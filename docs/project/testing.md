@@ -42,7 +42,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
-| [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every relative link in the docs resolves — **file and anchor** |
+| [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken
 partition draws a wrong article; editorial ones only warn, because failing a build over clumsy prose
@@ -78,7 +78,24 @@ in-flight edits are invisible. That gets it backwards. The rule here is to run `
 commit, so checking the working tree is what stops a broken link *landing* — checking committed state
 could only tell you it already had. A red result is always a one-line fix and always a real one.
 
-It knows two things beyond slugifying headings, both learned the hard way:
+**It covers source comments, and that is the case it exists for.** All three stale anchors that
+prompted it were in comments — `Spine.tsx`, `tree.ts`, `styles.css` — and not one was in a markdown
+file, so the first version of this test went green on every bug it was written in response to. That
+was caught by mutation-testing it rather than by trusting it green, which is the same move as
+everything else in this section: *a test that only ever runs green is indistinguishable from a test
+that matches nothing.*
+
+Comments need their own rule, because they don't use markdown link syntax. A bare
+`granularity-zoom.md#the-tree` is resolved against the **docs** directories, not against the source
+file that mentions it — `granularity-zoom.md` written in `src/web/tree.ts` means
+`docs/project/granularity-zoom.md`, not `src/web/granularity-zoom.md`.
+
+The one allowlist is `styles/tokens.css`, which cites the *original* app's own docs under a `Source:`
+line naming that repo's absolute path. Those are correctly dangling here and are listed explicitly
+rather than inferred: a rule like "the directory doesn't exist, so it must be external" would also
+swallow a typo in a directory name, which is exactly a break worth catching.
+
+It knows two more things beyond slugifying headings, both learned the hard way:
 
 - **Explicit `<a id="…">` tags count.** `architecture.md` and `open-questions.md` both use them, and
   their anchors bear no relation to the heading above. A checker that only slugifies headings reports

@@ -16,6 +16,18 @@
  * checking committed state would only tell you it already had. A red result
  * here is always a one-line fix, and always a real one.
  *
+ * It covers **source comments as well as markdown**, and that is not an extra —
+ * it is the case the test was written for. All three stale anchors that prompted
+ * it were in comments (`Spine.tsx`, `tree.ts`, `styles.css`), not one in a
+ * markdown file, and a markdown-only checker went green on every one of them.
+ * Found by spideryarn2-ed mutation-testing this file rather than trusting it.
+ *
+ * Comments don't use markdown link syntax, so they need their own rule: a bare
+ * `granularity-zoom.md#the-tree` in prose, resolved against the docs directories
+ * rather than against the source file's own — `granularity-zoom.md` written in
+ * `src/web/tree.ts` means `docs/project/granularity-zoom.md`, not
+ * `src/web/granularity-zoom.md`.
+ *
  * Not a style checker. It asserts only that a link goes where it claims.
  */
 import { readFileSync } from "node:fs";
@@ -24,7 +36,34 @@ import path from "node:path";
 import { globSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const FILES = ["AGENTS.md", ...globSync("docs/**/*.md")];
+const DOC_FILES = ["AGENTS.md", ...globSync("docs/**/*.md")];
+
+/** Everything that carries prose about the docs in a comment. */
+const SOURCE_FILES = [
+  ...globSync("src/**/*.{ts,tsx,css}"),
+  ...globSync("styles/*.css"),
+  ...globSync("*.config.ts"),
+];
+
+/**
+ * Where a bare reference is resolved, in order. A comment says
+ * `granularity-zoom.md#the-tree` and means the doc, wherever it lives — the
+ * path is relative to the docs, not to the file doing the referring.
+ */
+const SEARCH_ROOTS = [".", "docs/project", "docs/reusable"];
+
+/**
+ * Citations of a *different* repository, which are correctly dangling here.
+ * `styles/tokens.css` credits the original app's own docs under a `Source:`
+ * line naming its absolute path; those files were deliberately not carried over
+ * (docs/project/original-version.md). Listed explicitly rather than inferred:
+ * "the directory doesn't exist so it must be external" would also swallow a
+ * genuine typo in a directory name, which is exactly a break worth catching.
+ */
+const EXTERNAL = new Set([
+  "docs/reference/DESIGN_COLORS_FONTS.md",
+  "docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md",
+]);
 
 /** Fenced code blocks hold `#` lines that are comments, not headings. */
 const stripFences = (md: string) => md.replace(/^```[\s\S]*?^```/gm, "");
@@ -91,14 +130,47 @@ function linksIn(file: string): Link[] {
   return out;
 }
 
-const allLinks = FILES.flatMap(linksIn);
+/**
+ * Bare `foo.md#anchor` references in source comments.
+ *
+ * Deliberately not applied to markdown, where the convention is a real link and
+ * `linksIn` already covers it.
+ */
+function bareRefsIn(file: string): Link[] {
+  const src = readFileSync(file, "utf8");
+  const out: Link[] = [];
+  // The anchor class excludes `.`, so a reference ending a sentence —
+  // "…granularity-zoom.md#node-shape." — doesn't drag the full stop in.
+  for (const m of src.matchAll(/[\w./-]*\.md(?:#([\w-]+))?/g)) {
+    const target = m[0];
+    const rel = target.split("#")[0]!;
+    if (EXTERNAL.has(rel)) continue;
+    const resolved =
+      SEARCH_ROOTS.map((r) => path.normalize(path.join(r, rel))).find(existsSync) ??
+      path.normalize(path.join(path.dirname(file), rel));
+    out.push({ from: file, target, file: resolved, anchor: m[1] ?? "" });
+  }
+  return out;
+}
+
+const allLinks = [
+  ...DOC_FILES.flatMap(linksIn),
+  ...SOURCE_FILES.flatMap(bareRefsIn),
+];
 
 describe("documentation links", () => {
   it("finds links to check at all", () => {
     // Guards the regex itself: a parser that silently matched nothing would
     // make every assertion below pass forever.
-    expect(FILES.length).toBeGreaterThan(10);
+    expect(DOC_FILES.length).toBeGreaterThan(10);
+    expect(SOURCE_FILES.length).toBeGreaterThan(10);
     expect(allLinks.length).toBeGreaterThan(100);
+    // The bare-reference path has its own guard: it is the half that was
+    // missing, so "it found nothing" must not read as "nothing is wrong".
+    expect(SOURCE_FILES.flatMap(bareRefsIn).length).toBeGreaterThan(15);
+    expect(
+      SOURCE_FILES.flatMap(bareRefsIn).filter((l) => l.anchor).length,
+    ).toBeGreaterThan(5);
   });
 
   it("point at files that exist", () => {
