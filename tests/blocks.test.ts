@@ -132,4 +132,53 @@ describe("id stability", () => {
     const after = second.blocks.find((b) => b.text.includes("first paragraph"))!.id;
     expect(after).not.toBe(before);
   });
+
+  it("never hands one id to two blocks that read identically", () => {
+    // Two paragraphs with the same words are indistinguishable to the matcher.
+    // Consuming each previous id once is what stops both claiming the same one —
+    // duplicate ids would corrupt every artefact keyed on them.
+    const twice = `<article><p>Time is short.</p><p>Time is short.</p></article>`;
+    const first = splitIntoBlocks(twice);
+    const second = splitIntoBlocks(twice, first.blocks);
+    expect(new Set(second.blocks.map((b) => b.id)).size).toBe(second.blocks.length);
+    expect(second.stats.carried).toBe(2);
+  });
+});
+
+/**
+ * Captions are excluded by their marker, never by their length. The temptation
+ * is to treat short paragraphs as chrome — but the test article's "Given all
+ * this, what should we do?" is seven words of genuine argument and pivots the
+ * whole piece, while one of its captions runs to 94 words. Length tells you
+ * nothing here, and a word-count rule would silently drop real prose out of the
+ * ToC. See docs/project/table-of-contents.md.
+ */
+describe("caption detection is by marker, not by length", () => {
+  const { blocks } = splitIntoBlocks(`
+    <article>
+      <p>Given all this, what should we do?</p>
+      <p>Figure 2: A modern version of a McCulloch-Pitts neuron. Input signals arrive
+         weighted, are summed, and the unit fires when the total clears a threshold,
+         which is the abstraction the whole computational story rests upon.</p>
+      <p>Credits</p>
+    </article>
+  `);
+  const byText = (needle: string) => blocks.find((b) => b.text.includes(needle))!;
+
+  it("keeps a short paragraph that is actually an argument", () => {
+    const pivot = byText("what should we do");
+    expect(pivot.words).toBeLessThan(10);
+    expect(pivot.gistable).toBe(true);
+  });
+
+  it("drops a long caption, despite it being longer than the prose", () => {
+    const caption = byText("McCulloch-Pitts");
+    expect(caption.words).toBeGreaterThan(30);
+    expect(caption.kind).toBe("caption");
+    expect(caption.gistable).toBe(false);
+  });
+
+  it("drops a standalone boilerplate label", () => {
+    expect(byText("Credits").gistable).toBe(false);
+  });
 });

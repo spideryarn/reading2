@@ -36,14 +36,24 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/ids.test.ts`](../../tests/ids.test.ts) | the id format and uniqueness — [block-ids.md](block-ids.md) |
 | [`tests/blocks.test.ts`](../../tests/blocks.test.ts) | what counts as a block, and **id survival across re-extraction** |
 | [`tests/toc-flatten.test.ts`](../../tests/toc-flatten.test.ts) | tree → sidebar rows — [table-of-contents.md](table-of-contents.md) |
-| [`tests/validate-tree.test.ts`](../../tests/validate-tree.test.ts) | the validator catches each way a tree can go wrong |
+| [`tests/validate-tree.test.ts`](../../tests/validate-tree.test.ts) | the validator catches each **structural** way a tree can go wrong |
+| [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |
+| [`tests/toc-build.test.ts`](../../tests/toc-build.test.ts) | `buildTree` — the model's proposal → the stored tree, and leaf growth |
 | [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
+
+The validator has two test files on purpose. Structural failures exit non-zero because a broken
+partition draws a wrong article; editorial ones only warn, because failing a build over clumsy prose
+teaches everyone to ignore the validator. Splitting them also lets the two be edited without
+colliding.
 
 **Not tested, on purpose (for now):**
 
-- **Anything that calls an LLM.** Stage 4/5 generation is nondeterministic and costs money. The
-  guard for that output is [`src/validate-tree.ts`](../../src/validate-tree.ts) run against real
-  artefacts, not a unit test — see [granularity-zoom.md § The tree](granularity-zoom.md#the-tree).
+- **The model call itself.** Stage 4 generation is nondeterministic and costs money. The guard for
+  that output is [`src/validate-tree.ts`](../../src/validate-tree.ts) run against real artefacts —
+  see [granularity-zoom.md § The tree](granularity-zoom.md#the-tree). Note the split, though:
+  `buildTree` in [`src/toc.ts`](../../src/toc.ts) is the *deterministic* half of stage 4 — it takes
+  the model's parsed proposal and grows the leaf layer — and it is exported and tested precisely so
+  that only the genuinely nondeterministic part is untested.
 - **The React reading view.** No DOM tests yet. When they arrive: `environment: "jsdom"` and
   `@testing-library/react`, and start with [`src/web/tree.ts`](../../src/web/tree.ts) `buildGeometry`,
   which is pure and is where a rowSpan bug silently draws a wrong article.

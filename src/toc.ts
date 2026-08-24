@@ -87,7 +87,7 @@ JSON only, no prose, no code fence:
 
 Use only block ids that appear in the input. Do not invent ids.`;
 
-interface ModelNode {
+export interface ModelNode {
   title: string;
   gist?: string;
   range: [string, string];
@@ -115,7 +115,7 @@ function parseJson(raw: string): { root: ModelNode; navLabels: Record<string, st
  * layer underneath it. Every block gets exactly one leaf; a leaf carries a
  * navLabel only if its block is gistable and the model wrote one.
  */
-function buildTree(
+export function buildTree(
   root: ModelNode,
   navLabels: Record<string, string>,
   blocks: Block[],
