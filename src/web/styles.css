@@ -28,27 +28,68 @@
 
   --page: var(--background);
   --panel: var(--sidebar);
+  /* Floats above everything: the tooltip panel. Lighter again than --panel,
+     which is itself lighter than --page — on a dark ground, up is forward. */
+  --surface-raised: oklch(0.26 0 0);
   --rule: var(--border);
   --rule-strong: oklch(0.36 0 0);
 
   --highlight: var(--spideryarn-orange);
   /* The orange tinted *into* the page rather than into white — a lit patch, not a
      pale one. Any "mix the orange with black to darken it" from the light palette
-     has become "mix it with white to lift it"; see --highlight-ink. */
-  --highlight-wash: color-mix(in oklch, var(--spideryarn-orange) 20%, var(--page));
-  --highlight-ink: color-mix(in oklch, var(--spideryarn-orange) 85%, white);
+     has become "mix it with white to lift it"; see --highlight-ink.
+
+     MIX IN OKLAB, NOT OKLCH. --page is written `oklch(0.145 0 0)`: a hue that is
+     explicitly *specified* as 0, not missing. Polar interpolation therefore
+     interpolates it, dragging the result from the orange's 58.6° round to 11.7°
+     — a wash that is quietly pink rather than warm. --highlight-ink escapes only
+     by accident: mixing with the `white` keyword gives an achromatic colour whose
+     hue is *missing*, and a missing hue is carried over instead of interpolated.
+     oklab has no hue channel to interpolate, so it cannot go wrong this way, and
+     it stays right however someone else chooses to write --page.
+     Diagnosed by spideryarn2-c1, 2026-08-25. */
+  --highlight-wash: color-mix(in oklab, var(--spideryarn-orange) 20%, var(--page));
+  --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 85%, white);
 
   /* Left-edge tints that distinguish the granularity columns at a glance.
-     Same hue family as the brand, separated by chroma rather than by hue, so
-     the columns read as one system instead of as a rainbow. */
-  --depth-1: var(--spideryarn-orange);
-  --depth-2: oklch(0.68 0.045 45);
+     One hue family, so the columns read as one system rather than as a rainbow —
+     but the ramp runs down BOTH lightness and chroma, coarse to fine. The
+     previous pair separated on chroma alone (L 0.705 vs 0.680, a difference of
+     nothing) and these are painted 3px wide, where small-field colour
+     discrimination is at its worst and chroma is the least reliable channel of
+     the three. Lightness is what survives a 3px field. */
+  --depth-0: oklch(0.82 0.155 58);
+  --depth-1: oklch(0.68 0.120 52);
+  --depth-2: oklch(0.55 0.080 46);
+  --depth-3: oklch(0.44 0.045 40);
 
   --bar-h: 2.75rem; /* .controls */
   --head-h: 2.5rem; /* thead */
 }
 
 * { box-sizing: border-box; }
+
+/* --------------------------------------------------------------- shell ----
+   `min-width: max-content` is load-bearing and does NOT do what it looks like.
+   `position: sticky` is clamped to its *containing block*, so a sticky element
+   whose containing block is exactly as wide as itself has a sticky range of
+   zero — it is declared sticky and never moves. That is what used to happen to
+   .masthead and .controls: both are viewport-wide, their containing block was
+   body at viewport width, and so they scrolled away horizontally despite
+   saying `left: 0`. Meanwhile `thead th.pin-left` pinned perfectly from a
+   materially identical declaration, purely because *its* containing block is
+   the table, which is wider than the viewport. Widening this element to the
+   content's max-content width is what gives the bars somewhere to slide.
+   Diagnosed by spideryarn2-c1, 2026-08-25; written up in
+   docs/reusable/css-sticky-containing-block.md. */
+.reader {
+  --spine-w: 13rem;
+  padding-left: var(--spine-w);
+  /* min-width is set inline, in pixels, by App — see the note above. */
+}
+.reader.spine-full { --spine-w: 13rem; }
+.reader.spine-narrow { --spine-w: 1.5rem; }
+.reader.spine-off { --spine-w: 0rem; }
 
 body {
   margin: 0;
@@ -79,8 +120,8 @@ body {
    don't drift away when you scroll right. */
 .masthead {
   position: sticky;
-  left: 0;
-  width: 100vw;
+  left: var(--spine-w);
+  width: calc(100vw - var(--spine-w));
   background: var(--page);
   padding: 1.25rem 1.5rem 0.9rem;
 }
@@ -113,8 +154,8 @@ h1 {
 .controls {
   position: sticky;
   top: 0;
-  left: 0;
-  width: 100vw;
+  left: var(--spine-w);
+  width: calc(100vw - var(--spine-w));
   z-index: 40;
   height: var(--bar-h);
   display: flex;
@@ -180,7 +221,6 @@ h1 {
 table.zoom {
   border-collapse: separate;
   border-spacing: 0;
-  width: 100%;
 }
 
 thead th {
@@ -217,13 +257,14 @@ td {
 }
 
 /* ---- column widths and the pinned ends ----------------------------------
-   Minimums rather than fixed widths: the table fills the viewport when it can,
-   and overflows into a horizontal scroll when there are too many levels. */
-td.gist, thead th { min-width: 12rem; }
-/* 65ch of Georgia plus the id gutter. Below this the .prose clamp starts
-   narrowing the measure, so it degrades rather than breaking. */
-td.text { min-width: 34rem; background: var(--page); }
-.outline td.gist.leaf { min-width: 18rem; }
+   Widths are NOT set here. The table is `table-layout: fixed` and every column
+   gets an explicit pixel width from App § fitting, because automatic table
+   layout sizes columns by their content and the content is prose — which
+   answered `max-content` with a 4231px table inside a 1600px window. One place
+   decides the geometry, and it is the one that also decides which columns fit.
+   See src/web/App.tsx. */
+table.zoom { table-layout: fixed; }
+td.text { background: var(--page); }
 
 /* The pinned columns sit ON TOP of the scrolling ones, so they need to read as
    a layer rather than as a neighbour — otherwise a column half-hidden under the
@@ -231,27 +272,88 @@ td.text { min-width: 34rem; background: var(--page); }
    drop shadow, not a hairline. */
 td.pin-left, thead th.pin-left {
   position: sticky;
-  left: 0;
+  /* Not `left: 0` — that is the viewport edge, which is underneath the spine.
+     The rail is `position: fixed`, so it does not push the sticky edge along
+     for us. */
+  left: var(--spine-w);
   z-index: 15;
   box-shadow: 1px 0 0 var(--rule-strong), 8px 0 14px -8px rgb(0 0 0 / 0.75);
 }
 
+/* The rightmost column does NOT pin, and the asymmetry is the whole point.
+   Greg's brief said "always keep the leftmost and perhaps the rightmost
+   visible" — the hedge in "perhaps" turns out to be load-bearing.
+
+   Pinning left is free when you haven't scrolled: the column's static position
+   is already the left edge, so `left:` holds it exactly where it would be, and
+   it only starts covering its neighbours once you deliberately scroll away.
+   Pinning right is not free. A sticky element is painted without any space
+   being reserved for it, so `right: 0` shifts the last column LEFT by the
+   entire horizontal overflow the moment the page loads — covering that many
+   pixels of live content at rest, before the reader has touched anything. At
+   700px with `?cols=0,1,2` that was the whole Sections column, 396px of it,
+   hidden under the prose on arrival with nothing to say so.
+   (Mechanism diagnosed by the narrow-layout-probe agent, 2026-08-25.)
+
+   Reserving the space properly means lifting the column out of the table's
+   scroll extent — the frozen-pane pattern, two tables kept in sync — and that
+   is a large restructure to buy back a behaviour that is only useful while
+   overflowing, which auto-fit now makes rare. So: no right pin. Scrolling right
+   reveals the prose; the coarse column stays pinned on the left, which is the
+   half of the idea that pays for itself. */
 td.pin-right, thead th.pin-right {
-  position: sticky;
-  right: 0;
-  z-index: 15;
   border-right: none;
-  box-shadow: -1px 0 0 var(--rule-strong), -8px 0 14px -8px rgb(0 0 0 / 0.75);
 }
 
-/* Nothing to sit on top of when the table already fits. */
-@media (min-width: 1500px) {
-  td.pin-left, thead th.pin-left,
-  td.pin-right, thead th.pin-right { box-shadow: none; }
-  td.pin-left, thead th.pin-left { border-right: 1px solid var(--rule-strong); }
+/* Nothing to sit on top of when the table already fits, and whether it fits
+   depends on the table's real width — the number of columns changes with the
+   mode as well as with the window, so a viewport breakpoint gets this wrong in
+   both directions. TableView measures and sets `.overflowing`. */
+table.zoom:not(.overflowing) td.pin-left,
+table.zoom:not(.overflowing) thead th.pin-left {
+  box-shadow: none;
+  border-right: 1px solid var(--rule-strong);
 }
 
-thead th.pin-left, thead th.pin-right { z-index: 35; }
+thead th.pin-left { z-index: 35; }
+
+/* Overflow has to be discoverable. macOS hides its scrollbars until you move,
+   so a table that runs off the right edge looks identical to one that simply
+   ends there — the probe agent checked, and there is no persistent scrollbar to
+   see. A fade at the trailing edge says "this continues" without claiming a
+   row of chrome. Only drawn while there is actually something out there. */
+.reader:has(table.zoom.overflowing)::after {
+  content: "";
+  position: fixed;
+  top: var(--bar-h);
+  right: 0;
+  bottom: 0;
+  width: 2rem;
+  z-index: 20;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, var(--page) 80%, transparent)
+  );
+}
+
+/* Below the collision width, stop pinning the left column horizontally. Two
+   layers stacked on the same pixels is not a layout, and a gist column you can
+   scroll away from is better than one permanently underneath the prose.
+
+   `left: auto`, NOT `position: static`. Going static also cancels the element's
+   *vertical* stickiness, and the left-hand `<th>` is one of the column headers —
+   so the table head silently stopped pinning under the controls bar on exactly
+   the narrow screens where it is least affordable to lose. A sticky element with
+   `left: auto` simply has no horizontal anchor, and keeps its `top` one. */
+@media (max-width: 760px) {
+  td.pin-left, thead th.pin-left {
+    left: auto;
+    box-shadow: none;
+    border-right: 1px solid var(--rule-strong);
+  }
+}
 
 /* Gist cells span their whole range; the inner div sticks so the summary stays
    in view for as long as the text it summarises does. */
@@ -305,8 +407,16 @@ td.gist.continuation { background: var(--panel); }
 td.gist.active { background: var(--highlight-wash); }
 td.gist.active .title { color: var(--highlight-ink); }
 
-.col-depth-1 { --tint: var(--depth-1); }
-.col-depth-2 { --tint: var(--depth-2); }
+/* On the cell, not the column. `<col>` is not a DOM ancestor of `<td>`, and
+   custom properties inherit down the DOM tree — the handful of properties that
+   do cross from column to cell (background, border, width, visibility) do so by
+   a special table mechanism that is not inheritance. Set on `.col-depth-*` this
+   resolved on an element nothing ever read it from, so every bar in every
+   column painted the `--rule-strong` fallback grey. */
+td.gist.depth-0 { --tint: var(--depth-0); }
+td.gist.depth-1 { --tint: var(--depth-1); }
+td.gist.depth-2 { --tint: var(--depth-2); }
+td.gist.depth-3 { --tint: var(--depth-3); }
 td.gist .title::before {
   content: "";
   display: inline-block;
@@ -402,3 +512,285 @@ td.text.opaque .prose { font-size: 0.95rem; color: var(--ink-soft); }
 
 td.gist.leaf { cursor: pointer; background: var(--page); }
 td.gist.leaf:hover { background: var(--highlight-wash); }
+
+/* The leaf column in READING mode — one nav label per paragraph, beside the
+   paragraph rather than instead of it. It sits on the panel colour like the
+   other gist columns (in outline mode it is the detail column and sits on the
+   page), and its label rides the top of the row so it lines up with the first
+   line of the prose it labels rather than floating in the middle of a tall
+   cell. */
+.reading td.gist.leaf { background: var(--panel); }
+.reading td.gist.leaf .sticky { padding: 0.75rem 0.9rem 0.5rem; }
+.reading td.gist.leaf .nav-label { font-size: 0.75rem; color: var(--ink-faint); }
+.reading tr.row-active td.gist.leaf .nav-label { color: var(--ink-soft); }
+
+/* ----------------------------------------------------------------- spine --
+   The bird's-eye rail. `position: fixed` rather than a table column, because an
+   overview has to be visible all at once and consecutive table rows are
+   thousands of pixels apart — see Spine.tsx and granularity-zoom.md#the-spine.
+
+   Everything inside the track is positioned in PERCENTAGES of the document's
+   height, so the rail rescales itself on resize with no recomputation. */
+.spine {
+  position: fixed;
+  left: 0;
+  top: var(--bar-h);
+  bottom: 0;
+  width: var(--spine-w);
+  z-index: 45;
+  background: var(--panel);
+  border-right: 1px solid var(--rule-strong);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+}
+
+.spine-off .spine { display: none; }
+
+/* Where you are, in words. The bands below can be a pixel tall; this never is,
+   which is what lets the rail stay strictly proportional without becoming
+   unreadable for short parts. */
+.spine-here {
+  flex: none;
+  padding: 0.5rem 0.6rem 0.55rem;
+  border-bottom: 1px solid var(--rule-strong);
+  background: var(--highlight-wash);
+}
+
+.spine-here-part {
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--highlight-ink);
+}
+
+.spine-here-sub {
+  margin-top: 0.15rem;
+  font-size: 0.65rem;
+  line-height: 1.25;
+  color: var(--ink-soft);
+}
+
+.spine-track {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.spine-part {
+  position: absolute;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  padding: 0.1rem 0.4rem 0 0.65rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: var(--ink-faint);
+  transition: color 0.15s, background 0.15s;
+}
+
+/* The part's tint bar, full height of its band, so the rail reads as a stack of
+   proportional blocks rather than as a list of labels. */
+.spine-part::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--depth-1);
+  opacity: 0.45;
+}
+
+.spine-part.active {
+  background: var(--highlight-wash);
+  color: var(--ink);
+}
+.spine-part.active::before { width: 4px; opacity: 1; }
+
+/* L2 as hairlines: the subdivision of the article stays visible even where
+   there is no room for a word of it. */
+.spine-tick {
+  position: absolute;
+  left: 4px;
+  right: 0;
+  height: 1px;
+  background: var(--rule);
+  opacity: 0.8;
+}
+
+/* Invisible hit targets, one per L2, over the top of everything. A 1px tick is
+   not something anyone can click, and landing on the L2 is more precise than
+   landing on the part that contains it. */
+.spine-hit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.spine-hit:hover { background: color-mix(in oklab, var(--highlight) 14%, transparent); }
+.spine-hit:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -1px;
+}
+
+/* How much of the article is on screen, and where. Drawn over everything and
+   deliberately not interactive. */
+.spine-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 2px;
+  pointer-events: none;
+  border-top: 1px solid var(--highlight);
+  border-bottom: 1px solid var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 12%, transparent);
+}
+
+/* Collapsed rail: bands, ticks and the viewport marker, no words. Below about
+   1100px the labels cost more width than they are worth, but "where am I" is
+   exactly as useful on a small screen as on a large one. */
+.spine.narrow .spine-label { display: none; }
+.spine.narrow .spine-part { padding: 0; }
+.spine.narrow .spine-part::before { width: 100%; opacity: 0.3; }
+.spine.narrow .spine-part.active::before { opacity: 0.75; }
+
+/* A control that reads as a link rather than a toggle — it does something once
+   rather than being on or off. */
+.controls button.linky {
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding-inline: 0.3rem;
+}
+
+/* --------------------------------------------------------------- tooltip --
+   The hover panel — Tooltip.tsx, over Floating UI, which positions and ships no
+   styles of its own. Everything visual is here.
+
+   The panel is a raised surface: on a dark page a *lighter* grey reads as
+   forward, so it sits above --panel, which already sits above --page (see the
+   note in tokens.css). It must be opaque — it is drawn over prose. */
+.tooltip-anchor {
+  z-index: 80; /* above the spine (45) and both sticky bars */
+  /* The panel takes hover of its own only where that is wanted; for the spine
+     it must not, or a tooltip that lands under the pointer keeps itself open. */
+  pointer-events: none;
+}
+
+.tooltip {
+  position: relative; /* the arrow is measured against this box */
+  max-width: 22rem;
+  padding: 0.6rem 0.75rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  font-family: var(--font-ui);
+  /* No transform-origin here on purpose: useTransitionStyles writes a
+     placement-aware one inline, so the panel grows out of the band it belongs
+     to rather than out of its own middle. */
+}
+
+/* Colour is set on the element in Tooltip.tsx, not here — see the note there.
+   A stylesheet rule beats the presentation attributes FloatingArrow relies on
+   and paints a seam across the arrow's mouth. */
+.tooltip-arrow { z-index: 1; }
+
+/* The band card. Reads top to bottom: which part, which section, what it says,
+   what is inside it, how big it is. See BandCard in Spine.tsx. */
+.tip-crumb {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--highlight-ink);
+  margin-bottom: 0.2rem;
+  /* One line: a long part title must not push the section title out of view. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tip-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+/* Matches the § in the gist cells: the author's own heading, not a generated one. */
+.tip-own {
+  margin-left: 0.3rem;
+  font-weight: 400;
+  color: var(--highlight);
+}
+
+.tip-gist {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* A leaf has no gist, only nav chrome, and it should not be mistaken for one. */
+.tip-navlabel { font-style: italic; color: var(--ink-faint); }
+
+.tip-kids {
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+  padding-top: 0.4rem;
+}
+
+.tip-kids li {
+  position: relative;
+  padding-left: 0.7rem;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tip-kids li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--depth-2);
+}
+
+.tip-more { color: var(--ink-faint); font-style: italic; }
+.tip-more::before { display: none; }
+
+.tip-foot {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1;
+  color: var(--ink-faint);
+  opacity: 0.8;
+}
+
+/* Somebody who has asked not to be moved gets the panel, not the animation.
+   Floating UI's transition styles are inline, so this has to !important its
+   way past them. */
+@media (prefers-reduced-motion: reduce) {
+  .tooltip { transition: none !important; transform: none !important; }
+}

@@ -36,9 +36,18 @@ export async function loadArticle(slug: string): Promise<Article> {
     const tree = await readJson<Tree>(path.join(dir, "tree.json"));
     if (!blocksFile || !tree) continue;
 
+    // meta.json is optional — stages 3-5 don't all write one yet. Falling back
+    // to the slug puts "noema-mythology-of-conscious-ai" at the top of the
+    // reading view, so derive a real title from the article's own first heading
+    // instead, and keep the slug only as the last resort.
     const meta =
       (await readJson<Meta>(path.join(dir, "meta.json"))) ??
-      ({ slug, title: slug } satisfies Meta);
+      ({
+        slug,
+        title:
+          blocksFile.blocks.find((b) => b.kind === "heading" && b.level === 1)?.text ??
+          slug,
+      } satisfies Meta);
 
     return { meta, blocks: blocksFile.blocks, tree };
   }

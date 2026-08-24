@@ -20,11 +20,17 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/App.tsx`](../../src/web/App.tsx) | fetches `/api/article/<slug>`, masthead, the granularity controls |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links |
+| [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
+| [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version.md) |
+| [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
+| [`src/web/position.ts`](../../src/web/position.ts) | reading position → the section that goes in `?at=` |
 | [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
 
 Running it: [setup-dev.md](setup-dev.md). Slug selection is `/?slug=<slug>`, defaulting to
-`example`; deep links are `/#spya-k6fpme`.
+`example`; deep links are `/?at=spya-k6fpme`. Every other bit of view state is in the URL too —
+see [url-state.md](url-state.md) for the full set and for why scrolling *replaces* the history
+entry while toggling a column *pushes* one.
 
 ## Dark mode
 
@@ -75,7 +81,9 @@ which would give the reader no way to override it.
 ## The constraints it works under
 
 - **Position is a block id, never a pixel offset or a selector.** Scroll restore, deep links,
-  everything. [block-ids.md](block-ids.md) — read it before touching anything that resolves an id.
+  everything — and it is stored as the id of a *section's first block*, never a node id, which is
+  regenerated with the tree ([url-state.md](url-state.md#the-unit-is-a-section-not-a-position)).
+  [block-ids.md](block-ids.md) — read it before touching anything that resolves an id.
   In particular, ids are random: resolve a range by looking both endpoints up in the block sequence,
   never by comparing id strings.
 - **One payload, no network on zoom.** `GET /api/article/<slug>` returns `meta + blocks + tree`

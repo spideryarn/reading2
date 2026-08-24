@@ -40,6 +40,8 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |
 | [`tests/toc-build.test.ts`](../../tests/toc-build.test.ts) | `buildTree` — the model's proposal → the stored tree, and leaf growth |
 | [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
+| [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
+| [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken
 partition draws a wrong article; editorial ones only warn, because failing a build over clumsy prose
@@ -59,6 +61,28 @@ colliding.
   which is pure and is where a rowSpan bug silently draws a wrong article.
 - **Fetching and Readability** ([content-extraction.md](content-extraction.md)). Needs the network,
   or a large fixture corpus. Worth doing when extraction bugs start costing time.
+
+## Sweep a continuous input; don't sample it
+
+Where a function takes a continuous input — a window width, a scroll offset — assert the **shape** of
+its output over the whole range rather than its value at a few widths someone thought to name.
+
+`fitView` is the case that earned this. It was checked by hand at 1600, 1400, 1000, 860 and 700, and
+looked right at every one. It was wrong between them: the spine's labels appeared at a fixed 1100px
+and the rail's own growth ate two gist columns, so 1099px showed three levels and 1100px showed one.
+Widening the window removed context. **Non-monotonicity is invisible to sampling by construction** —
+every sampled point is individually plausible, and the defect lives only in the relationship between
+them. A sweep from 320 to 2600 asserting "no width ever shows fewer columns than a narrower one"
+found it immediately.
+
+The property outlives the numbers, too. The pixel assertions in
+[`tests/layout.test.ts`](../../tests/layout.test.ts) hold only until someone deliberately changes a
+constant; "wider is never worse" holds through every future change to all of them.
+
+Those pixel assertions are nonetheless **deliberately coupled** to the widths quoted in
+[granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them), so
+that changing a constant breaks the tests and forces the doc to be edited in the same breath. A doc
+quoting numbers the code no longer produces is worse than a doc quoting none.
 
 ## The two things to know before adding a test
 

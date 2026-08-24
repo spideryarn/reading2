@@ -30,6 +30,8 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [architecture.md](docs/project/architecture.md) | pipeline stages, what a block is, storage layout, server, stage ownership |
 | [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
+| [tooltips.md](docs/project/tooltips.md) | the spine's hover tooltips: which library, why Floating UI over Radix and Tippy, and the four things that fail silently |
+| [url-state.md](docs/project/url-state.md) | every bit of view state lives in the URL: the parameters, which ones push history and which replace, and why position is a *section* |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
 | [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
 | [testing.md](docs/project/testing.md) | the test runner, what's deterministic enough to test, and what we deliberately don't |
@@ -44,6 +46,10 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 - [docs/reusable/third-party-library-selection.md](docs/reusable/third-party-library-selection.md) —
   how to pick a dependency: bias towards long-lived, heavily-documented libraries, then write the
   decision down. Followed for Vitest in [testing.md](docs/project/testing.md)
+- [docs/reusable/css-sticky-containing-block.md](docs/reusable/css-sticky-containing-block.md) —
+  why `position: sticky` can be declared correctly and do nothing: its range is its containing
+  block's size minus its own, so a `100vw` bar in a `100vw` parent has zero range and fails
+  silently. Found here, but not about this project.
 - [docs/reusable/gjdutils-instructions.md](docs/reusable/gjdutils-instructions.md) — **read this
   first.** Greg keeps a library of reusable "how to do this kind of task well" instructions in
   [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions). When a task matches

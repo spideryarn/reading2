@@ -244,33 +244,182 @@ deliberately, to navigate, is the one context where navigation chrome is the poi
 `?text=0` opens straight into outline mode, so a whole-article ToC is a shareable link rather than a
 button you have to find. `#<blockid>` opens at a paragraph.
 
-### Too many levels: minimum widths, and pinned ends
+### Both at once: the paragraph outline beside the prose
+
+> I really like the Outline 1-sentence-paragraphs. But I also always want to be able to see the full
+> text. Can you look for a way to show both the Outline *and* the Full-text-reading at the same time.
+>
+> — Greg, 2026-08-25
+
+The leaf column — one `navLabel` per paragraph — is no longer confined to outline mode. Turned on
+with the **L3** control, it sits between the gists and the prose, so reading mode now contains
+everything outline mode had *plus* the article, each label on the same row as the paragraph it
+labels. Opt-in, never chosen by auto-fit, because it costs a column's width and most reading doesn't
+want it.
+
+**This does not breach the navLabel contract** ([node shape](#node-shape)), and the distinction is
+worth being precise about. The rule is that a navLabel must never be shown *instead of* prose that
+could be displayed — because a pointer to prose is not a substitute for it. Here the prose is right
+beside it. That is annotation, not substitution.
+
+**What it does not solve, stated plainly.** The outline is only compact *because* the text is absent.
+Turn the text on and every row grows to prose height, so consecutive labels are separated by
+hundreds of pixels: you get the outline *alongside* the text, but you can no longer scan the whole
+article's paragraph outline at a glance the way outline mode lets you. Those two things are mutually
+exclusive in a single table with shared rows, and no amount of styling changes that — it follows
+directly from the invariant that makes the view work at all.
+
+Two ways out, neither built, in rough order of preference:
+
+1. **Elastic rows.** One table still, but rows outside the section you are reading collapse to their
+   navLabel while the current section expands to full prose. Keeps the alignment invariant exactly;
+   turns the trade from all-or-nothing into a gradient. Closest in spirit to
+   [the fisheye sketch](#the-other-view-fisheye), and the two should probably be designed together.
+2. **Two synchronised panes**, outline scrolling at its own rate beside the prose. Gives a genuine
+   whole-article outline, but abandons shared rows — the one guarantee the tabular view is built on —
+   and has to replace it with scroll synchronisation, which is a weaker promise.
+
+### The spine: a bird's-eye rail
+
+> I want the left-hand most column to show a bird's eye view. So perhaps the first and maybe second
+> levels of the table of contents in a fairly information dense way. I guess deciding whether it
+> should be first or first and second might depend on how many first level there are. Maybe they're
+> collapsible, I'm not sure, but I need a way to see where I am in the whole article.
+>
+> — Greg, 2026-08-25
+
+The last clause is the one that decides the design. **An overview has to be visible all at once**,
+and a table column cannot be: consecutive entries are hundreds or thousands of pixels apart, so a
+column only ever shows you the entry you are standing in. So the spine is not a column. It is a
+separate `position: fixed` rail, the height of the viewport, in
+[`src/web/Spine.tsx`](../../src/web/Spine.tsx).
+
+It is **proportional, not a list**. Each L1 gets vertical space in proportion to how much of the
+document it actually occupies, so the rail is a squashed picture of the article rather than an index
+of it — and the you-are-here band is then a real position indicator rather than a decoration. Greg
+chose this over an equal-weight outline knowing the cost, which is that a short part gets a sliver
+too thin to hold its own label.
+
+Four decisions worth keeping:
+
+- **Segments are sized from measured pixel heights, not word counts.** In outline mode every row
+  collapses to one line, so a 900-word part and a 100-word part become nearly the same height on
+  screen; a word-count rail would point confidently at the wrong place. `Spine.tsx` measures the
+  real row geometry and re-measures on resize, on mode change, and on `document.fonts.ready`.
+  Measuring means the rail is correct in both modes for free.
+- **L2 is ticks and hit targets, never labels in the band.** Labels in the band cannot work, and the
+  reason is the tree invariant itself: children exactly partition their parent, so the first child's
+  label always begins at exactly the same pixel as its parent's, and the two collide. Instead L2
+  draws as a hairline (so the article's subdivision stays visible even where there is no room for a
+  word of it) with a transparent full-height button over it, because a 1px tick is not something
+  anyone can click.
+- **The detail the sliver can't hold lives in a hover tooltip.** Every hit target carries one, and it
+  is the payoff of the proportional design rather than an apology for it: which part the section
+  belongs to, its gist, the sub-sections inside it, its length, and how far into the piece it sits —
+  on a band that may be two pixels tall and carry no label at all. The tooltips are *grouped*, so
+  once one is open the neighbours open with no second wait and running the pointer down the rail
+  reads the article's sections one after another. Built on Floating UI — why that library, and what
+  it is doing for us: [tooltips.md](tooltips.md).
+- **Where you are is spelled out in a header strip** at the top of the rail, naming the current L1
+  and L2. The bands can be one pixel tall; that strip never is. This is what lets the rail stay
+  strictly proportional without becoming unreadable.
+- **The labels appear only when they are free.** The rail collapses to a tick-only 1.5rem below
+  1100px, and *also* at any width where widening it from 1.5rem to 13rem would cost a gist column —
+  which for a three-level tree means the labels arrive at about 1280px, not 1100px. A plain width
+  threshold made the fit non-monotonic: at 1099px you got three gist columns and at 1100px one, so
+  dragging the window *wider* removed two levels of context and handed back a rail nobody had asked
+  for. Whatever the right trade between labels and columns is, "wider window, less article" is not
+  it. An explicit `cols=` skips the check, since a fixed column count can't be reduced by the rail.
+  "Where am I" stays exactly as useful on a small screen; the words are what stops being affordable.
+  (Found by `spideryarn2-cd`, 2026-08-25, by sweeping widths — at any single width the old behaviour
+  looked like a considered trade. The sweep is now a test: `tests/layout.test.ts` asserts that no
+  width ever shows fewer columns than a narrower one.)
+- **In outline mode it disappears entirely.** The table there *is* a whole-article overview, so a
+  bird's-eye rail beside it would be a second copy of the same thing; the width goes back to the
+  columns. Decided in [`layout.ts`](../../src/web/layout.ts) § `fitView`, not in the rail itself, so
+  that one function answers every "how wide is anything" question.
+
+Because the spine now carries the coarse levels, the **L0 column is the first thing auto-fit gives
+up** on a narrow window (below), and the article-level gist is repeated in the masthead so that
+giving it up costs nothing.
+
+### Too many levels: fit the columns, don't just scroll them
 
 > If we had more than two or three levels, I think it will quickly get too narrow if we try and fit
 > everything on the screen at once. So maybe we have some minimum width for each column and allow for
 > scrolling, and if we do that, perhaps we always keep the leftmost and perhaps the rightmost visible,
 > and so the scrolling's just the middle. I don't know, maybe that'd be confusing, but let's try it.
+>
+> — Greg, 2026-08-24
 
-Built as described. Columns carry a **minimum** width rather than a fixed one, so the table fills the
-viewport when it can and overflows into a horizontal scroll when there are too many levels. The
-**leftmost visible column and the prose column pin**; the middle levels scroll between them.
+Built as described, then found wanting and revised. Minimum widths plus horizontal scrolling *works*,
+but on any laptop it means a column permanently buried under the pinned prose: three gist columns and
+the reading column come to 70rem — 1120px — so a 1000px window is 120px short before you have done
+anything. Scrolling to a column you can never see all of is not really an answer.
 
-Two things that make this work rather than merely function:
+So the view now **chooses which columns to show, and how wide**, in
+[`src/web/App.tsx` § fitting](../../src/web/App.tsx):
 
-- **The page scrolls horizontally, not an inner container.** Wrapping the table in
-  `overflow-x: auto` would force `overflow-y` to `auto` as well, which would silently break every
-  vertical sticky in the view — the gists that ride alongside their range, and the two header bars.
-  Instead the document itself is wide, the bars are `sticky` on *both* axes, and cell pinning is
-  plain `position: sticky` on `<td>`. That in turn requires `border-collapse: separate`, because
-  sticky cells are unreliable under `collapse`.
-- **Pinned columns are drawn as a layer, with a real drop shadow, not a hairline.** Greg's worry —
-  "maybe that'd be confusing" — is well founded, and this is where it bites: at `scrollLeft: 0` a
-  middle column sits *underneath* the pinned prose. With only a hairline that reads as a rendering
-  bug; with a shadow it reads as "there is more to scroll", which is true. The shadows are removed
-  above 1500px, where nothing overlaps.
+- **Shrink first, drop second.** Gist columns squeeze from a comfortable 15rem down to 11rem before a
+  level is given up. At 1000px three 15rem columns don't fit but two 11.5rem ones do, and two levels
+  of context beat one.
+- **Give up the coarse levels first.** They are what the spine is already showing; the finest gist is
+  the one that earns its place next to the paragraph it summarises. So L0 goes, then L1.
+- **The reading column takes the slack**, so the table fills the window exactly when it can and
+  overflows by a known amount when it can't. At 1600px: L0/L1/L2 at 240px and 672px of prose. At
+  760px: one gist column and prose, fitting exactly. At 700px it overflows by 44px, and that is the
+  first width where it does.
+- **Touching a granularity button takes the columns off automatic** and leaves them where you put
+  them; an `auto` control puts them back. The window should not quietly overrule a choice you made.
 
-Still unresolved: when the tree is deep enough that several middle columns are hidden at once, there
-is no indication of *how many*. A column-count affordance in the header bar is the obvious next move.
+Three things that make this work rather than merely function:
+
+- **The page scrolls horizontally, not an inner container.** Wrapping the table in `overflow-x: auto`
+  would force `overflow-y` to `auto` as well, which would silently break every vertical sticky in the
+  view — the gists that ride alongside their range, and the two header bars. Instead the document
+  itself is wide, the bars are `sticky` on *both* axes, and cell pinning is plain `position: sticky`
+  on `<td>`. That in turn requires `border-collapse: separate`, because sticky cells are unreliable
+  under `collapse`.
+- **Widths are explicit, and the table is `table-layout: fixed`.** This reverses the obvious choice
+  and it is worth knowing why. Automatic table layout sizes a column by its content, and the content
+  here is prose; combined with the `max-content` wrapper that horizontal sticky scrolling needs, it
+  laid every gist out on one unwrapped line and produced a **4231px table inside a 1600px window**.
+  Choosing the widths ourselves makes the geometry predictable and makes the fit calculation and the
+  rendering agree by construction instead of by two lists of numbers being kept in sync.
+- **Only the left end pins, and the asymmetry is the point.** Greg's brief said "always keep the
+  leftmost and perhaps the rightmost visible" — and the hedge in *perhaps* turns out to be
+  load-bearing. Pinning left is free when you haven't scrolled: the column's static position already
+  *is* the left edge, so it sits exactly where it would anyway and only starts covering its
+  neighbours once you deliberately scroll away from them. Pinning right is not free. A sticky element
+  is painted with **no space reserved for it**, so `right: 0` shifts the last column left by the
+  entire horizontal overflow the moment the page loads — covering that many pixels of live content at
+  rest, before the reader has touched anything. At 700px with `?cols=0,1,2` that was the whole
+  Sections column, 396px of it, hidden under the prose on arrival with nothing to indicate it was
+  there. Reserving the space properly means lifting the column out of the table's scroll extent (the
+  frozen-pane pattern: two tables kept in sync), which is a large restructure to buy back a behaviour
+  that only matters while overflowing — and auto-fit makes overflowing rare. So the prose no longer
+  pins; you scroll right to reach it, and the coarse column stays put on the left. (Mechanism
+  diagnosed by the `narrow-layout-probe` agent, 2026-08-25.)
+- **The left pin sticks at the spine's edge, not at zero.** The rail is `position: fixed`, so it does
+  not push the sticky edge along for us; `left: 0` would slide the pinned column underneath it.
+- **Overflow has to be discoverable.** macOS hides its scrollbars until you move, so a table that runs
+  off the right edge looks identical to one that simply ends there. A fade at the trailing edge says
+  "this continues" without claiming a row of chrome, and is drawn only while something is actually out
+  there — which the view knows exactly, because it chose the width.
+
+**Below 760px the left column stops pinning horizontally.** The two pinned layers are anchored to opposite
+edges, so they overlap once `gist + prose > viewport`; both used to carry the same `z-index`, which
+meant the winner was decided by document order rather than by anyone. Now the prose wins explicitly,
+and below the collision width the left column simply scrolls with everything else — a gist column you
+can scroll away from is better than one permanently underneath the prose. (Threshold identified by
+`spideryarn2-c1`, 2026-08-25.)
+
+The way to do that is `left: auto`, **not** `position: static`. Going static also cancels the
+element's *vertical* stickiness, and one of the elements involved is a column header — so the first
+attempt silently stopped the table head pinning under the controls bar, on exactly the narrow screens
+where losing it hurts most. It looked fine in a screenshot at the top of the page and only showed up
+in a `getBoundingClientRect()` reading taken 4000px down. A sticky element with `left: auto` has no
+horizontal anchor and keeps its `top` one, which is precisely what was wanted.
 
 ### Validate the tree, always
 

@@ -28,7 +28,9 @@ The view has two modes and the second is easy to forget:
 |---|---|
 | `/` | reading mode: `Article L0 │ Parts L1 │ Sections L2 │ Text verbatim` |
 | `/?text=0` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
-| `/#spya-k6fpme` | deep link, opens scrolled to that block — [block-ids.md](block-ids.md) |
+| `/?at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
+| `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
+| `/?cols=0,1&text=1` | an explicit column choice, which pins the columns and takes them off auto-fit |
 | `/?slug=<slug>` | a different article; defaults to `example` |
 
 **Widths.** At the default three gist columns the table is 1120px wide. Anything under that
@@ -36,6 +38,55 @@ overflows horizontally and the pinned end columns start overlapping the middle o
 design, not a fault: the pinned columns sit *on top* and the drop shadow is there to say "more to
 scroll". 1000×900 is a good window for exercising it; a full-width window hides the whole class of
 bug. Below the `td.text` minimum of 34rem the prose measure clamps rather than breaking.
+
+## Scroll, then read the address bar
+
+The `?at=` parameter is the one thing here no unit test can reach: the parsers and the section
+arithmetic are pinned in `tests/url-state.test.ts`, but the scroll listener that drives them needs a
+real layout. Four checks, in order — each one catches a different failure:
+
+1. **Scroll a few sections and stop.** After ~300ms `?at=` should appear and then change only as you
+   cross a section boundary, not continuously. If it updates on every pixel, the debounce is gone.
+2. **Reload.** You should land back at the same section. If you land at the top, the restore ran
+   before layout; if you land twice, `history.scrollRestoration` is not `manual`.
+3. **Press Back.** It must *leave the page*, not walk you back up it. Any scroll that created a
+   history entry is a bug — see [url-state.md](url-state.md).
+4. **Scroll to the very top.** `?at=` should disappear from the URL entirely.
+
+Then click a gist to jump: that one *should* add a history entry, so Back returns you to where you
+jumped from. It is the only scroll that does.
+
+The failure mode to watch for is a **feedback loop** — scrolling writes the URL and the URL scrolls
+the page, so a broken guard shows up as the page fighting you or juddering, not as an error.
+
+### A background tab will lie to you about scrolling
+
+Worth knowing before you conclude `?at=` is broken, because it looks exactly like a dead listener.
+**Chrome suspends the rendering step for a tab that isn't the visible one in its window**, and scroll
+events and `requestAnimationFrame` are both dispatched from that step. So in a hidden tab:
+
+- `window.scrollTo()` moves `window.scrollY` — and fires **no scroll event at all**.
+- `requestAnimationFrame` never runs, so anything rAF-coalesced (the `?at=` tracker, and the spine's
+  re-measure) never runs either.
+- `setTimeout` is clamped to a 1s minimum, so a 300ms debounce and a 16ms rAF shim both become one
+  second, and a driver script with a dozen short sleeps blows through a CDP timeout.
+
+A screenshot does **not** count as making the tab visible — the extension can capture a hidden tab
+perfectly well, so you get a correct-looking picture of a page whose event loop is asleep. Check
+`document.visibilityState` before believing a negative result.
+
+What still works in a hidden tab, and is therefore what to test there: anything driven by a direct
+call rather than by the rendering step — a fresh page load, a reload, `history.back()`, and clicking a
+control. That is enough to cover URL→page restore, the legacy-hash rewrite, and the history
+semantics. Continuous scroll→URL needs a genuinely visible tab.
+
+**Two things here are rAF-coalesced, and they fail differently.** The `?at=` tracker
+([url-state.md](url-state.md)) goes stale — annoying, self-correcting the moment you scroll in a real
+tab. The spine's re-measure ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine)) is
+worse: it sizes its bands from measured row heights, so measuring while the rendering step is asleep
+gives it wrong proportions, and a wrong-but-plausible rail is exactly the thing a screenshot cannot
+tell you about. If the spine looks subtly off, check `document.visibilityState` before you go looking
+at `Spine.tsx`.
 
 ## Do not judge colour from a screenshot
 
@@ -83,11 +134,33 @@ Each of these looked right in review and was wrong on the page.
    the same stylesheet work because *their* containing block is the table, which is wider than the
    viewport — the identical declaration, a different containing block, the opposite outcome.
    `getBoundingClientRect()` catches it in one call: a bar at `[-97, 903]` in a 1000px viewport is
-   not pinned, whatever `position` says.
+   not pinned, whatever `position` says. Written up on its own, because it is not specific to this
+   project, in [css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md).
 
 `styles.css` also carries three structural constraints that look arbitrary until you've hit the
 failure — `border-collapse: separate`, no `overflow-x` wrapper around the table, and the two-axis
 sticky bars that follow. They're commented in place; read them before you tidy them.
+
+## Where the pinned columns collide, and why 736px
+
+Worth knowing before testing narrow, because it is arithmetic rather than taste. The minimums are
+`td.gist` 12rem and `td.text` 34rem, so the pinned left column is 192px and the pinned prose column
+544px, whatever the viewport does. Both are pinned to opposite edges, so they overlap once
+
+```
+192 + 544 = 736 > viewport
+```
+
+Below 736px the two pinned layers are drawn on top of each other. Both carry `z-index: 15`, with no
+tiebreak between them, so which one wins is settled by document order rather than by choice — the
+prose paints over the gist column. Any deliberate answer here means giving them different z-indices
+or stopping one of them pinning.
+
+The practical failure starts well above that: at 860px the two pins take 736 of it, leaving 124px
+for two 192px middle columns, so both are almost entirely buried. **The design has no answer below
+roughly 900px**, and 700px is comfortably past the point where it stops meaning anything.
+
+*This section is derived from the stylesheet, not observed* — see the tooling caveat below.
 
 ## Driving it from an agent
 
@@ -101,3 +174,17 @@ that's not just a speed argument.
 page screenshots as entirely blank even with correct DOM and layout — suspect the compositor before
 the CSS. Six screenshots through a visible Chrome, including after both script and wheel scrolling,
 were all correct, so treat this as headless-only until someone sees it otherwise.
+
+**The spine is invisible in a hidden tab, and nothing is wrong.** It measures the table's real
+geometry inside `requestAnimationFrame`, and Chrome pauses rAF for a backgrounded tab — so an agent
+that navigates and immediately reads the DOM finds an empty `<aside class="spine">`, no bands and no
+hit targets, however healthy the article is. Take a screenshot first (which activates the tab), or
+check `document.visibilityState` before believing an empty rail. Found 2026-08-25, after a promising
+few minutes spent debugging a tree that turned out to be fine.
+
+**A tooling limit worth knowing:** `resize_window` stopped taking effect partway through a session.
+It kept reporting success while `innerWidth` stayed pinned at its previous value and `outerWidth`
+read 0 — so the window changed and the renderer's viewport did not. Earlier resizes in the same
+session had worked. **Always confirm a resize by reading `innerWidth` back**, and treat any
+narrow-viewport finding taken without that check as unverified. Anything under 1000px in this repo
+is currently untested for that reason.

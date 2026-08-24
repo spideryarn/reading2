@@ -14,20 +14,33 @@
  *    navLabels belong: navigation chrome, never shown in place of prose that
  *    could be displayed (granularity-zoom.md#node-shape).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Article, NodeId } from "../types.js";
-import { buildGeometry, columnLabel } from "./tree.js";
+import { useMemo, useRef, useState } from "react";
+import type { Article, BlockId, NodeId } from "../types.js";
+import { columnLabel, type Geometry } from "./tree.js";
+import type { Layout } from "./layout.js";
 
 interface Props {
   article: Article;
-  /** Which columns are visible, by depth. */
-  visibleDepths: Set<number>;
+  /** Built once in App, because the reading-position code needs it too. */
+  geometry: Geometry;
+  /** Visible column depths, coarse to fine. Chosen by layout.ts § fitView. */
+  columns: number[];
+  /** Explicit pixel widths, one per rendered column. See layout.ts. */
+  layout: Layout;
   showText: boolean;
+  /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
+  onJump(blockId: BlockId): void;
 }
 
-export function TableView({ article, visibleDepths, showText }: Props) {
-  const { blocks, tree } = article;
-  const geometry = useMemo(() => buildGeometry(tree, blocks), [tree, blocks]);
+export function TableView({
+  article,
+  geometry,
+  columns,
+  layout,
+  showText,
+  onJump,
+}: Props) {
+  const { blocks } = article;
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
@@ -38,30 +51,11 @@ export function TableView({ article, visibleDepths, showText }: Props) {
     [hoveredRow, geometry],
   );
 
-  useEffect(() => {
-    const id = decodeURIComponent(location.hash.slice(1));
-    if (!id) return;
-    const row = bodyRef.current?.querySelector<HTMLElement>(
-      `[data-block="${CSS.escape(id)}"]`,
-    );
-    if (!row) return;
-    // Explicit and clamped rather than scrollIntoView(): the row sits inside a
-    // cell that may span dozens of rows, and we want the row's own top, offset
-    // to clear the two sticky bars above it.
-    const STICKY_H = 88; // .controls + thead
-    const top = row.getBoundingClientRect().top + window.scrollY - STICKY_H;
-    const max = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo({ top: Math.max(0, Math.min(top, max)) });
-  }, []);
-
-  /** Clicking a gist takes you to the start of its range. */
-  const scrollToBlock = (blockId: string) => {
-    bodyRef.current
-      ?.querySelector(`[data-block="${CSS.escape(blockId)}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
-
-  const columns = geometry.columnDepths.filter((d) => visibleDepths.has(d));
+  // Whether the end columns need to read as a layer depends on whether the
+  // table actually outruns the window — which App knows exactly, because it
+  // chose the width. Not a viewport breakpoint: the column count changes with
+  // the mode as well as with the window.
+  const { overflowing } = layout;
 
   // With a deep tree the columns can outrun the viewport, so the page scrolls
   // horizontally and the two ends pin: the coarsest column on the left keeps
@@ -71,15 +65,14 @@ export function TableView({ article, visibleDepths, showText }: Props) {
   const pinRight = showText ? "text" : columns[columns.length - 1];
 
   return (
-    <table className={`zoom ${showText ? "reading" : "outline"}`}>
+    <table
+      className={`zoom ${showText ? "reading" : "outline"}${overflowing ? " overflowing" : ""}`}
+      style={{ width: layout.tableW }}
+    >
       <colgroup>
-        {columns.map((d) => (
-          <col
-            key={d}
-            className={`col-gist col-depth-${d}${d === geometry.leafDepth ? " col-leaf" : ""}`}
-          />
+        {layout.widths.map((w, i) => (
+          <col key={i} style={{ width: w }} />
         ))}
-        {showText && <col className="col-text" />}
       </colgroup>
       <thead>
         <tr>
@@ -121,13 +114,20 @@ export function TableView({ article, visibleDepths, showText }: Props) {
                   rowSpan={cell.rowSpan}
                   className={[
                     "gist",
+                    // On the <td>, NOT the <col>: custom properties inherit
+                    // through the DOM tree, and a <col> is not an ancestor of a
+                    // cell. Only background/border/width/visibility cross from
+                    // column to cell, by a special table mechanism that has
+                    // nothing to do with inheritance — so `--tint` set on the
+                    // <col> resolves on an element that nothing reads it from.
+                    `depth-${depth}`,
                     active ? "active" : "",
                     cell.continuation ? "continuation" : "",
                     depth === geometry.leafDepth ? "leaf" : "",
                     depth === pinLeft ? "pin-left" : "",
                     depth === pinRight ? "pin-right" : "",
                   ].filter(Boolean).join(" ")}
-                  onClick={() => scrollToBlock(node.range[0])}
+                  onClick={() => onJump(node.range[0])}
                 >
                   {!cell.continuation && (
                     <div className="sticky">

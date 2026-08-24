@@ -1,0 +1,119 @@
+# Tooltips
+
+> In the left-most column, add a nice hover-tooltip to show more detail somehow.
+>
+> — Greg, 2026-08-25
+
+The left-most column is [the spine](granularity-zoom.md#the-spine-a-birds-eye-rail), and that is
+what makes a tooltip more than decoration here. The rail is **proportional**: each part and section
+gets vertical space in proportion to how much of the document it occupies, which is what makes it a
+real position indicator, and which also means a short section is a two-pixel sliver with no room for
+a word. The design accepted that cost knowingly. The tooltip is where the cost gets paid back.
+
+So this is not "a label, but on hover". It is the one surface in the rail that can hold a sentence.
+
+## What we chose
+
+**[Floating UI](https://floating-ui.com) — `@floating-ui/react`**, v0.27.20, added 2026-08-25.
+One dependency, ~10kB gzipped, MIT.
+
+Picked by the process in
+[third-party-library-selection.md](../reusable/third-party-library-selection.md), whose first and
+loudest criterion is *long-lasting community, lots of docs and discussion* — because that is also
+what makes a library well-represented in the training data of the models writing against it.
+
+| Candidate | Verdict |
+|---|---|
+| **`@floating-ui/react`** | **Chosen.** The positioning engine the others are built on — it is Popper.js's successor by the same author, so a decade of Popper questions and answers describe the same model. ~6M downloads/week. Headless: it positions and it handles interaction, and ships no CSS, which suits a bespoke dark palette. TypeScript-first, hooks-based, tree-shakeable. |
+| `@radix-ui/react-tooltip` | A close second, and a fine answer. It wraps Floating UI and adds WAI-ARIA conformance out of the box. Passed over because it brings a `Provider` + `Portal` + `asChild` component convention this repo uses nowhere else — we lifted shadcn's *tokens* from the original app, not its components — and because its tooltip is deliberately restricted to non-interactive descriptive text. We would have been styling someone else's structure to look like ours. |
+| `@tippyjs/react` | **In maintenance mode as of April 2026**; development moved to Floating UI, which Tippy already used internally. Ruled out on the first criterion, which is about longevity. |
+| `react-tooltip` | Fine for a quick `data-tooltip` attribute; the API is string- and attribute-shaped rather than composition-shaped, and it fits rich, per-item content less well. |
+| Hand-rolled | Rejected. The work is not "put a div next to the cursor" — it is collision handling, hover intent, and dismissal, which is exactly the list of things that are subtly wrong in every hand-rolled tooltip. |
+
+Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react),
+[`@floating-ui/react` on npm](https://www.npmjs.com/package/@floating-ui/react),
+[floating-ui/floating-ui releases](https://github.com/floating-ui/floating-ui/releases),
+[PkgPulse, "Floating UI vs Tippy.js vs Radix Tooltip 2026"](https://www.pkgpulse.com/blog/floating-ui-vs-tippyjs-vs-radix-tooltip-popover-2026).
+
+## Where the code is
+
+| File | What it does |
+|---|---|
+| [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` |
+| [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
+| [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none |
+
+`Tooltip` is deliberately generic — nothing in it knows about the spine. The obvious second customer
+is a gist cell in [`TableView.tsx`](../../src/web/TableView.tsx), where a long summary is clipped by
+its column.
+
+## What the card says, and why that
+
+Top to bottom: the **part** it belongs to, the section **title**, its **gist**, the **sub-sections**
+inside it, and a footer of **words** and **how far into the piece** it sits. That is the answer to
+four different questions a reader can have about a band they cannot read — what is this, what is it
+about, what is inside it, how big is it and where am I.
+
+`navLabel` may appear here in place of a gist, and only because the spine is one of the two places
+the node shape explicitly sanctions navigation chrome
+([granularity-zoom.md § Node shape](granularity-zoom.md#node-shape)). It is styled differently, and
+it is never a fallback for a missing gist in the reading view.
+
+Listing the sub-sections is why [`App.tsx`](../../src/web/App.tsx) builds the outline three levels
+deep rather than two. The rail itself still only ever draws L1 and L2.
+
+## Four things that are load-bearing
+
+Each of these is a way the obvious version fails silently.
+
+1. **The floating node is two elements.** `floatingStyles` positions with a `transform`, and the
+   open/close transition also wants one. One element cannot carry both — the animation fights the
+   placement. Outer div positions, inner div animates. Floating UI's own recommendation, and the
+   reason `useTransitionStyles` returns styles separately instead of merging them.
+2. **It portals to `<body>`.** The spine is `overflow: hidden` and has to be — its bands are
+   absolutely positioned in percentages of the document height and would otherwise spill out of the
+   rail. Anything rendered *inside* the rail is therefore clipped to about 13rem. `<FloatingPortal>`
+   is what stops a 22rem panel becoming a 13rem one.
+3. **The arrow's `fill` and `stroke` are props, not CSS.** Given a `strokeWidth`, `FloatingArrow`
+   draws a second clipped path for the border and paints over the seam where the arrow meets the
+   panel using the `fill` value it was passed. A stylesheet rule wins the cascade over the
+   `stroke="none"` it puts on the fill path, and you get a line straight across the arrow's mouth.
+   `var(--surface-raised)` works as an attribute value because presentation attributes are parsed as
+   CSS values.
+4. **The tooltip is the trigger's *description*, not its name.** `useRole` wires the panel up as
+   `aria-describedby`. The spine's bands used to get their accessible name from the `title`
+   attribute the tooltip replaced, so the name has to be restated as `aria-label` — otherwise a
+   screen reader meets fifty anonymous buttons.
+
+## Grouping, and why the delays are what they are
+
+Open 240ms, close 90ms, wrapped in a `<TooltipGroup>`. The group is the interesting half: once one
+tooltip is open, its neighbours open *instantly* while the pointer keeps moving, and the fade is
+dropped to zero in that phase because a fade reads as lag when the panel is meant to be tracking the
+pointer. The rail stops being fifty separate waits and becomes something you can scrub.
+
+240ms is long enough that crossing the rail on the way to the article does not fire a dozen
+tooltips. 90ms to close is short but not instant, so a wobble between two adjacent bands does not
+blink the panel out and back.
+
+## Checking it in a browser
+
+[browser-testing.md](browser-testing.md) is the general how, and its warnings all apply — in
+particular **do not judge the panel from a screenshot**. A screenshot taken during the 120ms fade
+shows a transparent tooltip with the prose behind it bleeding through, which looks exactly like a
+missing `background`. `getComputedStyle(document.querySelector('.tooltip')).backgroundColor` settles
+it in one call.
+
+Two more, learned on 2026-08-25:
+
+- **The spine does not render in a hidden tab.** It measures inside `requestAnimationFrame`, which
+  Chrome pauses for a backgrounded tab, so an agent driving Chrome sees an empty
+  `<aside class="spine">` and no hit targets at all. Nothing is broken — take a screenshot first, or
+  otherwise make the tab visible, and it populates. Check `document.visibilityState` before
+  believing an empty rail.
+- **The collapsed rail is where it earns its keep, and it works.** Verified at ~1170px, where the
+  spine is a 1.5rem strip with no labels at all: the tooltip is then the *only* thing naming a
+  section, and the portal means the 22rem panel is unaffected by the 24px rail it grows out of.
+  Getting there took two goes — `resize_window` reported success while `innerWidth` stayed put, the
+  tooling limit already written up in browser-testing.md, and the width that finally applied did so
+  on a later window.

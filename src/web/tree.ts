@@ -120,3 +120,65 @@ export function columnLabel(depth: number, leafDepth: number): string {
     default: return `Level ${depth}`;
   }
 }
+
+/* -------------------------------------------------------------- the spine --
+   The bird's-eye rail down the far left renders the top of the tree — L1, and
+   L2 nested inside it — as one always-visible picture of the whole article.
+   Greg, 2026-08-25:
+
+   > I want the left-hand most column to show a bird's eye view … I need a way
+   > to see where I am in the whole article.
+
+   That "where I am" is what forces it out of the table. A table column is
+   correct for *chronology beside prose*, but a whole-article overview cannot
+   live in one, because consecutive entries are thousands of pixels apart: you
+   can only ever see the one you are standing in. So the spine is a separate,
+   viewport-height rail — see Spine.tsx, and granularity-zoom.md#the-spine. */
+
+export interface OutlineEntry {
+  node: TreeNode;
+  /** Row indices into `blocks`, inclusive at both ends. */
+  startRow: number;
+  endRow: number;
+  words: number;
+  children: OutlineEntry[];
+}
+
+/**
+ * The first `depthLimit` levels below the root, with row extents and word
+ * counts. Word counts are a fallback only — the spine sizes its segments from
+ * measured pixel heights so that it is a true minimap (see Spine.tsx) — but
+ * they are the right thing to fall back to before the first measurement, and
+ * they are cheap.
+ */
+export function buildOutline(
+  tree: Tree,
+  blocks: Block[],
+  depthLimit = 2,
+): OutlineEntry[] {
+  const order = new Map<BlockId, number>(blocks.map((b, i) => [b.id, i]));
+
+  const entryFor = (node: TreeNode | undefined): OutlineEntry | null => {
+    if (!node) return null;
+    // Index lookup, never string comparison — block ids carry no order.
+    const startRow = order.get(node.range[0]);
+    const endRow = order.get(node.range[1]);
+    if (startRow === undefined || endRow === undefined || startRow > endRow) {
+      return null;
+    }
+    let words = 0;
+    for (let i = startRow; i <= endRow; i++) words += blocks[i]?.words ?? 0;
+    const children =
+      node.depth < depthLimit
+        ? node.children
+            .map((id) => entryFor(tree.nodes[id]))
+            .filter((e): e is OutlineEntry => e !== null)
+        : [];
+    return { node, startRow, endRow, words, children };
+  };
+
+  const root = tree.nodes[tree.rootId];
+  return (root?.children ?? [])
+    .map((id) => entryFor(tree.nodes[id]))
+    .filter((e): e is OutlineEntry => e !== null);
+}
