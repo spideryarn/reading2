@@ -239,7 +239,7 @@ Not adopted here (Greg, 2026-08-24: leave it for now), but this is where it live
   `WRITE_EVERGREEN_DOC.md`, `SOUNDING_BOARD_MODE.md`, `DETECTIVE_SCIENTIST_MODE.md`,
   `CRITIQUE_OF_PLANNING_DOC.md`, `DEBRIEF_PROGRESS.md`, `AUDIT_ARCHITECTURE_MODE.md`, and
   `GATHER_DIVERSE_INPUTS_AND_CRITIQUES_ON_PLANNING_DOCS_FROM_OTHER_AI_MODELS_*.md` — the last of
-  which overlaps with our [docs/reusable/CODEX_CLI_AS_SUBAGENT.md](../reusable/CODEX_CLI_AS_SUBAGENT.md).
+  which overlaps with our [docs/reusable/codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md).
 - `docs/reference/SETUP_FOR_AI_FIRST_CODING.md` — how that repo is arranged for agents.
 - `docs/conversations/` — ~30 captured design conversations, several of them cross-model critiques.
   This is where the *reasoning* lives when a reference doc only states the conclusion.

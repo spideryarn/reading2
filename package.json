@@ -4,13 +4,14 @@
   "description": "HTML content extraction experiments",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "extract": "tsx src/extract.ts",
     "blocks": "tsx src/blocks.ts",
     "dev": "vite",
     "build": "vite build",
     "validate-tree": "tsx src/validate-tree.ts",
-    "toc:flatten": "tsx src/toc-flatten.ts"
+    "toc:flatten": "tsx src/toc-flatten.ts",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +31,7 @@
     "@vitejs/plugin-react": "^6.1.0",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   }
 }

@@ -23,7 +23,7 @@
  *   npx tsx scripts/run-codex.ts --prompt "Summarise how src/extract.ts works"
  *   npx tsx scripts/run-codex.ts --sandbox workspace-write --prompt-file /tmp/task.md -o /tmp/a.md
  *
- * See docs/reusable/CODEX_CLI_AS_SUBAGENT.md for models, auth, and the read-only/write switch.
+ * See docs/reusable/codex-cli-as-subagent.md for models, auth, and the read-only/write switch.
  */
 
 import { spawn } from 'node:child_process';

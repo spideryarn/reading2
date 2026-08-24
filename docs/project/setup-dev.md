@@ -27,6 +27,7 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run toc:flatten -- …` | 4, ToC → tree ([table-of-contents.md](table-of-contents.md)) | `tree.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
+| `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
 
 **Run the validator.** A tree that violates the invariants doesn't crash the client — it silently
 draws a *wrong article*. See [`example/README.md`](../../example/README.md).
@@ -37,7 +38,8 @@ draws a *wrong article*. See [`example/README.md`](../../example/README.md).
 - [`example/`](../../example/README.md) — the hand-authored placeholder the client falls back to when
   `data/<slug>/` doesn't exist yet.
 - `output/` — the prototype extractor's scratch output, including the test article.
-- No test runner yet; `npm test` is still a stub.
+- [`tests/`](../../tests) — Vitest unit tests. `npm test` (once) or `npm run test:watch`. See
+  [testing.md](testing.md).
 
 ## Before writing LLM code
 

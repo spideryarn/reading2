@@ -32,13 +32,17 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
 | [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
+| [testing.md](docs/project/testing.md) | the test runner, what's deterministic enough to test, and what we deliberately don't |
 | [open-questions.md](docs/project/open-questions.md) | undecided calls, each with a recommendation so nobody is blocked |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
 
-- [docs/reusable/CODEX_CLI_AS_SUBAGENT.md](docs/reusable/CODEX_CLI_AS_SUBAGENT.md) — dispatching a
+- [docs/reusable/codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md) — dispatching a
   GPT/Codex subagent from Claude Code via [`scripts/run-codex.ts`](scripts/run-codex.ts), for
   cross-family review or delegated implementation
+- [docs/reusable/third-party-library-selection.md](docs/reusable/third-party-library-selection.md) —
+  how to pick a dependency: bias towards long-lived, heavily-documented libraries, then write the
+  decision down. Followed for Vitest in [testing.md](docs/project/testing.md)
 
 ## The one contract that matters
 
@@ -62,6 +66,9 @@ Not descriptions of code, which the code already provides.
 
 - **Update the docs as you go.** Any time you create or change functionality, consider whether a doc
   under `docs/project/` needs creating or updating, and do it in the same piece of work.
+- **File names are lower-case kebab-case.** `table-of-contents.md`, not `TABLE_OF_CONTENTS.md`.
+  This holds everywhere under `docs/`, including `docs/reusable/`, even when the doc was copied in
+  from somewhere that shouted. Rename on sight and fix the links.
 - **New doc ⇒ new signpost.** Every time you add a doc, add a line for it to the table above in this
   file. A doc nothing links to may as well not exist.
 - **Quote Greg directly.** Where a document captures something he said, use his exact wording, or as
@@ -93,6 +100,8 @@ Not descriptions of code, which the code already provides.
   summaries, Readability edge cases, overlapping highlights, stable element ids — check
   [original-version.md](docs/project/original-version.md). It's a library to consult, not a backlog
   to import: that project is far larger in scope, and this one is staying tight.
+- **Run `npm test` before you commit.** It is deterministic and takes ~2s. What's covered, and what
+  isn't, is in [testing.md](docs/project/testing.md).
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.
 - **Committing, with several agents in one working tree.** We're deliberately not using git
