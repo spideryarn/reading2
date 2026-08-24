@@ -1,0 +1,292 @@
+{
+  "blocks": [
+    {
+      "id": "p0001",
+      "tag": "h1",
+      "html": "<h1>The Mythology Of Conscious AI</h1>",
+      "text": "The Mythology Of Conscious AI",
+      "level": 1,
+      "opaque": false,
+      "textHash": "56635187b851"
+    },
+    {
+      "id": "p0002",
+      "tag": "p",
+      "html": "<p>Credits</p>",
+      "text": "Credits",
+      "level": null,
+      "opaque": false,
+      "textHash": "2a6b24ad2872"
+    },
+    {
+      "id": "p0003",
+      "tag": "p",
+      "html": "<p>Anil Seth won the 2025 annual&nbsp;<span><a href=\"https://berggruen.org/eu/news/2025-berggruen-prize-essay-competition-winners\">Berggruen Prize Essay Competition</a> for his English-language essay, “<a href=\"https://www.noemamag.com/the-mythology-of-conscious-ai/\">The Mythology Of Conscious AI</a>.”</span></p>",
+      "text": "Anil Seth won the 2025 annual Berggruen Prize Essay Competition for his English-language essay, “The Mythology Of Conscious AI.”",
+      "level": null,
+      "opaque": false,
+      "textHash": "4b6c0ed4978a"
+    },
+    {
+      "id": "p0004",
+      "tag": "p",
+      "html": "<p>A neuroscience professor and the director of the Centre for Consciousness Science at the University of Sussex, Seth is also the co-director of the Canadian Institute for Advanced Research Program on Brain, Mind and Consciousness. He wrote, “Being&nbsp; You: A New Science of Consciousness” (Dutton, 2021).</p>",
+      "text": "A neuroscience professor and the director of the Centre for Consciousness Science at the University of Sussex, Seth is also the co-director of the Canadian Institute for Advanced Research Program on Brain, Mind and Consciousness. He wrote, “Being You: A New Science of Consciousness” (Dutton, 2021).",
+      "level": null,
+      "opaque": false,
+      "textHash": "ef5c415bccec"
+    },
+    {
+      "id": "p0005",
+      "tag": "p",
+      "html": "<p>For centuries, people have fantasized about playing God by creating artificial versions of human beings. This is a dream reinvented with every breaking wave of new technology. With genetic engineering came the prospect of human cloning, and with robotics that of humanlike androids.</p>",
+      "text": "For centuries, people have fantasized about playing God by creating artificial versions of human beings. This is a dream reinvented with every breaking wave of new technology. With genetic engineering came the prospect of human cloning, and with robotics that of humanlike androids.",
+      "level": null,
+      "opaque": false,
+      "textHash": "5e17e9e8e9e2"
+    },
+    {
+      "id": "p0006",
+      "tag": "p",
+      "html": "<p>The rise of artificial intelligence (AI) is another breaking wave — potentially a tsunami. The AI systems we have around us are arguably already intelligent, at least in some ways. They will surely get smarter still. But are they, or could they ever be, conscious? And why would that matter?</p>",
+      "text": "The rise of artificial intelligence (AI) is another breaking wave — potentially a tsunami. The AI systems we have around us are arguably already intelligent, at least in some ways. They will surely get smarter still. But are they, or could they ever be, conscious? And why would that matter?",
+      "level": null,
+      "opaque": false,
+      "textHash": "3b9fe62764c3"
+    },
+    {
+      "id": "p0007",
+      "tag": "p",
+      "html": "<p>The cultural history of synthetic consciousness is both long and mostly unhappy. From Yossele the Golem, to Mary Shelley’s “Frankenstein,” HAL 9000 in “2001: A Space Odyssey,” Ava in “Ex Machina,” and Klara in “Klara and The Sun,” the dream of creating artificial bodies and synthetic minds that both think and <em>feel</em> rarely ends well — at least, not for the humans involved. One thing we learn from these stories: If artificial intelligence is on a path toward real consciousness, or even toward systems that persuasively seem to be conscious, there’s plenty at stake — and not just disruption in job markets.</p>",
+      "text": "The cultural history of synthetic consciousness is both long and mostly unhappy. From Yossele the Golem, to Mary Shelley’s “Frankenstein,” HAL 9000 in “2001: A Space Odyssey,” Ava in “Ex Machina,” and Klara in “Klara and The Sun,” the dream of creating artificial bodies and synthetic minds that both think and feel rarely ends well — at least, not for the humans involved. One thing we learn from these stories: If artificial intelligence is on a path toward real consciousness, or even toward systems that persuasively seem to be conscious, there’s plenty at stake — and not just disruption in job markets.",
+      "level": null,
+      "opaque": false,
+      "textHash": "d56f576b22e5"
+    },
+    {
+      "id": "p0008",
+      "tag": "p",
+      "html": "<p>Some people think conscious AI is already here. In a 2022 interview with The Washington Post, Google engineer Blake Lemoine made a startling claim about the AI system he was working on, a chatbot called LaMDA. He <a href=\"https://www.washingtonpost.com/technology/2022/06/11/google-ai-lamda-blake-lemoine/\">claimed</a> it was conscious, that it had feelings, and was, in an important sense, like a real person. Despite a flurry of media coverage, Lemoine wasn’t taken all that seriously. Google dismissed him for violating its confidentiality policies, and the AI bandwagon rolled on.</p>",
+      "text": "Some people think conscious AI is already here. In a 2022 interview with The Washington Post, Google engineer Blake Lemoine made a startling claim about the AI system he was working on, a chatbot called LaMDA. He claimed it was conscious, that it had feelings, and was, in an important sense, like a real person. Despite a flurry of media coverage, Lemoine wasn’t taken all that seriously. Google dismissed him for violating its confidentiality policies, and the AI bandwagon rolled on.",
+      "level": null,
+      "opaque": false,
+      "textHash": "c7a8f8286583"
+    },
+    {
+      "id": "p0009",
+      "tag": "p",
+      "html": "<p>But the question he raised has not gone away. Firing someone for breaching confidentiality is not the same as firing them for being wrong. As AI technologies continue to improve, questions about machine consciousness are increasingly being raised. David Chalmers, one of the foremost thinkers in this area, has suggested that conscious machines <a href=\"https://www.bostonreview.net/articles/could-a-large-language-model-be-conscious/\">may be possible</a> in the not-too-distant future. Geoffrey Hinton, a true AI pioneer and recent Nobel Prize winner, <a href=\"https://www.youtube.com/watch?v=vxkBE23zDmQ\">thinks they exist</a> already. In late 2024, a group of prominent researchers wrote a widely publicized article about the need to take the <a href=\"https://arxiv.org/abs/2411.00986v1\">welfare of AI systems</a> seriously. For many leading experts in AI and neuroscience, the emergence of machine consciousness is a question of <em>when, </em>not <em>if</em>.</p>",
+      "text": "But the question he raised has not gone away. Firing someone for breaching confidentiality is not the same as firing them for being wrong. As AI technologies continue to improve, questions about machine consciousness are increasingly being raised. David Chalmers, one of the foremost thinkers in this area, has suggested that conscious machines may be possible in the not-too-distant future. Geoffrey Hinton, a true AI pioneer and recent Nobel Prize winner, thinks they exist already. In late 2024, a group of prominent researchers wrote a widely publicized article about the need to take the welfare of AI systems seriously. For many leading experts in AI and neuroscience, the emergence of machine consciousness is a question of when, not if.",
+      "level": null,
+      "opaque": false,
+      "textHash": "db789c83a5b1"
+    },
+    {
+      "id": "p0010",
+      "tag": "p",
+      "html": "<p>How we think about the prospects for conscious AI matters. It matters for the AI systems themselves, since — if they are conscious, whether now or in the future — with consciousness comes moral status, the potential for suffering and, perhaps, rights.</p>",
+      "text": "How we think about the prospects for conscious AI matters. It matters for the AI systems themselves, since — if they are conscious, whether now or in the future — with consciousness comes moral status, the potential for suffering and, perhaps, rights.",
+      "level": null,
+      "opaque": false,
+      "textHash": "2fb104d6172b"
+    },
+    {
+      "id": "p0011",
+      "tag": "p",
+      "html": "<p>It matters for us too. What we collectively think about consciousness in AI already carries enormous importance, regardless of the reality. If we feel that our AI companions really feel things, our psychological vulnerabilities can be exploited, our ethical priorities distorted, and our minds brutalized — treating conscious-seeming machines as if they lack feelings is a psychologically unhealthy place to be. And if we do endow our AI creations with rights, we may not be able to turn them off, even if they act against our interests.</p>",
+      "text": "It matters for us too. What we collectively think about consciousness in AI already carries enormous importance, regardless of the reality. If we feel that our AI companions really feel things, our psychological vulnerabilities can be exploited, our ethical priorities distorted, and our minds brutalized — treating conscious-seeming machines as if they lack feelings is a psychologically unhealthy place to be. And if we do endow our AI creations with rights, we may not be able to turn them off, even if they act against our interests.",
+      "level": null,
+      "opaque": false,
+      "textHash": "cf47f4967c8a"
+    },
+    {
+      "id": "p0012",
+      "tag": "p",
+      "html": "<p>Perhaps most of all, the way we think about conscious AI matters for how we understand our own human nature and the nature of the conscious experiences that make our lives worth living. If we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves.</p>",
+      "text": "Perhaps most of all, the way we think about conscious AI matters for how we understand our own human nature and the nature of the conscious experiences that make our lives worth living. If we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves.",
+      "level": null,
+      "opaque": false,
+      "textHash": "73d7a51ec96d"
+    },
+    {
+      "id": "p0013",
+      "tag": "h2",
+      "html": "<h2 id=\"h-the-temptations-of-conscious-ai\">The Temptations Of Conscious AI</h2>",
+      "text": "The Temptations Of Conscious AI",
+      "level": 2,
+      "opaque": false,
+      "textHash": "3be236ee31a1"
+    },
+    {
+      "id": "p0014",
+      "tag": "p",
+      "html": "<p>Why might we even think that AI could be conscious? After all, computers are very different from biological organisms, and the only things most people currently agree are conscious are made of meat, not metal.</p>",
+      "text": "Why might we even think that AI could be conscious? After all, computers are very different from biological organisms, and the only things most people currently agree are conscious are made of meat, not metal.",
+      "level": null,
+      "opaque": false,
+      "textHash": "05224217c144"
+    },
+    {
+      "id": "p0015",
+      "tag": "p",
+      "html": "<p>The first reason lies within our own psychological infrastructure. As humans, we know we are conscious and like to think we are intelligent, so we find it natural to assume the two go together. But just because they go together <em>in us </em>doesn’t mean that they go together <em>in general</em>.</p>",
+      "text": "The first reason lies within our own psychological infrastructure. As humans, we know we are conscious and like to think we are intelligent, so we find it natural to assume the two go together. But just because they go together in us doesn’t mean that they go together in general.",
+      "level": null,
+      "opaque": false,
+      "textHash": "299d043895b4"
+    },
+    {
+      "id": "p0016",
+      "tag": "p",
+      "html": "<p>Intelligence and consciousness are different things. Intelligence is mainly about <em>doing</em>: solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop — all involve intelligent behavior of some kind. A useful general definition of intelligence is the ability to achieve complex goals by flexible means. There are many other definitions out there, but they all emphasize the functional capacities of a system: the ability to transform inputs into outputs, to <em>get things done</em>.</p>",
+      "text": "Intelligence and consciousness are different things. Intelligence is mainly about doing: solving a crossword puzzle, assembling some furniture, navigating a tricky family situation, walking to the shop — all involve intelligent behavior of some kind. A useful general definition of intelligence is the ability to achieve complex goals by flexible means. There are many other definitions out there, but they all emphasize the functional capacities of a system: the ability to transform inputs into outputs, to get things done.",
+      "level": null,
+      "opaque": false,
+      "textHash": "b6539a5fbcf9"
+    },
+    {
+      "id": "p0017",
+      "tag": "figure",
+      "html": "<figure>\n\n  <blockquote>\n\n    <p>\n      “If we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves.”    </p>\n\n    \n    \n  </blockquote>\n</figure>",
+      "text": "“If we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves.”",
+      "level": null,
+      "opaque": true,
+      "textHash": "67189b503bfb"
+    },
+    {
+      "id": "p0018",
+      "tag": "p",
+      "html": "<p>An artificially intelligent system is measured by its ability to perform intelligent behavior of some kind, though not necessarily in a humanlike form. The concept of <a href=\"https://arxiv.org/abs/0706.3639\">artificial <em>general </em>intelligence</a> (AGI), by contrast, explicitly references human intelligence. It is supposed to match or exceed the cognitive competencies of human beings. (There’s also artificial superintelligence, ASI, which happens when AI bootstraps itself beyond our comprehension and control. ASI tends to crop up in the more existentially fraught scenarios for our possible futures.)</p>",
+      "text": "An artificially intelligent system is measured by its ability to perform intelligent behavior of some kind, though not necessarily in a humanlike form. The concept of artificial general intelligence (AGI), by contrast, explicitly references human intelligence. It is supposed to match or exceed the cognitive competencies of human beings. (There’s also artificial superintelligence, ASI, which happens when AI bootstraps itself beyond our comprehension and control. ASI tends to crop up in the more existentially fraught scenarios for our possible futures.)",
+      "level": null,
+      "opaque": false,
+      "textHash": "722697a3ae8a"
+    },
+    {
+      "id": "p0019",
+      "tag": "p",
+      "html": "<p>Consciousness, in contrast to intelligence, is mostly about <em>being</em>. <a href=\"https://philpapers.org/rec/NAGWII\">Half a century ago</a>, the philosopher Thomas Nagel famously offered that “an organism has conscious mental states if and only if there is something it is like to<em> be </em>that organism.” Consciousness is the difference between normal wakefulness and the oblivion of deep general anesthesia. It is the experiential aspect of brain function and especially of perception: the colors, shapes, tastes, emotions, thoughts and more, that give our lives texture and meaning. The blueness of the sky on a clear day. The bitter tang and headrush of your first coffee.</p>",
+      "text": "Consciousness, in contrast to intelligence, is mostly about being. Half a century ago, the philosopher Thomas Nagel famously offered that “an organism has conscious mental states if and only if there is something it is like to be that organism.” Consciousness is the difference between normal wakefulness and the oblivion of deep general anesthesia. It is the experiential aspect of brain function and especially of perception: the colors, shapes, tastes, emotions, thoughts and more, that give our lives texture and meaning. The blueness of the sky on a clear day. The bitter tang and headrush of your first coffee.",
+      "level": null,
+      "opaque": false,
+      "textHash": "e6ba29a52064"
+    },
+    {
+      "id": "p0020",
+      "tag": "p",
+      "html": "<p>AI systems can reasonably lay claim to intelligence in some form, since they can certainly <em>do </em>things, but it is harder to say whether there is anything-it-is-like-to<em>-be </em>ChatGPT.</p>",
+      "text": "AI systems can reasonably lay claim to intelligence in some form, since they can certainly do things, but it is harder to say whether there is anything-it-is-like-to-be ChatGPT.",
+      "level": null,
+      "opaque": false,
+      "textHash": "6214ddf08ff6"
+    },
+    {
+      "id": "p0021",
+      "tag": "p",
+      "html": "<p>The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.</p>",
+      "text": "The propensity to bundle intelligence and consciousness together can be traced to three baked-in psychological biases.",
+      "level": null,
+      "opaque": false,
+      "textHash": "f3f89560c2d7"
+    },
+    {
+      "id": "p0022",
+      "tag": "p",
+      "html": "<p>The first is <em>anthropocentrism</em>. This is the tendency to see things through the lens of being human: to take the human example as definitional, rather than as one example of how different properties might come together.</p>",
+      "text": "The first is anthropocentrism. This is the tendency to see things through the lens of being human: to take the human example as definitional, rather than as one example of how different properties might come together.",
+      "level": null,
+      "opaque": false,
+      "textHash": "d37e0656edfa"
+    },
+    {
+      "id": "p0023",
+      "tag": "p",
+      "html": "<p>The second is <em>human exceptionalism</em>: our unfortunate habit of putting the human species at the top of every pile, and sometimes in a different pile altogether (perhaps closer to angels and Gods than to other animals, as in the medieval <em>Scala naturae</em>). And the third is <em>anthropomorphism</em>. This is the tendency to project humanlike qualities onto nonhuman things based on what may be only superficial similarities.</p>",
+      "text": "The second is human exceptionalism: our unfortunate habit of putting the human species at the top of every pile, and sometimes in a different pile altogether (perhaps closer to angels and Gods than to other animals, as in the medieval Scala naturae). And the third is anthropomorphism. This is the tendency to project humanlike qualities onto nonhuman things based on what may be only superficial similarities.",
+      "level": null,
+      "opaque": false,
+      "textHash": "fd8b33979c5b"
+    },
+    {
+      "id": "p0024",
+      "tag": "p",
+      "html": "<p>Taken together, these biases explain why it’s hardly surprising that when things exhibit abilities we think of as distinctively human, such as intelligence, we naturally imbue them with other qualities we feel are characteristically or even distinctively human: understanding, mindedness and consciousness, too.</p>",
+      "text": "Taken together, these biases explain why it’s hardly surprising that when things exhibit abilities we think of as distinctively human, such as intelligence, we naturally imbue them with other qualities we feel are characteristically or even distinctively human: understanding, mindedness and consciousness, too.",
+      "level": null,
+      "opaque": false,
+      "textHash": "ea479c45585c"
+    },
+    {
+      "id": "p0025",
+      "tag": "p",
+      "html": "<p>One aspect of intelligent behavior that’s turned out to be particularly effective at making some people think that AI could be conscious is language. This is likely because language is a cornerstone of human exceptionalism. Large Language Models (LLMs) like OpenAI’s ChatGPT or Anthropic’s Claude have been the focus of most of the excitement about artificial consciousness. Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious, even though, under the hood, it is rather similar to an LLM. All these systems run on silicon and involve artificial neural networks and other fancy algorithmic innovations such as transformers. AlphaFold, which predicts protein structure rather than words, just doesn’t pull our psychological strings in the same way.</p>",
+      "text": "One aspect of intelligent behavior that’s turned out to be particularly effective at making some people think that AI could be conscious is language. This is likely because language is a cornerstone of human exceptionalism. Large Language Models (LLMs) like OpenAI’s ChatGPT or Anthropic’s Claude have been the focus of most of the excitement about artificial consciousness. Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious, even though, under the hood, it is rather similar to an LLM. All these systems run on silicon and involve artificial neural networks and other fancy algorithmic innovations such as transformers. AlphaFold, which predicts protein structure rather than words, just doesn’t pull our psychological strings in the same way.",
+      "level": null,
+      "opaque": false,
+      "textHash": "ca79a0ac62ed"
+    },
+    {
+      "id": "p0026",
+      "tag": "p",
+      "html": "<p>The language that we ourselves use matters too. Consider how normal it has become to say that LLMs “hallucinate” when they spew falsehoods. Hallucinations in human beings are mainly conscious experiences that have lost their grip on reality (uncontrolled perceptions, one might say). We hallucinate when we hear voices that aren’t there or see a dead relative standing at the foot of the bed. When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience. If we must use a human analogy, it would be far better to say that they “confabulate.” In humans, confabulation involves making things up without realizing it. It is primarily about <em>doing</em>, rather than <em>experiencing</em>.</p>",
+      "text": "The language that we ourselves use matters too. Consider how normal it has become to say that LLMs “hallucinate” when they spew falsehoods. Hallucinations in human beings are mainly conscious experiences that have lost their grip on reality (uncontrolled perceptions, one might say). We hallucinate when we hear voices that aren’t there or see a dead relative standing at the foot of the bed. When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience. If we must use a human analogy, it would be far better to say that they “confabulate.” In humans, confabulation involves making things up without realizing it. It is primarily about doing, rather than experiencing.",
+      "level": null,
+      "opaque": false,
+      "textHash": "175d2e039321"
+    },
+    {
+      "id": "p0027",
+      "tag": "p",
+      "html": "<p>When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does. We certainly should not just assume that consciousness will come along for the ride as AI gets smarter, and if you hear someone saying that real artificial consciousness will magically emerge at the arbitrary threshold of AGI, that’s a sure sign of human exceptionalism at work.</p>",
+      "text": "When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does. We certainly should not just assume that consciousness will come along for the ride as AI gets smarter, and if you hear someone saying that real artificial consciousness will magically emerge at the arbitrary threshold of AGI, that’s a sure sign of human exceptionalism at work.",
+      "level": null,
+      "opaque": false,
+      "textHash": "fc5b62f96fd2"
+    },
+    {
+      "id": "p0028",
+      "tag": "p",
+      "html": "<p>There are other biases in play, too. There’s the powerful idea that everything in AI is changing exponentially. Whether it’s raw compute as indexed by Moore’s Law, or the new capabilities available with each new iteration of the big tech foundation models, things surely are changing quickly. Exponential growth has the psychologically destabilizing property that what’s ahead seems impossibly steep, and what’s behind seems irrelevantly flat. Crucially, things seem this way wherever you are on the curve — that’s what makes it exponential. Because of this, it’s tempting to feel like we are always on the cusp of a major transition, and what could be more major than the creation of real artificial consciousness? But on an exponential curve, every point is an inflection point.</p>",
+      "text": "There are other biases in play, too. There’s the powerful idea that everything in AI is changing exponentially. Whether it’s raw compute as indexed by Moore’s Law, or the new capabilities available with each new iteration of the big tech foundation models, things surely are changing quickly. Exponential growth has the psychologically destabilizing property that what’s ahead seems impossibly steep, and what’s behind seems irrelevantly flat. Crucially, things seem this way wherever you are on the curve — that’s what makes it exponential. Because of this, it’s tempting to feel like we are always on the cusp of a major transition, and what could be more major than the creation of real artificial consciousness? But on an exponential curve, every point is an inflection point.",
+      "level": null,
+      "opaque": false,
+      "textHash": "6f77d14d7cf3"
+    },
+    {
+      "id": "p0029",
+      "tag": "figure",
+      "html": "<figure>\n\n  <blockquote>\n\n    <p>\n      “When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does.”    </p>\n\n    \n    \n  </blockquote>\n</figure>",
+      "text": "“When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does.”",
+      "level": null,
+      "opaque": true,
+      "textHash": "1e7bfd7787c5"
+    },
+    {
+      "id": "p0030",
+      "tag": "p",
+      "html": "<p>Finally, there’s the temptation of the techno-rapture. Early in the movie “Ex Machina,”the programmer Caleb says to the inventor Nathan: “If you’ve created a conscious machine —&nbsp;it’s not the history of man, that’s the history of Gods.” If we feel we’re at a techno-historical transition, and we happen to be one of its architects, then the Promethean lure must be hard to resist: the feeling of bringing to humankind that which was once the province of the divine. And with this singularity comes the signature rapture offering of immortality: the promise of escaping our inconveniently decaying biological bodies and living (or at least being) forever, floating off to eternity in a silicon-enabled cloud.</p>",
+      "text": "Finally, there’s the temptation of the techno-rapture. Early in the movie “Ex Machina,”the programmer Caleb says to the inventor Nathan: “If you’ve created a conscious machine — it’s not the history of man, that’s the history of Gods.” If we feel we’re at a techno-historical transition, and we happen to be one of its architects, then the Promethean lure must be hard to resist: the feeling of bringing to humankind that which was once the province of the divine. And with this singularity comes the signature rapture offering of immortality: the promise of escaping our inconveniently decaying biological bodies and living (or at least being) forever, floating off to eternity in a silicon-enabled cloud.",
+      "level": null,
+      "opaque": false,
+      "textHash": "be825db2ed11"
+    },
+    {
+      "id": "p0031",
+      "tag": "p",
+      "html": "<p>Perhaps this is one reason why pronouncements of imminent machine consciousness seem more common within the technorati than outside of it. (More cynically: fueling the idea that there’s something semi-magical about AI may help share prices stay aloft and justify the sky-high salaries and levels of investment now seen in Silicon Valley. Did someone say “bubble”?)</p>",
+      "text": "Perhaps this is one reason why pronouncements of imminent machine consciousness seem more common within the technorati than outside of it. (More cynically: fueling the idea that there’s something semi-magical about AI may help share prices stay aloft and justify the sky-high salaries and levels of investment now seen in Silicon Valley. Did someone say “bubble”?)",
+      "level": null,
+      "opaque": false,
+      "textHash": "ee76e7394469"
+    },
+    {
+      "id": "p0032",
+      "tag": "p",
+      "html": "<p>In his book “<a href=\"https://basicbooks.uk/titles/adam-becker/more-everything-forever/9781399827904/\">More Everything Forever,</a>” Adam Becker describes the tendency to project consciousness into AI as a form of pareidolia — the phenomenon of seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun (Figure 1). This is an apt description. But helping you recognize the power of our pareidolia-inducing psychological biases is just the first step in challenging the mythology of conscious AI. To address the question of whether real artificial consciousness is even possible, we need to dig deeper.</p>",
+      "text": "In his book “More Everything Forever,” Adam Becker describes the tendency to project consciousness into AI as a form of pareidolia — the phenomenon of seeing patterns in things, like a face in a piece of toast or Mother Teresa in a cinnamon bun (Figure 1). This is an apt description. But helping you recognize the power of our pareidolia-inducing psychological biases is just the first step in challenging the mythology of conscious AI. To address the question of whether real artificial consciousness is even possible, we need to dig deeper.",
+      "level": null,
+      "opaque": false,
+      "textHash": "fea11d682209"
+    }
+  ]
+}

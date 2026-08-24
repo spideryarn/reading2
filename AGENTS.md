@@ -22,6 +22,12 @@ See [docs/project/granularity-zoom.md](docs/project/granularity-zoom.md).
 - [docs/project/content-extraction.md](docs/project/content-extraction.md) — the Readability extraction stage (owned by another agent)
 - [docs/project/open-questions.md](docs/project/open-questions.md) — undecided calls, each with a recommendation so nobody is blocked
 
+`docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
+
+- [docs/reusable/CODEX_CLI_AS_SUBAGENT.md](docs/reusable/CODEX_CLI_AS_SUBAGENT.md) — dispatching a
+  GPT/Codex subagent from Claude Code via [`scripts/run-codex.ts`](scripts/run-codex.ts), for
+  cross-family review or delegated implementation
+
 ## How we write docs here
 
 We keep **lots** of documents under `docs/project/`, and they exist mainly to carry **intent** —
