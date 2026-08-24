@@ -73,8 +73,9 @@ that codebase keep working.
 a serif for the article, which was the agreement that mattered. It now `@import`s
 [`styles/tokens.css`](../../styles/tokens.css) and defines a thin semantic layer over it rather than
 restating any values; the warm palette and the dark-mode block are gone. One palette, one source.
-`index.html` links the favicons and manifest from [`public/`](../../public/), with `theme-color`
-`#DB8A45`.
+`index.html` links the favicons and manifest from [`public/`](../../public/). (Its `theme-color` was
+`#DB8A45` until the dark switch below moved it to the page black, so mobile browser chrome matches
+the page rather than announcing the brand.)
 
 **Superseded in part, same day.** The single-palette half of that decision stands and is why any of
 this was cheap; the light-only half is gone — see the dark-only decision above. `styles/tokens.css`

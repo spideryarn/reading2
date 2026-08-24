@@ -4,7 +4,14 @@
  * Source: /Users/greg/dev/spideryarn/reading — `app/globals.css` (colours),
  * `docs/reference/DESIGN_COLORS_FONTS.md` (rationale),
  * `docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md` (the reading measure/typography numbers).
- * See docs/project/spideryarn-original.md for what was and wasn't carried over, and why.
+ * See docs/project/original-version.md for what was and wasn't carried over, and why.
+ *
+ * DARK ONLY, unconditionally — no toggle, no `prefers-color-scheme`, no light fallback.
+ * Greg, 2026-08-24: "I'm happy to go with the dumb version where we just switched to always being
+ * in dark mode." One theme is one thing to get right. The surface values below are the neutral set
+ * inverted, under the *same variable names* as before, so nothing downstream had to be rewired; the
+ * brand orange is unchanged, and reads better on black than it ever did on white (~7.8:1 vs ~2.6:1).
+ * The reasoning, and what to do if light mode ever comes back: docs/project/web-client.md § Dark mode.
  *
  * Deliberately plain CSS custom properties: no Tailwind, no shadcn, no build step, so the React
  * client can use these however it likes. Names match the original where they exist there, so
@@ -12,38 +19,46 @@
  */
 
 :root {
+    /* Tells the browser to paint its own furniture dark too — scrollbars, form controls, and the
+       canvas behind the page. index.html says the same in a <meta> so it applies before CSS loads. */
+    color-scheme: dark;
+
     /* ---- brand ------------------------------------------------------- */
     --spideryarn-orange: #DB8A45;
     --highlight: var(--spideryarn-orange);   /* alias: say this when you mean "the orange" */
 
-    /* ---- surfaces and text (light only; the original forces light mode) */
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.65 0.15 45);            /* Spideryarn orange in OKLCH */
-    --primary-foreground: oklch(0.98 0.02 45);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    /* CAREFUL: --accent here is shadcn's meaning — a near-white *surface* for hover
+    /* ---- surfaces and text (dark only; see the header) ---------------- */
+    /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,
+       because pure white on pure black haloes badly in a serif at reading sizes. */
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.97 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.97 0 0);
+    --primary: oklch(0.65 0.15 45);            /* Spideryarn orange in OKLCH — unchanged */
+    --primary-foreground: oklch(0.16 0.02 45); /* text *on* an orange fill, so now near-black */
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.97 0 0);
+    --muted: oklch(0.245 0 0);
+    --muted-foreground: oklch(0.63 0 0);
+    /* CAREFUL: --accent here is shadcn's meaning — a raised dark *surface* for hover
        states — NOT the brand highlight colour. If you import this file into a
        stylesheet that already uses --accent to mean "the orange", every highlight
-       silently goes almost white. Use --highlight / --spideryarn-orange for the
-       orange, and rename your own variable rather than redefining --accent. */
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+       silently goes near-black and vanishes into the page. Use --highlight /
+       --spideryarn-orange for the orange, and rename your own variable rather than
+       redefining --accent. */
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.97 0 0);
+    --destructive: oklch(0.65 0.2 27.325);
+    --border: oklch(0.27 0 0);
+    --input: oklch(0.3 0 0);
+    --ring: oklch(0.55 0 0);
 
     /* ---- sidebar / left rail ----------------------------------------- */
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-border: oklch(0.922 0 0);
+    /* Slightly *lighter* than --background, not darker: on a dark page a panel lifts forward. */
+    --sidebar: oklch(0.19 0 0);
+    --sidebar-foreground: oklch(0.97 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-border: oklch(0.27 0 0);
 
     /* ---- shape ------------------------------------------------------- */
     --radius: 0.625rem;

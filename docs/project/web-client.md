@@ -26,6 +26,52 @@ Why the feature exists and what a gist may and may not be:
 Running it: [setup-dev.md](setup-dev.md). Slug selection is `/?slug=<slug>`, defaulting to
 `example`; deep links are `/#spya-k6fpme`.
 
+## Dark mode
+
+The reading view is **dark only** — an all-but-black page, off-white text, Spideryarn orange
+unchanged. There is no toggle, no `prefers-color-scheme` branch and no light fallback. Greg,
+2026-08-24:
+
+> actually, it's night, and I'd quite like to be in dark mode. I don't want to add too much
+> complexity, so I'm happy just to switch over and say we're going to make it always be in dark mode
+> … which means the CSS is going to need a black background, white text, but keep the orange where
+> possible.
+
+This reverses the "light mode only" inherited from the original app — see
+[original-version.md § Decision: the palette](original-version.md#decision-the-palette), which now
+records the reversal. What made it cheap: the palette had already been collapsed into one source, so
+switching themes meant changing values, not chasing colours through the stylesheet.
+
+How it's put together, and what to know before touching it:
+
+- **The variable *names* did not change.** [`styles/tokens.css`](../../styles/tokens.css) still
+  defines `--background`, `--foreground`, `--muted`, `--sidebar` and friends; only their values
+  flipped. Nothing downstream needed rewiring, and anything copied from the original codebase still
+  resolves.
+- **The orange is untouched — `#DB8A45`, unconditionally.** It's the one colour that needed no
+  adjusting, and it works *better* here: `#DB8A45` on the near-black page is about 7.8:1, against
+  about 2.6:1 on white. Orange text was borderline in light mode and is comfortable now, so the
+  highlight can carry more work than it used to.
+- **Not literally black-on-white inverted.** The page is `oklch(0.145 0 0)` and the text
+  `oklch(0.97 0 0)`, because pure white on pure black haloes badly in Georgia at 17px.
+- **Soft and faint greys run the other way.** In [`src/web/styles.css`](../../src/web/styles.css),
+  `--ink-soft` / `--ink-faint` now *descend* in lightness from `--ink` instead of ascending. Anything
+  that read `color-mix(…, black)` to darken the orange became `color-mix(…, white)` to lift it — that
+  one lives in `--highlight-ink` now, so it's stated once.
+- **Panels are lighter than the page, not darker.** `--sidebar` sits above `--background`; on a dark
+  ground a raised surface reads as forward. The same inversion catches `--accent`, which is still
+  shadcn's "hover surface" meaning and is now a dark grey — the trap described in
+  [original-version.md](original-version.md#brand-facts-now-load-bearing) is unchanged in kind, only
+  the failure mode flipped: a highlight that goes near-white becomes one that vanishes into the page.
+- **`color-scheme: dark` is declared twice on purpose** — on `:root` in `tokens.css` for scrollbars
+  and form controls, and again as a `<meta>` in [`index.html`](../../index.html) so the browser
+  paints its canvas dark *before* the stylesheet loads. Without the meta there's a white flash on
+  first paint. `theme-color` is the page black rather than the orange for the same reason.
+
+If a light mode is ever wanted back, the shape of the change is a `[data-theme]` attribute on
+`:root` and a second block of the same variable names — not a `prefers-color-scheme` media query,
+which would give the reader no way to override it.
+
 ## The constraints it works under
 
 - **Position is a block id, never a pixel offset or a selector.** Scroll restore, deep links,

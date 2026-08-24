@@ -2,40 +2,47 @@
  * Reading view styles.
  *
  * The palette is NOT defined here — it comes from ../../styles/tokens.css,
- * lifted from the original Spideryarn app. Greg's call (2026-08-24, relayed via
- * the session that ported the brand): Spideryarn orange, white background,
- * light mode only, as in the original. See
- * docs/project/PREVIOUS_VERSION.md § "Decision: the palette".
+ * lifted from the original Spideryarn app. Spideryarn orange, and — since
+ * 2026-08-24, Greg's call — dark only: an all-but-black page, off-white text,
+ * the orange untouched. No toggle. See
+ * docs/project/original-version.md § "Decision: the palette" and
+ * docs/project/web-client.md § "Dark mode".
  *
  * This file previously carried an independently-grown warm-brown palette with a
- * dark mode. Both are gone: one palette, one source.
+ * dark mode of its own. Both are gone: one palette, one source, one theme.
  */
 @import "../../styles/tokens.css";
 
 /* ---------------------------------------------------------------- tokens --
    A thin semantic layer over the brand tokens, so the rules below read in
    terms of the reading view rather than in terms of shadcn surface names.
-   NOTE: tokens.css defines --accent as a near-white *surface* (shadcn's
+   NOTE: tokens.css defines --accent as a raised dark *surface* (shadcn's
    meaning). The brand orange is --spideryarn-orange / --primary. Anything here
    that means "the orange" says --highlight, so the two never get confused.  */
 :root {
+  /* On a dark page the greys run the other way: soft/faint means *darker*, not
+     lighter, so these lightnesses descend from --ink rather than ascending. */
   --ink: var(--foreground);
-  --ink-soft: oklch(0.44 0 0);
+  --ink-soft: oklch(0.78 0 0);
   --ink-faint: var(--muted-foreground);
 
   --page: var(--background);
   --panel: var(--sidebar);
   --rule: var(--border);
-  --rule-strong: oklch(0.86 0 0);
+  --rule-strong: oklch(0.36 0 0);
 
   --highlight: var(--spideryarn-orange);
-  --highlight-wash: color-mix(in oklch, var(--spideryarn-orange) 10%, white);
+  /* The orange tinted *into* the page rather than into white — a lit patch, not a
+     pale one. Any "mix the orange with black to darken it" from the light palette
+     has become "mix it with white to lift it"; see --highlight-ink. */
+  --highlight-wash: color-mix(in oklch, var(--spideryarn-orange) 20%, var(--page));
+  --highlight-ink: color-mix(in oklch, var(--spideryarn-orange) 85%, white);
 
   /* Left-edge tints that distinguish the granularity columns at a glance.
      Same hue family as the brand, separated by chroma rather than by hue, so
      the columns read as one system instead of as a rainbow. */
   --depth-1: var(--spideryarn-orange);
-  --depth-2: oklch(0.72 0.045 45);
+  --depth-2: oklch(0.68 0.045 45);
 
   --bar-h: 2.75rem; /* .controls */
   --head-h: 2.5rem; /* thead */
@@ -66,7 +73,14 @@ body {
    the masthead scrolls away, the controls pin at 0, the table head pins below
    the controls, and a gist cell's sticky content pins below both. Change one
    height and you must change the offsets under it.  */
+/* The table can be wider than the viewport, so the PAGE scrolls horizontally
+   (an inner overflow-x container would force overflow-y to `auto` too, which
+   would break every vertical sticky below). These bars pin to the left so they
+   don't drift away when you scroll right. */
 .masthead {
+  position: sticky;
+  left: 0;
+  width: 100vw;
   background: var(--page);
   padding: 1.25rem 1.5rem 0.9rem;
 }
@@ -99,7 +113,9 @@ h1 {
 .controls {
   position: sticky;
   top: 0;
-  z-index: 30;
+  left: 0;
+  width: 100vw;
+  z-index: 40;
   height: var(--bar-h);
   display: flex;
   align-items: center;
@@ -135,8 +151,16 @@ h1 {
 .controls button.on {
   background: var(--highlight-wash);
   border-color: var(--highlight);
-  color: color-mix(in oklch, var(--spideryarn-orange) 75%, black);
+  color: var(--highlight-ink);
   font-weight: 600;
+}
+
+.mode {
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-left: 0.5rem;
 }
 
 .provenance {
@@ -150,19 +174,19 @@ h1 {
 }
 
 /* ----------------------------------------------------------------- table -- */
+/* border-collapse must be `separate` for `position: sticky` to work reliably on
+   cells, which is what pins the end columns. Only border-right/border-bottom are
+   ever set, so nothing doubles up. */
 table.zoom {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
-  table-layout: fixed;
 }
-
-col.col-gist { width: 15rem; }
-col.col-text { width: auto; }
 
 thead th {
   position: sticky;
   top: var(--bar-h);
-  z-index: 20;
+  z-index: 25;
   height: var(--head-h);
   background: var(--panel);
   border-bottom: 1px solid var(--rule-strong);
@@ -191,6 +215,43 @@ td {
   border-bottom: 1px solid var(--rule);
   border-right: 1px solid var(--rule-strong);
 }
+
+/* ---- column widths and the pinned ends ----------------------------------
+   Minimums rather than fixed widths: the table fills the viewport when it can,
+   and overflows into a horizontal scroll when there are too many levels. */
+td.gist, thead th { min-width: 12rem; }
+/* 65ch of Georgia plus the id gutter. Below this the .prose clamp starts
+   narrowing the measure, so it degrades rather than breaking. */
+td.text { min-width: 34rem; background: var(--page); }
+.outline td.gist.leaf { min-width: 18rem; }
+
+/* The pinned columns sit ON TOP of the scrolling ones, so they need to read as
+   a layer rather than as a neighbour — otherwise a column half-hidden under the
+   prose looks like a rendering bug instead of like more to scroll. Hence a real
+   drop shadow, not a hairline. */
+td.pin-left, thead th.pin-left {
+  position: sticky;
+  left: 0;
+  z-index: 15;
+  box-shadow: 1px 0 0 var(--rule-strong), 8px 0 14px -8px rgb(0 0 0 / 0.75);
+}
+
+td.pin-right, thead th.pin-right {
+  position: sticky;
+  right: 0;
+  z-index: 15;
+  border-right: none;
+  box-shadow: -1px 0 0 var(--rule-strong), -8px 0 14px -8px rgb(0 0 0 / 0.75);
+}
+
+/* Nothing to sit on top of when the table already fits. */
+@media (min-width: 1500px) {
+  td.pin-left, thead th.pin-left,
+  td.pin-right, thead th.pin-right { box-shadow: none; }
+  td.pin-left, thead th.pin-left { border-right: 1px solid var(--rule-strong); }
+}
+
+thead th.pin-left, thead th.pin-right { z-index: 35; }
 
 /* Gist cells span their whole range; the inner div sticks so the summary stays
    in view for as long as the text it summarises does. */
@@ -238,9 +299,11 @@ td.gist .range {
   opacity: 0.7;
 }
 
+/* Continuation cells must stay opaque: when pinned, transparent would let the
+   scrolling columns show through them. */
+td.gist.continuation { background: var(--panel); }
 td.gist.active { background: var(--highlight-wash); }
-td.gist.active .title { color: color-mix(in oklch, var(--spideryarn-orange) 80%, black); }
-td.gist.continuation { background: transparent; }
+td.gist.active .title { color: var(--highlight-ink); }
 
 .col-depth-1 { --tint: var(--depth-1); }
 .col-depth-2 { --tint: var(--depth-2); }
@@ -264,7 +327,6 @@ td.gist .title::before {
 td.text {
   padding: 0.7rem 1.4rem 0.7rem 5.2rem;
   position: relative;
-  border-right: none;
 }
 
 tr.row-active td.text { background: var(--panel); }
@@ -280,12 +342,12 @@ tr.row-active td.text { background: var(--panel); }
   font-size: 0.62rem;
   line-height: 1;
   color: var(--ink-faint);
-  opacity: 0.45;
+  opacity: 0.55;
   user-select: all;
   transition: opacity 0.12s;
 }
 
-tr.row-active .block-id { opacity: 0.85; }
+tr.row-active .block-id { opacity: 0.95; }
 
 .prose {
   max-width: clamp(45ch, 90vw, var(--reading-measure));
@@ -304,7 +366,7 @@ tr.row-active .block-id { opacity: 0.85; }
   font-weight: 650;
 }
 .prose a {
-  color: color-mix(in oklch, var(--spideryarn-orange) 80%, black);
+  color: var(--highlight-ink);
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
 }
@@ -322,3 +384,21 @@ tr.row-active .block-id { opacity: 0.85; }
 /* Media, captions and rules — present, but never competing with the argument. */
 td.text.opaque { background: var(--muted); }
 td.text.opaque .prose { font-size: 0.95rem; color: var(--ink-soft); }
+
+/* --------------------------------------------------------------- outline --
+   Text off: rows collapse to their natural height and the same table becomes a
+   whole-article table of contents. The leaf column appears here and only here,
+   carrying navLabels — navigation chrome, never a stand-in for prose. */
+.outline td.gist .sticky { padding: 0.5rem 0.9rem 0.55rem; }
+.outline td.gist .gist-text { font-size: 0.82rem; }
+.outline td.gist .range { display: none; }
+
+.nav-label {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+td.gist.leaf { cursor: pointer; background: var(--page); }
+td.gist.leaf:hover { background: var(--highlight-wash); }
