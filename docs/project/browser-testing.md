@@ -82,7 +82,7 @@ semantics. Continuous scroll→URL needs a genuinely visible tab.
 
 **Two things here are rAF-coalesced, and they fail differently.** The `?at=` tracker
 ([url-state.md](url-state.md)) goes stale — annoying, self-correcting the moment you scroll in a real
-tab. The spine's re-measure ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine)) is
+tab. The spine's re-measure ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)) is
 worse: it sizes its bands from measured row heights, so measuring while the rendering step is asleep
 gives it wrong proportions, and a wrong-but-plausible rail is exactly the thing a screenshot cannot
 tell you about. If the spine looks subtly off, check `document.visibilityState` before you go looking

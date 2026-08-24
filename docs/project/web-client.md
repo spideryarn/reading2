@@ -25,10 +25,14 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version.md) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → the section that goes in `?at=` |
+| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) |
+| [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically |
 | [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
 
 Running it: [setup-dev.md](setup-dev.md). Slug selection is `/?slug=<slug>`, defaulting to
-`example`; deep links are `/?at=spya-k6fpme`. Every other bit of view state is in the URL too —
+`noema-mythology-of-conscious-ai` — the real pipeline output, which is gitignored, so a fresh clone
+falls through to the committed `example/` fixture and still works ([`src/api.ts`](../../src/api.ts)).
+Deep links are `/?at=spya-k6fpme`. Every other bit of view state is in the URL too —
 see [url-state.md](url-state.md) for the full set and for why scrolling *replaces* the history
 entry while toggling a column *pushes* one.
 

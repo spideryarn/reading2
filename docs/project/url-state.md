@@ -29,7 +29,12 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
 | `text` | `1` reading mode, `0` outline mode | push | `?text=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
-| `spine` | whether the bird's-eye rail is shown ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine)) | push | `?spine=0` |
+
+The bird's-eye rail is deliberately **not** a parameter. Its visibility is derived, not chosen — it
+is off in outline mode and collapses to ticks when labels would cost a gist column, both decided by
+`fitView` ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)).
+Nothing the reader sets means there is nothing to remember. If it ever gains a toggle it gains a
+param, and `parseAsBit` is already the right parser for it.
 
 `cols=none` exists because the empty list would otherwise serialize to an empty string, which is
 indistinguishable from the parameter being absent — and absent means *automatic*, which is the

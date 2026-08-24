@@ -3,7 +3,8 @@
  *
  * Kept out of App.tsx so it can be tested without a DOM: every number below is
  * checkable arithmetic, and the worked examples in
- * granularity-zoom.md#too-many-levels are the test cases.
+ * granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them are
+ * the test cases.
  *
  * The problem, from that doc: minimum widths plus horizontal scrolling works,
  * but on any laptop it leaves a column permanently buried under the pinned

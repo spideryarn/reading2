@@ -35,7 +35,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
 | [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
 | [testing.md](docs/project/testing.md) | the test runner, what's deterministic enough to test, and what we deliberately don't |
-| [browser-testing.md](docs/project/browser-testing.md) | how to drive the reading view in a browser, and the three ways colour and sticky positioning lie to you |
+| [browser-testing.md](docs/project/browser-testing.md) | how to drive the reading view in a browser, and the ways it lies to you: colour, sticky positioning, and a hidden tab that fires no scroll events at all |
 | [open-questions.md](docs/project/open-questions.md) | undecided calls, each with a recommendation so nobody is blocked |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
