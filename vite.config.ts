@@ -27,7 +27,11 @@ export default defineConfig({
     react(),
     {
       name: "spideryarn-api",
-      configureServer: (server) => server.middlewares.use(apiMiddleware),
+      // Block body, not an arrow-with-expression: configureServer treats a
+      // returned value as a post-hook, and `.use()` returns the connect app.
+      configureServer(server) {
+        server.middlewares.use(apiMiddleware);
+      },
     },
   ],
   server: { port: 5273, open: true },

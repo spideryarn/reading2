@@ -13,12 +13,12 @@
         "n0018"
       ],
       "range": [
-        "p0001",
-        "p0032"
+        "spya-tgnssb",
+        "spya-gxdsbh"
       ],
       "title": "The Mythology Of Conscious AI",
       "gist": "Machine consciousness looks to many leading experts like a question of when, not if, but the pull toward it comes from our own anthropocentrism, human exceptionalism and anthropomorphism rather than from the machines — a pareidolia that, if we give in to it, makes us overestimate our creations and underestimate ourselves.",
-      "summary": "The dream of playing God is reinvented with every breaking wave of technology, and AI is the latest one; Chalmers thinks conscious machines may be near, Hinton thinks they are already here. But intelligence is about doing and consciousness is about being, and they travel together only in us. What makes conscious AI tempting is a set of baked-in psychological biases, amplified by language, by exponential curves and by the Promethean lure of the techno-rapture. Recognizing that pareidolia is only the first step; whether real artificial consciousness is possible needs digging deeper.",
+      "summary": "The dream of playing God is reinvented with every breaking wave of technology, and AI is the latest one; Chalmers thinks conscious machines may be possible before long, Hinton thinks they already exist. But intelligence is about doing and consciousness is about being, and they travel together only in us. What makes conscious AI tempting is a set of baked-in psychological biases, amplified by language, by exponential curves and by the Promethean lure of the techno-rapture. Recognizing that pareidolia is only the first step; whether real artificial consciousness is possible needs digging deeper.",
       "sourceHeading": "The Mythology Of Conscious AI"
     },
     "n0002": {
@@ -31,8 +31,8 @@
         "n0014"
       ],
       "range": [
-        "p0001",
-        "p0012"
+        "spya-tgnssb",
+        "spya-sge6a2"
       ],
       "title": "Why the question matters",
       "gist": "The dream of creating artificial versions of ourselves is being reinvented once more with AI — and because machine consciousness is now, for many leading experts, a question of when, not if, how we think about it decides the moral status we owe our machines, how exploitable our own psychological vulnerabilities become, and whether we end up underestimating ourselves.",
@@ -49,12 +49,12 @@
         "n0007"
       ],
       "range": [
-        "p0001",
-        "p0004"
+        "spya-tgnssb",
+        "spya-rg493b"
       ],
       "title": "Title and credits",
       "gist": "Anil Seth — neuroscience professor, director of the Centre for Consciousness Science at Sussex and author of “Being You” — won the 2025 Berggruen Prize Essay Competition for this essay.",
-      "summary": "Front matter: the essay’s title, the prize it won, and a short biographical note on its author."
+      "summary": "Front matter, not argument: the essay’s title, the prize it won, and a short biographical note on its author. Seth is a neuroscience professor at Sussex and co-directs the CIFAR Program on Brain, Mind and Consciousness."
     },
     "n0004": {
       "id": "n0004",
@@ -62,10 +62,11 @@
       "parent": "n0003",
       "children": [],
       "range": [
-        "p0001",
-        "p0001"
+        "spya-tgnssb",
+        "spya-tgnssb"
       ],
       "title": "Essay title",
+      "navLabel": "The Mythology Of Conscious AI",
       "sourceHeading": "The Mythology Of Conscious AI"
     },
     "n0005": {
@@ -74,8 +75,8 @@
       "parent": "n0003",
       "children": [],
       "range": [
-        "p0002",
-        "p0002"
+        "spya-d2h6jh",
+        "spya-d2h6jh"
       ],
       "title": "Credits line"
     },
@@ -85,10 +86,11 @@
       "parent": "n0003",
       "children": [],
       "range": [
-        "p0003",
-        "p0003"
+        "spya-gp3g6s",
+        "spya-gp3g6s"
       ],
-      "title": "Berggruen Prize win"
+      "title": "Berggruen Prize win",
+      "navLabel": "Seth's essay won the 2025 Berggruen Prize Essay Competition, in English"
     },
     "n0007": {
       "id": "n0007",
@@ -96,10 +98,11 @@
       "parent": "n0003",
       "children": [],
       "range": [
-        "p0004",
-        "p0004"
+        "spya-rg493b",
+        "spya-rg493b"
       ],
-      "title": "About Anil Seth"
+      "title": "About Anil Seth",
+      "navLabel": "Seth directs Sussex's Centre for Consciousness Science and wrote “Being You” in 2021"
     },
     "n0008": {
       "id": "n0008",
@@ -113,12 +116,12 @@
         "n0013"
       ],
       "range": [
-        "p0005",
-        "p0009"
+        "spya-u6w37a",
+        "spya-epw4h3"
       ],
       "title": "When, not if",
       "gist": "Every breaking wave of technology revives the fantasy of playing God, and this one arrives with the AI systems already arguably intelligent — so when Google dismissed Blake Lemoine for saying LaMDA was conscious it settled nothing, and for many leading experts the emergence of machine consciousness is now a question of when, not if.",
-      "summary": "Human cloning came with genetic engineering, humanlike androids with robotics; AI is the next wave, potentially a tsunami. The cultural history of synthetic consciousness — Yossele the Golem through Klara — is long and mostly unhappy, which is a warning that plenty is at stake beyond job markets. Chalmers suggests conscious machines may be possible before long, Hinton thinks they already exist, and a group of prominent researchers has argued we should take AI welfare seriously."
+      "summary": "Human cloning came with genetic engineering, humanlike androids with robotics; AI is the next wave, potentially a tsunami. The cultural history of synthetic consciousness — Yossele the Golem through Klara — is long and mostly unhappy, which is a warning that plenty is at stake beyond job markets. Chalmers suggests conscious machines may be possible in the not-too-distant future, Hinton thinks they exist already, and a group of prominent researchers has argued we should take the welfare of AI systems seriously."
     },
     "n0009": {
       "id": "n0009",
@@ -126,10 +129,11 @@
       "parent": "n0008",
       "children": [],
       "range": [
-        "p0005",
-        "p0005"
+        "spya-u6w37a",
+        "spya-u6w37a"
       ],
-      "title": "Playing God, reinvented"
+      "title": "Playing God, reinvented",
+      "navLabel": "Playing God is a dream reinvented with every breaking wave of new technology"
     },
     "n0010": {
       "id": "n0010",
@@ -137,10 +141,11 @@
       "parent": "n0008",
       "children": [],
       "range": [
-        "p0006",
-        "p0006"
+        "spya-gjy45p",
+        "spya-gjy45p"
       ],
-      "title": "AI as tsunami"
+      "title": "AI as tsunami",
+      "navLabel": "AI is another breaking wave, arguably already intelligent, but are these systems conscious?"
     },
     "n0011": {
       "id": "n0011",
@@ -148,10 +153,11 @@
       "parent": "n0008",
       "children": [],
       "range": [
-        "p0007",
-        "p0007"
+        "spya-d9a0wr",
+        "spya-d9a0wr"
       ],
-      "title": "It rarely ends well"
+      "title": "It rarely ends well",
+      "navLabel": "From the Golem to Klara, synthetic minds rarely end well for the humans involved"
     },
     "n0012": {
       "id": "n0012",
@@ -159,10 +165,11 @@
       "parent": "n0008",
       "children": [],
       "range": [
-        "p0008",
-        "p0008"
+        "spya-cvyfqe",
+        "spya-cvyfqe"
       ],
-      "title": "Lemoine and LaMDA"
+      "title": "Lemoine and LaMDA",
+      "navLabel": "Google engineer Blake Lemoine claimed LaMDA was conscious, and was dismissed for breaching confidentiality"
     },
     "n0013": {
       "id": "n0013",
@@ -170,10 +177,11 @@
       "parent": "n0008",
       "children": [],
       "range": [
-        "p0009",
-        "p0009"
+        "spya-epw4h3",
+        "spya-epw4h3"
       ],
-      "title": "When, not if"
+      "title": "When, not if",
+      "navLabel": "Chalmers, Hinton and AI-welfare researchers: machine consciousness is a question of when, not if"
     },
     "n0014": {
       "id": "n0014",
@@ -185,12 +193,12 @@
         "n0017"
       ],
       "range": [
-        "p0010",
-        "p0012"
+        "spya-e68t9h",
+        "spya-sge6a2"
       ],
       "title": "What is at stake",
-      "gist": "With consciousness comes moral status, the potential for suffering and perhaps rights we could not turn off; short of that, merely feeling that our AI companions feel things leaves our psychological vulnerabilities open to exploitation — and confusing ourselves with our machine creations makes us underestimate ourselves.",
-      "summary": "The stakes run in three directions. For the systems: if they are conscious, they can be wronged. For us: treating conscious-seeming machines as if they lack feelings is psychologically unhealthy, while endowing them with rights may leave us unable to switch them off even when they act against our interests. And for our self-understanding: overestimating the machines is the same mistake as underestimating the conscious experiences that make our lives worth living."
+      "gist": "With consciousness comes moral status, the potential for suffering and perhaps rights we could not turn off; short of that, merely feeling that our AI companions really feel things leaves our psychological vulnerabilities open to exploitation — and confusing ourselves with our machine creations makes us underestimate ourselves.",
+      "summary": "The stakes run in three directions. For the systems: if they are conscious, they can be wronged. For us: treating conscious-seeming machines as if they lack feelings is a psychologically unhealthy place to be, while endowing them with rights may leave us unable to turn them off even when they act against our interests. And for our self-understanding — overestimating the machines is the same mistake as underestimating the conscious experiences that make our lives worth living."
     },
     "n0015": {
       "id": "n0015",
@@ -198,10 +206,11 @@
       "parent": "n0014",
       "children": [],
       "range": [
-        "p0010",
-        "p0010"
+        "spya-e68t9h",
+        "spya-e68t9h"
       ],
-      "title": "Moral status and suffering"
+      "title": "Moral status and suffering",
+      "navLabel": "If AI systems are conscious, moral status, suffering and perhaps rights follow"
     },
     "n0016": {
       "id": "n0016",
@@ -209,10 +218,11 @@
       "parent": "n0014",
       "children": [],
       "range": [
-        "p0011",
-        "p0011"
+        "spya-z2b4ny",
+        "spya-z2b4ny"
       ],
-      "title": "Our vulnerabilities exploited"
+      "title": "Our vulnerabilities exploited",
+      "navLabel": "Believing our AI companions feel things leaves our psychological vulnerabilities open to exploitation"
     },
     "n0017": {
       "id": "n0017",
@@ -220,10 +230,11 @@
       "parent": "n0014",
       "children": [],
       "range": [
-        "p0012",
-        "p0012"
+        "spya-sge6a2",
+        "spya-sge6a2"
       ],
-      "title": "Underestimating ourselves"
+      "title": "Underestimating ourselves",
+      "navLabel": "Confusing ourselves with our machine creations makes us overestimate them and underestimate ourselves"
     },
     "n0018": {
       "id": "n0018",
@@ -237,12 +248,12 @@
         "n0038"
       ],
       "range": [
-        "p0013",
-        "p0032"
+        "spya-nh8mt7",
+        "spya-gxdsbh"
       ],
       "title": "The Temptations Of Conscious AI",
       "gist": "Intelligence is about doing and consciousness is about being, so the pull toward conscious AI comes not from the machines but from our own anthropocentrism, human exceptionalism and anthropomorphism — biases that language, exponential curves and the Promethean lure of the techno-rapture inflate into pareidolia.",
-      "summary": "Intelligence is the ability to achieve complex goals by flexible means: a matter of doing. Consciousness is a matter of being — there is something it is like to be an organism, the blueness of the sky, the bitter tang of your first coffee — and the two go together in us without going together in general. Three baked-in biases push us to bundle them anyway, and language pulls those strings hardest, which is why nobody calls AlphaFold conscious. Exponential curves and the offer of silicon immortality do the rest, leaving a pareidolia that has to be recognized before the real question can be asked.",
+      "summary": "Intelligence is the ability to achieve complex goals by flexible means: a matter of doing. Consciousness is a matter of being — there is something it is like to be an organism, the blueness of the sky, the bitter tang of your first coffee — and the two go together in us without going together in general. Three baked-in biases push us to bundle them anyway, and language pulls those strings hardest, which is why nobody has claimed AlphaFold is conscious. Exponential curves and the offer of silicon-enabled immortality do the rest, leaving a pareidolia that has to be recognized before the real question can be asked.",
       "sourceHeading": "The Temptations Of Conscious AI"
     },
     "n0019": {
@@ -257,12 +268,12 @@
         "n0024"
       ],
       "range": [
-        "p0013",
-        "p0017"
+        "spya-nh8mt7",
+        "spya-qb6xsj"
       ],
       "title": "Intelligence is about doing",
       "gist": "We find it natural to assume intelligence and consciousness go together because they go together in us, but intelligence is only the ability to achieve complex goals by flexible means — crosswords, flat-pack furniture, a tricky family situation — and every definition of it emphasizes what a system can get done.",
-      "summary": "Computers are very different from biological organisms, and the only things most people agree are conscious are made of meat, not metal — so the first reason to expect conscious AI lies in our own psychological infrastructure rather than in the machines. That the two properties come bundled in us is no argument that they come bundled in general."
+      "summary": "Computers are very different from biological organisms, and the only things most people currently agree are conscious are made of meat, not metal — so the first reason to expect conscious AI lies within our own psychological infrastructure rather than in the machines. That the two properties come bundled in us is no argument that they come bundled in general."
     },
     "n0020": {
       "id": "n0020",
@@ -270,10 +281,11 @@
       "parent": "n0019",
       "children": [],
       "range": [
-        "p0013",
-        "p0013"
+        "spya-nh8mt7",
+        "spya-nh8mt7"
       ],
-      "title": "The Temptations Of Conscious AI",
+      "title": "Section heading",
+      "navLabel": "The Temptations Of Conscious AI",
       "sourceHeading": "The Temptations Of Conscious AI"
     },
     "n0021": {
@@ -282,10 +294,11 @@
       "parent": "n0019",
       "children": [],
       "range": [
-        "p0014",
-        "p0014"
+        "spya-q23td7",
+        "spya-q23td7"
       ],
-      "title": "Meat, not metal"
+      "title": "Meat, not metal",
+      "navLabel": "Why think AI could be conscious, when the agreed cases are made of meat?"
     },
     "n0022": {
       "id": "n0022",
@@ -293,10 +306,11 @@
       "parent": "n0019",
       "children": [],
       "range": [
-        "p0015",
-        "p0015"
+        "spya-f87ghx",
+        "spya-f87ghx"
       ],
-      "title": "Why we assume it"
+      "title": "Why we assume it",
+      "navLabel": "We assume intelligence and consciousness go together because they go together in us"
     },
     "n0023": {
       "id": "n0023",
@@ -304,10 +318,11 @@
       "parent": "n0019",
       "children": [],
       "range": [
-        "p0016",
-        "p0016"
+        "spya-nj888h",
+        "spya-nj888h"
       ],
-      "title": "Intelligence is doing"
+      "title": "Intelligence is doing",
+      "navLabel": "Intelligence is about doing: achieving complex goals by flexible means"
     },
     "n0024": {
       "id": "n0024",
@@ -315,8 +330,8 @@
       "parent": "n0019",
       "children": [],
       "range": [
-        "p0017",
-        "p0017"
+        "spya-qb6xsj",
+        "spya-qb6xsj"
       ],
       "title": "Pull quote on confusion"
     },
@@ -330,11 +345,11 @@
         "n0028"
       ],
       "range": [
-        "p0018",
-        "p0020"
+        "spya-hk6gha",
+        "spya-xm96be"
       ],
       "title": "Consciousness is about being",
-      "gist": "AGI is defined by matching human cognitive competencies, but consciousness is not competence: an organism is conscious if and only if there is something it is like to be that organism — the blueness of the sky, the bitter tang of coffee — which is why AI can lay claim to intelligence while it stays hard to say whether there is anything-it-is-like-to-be ChatGPT.",
+      "gist": "AGI is defined by matching or exceeding human cognitive competencies, but consciousness is not competence: an organism has conscious mental states if and only if there is something it is like to be that organism — the blueness of the sky, the bitter tang of your first coffee — which is why AI can lay claim to intelligence while it stays harder to say whether there is anything-it-is-like-to-be ChatGPT.",
       "summary": "Nagel’s formulation puts consciousness on the side of experience rather than performance: the difference between normal wakefulness and the oblivion of deep general anesthesia. AI systems certainly do things, so intelligence in some form is a reasonable claim. Being is the part that does not follow."
     },
     "n0026": {
@@ -343,10 +358,11 @@
       "parent": "n0025",
       "children": [],
       "range": [
-        "p0018",
-        "p0018"
+        "spya-hk6gha",
+        "spya-hk6gha"
       ],
-      "title": "AGI and ASI"
+      "title": "AGI and ASI",
+      "navLabel": "AGI means matching human cognitive competencies; ASI bootstraps beyond our comprehension and control"
     },
     "n0027": {
       "id": "n0027",
@@ -354,10 +370,11 @@
       "parent": "n0025",
       "children": [],
       "range": [
-        "p0019",
-        "p0019"
+        "spya-j0a9rq",
+        "spya-j0a9rq"
       ],
-      "title": "Something it is like"
+      "title": "Something it is like",
+      "navLabel": "Nagel: there is something it is like to be a conscious organism"
     },
     "n0028": {
       "id": "n0028",
@@ -365,10 +382,11 @@
       "parent": "n0025",
       "children": [],
       "range": [
-        "p0020",
-        "p0020"
+        "spya-xm96be",
+        "spya-xm96be"
       ],
-      "title": "Doing, yes; being, unclear"
+      "title": "Doing, yes; being, unclear",
+      "navLabel": "AI can claim intelligence, but anything-it-is-like-to-be ChatGPT is harder to say"
     },
     "n0029": {
       "id": "n0029",
@@ -381,12 +399,12 @@
         "n0033"
       ],
       "range": [
-        "p0021",
-        "p0024"
+        "spya-cvaqgs",
+        "spya-nxxnrj"
       ],
       "title": "Three baked-in biases",
       "gist": "Anthropocentrism, human exceptionalism and anthropomorphism together explain why anything exhibiting a distinctively human ability such as intelligence gets imbued with understanding, mindedness and consciousness too.",
-      "summary": "Anthropocentrism takes the human example as definitional rather than as one way properties can combine. Human exceptionalism puts our species at the top of every pile, or in a different pile altogether. Anthropomorphism projects humanlike qualities onto nonhuman things on the strength of superficial similarities."
+      "summary": "Anthropocentrism takes the human example as definitional rather than as one example of how different properties might come together. Human exceptionalism is the habit of putting our species at the top of every pile, and sometimes in a different pile altogether. Anthropomorphism projects humanlike qualities onto nonhuman things on the strength of what may be only superficial similarities."
     },
     "n0030": {
       "id": "n0030",
@@ -394,10 +412,11 @@
       "parent": "n0029",
       "children": [],
       "range": [
-        "p0021",
-        "p0021"
+        "spya-cvaqgs",
+        "spya-cvaqgs"
       ],
-      "title": "Three psychological biases"
+      "title": "Three psychological biases",
+      "navLabel": "The propensity to bundle intelligence with consciousness traces to three baked-in psychological biases"
     },
     "n0031": {
       "id": "n0031",
@@ -405,10 +424,11 @@
       "parent": "n0029",
       "children": [],
       "range": [
-        "p0022",
-        "p0022"
+        "spya-h4mwb2",
+        "spya-h4mwb2"
       ],
-      "title": "Bias one: anthropocentrism"
+      "title": "Bias one: anthropocentrism",
+      "navLabel": "Anthropocentrism takes the human example as definitional rather than as one example among many"
     },
     "n0032": {
       "id": "n0032",
@@ -416,10 +436,11 @@
       "parent": "n0029",
       "children": [],
       "range": [
-        "p0023",
-        "p0023"
+        "spya-her4zk",
+        "spya-her4zk"
       ],
-      "title": "Exceptionalism and anthropomorphism"
+      "title": "Exceptionalism and anthropomorphism",
+      "navLabel": "Human exceptionalism puts us atop every pile; anthropomorphism projects humanlike qualities onto nonhuman things"
     },
     "n0033": {
       "id": "n0033",
@@ -427,10 +448,11 @@
       "parent": "n0029",
       "children": [],
       "range": [
-        "p0024",
-        "p0024"
+        "spya-nxxnrj",
+        "spya-nxxnrj"
       ],
-      "title": "Why the biases combine"
+      "title": "Why the biases combine",
+      "navLabel": "Show a distinctively human ability and we imbue it with understanding, mindedness and consciousness"
     },
     "n0034": {
       "id": "n0034",
@@ -442,12 +464,12 @@
         "n0037"
       ],
       "range": [
-        "p0025",
-        "p0027"
+        "spya-k6fpme",
+        "spya-cqh2pq"
       ],
       "title": "Language pulls the strings",
-      "gist": "Language is a cornerstone of human exceptionalism, which is why LLMs and not the algorithmically similar AlphaFold attract claims of consciousness — and why saying such systems “hallucinate” rather than “confabulate” quietly confers on them a capacity for experience we then find where it does not exist and miss where it does.",
-      "summary": "Hallucination in humans is a conscious experience that has lost its grip on reality; confabulation is making things up without realizing it, a matter of doing rather than experiencing. The word we picked smuggles in the conclusion. Consciousness should not be assumed to come along for the ride as AI gets smarter, and promising that it will emerge at the arbitrary threshold of AGI is human exceptionalism at work."
+      "gist": "Language is a cornerstone of human exceptionalism, which is why LLMs and not the algorithmically similar AlphaFold attract claims of consciousness — and why saying such systems “hallucinate” rather than “confabulate” implicitly confers on them a capacity for experience we then see where it doesn’t exist and miss where it does.",
+      "summary": "Hallucination in human beings is mainly a conscious experience that has lost its grip on reality; confabulation is making things up without realizing it, primarily about doing rather than experiencing. The word we picked smuggles in the conclusion. Consciousness should not be assumed to come along for the ride as AI gets smarter, and promising that it will magically emerge at the arbitrary threshold of AGI is human exceptionalism at work."
     },
     "n0035": {
       "id": "n0035",
@@ -455,10 +477,11 @@
       "parent": "n0034",
       "children": [],
       "range": [
-        "p0025",
-        "p0025"
+        "spya-k6fpme",
+        "spya-k6fpme"
       ],
-      "title": "Why LLMs, not AlphaFold"
+      "title": "Why LLMs, not AlphaFold",
+      "navLabel": "Language is why LLMs attract consciousness claims and the similar AlphaFold does not"
     },
     "n0036": {
       "id": "n0036",
@@ -466,10 +489,11 @@
       "parent": "n0034",
       "children": [],
       "range": [
-        "p0026",
-        "p0026"
+        "spya-t29n67",
+        "spya-t29n67"
       ],
-      "title": "Hallucinate versus confabulate"
+      "title": "Hallucinate versus confabulate",
+      "navLabel": "Saying LLMs “hallucinate” confers a capacity for experience; “confabulate” would be far better"
     },
     "n0037": {
       "id": "n0037",
@@ -477,10 +501,11 @@
       "parent": "n0034",
       "children": [],
       "range": [
-        "p0027",
-        "p0027"
+        "spya-cqh2pq",
+        "spya-cqh2pq"
       ],
-      "title": "Seeing consciousness where it isn’t"
+      "title": "Seeing consciousness where it isn’t",
+      "navLabel": "Identifying consciousness with intelligence and language, we see it where it isn't and miss it"
     },
     "n0038": {
       "id": "n0038",
@@ -491,15 +516,17 @@
         "n0040",
         "n0041",
         "n0042",
-        "n0043"
+        "n0043",
+        "n0044",
+        "n0045"
       ],
       "range": [
-        "p0028",
-        "p0032"
+        "spya-cke6sj",
+        "spya-gxdsbh"
       ],
       "title": "The techno-rapture",
-      "gist": "On an exponential curve every point is an inflection point, so we always feel on the cusp of a transition — and the Promethean lure of the techno-rapture, with its offer of escaping our decaying biological bodies, is why imminent machine consciousness is proclaimed more within the technorati than outside it, a pareidolia rather than a finding.",
-      "summary": "Exponential growth makes what is ahead seem impossibly steep and what is behind irrelevantly flat, wherever you stand on it. Caleb’s line in “Ex Machina” — “it’s not the history of man, that’s the history of Gods” — names the temptation for anyone who thinks they are one of the transition’s architects, and there is a more cynical reading involving share prices and the word “bubble.” Becker’s diagnosis of pareidolia is apt, but recognizing the bias is only the first step toward whether real artificial consciousness is possible at all."
+      "gist": "On an exponential curve every point is an inflection point, so we always feel on the cusp of a major transition — and the Promethean lure of the techno-rapture, with its offer of escaping our inconveniently decaying biological bodies, is why imminent machine consciousness is pronounced more within the technorati than outside it: pareidolia rather than a finding.",
+      "summary": "Exponential growth makes what’s ahead seem impossibly steep and what’s behind irrelevantly flat, wherever you stand on the curve. Caleb’s line in “Ex Machina” — “it’s not the history of man, that’s the history of Gods” — names the temptation for anyone who feels they are one of the transition’s architects, and there is a more cynical reading involving share prices and the word “bubble.” Becker’s diagnosis of pareidolia, a face in a piece of toast or Mother Teresa in a cinnamon bun, is apt — but recognizing the bias is only the first step toward whether real artificial consciousness is possible at all."
     },
     "n0039": {
       "id": "n0039",
@@ -507,10 +534,11 @@
       "parent": "n0038",
       "children": [],
       "range": [
-        "p0028",
-        "p0028"
+        "spya-cke6sj",
+        "spya-cke6sj"
       ],
-      "title": "Every point an inflection"
+      "title": "Every point an inflection",
+      "navLabel": "Exponential growth always feels like the cusp: every point is an inflection point"
     },
     "n0040": {
       "id": "n0040",
@@ -518,8 +546,8 @@
       "parent": "n0038",
       "children": [],
       "range": [
-        "p0029",
-        "p0029"
+        "spya-v7s7gu",
+        "spya-v7s7gu"
       ],
       "title": "Pull quote on language"
     },
@@ -529,10 +557,11 @@
       "parent": "n0038",
       "children": [],
       "range": [
-        "p0030",
-        "p0030"
+        "spya-v4sduf",
+        "spya-v4sduf"
       ],
-      "title": "The techno-rapture"
+      "title": "The techno-rapture",
+      "navLabel": "The Promethean lure of the techno-rapture, and its offer of silicon-enabled immortality"
     },
     "n0042": {
       "id": "n0042",
@@ -540,10 +569,11 @@
       "parent": "n0038",
       "children": [],
       "range": [
-        "p0031",
-        "p0031"
+        "spya-mcaa4g",
+        "spya-mcaa4g"
       ],
-      "title": "Technorati and share prices"
+      "title": "Technorati and share prices",
+      "navLabel": "Machine-consciousness pronouncements cluster among the technorati, where they may also help share prices"
     },
     "n0043": {
       "id": "n0043",
@@ -551,10 +581,33 @@
       "parent": "n0038",
       "children": [],
       "range": [
-        "p0032",
-        "p0032"
+        "spya-k850tu",
+        "spya-k850tu"
       ],
-      "title": "Pareidolia, and digging deeper"
+      "title": "Pareidolia, and digging deeper",
+      "navLabel": "Becker calls projecting consciousness into AI pareidolia; recognizing it is only the first step"
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-rtcxt4",
+        "spya-rtcxt4"
+      ],
+      "title": "Figure 1 image"
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-gxdsbh",
+        "spya-gxdsbh"
+      ],
+      "title": "Figure 1 caption"
     }
   }
 }

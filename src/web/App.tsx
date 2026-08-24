@@ -45,13 +45,14 @@ function Reader({ article }: { article: Article }) {
 
   return (
     <div className="reader">
-      <header>
-        <div className="masthead">
+      <div className="masthead">
+        <div className="masthead-inner">
           <h1>{article.meta.title}</h1>
           {article.meta.byline && <p className="byline">{article.meta.byline}</p>}
           {root?.gist && <p className="root-gist">{root.gist}</p>}
         </div>
-        <div className="controls">
+      </div>
+      <div className="controls">
           <span className="controls-label">Granularity</span>
           {allDepths.map((d) => (
             <button
@@ -69,10 +70,9 @@ function Reader({ article }: { article: Article }) {
             Text
           </button>
           <span className="provenance" title={article.tree.generator}>
-            {article.tree.version}
-          </span>
-        </div>
-      </header>
+          {article.tree.version}
+        </span>
+      </div>
       <TableView
         article={article}
         visibleDepths={visibleDepths}

@@ -1,4 +1,4 @@
-# spideryarn2
+# Spideryarn
 
 An experiment in AI-assisted reading that **augments** rather than replaces reading.
 
@@ -6,21 +6,30 @@ An experiment in AI-assisted reading that **augments** rather than replaces read
 > easy, trying to replace the words with quick and easy summaries so much, but rather we help the
 > user get what they need from it, help them read efficiently, but deeply, help them internalize and
 > interrogate.
+>
+> — Greg, 2026-08-24
 
-See [docs/project/vision.md](docs/project/vision.md).
+The product is **Spideryarn**; `spideryarn2` is just this working directory, and the app it's an
+offshoot of is [documented here](docs/project/PREVIOUS_VERSION.md). The first feature is
+**granularity zoom** — the article at any of several levels of compression, vertical for position in
+the piece, horizontal for how much detail.
 
-The first feature is **granularity zoom**: the article rendered at any of several levels of
-compression. Vertical = position in the article. Horizontal = how much detail. Scroll right toward
-the full text, left toward a one-sentence gist.
-See [docs/project/granularity-zoom.md](docs/project/granularity-zoom.md).
+**This file is a signpost, not a spec.** Everything real lives in `docs/project/`.
 
 ## Docs
 
-- [docs/project/vision.md](docs/project/vision.md) — what we're trying to do, the principles, and what we're deliberately *not* doing
-- [docs/project/granularity-zoom.md](docs/project/granularity-zoom.md) — the core feature: the tree, generation, interaction, failure modes
-- [docs/project/architecture.md](docs/project/architecture.md) — pipeline stages, storage layout, server, stage ownership
-- [docs/project/content-extraction.md](docs/project/content-extraction.md) — the Readability extraction stage (owned by another agent)
-- [docs/project/open-questions.md](docs/project/open-questions.md) — undecided calls, each with a recommendation so nobody is blocked
+Start with [vision.md](docs/project/vision.md), then whichever of these you need:
+
+| Doc | What's in it |
+|---|---|
+| [vision.md](docs/project/vision.md) | what we're trying to do, the principles, and what we're deliberately *not* doing |
+| [granularity-zoom.md](docs/project/granularity-zoom.md) | the core feature: the tree, the node shape, generation, interaction, failure modes |
+| [block-ids.md](docs/project/block-ids.md) | **the spine** — the id format, and why ids are random rather than sequential |
+| [table-of-contents.md](docs/project/table-of-contents.md) | the deeply-nested ToC: schema, granularity, the generation prompt |
+| [architecture.md](docs/project/architecture.md) | pipeline stages, what a block is, storage layout, server, stage ownership |
+| [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
+| [PREVIOUS_VERSION.md](docs/project/PREVIOUS_VERSION.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
+| [open-questions.md](docs/project/open-questions.md) | undecided calls, each with a recommendation so nobody is blocked |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
 
@@ -28,53 +37,74 @@ See [docs/project/granularity-zoom.md](docs/project/granularity-zoom.md).
   GPT/Codex subagent from Claude Code via [`scripts/run-codex.ts`](scripts/run-codex.ts), for
   cross-family review or delegated implementation
 
+## The one contract that matters
+
+Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — ToC, summaries,
+scroll position, highlights, notes, questions — addresses text by that id, never by character offset
+or CSS selector. Ids are minted once and preserved on every later run, so they survive re-extraction.
+
+The format, the reasoning, and the one way to get range checks silently wrong are all in
+**[block-ids.md](docs/project/block-ids.md)** — read it before touching anything that resolves an id.
+
+## Current state
+
+- [`src/extract.ts`](src/extract.ts) — fetch a URL, run Mozilla Readability, write standalone HTML to
+  `output/`. The prototype pipeline stages 1–2 are growing out of.
+- [`src/ids.ts`](src/ids.ts) + [`src/blocks.ts`](src/blocks.ts) — stage 3: split the article into
+  blocks and mint stable ids. `npm run blocks -- <article.html>`; idempotent, re-running preserves
+  every existing id.
+- `output/noema-mythology-of-conscious-ai.html` — the working test article (Anil Seth, ~54 min read,
+  long and mostly *unstructured* prose, which is deliberately the hard case). 139 blocks, only 9 of
+  them headings.
+- [`styles/tokens.css`](styles/tokens.css) + [`public/`](public/) — logo, favicons, brand colours and
+  reading typography, lifted from the previous version — see
+  [PREVIOUS_VERSION.md](docs/project/PREVIOUS_VERSION.md).
+- A React client (Vite) is being built by another agent.
+- The ToC (stage 4) and summarization (stage 5) are unbuilt.
+
 ## How we write docs here
 
-We keep **lots** of documents under `docs/project/`, and they exist mainly to carry **intent** —
-Greg's suggestions, the goals, the design constraints, the decisions and why they were made. Not
-descriptions of code, which the code already provides.
+We keep **lots** of documents under `docs/project/`. A doc here is really only two things:
 
+1. **Intent** — Greg's suggestions and directions, the goals, the design constraints, the decisions
+   and why they were made. Mostly in his own words.
+2. **Signposts** — links to the other docs and to the code, so an agent dropped into any one file
+   can quickly find the relevant place.
+
+Not descriptions of code, which the code already provides.
+
+- **Update the docs as you go.** Any time you create or change functionality, consider whether a doc
+  under `docs/project/` needs creating or updating, and do it in the same piece of work.
+- **New doc ⇒ new signpost.** Every time you add a doc, add a line for it to the table above in this
+  file. A doc nothing links to may as well not exist.
 - **Quote Greg directly.** Where a document captures something he said, use his exact wording, or as
   near to it as possible, in a blockquote — the phrasing carries intent that a paraphrase loses.
   Attribute and date it. If you later find you've flattened a quote into your own voice, put his back.
 - **Signpost heavily.** Every document should link out to the other documents and to the relevant
-  bits of code (e.g. [`src/extract.ts`](src/extract.ts)), so an agent dropped into any one file can
+  bits of code (e.g. [`src/blocks.ts`](src/blocks.ts)), so an agent dropped into any one file can
   find its way to everything else. Cross-link both directions; deep-link to specific sections.
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
   and delete the question. That file should shrink.
 - **Write down anything a future reader would otherwise have to reverse-engineer** — especially the
-  reason a design went one way rather than the obvious other way.
-
-## Current state
-
-- [`src/extract.ts`](src/extract.ts) — fetch a URL, run Mozilla Readability, write a standalone HTML
-  file to `output/`. This is the prototype that pipeline stages 1–2 are growing out of.
-- `output/noema-mythology-of-conscious-ai.html` — the working test article (Anil Seth, ~54 min read,
-  long and mostly *unstructured* prose, which is deliberately the hard case).
-- Everything else is unbuilt.
-
-## The one contract that matters
-
-Every block of the extracted article gets a **stable id** (`p0001`, `p0002`, …) in document order.
-Ids are assigned once, at extraction, and are the anchor for *everything* downstream: the table of
-contents, summaries at every level, scroll position, highlights, notes, questions. Features address
-text by block id, never by character offset or CSS selector. If you change how ids are assigned, you
-invalidate every cached artefact — bump the pipeline version rather than silently re-numbering.
-Open sub-questions: [Q2](docs/project/open-questions.md#q2) (stability across re-extraction),
-[Q3](docs/project/open-questions.md#q3) (what counts as a block).
+  reason a design went one way rather than the obvious other way, and *especially* where the decision
+  went against the recommendation written down at the time.
 
 ## Working agreements for agents
 
 - Several agents work this repo in parallel. Stay inside your stage — see
   [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership) — and talk to
   other stages through the JSON artefacts on disk, not by reaching into their code.
-- Currently claimed: **extraction / Readability** and **the table of contents** are owned by other
-  agents. Note that the deeply-nested ToC and the granularity-zoom tree are
-  [the same structure](docs/project/granularity-zoom.md#the-tree) — coordinate rather than building two.
+- The deeply-nested ToC and the granularity-zoom tree are
+  [the same structure](docs/project/granularity-zoom.md#the-tree), produced by stages 4 and 5
+  together. They must not diverge into two trees.
 - Keep pipeline stages independently runnable and independently cacheable. Each writes JSON under
   `data/<slug>/`; anything expensive is cached on a content hash.
 - Prefer boring: filesystem over database, one server process, TypeScript + ESM throughout, `tsx` to
   run. "It can be a simple one at first" — no framework churn while the ideas are still moving.
+- Before rebuilding something the previous version already solved — AI headings, multi-granularity
+  summaries, Readability edge cases, overlapping highlights, stable element ids — check
+  [PREVIOUS_VERSION.md](docs/project/PREVIOUS_VERSION.md). It's a library to consult, not a backlog
+  to import: that project is far larger in scope, and this one is staying tight.
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.

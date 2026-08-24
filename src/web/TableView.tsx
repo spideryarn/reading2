@@ -6,7 +6,7 @@
  * described in the brief: "so by scrolling rightwards, you get more detail. By
  * scrolling downwards, you progress through the chronology of the article."
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Article, NodeId } from "../types.js";
 import { buildGeometry, columnLabel } from "./tree.js";
 
@@ -29,6 +29,29 @@ export function TableView({ article, visibleDepths, showText }: Props) {
     () => new Set(hoveredRow === null ? [] : geometry.chains[hoveredRow]),
     [hoveredRow, geometry],
   );
+
+  /**
+   * Deep-link to a block: `/#spya-k6fpme` opens the article at that paragraph.
+   * Position is a block id, never a pixel offset
+   * (docs/project/granularity-zoom.md#interaction), so the hash is the natural
+   * place to put it. Runs after the first render because the browser's own
+   * fragment scroll happens before React has drawn anything.
+   */
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!id) return;
+    const row = bodyRef.current?.querySelector<HTMLElement>(
+      `[data-block="${CSS.escape(id)}"]`,
+    );
+    if (!row) return;
+    // Explicit and clamped rather than scrollIntoView(): the row sits inside a
+    // cell that may span dozens of rows, and we want the row's own top, offset
+    // to clear the two sticky bars above it.
+    const STICKY_H = 88; // .controls + thead
+    const top = row.getBoundingClientRect().top + window.scrollY - STICKY_H;
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo({ top: Math.max(0, Math.min(top, max)) });
+  }, []);
 
   /** Clicking a gist takes you to the start of its range. */
   const scrollToBlock = (blockId: string) => {
@@ -102,7 +125,7 @@ export function TableView({ article, visibleDepths, showText }: Props) {
               );
             })}
             {showText && (
-              <td className={`text ${block.opaque ? "opaque" : ""}`}>
+              <td className={`text ${!block.gistable ? "opaque" : ""}`}>
                 <span className="block-id">{block.id}</span>
                 <div
                   className="prose"

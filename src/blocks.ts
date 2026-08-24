@@ -35,7 +35,21 @@ const CONTAINERS = new Set([
 
 const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "IFRAME", "FORM", "BUTTON"]);
 
-export type BlockKind = "heading" | "text" | "quote" | "code" | "media" | "other";
+export type BlockKind =
+  | "heading" | "text" | "quote" | "code" | "media" | "caption" | "other";
+
+/**
+ * Captions that sit *beside* a figure rather than inside it, so they arrive as
+ * ordinary paragraphs. They belong to the image, not to the argument, and a ToC
+ * row reading "Figure 2: A modern version of a McCulloch-Pitts neuron…" as a
+ * peer of real prose is noise. Matched on the explicit marker only — never on
+ * length, because "Given all this, what should we do?" is seven words of
+ * genuine argument.
+ */
+const CAPTION_MARKER = /^(figure|fig\.?|table|chart|diagram|image|photo|plate)\s*\d*\s*[:.—-]/i;
+
+/** Standalone boilerplate labels acting as headings: "Credits", "Sources". */
+const BOILERPLATE_LABEL = /^(credits?|sources?|notes?|references?|photo credits?)$/i;
 
 export interface Block {
   id: string;
@@ -196,6 +210,13 @@ export function splitIntoBlocks(html: string): SplitResult {
     } else if (text.length === 0) {
       gistable = false;
       note = "empty";
+    } else if (CAPTION_MARKER.test(text)) {
+      kind = "caption";
+      gistable = false;
+      note = "figure caption";
+    } else if (BOILERPLATE_LABEL.test(text)) {
+      gistable = false;
+      note = "boilerplate label";
     }
 
     // Pull-quotes repeat a sentence that is already in the prose. Giving them
@@ -235,8 +256,15 @@ export function splitIntoBlocks(html: string): SplitResult {
 
 // ---------------------------------------------------------------- CLI
 
-const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
-if (isMain) {
+/**
+ * The CLI lives in a function rather than at the top level so this module has
+ * no top-level `await`. With one, the module becomes an *async module* and any
+ * CommonJS consumer gets ERR_REQUIRE_ASYNC_MODULE on import — which the isMain
+ * guard does not prevent, since it is the syntax that matters, not whether the
+ * branch runs. ESM importers are unaffected either way; this just keeps
+ * splitIntoBlocks importable from anywhere.
+ */
+async function main() {
   const input = process.argv[2];
   if (!input) {
     console.error("Usage: tsx src/blocks.ts <article.html> [blocks.json]");
@@ -261,3 +289,7 @@ if (isMain) {
   console.log(`\nHTML:      ${path.resolve(input)}`);
   console.log(`Blocks:    ${path.resolve(outJson)}`);
 }
+
+const isMain =
+  process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+if (isMain) void main();

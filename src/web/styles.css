@@ -48,17 +48,17 @@ body {
   white-space: pre-wrap;
 }
 
-/* ---------------------------------------------------------------- header -- */
-header {
-  position: sticky;
-  top: 0;
-  z-index: 30;
+/* ---------------------------------------------------------------- header --
+   Three stacked layers, each with a fixed sticky offset so they never collide:
+   the masthead scrolls away, the controls pin at 0, the table head pins below
+   the controls, and a gist cell's sticky content pins below both. Change one
+   height and you must change the offsets under it.  */
+.masthead {
   background: var(--bg);
-  border-bottom: 1px solid var(--rule-strong);
-  padding: 1.25rem 1.5rem 0.75rem;
+  padding: 1.25rem 1.5rem 0.9rem;
 }
 
-.masthead { max-width: 62rem; }
+.masthead-inner { max-width: 62rem; }
 
 h1 {
   margin: 0;
@@ -83,10 +83,16 @@ h1 {
 }
 
 .controls {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 2.75rem;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-top: 0.9rem;
+  padding: 0 1.5rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule-strong);
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -141,7 +147,7 @@ col.col-text { width: auto; }
 
 thead th {
   position: sticky;
-  top: 0;
+  top: 2.75rem; /* clears .controls */
   z-index: 20;
   background: var(--panel);
   border-bottom: 1px solid var(--rule-strong);
@@ -179,7 +185,7 @@ td.gist {
 
 td.gist .sticky {
   position: sticky;
-  top: 3.2rem;
+  top: 5.4rem; /* clears .controls + thead */
   padding: 0.85rem 1rem 1rem;
 }
 
@@ -229,22 +235,28 @@ td.gist .title::before {
 
 /* ------------------------------------------------------------------ text -- */
 td.text {
-  padding: 0.7rem 1.4rem 0.7rem 2.9rem;
+  padding: 0.7rem 1.4rem 0.7rem 5.2rem;
   position: relative;
   border-right: none;
 }
 
 tr.row-active td.text { background: var(--panel); }
 
+/* The id gutter is for debugging and for quoting a block in conversation, so it
+   is present but recessive until you're on the row. */
 .block-id {
   position: absolute;
-  left: 0.8rem;
-  top: 0.95rem;
+  left: 1rem;
+  top: 1.05rem;
+  width: 4rem;
   font: 0.62rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--ink-faint);
-  opacity: 0.5;
-  user-select: none;
+  opacity: 0.3;
+  user-select: all;
+  transition: opacity 0.12s;
 }
+
+tr.row-active .block-id { opacity: 0.75; }
 
 .prose { max-width: 40rem; }
 .prose > * { margin: 0; }

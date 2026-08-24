@@ -178,6 +178,91 @@ Determinism and cost: the whole tree is generated once per article and cached un
 lazy — the reader needs the entire leftmost column instantly, since scanning the whole landscape is
 the point.
 
+## The tabular view
+
+The first of two planned views, and the one that is built. It is Greg's original framing
+(2026-08-24), which he restated after considering the alternative below:
+
+> When I started out, I had this vision basically of a **tabular representation** where up-down is
+> chronology in the document and left-right is granularity, with **a column for each level of the
+> table of contents**, and that we explicitly create nested table of contents levels just as a normal
+> tree hierarchy.
+
+Implemented in [`src/web/TableView.tsx`](../../src/web/TableView.tsx), with the geometry in
+[`src/web/tree.ts`](../../src/web/tree.ts).
+
+**It is a literal HTML `<table>`, and that is the point.** One row per block; one column per depth;
+an ancestor cell simply spans the rows of its range with `rowSpan`. Because every node covers a
+contiguous range and a node's children exactly partition it ([the tree](#the-tree)), that mapping is
+exact and needs no layout logic at all — vertical position is *automatically* the same at every level
+of granularity, which is the invariant the whole feature rests on. The table isn't a rendering
+convenience; it is the tree invariant made visible.
+
+Consequences worth knowing:
+
+- **All levels are on screen at once**, rather than one level at a time. Greg's brief describes
+  scrolling left-right *between* granularities; the table shows them side by side instead, so the
+  relationship between a gist and the prose under it is visible rather than remembered. The
+  granularity buttons in the header toggle columns, which is what "scrolling rightwards" degenerates
+  to when every level is already present.
+- **Gists stick.** A spanning cell's content is `position: sticky`, so a chapter's gist stays beside
+  its text for as long as that text is on screen, then hands over to the next. Without this the
+  coarse columns are only readable at the top of each range.
+- **Hovering a row lights up its whole ancestor path**, across every column simultaneously — the
+  cheapest possible answer to "where am I in the structure".
+- **Leaves render `block.html` verbatim**, never a `navLabel`. See the warning in
+  [Node shape](#node-shape): falling back to `navLabel` when `gist` is absent would silently turn
+  navigation chrome into reading content.
+
+### Validate the tree, always
+
+The client does not crash on a malformed tree — it silently draws a **wrong article**, because
+`rowSpan` arithmetic over bad ranges still produces a plausible-looking table. So the invariants are
+checked explicitly by [`src/validate-tree.ts`](../../src/validate-tree.ts):
+
+```
+npm run validate-tree -- example
+npm run validate-tree -- data/<slug>
+```
+
+Anything writing a `tree.json` should run it. It checks contiguity, exact partitioning,
+depth/parent agreement, that every block is covered by exactly one leaf, and that leaves carry no
+`gist`. It resolves ranges through the `blocks.json` index, never by comparing id strings
+([why](block-ids.md#the-cost-we-accepted)).
+
+### The other view: fisheye
+
+Not built. It came out of a conversation on 2026-08-24 about what "efficient but deep" reading
+actually needs — the observation being that a single global granularity cannot express the thing
+readers most want, which is to be **deep in one place and shallow everywhere else**. Greg:
+
+> You made this suggestion about a fisheye view and I really like the idea of that, but that does
+> complicate things and it's a different interface. … So we're going to have a React web server or
+> whatever that has two interfaces, two views. One is my tabular version and one is the fisheye
+> version. And I'd say do whichever one is simpler first.
+
+The sketch, recorded so it isn't lost:
+
+- A slider sets a **baseline** depth; proximity to the reader's position adds depth on top of it, so
+  detail follows attention and the periphery stays compressed with no explicit gesture. This is
+  Furnas's degree-of-interest, applied to prose: show content when
+  `rank ≤ baseline − distance-from-focus`, where distance is measured in the tree, not in pixels.
+- Focus is a **fixed reading line** roughly 40% down the viewport — text flows past a stationary
+  line. This is the detail that makes it work: tying focus to the mouse pointer creates a reflow
+  feedback loop, where expanding under the pointer displaces the line the pointer was on, which
+  expands the next one, and the page churns. Scroll anchors to the focused node's top edge so it
+  unfolds *downward* rather than sliding out from under you.
+- It wants a per-sentence rank rather than a per-node depth, since granularity varies *within* one
+  screen. Whether that rank is derived from tree position (each node promoting its best sentence,
+  which guarantees even coverage and gives literally "one sentence per chapter" at the far left) or
+  from a global salience score (honest about which passages are dense, but it clumps and leaves whole
+  sections blank) is **undecided** — see [Q8](open-questions.md#q8).
+
+Note this view leans toward showing the author's real sentences rather than generated gists, which
+is a different bargain from the tabular view's and closer to
+[principle 1](vision.md#principles). That tension is worth resolving deliberately rather than by
+whichever view gets built second.
+
 ## Interaction
 
 **Position is a block id, not a scroll offset.** The client tracks the block id nearest the top of

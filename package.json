@@ -6,7 +6,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "extract": "tsx src/extract.ts",
-    "blocks": "tsx src/blocks.ts"
+    "blocks": "tsx src/blocks.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "validate-tree": "tsx src/validate-tree.ts",
+    "toc:flatten": "tsx src/toc-flatten.ts"
   },
   "keywords": [],
   "author": "",

@@ -36,10 +36,17 @@ export interface Geometry {
 /** Descend from the root, following the child whose range contains each block. */
 function buildChains(tree: Tree, blocks: Block[]): NodeId[][] {
   const order = new Map<BlockId, number>(blocks.map((b, i) => [b.id, i]));
-  const spanOf = (n: TreeNode): [number, number] => [
-    order.get(n.range[0]) ?? 0,
-    order.get(n.range[1]) ?? blocks.length - 1,
-  ];
+
+  // Ids are random, so a range is resolved by looking both endpoints up in the
+  // block sequence — never by comparing the id strings, which would return a
+  // plausible and meaningless boolean. See docs/project/block-ids.md.
+  // An unresolvable range yields null and the node is skipped, so a malformed
+  // tree renders visibly short rather than silently claiming the whole article.
+  const spanOf = (n: TreeNode): [number, number] | null => {
+    const lo = order.get(n.range[0]);
+    const hi = order.get(n.range[1]);
+    return lo === undefined || hi === undefined || lo > hi ? null : [lo, hi];
+  };
 
   return blocks.map((_, i) => {
     const chain: NodeId[] = [];
@@ -50,8 +57,8 @@ function buildChains(tree: Tree, blocks: Block[]): NodeId[][] {
         .map((id) => tree.nodes[id])
         .find((c) => {
           if (!c) return false;
-          const [lo, hi] = spanOf(c);
-          return i >= lo && i <= hi;
+          const span = spanOf(c);
+          return span !== null && i >= span[0] && i <= span[1];
         });
       node = next;
     }

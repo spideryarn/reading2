@@ -18,12 +18,23 @@ It feeds the block-splitting stage that assigns the stable ids everything else a
 in turn feeds the deeply-nested table of contents and the
 [granularity-zoom tree](granularity-zoom.md#the-tree) — one structure, not two.
 
-Two open questions land on this stage: whether extraction or the blocks stage owns id assignment and
-how ids survive re-extraction ([Q2](open-questions.md#q2)), and what counts as a block
-([Q3](open-questions.md#q3)).
+Two questions that used to land on this stage were settled on 2026-08-24, both away from it:
+id assignment belongs to **stage 3**, not extraction, and ids are random so they survive
+re-extraction ([block-ids.md](block-ids.md)); a block is the *finest* unit a reader takes in as one
+thing ([architecture.md § What a block is](architecture.md#what-a-block-is)).
+
+What this stage still owes stage 3: sanitized HTML whose element structure is stable run-to-run.
+Ids are preserved by matching on the `spya-` attribute already in the document, so extraction must
+not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 
 The standalone styled HTML output is a debug view; once the server exists
 ([architecture.md § Server and client](architecture.md#server-and-client)), the durable artefacts are
 `article.html` + `meta.json` under `data/<slug>/`.
 
 Why any of this exists at all: [vision.md](vision.md).
+
+## Prior art
+
+The previous version of Spideryarn ran a Readability-based extraction path in production and wrote
+down what went wrong with it. See
+[PREVIOUS_VERSION.md](PREVIOUS_VERSION.md#things-it-built-that-we-re-also-building) for the pointers.

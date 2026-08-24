@@ -29,31 +29,20 @@ Target branching factor ~5–9 so levels feel like even strides.
 
 ---
 
-## Q2 — Who assigns block ids, and how stable are they across re-extraction? <a id="q2"></a>
+## Q2, Q3 — decided <a id="q2"></a><a id="q3"></a>
 
-Ids are [the one contract that matters](../../AGENTS.md#the-one-contract-that-matters). Two sub-questions:
+Both settled on 2026-08-24 and written up where they belong. Anchors kept so older links still land.
 
-- **Which stage owns assignment** — the extractor (stage 2) or the ToC/blocks stage (stage 3)? Both
-  are owned by other agents right now, so this needs an explicit call.
-- **Sequential or content-hashed?** `p0001…` in document order is simple and readable, but if the
-  article is re-fetched and one paragraph is inserted near the top, every downstream id shifts and
-  every note, highlight, and cached gist is silently wrong.
-
-**Recommendation:** sequential ids for readability, *plus* a `textHash` per block, and a re-extraction
-step that matches new blocks to old by hash to migrate reader state. Ship sequential-only in v1 and
-record the pipeline version in every artefact so stale caches are detectable rather than invisible.
-
----
-
-## Q3 — What is a "block"? <a id="q3"></a>
-
-Paragraphs are the obvious leaf, but a Readability-extracted article also contains headings, lists,
-blockquotes, figures, `pre`, and tables. Are list items individual blocks or is the whole `<ul>` one
-block? Does a figure get a gist?
-
-**Recommendation:** one block per top-level flow element (a whole `<ul>` is one block), because that
-keeps blocks close to "a thing you read as a unit". Figures and `pre` are blocks that carry no gist
-and are shown verbatim at any level where their parent is expanded.
+- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + ToC agent), and ids are
+  **random**, not sequential, because sequential ids silently break on re-extraction. See
+  [block-ids.md](block-ids.md#why-random-and-not-sequential). Note this went *against* the
+  recommendation recorded here, which was sequential-plus-`textHash`; the hash-migration step it
+  proposed is unnecessary once ids simply survive.
+- **Q3 — what is a "block"?** The **finest** unit a reader takes in as one thing: an `<li>` is a
+  block, the `<ul>` is a tree node. See
+  [architecture.md § What a block is](architecture.md#what-a-block-is). Also against the
+  recommendation here, which was one block per top-level flow element — that would have made
+  "a ToC row per list item" permanently unreachable.
 
 ---
 
@@ -103,3 +92,28 @@ call per node plus one per leaf batch.
 
 **Recommendation:** measure on the Noema article before optimising. Load the `claude-api` skill for
 current model ids before writing the calls; don't hardcode a model from memory.
+
+---
+
+## Q8 — Where does a sentence's rank come from, in the fisheye view? <a id="q8"></a>
+
+Only bites once the [fisheye view](granularity-zoom.md#the-other-view-fisheye) is built; the
+[tabular view](granularity-zoom.md#the-tabular-view) needs only per-node gists and is unaffected.
+
+Fisheye varies granularity *within* one screen, so it needs a number per sentence, not per node.
+Two ways to get one:
+
+| Option | For | Against |
+|---|---|---|
+| **Hierarchical budget** — each node promotes its best sentence, which inherits the node's depth | coverage is guaranteed even; the far-left view is literally "one sentence per chapter", which is what the brief asked for; only local judgments, which LLMs are good at | a dull section gets the same airtime as the crux |
+| Global salience score | honest about where the substance actually is | clumps badly; whole sections render as nothing when zoomed out, so the map develops blind spots |
+| Global score with a per-section quota floor | strictly better output than either | two interacting mechanisms to tune and debug |
+
+**Recommendation: the hierarchical budget**, because it delivers the brief's own description of the
+leftmost column and because it degrades gracefully. Revisit if the coarse levels feel like they are
+giving equal weight to unequal material.
+
+Related and also open: the fisheye sketch leans toward showing the author's **real sentences** where
+the tabular view shows **generated gists**. Those are different bargains with
+[principle 1](vision.md#principles) and should be reconciled deliberately.
+

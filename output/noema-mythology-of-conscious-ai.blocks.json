@@ -17,7 +17,8 @@
       "text": "Credits",
       "words": 1,
       "html": "<p id=\"spya-d2h6jh\">Credits</p>",
-      "gistable": true
+      "gistable": false,
+      "note": "boilerplate label"
     },
     {
       "id": "spya-gp3g6s",
@@ -305,11 +306,12 @@
     {
       "id": "spya-gxdsbh",
       "tag": "p",
-      "kind": "text",
+      "kind": "caption",
       "text": "Figure 1: Mother Teresa in a cinnamon bun. (Public Domain)",
       "words": 10,
       "html": "<p id=\"spya-gxdsbh\">Figure 1: Mother Teresa in a cinnamon bun. (Public Domain)</p>",
-      "gistable": true
+      "gistable": false,
+      "note": "figure caption"
     },
     {
       "id": "spya-d3g67c",
@@ -426,11 +428,12 @@
     {
       "id": "spya-qknqjx",
       "tag": "p",
-      "kind": "text",
+      "kind": "caption",
       "text": "Figure 2: A modern version of a McCulloch-Pitts neuron. Input signals X1-X4 are multiplied by weights w, summed up together with a bias (another input) and then passed through an activation function, usually a sigmoid (an S-shaped curve), to give an output Y. This version is similar to the artificial neurons used in contemporary AI. In the original version, the output was either 1 (if the summed, weighted inputs exceeded a fixed threshold) or 0 (if they didn’t). The modifications were introduced to make artificial neural networks easier to train. (Courtesy of Anil Seth)",
       "words": 94,
       "html": "<p id=\"spya-qknqjx\">Figure 2: A modern version of a McCulloch-Pitts neuron. Input signals X1-X4 are multiplied by weights w, summed up together with a bias (another input) and then passed through an activation function, usually a sigmoid (an S-shaped curve), to give an output Y. This version is similar to the artificial neurons used in contemporary AI. In the original version, the output was either 1 (if the summed, weighted inputs exceeded a fixed threshold) or 0 (if they didn’t). The modifications were introduced to make artificial neural networks easier to train. (Courtesy of Anil Seth)</p>",
-      "gistable": true
+      "gistable": false,
+      "note": "figure caption"
     },
     {
       "id": "spya-v5vz2t",
@@ -646,11 +649,12 @@
     {
       "id": "spya-v8s83c",
       "tag": "p",
-      "kind": "text",
+      "kind": "caption",
       "text": "Figure 3: The Watt Governor. It’s not a computer. (R. Routledge/Wikimedia)",
       "words": 11,
       "html": "<p id=\"spya-v8s83c\">Figure 3: The Watt Governor. It’s not a computer. (R. Routledge/Wikimedia)</p>",
-      "gistable": true
+      "gistable": false,
+      "note": "figure caption"
     },
     {
       "id": "spya-sq9v5k",
@@ -757,11 +761,12 @@
     {
       "id": "spya-f3bgh0",
       "tag": "p",
-      "kind": "text",
+      "kind": "caption",
       "text": "Figure 4: Perception as controlled hallucination. The conscious experience of a coffee cup is underpinned by the content of the brain’s predictions (grey arrows) of the causes of sensory inputs (black arrows). (Courtesy of Anil Seth)",
       "words": 36,
       "html": "<p id=\"spya-f3bgh0\">Figure 4: Perception as controlled hallucination. The conscious experience of a coffee cup is underpinned by the content of the brain’s predictions (grey arrows) of the causes of sensory inputs (black arrows). (Courtesy of Anil Seth)</p>",
-      "gistable": true
+      "gistable": false,
+      "note": "figure caption"
     },
     {
       "id": "spya-hzp9yz",
@@ -1152,11 +1157,12 @@
     {
       "id": "spya-tv922y",
       "tag": "p",
-      "kind": "text",
+      "kind": "caption",
       "text": "Figure 5: The Müller-Lyer illusion. The two lines are the same length. (Courtesy of Anil Seth)",
       "words": 16,
       "html": "<p id=\"spya-tv922y\">Figure 5: The Müller-Lyer illusion. The two lines are the same length. (Courtesy of Anil Seth)</p>",
-      "gistable": true
+      "gistable": false,
+      "note": "figure caption"
     },
     {
       "id": "spya-kqs33c",
