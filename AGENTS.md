@@ -15,6 +15,7 @@ offshoot of is [documented here](docs/project/PREVIOUS_VERSION.md). The first fe
 the piece, horizontal for how much detail.
 
 **This file is a signpost, not a spec.** Everything real lives in `docs/project/`.
+`CLAUDE.md` is a symlink to this file — there is only one of it, so edit either name freely.
 
 ## Docs
 
@@ -28,6 +29,8 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [table-of-contents.md](docs/project/table-of-contents.md) | the deeply-nested ToC: schema, granularity, the generation prompt |
 | [architecture.md](docs/project/architecture.md) | pipeline stages, what a block is, storage layout, server, stage ownership |
 | [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
+| [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
+| [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
 | [PREVIOUS_VERSION.md](docs/project/PREVIOUS_VERSION.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
 | [open-questions.md](docs/project/open-questions.md) | undecided calls, each with a recommendation so nobody is blocked |
 
@@ -45,22 +48,6 @@ or CSS selector. Ids are minted once and preserved on every later run, so they s
 
 The format, the reasoning, and the one way to get range checks silently wrong are all in
 **[block-ids.md](docs/project/block-ids.md)** — read it before touching anything that resolves an id.
-
-## Current state
-
-- [`src/extract.ts`](src/extract.ts) — fetch a URL, run Mozilla Readability, write standalone HTML to
-  `output/`. The prototype pipeline stages 1–2 are growing out of.
-- [`src/ids.ts`](src/ids.ts) + [`src/blocks.ts`](src/blocks.ts) — stage 3: split the article into
-  blocks and mint stable ids. `npm run blocks -- <article.html>`; idempotent, re-running preserves
-  every existing id.
-- `output/noema-mythology-of-conscious-ai.html` — the working test article (Anil Seth, ~54 min read,
-  long and mostly *unstructured* prose, which is deliberately the hard case). 139 blocks, only 9 of
-  them headings.
-- [`styles/tokens.css`](styles/tokens.css) + [`public/`](public/) — logo, favicons, brand colours and
-  reading typography, lifted from the previous version — see
-  [PREVIOUS_VERSION.md](docs/project/PREVIOUS_VERSION.md).
-- A React client (Vite) is being built by another agent.
-- The ToC (stage 4) and summarization (stage 5) are unbuilt.
 
 ## How we write docs here
 
@@ -108,3 +95,14 @@ Not descriptions of code, which the code already provides.
   to import: that project is far larger in scope, and this one is staying tight.
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.
+- **Committing, with several agents in one working tree.** We're deliberately not using git
+  worktrees yet — not worth the complexity — so the tree has other agents' in-flight edits in it.
+  Commit only your own files, by naming them explicitly and doing it in one atomic command:
+
+  ```
+  git reset && git add <your files> && git commit -m "…"
+  ```
+
+  The leading `git reset` unstages anything someone else left staged. Never `git add -A`, `git add .`
+  or `git commit -a`. And don't stress if someone sweeps up one of your changes anyway — it happens,
+  it's recoverable, keep going.
