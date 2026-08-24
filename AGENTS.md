@@ -43,6 +43,17 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 - [docs/reusable/third-party-library-selection.md](docs/reusable/third-party-library-selection.md) —
   how to pick a dependency: bias towards long-lived, heavily-documented libraries, then write the
   decision down. Followed for Vitest in [testing.md](docs/project/testing.md)
+- [docs/reusable/gjdutils-instructions.md](docs/reusable/gjdutils-instructions.md) — **read this
+  first.** Greg keeps a library of reusable "how to do this kind of task well" instructions in
+  [gjdutils](https://github.com/gregdetre/gjdutils/tree/main/docs/instructions). When a task matches
+  one, follow it rather than inventing a process. Copied in so far:
+  - [capture-sounding-board-conversation.md](docs/reusable/capture-sounding-board-conversation.md) —
+    writing a conversation up as a document: quote Greg verbatim, synthesise the rest
+  - [generate-mermaid-diagram.md](docs/reusable/generate-mermaid-diagram.md) — authoring `.mermaid`
+    files and rendering them to SVG, plus the house style for colour, shape and labels
+  - [rename-or-move.md](docs/reusable/rename-or-move.md) — `git mv`, then hunt down every reference
+  - [write-deep-dive-as-doc.md](docs/reusable/write-deep-dive-as-doc.md) — researching a topic and
+    writing it up as a reference doc with its sources attached
 
 ## The one contract that matters
 
