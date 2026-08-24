@@ -46,6 +46,10 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 - [docs/reusable/third-party-library-selection.md](docs/reusable/third-party-library-selection.md) —
   how to pick a dependency: bias towards long-lived, heavily-documented libraries, then write the
   decision down. Followed for Vitest in [testing.md](docs/project/testing.md)
+- [docs/reusable/silent-success.md](docs/reusable/silent-success.md) — **the pattern behind most of
+  a day's bugs.** A thing reports success while doing nothing, and the check you'd naturally run
+  returns the answer you were hoping for — because it shares an assumption with the code. Six worked
+  examples and the habit that catches them.
 - [docs/reusable/css-sticky-containing-block.md](docs/reusable/css-sticky-containing-block.md) —
   why `position: sticky` can be declared correctly and do nothing: its range is its containing
   block's size minus its own, so a `100vw` bar in a `100vw` parent has zero range and fails
