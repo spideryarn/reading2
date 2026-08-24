@@ -11,13 +11,15 @@
     "build": "vite build",
     "validate-tree": "tsx src/validate-tree.ts",
     "toc:flatten": "tsx src/toc-flatten.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "toc": "tsx src/toc.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "@mozilla/readability": "^0.6.0",
     "jsdom": "^29.1.1",
     "react": "^19.2.8",

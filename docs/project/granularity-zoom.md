@@ -214,6 +214,64 @@ Consequences worth knowing:
   [Node shape](#node-shape): falling back to `navLabel` when `gist` is absent would silently turn
   navigation chrome into reading content.
 
+### Two modes: reading and outline
+
+Greg, 2026-08-24:
+
+> There should be one level higher. In other words, I want to be able to easily see the whole table
+> of contents.
+
+Those are two different requests and both are satisfied, but not by the same change.
+
+**One level higher** is literal: depth 0 now gets its own column. Without it the coarsest thing on
+screen was the parts list, and there was no single place saying what the piece *is*.
+
+**Seeing the whole table of contents** is not about adding a column, and this is the part worth
+understanding. In reading mode the ToC rows are all present — but a part's row and the next part's
+row are separated by thousands of pixels of prose, so "the outline" is something you scroll through
+rather than something you see. Adding L0 does not fix that; nothing in the horizontal axis can.
+
+The fix is in the *vertical* axis, and it was already latent in the table: **hide the text column and
+every row collapses to its natural height**, turning the same table into a compact whole-article
+outline. Same tree, same rowSpans, same alignment — only the tallest column is gone.
+
+That mode needs one thing reading mode does not: a column for the **leaf `navLabel`s**, which
+otherwise have nowhere to render. It appears in outline mode only, and is not user-togglable,
+because a navLabel beside the very paragraph it labels is noise, and — per
+[Node shape](#node-shape) — must never stand in for prose that could be shown. Hiding the prose
+deliberately, to navigate, is the one context where navigation chrome is the point.
+
+`?text=0` opens straight into outline mode, so a whole-article ToC is a shareable link rather than a
+button you have to find. `#<blockid>` opens at a paragraph.
+
+### Too many levels: minimum widths, and pinned ends
+
+> If we had more than two or three levels, I think it will quickly get too narrow if we try and fit
+> everything on the screen at once. So maybe we have some minimum width for each column and allow for
+> scrolling, and if we do that, perhaps we always keep the leftmost and perhaps the rightmost visible,
+> and so the scrolling's just the middle. I don't know, maybe that'd be confusing, but let's try it.
+
+Built as described. Columns carry a **minimum** width rather than a fixed one, so the table fills the
+viewport when it can and overflows into a horizontal scroll when there are too many levels. The
+**leftmost visible column and the prose column pin**; the middle levels scroll between them.
+
+Two things that make this work rather than merely function:
+
+- **The page scrolls horizontally, not an inner container.** Wrapping the table in
+  `overflow-x: auto` would force `overflow-y` to `auto` as well, which would silently break every
+  vertical sticky in the view — the gists that ride alongside their range, and the two header bars.
+  Instead the document itself is wide, the bars are `sticky` on *both* axes, and cell pinning is
+  plain `position: sticky` on `<td>`. That in turn requires `border-collapse: separate`, because
+  sticky cells are unreliable under `collapse`.
+- **Pinned columns are drawn as a layer, with a real drop shadow, not a hairline.** Greg's worry —
+  "maybe that'd be confusing" — is well founded, and this is where it bites: at `scrollLeft: 0` a
+  middle column sits *underneath* the pinned prose. With only a hairline that reads as a rendering
+  bug; with a shadow it reads as "there is more to scroll", which is true. The shadows are removed
+  above 1500px, where nothing overlaps.
+
+Still unresolved: when the tree is deep enough that several middle columns are hidden at once, there
+is no indication of *how many*. A column-count affordance in the header bar is the obvious next move.
+
 ### Validate the tree, always
 
 The client does not crash on a malformed tree — it silently draws a **wrong article**, because

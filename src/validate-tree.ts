@@ -121,7 +121,9 @@ for (const node of Object.values(tree.nodes)) {
     const t = wordsIn(node.title ?? "");
     if (t === 0) fail(`${node.id}: internal node has no title`);
     else if (t > 8) warn(`${node.id}: title is ${t} words, expected 2–6 — ${JSON.stringify(node.title)}`);
-    if (/[.!?]$/.test(node.title ?? ""))
+    // Only our own titles are held to this. An authored heading reproduced
+    // verbatim keeps its punctuation — "What (Not) To Do?" is the author's.
+    if (!node.sourceHeading && /[.!?]$/.test(node.title ?? ""))
       warn(`${node.id}: title ends with sentence punctuation — it is a label, not a sentence`);
 
     // A node claiming an authored heading must actually contain one.

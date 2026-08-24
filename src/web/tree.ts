@@ -23,8 +23,10 @@ export interface Cell {
 }
 
 export interface Geometry {
-  /** Column depths, e.g. [1, 2] — the gist columns, left (coarse) to right. */
+  /** Every column depth, 0 (whole article) … maxDepth (the leaves). */
   columnDepths: number[];
+  /** The deepest depth — the leaf column, which renders navLabels, not gists. */
+  leafDepth: number;
   /** cells[columnIndex] → the cells in that column, in document order. */
   cells: Cell[][];
   /** cells keyed by "depth:rowIndex" for the row where each cell starts. */
@@ -69,10 +71,13 @@ function buildChains(tree: Tree, blocks: Block[]): NodeId[][] {
 export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
   const chains = buildChains(tree, blocks);
 
-  // Deepest node anywhere in the tree. The last depth is the leaf level, which
-  // the table renders as verbatim text rather than as a gist column.
+  // Columns run from 0 (one cell: the whole article) to maxDepth (the leaves).
+  // Depth 0 earns a column because otherwise the coarsest thing on screen is
+  // the parts list, and there is no single place that says what the piece is.
+  // The leaf column carries navLabels rather than gists, so it is only shown in
+  // outline mode — see TableView.
   const maxDepth = Math.max(...Object.values(tree.nodes).map((n) => n.depth));
-  const columnDepths = Array.from({ length: Math.max(0, maxDepth - 1) }, (_, i) => i + 1);
+  const columnDepths = Array.from({ length: maxDepth + 1 }, (_, i) => i);
 
   const cells: Cell[][] = [];
   const cellAt = new Map<string, Cell>();
@@ -102,12 +107,16 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
     cells.push(column);
   }
 
-  return { columnDepths, cells, cellAt, chains };
+  return { columnDepths, leafDepth: maxDepth, cells, cellAt, chains };
 }
 
-/** Human label for a gist column. */
-export function columnLabel(depth: number, columnDepths: number[]): string {
-  if (depth === columnDepths[0]) return "Parts";
-  if (depth === columnDepths[columnDepths.length - 1]) return "Sections";
-  return `Level ${depth}`;
+/** Human label for a column. */
+export function columnLabel(depth: number, leafDepth: number): string {
+  if (depth === leafDepth) return "Paragraphs";
+  switch (depth) {
+    case 0: return "Article";
+    case 1: return "Parts";
+    case 2: return "Sections";
+    default: return `Level ${depth}`;
+  }
 }
