@@ -54,6 +54,16 @@ that codebase keep working.
   disabled during rapid prototyping to avoid inconsistency, and the same reasoning applies here.
 - **Trebuchet MS is the wordmark font and nothing else.** UI is a system sans; the *article* is a
   serif (Georgia), because the article is the thing you actually read.
+- **`--accent` is a trap.** The original's tokens are shadcn-shaped, so `--accent` there means a
+  near-white *surface* for hover states, not the brand highlight. Import
+  [`styles/tokens.css`](../../styles/tokens.css) into a stylesheet that uses `--accent` to mean "the
+  orange" and every highlight silently goes almost white. Found the hard way by the client agent
+  while adopting the brand. `tokens.css` now warns at the definition and offers `--highlight` as the
+  alias that means what you expect; rename your own variable rather than redefining `--accent`.
+- **`.reading-column` centres its text** (`margin-inline: auto`), which is right for a full-width
+  reading view and wrong inside a table cell or a narrow pane — there, apply the four custom
+  properties directly and keep your own container. The measure and the research are the same either
+  way; only the box differs.
 - The header markup pairs `<img class="logo-image">` with a `<span class="logo-text">` of per-letter
   `<span class="logo-letter">` (`components/app-header.tsx`). `tokens.css` preserves those class
   names, so the original's 15 CSS-only hover animations (`styles/logo-animations.css`, 1,911 lines,
@@ -62,12 +72,17 @@ that codebase keep working.
 
 ### Decision: the palette
 
-**Spideryarn orange wins** (Greg, 2026-08-24). [`src/web/styles.css`](../../src/web/styles.css) grew
-its own token set in parallel — `--accent: #8a5a2b` warm brown on `#fbfaf8`, with dark-mode support —
-and independently landed on a serif for the article, which is the agreement that matters. The accent
-and background should move to the brand values above, dark mode goes, and whichever file loses should
-`@import` the other rather than restate the values. That file belongs to the client agent, so this
-is recorded here rather than edited in.
+**Spideryarn orange wins** (Greg, 2026-08-24), and it's done.
+[`src/web/styles.css`](../../src/web/styles.css) had grown its own token set in parallel —
+`--accent: #8a5a2b` warm brown on `#fbfaf8`, with dark-mode support — while independently landing on
+a serif for the article, which was the agreement that mattered. It now `@import`s
+[`styles/tokens.css`](../../styles/tokens.css) and defines a thin semantic layer over it rather than
+restating any values; the warm palette and the dark-mode block are gone. One palette, one source,
+light only. `index.html` links the favicons and manifest from [`public/`](../../public/), with
+`theme-color` `#DB8A45`.
+
+No wordmark on screen yet — that view's masthead is the article title, not app chrome. When app-level
+chrome exists, `.logo-text` / `.logo-image` are waiting.
 
 ## The map
 

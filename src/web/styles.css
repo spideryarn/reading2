@@ -1,49 +1,62 @@
-/* ---------------------------------------------------------------- tokens -- */
-:root {
-  --bg: #fbfaf8;
-  --panel: #ffffff;
-  --ink: #1c1a17;
-  --ink-soft: #5c564e;
-  --ink-faint: #918a80;
-  --rule: #e5e0d8;
-  --rule-strong: #cfc7bb;
-  --accent: #8a5a2b;
-  --accent-wash: #f5ede2;
-  --depth-1: #7a4f8c;
-  --depth-2: #2f6b74;
-}
+/*
+ * Reading view styles.
+ *
+ * The palette is NOT defined here — it comes from ../../styles/tokens.css,
+ * lifted from the original Spideryarn app. Greg's call (2026-08-24, relayed via
+ * the session that ported the brand): Spideryarn orange, white background,
+ * light mode only, as in the original. See
+ * docs/project/PREVIOUS_VERSION.md § "Decision: the palette".
+ *
+ * This file previously carried an independently-grown warm-brown palette with a
+ * dark mode. Both are gone: one palette, one source.
+ */
+@import "../../styles/tokens.css";
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #16151300;
-    --bg: #161513;
-    --panel: #1e1d1a;
-    --ink: #ece7df;
-    --ink-soft: #b0a89c;
-    --ink-faint: #7d766c;
-    --rule: #302e2a;
-    --rule-strong: #45413b;
-    --accent: #d8a165;
-    --accent-wash: #2a241c;
-    --depth-1: #c3a0d0;
-    --depth-2: #8ac3cb;
-  }
+/* ---------------------------------------------------------------- tokens --
+   A thin semantic layer over the brand tokens, so the rules below read in
+   terms of the reading view rather than in terms of shadcn surface names.
+   NOTE: tokens.css defines --accent as a near-white *surface* (shadcn's
+   meaning). The brand orange is --spideryarn-orange / --primary. Anything here
+   that means "the orange" says --highlight, so the two never get confused.  */
+:root {
+  --ink: var(--foreground);
+  --ink-soft: oklch(0.44 0 0);
+  --ink-faint: var(--muted-foreground);
+
+  --page: var(--background);
+  --panel: var(--sidebar);
+  --rule: var(--border);
+  --rule-strong: oklch(0.86 0 0);
+
+  --highlight: var(--spideryarn-orange);
+  --highlight-wash: color-mix(in oklch, var(--spideryarn-orange) 10%, white);
+
+  /* Left-edge tints that distinguish the granularity columns at a glance.
+     Same hue family as the brand, separated by chroma rather than by hue, so
+     the columns read as one system instead of as a rainbow. */
+  --depth-1: var(--spideryarn-orange);
+  --depth-2: oklch(0.72 0.045 45);
+
+  --bar-h: 2.75rem; /* .controls */
+  --head-h: 2.5rem; /* thead */
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--page);
   color: var(--ink);
-  font: 16px/1.55 ui-serif, Georgia, "Iowan Old Style", Palatino, serif;
+  font-family: var(--font-reading);
+  font-size: 1rem;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
 .loading, .error {
   padding: 3rem;
   color: var(--ink-soft);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   white-space: pre-wrap;
 }
@@ -54,7 +67,7 @@ body {
    the controls, and a gist cell's sticky content pins below both. Change one
    height and you must change the offsets under it.  */
 .masthead {
-  background: var(--bg);
+  background: var(--page);
   padding: 1.25rem 1.5rem 0.9rem;
 }
 
@@ -62,20 +75,21 @@ body {
 
 h1 {
   margin: 0;
-  font-size: 1.4rem;
-  font-weight: 600;
+  font-family: var(--font-reading);
+  font-size: 1.45rem;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .byline {
-  margin: 0.15rem 0 0;
+  margin: 0.2rem 0 0;
+  font-family: var(--font-ui);
   font-size: 0.82rem;
   color: var(--ink-faint);
-  font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
 .root-gist {
-  margin: 0.5rem 0 0;
+  margin: 0.55rem 0 0;
   max-width: 48rem;
   color: var(--ink-soft);
   font-size: 0.95rem;
@@ -86,14 +100,14 @@ h1 {
   position: sticky;
   top: 0;
   z-index: 30;
-  height: 2.75rem;
+  height: var(--bar-h);
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0 1.5rem;
-  background: var(--bg);
+  background: var(--page);
   border-bottom: 1px solid var(--rule-strong);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
 }
 
 .controls-label {
@@ -116,12 +130,12 @@ h1 {
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.controls button:hover { border-color: var(--accent); color: var(--accent); }
+.controls button:hover { border-color: var(--highlight); color: var(--highlight); }
 
 .controls button.on {
-  background: var(--accent-wash);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--highlight-wash);
+  border-color: var(--highlight);
+  color: color-mix(in oklch, var(--spideryarn-orange) 75%, black);
   font-weight: 600;
 }
 
@@ -129,7 +143,7 @@ h1 {
   margin-left: auto;
   font-size: 0.68rem;
   color: var(--ink-faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   border: 1px dashed var(--rule-strong);
   border-radius: 4px;
   padding: 0.1rem 0.45rem;
@@ -147,13 +161,17 @@ col.col-text { width: auto; }
 
 thead th {
   position: sticky;
-  top: 2.75rem; /* clears .controls */
+  top: var(--bar-h);
   z-index: 20;
+  height: var(--head-h);
   background: var(--panel);
   border-bottom: 1px solid var(--rule-strong);
   padding: 0.5rem 1rem;
   text-align: left;
-  font: 600 0.68rem/1.4 ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -185,19 +203,22 @@ td.gist {
 
 td.gist .sticky {
   position: sticky;
-  top: 5.4rem; /* clears .controls + thead */
+  top: calc(var(--bar-h) + var(--head-h)); /* clears both bars */
   padding: 0.85rem 1rem 1rem;
 }
 
 td.gist .title {
-  font: 600 0.9rem/1.35 ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--ink);
   margin-bottom: 0.3rem;
 }
 
 td.gist .own {
   margin-left: 0.3rem;
-  color: var(--accent);
+  color: var(--highlight);
   font-weight: 400;
 }
 
@@ -210,16 +231,17 @@ td.gist .gist-text {
 
 td.gist .range {
   margin-top: 0.5rem;
-  font: 0.65rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  line-height: 1;
   color: var(--ink-faint);
-  opacity: 0.65;
+  opacity: 0.7;
 }
 
-td.gist.active { background: var(--accent-wash); }
-td.gist.active .title { color: var(--accent); }
+td.gist.active { background: var(--highlight-wash); }
+td.gist.active .title { color: color-mix(in oklch, var(--spideryarn-orange) 80%, black); }
 td.gist.continuation { background: transparent; }
 
-/* Left edge tint per depth, so the levels are distinguishable at a glance. */
 .col-depth-1 { --tint: var(--depth-1); }
 .col-depth-2 { --tint: var(--depth-2); }
 td.gist .title::before {
@@ -233,7 +255,12 @@ td.gist .title::before {
   border-radius: 2px;
 }
 
-/* ------------------------------------------------------------------ text -- */
+/* ------------------------------------------------------------------ text --
+   The article column. Georgia at 17px/1.6 and a 65ch measure come from the
+   original app's typography research (styles/tokens.css) — 80 chars per line
+   reads ~7% faster but comprehends ~12% worse. The measure is applied to
+   .prose rather than by using .reading-column, because that class centres
+   itself and here the text is left-aligned in a table cell.  */
 td.text {
   padding: 0.7rem 1.4rem 0.7rem 5.2rem;
   position: relative;
@@ -249,36 +276,49 @@ tr.row-active td.text { background: var(--panel); }
   left: 1rem;
   top: 1.05rem;
   width: 4rem;
-  font: 0.62rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1;
   color: var(--ink-faint);
-  opacity: 0.3;
+  opacity: 0.45;
   user-select: all;
   transition: opacity 0.12s;
 }
 
-tr.row-active .block-id { opacity: 0.75; }
+tr.row-active .block-id { opacity: 0.85; }
 
-.prose { max-width: 40rem; }
+.prose {
+  max-width: clamp(45ch, 90vw, var(--reading-measure));
+  font-family: var(--font-reading);
+}
 .prose > * { margin: 0; }
-.prose p { font-size: 1.02rem; line-height: 1.65; }
+.prose p {
+  font-size: var(--reading-size);
+  line-height: var(--reading-line-height);
+}
 .prose h1 { font-size: 1.5rem; }
 .prose h2 { font-size: 1.15rem; letter-spacing: 0.01em; }
 .prose h3 { font-size: 1rem; }
 .prose h1, .prose h2, .prose h3 {
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-weight: 650;
 }
-.prose a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.prose a {
+  color: color-mix(in oklch, var(--spideryarn-orange) 80%, black);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
 .prose img { max-width: 100%; height: auto; }
 .prose figure { margin: 0; }
 .prose figcaption { font-size: 0.85rem; color: var(--ink-faint); }
 .prose blockquote {
   margin: 0;
   padding-left: 1rem;
-  border-left: 2px solid var(--accent);
+  border-left: 2px solid var(--highlight);
   font-style: italic;
   color: var(--ink-soft);
 }
 
-td.text.opaque { background: color-mix(in srgb, var(--panel) 60%, transparent); }
+/* Media, captions and rules — present, but never competing with the argument. */
+td.text.opaque { background: var(--muted); }
 td.text.opaque .prose { font-size: 0.95rem; color: var(--ink-soft); }

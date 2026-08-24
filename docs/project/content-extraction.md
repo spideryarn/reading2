@@ -37,4 +37,4 @@ Why any of this exists at all: [vision.md](vision.md).
 
 The previous version of Spideryarn ran a Readability-based extraction path in production and wrote
 down what went wrong with it. See
-[PREVIOUS_VERSION.md](PREVIOUS_VERSION.md#things-it-built-that-we-re-also-building) for the pointers.
+[PREVIOUS_VERSION.md](PREVIOUS_VERSION.md#things-it-built-that-were-also-building) for the pointers.

@@ -5,8 +5,8 @@ Pipeline stage 4. Builds the nested structure that the ToC sidebar and the
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
-Stage 4 builds the *structure* (ranges, hierarchy, titles). Stage 5 fills the
-`gist` on each node. This document is about the structure and the titles.
+Stage 4 builds the *structure* (ranges, hierarchy, titles, leaf `navLabel`s). Stage 5 fills the
+`gist` on each internal node. This document is about the structure and the labels.
 
 ## Intent
 
@@ -59,41 +59,61 @@ model. So:
 
 - `depth` — a number, position in the tree, always present.
 - `sourceHeading` — the author's heading text, verbatim, present only when a real heading is behind
-  the node.
-- `titleSource` — `"heading" | "rewritten" | "proposed"`, so you can always tell whose words a row
-  is showing.
+  the node. [`validate-tree.ts`](../../src/validate-tree.ts) fails any node whose `sourceHeading`
+  doesn't match a real heading block inside its own range.
 
 ## Schema
 
+Canonical definition lives in [`src/types.ts`](../../src/types.ts); this is a copy for reading.
 `data/<slug>/tree.json`:
 
 ```ts
 interface Tree {
-  version: number;
-  blocksHash: string;        // ties a tree to the exact blocks.json it was built from
-  root: TocNode;
+  version: string;
+  generator: string;
+  slug: string;
+  rootId: NodeId;
+  nodes: Record<NodeId, TreeNode>;   // flat map, NOT nested
 }
 
-interface TocNode {
-  id: string;                // "n0042", stable within a tree
-  depth: number;             // 0 = whole article
-  title: string;             // SHORT at shallow depth, LONGER at leaf depth
-  range: [string, string];   // inclusive block-id range; children exactly partition it
-  children: TocNode[];       // [] at leaf depth
-  block?: string;            // block id, when this node IS a single block
-  sourceHeading?: string;    // the author's heading text, verbatim, when one exists
-  titleSource: "heading" | "rewritten" | "proposed";
-  gist?: string;             // ONE sentence; stage 5 fills this, not stage 4
+interface TreeNode {
+  id: NodeId;                  // "n0042"
+  depth: number;               // 0 = whole article
+  parent: NodeId | null;
+  children: NodeId[];          // [] for leaves — ids, not nested objects
+  range: [BlockId, BlockId];   // inclusive; children exactly partition it
+  title: string;               // 2–6 words. Internal nodes.
+  gist?: string;               // ONE sentence, stage 5. Never on leaves.
+  navLabel?: string;           // leaves only — the ToC row's text
+  summary?: string;
+  sourceHeading?: string;
 }
 ```
 
-The invariant, inherited from [the tree](granularity-zoom.md#the-tree): **every node covers a
-contiguous range of blocks, and a node's children exactly partition its range** — no gaps, no
-overlaps, no reordering. Contiguity is in `blocks.json` **array order**, not in the id string;
-random ids carry no ordering (see [block-ids.md](block-ids.md)). Never write
-`if (id > start && id < end)`.
+### Why a flat map and not a nested tree
 
-[`src/toc-validate.ts`](../../src/toc-validate.ts) enforces all of it. Run it on every generated
+The stored shape is a map keyed by `NodeId`, not nested objects. That looks less natural in JSON,
+and it is the right call, because of what the client actually asks it.
+
+The [anchor invariant](granularity-zoom.md#interaction) means that on every zoom change the client
+asks *"which node at depth D contains block X?"*, and on every scroll it asks it again. In a keyed
+map that is a lookup. In a nested structure it is a walk from the root. The React client
+([`src/web/tree.ts`](../../src/web/tree.ts)) was already built against the map, and the map is what
+[`src/types.ts`](../../src/types.ts) declares, so the map wins.
+
+The convenience of nesting is recovered where it's actually wanted — see
+[the generation prompt](#the-generation-prompt), where the *model* emits nested JSON and stage 4
+converts it to the map. Nesting is a good authoring format and a poor query format; the two do not
+have to be the same.
+
+### The partition invariant
+
+Inherited from [the tree](granularity-zoom.md#the-tree): **every node covers a contiguous range of
+blocks, and a node's children exactly partition its range** — no gaps, no overlaps, no reordering.
+Contiguity is in `blocks.json` **array order**, not in the id string; random ids carry no ordering
+(see [block-ids.md](block-ids.md#the-cost-we-accepted)). Never write `if (id > start && id < end)`.
+
+[`src/validate-tree.ts`](../../src/validate-tree.ts) enforces all of it. Run it on every generated
 tree — it is what stops a model quietly inventing a block id that doesn't exist.
 
 ## Entry length grows with depth <a id="granularity"></a>
@@ -107,49 +127,69 @@ plenty. At leaf depth a node has twenty siblings that are all about the same sub
 words ("the caching problem") is ambiguous across five of them. Length should track how much
 disambiguation the level actually demands.
 
-| Depth | Target | Why |
-|---|---|---|
-| 0 (article) | 2–8 words | It's the title. |
-| 1–2 (chapters, sections) | **2–6 words** | Landmarks. Must be scannable at a glance. |
-| leaf (paragraph rows) | **10–15 words** | A paragraph has no name of its own; it needs a claim. |
+**This rule is unchanged. Only its mechanism changed.** It used to be one `title` field that grew
+with depth. It is now expressed by *which field a node carries*:
 
-The cost is real and worth stating. 110-odd leaf rows at ~12 words is about **1,400 words of ToC
-against 8,275 words of article — roughly a sixth of the piece**. That is why the sidebar keeps
+| Node | Field | Target | Why |
+|---|---|---|---|
+| internal (chapters, sections) | `title` | **2–6 words** | Landmarks. Must be scannable at a glance. |
+| leaf (paragraph rows) | `navLabel` | **6–20 words** | A paragraph has no name of its own; it needs a claim. |
+
+Splitting the field is better than one field changing size, because the two do genuinely different
+jobs — a `title` also names the node in the spine and in the zoom view's collapsed levels, where it
+must stay short, while a `navLabel` exists only to be read once and clicked.
+
+A **heading leaf is exempt from the lower bound**: its label is the author's own title, and
+`Soul Machine` is exactly right at two words. `validate-tree.ts` skips the band check for leaves
+whose block is `kind: "heading"`.
+
+The cost is real and worth stating. 116 labelled leaf rows at ~12 words is about **1,400 words of
+ToC against 8,275 words of article — roughly a sixth of the piece**. That is why the sidebar keeps
 paragraph rows **collapsed by default**, showing the heading outline until the reader expands a
 section. An always-visible flat list of every paragraph is unusable, and it is also the thing
 [vision.md](vision.md#anti-goals) warns about: a summary satisfying enough to read *instead of* the
 article.
 
-## Not every block earns a row
+## Every block gets a leaf; not every leaf gets a row
 
-Every block has an id. That is [the contract](block-ids.md). It does **not** follow that every block
-gets a ToC row.
+This is the part most likely to be mis-implemented, so it is worth being exact.
 
-**Never a row of its own:**
+**Every block gets exactly one leaf node.** Not one-to-three, not merged with a neighbour — exactly
+one. `validate-tree.ts` fails a leaf that spans more than a single block, and fails any block not
+covered by some leaf. That is what keeps coverage machine-checkable: if rows could vanish or absorb
+each other, a silently dropped paragraph would be undetectable.
 
-- Any block with `gistable: false` in `blocks.json` — images, horizontal rules, and pull-quotes that
-  repeat body text verbatim. All 11 pull-quotes in the test article are word-for-word repeats of
-  body sentences; giving them rows would print the same claim in the ToC twice.
-- **Figure captions.** A `<p>` matching `^(Figure|Fig\.|Table|Image|Photo)\s*\d*\s*[:.]` is a caption
-  for the adjacent media block, not prose. The test article has three (`Figure 1: Mother Teresa in a
-  cinnamon bun.`, `Figure 3: The Watt Governor.`, `Figure 5: The Müller-Lyer illusion.`) and
-  `blocks.ts` currently marks them gistable, because they are text-bearing `<p>` elements sitting
-  *beside* the image rather than inside the `<figure>`. Stage 4 must filter them.
-- Boilerplate: a block whose entire text matches `^(Credits|Share|Subscribe|Related|Tags)$`.
+**Selectivity lives in `navLabel`, not in the ranges.** A leaf that should not appear in the sidebar
+simply carries no `navLabel`. [`toc-flatten.ts`](../../src/toc-flatten.ts) emits a row only for
+nodes that have a label, so an unlabelled leaf is tiled by the tree, rendered verbatim in the
+reading view, addressable by its id — and invisible in the ToC. Nothing is lost; nothing is
+duplicated.
 
-**Merged into a neighbour rather than dropped:** a gistable block under ~25 words that continues the
-block beside it — a transition, a one-line setup, a dangling attribution. In the test article that's
-`"Given all this, what should we do?"` (7 words) and `"Let's summarize. Many social and
-psychological factors…"` (19 words).
+**Never labelled:** any block with `gistable: false` in `blocks.json`. Stage 3 decides this, not
+stage 4 ([architecture.md § What a block is](architecture.md#what-a-block-is)). In the test article
+that is 23 of 139 blocks:
 
-Crucially, **merging is not deletion**. A leaf node may cover a *range* of 1–3 blocks. The block
-still exists, still has an id, still gets rendered verbatim in the reading view — it just shares a
-ToC row with its neighbour. This keeps the partition invariant intact and machine-checkable: leaf
-ranges must still tile the entire article with no gaps. If rows could simply vanish, coverage would
-be unverifiable and blocks could go silently missing.
+- **Media** — figures, bare images, horizontal rules.
+- **Pull-quotes.** All 11 in the test article are word-for-word repeats of body sentences; giving
+  them rows would print the same claim in the ToC twice.
+- **Figure captions** — `kind: "caption"`, matched on an explicit `^(Figure|Fig\.|Table|…)\s*\d*\s*[:.]`
+  marker and **never on length**, because `"Given all this, what should we do?"` is seven words of
+  real argument. The test article has five.
+- **Boilerplate labels** — a block whose entire text is `Credits`, `Sources`, `Notes`, `References`.
 
-Non-gistable blocks are **absorbed into an adjacent leaf node's range** for the same reason. They may
-appear *inside* a range; they may never be a node's `block` anchor.
+`validate-tree.ts` turns this into a hard error: a leaf carrying a `navLabel` while anchoring a
+`gistable: false` block fails the tree.
+
+> [!NOTE]
+> Two of the five captions are substantial — `Figure 2` runs to 94 words and `Figure 4` to 36,
+> and both explain a diagram rather than merely name it. We accepted losing them from the ToC
+> anyway, on the grounds that a caption belongs to its image and not to the argument: a reader who
+> wants it descends to the figure. This is a deliberate trade, not an oversight, and it is a
+> reasonable thing to revisit if the sidebar feels like it is hiding content.
+
+The inverse case is a warning rather than an error: a **gistable** leaf with no `navLabel` is
+flagged as "unreachable in the ToC". That is the escape hatch for a genuinely trivial transition,
+and it is deliberately noisy — skipping prose should be a decision someone made, not a default.
 
 ## Headings: verbatim unless genuinely uninformative
 
@@ -160,9 +200,6 @@ rewriting is high, and the test is **mechanical, not a judgment call**:
 > Rewrite a heading only if it (a) shares no content word with its own section body, **or** (b) is a
 > stock label — `Introduction`, `Background`, `Overview`, `Conclusion`, `Part Two`, `Chapter 3`.
 > Otherwise pass it through untouched.
-
-Set `titleSource: "rewritten"` whenever you do, so drift is auditable with one grep instead of a
-diff against the source.
 
 Worked example — the test article's four `h3`s:
 
@@ -177,6 +214,14 @@ All four pass. The numeric prefixes stay: they are the author's own enumeration 
 would break the correspondence with the page. This is the expected outcome — **rewriting should be
 rare**, and a run that rewrites more than a heading or two is a bug in the rule, not a bad article.
 
+> [!WARNING]
+> **Rewrites are not currently auditable.** An earlier draft of this design carried a
+> `titleSource: "heading" | "rewritten" | "proposed"` field so drift could be found with one grep.
+> That field is **not** in [`src/types.ts`](../../src/types.ts) and nothing emits or checks it. Today
+> the only signal is `sourceHeading`: a node that has one but whose `title` differs from it has been
+> rewritten. That is inferable but not explicit, and it says nothing about *proposed* titles. Worth
+> adding the field if rewriting ever turns out to be more common than the rule predicts.
+
 ## Building the tree over a flat article
 
 Authored headings are **hard boundaries** — they are ground truth about where the author thought the
@@ -184,7 +229,8 @@ seams were, and readers recognise them. Where a run between headings is long and
 model proposes boundaries by topic shift. Target branching factor ~5–9 so each level is an even
 stride rather than one level doing all the work.
 
-Worked through for the test article — 139 blocks, 122 gistable, 9 headings:
+Current stage-3 output for the test article: **139 blocks** — 9 heading, 108 text, 17 media, 5
+caption — of which **116 are gistable** and 23 are not.
 
 ```
   depth 0  article ......................................... 139 blocks
@@ -212,16 +258,28 @@ proposed.
 Those `h3` runs are still 13–26 blocks each — far above the 5–9 target — so **a proposed level sits
 below them**, splitting each into 3–4 topic groups of ~6 blocks. Only then do leaf rows appear.
 
-The shape that falls out is roughly `1 → 5 → 20 → ~110 leaves`: branching factors of 5, 4, and 5.5.
-That is the right answer for this piece, and it is only reachable because proposed levels are
+The shape that falls out is roughly `1 → 5 → 20 → 139 leaves`: branching factors of about 5, 4 and
+7. That is the right answer for this piece, and it is only reachable because proposed levels are
 allowed to interleave with authored ones. A headings-only tree would give this article **two**
 levels and no zoom axis worth having.
+
+Of those 139 leaves, 116 carry a `navLabel` and 23 do not.
 
 ## The generation prompt
 
 A ~10k-word article fits comfortably in one pass, so the model sees the whole document and can keep
 sibling titles consistent with each other. Longer pieces need section-by-section processing against
 a shared style contract — not yet needed, not yet built.
+
+**The model emits nested JSON; stage 4 converts it to the flat map** and assigns `NodeId`s, `parent`
+pointers and `depth`. Asking a model to emit a self-consistent map of cross-referencing ids is
+asking for dangling pointers; nesting makes the partition structurally obvious to whatever is
+writing it.
+
+**Leaves are generated mechanically, not by the model.** Since every block gets exactly one leaf,
+stage 4 creates them itself from `blocks.json`. The model never chooses leaf ranges — it proposes
+the internal grouping and writes the `navLabel` text. That removes an entire class of partition
+error from the model's job.
 
 The prompt rules below inherit from
 [granularity-zoom.md § Generation](granularity-zoom.md#generation) and
@@ -232,53 +290,54 @@ You are building a nested table of contents for an article. It goes all the way
 down to individual paragraphs, and it will be rendered as a navigation sidebar.
 
 You receive the article as a numbered list of blocks. Each block has an id
-(e.g. spya-k3m9qt), a tag, and its text.
-
-Produce a tree of nodes. Every node covers a contiguous range of blocks, and a
-node's children exactly partition its range — no gaps, no overlaps, no
-reordering. The first child starts where its parent starts; the last child ends
-where its parent ends.
+(e.g. spya-k3m9qt), a tag, its text, and a NOT-GISTABLE marker on some.
 
 STRUCTURE
+
+Produce a tree of INTERNAL nodes only. Every node covers a contiguous range of
+blocks, and a node's children exactly partition its range — no gaps, no
+overlaps, no reordering. The first child starts where its parent starts; the
+last child ends where its parent ends.
 
 - The article's own headings are HARD boundaries. A node must begin at a
   heading block wherever one exists. Never merge across a heading.
 - Where a run between headings is longer than ~9 blocks, propose your own
   boundaries inside it at genuine topic shifts, and give those nodes titles.
 - Aim for 5–9 children per node so each level is an even stride.
-- Leaf nodes cover 1–3 blocks. Give a block its own leaf node unless it is
-  under ~25 words AND directly continues its neighbour (a transition, a
-  one-line setup, a dangling attribution) — then merge it into that neighbour.
-- Blocks marked NOT-GISTABLE must never be a node's `block` anchor. Absorb them
-  into an adjacent leaf node's range.
+- Do NOT emit leaf nodes for individual blocks. Stop at the level above.
 
-TITLES
+TITLES (internal nodes)
 
-- Length grows with depth, because a title's only job is to tell itself apart
-  from its SIBLINGS, and deeper siblings are more numerous and more alike:
-    depth 1–2 (chapters, sections) ....  2–6 words
-    leaf nodes (paragraphs) .......... 10–15 words
-- A title must be a CLAIM or a MOVE, not a topic label.
+- 2–6 words. A title is a landmark, scanned at a glance.
+- Where the author gave the section a heading, use that heading's text
+  UNCHANGED and repeat it in `sourceHeading`. Rewrite it ONLY if it shares no
+  content word with its section body, or is a stock label ("Introduction",
+  "Background", "Part Two"). Rewriting should be rare.
+- No trailing punctuation.
+
+NAV LABELS (one per gistable block)
+
+- 6–20 words. Longer than a title on purpose: a paragraph has no name of its
+  own, and its neighbours are numerous and similar, so it needs enough words to
+  tell itself apart from them.
+- A navLabel must be a CLAIM or a MOVE, not a topic label.
     good: "Seth rejects substrate independence because feeling is metabolic"
     bad:  "Discusses substrate independence"
 - Reuse the author's distinctive vocabulary verbatim. Those words are the
   reader's handholds when they arrive at the passage.
-- Where the author gave the section a heading, use that heading's text
-  UNCHANGED and set titleSource:"heading". Rewrite it ONLY if it shares no
-  content word with its section body, or is a stock label ("Introduction",
-  "Background", "Part Two") — then set titleSource:"rewritten". Rewriting
-  should be rare. Titles you invent for proposed nodes get titleSource:"proposed".
-- Never introduce a fact that is not in the range below the node.
+- For a heading block, the navLabel is just the heading's own text.
+- Emit NOTHING for a block marked NOT-GISTABLE. No navLabel, no entry.
+- Never introduce a fact that is not in the block.
 - No meta-narration. Never write "this section explores", "the author then
   turns to", "we are told that".
-- No trailing punctuation on a title.
 
 OUTPUT
 
-JSON only, matching this shape:
+JSON only:
 
-{"root": {"id": "n0001", "depth": 0, "title": "...", "range": ["<firstBlockId>",
-"<lastBlockId>"], "titleSource": "heading", "children": [ ... ]}}
+{"root": {"title": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
+          "sourceHeading": "...", "children": [ ... ]},
+ "navLabels": {"<blockId>": "...", ...}}
 
 Use only block ids that appear in the input. Do not invent ids. Do not write a
 `gist` field — that is a later stage.
@@ -290,15 +349,69 @@ The prompt asks a model to emit a partition over 139 ids. It will occasionally e
 in the input, or a range with a one-block gap. Never trust a generated tree:
 
 ```
-npm run toc:validate -- output/noema-mythology-of-conscious-ai.blocks.json data/noema/tree.json
+npm run validate-tree -- data/noema
 ```
 
-That check is cheap and it is the only thing standing between a plausible-looking sidebar and one
-that silently drops a paragraph.
+Structural failures exit non-zero; editorial ones (label lengths, a title ending in a full stop, a
+gistable leaf with no label) print as warnings and do not fail the run. The check is cheap and it is
+the only thing standing between a plausible-looking sidebar and one that silently drops a paragraph.
+
+## Worked example: the derived sidebar
+
+`example/` holds a 34-block slice of the test article. Its `blocks.json` is **real** stage-3 output;
+its `tree.json` is **hand-authored** to this schema as a stand-in until stage 4 exists — it is not
+model-generated, and its labels are what we want the prompt to produce, not proof that it does.
+
+Collapsed to the heading outline, which is the sidebar's default state
+(`npx tsx src/toc-flatten.ts example/tree.json 2`):
+
+```
+▸ The Mythology Of Conscious AI  [spya-tgnssb…spya-gxdsbh]
+  ▸ Why the question matters  [spya-tgnssb…spya-sge6a2]
+    ▸ Title and credits  [spya-tgnssb…spya-rg493b]
+    ▸ When, not if  [spya-u6w37a…spya-epw4h3]
+    ▸ What is at stake  [spya-e68t9h…spya-sge6a2]
+  ▸ The Temptations Of Conscious AI  [spya-nh8mt7…spya-gxdsbh]
+    ▸ Intelligence is about doing  [spya-nh8mt7…spya-qb6xsj]
+    ▸ Consciousness is about being  [spya-hk6gha…spya-xm96be]
+    ▸ Three baked-in biases  [spya-cvaqgs…spya-nxxnrj]
+    ▸ Language pulls the strings  [spya-k6fpme…spya-cqh2pq]
+    ▸ The techno-rapture  [spya-cke6sj…spya-gxdsbh]
+
+11 rows
+```
+
+Expanded to paragraph level (`npx tsx src/toc-flatten.ts example/tree.json`), the same two sections
+become:
+
+```
+    ▸ When, not if  [spya-u6w37a…spya-epw4h3]
+        Playing God is a dream reinvented with every breaking wave of new technology
+        AI is another breaking wave, arguably already intelligent, but are these systems conscious?
+        From the Golem to Klara, synthetic minds rarely end well for the humans involved
+        Google engineer Blake Lemoine claimed LaMDA was conscious, and was dismissed for breaching confidentiality
+        Chalmers, Hinton and AI-welfare researchers: machine consciousness is a question of when, not if
+    ▸ What is at stake  [spya-e68t9h…spya-sge6a2]
+        If AI systems are conscious, moral status, suffering and perhaps rights follow
+        Believing our AI companions feel things leaves our psychological vulnerabilities open to exploitation
+        Confusing ourselves with our machine creations makes us overestimate them and underestimate ourselves
+
+40 rows
+```
+
+34 blocks produce 34 leaves, but only 40 rows in total across every depth — 11 internal plus 29
+labelled leaves. The five unlabelled leaves are `Credits`, two pull-quotes, a bare image and
+`Figure 1`, each tiled by the tree and each correctly absent from the sidebar.
+
+Note the length contrast between the two listings: `When, not if` against
+`Chalmers, Hinton and AI-welfare researchers: machine consciousness is a question of when, not if`.
+That is the entry-length rule doing its job — three words are enough to tell that section from its
+four siblings, and would be useless at telling five adjacent paragraphs apart.
 
 ## See also
 
 - [block-ids.md](block-ids.md) — the id contract these ranges are built on
 - [granularity-zoom.md](granularity-zoom.md) — the same tree, rendered as text instead of navigation
 - [architecture.md](architecture.md) — where stage 4 sits in the pipeline
-- [`src/toc-validate.ts`](../../src/toc-validate.ts), [`src/toc-flatten.ts`](../../src/toc-flatten.ts)
+- [`src/types.ts`](../../src/types.ts) — the canonical schema
+- [`src/validate-tree.ts`](../../src/validate-tree.ts), [`src/toc-flatten.ts`](../../src/toc-flatten.ts)

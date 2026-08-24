@@ -62,6 +62,33 @@ genuinely new blocks are minted. The `spya-` prefix is what makes that decidable
 our ids from an author's own `id="main-content"` without a manifest. On the test article, a second
 run reuses all 139 ids and mints none.
 
+### Surviving stage 2, which is the case that actually matters
+
+Reusing ids found in the HTML is not enough on its own, and it is worth being precise about why.
+**Stage 2 writes a fresh document.** Readability re-parses the fetched page and emits new markup, so
+after a re-extraction there are no ids in the file to preserve — the first version of this stage
+re-minted all 139 and would have orphaned every note, which is the exact failure random ids were
+chosen to prevent.
+
+So stage 3 also **carries ids over from the previous `blocks.json`** when one exists, matching a new
+block to an old one by its normalised text. A paragraph keeps its id as long as its words are
+unchanged, no matter how far it has moved. Blocks with no text — images, figures — match on their
+`src` instead, so a ToC row aimed at a diagram doesn't go stale. Each previous id is consumed once,
+so a page with several identical short paragraphs cannot hand the same id to two blocks.
+
+Measured on the test article, re-extracted *and* with a new paragraph inserted above everything:
+**138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to
+match on and which nobody annotates.
+
+Two honest limits:
+
+- **An edited paragraph gets a new id** and loses whatever was anchored to it. We cannot distinguish
+  a heavily rewritten paragraph from a new one, and guessing with fuzzy matching would silently
+  attach a reader's note to a sentence that no longer says what they annotated. Losing the anchor is
+  the safer failure.
+- **Carry-over needs the previous `blocks.json`.** Delete it and the ids are gone for good. It is a
+  source artefact, not a cache; `data/<slug>/blocks.json` should be treated as precious.
+
 ### The cost we accepted
 
 **Order is no longer derivable from the id.** `spya-w8z40d` tells you nothing about whether it comes

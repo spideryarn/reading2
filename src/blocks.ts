@@ -161,10 +161,57 @@ function collectElements(root: Element): Element[] {
 export interface SplitResult {
   blocks: Block[];
   html: string;
-  stats: { total: number; reused: number; minted: number; gistable: number };
+  stats: {
+    total: number;
+    reused: number;
+    carried: number;
+    minted: number;
+    gistable: number;
+  };
 }
 
-export function splitIntoBlocks(html: string): SplitResult {
+/**
+ * Ids already present in the HTML survive a re-run of this stage. They do NOT
+ * survive a re-run of *stage 2*, which writes a fresh document from Readability
+ * with no ids in it at all — and re-extraction is exactly the case random ids
+ * exist to protect against (block-ids.md#why-random-and-not-sequential).
+ *
+ * So when the previous blocks.json is available we re-attach ids by matching
+ * block text. A paragraph keeps its id for as long as its words are unchanged,
+ * regardless of what was inserted above it. An edited paragraph gets a fresh id
+ * and loses its annotations — that is a real limit, and honest: we cannot tell
+ * a heavily rewritten paragraph from a new one.
+ *
+ * Matching is first-come over the previous document's order, and each previous
+ * id is consumed once, so a page with several identical short paragraphs can't
+ * hand the same id to two blocks.
+ */
+function matchKey(tag: string, text: string, html: string): string | null {
+  const words = normalize(text);
+  if (words) return `t:${words}`;
+  // Images and rules carry no text, so match them on what they point at —
+  // otherwise every figure is re-minted on each re-extraction and any ToC row
+  // aimed at a diagram goes stale.
+  const src = /\bsrc="([^"]+)"/.exec(html)?.[1];
+  return src ? `s:${src}` : null;
+}
+
+function carryOverIds(previous: Block[] | undefined) {
+  const byKey = new Map<string, string[]>();
+  for (const b of previous ?? []) {
+    const key = matchKey(b.tag, b.text, b.html);
+    if (!key) continue;
+    const bucket = byKey.get(key);
+    if (bucket) bucket.push(b.id);
+    else byKey.set(key, [b.id]);
+  }
+  return (tag: string, text: string, html: string): string | undefined => {
+    const key = matchKey(tag, text, html);
+    return key ? byKey.get(key)?.shift() : undefined;
+  };
+}
+
+export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
   const dom = new JSDOM(html);
   const doc = dom.window.document;
 
@@ -182,20 +229,37 @@ export function splitIntoBlocks(html: string): SplitResult {
     .map((el) => normalize(el.textContent ?? ""));
 
   let reused = 0;
+  let carried = 0;
   let minted = 0;
+  const recoverId = carryOverIds(previous);
 
   const blocks: Block[] = elements.map((el) => {
+    const content = ownContent(el);
+    const text = extractText(content);
+
+    // Three ways to get an id, in descending order of confidence: it is already
+    // in the document; the previous run had a block with these exact words; or
+    // this is genuinely new text.
     let id = el.getAttribute("id");
     if (isSpideryarnId(id)) {
       reused++;
+      taken.add(id!);
     } else {
-      id = mintUniqueId(taken);
-      minted++;
+      const recovered = recoverId(el.tagName.toLowerCase(), text, content.outerHTML);
+      if (recovered && !taken.has(recovered)) {
+        id = recovered;
+        carried++;
+        taken.add(id);
+      } else {
+        id = mintUniqueId(taken);
+        minted++;
+      }
       el.setAttribute("id", id);
     }
+    // `ownContent` may have cloned before the id existed; keep the stored html
+    // in step with the document.
+    if (content !== el) content.setAttribute("id", id!);
 
-    const content = ownContent(el);
-    const text = extractText(content);
     let { kind, level } = classify(el);
     let gistable = true;
     let note: string | undefined;
@@ -248,6 +312,7 @@ export function splitIntoBlocks(html: string): SplitResult {
     stats: {
       total: blocks.length,
       reused,
+      carried,
       minted,
       gistable: blocks.filter((b) => b.gistable).length,
     },
@@ -272,8 +337,17 @@ async function main() {
   }
   const outJson = process.argv[3] ?? input.replace(/\.html$/, "") + ".blocks.json";
 
+  // If a previous run's blocks.json is sitting there, use it to carry ids
+  // across a re-extraction that wiped them from the HTML.
+  let previous: Block[] | undefined;
+  try {
+    previous = JSON.parse(await readFile(outJson, "utf-8")).blocks as Block[];
+  } catch {
+    previous = undefined; // first run for this article
+  }
+
   const source = await readFile(input, "utf-8");
-  const { blocks, html, stats } = splitIntoBlocks(source);
+  const { blocks, html, stats } = splitIntoBlocks(source, previous);
 
   await writeFile(input, html, "utf-8");
   await writeFile(outJson, JSON.stringify({ blocks }, null, 2), "utf-8");
@@ -284,7 +358,9 @@ async function main() {
   }, {});
 
   console.log(`Blocks:    ${stats.total}  (${JSON.stringify(byKind)})`);
-  console.log(`Ids:       ${stats.reused} reused, ${stats.minted} minted`);
+  console.log(
+    `Ids:       ${stats.reused} reused, ${stats.carried} carried over, ${stats.minted} minted`,
+  );
   console.log(`Gistable:  ${stats.gistable}  (${stats.total - stats.gistable} skipped)`);
   console.log(`\nHTML:      ${path.resolve(input)}`);
   console.log(`Blocks:    ${path.resolve(outJson)}`);
