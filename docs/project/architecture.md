@@ -123,6 +123,11 @@ Filesystem, one directory per article, no database:
 Anything expensive is cached on a content hash. `tree.json` is keyed on
 `hash(blocks.json) + prompt version + model id` — change any of those and it regenerates.
 
+`blocks.json` is the exception: it is a **source artefact, not a cache**. It is the only place the
+ids live, and stage 3 carries them forward by matching text on re-run — so deleting it destroys
+every id permanently, and orphans every note, highlight and gist that pointed at one. See
+[block-ids.md § Surviving stage 2](block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters).
+
 ## Server and client
 
 - One process, one command: `npm run dev`. The API is currently mounted as **Vite dev middleware**
@@ -141,8 +146,9 @@ Anything expensive is cached on a content hash. `tree.json` is keyed on
   position is a **block id**, never a pixel offset. Brand and reading tokens come from
   [`styles/tokens.css`](../../styles/tokens.css), and the logo/favicons from
   [`public/`](../../public/) — both lifted from the previous version, see
-  [PREVIOUS_VERSION.md](PREVIOUS_VERSION.md). Plain CSS variables, adopt or remap as you like;
-  Spideryarn orange `#DB8A45` is the accent, light mode only.
+  [original-version.md](original-version.md). Plain CSS variables, adopt or remap as you like;
+  Spideryarn orange `#DB8A45` is the accent, on a dark-only palette — see
+  [web-client.md](web-client.md).
 - LLM calls happen in the pipeline, not in request handlers. Before writing any Anthropic SDK code,
   load the `claude-api` skill for current model ids and parameters.
 

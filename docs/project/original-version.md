@@ -50,20 +50,15 @@ that codebase keep working.
 
 - **Spideryarn orange is `#DB8A45`** — `oklch(0.65 0.15 45)`. Primary, focus ring, accent. Don't
   invent a second accent colour.
-- **Light mode only**, as there (`UI_CONFIG.FORCE_LIGHT_MODE` in `lib/config.ts`) — dark mode was
-  disabled during rapid prototyping to avoid inconsistency, and the same reasoning applies here.
-- **Trebuchet MS is the wordmark font and nothing else.** UI is a system sans; the *article* is a
-  serif (Georgia), because the article is the thing you actually read.
-- **`--accent` is a trap.** The original's tokens are shadcn-shaped, so `--accent` there means a
-  near-white *surface* for hover states, not the brand highlight. Import
-  [`styles/tokens.css`](../../styles/tokens.css) into a stylesheet that uses `--accent` to mean "the
-  orange" and every highlight silently goes almost white. Found the hard way by the client agent
-  while adopting the brand. `tokens.css` now warns at the definition and offers `--highlight` as the
-  alias that means what you expect; rename your own variable rather than redefining `--accent`.
-- **`.reading-column` centres its text** (`margin-inline: auto`), which is right for a full-width
-  reading view and wrong inside a table cell or a narrow pane — there, apply the four custom
-  properties directly and keep your own container. The measure and the research are the same either
-  way; only the box differs.
+- **We are dark-only** (Greg, 2026-08-24): *"I'm happy to go with the dumb version where we just
+  switched to always being in dark mode."* No toggle, no `prefers-color-scheme`, no light fallback.
+  This reverses the light-only inheritance below, and the original app is **not** a useful source for
+  it: `lib/config.ts` forces light via `UI_CONFIG.FORCE_LIGHT_MODE`, and although `app/globals.css`
+  carries a complete `.dark` OKLCH block, it never redefines `--spideryarn-orange` and lets
+  `--primary` go near-white — so the brand orange is simply not carried into dark there. We answered
+  that ourselves: **the orange is unchanged at `#DB8A45`**, which reads better on the dark ground
+  (~7.8:1) than it ever did on white (~2.6:1). See [web-client.md](web-client.md) for the reasoning
+  and [`styles/tokens.css`](../../styles/tokens.css) for the values.
 - The header markup pairs `<img class="logo-image">` with a `<span class="logo-text">` of per-letter
   `<span class="logo-letter">` (`components/app-header.tsx`). `tokens.css` preserves those class
   names, so the original's 15 CSS-only hover animations (`styles/logo-animations.css`, 1,911 lines,
@@ -77,9 +72,19 @@ that codebase keep working.
 `--accent: #8a5a2b` warm brown on `#fbfaf8`, with dark-mode support — while independently landing on
 a serif for the article, which was the agreement that mattered. It now `@import`s
 [`styles/tokens.css`](../../styles/tokens.css) and defines a thin semantic layer over it rather than
-restating any values; the warm palette and the dark-mode block are gone. One palette, one source,
-light only. `index.html` links the favicons and manifest from [`public/`](../../public/), with
-`theme-color` `#DB8A45`.
+restating any values; the warm palette and the dark-mode block are gone. One palette, one source.
+`index.html` links the favicons and manifest from [`public/`](../../public/), with `theme-color`
+`#DB8A45`.
+
+**Superseded in part, same day.** The single-palette half of that decision stands and is why any of
+this was cheap; the light-only half is gone — see the dark-only decision above. `styles/tokens.css`
+now holds dark surface values under the *same variable names*, so nothing downstream needed rewiring,
+and the `--accent` trap noted above still applies (in dark it fails the other way — a highlight that
+takes `--accent` by mistake goes near-black and vanishes into the page).
+
+Worth recording as a road not taken: the warm palette deleted in the convergence had its own dark
+variant, recoverable with `git show 4bd4d94:src/web/styles.css`, and it had chosen a *lightened*
+`#d8a165` rather than reusing the brand orange. We went the other way and kept `#DB8A45` unchanged.
 
 No wordmark on screen yet — that view's masthead is the article title, not app chrome. When app-level
 chrome exists, `.logo-text` / `.logo-image` are waiting.
