@@ -349,8 +349,10 @@ The prompt asks a model to emit a partition over 139 ids. It will occasionally e
 in the input, or a range with a one-block gap. Never trust a generated tree:
 
 ```
-npm run validate-tree -- data/noema
+npm run validate-tree -- example        # or data/<slug> once stage 4 writes one
 ```
+
+It takes a *directory* holding both `blocks.json` and `tree.json`, not two file paths.
 
 Structural failures exit non-zero; editorial ones (label lengths, a title ending in a full stop, a
 gistable leaf with no label) print as warnings and do not fail the run. The check is cheap and it is
