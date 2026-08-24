@@ -31,9 +31,11 @@ constraint, not an apology — keep it boring while the ideas are still moving.
  └──────────┘                 (title, byline, siteName, lang, url)
    │
    ▼
- ┌──────────┐   split into blocks, assign STABLE IDS in document order
- │ 3 blocks │──────────────►  data/<slug>/blocks.json    [{id:"p0001", tag:"p", html, text}]
- └──────────┘
+ ┌──────────┐   split into blocks, assign STABLE RANDOM IDS (see block-ids.md)
+ │ 3 blocks │──────────────►  data/<slug>/blocks.json
+ └──────────┘                 [{id:"spya-k3m9qt", tag, kind, level?, text,
+   │                            words, html, gistable, note?}]  — array order
+   │                            IS document order
    │
    ├─────────────────────┐
    ▼                     ▼
@@ -61,11 +63,15 @@ artefacts on disk, not by reaching into another stage's code.
 | # | Stage | Owner | Artefact |
 |---|-------|-------|----------|
 | 1 | fetch | unclaimed (currently inline in `src/extract.ts`) | `raw.html` |
-| 2 | extract / Readability / sanitize — see [content-extraction.md](content-extraction.md) | **another agent** | `article.html`, `meta.json` |
-| 3 | blocks + stable ids | with stage 2 or 4 — needs deciding ([Q2](open-questions.md#q2)) | `blocks.json` |
-| 4 | table of contents (deeply nested) | **another agent** | `tree.json` (structure) |
+| 2 | extract / Readability / sanitize — see [content-extraction.md](content-extraction.md) | **extraction agent** | `article.html`, `meta.json` |
+| 3 | blocks + stable ids — see [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
+| 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 6 | server + client | unclaimed | — |
+
+Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the ToC, since the
+ToC is the first thing that has to address blocks and would otherwise be built on someone else's
+assumptions about what a block is.
 
 Current code: [`src/extract.ts`](../../src/extract.ts) (documented in
 [content-extraction.md](content-extraction.md)) does fetch + Readability + a standalone HTML page in

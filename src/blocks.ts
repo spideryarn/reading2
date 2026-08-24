@@ -59,6 +59,45 @@ export interface Block {
 const normalize = (s: string) =>
   s.replace(/\s+/g, " ").replace(/[^a-z0-9 ]/gi, "").toLowerCase().trim();
 
+/** Lists nested directly inside this element. */
+const nestedLists = (el: Element) =>
+  Array.from(el.children).filter((c) => c.tagName === "UL" || c.tagName === "OL");
+
+/**
+ * An `<li>` holding a nested list is a leaf *and* a container: "Nested outer"
+ * is its own readable unit, and the items beneath it are separate ones. We emit
+ * the item's own content as a block and descend into the sublist, so every item
+ * at every level is addressable. Without this the sublist is swallowed into its
+ * parent's text and cannot be linked to at all.
+ *
+ * The block's text and html come from a clone with the sublists stripped, so no
+ * two blocks ever contain the same text — the flat sequence the tree ranges
+ * over must not overlap.
+ */
+function ownContent(el: Element): Element {
+  const nested = nestedLists(el);
+  if (nested.length === 0) return el;
+  const clone = el.cloneNode(true) as Element;
+  for (const child of nestedLists(clone)) child.remove();
+  return clone;
+}
+
+/**
+ * Text with block boundaries preserved as spaces. Bare `textContent` runs
+ * adjacent blocks together — a blockquote of two paragraphs comes out as
+ * "…sentence one.Sentence two…" — which corrupts word counts and any gist
+ * written from it.
+ */
+function extractText(el: Element): string {
+  const clone = el.cloneNode(true) as Element;
+  for (const n of Array.from(
+    clone.querySelectorAll("p,div,br,li,h1,h2,h3,h4,h5,h6,blockquote,figcaption,td,th,tr"),
+  )) {
+    n.insertAdjacentText("beforebegin", " ");
+  }
+  return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
 function classify(el: Element): { kind: BlockKind; level?: number } {
   const tag = el.tagName;
   if (/^H[1-6]$/.test(tag)) return { kind: "heading", level: Number(tag[1]) };
@@ -84,7 +123,9 @@ function collectElements(root: Element): Element[] {
       if (SKIP.has(tag)) continue;
       if (LEAF_BLOCKS.has(tag)) {
         out.push(child);
-        continue; // never descend into a leaf
+        // A list item is the one leaf that can contain further blocks.
+        if (tag === "LI") for (const sublist of nestedLists(child)) walk(sublist);
+        continue; // otherwise never descend into a leaf
       }
       if (CONTAINERS.has(tag)) {
         walk(child);
@@ -139,7 +180,8 @@ export function splitIntoBlocks(html: string): SplitResult {
       el.setAttribute("id", id);
     }
 
-    const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+    const content = ownContent(el);
+    const text = extractText(content);
     let { kind, level } = classify(el);
     let gistable = true;
     let note: string | undefined;
@@ -173,7 +215,7 @@ export function splitIntoBlocks(html: string): SplitResult {
       ...(level !== undefined ? { level } : {}),
       text,
       words: text.length ? text.split(/\s+/).length : 0,
-      html: el.outerHTML,
+      html: content.outerHTML,
       gistable,
       ...(note ? { note } : {}),
     };

@@ -1,0 +1,161 @@
+{
+  "blocks": [
+    {
+      "id": "spya-jevcj0",
+      "tag": "h1",
+      "kind": "heading",
+      "level": 1,
+      "text": "Title",
+      "words": 1,
+      "html": "<h1 id=\"spya-jevcj0\">Title</h1>",
+      "gistable": true
+    },
+    {
+      "id": "spya-xrffsd",
+      "tag": "p",
+      "kind": "text",
+      "text": "A plain paragraph.",
+      "words": 3,
+      "html": "<p id=\"spya-xrffsd\">A plain paragraph.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-zpjkkv",
+      "tag": "li",
+      "kind": "text",
+      "text": "Terse one",
+      "words": 2,
+      "html": "<li id=\"spya-zpjkkv\">Terse one</li>",
+      "gistable": true
+    },
+    {
+      "id": "spya-b472v6",
+      "tag": "li",
+      "kind": "text",
+      "text": "Terse two",
+      "words": 2,
+      "html": "<li id=\"spya-b472v6\">Terse two</li>",
+      "gistable": true
+    },
+    {
+      "id": "spya-pfw76n",
+      "tag": "li",
+      "kind": "text",
+      "text": "A much longer list item that carries a real argument and would deserve its own row.",
+      "words": 16,
+      "html": "<li id=\"spya-pfw76n\">A much longer list item that carries a real argument and would deserve its own row.</li>",
+      "gistable": true
+    },
+    {
+      "id": "spya-c7g50y",
+      "tag": "li",
+      "kind": "text",
+      "text": "First",
+      "words": 1,
+      "html": "<li id=\"spya-c7g50y\">First</li>",
+      "gistable": true
+    },
+    {
+      "id": "spya-d969pz",
+      "tag": "li",
+      "kind": "text",
+      "text": "Second",
+      "words": 1,
+      "html": "<li id=\"spya-d969pz\">Second</li>",
+      "gistable": true
+    },
+    {
+      "id": "spya-bbbbhr",
+      "tag": "blockquote",
+      "kind": "quote",
+      "text": "A standalone quote not inside a figure.",
+      "words": 7,
+      "html": "<blockquote id=\"spya-bbbbhr\"><p>A standalone quote not inside a figure.</p></blockquote>",
+      "gistable": true
+    },
+    {
+      "id": "spya-hzhede",
+      "tag": "pre",
+      "kind": "code",
+      "text": "const x = 1;",
+      "words": 4,
+      "html": "<pre id=\"spya-hzhede\"><code>const x = 1;</code></pre>",
+      "gistable": true
+    },
+    {
+      "id": "spya-upf945",
+      "tag": "table",
+      "kind": "other",
+      "text": "cell",
+      "words": 1,
+      "html": "<table id=\"spya-upf945\"><tbody><tr><td>cell</td></tr></tbody></table>",
+      "gistable": true
+    },
+    {
+      "id": "spya-ppza79",
+      "tag": "figure",
+      "kind": "media",
+      "text": "A caption",
+      "words": 2,
+      "html": "<figure id=\"spya-ppza79\"><img src=\"x.png\"><figcaption>A caption</figcaption></figure>",
+      "gistable": false,
+      "note": "media"
+    },
+    {
+      "id": "spya-w5xy6d",
+      "tag": "p",
+      "kind": "media",
+      "text": "",
+      "words": 0,
+      "html": "<p id=\"spya-w5xy6d\"><img src=\"bare.png\"></p>",
+      "gistable": false,
+      "note": "image-only paragraph"
+    },
+    {
+      "id": "spya-k99mqr",
+      "tag": "li",
+      "kind": "text",
+      "text": "Nested outer",
+      "words": 2,
+      "html": "<li id=\"spya-k99mqr\">Nested outer</li>",
+      "gistable": true
+    },
+    {
+      "id": "spya-v3ghna",
+      "tag": "li",
+      "kind": "text",
+      "text": "Nested inner",
+      "words": 2,
+      "html": "<li id=\"spya-v3ghna\">Nested inner</li>",
+      "gistable": true
+    },
+    {
+      "id": "spya-nz0gfx",
+      "tag": "hr",
+      "kind": "media",
+      "text": "",
+      "words": 0,
+      "html": "<hr id=\"spya-nz0gfx\">",
+      "gistable": false,
+      "note": "media"
+    },
+    {
+      "id": "spya-apvg6x",
+      "tag": "p",
+      "kind": "text",
+      "text": "Paragraph with an author id.",
+      "words": 5,
+      "html": "<p id=\"spya-apvg6x\">Paragraph with an author id.</p>",
+      "gistable": true
+    },
+    {
+      "id": "spya-aaaaaa",
+      "tag": "p",
+      "kind": "text",
+      "text": "Paragraph with an existing spya id.",
+      "words": 6,
+      "html": "<p id=\"spya-aaaaaa\">Paragraph with an existing spya id.</p>",
+      "gistable": true
+    }
+  ]
+}

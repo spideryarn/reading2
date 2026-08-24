@@ -1,0 +1,272 @@
+/* ---------------------------------------------------------------- tokens -- */
+:root {
+  --bg: #fbfaf8;
+  --panel: #ffffff;
+  --ink: #1c1a17;
+  --ink-soft: #5c564e;
+  --ink-faint: #918a80;
+  --rule: #e5e0d8;
+  --rule-strong: #cfc7bb;
+  --accent: #8a5a2b;
+  --accent-wash: #f5ede2;
+  --depth-1: #7a4f8c;
+  --depth-2: #2f6b74;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16151300;
+    --bg: #161513;
+    --panel: #1e1d1a;
+    --ink: #ece7df;
+    --ink-soft: #b0a89c;
+    --ink-faint: #7d766c;
+    --rule: #302e2a;
+    --rule-strong: #45413b;
+    --accent: #d8a165;
+    --accent-wash: #2a241c;
+    --depth-1: #c3a0d0;
+    --depth-2: #8ac3cb;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 ui-serif, Georgia, "Iowan Old Style", Palatino, serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.loading, .error {
+  padding: 3rem;
+  color: var(--ink-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------- header -- */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule-strong);
+  padding: 1.25rem 1.5rem 0.75rem;
+}
+
+.masthead { max-width: 62rem; }
+
+h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.byline {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.root-gist {
+  margin: 0.5rem 0 0;
+  max-width: 48rem;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  font-style: italic;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.controls-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-right: 0.3rem;
+}
+
+.controls button {
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.22rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.controls button:hover { border-color: var(--accent); color: var(--accent); }
+
+.controls button.on {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.provenance {
+  margin-left: auto;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+}
+
+/* ----------------------------------------------------------------- table -- */
+table.zoom {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+
+col.col-gist { width: 15rem; }
+col.col-text { width: auto; }
+
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--panel);
+  border-bottom: 1px solid var(--rule-strong);
+  padding: 0.5rem 1rem;
+  text-align: left;
+  font: 600 0.68rem/1.4 ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.depth-tag {
+  margin-left: 0.45rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-faint);
+  opacity: 0.7;
+}
+
+td {
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+  border-right: 1px solid var(--rule-strong);
+}
+
+/* Gist cells span their whole range; the inner div sticks so the summary stays
+   in view for as long as the text it summarises does. */
+td.gist {
+  padding: 0;
+  cursor: pointer;
+  background: var(--panel);
+  transition: background 0.15s;
+}
+
+td.gist .sticky {
+  position: sticky;
+  top: 3.2rem;
+  padding: 0.85rem 1rem 1rem;
+}
+
+td.gist .title {
+  font: 600 0.9rem/1.35 ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+
+td.gist .own {
+  margin-left: 0.3rem;
+  color: var(--accent);
+  font-weight: 400;
+}
+
+td.gist .gist-text {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+td.gist .range {
+  margin-top: 0.5rem;
+  font: 0.65rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink-faint);
+  opacity: 0.65;
+}
+
+td.gist.active { background: var(--accent-wash); }
+td.gist.active .title { color: var(--accent); }
+td.gist.continuation { background: transparent; }
+
+/* Left edge tint per depth, so the levels are distinguishable at a glance. */
+.col-depth-1 { --tint: var(--depth-1); }
+.col-depth-2 { --tint: var(--depth-2); }
+td.gist .title::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 0.72em;
+  margin-right: 0.45rem;
+  vertical-align: -0.02em;
+  background: var(--tint, var(--rule-strong));
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------ text -- */
+td.text {
+  padding: 0.7rem 1.4rem 0.7rem 2.9rem;
+  position: relative;
+  border-right: none;
+}
+
+tr.row-active td.text { background: var(--panel); }
+
+.block-id {
+  position: absolute;
+  left: 0.8rem;
+  top: 0.95rem;
+  font: 0.62rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink-faint);
+  opacity: 0.5;
+  user-select: none;
+}
+
+.prose { max-width: 40rem; }
+.prose > * { margin: 0; }
+.prose p { font-size: 1.02rem; line-height: 1.65; }
+.prose h1 { font-size: 1.5rem; }
+.prose h2 { font-size: 1.15rem; letter-spacing: 0.01em; }
+.prose h3 { font-size: 1rem; }
+.prose h1, .prose h2, .prose h3 {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-weight: 650;
+}
+.prose a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.prose img { max-width: 100%; height: auto; }
+.prose figure { margin: 0; }
+.prose figcaption { font-size: 0.85rem; color: var(--ink-faint); }
+.prose blockquote {
+  margin: 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--accent);
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+td.text.opaque { background: color-mix(in srgb, var(--panel) 60%, transparent); }
+td.text.opaque .prose { font-size: 0.95rem; color: var(--ink-soft); }

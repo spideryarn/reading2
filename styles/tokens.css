@@ -1,0 +1,77 @@
+/*
+ * Brand and reading tokens, lifted from the original Spideryarn app.
+ *
+ * Source: /Users/greg/dev/spideryarn/reading — `app/globals.css` (colours),
+ * `docs/reference/DESIGN_COLORS_FONTS.md` (rationale),
+ * `docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md` (the reading measure/typography numbers).
+ * See docs/project/spideryarn-original.md for what was and wasn't carried over, and why.
+ *
+ * Deliberately plain CSS custom properties: no Tailwind, no shadcn, no build step, so the React
+ * client can use these however it likes. Names match the original where they exist there, so
+ * anything copied across from that codebase keeps working.
+ */
+
+:root {
+    /* ---- brand ------------------------------------------------------- */
+    --spideryarn-orange: #DB8A45;
+
+    /* ---- surfaces and text (light only; the original forces light mode) */
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.65 0.15 45);            /* Spideryarn orange in OKLCH */
+    --primary-foreground: oklch(0.98 0.02 45);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+
+    /* ---- sidebar / left rail ----------------------------------------- */
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+
+    /* ---- shape ------------------------------------------------------- */
+    --radius: 0.625rem;
+    --header-height: 4rem;
+
+    /* ---- type -------------------------------------------------------- */
+    --font-brand: 'Trebuchet MS', sans-serif;           /* the wordmark, and only the wordmark */
+    --font-ui: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-reading: Georgia, 'Times New Roman', serif;  /* see the research doc: screen serif, big x-height */
+
+    /* ---- reading measure --------------------------------------------- */
+    /* 55-70 chars/line; 80 reads ~7% faster but comprehends ~12% worse (Dyson & Kipping 1998). */
+    --reading-measure: 65ch;
+    --reading-size: 1.0625rem;                          /* 17px */
+    --reading-line-height: 1.6;
+}
+
+/* The article column. Every zoom level renders into this, so the measure never changes
+   under the reader as they scroll left/right — see docs/project/granularity-zoom.md. */
+.reading-column {
+    max-width: clamp(45ch, 90vw, var(--reading-measure));
+    margin-inline: auto;
+    font-family: var(--font-reading);
+    font-size: var(--reading-size);
+    line-height: var(--reading-line-height);
+    font-weight: 400;
+    color: var(--foreground);
+}
+
+/* Wordmark. Structure copied from the original header so its logo animations could drop in later:
+   an <img class="logo-image"> next to a <span class="logo-text"> of per-letter <span class="logo-letter">. */
+.logo-text {
+    font-family: var(--font-brand);
+    font-weight: 600;
+    color: var(--spideryarn-orange);
+}

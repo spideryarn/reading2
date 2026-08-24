@@ -35,7 +35,7 @@ An article rendered at any of several levels of compression, with two axes:
   |    (whole piece)  (chapters)      (sections)        (paragraphs)
   |
   |    "Consciousness   "Why substrate   "The hard problem   Full text of
-  d     is not          matters"          returns"           p0012 …
+  d     is not          matters"          returns"           spya-gp3g6s …
   o     substrate-
   w     independent,    "What the         "Predictive
   n     so AI systems    Turing test      processing gives
@@ -59,44 +59,75 @@ That deeply-nested ToC and this tree are **the same structure**, not two — see
 [architecture.md § Pipeline](architecture.md#pipeline). The ToC is it rendered as navigation; the
 zoom view is it rendered as text.
 
-The article is a flat sequence of blocks with stable ids (`p0001…`) — see
-[AGENTS.md § The one contract that matters](../../AGENTS.md#the-one-contract-that-matters), and
-[Q3](open-questions.md#q3) for what counts as a block. Over that sequence sits a
-tree in which **every node covers a contiguous range of blocks**, and **a node's children exactly
-partition its range** — no gaps, no overlaps, no reordering.
+The article is a flat sequence of blocks with stable ids (`spya-k3m9qt…`) — see
+[block-ids.md](block-ids.md) for the format and
+[architecture.md § What a block is](architecture.md#what-a-block-is) for what counts as one. Over
+that sequence sits a tree in which **every node covers a contiguous range of blocks**, and **a
+node's children exactly partition its range** — no gaps, no overlaps, no reordering.
 
 ```
-  L0  article ......................................... p0001–p0412
-  L1    chapter "Why substrate matters" ............... p0001–p0088
-  L2      section "The hard problem returns" .......... p0012–p0031
-  L3        p0012  p0013  p0014 … (leaves, verbatim)
+  L0  article ......................................... spya-tgnssb … spya-w8z40d
+  L1    chapter "Consciousness & Computation" ......... spya-d3g67c … (idx 34–111)
+  L2      section "1: Brains Are Not Computers" ....... spya-sk4su6 … (idx 37–62)
+  L3        spya-gp3g6s  spya-rg493b  … (leaves, verbatim)
 ```
 
-That invariant is the whole trick. Because ranges are contiguous and ordered, any level of the
-tree read left-to-right is a valid rendering of the article top-to-bottom, and any block id maps
+That invariant is the whole trick. Because ranges are contiguous and non-overlapping, any level of
+the tree read left-to-right is a valid rendering of the article top-to-bottom, and any block id maps
 to exactly one node per level. Zooming becomes a lookup, not a re-layout.
+
+**Order comes from the `blocks.json` index, not from the id.** Block ids are random
+([and deliberately so](block-ids.md#why-random-and-not-sequential)), so a range `[firstId, lastId]`
+is resolved by looking both endpoints up in the block sequence and comparing *those* positions.
+Comparing the id strings themselves — `id > start && id < end` — returns a plausible boolean and is
+meaningless. The invariant is unchanged and still load-bearing; only the thing that witnesses it
+moved from the id to the index.
 
 ### Node shape
 
 ```ts
 type NodeId = string;      // "n0042"
-type BlockId = string;     // "p0012"
+type BlockId = string;     // "spya-k3m9qt"
 
 interface Node {
   id: NodeId;
   depth: number;           // 0 = whole article
   parent: NodeId | null;
   children: NodeId[];      // [] for leaves
-  range: [BlockId, BlockId];  // inclusive, contiguous
+  range: [BlockId, BlockId];  // inclusive, contiguous; resolved via the blocks.json index
   title: string;           // 2–6 words, for the ToC and the spine
-  gist: string;            // ONE sentence — this is what the level above renders
+  gist?: string;           // ONE sentence — what the level above renders. Absent on leaves.
+  navLabel?: string;       // leaves only — a ToC row's text. Never rendered in the reading view.
   summary?: string;        // 2–4 sentences, shown on hover/expand, optional
   sourceHeading?: string;  // the author's own heading, if this node came from one
 }
 ```
 
-Leaves carry no `gist`: at the rightmost level we render the block's verbatim HTML. A summary is
-never shown where the real sentence could be shown instead.
+**Leaves carry no `gist`, but they do carry a `navLabel`.** These are different things, and keeping
+them separate is what lets the ToC go "all the way down to a paragraph level" without breaking
+[principle 1](vision.md#principles).
+
+- A **gist** is *substitutable prose*. It appears in the reading view **in place of** the text it
+  compresses. Leaves never get one, because at the rightmost level the real paragraph is right
+  there, and a summary must never be shown where the real sentence could be.
+- A **navLabel** is *a pointer to prose*. It appears only in the ToC and the spine — navigation
+  chrome, never the reading column. Clicking it takes you to the paragraph; it is never displayed
+  instead of the paragraph.
+
+Principle 1 asks that "every generated line should be a door, not a wall". A ToC row is definitively
+a door: its whole purpose is to be clicked and left behind. The rule that matters is not "leaves
+have no generated text" but **"the reading view never substitutes generated text for prose that
+could be shown"** — and that rule is intact.
+
+Two consequences worth stating, because they are easy to get wrong:
+
+- A renderer must never fall back to `navLabel` when `gist` is absent. That fallback silently turns
+  navigation chrome into reading content and is exactly the failure principle 1 guards against.
+- `navLabel` grows *longer* with depth, where `title` stays short. A chapter has few siblings and
+  they are wildly different, so three words distinguish it. A paragraph has twenty siblings all
+  about the same subtopic, so three words do not. An entry needs only enough words to tell itself
+  apart from its neighbours — and that demand rises as you descend. See
+  [table-of-contents.md](table-of-contents.md) for the length rules.
 
 ### Where the tree comes from
 
@@ -118,9 +149,12 @@ not an essay's. Provisional approach, with the alternatives weighed in
 Bottom-up, one pass, precomputed for the whole article and cached.
 
 ```
-  blocks ──► leaf-level gists ──► section gists ──► chapter gists ──► article gist
-             (from block text)    (from children)   (from children)   (from children)
+  blocks ──► leaf navLabels ──► section gists ──► chapter gists ──► article gist
+             (from block text)  (from children)   (from children)   (from children)
 ```
+
+(The leftmost step writes leaves' `navLabel`s — the ToC rows for individual paragraphs. Leaves have
+no `gist`; the first *gists* appear one level up. See [Node shape](#node-shape).)
 
 Each parent is written from its children's gists and titles, not from the raw text underneath it.
 This is what makes the zoom *feel* coherent: level N genuinely is a compression of level N+1, so

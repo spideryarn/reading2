@@ -39,8 +39,11 @@ The first feature built on this is [granularity zoom](granularity-zoom.md).
 ## Principles
 
 1. **The text is the destination, not the source material.** Summaries exist to route the reader
-   into the prose. Every generated line should be a door, not a wall. (Concretely: leaves are
-   verbatim and carry no gist — [granularity-zoom.md § Node shape](granularity-zoom.md#node-shape).)
+   into the prose. Every generated line should be a door, not a wall. (Concretely: **the reading
+   view never substitutes generated text for prose it could show instead** — leaves carry no `gist`,
+   so at the rightmost level you get the real paragraph. Navigation is a separate matter: a ToC row
+   *is* a door, so leaves do carry a short `navLabel` that appears only in the ToC and the spine.
+   See [granularity-zoom.md § Node shape](granularity-zoom.md#node-shape).)
 2. **Speak the author's language.** Summaries reuse the author's own terms and framing where possible,
    so that when the reader arrives at the passage, they recognise it. Avoid the flattening "the author
    argues that…" voice. Enforced in the prompt rules at
@@ -48,8 +51,7 @@ The first feature built on this is [granularity zoom](granularity-zoom.md).
 3. **Effort in the right places.** We are not trying to minimise reading time. We're trying to minimise
    time spent on the parts the reader didn't need, so there's more left for the parts they did.
 4. **Legible provenance.** Anything the model asserts is anchored to a block id, and the reader can
-   always reach the passage it came from in one action. See
-   [AGENTS.md § The one contract that matters](../../AGENTS.md#the-one-contract-that-matters).
+   always reach the passage it came from in one action. See [block-ids.md](block-ids.md).
 5. **No hidden reformulation.** We never silently rewrite the author's prose in the reading view.
    Generated text lives at generated altitudes; the rightmost level is verbatim, always.
 
@@ -76,5 +78,7 @@ these, each to be judged against the principles above:
 - **Author's glossary** — the terms this piece uses in a non-obvious way, defined from the piece itself.
 - **Argument view** — claims, the support offered for each, and the moves the author doesn't make.
 - **Confusion signal** — the reader marks a passage as unclear; the highest-value input we can get.
-- **Notes and highlights** anchored to block ids, surviving re-extraction ([Q2](open-questions.md#q2)).
+- **Notes and highlights** anchored to block ids, surviving re-extraction — which is precisely why
+  those ids are random rather than sequential
+  ([block-ids.md](block-ids.md#why-random-and-not-sequential)).
 - **Recall** — a few durable questions generated from what the reader actually dwelt on.
