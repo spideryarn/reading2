@@ -42,6 +42,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
+| [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every relative link in the docs resolves — **file and anchor** |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken
 partition draws a wrong article; editorial ones only warn, because failing a build over clumsy prose
@@ -61,6 +62,32 @@ colliding.
   which is pure and is where a rowSpan bug silently draws a wrong article.
 - **Fetching and Readability** ([content-extraction.md](content-extraction.md)). Needs the network,
   or a large fixture corpus. Worth doing when extraction bugs start costing time.
+
+## Why the docs have a test
+
+Unusual enough to justify. Doc rot bit three times in one session, and always the same way: **a
+stale anchor resolves silently to the top of the page.** You click it, land somewhere plausible, and
+never learn it stopped taking you where it said. Renaming a heading breaks every link into it, in
+files you weren't editing, with no signal anywhere. Given how heavily this repo cross-links by
+policy (AGENTS.md § How we write docs here), that is a standing tax, and one grep pays it.
+
+[`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) checks the **working tree**, not committed
+state, and that choice is the whole design. Several agents edit this repo at once, so one renaming a
+heading can turn another's link red mid-flight; the tempting fix is to read `git show HEAD:…` so
+in-flight edits are invisible. That gets it backwards. The rule here is to run `npm test` before you
+commit, so checking the working tree is what stops a broken link *landing* — checking committed state
+could only tell you it already had. A red result is always a one-line fix and always a real one.
+
+It knows two things beyond slugifying headings, both learned the hard way:
+
+- **Explicit `<a id="…">` tags count.** `architecture.md` and `open-questions.md` both use them, and
+  their anchors bear no relation to the heading above. A checker that only slugifies headings reports
+  those as stale, and they aren't.
+- **Headings inside code fences are not headings.** A `# comment` line in a shell block would
+  otherwise mint an anchor that doesn't exist.
+
+The first assertion in the file checks that the link parser found any links at all — a regex that
+silently matched nothing would make everything below it pass forever.
 
 ## Sweep a continuous input; don't sample it
 
