@@ -10,7 +10,7 @@ An experiment in AI-assisted reading that **augments** rather than replaces read
 > — Greg, 2026-08-24
 
 The product is **Spideryarn**; `spideryarn2` is just this working directory, and the app it's an
-offshoot of is [documented here](docs/project/PREVIOUS_VERSION.md). The first feature is
+offshoot of is [documented here](docs/project/original-version.md). The first feature is
 **granularity zoom** — the article at any of several levels of compression, vertical for position in
 the piece, horizontal for how much detail.
 
@@ -31,7 +31,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
-| [PREVIOUS_VERSION.md](docs/project/PREVIOUS_VERSION.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
+| [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
 | [open-questions.md](docs/project/open-questions.md) | undecided calls, each with a recommendation so nobody is blocked |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
@@ -91,7 +91,7 @@ Not descriptions of code, which the code already provides.
   run. "It can be a simple one at first" — no framework churn while the ideas are still moving.
 - Before rebuilding something the previous version already solved — AI headings, multi-granularity
   summaries, Readability edge cases, overlapping highlights, stable element ids — check
-  [PREVIOUS_VERSION.md](docs/project/PREVIOUS_VERSION.md). It's a library to consult, not a backlog
+  [original-version.md](docs/project/original-version.md). It's a library to consult, not a backlog
   to import: that project is far larger in scope, and this one is staying tight.
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.

@@ -1,4 +1,4 @@
-# The previous version — Spideryarn Reading
+# The original version — Spideryarn Reading
 
 `spideryarn2` is an experimental offshoot of an existing, much larger project. This document is the
 map to it: where it is, what we've already taken, what's worth reading before you rebuild something
@@ -143,9 +143,12 @@ So this is the third attempt at the idea, not the second.
   [block-ids.md](block-ids.md), solved differently.** They needed ids stable across reloads and
   modifications, and went *deterministic*: UUIDv5 over (DOM path + tag name + semantic attributes +
   first 100 chars of text), truncated to 8 characters, prefixed `syr-`. We went the other way —
-  random ids minted once and preserved on re-run ([why](block-ids.md#why-random-and-not-sequential)) —
+  random ids minted once and then carried forward by matching text on re-run
+  ([why](block-ids.md#why-random-and-not-sequential), and
+  [what it took to actually work](block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters)) —
   and both are answers to the same failure, which is reader state silently pointing at the wrong
-  paragraph after re-extraction. Worth knowing the trade they took: a deterministic id changes
+  paragraph after re-extraction. Note that neither scheme gets this for free: theirs recomputes the
+  id from content, ours has to explicitly match old blocks to new ones. Worth knowing the trade they took: a deterministic id changes
   whenever its inputs change, so an edited paragraph becomes a different paragraph. Their doc lists
   exactly which changes must and must not move an id (whitespace, style attributes, comments and
   attribute order must not; reordering, tag changes and significant text changes must) — that list is
