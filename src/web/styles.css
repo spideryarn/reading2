@@ -527,7 +527,7 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 /* ----------------------------------------------------------------- spine --
    The bird's-eye rail. `position: fixed` rather than a table column, because an
    overview has to be visible all at once and consecutive table rows are
-   thousands of pixels apart — see Spine.tsx and granularity-zoom.md#the-spine.
+   thousands of pixels apart — see Spine.tsx and granularity-zoom.md#the-spine-a-birds-eye-rail.
 
    Everything inside the track is positioned in PERCENTAGES of the document's
    height, so the rail rescales itself on resize with no recomputation. */

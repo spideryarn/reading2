@@ -13,7 +13,7 @@
  * squashed picture of the article rather than an index of it, and the
  * you-are-here band is a genuine position indicator rather than a decoration.
  * The cost, accepted deliberately: a short part gets a sliver too thin to hold
- * its own label. See granularity-zoom.md#the-spine.
+ * its own label. See granularity-zoom.md#the-spine-a-birds-eye-rail.
  *
  * Why it is not a table column: an overview has to be visible all at once, and
  * consecutive rows of the table are hundreds or thousands of pixels apart, so a

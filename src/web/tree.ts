@@ -133,7 +133,7 @@ export function columnLabel(depth: number, leafDepth: number): string {
    correct for *chronology beside prose*, but a whole-article overview cannot
    live in one, because consecutive entries are thousands of pixels apart: you
    can only ever see the one you are standing in. So the spine is a separate,
-   viewport-height rail — see Spine.tsx, and granularity-zoom.md#the-spine. */
+   viewport-height rail — see Spine.tsx, and granularity-zoom.md#the-spine-a-birds-eye-rail. */
 
 export interface OutlineEntry {
   node: TreeNode;
