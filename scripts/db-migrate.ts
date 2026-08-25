@@ -28,7 +28,7 @@
  * in conflict, and the session pooler is what satisfies both.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -37,6 +37,14 @@ import { Pool } from "pg";
 import { loadEnvLocal } from "../src/env.js";
 
 loadEnvLocal();
+
+/**
+ * Supabase's CA certificate, downloaded from the dashboard
+ * (Settings -> Database -> SSL Configuration) and committed. Deliberately NOT
+ * under `supabase/`, which `supabase init --force` rewrites — see
+ * docs/project/supabase-local.md.
+ */
+const DEFAULT_CA = path.resolve(import.meta.dirname, "../certs/supabase-ca.crt");
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -88,8 +96,18 @@ if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
  */
 function sslConfig(): false | { rejectUnauthorized: boolean; ca?: string } {
   if (isLocal) return false;
-  const caPath = process.env.PGSSLROOTCERT;
-  if (caPath) return { rejectUnauthorized: true, ca: readFileSync(caPath, "utf8") };
+
+  // PGSSLROOTCERT wins if set; otherwise the committed certificate is used
+  // automatically, so a verified connection is what you get by default rather
+  // than something to remember. Supabase's CA is public — the same file for
+  // every customer — so committing it is safe and makes this work on a fresh
+  // clone with no setup step.
+  const caPath = process.env.PGSSLROOTCERT ?? DEFAULT_CA;
+  if (existsSync(caPath)) return { rejectUnauthorized: true, ca: readFileSync(caPath, "utf8") };
+  if (process.env.PGSSLROOTCERT) {
+    console.error(`PGSSLROOTCERT is set but there is no file at ${caPath}`);
+    process.exit(1);
+  }
   console.warn(
     "\u26a0 Connecting over SSL without a CA certificate: encrypted, but the " +
       "server is not verified.\n  Download the certificate from the Supabase " +
