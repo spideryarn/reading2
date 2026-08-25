@@ -34,12 +34,21 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [keyboard.md](docs/project/keyboard.md) | ↑ / ↓ step through the article, and the level they step by is whichever column the pointer is in |
 | [comments.md](docs/project/comments.md) | select a sentence and the model explains it: the dialog (not a column), when it searches the web, and why the anchor is the quote rather than an offset |
 | [url-state.md](docs/project/url-state.md) | every bit of view state lives in the URL: the parameters, which ones push history and which replace, and why position is a *section* |
+| [icons.md](docs/project/icons.md) | Lucide, not Phosphor: why, the one stroke weight everything uses, and the two ways swapping a glyph for an SVG breaks a layout quietly |
 | [linting.md](docs/project/linting.md) | `npm run lint`: why Biome rather than ESLint (TypeScript 7 removed the API ESLint needs), the config-file extension that silently discards your settings, and which rules are off on purpose |
+| [typechecking.md](docs/project/typechecking.md) | `npm run typecheck`: the three tsconfigs, the strict flags we turned on and the one we didn't, and the guard that stops a typecheck checking nothing |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
 | [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
 | [testing.md](docs/project/testing.md) | the test runner, what's deterministic enough to test, and what we deliberately don't |
 | [browser-testing.md](docs/project/browser-testing.md) | how to drive the reading view in a browser, and the ways it lies to you: colour, sticky positioning, and a hidden tab that fires no scroll events at all |
 | [open-questions.md](docs/project/open-questions.md) | undecided calls, each with a recommendation so nobody is blocked |
+
+`docs/plans/` holds plans for work that is being done or has just been done — the reasoning and the
+evidence behind a change, written before it landed and kept afterwards so the *why* survives.
+
+| Plan | What's in it |
+|---|---|
+| [shadcn-migration.md](docs/plans/shadcn-migration.md) | adopting Tailwind and shadcn components, 2026-08-25: the four guards Tailwind needs here, what shadcn covers and what it never will, and an honest account of what it buys. **Read it with [web-client.md § Tailwind and shadcn](docs/project/web-client.md#tailwind-and-shadcn-components) beside it** — several of its predictions were wrong in practice, and that section records what actually happened |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
 
@@ -51,7 +60,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
   decision down. Followed for Vitest in [testing.md](docs/project/testing.md)
 - [docs/reusable/silent-success.md](docs/reusable/silent-success.md) — **the pattern behind most of
   a day's bugs.** A thing reports success while doing nothing, and the check you'd naturally run
-  returns the answer you were hoping for — because it shares an assumption with the code. Six worked
+  returns the answer you were hoping for — because it shares an assumption with the code. Nine worked
   examples and the habit that catches them.
 - [docs/reusable/css-sticky-containing-block.md](docs/reusable/css-sticky-containing-block.md) —
   why `position: sticky` can be declared correctly and do nothing: its range is its containing
@@ -124,14 +133,23 @@ Not descriptions of code, which the code already provides.
   `data/<slug>/`; anything expensive is cached on a content hash.
 - Prefer boring: filesystem over database, one server process, TypeScript + ESM throughout, `tsx` to
   run. "It can be a simple one at first" — no framework churn while the ideas are still moving.
+  **One deliberate exception, 2026-08-25:** Tailwind v4 and shadcn components went in at Greg's
+  request — *"Let's switch to using Shadcn."* That is framework churn, and it was weighed against
+  this bullet rather than slipped past it: the plan
+  ([shadcn-migration.md § Honest assessment](docs/plans/shadcn-migration.md#honest-assessment))
+  states the cost in full and recommends only the cheap half of it. The principle was not forgotten;
+  its owner overrode it. It still governs everything else, and it still governs how far shadcn
+  spreads — [web-client.md § Tailwind and shadcn](docs/project/web-client.md#tailwind-and-shadcn-components)
+  says what is deliberately staying hand-written.
 - Before rebuilding something the previous version already solved — AI headings, multi-granularity
   summaries, Readability edge cases, overlapping highlights, stable element ids — check
   [original-version.md](docs/project/original-version.md). It's a library to consult, not a backlog
   to import: that project is far larger in scope, and this one is staying tight.
-- **Run `npm test` before you commit.** It is deterministic and takes ~2s. What's covered, and what
-  isn't, is in [testing.md](docs/project/testing.md).
-  Run `npm run lint` too, though its baseline is not clean yet — see
-  [linting.md](docs/project/linting.md).
+- **Run `npm test` and `npm run typecheck` before you commit.** Both are deterministic and take a
+  few seconds. `npm run lint` too, though its baseline is not clean yet — see
+  [linting.md](docs/project/linting.md). What the tests cover, and what they don't, is in
+  [testing.md](docs/project/testing.md); why the typecheck needs a script of its own rather than a
+  bare `tsc` is in [typechecking.md](docs/project/typechecking.md).
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.
 - **Committing, with several agents in one working tree.** We're deliberately not using git

@@ -39,12 +39,35 @@ framework, a database, or a component library because they did — don't.
 | Logo, favicons, web manifest | `public/spideryarn-logo.png`, `public/favicon*`, `public/site.webmanifest` | [`public/`](../../public/) |
 | Brand colours, radii, sidebar tokens | `app/globals.css` `:root` block | [`styles/tokens.css`](../../styles/tokens.css) |
 | Reading typography (Georgia, 17px, 65ch measure) | `docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md` | [`styles/tokens.css`](../../styles/tokens.css) — `.reading-column` |
+| **Tailwind v4 and shadcn components** (2026-08-25) | the stack their CSS was written against | [`src/web/tailwind.css`](../../src/web/tailwind.css), [`src/web/components/ui/`](../../src/web/components/ui/) |
 
-[`styles/tokens.css`](../../styles/tokens.css) is deliberately **plain CSS custom properties** — no
-Tailwind, no shadcn, no build step — so whoever owns the client (stage 6, see
-[architecture.md § Stage ownership](architecture.md#stage-ownership)) can use it directly or map it
-into whatever they're using. Variable names match the original's so components copied across from
-that codebase keep working.
+[`styles/tokens.css`](../../styles/tokens.css) is still **plain CSS custom properties** and still the
+single source of truth for colour, so whoever owns the client (stage 6, see
+[architecture.md § Stage ownership](architecture.md#stage-ownership)) can use it directly. Variable
+names match the original's so components copied across from that codebase keep working — and that
+turned out to matter more than anyone expected, below.
+
+### The reversal: Tailwind and shadcn, 2026-08-25
+
+This section used to end "no Tailwind, no shadcn, no build step", and the next section listed both
+under [§ Deliberately not lifted](#deliberately-not-lifted) with the line *"Adopting Tailwind later
+is fine; inheriting a component library now is not."* Greg asked for both on 2026-08-25 — *"Let's
+switch to using Shadcn."* The Tailwind half was the "later" clause being cashed in. The
+component-library half is a straight reversal, made deliberately with the cost written down:
+[shadcn-migration.md § Honest assessment](../plans/shadcn-migration.md#honest-assessment).
+
+**The tokens made it almost free, and not by our doing.** `app/globals.css` over there *was* a shadcn
+project, so `tokens.css` already carried shadcn's default dark values under shadcn's exact names, in
+OKLCH, with `--primary` swapped to the orange. There was nothing to re-map: an `@theme inline` block
+in [`tailwind.css`](../../src/web/tailwind.css) points Tailwind's `--color-*` names at this file and
+that is the whole bridge. Three variables were missing and were added — `--popover`,
+`--popover-foreground`, `--destructive-foreground`.
+
+Worth being honest about what that implies: the part shadcn usually helps most with, we had already
+had for a week without the dependency. What we bought is accessibility on the chrome and a house
+style for chrome not yet built — see
+[web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components) for what is
+adopted, what never will be, and the four guards Tailwind needed to go in safely.
 
 ### Brand facts, now load-bearing
 
@@ -251,9 +274,14 @@ Not adopted here (Greg, 2026-08-24: leave it for now), but this is where it live
   the filesystem, on purpose. No database while the ideas are still moving.
 - **Next.js.** The client here is Vite + React; theirs is Next.js App Router with server components.
   Anything copied across needs its `'use client'`, `next/image` and `next/link` stripped.
-- **shadcn/ui, Radix, Tailwind v4, Phosphor.** Their CSS assumes all of it (`@theme inline`,
-  `@apply`, `bg-primary`). Our `tokens.css` is the same *values* with none of the dependencies.
-  Adopting Tailwind later is fine; inheriting a component library now is not.
+- ~~**shadcn/ui, Radix, Tailwind v4.**~~ **Reversed 2026-08-25** — both adopted, see
+  [§ The reversal](#the-reversal-tailwind-and-shadcn-2026-08-25) above. The entry is struck through
+  rather than deleted because the argument it made was a real one and is still the argument for not
+  going further: *"Adopting Tailwind later is fine; inheriting a component library now is not."*
+  We inherit primitives, not their reading view.
+- **Phosphor.** Not lifted, and not only for the reason above — Phosphor's React package had shipped
+  nothing for fifteen months when we looked. Icons went to **Lucide**, which is also shadcn's
+  default, so it cost nothing when shadcn arrived. See [icons.md](icons.md).
 - **The tool registry and the mutations framework** (`TOOL_EXECUTION_FRAMEWORK.md`,
   `TOOL_ARCHITECTURE_AND_DEVELOPMENT_GUIDE.md`,
   `MUTATIONS_DOCUMENT_CONTENT_REVERSIBLE_TRANSFORMS.md`). Large, and built for a different problem —

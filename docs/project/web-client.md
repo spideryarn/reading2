@@ -16,14 +16,18 @@ Why the feature exists and what a gist may and may not be:
 
 | File | What it does |
 |---|---|
-| [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry |
+| [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters |
 | [`src/web/App.tsx`](../../src/web/App.tsx) | fetches `/api/article/<slug>`, masthead, the granularity controls |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts, with the provenance behind a `▾` — everything about the article that does not vary with position |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
-| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version.md) |
+| [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
+| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version.md). Both now load *inside* `@layer app`, via `tailwind.css` |
+| [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle`, `collapsible` |
+| [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
+| [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
 | [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | ask the model about a selected passage — [comments.md](comments.md) |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | comments in reading order, and the panel's prev/next — [comments.md](comments.md#several-at-once) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
@@ -39,6 +43,98 @@ falls through to the committed `example/` fixture and still works ([`src/api.ts`
 Deep links are `/?at=spya-k6fpme`. Every other bit of view state is in the URL too —
 see [url-state.md](url-state.md) for the full set and for why scrolling *replaces* the history
 entry while toggling a column *pushes* one.
+
+## Tailwind and shadcn components
+
+> Let's switch to using Shadcn.
+>
+> — Greg, 2026-08-25
+
+Read that as **adopting shadcn components**, not switching the reading view to shadcn. The plan and
+the full accounting are [shadcn-migration.md](../plans/shadcn-migration.md); this section is
+what actually landed and what a future reader would otherwise have to reverse-engineer.
+
+**What shadcn now stands behind:** the granularity pills in [`App.tsx`](../../src/web/App.tsx), the
+masthead `▾` in [`Masthead.tsx`](../../src/web/Masthead.tsx), and a `Button` waiting for the comment
+dialog. Roughly eleven clickable chrome elements. What it buys is accessibility we did not have —
+`aria-pressed` on the toggles, `aria-controls`/`aria-expanded` on the disclosure — and a house style
+for chrome not yet built.
+
+**What is staying hand-written, and always will be:** the spine, the table geometry and its
+`rowSpan` arithmetic, the sticky-bar ladder and its z-index order, the reading measure, `mark.cmt`
+and the annotation layer, the arc column, the modeless comment shell, and the runtime pixel geometry
+[`layout.ts`](../../src/web/layout.ts) computes. That is about 1,060 of `styles.css`'s 1,212 lines.
+**So there are two ways of styling here, permanently** — utilities for chrome, semantic CSS for
+everything utilities cannot express. Nobody is going to convert the rest, and nobody should try.
+
+### Four guards, all in `tailwind.css`
+
+Each is there for a failure that is silent rather than loud. Every one of them was found by building
+it, not by reasoning about it. The file itself carries the long version; this is the map.
+
+| Guard | Without it |
+|---|---|
+| `prefix(tw)` on both imports | Tailwind's scanner is a plain **text** scanner — it pulls bare words out of source and emits a utility for any that matches a utility name. It found 18 in `src/web/`, two of which collide with live class names, and `.outline` drew a 1px border round the whole table in outline mode (`/?text=0`) |
+| `@layer app` on the `styles.css` import | Unlayered declarations beat layered ones whatever the order. Every place a shadcn component goes is already covered by a descendant rule (`.controls button`, `.cmt-nav button`, `.cmt-dialog header`), so a utility you deliberately wrote would lose twice over and say nothing |
+| `source(none)` + an explicit `@source "../../src/web"` | v4 auto-detects sources from the project root. It scanned `docs/`, found the `tw:flex` and `tw:rounded-md` written as **examples in the migration plan's prose**, and compiled them into the production bundle — seven utilities no component used. It then happened again from a doc comment inside [`lib/utils.ts`](../../src/web/lib/utils.ts) |
+| `@custom-variant dark (&)` | Tailwind compiles `dark:` to `@media (prefers-color-scheme: dark)`, and this page is dark with no media query — see [§ Dark mode](#dark-mode) |
+
+Two of these are worth stating in full, because the lesson outruns the fix.
+
+**The prefix and the layer solve opposite problems, and neither substitutes for the other.** The
+prefix stops Tailwind *inventing* a class we already use. The layer stops a class we *meant* from
+losing. Layering alone would have made the `.outline` collision worse, not better, because it makes
+utilities win more.
+
+**Documentation prose can become shipped CSS.** That is the `source(none)` guard's real lesson, and
+it has a second half: while it was happening, *"the class is in the compiled CSS"* stopped being
+evidence that anything worked — the class was there because a document mentioned it. A verification
+step that cannot fail is the shape of bug this repo keeps meeting
+([silent-success.md](../reusable/silent-success.md)). Widen `@source` when client code moves, and
+never point it at a directory containing prose.
+
+One thing that went right by design: `twMerge` correctly drops shadcn's
+`data-[state=on]:bg-accent`, so the orange on-state we override survives. `--accent` in this palette
+is a raised dark **surface**, not the brand orange — the trap
+[original-version.md § Brand facts](original-version.md#brand-facts-now-load-bearing) records,
+arriving through the front door in the first component we adopted. The orange has its own Tailwind
+name, `--color-highlight`, so nobody can reach for `tw:bg-accent` expecting it.
+
+### Individual `Toggle`s, not a `ToggleGroup`
+
+The plan called for `ToggleGroup type="multiple"` for the granularity pills. **We used separate
+`Toggle`s instead, and the reason is the keyboard.** A ToggleGroup wraps its items in Radix's roving
+focus, which binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown. In this app ↑/↓ step through the
+article and ←/→ are deliberately handed back to the browser to pan a table wider than the window
+([keyboard.md](keyboard.md#what-we-gave-up)). A group would swallow all four whenever focus sat in
+the controls bar — which is exactly where focus lands after you click a pill.
+
+Separate toggles give the same `aria-pressed` and `data-state` and leave the arrow keys alone. **This
+is a standing constraint on future component choices, not a one-off**: any Radix primitive with
+roving focus (`ToggleGroup`, `RadioGroup`, `Tabs`, `Menubar`, `NavigationMenu`) will take the arrow
+keys from the reader the moment focus lands inside it. Check before you reach for one.
+
+### Never delete a semantic class name
+
+Seven files read the DOM by selector — `.controls`, `thead th`, `tr[data-block]`, `td.text .prose`,
+`[data-nav-depth]`, `mark.cmt[data-comment]`. If `.controls` ever becomes a Tailwind-styled flex row,
+keep `className="controls tw:flex …"`. Losing `.controls` makes `stickyOffset()` return 0, and then
+every deep link and arrow jump lands *under* the sticky bar while `scrollY` confirms the scroll
+happened.
+
+### Still outstanding
+
+Two steps of the plan were **not** done, because several agents had edits in flight in the files
+they touch:
+
+- **Step 7 — the comment dialog chrome.** `.cmt-close`, `.cmt-nav button` and
+  `.cmt-dialog button.linky` are still hand-written; `Button` is generated and unused. Keep the
+  `<aside>`, `.cmt-dialog` and `z-index: 70` when it happens — [comments.md](comments.md).
+- **Step 8 — deleting the dead CSS.** `.controls button` and friends are superseded but still in
+  `styles.css`. Harmless, because `@layer app` means the utilities win anyway, but confusing.
+
+Also deferred: `styles.css`'s header comment does not yet say the file is imported into `@layer app`
+by `tailwind.css`. It should, or the next person adds a utility and watches it do nothing.
 
 ## Dark mode
 
@@ -85,6 +181,36 @@ How it's put together, and what to know before touching it:
 If a light mode is ever wanted back, the shape of the change is a `[data-theme]` attribute on
 `:root` and a second block of the same variable names — not a `prefers-color-scheme` media query,
 which would give the reader no way to override it.
+
+### What Tailwind and shadcn assume instead, and the bug it caused
+
+Both of them assume `dark:` means *the OS is in dark mode*. Here it means nothing of the kind, and
+that mismatch shipped a bug that nobody working on it could see.
+
+- **`@custom-variant dark (&)` in [`tailwind.css`](../../src/web/tailwind.css).** Tailwind compiles
+  `dark:` to `@media (prefers-color-scheme: dark)`, and shadcn's components lean on it — `Button`
+  alone has `dark:bg-input/30`, `dark:border-input`, `dark:hover:bg-accent/50`. This app has no media
+  query anywhere, so **on a machine whose OS was in light mode none of those rules would have
+  applied, and the components would have rendered their light-mode branch on our permanently dark
+  page.** The failure depended on the OS setting of whoever *viewed* it: perfect on a dark-mode Mac,
+  subtly wrong on a light-mode one, invisible to the author and to every test. Redefining the variant
+  as always-matching makes `dark:x` mean exactly `x`, which is the truth here. If light mode returns,
+  this line is the first thing to change.
+- **`shadcn init` writes a light palette, so we never run it.** It emits a light `:root` block plus a
+  `.dark` block, and loaded after `tokens.css` its `--background: oklch(1 0 0)` wins: white page,
+  near-invisible orange. [`components.json`](../../components.json) is hand-written for that reason
+  and `init` is skipped entirely — `add` alone does not touch the palette. Diff `tokens.css` and
+  `tailwind.css` after any `add` anyway ([setup-dev.md](setup-dev.md#adding-a-ui-component)).
+- **`tokens.css` stays canonical.** The `@theme inline` block in `tailwind.css` only *points*
+  Tailwind's `--color-*` names at it. `inline` is the load-bearing keyword: without it Tailwind copies
+  the resolved value at build time, and `tw:bg-background` would freeze whatever `--background` was
+  when the CSS compiled, then silently disagree with a hand-written `var(--background)` the moment
+  anyone changed the token.
+- **`--highlight-wash` stays hand-written.** Tailwind's opacity modifiers mix with `transparent`;
+  ours mixes with `var(--page)`, an opaque blend. Different colours wherever the wash sits over
+  `--panel` rather than `--page` — which is exactly where the active gist cell and the active spine
+  band put it. `tw:bg-highlight/20` is a plausible-looking substitution that renders subtly wrong on
+  half its uses.
 
 ## The constraints it works under
 

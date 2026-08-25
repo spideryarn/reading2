@@ -30,6 +30,37 @@ what makes a library well-represented in the training data of the models writing
 | `react-tooltip` | Fine for a quick `data-tooltip` attribute; the API is string- and attribute-shaped rather than composition-shaped, and it fits rich, per-item content less well. |
 | Hand-rolled | Rejected. The work is not "put a div next to the cursor" — it is collision handling, hover intent, and dismissal, which is exactly the list of things that are subtly wrong in every hand-rolled tooltip. |
 
+### Revisited the same day, and narrowed
+
+Later on 2026-08-25 the repo adopted Radix, via shadcn components
+([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)). That
+re-opened the row above, and the answer is **unchanged but resting on less**. Worth writing down: a
+decision re-affirmed for a narrower reason is a weaker decision than it was, and the next person
+should know which leg it is standing on.
+
+- **One of the two reasons expired.** *"It brings a `Provider` + `Portal` + `asChild` component
+  convention this repo uses nowhere else"* is simply no longer true — `radix-ui` is installed and
+  that convention is now in the controls bar and the masthead.
+- **The other stands, and decides it alone: the grouping.** Once one band's tooltip is open,
+  neighbours open instantly **and the fade drops to zero** while the pointer keeps moving
+  ([§ Grouping](#grouping-and-why-the-delays-are-what-they-are)). That is `useDelayGroup`'s
+  `isInstantPhase` feeding `useTransitionStyles`. Radix's `Tooltip.Provider` has `delayDuration` and
+  `skipDelayDuration` — the *timing* half — but no equivalent of `isInstantPhase`: it animates from
+  `data-state` attributes in CSS, which do not distinguish "opening cold" from "opening warm". Radix
+  could probably reach parity with enough custom CSS, at the cost of re-proving a tuned interaction
+  that already works, on the one surface where the tooltip *is* the feature.
+- Two smaller costs, from the registry sources: shadcn's `tooltip.tsx` is a deliberately inverted
+  one-liner (`bg-foreground text-background … text-xs`), and ours is a raised dark card carrying
+  crumb, title, gist, sub-section list and footer — migrating `BandCard` into it means overriding
+  essentially every class it ships. And it is the only component in the shortlist that needs
+  `tw-animate-css`, a dependency bought solely for this swap.
+
+Radix is modestly better on two of the four traps below — it owns the two-element transform problem,
+and its arrow is a plain rotated div rather than an SVG with `fill`/`stroke` props. If "one component
+library, no exceptions" ever becomes the rule, that is a defensible reason to switch. Do it alone,
+last, and accept the scrub feel degrading: the risk is not correctness, it is that the spine stops
+feeling like one surface, which is invisible in a screenshot and obvious in use.
+
 Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react),
 [`@floating-ui/react` on npm](https://www.npmjs.com/package/@floating-ui/react),
 [floating-ui/floating-ui releases](https://github.com/floating-ui/floating-ui/releases),

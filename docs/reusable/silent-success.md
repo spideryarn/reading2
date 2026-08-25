@@ -11,7 +11,7 @@ correct, the tests are green. The defect lives in the gap between *what you aske
 meant*, and the natural check is on the wrong side of that gap — usually because it shares an
 assumption with the code. That is why it agrees with it.
 
-## The seven
+## The nine
 
 | The bug | What the natural check said | What you had to measure instead |
 |---|---|---|
@@ -22,6 +22,9 @@ assumption with the code. That is why it agrees with it.
 | A renamed heading, and links into it | Click the link: a page loads | Whether the anchor exists in the target's headings |
 | A test that matches nothing | The suite is green | Mutate the input so it *must* fail, and check it does |
 | A `//` comment in `biome.json` (comments need `.jsonc`) | `npm run lint` runs and reports findings, exit code as expected | Whether a rule you switched **off** still fires — and `grep` the output for `unknown key` |
+| A CSS framework's text scanner inventing a class name you already use | The install is correct, the build is clean, and the class is in the compiled CSS | The **diff** of the compiled output, rule by rule — and whether anything in your own source already answers to that name |
+| Unlayered CSS silently outranking layered utilities | The class is in the DOM, the rule is in the stylesheet, and both are valid | `getComputedStyle` on the element for the property in dispute — or which `@layer` each rule actually landed in |
+| A rule whose condition depends on the *viewer's* machine, not yours | The page looks right — on your machine, with your OS settings | Force the condition off (or read the compiled rule) and check the styling still arrives |
 
 ## Why the natural check agrees with the bug
 
@@ -37,6 +40,8 @@ false premise:
 | Click the link | that arriving *somewhere* means arriving **there** |
 | Run the test | that no failures means nothing broken |
 | Reason about the regex | that you meant what you wrote |
+| Check the class is in the compiled CSS | that a class exists because something asked for it |
+| Add the class and look at the page | that a valid rule is a rule that applies |
 
 That is what makes "be careful" useless as advice here. Care applied through the same assumption
 produces the same wrong answer, more confidently.
@@ -80,6 +85,49 @@ same wrong conclusion. Optimise for shortening that interval, not for the fix.
   plausible and never learn it stopped taking you where it said.
 - **A vacuous test.** A collector that matches nothing passes every assertion about its contents,
   forever. Assert that it found something, and prove it fails by breaking the thing it watches.
+- **A scanner that invents a class you already use.** Tailwind v4's source scanner is a plain **text**
+  scanner: it pulls bare words out of your files and emits a utility for any that happens to match a
+  utility name, whether or not the word was ever a class. Installed against an eight-thousand-line
+  codebase that had never met Tailwind, it generated eighteen — and one of them, `.outline`, was
+  already in use as a *mode* class on a `<table>`. The result was a 1px border round the whole table,
+  in a view you have to opt into, that reads as a deliberate design choice.
+
+  Everything about this reports success. The install is right, the build is clean, the CSS is valid,
+  the class is genuinely in the output. The gap is between *"the framework generated what I asked
+  for"* and *"the framework generated only what I asked for"*, and no natural check straddles it: you
+  did not write `.outline`, so you have no reason to go looking for it. The measure is the **diff** of
+  the compiled output — read what appeared, not whether what you wanted appeared. The fix here was a
+  namespace (`prefix(tw)`), which makes the collision impossible by construction rather than by
+  vigilance.
+
+  It has a nastier second half. The scanner reads whatever you point it at, and by default that is the
+  project root — including your documentation. Class names quoted as **examples in a plan document**
+  compiled into the production bundle: seven live utilities that no component had asked for. While
+  that was happening, *"the class is in the compiled CSS"* stopped being evidence that anything
+  worked, which is the same shape as a test that cannot fail. Prose can become shipped code, and a
+  verification step can be poisoned by the very document describing it.
+- **Unlayered CSS outranking layered utilities.** In the cascade, an unlayered normal declaration
+  beats a layered one — whatever the layer order, whatever the source order, whatever the specificity.
+  Everything a modern CSS framework emits sits inside a layer; a hand-written stylesheet imported
+  plainly does not. So the old stylesheet wins every contest, permanently, and the framework you just
+  installed does nothing wherever the two overlap.
+
+  This is the purest form of the pattern. The class is in the DOM, the rule is in the stylesheet, both
+  are valid, the network tab shows the CSS served, and the page simply does not move. There is no
+  error to search for and no state to inspect — the failure *is* the absence of a change. Worse, it is
+  selective: utilities on untouched elements work fine, so a five-minute smoke test comes back green
+  and you conclude the install is good. And in the case that produced this entry it was near-total by
+  bad luck rather than by degree: the old stylesheet styled its buttons by descendant selector
+  (`.controls button`, `.cmt-nav button`), which is exactly where the new components were going.
+
+  Two ways to measure it. `getComputedStyle(el)` for the property in dispute, which is an outcome and
+  not a declaration. Or read the compiled CSS and check which `@layer` each rule landed in — a
+  suspiciously **empty** layer beside rules sitting outside every layer is the whole diagnosis.
+
+  Note that this and the previous entry pull in opposite directions, which is why neither fix
+  substitutes for the other. Layering makes your utilities win *more*, so it makes an accidental class
+  collision worse. Namespacing stops the framework inventing names, and does nothing about your own
+  rules beating the ones you meant.
 
 ## The habit
 
@@ -114,6 +162,13 @@ You are probably in it when:
 - The evidence is a screenshot, or any single sample of a continuous space.
 - The thing declares an intent (`position: sticky`, a link, a subscription) rather than reporting an
   outcome. Declarations report what you asked for, not what happened.
+- **The outcome depends on something about the *viewer* that you cannot see from here.** A near miss
+  from the same session: a component library's `dark:` classes compile to
+  `@media (prefers-color-scheme: dark)`, on a page that is dark unconditionally with no media query.
+  Every such rule would have applied or not according to the **OS setting of whoever opened the
+  page** — flawless on the author's dark-mode machine, subtly wrong on a light-mode one, and outside
+  the reach of any test, since a headless DOM has no OS to ask. Whenever the answer varies by
+  environment, the environment you happen to be in is a sample of one.
 
 Collected in spideryarn, 2026-08-25. Applied there in
 [browser-testing.md](../project/browser-testing.md) and

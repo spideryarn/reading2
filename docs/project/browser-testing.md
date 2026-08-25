@@ -190,6 +190,42 @@ Each of these looked right in review and was wrong on the page.
 failure — `border-collapse: separate`, no `overflow-x` wrapper around the table, and the two-axis
 sticky bars that follow. They're commented in place; read them before you tidy them.
 
+## Two more, since Tailwind went in
+
+Both are 2026-08-25, and both are in the same family as everything above: valid CSS, correct install,
+class present in the DOM.
+
+**A utility that does nothing means the *layer order* is wrong, not that Tailwind failed to install.**
+Everything Tailwind emits sits inside a cascade layer, and unlayered declarations beat layered ones
+whatever the order and whatever the specificity. `styles.css` is 1,212 lines of descendant rules
+covering exactly the elements chrome components go on, so an unlayered `styles.css` outranks every
+utility, silently. The guard is the `@import "./styles.css" layer(app)` in
+[`src/web/tailwind.css`](../../src/web/tailwind.css)
+([web-client.md § Four guards](web-client.md#four-guards-all-in-tailwindcss)). To check it, look at
+the emitted CSS, not the page:
+
+```js
+// in the dev server, over the served stylesheet text
+[...document.styleSheets].flatMap(s => [...s.cssRules]).filter(r => r.constructor.name === 'CSSLayerBlockRule').map(r => r.name)
+// 'app' must be there, and it must contain `.controls button` — not sit empty
+```
+
+Adding `layer(app)` and finding the page unchanged is *also* what total failure looks like, so check
+both halves: that the app rules are inside the layer, **and** that a temporary `tw:px-4` on something
+inside `.controls` actually moves it.
+
+**`/?text=0` is where a scanner collision shows.** Tailwind's source scanner is a plain text scan,
+so before `prefix(tw)` it generated an `.outline` utility — and `TableView` uses `outline` as a
+*mode* class on the `<table>`. The result was a 1px border round the whole table, in a mode you have
+to opt into, that reads as a deliberate design choice. Outline mode is not the default view; check
+it explicitly, every time styling changes.
+
+Related, and worth knowing before you trust the compiled CSS at all: **`tailwind.css` sets
+`source(none)` with one explicit `@source`, because v4 otherwise scans from the project root and
+compiles class names out of `docs/`.** While that was happening, seven utilities were shipped that
+existed only because a plan document quoted them as examples — and *"the class is in the compiled
+CSS"* stopped being evidence that anything worked.
+
 ## Where the pinned columns collide, and why 736px
 
 Worth knowing before testing narrow, because it is arithmetic rather than taste. The minimums are

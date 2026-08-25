@@ -46,6 +46,7 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
+| `npm run typecheck` | every tsconfig, plus the guards that the checking happened ([typechecking.md](typechecking.md)) | — |
 | `npm run lint` | Biome over `src/`, `tests/`, `scripts/` ([linting.md](linting.md)) | — |
 
 The comment endpoints have no CLI stage — they are driven from the reading view. They write
@@ -54,6 +55,42 @@ nothing else breaks.
 
 **Run the validator.** A tree that violates the invariants doesn't crash the client — it silently
 draws a *wrong article*. See [`example/README.md`](../../example/README.md).
+
+## Adding a UI component
+
+Chrome — buttons, toggles, disclosures — comes from shadcn now:
+
+```bash
+npx shadcn@latest add <component>     # never `init`; see below
+```
+
+Four things to know, all found by running it rather than reading about it
+([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)):
+
+1. **Move the file.** The CLI cannot resolve `@/` here — it reads the **root**
+   [`tsconfig.json`](../../tsconfig.json) and our `paths` live in
+   [`src/web/tsconfig.json`](../../src/web/tsconfig.json), where they belong. So it writes a literal
+   `./@/components/ui/` directory at the repo root and reports success. Move the file to
+   `src/web/components/ui/`, delete the stray `@` directory, and check `npm run typecheck` —
+   [typechecking.md](typechecking.md#the-trap-the-shadcn-cli-cannot-resolve-the-alias-here).
+2. **The `tw:` prefix is applied for you.** `"prefix": "tw"` in
+   [`components.json`](../../components.json) is enough; the generated `cva` strings arrive already
+   prefixed. The migration plan predicted a hand find-and-replace per file — it was wrong, and you
+   should not do one.
+3. **Never run `shadcn init`.** It writes a light `:root` palette and a `.dark` block, and loaded
+   after `tokens.css` its `--background: oklch(1 0 0)` wins: white page, near-invisible orange.
+   `components.json` is hand-written so nothing has to be guessed. `add` alone does not touch the
+   palette — **diff [`styles/tokens.css`](../../styles/tokens.css) and
+   [`src/web/tailwind.css`](../../src/web/tailwind.css) afterwards anyway** and revert anything that
+   appeared there.
+4. **Check what it installed.** The CLI installs the Radix packages but not always the rest — it
+   added `radix-ui` and left `class-variance-authority` out. The build did **not** catch that,
+   because nothing imported the component yet so vite never bundled it. `npm run typecheck` did.
+
+Then read the generated class strings before using them. `data-[state=on]:bg-accent` is shadcn's
+default on-state, and in this palette `--accent` is a raised dark **surface**, not the brand orange —
+left alone it marks a pressed toggle with dark grey on a near-black page. Not an error, not visibly
+broken, just the signal quietly gone.
 
 ## Where things live
 

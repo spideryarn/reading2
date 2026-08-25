@@ -138,6 +138,23 @@ the top of that section ([url-state.md](url-state.md#the-unit-is-a-section-not-a
   ([§ fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)), which is
   the only thing on that axis the reader cannot already do another way.
 
+## This constrains which components we may use
+
+All four arrow keys are spoken for: ↑/↓ by this file, ←/→ by the browser panning the table. So a
+component that captures arrow keys takes something real away, and several of the obvious ones do.
+
+**Radix's roving focus binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown.** That is why the
+granularity pills are individual shadcn `Toggle`s and not a `ToggleGroup`, which is what the
+migration plan called for and what you would normally reach for
+([web-client.md § Individual Toggles](web-client.md#individual-toggles-not-a-togglegroup),
+2026-08-25). A group would have swallowed all four whenever focus sat inside the controls bar —
+which is precisely where focus lands after you click a pill. Separate toggles give the same
+`aria-pressed` and `data-state` and leave the keys alone.
+
+The same applies to `RadioGroup`, `Tabs`, `Menubar` and `NavigationMenu`. **Check the keyboard
+behaviour before adopting any of them**, and prefer the ungrouped primitive where the grouping only
+buys focus management we do not need.
+
 ## Where this leaves an older sketch
 
 [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) originally gave ← / → to *zoom

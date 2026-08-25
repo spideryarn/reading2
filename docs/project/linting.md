@@ -79,6 +79,20 @@ npx biome lint src 2>&1 | grep -i 'unknown key\|deserialize'
   `tsconfig.base.json` turns on `noUncheckedIndexedAccess`, so every `blocks[i]` now needs a real
   check or a `!`. Whether a given `!` is a lie is a question about that line's logic, which the rule
   cannot see — so it flags all of them and buries the findings that mean something.
+- **[`src/web/tailwind.css`](../../src/web/tailwind.css) is excluded from linting entirely.** Biome's
+  CSS parser does not know Tailwind v4's import modifiers: `layer()` it accepts, `prefix(tw)` and
+  `source(none)` it does not, and it reports **9 parse errors** rather than lint findings. Parse
+  errors also rule out an inline `biome-ignore` — the suppression is never reached, because the file
+  never parses. Both modifiers are load-bearing
+  ([web-client.md § Four guards](web-client.md#four-guards-all-in-tailwindcss)), so the exclusion is
+  the only lever. Everything else under `src/` is still linted; this one file is not linted at all.
+  Revisit when Biome learns the v4 syntax.
+- **Generated shadcn components get no exception.** The migration plan expected an `overrides` entry
+  for `src/web/components/ui/**`. It isn't needed: across `button`, `toggle` and `collapsible` the
+  whole crop is one fixable `useImportType` warning on `toggle.tsx`'s `import * as React`. A
+  generated component is **our** code the moment it lands — that is the entire shadcn model — so fix
+  the file rather than carving out the directory. Add an override only when a rule turns out to be
+  wrong about generated code as a class, and scope it to `src/web/components/ui/**`.
 - **`noFocusedTests`, in [`tests/layout.test.ts`](../../tests/layout.test.ts) only.** The rule looks
   for bare calls to `fit` and `fdescribe`, which are Jasmine's focused-it. That file has a local
   helper genuinely named `fit`, wrapping `fitView` from

@@ -78,6 +78,20 @@ disagree with Chrome. See [comments.md § The offset space](comments.md#offset-s
 - **The React reading view.** No DOM tests yet. When they arrive: `environment: "jsdom"` and
   `@testing-library/react`, and start with [`src/web/tree.ts`](../../src/web/tree.ts) `buildGeometry`,
   which is pure and is where a rowSpan bug silently draws a wrong article.
+
+  **The gap is bigger than "no DOM tests" sounds, and 2026-08-25 measured it.** Adopting Tailwind
+  produced three bugs the whole suite was blind to: a generated `.outline` utility drawing a border
+  round the table, unlayered CSS outranking every utility we meant to write, and `dark:` rules that
+  applied or not depending on the *viewer's* OS setting
+  ([web-client.md § Four guards](web-client.md#four-guards-all-in-tailwindcss)). Every one produced
+  valid CSS that rendered. None of them could have gone red here, because nothing renders React and
+  nothing computes a style — and the third could not have gone red in a DOM test either, since jsdom
+  has no OS to ask.
+
+  So this is the moment to reconsider `@testing-library/react`, and also the moment to be honest
+  about its ceiling: it would have caught the class names, not the cascade. Anything that depends on
+  the *resolved* value has to be checked in a real browser
+  ([browser-testing.md](browser-testing.md#do-not-judge-colour-from-a-screenshot)).
 - **Fetching and Readability** ([content-extraction.md](content-extraction.md)). Needs the network,
   or a large fixture corpus. Worth doing when extraction bugs start costing time.
 
