@@ -71,10 +71,9 @@ npx biome lint src 2>&1 | grep -i 'unknown key\|deserialize'
 
 ## What's turned off, and why
 
-- **The formatter, entirely.** Biome's default indent is tabs and this codebase is spaces, so
-  enabling it rewrites every file at once — an unreviewable diff, in a tree where several agents
-  have edits in flight ([CLAUDE.md § Committing](../../CLAUDE.md)). Same for `organizeImports`.
-  Turning either on is its own commit, if we ever want it.
+- **The formatter, entirely.** See [§ Tabs or spaces](#tabs-or-spaces) below — the short version
+  is that it was measured rather than assumed, and it isn't worth the churn. Same for
+  `organizeImports`, which would reorder imports across every file.
 - **`noNonNullAssertion`**, 83 hits, all `x!`. The count is climbing on purpose:
   `tsconfig.base.json` turns on `noUncheckedIndexedAccess`, so every `blocks[i]` now needs a real
   check or a `!`. Whether a given `!` is a lie is a question about that line's logic, which the rule
@@ -102,6 +101,59 @@ npx biome lint src 2>&1 | grep -i 'unknown key\|deserialize'
 `noFloatingPromises` is switched **on**, at error. It lives in Biome's `nursery` group because it
 needs type inference, which is also why `@biomejs/biome` is pinned to an exact version in
 `package.json`: nursery rules move between releases.
+
+## Tabs or spaces
+
+**Spaces, two of them.** Settled, and settled by counting rather than by preference:
+
+| | |
+|---|---|
+| space-indented lines in the repo | 10,151 |
+| tab-indented lines | 0 |
+| files mixing the two | 0 |
+
+There was nothing to reconcile. [`.editorconfig`](../../.editorconfig) now states it, so editors and
+agents pick it up without being told.
+
+### Why the formatter is still off
+
+The obvious follow-on is "so configure Biome to space/2 and turn the formatter on". We measured what
+that would actually do, at three line widths:
+
+| lineWidth | files touched | lines rewritten |
+|---|---|---|
+| 80 | 47 / 56 | 1,935 (19.3%) |
+| **100** | **39 / 56** | **1,239 (12.3%)** |
+| 120 | 43 / 56 | 1,420 (14.2%) |
+
+Even at its best setting that is an eighth of the codebase rewritten for no behaviour change. And
+the changes are a wash rather than an improvement. It collapses some genuinely over-wrapped calls,
+which is nice; it also takes the tag list in [`src/blocks.ts`](../../src/blocks.ts) — four lines,
+grouped so the headings sit together and the block elements sit together — and explodes it into
+fifteen lines, one tag each, destroying the grouping that made it readable:
+
+```
+-  "P", "H1", "H2", "H3", "H4", "H5", "H6",
+-  "LI", "PRE", "BLOCKQUOTE", "FIGURE", "TABLE", "IMG", "HR",
++  "P",
++  "H1",
++  … eleven more lines
+```
+
+A formatter earns its churn by ending arguments nobody wants to have. There is no argument here to
+end: the indentation is already unanimous, and hand-formatting in this codebase is carrying meaning
+a formatter can't see. So it stays off.
+
+### The trap if anyone turns it on
+
+Biome's own default indent is **tabs**, and it **ignores `.editorconfig` unless you ask it to**.
+Verified: with `useEditorconfig` unset, a tab-indented file next to an `.editorconfig` saying
+`indent_style = space` is reported as already-clean; set `useEditorconfig: true` and the same file
+is reformatted to spaces.
+
+So `biome.jsonc` sets `"useEditorconfig": true` even though the formatter is off. It costs nothing
+today, and it means that whoever eventually flips `enabled` to `true` gets space/2 from
+`.editorconfig` rather than silently converting all 10,151 lines to tabs on the first run.
 
 ## The baseline is not green yet
 

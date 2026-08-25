@@ -1,0 +1,22 @@
+# Spaces, two of them. Not a preference — a census: every one of the ~10,000
+# indented lines in this repo is space-indented, and none is tab-indented, so
+# there is nothing to reconcile and no reason to churn it.
+#
+# This file is here so editors and agents pick that up without being told, and
+# so nobody has to guess. Biome does NOT read it unless asked: see
+# formatter.useEditorconfig in biome.jsonc, and docs/project/linting.md for why
+# the formatter itself is off.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markdown: two trailing spaces is a hard line break, so leave them alone.
+[*.md]
+trim_trailing_whitespace = false

@@ -3,7 +3,22 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
 
   "files": {
-    "includes": ["src/**", "tests/**", "scripts/**", "vite.config.ts", "vitest.config.ts"]
+    // src/web/tailwind.css is excluded because Biome's CSS parser does not know
+    // Tailwind v4's import modifiers — `layer()` it accepts, `prefix(tw)` and
+    // `source(none)` it does not, and it reports 9 PARSE errors rather than
+    // lint findings. Parse errors also mean an inline `biome-ignore` in the
+    // file cannot help: the suppression is never reached, because the file
+    // never parses. Both modifiers are load-bearing (see that file's header),
+    // so the exclusion is the only lever. Everything else under src/ is still
+    // linted, this one file is not linted at all.
+    "includes": [
+      "src/**",
+      "!src/web/tailwind.css",
+      "tests/**",
+      "scripts/**",
+      "vite.config.ts",
+      "vitest.config.ts"
+    ]
   },
 
   // This file is biome.jsonc, not biome.json, and the extension is load-bearing.
@@ -16,7 +31,17 @@
   // so enabling it rewrites every file at once — a diff nobody can review, in a
   // tree where several agents have edits in flight. Lint first. Turning the
   // formatter on would be its own commit, if we ever want it at all.
-  "formatter": { "enabled": false },
+  // Off, and measured rather than assumed: turning it on at its best setting
+  // (space/2, lineWidth 100) rewrites 1,239 lines across 39 of 56 files, and
+  // the changes are a wash — some collapse a needlessly-wrapped call, others
+  // explode a deliberately grouped list (the tag names in src/blocks.ts go from
+  // 4 readable lines to 15, one per line). Not worth the churn.
+  //
+  // useEditorconfig matters even so: if anyone ever flips `enabled` to true,
+  // Biome's own default is TABS, and it ignores .editorconfig unless asked.
+  // With this on it picks up space/2 from .editorconfig instead of silently
+  // reformatting the entire codebase to tabs on the first run.
+  "formatter": { "enabled": false, "useEditorconfig": true },
 
   // Same reason: organizeImports would reorder imports across the whole tree.
   "assist": { "enabled": false },
