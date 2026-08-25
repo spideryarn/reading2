@@ -15,8 +15,9 @@
  * The write half is tested in tweets.test.ts; the page is src/web/Tweets.tsx.
  */
 import { describe, expect, it } from "vitest";
+import { cascadeForce } from "../src/jobs.js";
 import { parseJobRequest } from "../src/routes.js";
-import { threadMarkdown } from "../src/web/Tweets.js";
+import { howLong, threadMarkdown } from "../src/web/Tweets.js";
 import type { Article, TweetThread } from "../src/types.js";
 
 /** @param url omitted entirely when null — an article fetched from a file has no URL at all. */
@@ -97,5 +98,57 @@ describe("the request the button sends", () => {
     // Sending both is refused outright (routes.ts), so a page that helpfully
     // added `article.meta.url` here would break its own button.
     expect(() => parseJobRequest({ slug: "writes", url: "https://a.example/x" })).toThrow();
+  });
+});
+
+/**
+ * The footer's "Write it again", which is a different request from the one
+ * above and fails in a way that looks like success.
+ *
+ * A rewrite asked for without `force` is accepted, queued, and skipped — the
+ * step's own freshness check says the thread on disk is current, because it is.
+ * The job goes green, the page refetches, and the reader gets back the same
+ * thread they just asked to replace, with nothing anywhere saying why. That is
+ * docs/reusable/silent-success.md exactly, and it is why the flag is pinned
+ * here rather than left to the page.
+ */
+describe("the request the rewrite sends", () => {
+  it("keeps the force alongside the steps", () => {
+    expect(parseJobRequest({ slug: "writes", steps: ["tweets"], force: ["tweets"] })).toEqual({
+      slug: "writes",
+      steps: ["tweets"],
+      force: ["tweets"],
+    });
+  });
+
+  it("really does force the step once the queue has cascaded it", () => {
+    // `tweets` is in FORCE_ONLY_WHEN_NAMED, so it is forced only when named —
+    // which is what makes naming it the whole difference between this request
+    // and the one the empty state sends.
+    expect([...cascadeForce(["tweets"], new Set(["tweets"]))]).toEqual(["tweets"]);
+    expect([...cascadeForce(["tweets"], new Set())]).toEqual([]);
+  });
+});
+
+/**
+ * How long the model took, which the artefact has recorded from the first run
+ * and nothing showed until the page grew a footer.
+ */
+describe("howLong", () => {
+  it("reads in seconds while it is short", () => {
+    expect(howLong(6136)).toBe("6.1s");
+    expect(howLong(59_900)).toBe("59.9s");
+  });
+
+  it("switches to minutes once seconds stop being readable", () => {
+    expect(howLong(72_000)).toBe("1m 12s");
+    expect(howLong(600_000)).toBe("10m 0s");
+  });
+
+  it("says it does not know rather than saying zero", () => {
+    // The failure the borrow list warns about: an empty timing rendered as
+    // `0ms` reads as "instant" rather than as "we never measured it".
+    expect(howLong(Number.NaN)).toBe("an unknown time");
+    expect(howLong(-1)).toBe("an unknown time");
   });
 });

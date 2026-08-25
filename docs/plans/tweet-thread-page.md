@@ -583,16 +583,103 @@ last line clear of the fixed bar by about 32px. `/read/noema/tweets` shows the e
 button. No console errors, no failed requests. The empty state's button was deliberately **not**
 pressed — that is a model call, and the two states that matter were both already on disk.
 
+## A second pass over theirs, 2026-08-25
+
+Greg, after the page was built:
+
+> Have a look at the Tweet Thread functionality. See if there's anything from the version we had in
+> `docs/project/original-version/` that we should borrow, e.g. the new version seems to be missing
+> some of the design polish and other functionality.
+
+So `components/tweet-thread-view.tsx`, `components/tweet-card.tsx` and their page were read again,
+this time looking for what *ours* had left behind rather than for what to avoid. Most of the
+difference is the part we turned down on purpose and would turn down again: the blue-purple gradient
+masthead, the `✨ AI POWERED 🧵` pill, the animated bouncing dots, the three blurred background
+circles, the card hover-scale, the threading line drawn between cards with two absolutely positioned
+elements, the `🏁 End of thread` badge, and the fully styled *"Post to Bluesky"* button wired to
+`alert('Coming soon!')`. Their page is light, loud and Twitter-flavoured; ours is dark, quiet and
+typographic, and that gap is the design, not a shortfall in it.
+
+Three things did come across.
+
+### 1. A thread that is fine can now be rewritten
+
+This is the open question below, closed. Theirs had a **Reset** button beside the title at all
+times; ours had a button only when the thread had gone stale. The reason for leaving it out was
+real — *"a model call one click away, and nothing else in the app spends money that easily"* — but
+the gap turned into its own problem, because the only way to replace a thread you simply did not
+like was to change the article underneath it.
+
+The answer is not to accept the click, it is to make it **two clicks and put it out of the way**:
+
+- At the **foot of the page**, under a hairline rule, not beside the title. That is also where the
+  thought occurs — you have just read the last post.
+- **A confirm step in place, not a dialog.** Pressing "Write it again" replaces the button with
+  *"Another model call, and this one is not out of date."* and a **Rewrite** / **Cancel** pair.
+  Nothing is blocked and nothing is modal; the cost is simply stated before it is spent.
+- **`force: ["tweets"]`, and it is load-bearing.** Without it the request is accepted, queued and
+  *skipped* — `threadIsCurrent` says the artefact on disk is current, because it is — so the job
+  goes green, the page refetches, and the reader gets back the very thread they asked to replace
+  with nothing anywhere saying why. Textbook [silent success](../reusable/silent-success.md), and
+  now pinned in `tests/tweets-page.test.ts` at both ends: the request parses with its `force`, and
+  `cascadeForce` really does mark the step.
+- **Only when the thread is current.** A stale thread already has a button, at the top, inside the
+  paragraph that explains why it needs pressing. Two of them would be one too many, and the wrong
+  one is the one further from the reason.
+
+**A bug found on the way, worth writing down.** `write()` grew an argument — `write(force = false)`
+— and `Progress` was passing it straight to `onClick`. React hands a click handler a `MouseEvent`,
+so every ordinary press would have arrived as `force = <MouseEvent>`, which is an object, which is
+truthy: every press forced. It typechecks, it works, and it is invisible until you wonder why the
+bill is high. The default parameter is what makes the `onClick={onWrite}` shorthand dangerous;
+`onClick={() => void onWrite()}` is the fix.
+
+### 2. The thread's own numbers
+
+Theirs had a row of pills — `📊 12 tweets`, `✏️ 2,610 chars in thread`, `📄 41,238 chars in
+document`. The pills are not worth having; the three facts are. Ours says them as a line of prose:
+
+```
+A thread, 5 posts · 1,131 characters from 3,182 words
+```
+
+The document's word count is the one that earns its place. On its own "1,131 characters" is a fact
+about nothing; beside the article's length it is the compression the reader is being asked to
+trust — which is the honest thing to put at the top of a summary that sits next to
+[vision.md](../project/vision.md)'s anti-goals.
+
+The footer gained the other number the artefact already held: **how long the model took**.
+`elapsedMs` has been written into `tweets.json` since the first run and nothing has ever shown it,
+and a number nobody looks at is a number nobody notices going wrong — which is precisely how their
+`0ms` timings survived ([borrow-list.md](../project/original-version/borrow-list.md)). `howLong` is
+exported and tested, including the case that matters: an unusable value says *"in an unknown time"*
+rather than `0.0s`, because "instant" and "we never measured it" must not render the same.
+
+### 3. The copy button can be heard
+
+The one accessibility detail theirs had and ours did not. Their button changed its `aria-label` with
+its state; ours changed only its visible text, inside a `Button` whose accessible name came from
+`title` — so a screen reader announced "Copy the thread" whatever had happened, including
+**"Couldn't copy"**, the state the whole component exists to report. Now the `aria-label` tracks the
+state and the label sits in an `aria-live="polite"` region, so the outcome is announced rather than
+merely displayed.
+
+### What was looked at and left there
+
+- **The thread summary.** Cut on purpose in [§6](#6-two-fields-the-plan-specified-are-gone) and
+  still cut: a sentence summarising a thread that is itself a summary, when the tree root's gist
+  already says the whole piece in one sentence.
+- **The green → amber → red character bar.** Rejected in the page section above for the reason that
+  still holds — it cries wolf at 190 and teaches you to ignore it at 281.
+- **Auto-generation on page open**, and the retry loop it came with. Greg asked for a button.
+- **Bluesky.** Still no.
+
 ## What is still open
 
 - **Per-post anchoring.** Turned down for now by "follow the product decisions from the original
   version", and the shape to add later is one optional `blockId` per post. If it is ever added, the
   page becomes a way *into* the article rather than a substitute for it, which is the version that
   answers the anti-goal outright.
-- **Whether a *current* thread should be regenerable.** Half-answered above: a stale one offers
-  "Write it again" and needs no `force`, because the step already agrees it is out of date. A
-  `[rewrite]` on a thread that is fine is `force: ["tweets"]` and still not built — it is a model
-  call one click away, and nothing else in the app spends money that easily.
 - **Bluesky and X posting.** Theirs planned it and never built it. Neither should we.
 - **Whether this belongs in the library card.** A thread is a decent blurb. It is also a generated
   claim on a page full of other articles, which is a different risk.

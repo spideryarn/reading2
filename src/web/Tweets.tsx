@@ -35,6 +35,33 @@
  *    written from, and those can move underneath it. Their version could not
  *    answer this question at all.
  *
+ * ## What was borrowed back from theirs, 2026-08-25
+ *
+ * A second pass over `components/tweet-thread-view.tsx` in the original repo,
+ * looking for what this page had left behind. Three things came across, none of
+ * them the gradients:
+ *
+ *  - **A thread that can be rewritten when it is fine.** Theirs had a "Reset"
+ *    button at all times; ours had one only when the thread had gone stale, and
+ *    docs/plans/tweet-thread-page.md#what-is-still-open left the rest open on
+ *    the grounds that a model call should not be one click away. It is now two
+ *    clicks away instead — see `Rewrite` — which answers the objection rather
+ *    than living with the gap.
+ *  - **The thread's own numbers.** Theirs put the post count, the characters in
+ *    the thread and the characters in the document in a row of pills. The three
+ *    facts were the good part; the pills were not. Ours says them in a line of
+ *    prose, and adds the elapsed time, which the artefact has stored since the
+ *    first run and nothing has ever shown.
+ *  - **A copy button a screen reader can follow.** Theirs changed its
+ *    `aria-label` with its state. Ours changed only its visible text, inside a
+ *    button whose accessible name came from `title` — so the announcement never
+ *    moved off "Copy".
+ *
+ * Deliberately left there: the thread summary (cut on purpose, see the plan's
+ * as-built §6), the green→amber→red character bar (it cries wolf at 190), the
+ * threading line between cards, the hover scale transforms, and "Post to
+ * Bluesky", which was a fully styled button wired to `alert()`.
+ *
  * Tailwind utilities rather than a block in styles.css, exactly as Metadata.tsx
  * does it: this page is chrome, and chrome is what Tailwind is here for
  * (docs/project/web-client.md#tailwind-and-shadcn-components). Every class needs
@@ -47,6 +74,7 @@ import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { carriedSearch, readHref } from "./router.js";
+import { articleStats } from "./stats.js";
 import { useJobs } from "./useJobs.js";
 
 /** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
@@ -154,9 +182,30 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
     return null;
   }, [queue.jobs, startedId]);
 
-  async function write() {
+  /**
+   * Ask for a thread.
+   *
+   * `force` is the difference between "write one" and "write this one again".
+   * Without it the step's own freshness check (`threadIsCurrent` in
+   * src/tweets.ts) is the arbiter, which is right for an absent thread and
+   * right for a stale one — it agrees the artefact is out of date, so an
+   * ordinary run really does rewrite it. It is *wrong* for a thread that is
+   * perfectly current: the step would report "already done" and the page would
+   * sit there having apparently done nothing. `force: ["tweets"]` is how the
+   * footer's rewrite says "I know, do it anyway".
+   *
+   * Forcing a step forces every step after it (`cascadeForce`, src/jobs.ts).
+   * That is harmless here only because `tweets` is last in `STEP_ORDER` and is
+   * the sole step in this job — worth knowing before adding a second name to
+   * the array.
+   */
+  async function write(force = false) {
     setStartedId(null);
-    const started = await queue.run({ slug, steps: ["tweets"] });
+    const started = await queue.run({
+      slug,
+      steps: ["tweets"],
+      ...(force ? { force: ["tweets" as const] } : {}),
+    });
     setPostFailed(started === null);
     if (started) setStartedId(started.id);
   }
@@ -240,7 +289,7 @@ function Empty({
 }: {
   job: Job | null;
   failed: string | null;
-  onWrite(): void;
+  onWrite(): Promise<void>;
   onCancel(id: string): void;
 }) {
   return (
@@ -279,7 +328,7 @@ function Progress({
 }: {
   job: Job | null;
   failed: string | null;
-  onWrite(): void;
+  onWrite(): Promise<void>;
   onCancel(id: string): void;
   label: string;
 }) {
@@ -309,7 +358,11 @@ function Progress({
   }
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={onWrite}>
+      {/* `() => onWrite()` and not `onWrite`: React hands the click handler a
+          MouseEvent, and `write(force = false)` would take that event as its
+          `force` argument — an object, so truthy — and quietly force every
+          press. The default parameter is what makes the shorthand dangerous. */}
+      <Button type="button" variant="outline" size="sm" onClick={() => void onWrite()}>
         <PenLine size={13} />
         {label}
       </Button>
@@ -333,17 +386,27 @@ function Thread({
   article: Article;
   job: Job | null;
   failed: string | null;
-  onWrite(): void;
+  onWrite(force?: boolean): Promise<void>;
   onCancel(id: string): void;
 }) {
   const total = thread.tweets.length;
   const over = thread.tweets.filter((t) => t.chars > thread.limit).length;
+  /* Summed here rather than stored. It is the array's own arithmetic, and a
+     `chars` total in the artefact would be a second copy of a fact the posts
+     already carry — the same reason nothing stores a post number. */
+  const chars = thread.tweets.reduce((n, t) => n + t.chars, 0);
+  const words = useMemo(() => articleStats(article).words, [article]);
 
   return (
     <>
       <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+        {/* Three numbers, borrowed from their pill row and said as a sentence.
+            The document's word count is the one that earns its place: on its
+            own "1,842 characters" is a fact about nothing, and beside 8,275
+            words it is the compression the reader is being asked to trust. */}
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-          A thread, {total} {total === 1 ? "post" : "posts"}
+          A thread, {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters
+          from {words.toLocaleString()} words
         </p>
         <CopyButton
           text={() => threadMarkdown(thread, article)}
@@ -423,10 +486,118 @@ function Thread({
         ))}
       </ol>
 
-      <p className="tw:mt-6 tw:mb-0 tw:text-xs tw:text-ink-faint">
-        Written by {thread.generator} · {thread.version} · {whenWritten(thread.generatedAt)}
-      </p>
+      {/* A hairline and then the provenance: the end of the thread, said with a
+          rule rather than with their "🏁 End of thread" pill. In a list of
+          fifteen cards the reader does want to know they have reached the
+          bottom; it just does not need an emoji to say so. */}
+      <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:border-t tw:border-border tw:pt-4">
+        <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
+          Written by {thread.generator} · {thread.version} · {whenWritten(thread.generatedAt)} ·{" "}
+          {howLong(thread.elapsedMs)}
+        </p>
+        {/* Only when the thread is fine. A stale one already has a button, at
+            the top, inside the paragraph explaining why it needs pressing —
+            two of them would be one too many, and the wrong one is the one
+            further from the reason. */}
+        {!stale && (
+          <Rewrite job={job} failed={failed} onWrite={onWrite} onCancel={onCancel} />
+        )}
+      </div>
     </>
+  );
+}
+
+/**
+ * Write the thread again when there is nothing wrong with it.
+ *
+ * Theirs had this as a "Reset" button beside the title, one click, always
+ * there. The plan left it out for a stated reason —
+ * docs/plans/tweet-thread-page.md#what-is-still-open: *"it is a model call one
+ * click away, and nothing else in the app spends money that easily"* — and then
+ * the gap became its own problem, because the only way to replace a thread you
+ * did not like was to change the article underneath it.
+ *
+ * So: two clicks, not one, and at the foot of the page rather than beside the
+ * title. The confirm step is the whole answer to the objection — it is not a
+ * dialog, it does not block anything, and it says what the click costs before
+ * you have spent it. The foot of the page is also simply where the thought
+ * occurs: you have just read the last post.
+ *
+ * `busy` covers the gap between the click and the job appearing in the polled
+ * list, which is a round trip during which `job` is still null. Without it the
+ * confirm row vanishes and the plain button comes back — a press that appears
+ * to have been ignored, which is the failure this whole page keeps guarding
+ * against (docs/reusable/silent-success.md).
+ */
+function Rewrite({
+  job,
+  failed,
+  onWrite,
+  onCancel,
+}: {
+  job: Job | null;
+  failed: string | null;
+  onWrite(force?: boolean): Promise<void>;
+  onCancel(id: string): void;
+}) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  if (job) {
+    return (
+      <span className="tw:ml-auto tw:w-full">
+        <Progress
+          job={job}
+          failed={null}
+          onWrite={() => onWrite(true)}
+          onCancel={onCancel}
+          label="Write it again"
+        />
+      </span>
+    );
+  }
+
+  if (asking) {
+    return (
+      <span className="tw:ml-auto tw:flex tw:items-center tw:gap-2 tw:text-xs tw:text-muted-foreground">
+        <span>Another model call, and this one is not out of date.</span>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            // `true`: the step's freshness check would otherwise skip a thread
+            // that is, by construction, perfectly current.
+            await onWrite(true);
+            setBusy(false);
+            setAsking(false);
+          }}
+        >
+          {busy ? "Starting…" : "Rewrite"}
+        </Button>
+        <Button type="button" variant="ghost" size="xs" disabled={busy} onClick={() => setAsking(false)}>
+          Cancel
+        </Button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="tw:ml-auto tw:flex tw:items-center tw:gap-3">
+      {failed && <span className="tw:text-xs tw:text-destructive">{failed}</span>}
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        title="Throw this thread away and write another one"
+        onClick={() => setAsking(true)}
+      >
+        <PenLine size={12} />
+        Write it again
+      </Button>
+    </span>
   );
 }
 
@@ -473,6 +644,12 @@ function CopyButton({
       size="xs"
       className={className}
       title={label}
+      /* Borrowed from theirs, which was the one accessibility detail this page
+         had left behind. Without it the button's accessible name comes from
+         `title` and stays on "Copy" through every state, so the outcome — and
+         especially "Couldn't copy", the state this component exists to report —
+         is announced to a screen reader as nothing at all. */
+      aria-label={state === "done" ? "Copied" : state === "failed" ? "Couldn't copy" : label}
       onClick={() => {
         // The `?.` was doing real damage: on an origin with no clipboard at
         // all the expression is `undefined`, nothing is thrown, and the button
@@ -489,7 +666,12 @@ function CopyButton({
       }}
     >
       {state === "done" ? <Check size={12} className="tw:text-highlight" /> : <Copy size={12} />}
-      {state === "done" ? "Copied" : state === "failed" ? "Couldn't copy" : label}
+      {/* `aria-live` as well as the label, because the label changing is not an
+          announcement unless something is watching the region. `polite`, so it
+          waits its turn rather than interrupting whatever is being read. */}
+      <span aria-live="polite">
+        {state === "done" ? "Copied" : state === "failed" ? "Couldn't copy" : label}
+      </span>
     </Button>
   );
 }
@@ -515,6 +697,24 @@ export function threadMarkdown(thread: TweetThread, article: Article): string {
   const head = [article.meta.title, article.meta.url].filter(Boolean).join("\n");
   const posts = thread.tweets.map((t, i) => `${i + 1}/${thread.tweets.length} ${t.text}`);
   return [head, ...posts].join("\n\n");
+}
+
+/**
+ * `6.1s`, or `1m 12s` once it gets long enough for seconds to stop being
+ * readable.
+ *
+ * `elapsedMs` has been in the artefact since the first run and nothing has ever
+ * shown it. It is worth showing for the reason the borrow list gives for timing
+ * every model call from the outside: the original asked the SDK for its own
+ * timings, got empty values back, and rendered them as `0ms` — a duration that
+ * reads as "instant" rather than as "we don't know". A number nobody looks at
+ * is a number nobody notices going wrong.
+ */
+export function howLong(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "an unknown time";
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
 /** `25 Aug 2026`, or nothing readable if the artefact's timestamp is not one. */
