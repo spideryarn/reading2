@@ -1,9 +1,14 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
+import { LucideProvider } from "lucide-react";
 import { App } from "./App.js";
 import { isSpideryarnId } from "../ids.js";
-import "./styles.css";
+// The entry stylesheet, and the ONLY one imported here. It pulls in
+// styles.css inside `@layer app` — importing the two side by side would
+// leave styles.css unlayered, where it silently outranks every Tailwind
+// utility. See the header of tailwind.css.
+import "./tailwind.css";
 
 /**
  * The browser must not try to restore scroll itself.
@@ -35,10 +40,20 @@ if (isSpideryarnId(legacyAnchor)) {
   history.replaceState(history.state, "", url);
 }
 
+/**
+ * Icon defaults for the whole app — see docs/project/icons.md.
+ *
+ * Set once here rather than at every call site, so the chrome stays one weight.
+ * 16px against a 0.82rem UI face, and a stroke thinner than Lucide's default 2,
+ * because on the dark ground a 2px stroke reads as bold: the icons are meant to
+ * sit behind the prose, not compete with it.
+ */
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <NuqsAdapter>
-      <App />
-    </NuqsAdapter>
+    <LucideProvider size={16} strokeWidth={1.75}>
+      <NuqsAdapter>
+        <App />
+      </NuqsAdapter>
+    </LucideProvider>
   </StrictMode>,
 );

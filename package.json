@@ -15,7 +15,8 @@
     "toc:flatten": "tsx src/toc-flatten.ts",
     "test:watch": "vitest",
     "toc": "tsx src/toc.ts",
-    "arc": "tsx src/arc.ts"
+    "arc": "tsx src/arc.ts",
+    "typecheck": "tsx scripts/typecheck.ts"
   },
   "keywords": [],
   "author": "",
@@ -26,17 +27,20 @@
     "@floating-ui/react": "^0.27.20",
     "@mozilla/readability": "^0.6.0",
     "jsdom": "^29.1.1",
+    "lucide-react": "^1.34.0",
     "nuqs": "^2.10.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.10",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",

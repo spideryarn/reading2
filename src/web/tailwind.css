@@ -1,0 +1,57 @@
+/*
+ * The stylesheet entry point. `main.tsx` imports THIS file and nothing else.
+ *
+ * Four lines, and every one of them is load-bearing. The reasoning is in
+ * docs/plans/shadcn-migration.md; the short version:
+ *
+ * 1. The `@layer` statement must come FIRST, before the @imports. A layer
+ *    statement is one of the few things allowed to precede @import, and it is
+ *    what fixes the order: app styles beat preflight, utilities beat app styles.
+ *
+ * 2. `prefix(tw)` is not taste. Tailwind's scanner is a plain TEXT scanner: it
+ *    pulls bare words out of source files and generates a utility for any that
+ *    matches a utility name, whether or not it was ever a class name. Built
+ *    against src/web/ unprefixed it generates 18 classes, two of which collide
+ *    with live ones — and `.outline` draws a 1px border round the whole table
+ *    in outline mode, because TableView sets `outline` as a MODE class and
+ *    nothing in styles.css contests `outline-*`. Prefixed: zero collisions.
+ *    Utilities are written `tw:flex`, `tw:hover:bg-accent` — v4 colon syntax,
+ *    not the v3 `tw-` dash. Theme variables stay unprefixed.
+ *
+ * 3. theme.css and utilities.css do NOT self-wrap — theme.css is a bare
+ *    `@theme default {…}` and utilities.css a bare `@tailwind utilities;`.
+ *    Drop the `layer(…)` and they land unlayered, tie with our rules on layer
+ *    priority and then lose on specificity. Same bug, different cause.
+ *
+ * 4. We import PREFLIGHT NOWHERE. `@import "tailwindcss"` would pull it in and
+ *    quietly reset everything styles.css is silent about — most of it inside
+ *    `.prose`, which renders the article author's own HTML, the one place we
+ *    cannot enumerate the tags. The one part of preflight we want,
+ *    `box-sizing: border-box`, styles.css already has.
+ *
+ * `styles.css` is imported here rather than from main.tsx so it lands inside
+ * `@layer app`. Importing the two files side by side from main.tsx does NOT
+ * work — styles.css stays unlayered, outranks every utility, and Tailwind
+ * silently does nothing. Its own nested @import of tokens.css inherits the
+ * layer, so tokens.css needs no change.
+ */
+@layer theme, base, app, utilities;
+
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
+
+/* Scan the client source, and ONLY the client source.
+
+   Tailwind v4 auto-detects sources from the project root, which swept in
+   docs/ — and since its scanner is a plain text scanner, the `tw:flex` and
+   `tw:rounded-md` written as EXAMPLES in docs/plans/shadcn-migration.md were
+   compiled into the production bundle. Seven utilities shipped, none of them
+   used by any component. It also makes verification lie: a utility appears in
+   the output because a doc mentioned it, so "the class is in the CSS" stops
+   being evidence that the component asking for it works.
+
+   `source(none)` turns automatic detection off; the @source below turns it
+   back on for exactly one directory. Widen this when client code moves — and
+   never to a directory containing prose. */
+@source "../../src/web";
+@import "./styles.css" layer(app);

@@ -1,5 +1,6 @@
 import { defineConfig, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { handleApi } from "./src/routes.js";
 import { loadEnvLocal } from "./src/env.js";
 
@@ -31,6 +32,10 @@ export default defineConfig(() => {
   return {
     plugins: [
       react(),
+      // Tailwind is just another plugin; the API middleware below is untouched.
+      // The entry stylesheet is src/web/tailwind.css — read its header before
+      // changing how the CSS is wired, the layering there is load-bearing.
+      tailwindcss(),
       {
         name: "spideryarn-api",
         // Block body, not an arrow-with-expression: configureServer treats a
