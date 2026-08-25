@@ -316,8 +316,15 @@ prefer long-lived, heavily-documented libraries, then write the decision down.
 Honest list, none of it blocking:
 
 1. **Stage 2 still uses the requested URL as Readability's base**, not `doc.url`. After a redirect
-   that resolves relative links against the wrong origin. One line, in someone else's stage —
-   [content-extraction.md](content-extraction.md).
+   that resolves every relative link and image against the wrong origin.
+
+   This page first called that a one-line fix in someone else's stage, and that was wrong. The
+   convenience wrapper `fetchHtml` returns a string, so the final URL is **thrown away between step
+   1 and step 2** and there is nowhere for stage 2 to read it from. Fixing it means deciding where
+   the resolved URL is written down — the queue calling `fetchDocument` and passing `doc.url` on to
+   `runExtract` is the obvious answer, and it touches two stages this one doesn't own
+   ([ingest-queue.md](ingest-queue.md), [content-extraction.md](content-extraction.md)). Worth doing
+   deliberately rather than quietly.
 2. **The queue writes `raw.html` as a UTF-8 string** rather than the bytes, and has no PDF path.
    Fine today, since nothing downstream reads a PDF; see [ingest-queue.md](ingest-queue.md).
 3. **PDFs are fetched and stored and nothing reads them.** Deliberate — Greg asked for the fetcher
