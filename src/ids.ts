@@ -33,11 +33,21 @@ export const ID_PATTERN = new RegExp(
  * set lookup, and a silent duplicate would corrupt every downstream artefact.
  */
 export function mintId(random: () => number = Math.random): string {
-  let out = LETTERS[Math.floor(random() * LETTERS.length)];
+  let out = pick(LETTERS, random);
   for (let i = 1; i < ID_BODY_LENGTH; i++) {
-    out += ALPHABET[Math.floor(random() * ALPHABET.length)];
+    out += pick(ALPHABET, random);
   }
   return ID_PREFIX + out;
+}
+
+/**
+ * One character from `chars`. `Math.min` because `random()` returning exactly 1
+ * is off the end of the string: `Math.random` never does, but a rigged
+ * generator in a test can, and the old `chars[i]` form turned that into the
+ * literal text "undefined" inside an id rather than an error.
+ */
+function pick(chars: string, random: () => number): string {
+  return chars.charAt(Math.min(Math.floor(random() * chars.length), chars.length - 1));
 }
 
 export function isSpideryarnId(value: string | null | undefined): boolean {

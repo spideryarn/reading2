@@ -86,9 +86,13 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
     const column: Cell[] = [];
     // A block whose branch is shallower than this column reuses its deepest
     // node; we mark that as a continuation so the text isn't repeated.
-    const nodeFor = (row: number) => {
+    const nodeFor = (row: number): { node: TreeNode | undefined; continuation: boolean } => {
+      // A row with no chain means the tree does not cover that block. The
+      // caller already skips a missing node (it draws nothing rather than
+      // guessing), and validate-tree.ts is what complains about it properly.
       const chain = chains[row];
-      const id = chain[Math.min(depth, chain.length - 1)];
+      if (!chain?.length) return { node: undefined, continuation: false };
+      const id = chain[Math.min(depth, chain.length - 1)]!;
       return { node: tree.nodes[id], continuation: depth > chain.length - 1 };
     };
 
@@ -167,12 +171,16 @@ export function buildArcColumn(
   let row = 0;
   parts.forEach((cell, i) => {
     const key = `${cell.node.range[0]}|${cell.node.range[1]}`;
+    // Read once and spread on the value, not on `has`: `text` must be absent
+    // when nothing matched, never present-and-undefined, because "absent" is
+    // what makes the cell draw empty rather than borrow its neighbour's.
+    const text = byRange.get(key);
     out.set(row, {
       node: cell.node,
       rowSpan: cell.rowSpan,
       index: i + 1,
       total: parts.length,
-      ...(byRange.has(key) ? { text: byRange.get(key) } : {}),
+      ...(text !== undefined && { text }),
     });
     row += cell.rowSpan;
   });

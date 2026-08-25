@@ -95,8 +95,8 @@ describe("buildTree", () => {
       }
       const parent = tree.nodes[node.parent];
       expect(parent).toBeDefined();
-      expect(parent.children).toContain(node.id);
-      expect(node.depth).toBe(parent.depth + 1);
+      expect(parent!.children).toContain(node.id);
+      expect(node.depth).toBe(parent!.depth + 1);
     }
   });
 
@@ -105,7 +105,7 @@ describe("buildTree", () => {
     for (const node of nodes.filter((n) => n.children.length > 0)) {
       let cursor = index.get(node.range[0])!;
       for (const childId of node.children) {
-        const child = tree.nodes[childId];
+        const child = tree.nodes[childId]!;
         expect(index.get(child.range[0])).toBe(cursor);
         cursor = index.get(child.range[1])! + 1;
       }
@@ -118,7 +118,7 @@ describe("buildTree", () => {
   });
 
   it("records the root and its slug so the artefact is self-describing", () => {
-    expect(tree.nodes[tree.rootId].parent).toBeNull();
+    expect(tree.nodes[tree.rootId]!.parent).toBeNull();
     expect(tree.slug).toBe("test");
   });
 

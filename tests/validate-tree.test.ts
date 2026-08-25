@@ -77,7 +77,7 @@ describe("validate-tree", () => {
 
   it("fails a range pointing at a block id that isn't in blocks.json", async () => {
     const dir = await brokenFixture((tree) => {
-      tree.nodes[tree.rootId].range[1] = "spya-zzzzzz";
+      tree.nodes[tree.rootId]!.range[1] = "spya-zzzzzz";
     });
     const { code, out } = await validate(dir);
     expect(code).toBe(1);

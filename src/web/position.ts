@@ -95,8 +95,10 @@ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
  */
 export function activeSectionIndex(tops: number[], line: number): number {
   let active = 0;
-  for (let i = 0; i < tops.length; i++) {
-    if (tops[i] > line) break;
+  // `.entries()` rather than an index loop: it hands out the value already
+  // typed, so there is no indexing to bounds-check.
+  for (const [i, top] of tops.entries()) {
+    if (top > line) break;
     active = i;
   }
   return active;

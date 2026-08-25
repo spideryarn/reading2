@@ -70,14 +70,17 @@ for (const node of Object.values(tree.nodes)) {
   const mySpan = span(node);
   if (!mySpan) continue;
 
-  if (node.parent !== null && !tree.nodes[node.parent])
-    fail(`${node.id}: parent "${node.parent}" is not in nodes`);
-  else if (node.parent) {
+  if (node.parent !== null) {
+    // Same shape as the child loop below: look the node up once, and let the
+    // "not in nodes" case be the thing that narrows the type.
     const parent = tree.nodes[node.parent];
-    if (!parent.children.includes(node.id))
-      fail(`${node.id}: parent ${parent.id} does not list it as a child`);
-    if (node.depth !== parent.depth + 1)
-      fail(`${node.id}: depth ${node.depth} but parent ${parent.id} is depth ${parent.depth}`);
+    if (!parent) fail(`${node.id}: parent "${node.parent}" is not in nodes`);
+    else {
+      if (!parent.children.includes(node.id))
+        fail(`${node.id}: parent ${parent.id} does not list it as a child`);
+      if (node.depth !== parent.depth + 1)
+        fail(`${node.id}: depth ${node.depth} but parent ${parent.id} is depth ${parent.depth}`);
+    }
   }
 
   if (node.children.length === 0) {
@@ -160,8 +163,9 @@ for (const node of Object.values(tree.nodes)) {
   }
 }
 
-for (let i = 0; i < blocks.length; i++)
-  if (!covered.has(i)) fail(`block ${blocks[i].id} (index ${i}) is not covered by any leaf`);
+blocks.forEach((block, i) => {
+  if (!covered.has(i)) fail(`block ${block.id} (index ${i}) is not covered by any leaf`);
+});
 
 const byDepth = new Map<number, number>();
 for (const n of Object.values(tree.nodes)) byDepth.set(n.depth, (byDepth.get(n.depth) ?? 0) + 1);

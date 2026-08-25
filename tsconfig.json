@@ -1,20 +1,17 @@
 {
+  /* The node side: pipeline stages, the API, and the config files that run in
+     the same process. Module resolution is nodenext because that is literally
+     how these files run — tsx and node ESM — so a missing `.js` on a relative
+     import is an error here rather than a crash the first time you run the
+     stage. The client (src/web) is bundled by vite and uses Bundler
+     resolution instead; see src/web/tsconfig.json. */
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "outDir": "dist"
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2022"],
+    "types": ["node"]
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "src/web",
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src", "scripts", "vite.config.ts", "vitest.config.ts"],
+  "exclude": ["src/web"]
 }

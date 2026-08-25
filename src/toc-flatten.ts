@@ -77,7 +77,10 @@ async function main(): Promise<void> {
   }
   const maxDepth = process.argv[3] ? Number(process.argv[3]) : undefined;
   const tree: Tree = JSON.parse(await readFile(treePath, "utf-8"));
-  const rows = flattenTree(tree, { maxDepth });
+  // Spread rather than `{ maxDepth }`: an explicit `maxDepth: undefined` is a
+  // different thing from an absent one, and flattenTree's default only applies
+  // to the absent case.
+  const rows = flattenTree(tree, { ...(maxDepth !== undefined && { maxDepth }) });
 
   for (const r of rows) {
     const marker = r.hasChildren ? "▸" : " ";

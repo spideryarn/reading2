@@ -157,7 +157,9 @@ export function buildArc(
   }
   const entries: ArcEntry[] = parts.map((p, i) => ({
     range: p.range,
-    text: sentences[i].trim(),
+    // In range because the lengths were checked equal immediately above; that
+    // check is the whole reason this function refuses to guess.
+    text: sentences[i]!.trim(),
   }));
   return { version: PROMPT_VERSION, generator: MODEL, slug, entries };
 }
@@ -215,7 +217,7 @@ async function main(): Promise<void> {
   console.log(`Elapsed:   ${((Date.now() - started) / 1000).toFixed(1)}s`);
   console.log(`Wrote:     ${path.resolve(outFile)}\n`);
   arc.entries.forEach((e, i) => {
-    console.log(`${String(i + 1).padStart(2)}. ${parts[i].title}\n    ${e.text}\n`);
+    console.log(`${String(i + 1).padStart(2)}. ${parts[i]?.title ?? ""}\n    ${e.text}\n`);
   });
 }
 

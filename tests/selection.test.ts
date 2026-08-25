@@ -95,7 +95,7 @@ describe("readSelection", () => {
         <tr data-block="spya-aaaaaa"><td class="text"><div class="prose"><p>first block here.</p></div></td></tr>
         <tr data-block="spya-bbbbbb"><td class="text"><div class="prose"><p>second block here.</p></div></td></tr>
       </tbody></table>`;
-    const [one, two] = [...document.querySelectorAll(".prose p")];
+    const [one, two] = [...document.querySelectorAll(".prose p")] as [Element, Element];
     const range = document.createRange();
     range.setStart(one.firstChild!, 6);
     range.setEnd(two.firstChild!, 6);

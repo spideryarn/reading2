@@ -27,7 +27,10 @@ export function loadEnvLocal(): void {
   for (const line of text.split("\n")) {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
     if (!match || line.trimStart().startsWith("#")) continue;
-    const value = match[2].trim().replace(/^(['"])(.*)\1$/, "$2");
-    if (process.env[match[1]] === undefined) process.env[match[1]] = value;
+    // Neither group is optional in the pattern, so the defaults never fire —
+    // they are here because a regex match types every group as possibly absent.
+    const [, name = "", raw = ""] = match;
+    const value = raw.trim().replace(/^(['"])(.*)\1$/, "$2");
+    if (process.env[name] === undefined) process.env[name] = value;
   }
 }

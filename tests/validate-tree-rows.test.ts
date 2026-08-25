@@ -71,7 +71,7 @@ describe("rows may only anchor to blocks worth reading", () => {
     const { code, out } = await withTree((tree) => {
       const leaf = leafFor(tree, "spya-d2h6jh");
       delete tree.nodes[leaf.id];
-      const parent = tree.nodes[leaf.parent!];
+      const parent = tree.nodes[leaf.parent!]!;
       parent.children = parent.children.filter((id) => id !== leaf.id);
     });
     expect(code).not.toBe(0);

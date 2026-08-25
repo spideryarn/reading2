@@ -152,7 +152,9 @@ export function buildTree(
       throw new Error(`Node "${mn.title}" has a range not in blocks.json: ${mn.range.join("…")}`);
     }
     for (let i = lo; i <= hi; i++) {
-      const block = blocks[i];
+      // In range: lo and hi both came out of `index`, which is built over
+      // `blocks`, and the undefined case threw two lines up.
+      const block = blocks[i]!;
       const leafId = nextId();
       const label = block.gistable ? navLabels[block.id] : undefined;
       nodes[leafId] = {

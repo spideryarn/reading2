@@ -23,7 +23,7 @@ const parts = partsOf(tree);
 
 /** An arc that matches this tree exactly, as `npm run arc` would produce. */
 const arc: Arc = buildArc(
-  parts.map((p, i) => `arc sentence ${i + 1}`),
+  parts.map((_, i) => `arc sentence ${i + 1}`),
   tree,
   "example",
 );
@@ -46,7 +46,7 @@ describe("buildArcColumn", () => {
   it("shares the parts' boundaries exactly", () => {
     const cells = buildArcColumn(geometry, arc)!;
     let row = 0;
-    for (const part of geometry.cells[1]) {
+    for (const part of geometry.cells[1]!) {
       expect(cells.get(row)?.rowSpan).toBe(part.rowSpan);
       expect(cells.get(row)?.node.id).toBe(part.node.id);
       row += part.rowSpan;
@@ -62,7 +62,7 @@ describe("buildArcColumn", () => {
   it("gives every part a cell even when the arc has no sentence for it", () => {
     const stale: Arc = { ...arc, entries: arc.entries.slice(0, 1) };
     const cells = buildArcColumn(geometry, stale)!;
-    expect(cells.size).toBe(geometry.cells[1].length);
+    expect(cells.size).toBe(geometry.cells[1]!.length);
     expect([...cells.values()].reduce((n, c) => n + c.rowSpan, 0)).toBe(blocks.length);
     expect(cells.get(0)?.text).toBeDefined();
     expect([...cells.values()].filter((c) => c.text === undefined).length).toBe(

@@ -38,7 +38,7 @@
  * named in the header strip at the top of the rail instead, where they are
  * legible however thin the band is.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import type { OutlineEntry } from "./tree.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 
@@ -48,7 +48,9 @@ interface Band {
   top: number;
   height: number;
   /** For an L2, the title of the L1 it belongs to. */
-  parentTitle?: string;
+  // `| undefined` explicitly: bandFor passes the argument through whether or
+  // not the caller supplied one, and a top-level band genuinely has no parent.
+  parentTitle?: string | undefined;
 }
 
 interface Metrics {

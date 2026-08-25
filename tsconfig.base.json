@@ -1,0 +1,40 @@
+{
+  /* Shared compiler options, and NOTHING else.
+     Deliberately no "include", "exclude" or "files": those are inherited through
+     `extends`, and a project that inherits a file list it did not write is how
+     `tsc -p src/web/tsconfig.json` came to check zero files and exit 0 for weeks
+     (commit fde38bb, and docs/reusable/silent-success.md). Every project below
+     states its own file list; this file never states one.
+
+     Which flags are on, and which we left off on purpose, is in
+     docs/project/typechecking.md. */
+  "compilerOptions": {
+    "target": "ES2022",
+    "strict": true,
+
+    /* Beyond `strict`. The first is the one that matters most here: indexing an
+       array or a Record now yields `T | undefined`, so every `blocks[i]` and
+       `nodes[id]` has to answer "what if it isn't there?". That is exactly the
+       class of mistake docs/project/block-ids.md warns about. */
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    /* `import type` must say so, and each file must be transpilable alone —
+       which is what tsx, vite and vitest all actually do to these files. */
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Nothing here is ever built by tsc: the client goes through vite, the
+       node-side scripts through tsx. tsc is a checker only. */
+    "noEmit": true
+  }
+}

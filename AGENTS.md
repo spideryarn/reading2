@@ -145,8 +145,10 @@ Not descriptions of code, which the code already provides.
   summaries, Readability edge cases, overlapping highlights, stable element ids — check
   [original-version.md](docs/project/original-version.md). It's a library to consult, not a backlog
   to import: that project is far larger in scope, and this one is staying tight.
-- **Run `npm test` and `npm run typecheck` before you commit.** Both are deterministic and take a
-  few seconds. `npm run lint` too, though its baseline is not clean yet — see
+- **Run `npm test` and `npm run typecheck` when you finish a change, not just before you commit.**
+  Both are deterministic and take a few seconds, and finding out at commit time that a change from
+  half an hour ago was wrong is the expensive way to find out. `npm run lint` too, on the files you
+  touched — its baseline is not clean yet, so read it as advice rather than a gate; see
   [linting.md](docs/project/linting.md). What the tests cover, and what they don't, is in
   [testing.md](docs/project/testing.md); why the typecheck needs a script of its own rather than a
   bare `tsc` is in [typechecking.md](docs/project/typechecking.md).

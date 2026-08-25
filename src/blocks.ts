@@ -186,7 +186,7 @@ export interface SplitResult {
  * id is consumed once, so a page with several identical short paragraphs can't
  * hand the same id to two blocks.
  */
-function matchKey(tag: string, text: string, html: string): string | null {
+function matchKey(text: string, html: string): string | null {
   const words = normalize(text);
   if (words) return `t:${words}`;
   // Images and rules carry no text, so match them on what they point at —
@@ -199,14 +199,14 @@ function matchKey(tag: string, text: string, html: string): string | null {
 function carryOverIds(previous: Block[] | undefined) {
   const byKey = new Map<string, string[]>();
   for (const b of previous ?? []) {
-    const key = matchKey(b.tag, b.text, b.html);
+    const key = matchKey(b.text, b.html);
     if (!key) continue;
     const bucket = byKey.get(key);
     if (bucket) bucket.push(b.id);
     else byKey.set(key, [b.id]);
   }
-  return (tag: string, text: string, html: string): string | undefined => {
-    const key = matchKey(tag, text, html);
+  return (text: string, html: string): string | undefined => {
+    const key = matchKey(text, html);
     return key ? byKey.get(key)?.shift() : undefined;
   };
 }
@@ -245,7 +245,7 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
       reused++;
       taken.add(id!);
     } else {
-      const recovered = recoverId(el.tagName.toLowerCase(), text, content.outerHTML);
+      const recovered = recoverId(text, content.outerHTML);
       if (recovered && !taken.has(recovered)) {
         id = recovered;
         carried++;

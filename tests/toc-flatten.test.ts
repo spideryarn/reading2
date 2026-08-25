@@ -52,7 +52,7 @@ describe("flattenTree", () => {
   });
 
   it("carries the extent, not just the start", () => {
-    const root = flattenTree(toyTree())[0];
+    const root = flattenTree(toyTree())[0]!;
     expect([root.startsAt, root.endsAt]).toEqual(["b0", "b3"]);
   });
 

@@ -67,7 +67,7 @@ describe("mintUniqueId", () => {
     // collides with what's already in the set.
     const values = [0, 0, 0, 0, 0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
     let i = 0;
-    const random = () => values[i++ % values.length];
+    const random = () => values[i++ % values.length]!;
 
     const taken = new Set<string>();
     const first = mintUniqueId(taken, random);

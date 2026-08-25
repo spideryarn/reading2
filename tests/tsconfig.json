@@ -1,0 +1,20 @@
+{
+  /* The tests, which reach into both of the other two projects — a test file
+     imports `../src/arc.js` and `../src/web/keynav.js` in the same breath — so
+     this project needs the node types and the DOM libs together. Bundler
+     resolution because vitest is what runs these.
+
+     Before this existed the tests were checked by nothing at all: `npm test`
+     runs them through vitest's transpile-only pipeline, which strips the types
+     without looking at them. */
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["."],
+  "exclude": []
+}
