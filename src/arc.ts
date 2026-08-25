@@ -30,9 +30,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { MODEL } from "./models.js";
+import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Arc, ArcEntry, Block, Tree, TreeNode } from "./types.js";
 
-const MODEL = "claude-opus-5";
 const PROMPT_VERSION = "arc/2";
 
 const SYSTEM = `You are writing the leftmost, coarsest column of a reading view for a long
@@ -174,6 +175,8 @@ function parseJson(raw: string): { arc: string[] } {
 export interface ArcRun {
   arc: Arc;
   outFile: string;
+  /** Which model wrote it. `MODEL` is private here, and the queue logs what an arc cost. */
+  model: string;
   parts: TreeNode[];
   blocks: number;
   inputTokens: number;
@@ -201,10 +204,19 @@ export async function generateArc(opts: {
   const parts = partsOf(tree);
   const started = Date.now();
 
+  /* One sentence per part, so the answer is small and stays small — a dozen
+     parts is a few hundred tokens. What is not small is the article this stage
+     reads to write them, and the model's reasoning over it comes out of the
+     same allowance as the answer. That is what the 16,000 typed here before
+     could not survive: not a long arc, a long article. See src/token-budget.ts,
+     and docs/postmortems/toc-max-tokens.md for the run that found it. */
+  const answerTokens = 300 + parts.length * 80;
+  const maxTokens = budgetFor("arc", answerTokens);
+
   const client = new Anthropic();
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 16000,
+    max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: "high" },
     system: SYSTEM,
@@ -229,7 +241,14 @@ export async function generateArc(opts: {
     throw new Error(`Model refused: ${JSON.stringify(message.stop_details)}`);
   }
   if (message.stop_reason === "max_tokens") {
-    throw new Error("Hit max_tokens — the JSON is truncated. Raise it and retry.");
+    throw new Error(
+      truncatedMessage("arc", maxTokens, answerTokens, {
+        outputTokens: message.usage.output_tokens,
+        answerChars: message.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .reduce((n, b) => n + b.text.length, 0),
+      }),
+    );
   }
 
   const raw = message.content
@@ -244,6 +263,7 @@ export async function generateArc(opts: {
   return {
     arc,
     outFile,
+    model: MODEL,
     parts,
     blocks: blocks.length,
     inputTokens: message.usage.input_tokens,

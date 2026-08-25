@@ -10,7 +10,7 @@
  * docs/project/testing.md.
  */
 import { describe, expect, it } from "vitest";
-import { buildTree, type ModelNode } from "../src/toc.js";
+import { buildTree, checkCoverage, type ModelNode } from "../src/toc.js";
 import type { Block } from "../src/types.js";
 
 function block(id: string, text: string, gistable = true): Block {
@@ -132,5 +132,70 @@ describe("buildTree", () => {
     const t = buildTree(ROOT, sneaky, BLOCKS, "test");
     const leaf = Object.values(t.nodes).find((n) => n.range[0] === "spya-cccccc");
     expect(leaf?.navLabel).toBeUndefined();
+  });
+});
+
+/**
+ * `stop_reason: "max_tokens"` catches a response the API cut off. It does not
+ * catch the other way stage 4 can come back incomplete: a model that senses it
+ * is running out of room, closes its JSON tidily, and simply writes fewer
+ * labels than there are paragraphs. That parses, and `buildTree` builds a
+ * perfectly valid tree from it — with a hundred paragraphs missing from the
+ * sidebar and nothing anywhere saying so.
+ *
+ * These are the tests for the guard between the loud failure this stage now has
+ * and the quiet one that would replace it. See
+ * docs/postmortems/toc-max-tokens.md.
+ */
+describe("checkCoverage", () => {
+  /** Twenty gistable blocks, tiled by one internal node. */
+  const twenty: Block[] = Array.from({ length: 20 }, (_, i) =>
+    block(`spya-${String(i).padStart(6, "0")}`, `Paragraph ${i}`),
+  );
+  const wholeThing: ModelNode = {
+    title: "Whole piece",
+    gist: "It argues something.",
+    range: ["spya-000000", "spya-000019"],
+  };
+  const labelsFor = (ids: string[]) =>
+    Object.fromEntries(ids.map((id) => [id, "A claim about this paragraph, at a workable length"]));
+  const check = (labels: Record<string, string>, blocks = twenty) =>
+    checkCoverage(labels, buildTree(wholeThing, labels, blocks, "test"), blocks);
+
+  it("passes a tree that labels every paragraph", () => {
+    expect(() => check(labelsFor(twenty.map((b) => b.id)))).not.toThrow();
+  });
+
+  it("allows the one skipped label the design deliberately permits", () => {
+    // An unlabelled gistable leaf is a warning in validate-tree.ts on purpose —
+    // the escape hatch for a trivial transition sentence. This must not become
+    // an error by accident.
+    expect(() => check(labelsFor(twenty.slice(1).map((b) => b.id)))).not.toThrow();
+  });
+
+  it("refuses a tree that quietly describes half the article", () => {
+    expect(() => check(labelsFor(twenty.slice(0, 10).map((b) => b.id)))).toThrow(/10 of 20/);
+  });
+
+  it("says nothing was written, because nothing was", () => {
+    // The check runs before the artefacts are written. A message that left that
+    // ambiguous would send someone hunting for a half-written tree.
+    expect(() => check(labelsFor(twenty.slice(0, 2).map((b) => b.id)))).toThrow(
+      /nothing has been written/,
+    );
+  });
+
+  it("counts only gistable blocks, so images don't fail an honest tree", () => {
+    // 10 of 20 blocks are media. Labelling the other 10 is full coverage.
+    const half: Block[] = twenty.map((b, i) => (i % 2 === 0 ? b : { ...b, gistable: false }));
+    const ids = half.filter((b) => b.gistable).map((b) => b.id);
+    expect(() => check(labelsFor(ids), half)).not.toThrow();
+  });
+
+  it("refuses a label for a block that is not in this article", () => {
+    // buildTree can't see this one: it walks the blocks and looks each label up,
+    // so an invented id is never asked for and leaves no trace in the tree.
+    const labels = { ...labelsFor(twenty.map((b) => b.id)), "spya-zzzzzz": "A label from nowhere" };
+    expect(() => check(labels)).toThrow(/not in this article/);
   });
 });
