@@ -32,6 +32,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
 | [tooltips.md](docs/project/tooltips.md) | the spine's hover tooltips: which library, why Floating UI over Radix and Tippy, and the four things that fail silently |
 | [keyboard.md](docs/project/keyboard.md) | ← / → step through the article, and the level they step by is whichever column the pointer is in |
+| [comments.md](docs/project/comments.md) | select a sentence and the model explains it: the dialog (not a column), when it searches the web, and why the anchor is the quote rather than an offset |
 | [url-state.md](docs/project/url-state.md) | every bit of view state lives in the URL: the parameters, which ones push history and which replace, and why position is a *section* |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
 | [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
@@ -109,6 +110,9 @@ Not descriptions of code, which the code already provides.
 
 ## Working agreements for agents
 
+- **Explain plainly.** Whenever you explain something, summarise, or ask a question — in chat, in a
+  doc, in a commit message — use plain words and short sentences. Say the thing itself, not a
+  gesture at it. No jargon where an ordinary word will do, no hedging padding.
 - Several agents work this repo in parallel. Stay inside your stage — see
   [architecture.md § Stage ownership](docs/project/architecture.md#stage-ownership) — and talk to
   other stages through the JSON artefacts on disk, not by reaching into their code.
