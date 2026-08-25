@@ -155,7 +155,18 @@ Not descriptions of code, which the code already provides.
   `data/<slug>/`; anything expensive is cached on a content hash.
 - Prefer boring: filesystem over database, one server process, TypeScript + ESM throughout, `tsx` to
   run. "It can be a simple one at first" — no framework churn while the ideas are still moving.
-  **One deliberate exception, 2026-08-25:** Tailwind v4 and shadcn components went in at Greg's
+  **Two deliberate exceptions, both 2026-08-25 and both Greg's call.**
+
+  *One — the database.* "Filesystem over database" is being reversed: storage moves to Supabase
+  Postgres, *"in readiness for deploying this properly to the web."* The principle didn't lose an
+  argument, it ran out of runway — a single writable disk is the thing serverless hosting does not
+  have, so the choice is a database or no deploy. Planned in
+  [postgres-migration.md](docs/plans/postgres-migration.md), **not yet built**; until it is, the
+  filesystem layout in [database.md](docs/project/database.md) is still what's true. Note that
+  "one server process" in this bullet goes with it, and that everything else here — TypeScript, ESM,
+  `tsx`, no framework churn — is untouched.
+
+  *Two — shadcn.* Tailwind v4 and shadcn components went in at Greg's
   request — *"Let's switch to using Shadcn."* That is framework churn, and it was weighed against
   this bullet rather than slipped past it: the plan
   ([shadcn-migration.md § Honest assessment](docs/plans/shadcn-migration.md#honest-assessment))

@@ -183,7 +183,7 @@ handful of articles a day, in exchange for nothing.
 | Rejected | Why |
 |---|---|
 | **BullMQ** | The best-known of these and its `updateProgress` + `QueueEvents` is exactly the progress mechanism we want — but it needs **Redis**, and [architecture.md](architecture.md) says filesystem, one process, no infrastructure. Worth a second look one day: BullMQ 6 added a Postgres backend, though its own docs still call Redis "the most battle-tested option". |
-| **pg-boss** | The runner-up, and the one to adopt **when Postgres lands** — Postgres-only, nothing else to run, with retries, backoff, dead-lettering, cron and `LISTEN/NOTIFY` included. It needs a database we don't have yet, and adopting one to get a queue would be the tail wagging the dog. |
+| **pg-boss** | The runner-up — Postgres-only, nothing else to run, with retries, backoff, dead-lettering and cron included. It needed a database we didn't have, and adopting one to get a queue would have been the tail wagging the dog. **Postgres has since landed as a plan**, and this was reconsidered rather than inherited: still no, but for a different reason, and it stays the first thing to re-evaluate — see [§ When this becomes Postgres](#when-this-becomes-postgres). |
 | **graphile-worker** | The same idea as pg-boss and a good library. pg-boss has 2.7× the downloads and 1.6× the stars, which under [our first criterion](../reusable/third-party-library-selection.md#selection-criteria) — pretraining data — is the whole difference. |
 | **bee-queue** | Redis again, with less momentum than BullMQ. No upside. |
 | **fastq** | Fine, and lower-level than we need. Its enormous download count is `glob` pulling it in transitively, not people choosing it. |
@@ -316,13 +316,34 @@ watching a two-minute step is actually asking is whether anything is still happe
 a scalar or a small blob a column could hold. The same discipline `LibraryEntry` follows
 ([library.md § When this becomes Postgres](library.md#when-this-becomes-postgres)).
 
+**Updated 2026-08-25.** The row that said "pg-boss" is
+[reversed by the Postgres plan](../plans/postgres-migration.md#the-queue), and the row that said
+`LISTEN/NOTIFY` was simply wrong. Both are corrected here rather than left to disagree.
+
 | Today | Then |
 |---|---|
-| `data/_jobs/<id>.json`, one file per job | a `jobs` table, `steps` as `jsonb` |
-| p-queue, in the server process | **pg-boss**, `SKIP LOCKED`, surviving the process |
-| restart sweep marks orphans `error` | pg-boss's own visibility timeout, and a real retry policy |
-| one process, so the in-memory map is authoritative | the table is authoritative; `LISTEN/NOTIFY` for wakeups |
+| `data/_jobs/<id>.json`, one file per job | a `jobs` table, `steps` as `jsonb`. **`id` stays `text`** — jobs are minted by the same `mintId()` as blocks, so they are `spya-` ids, not uuids |
+| p-queue, in the server process | our own `jobs` table plus a singleton `queue_state` row, claimed under a lease, surviving the process |
+| restart sweep marks orphans `error` | lease expiry, and a rescue sweep that reclaims what a dead worker held |
+| one process, so the in-memory map is authoritative | the table is authoritative, and every write is **fenced on `attempt_id`** |
 | polling `/api/jobs` | still polling — it is fine, and it is the part that does not need to change |
+
+Three things that changed since this table was first written:
+
+- **Not pg-boss after all.** The original reason to reject it (a second client and its own pool) has
+  gone away now that we connect to Postgres directly, so it was reopened honestly. It is still not
+  being adopted, for a weaker reason: our `jobs` table is unusually rich — per-step state, a
+  cancellation that must *not* release the global slot, de-duplication on forced steps — and would
+  have to exist beside pg-boss's own, leaving two sources of truth about the same work. **Revisit
+  when redelivery or backoff becomes a requirement rather than a nicety.**
+- **`SKIP LOCKED` does not give concurrency 1.** The obvious
+  `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 1` lets two workers claim two *different* jobs, which is
+  exactly the global concurrency-1 guarantee this document chose on purpose. Claiming must lock the
+  singleton `queue_state` row first.
+- **`LISTEN/NOTIFY` is not available.** It is session-scoped, and we reach Postgres through a
+  transaction-mode pooler, which hands out a connection per transaction. It would not error at
+  connect time — it would simply never deliver. **Keep polling**, which this document already says is
+  the right answer.
 
 The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`, `cancelJob`,
 `retryJob`, `forgetJob`. Nothing above those six knows there are files.
