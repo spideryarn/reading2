@@ -20,6 +20,7 @@ import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/pro
 import path from "node:path";
 import { mintId } from "./ids.js";
 import { isSlug } from "./ingest.js";
+import { errorFields, log, since } from "./log.js";
 import {
   assertProduced,
   contextPaths,
@@ -124,7 +125,14 @@ function persist(job: Job): Promise<void> {
   const next = (writes.get(job.id) ?? Promise.resolve())
     .then(() => (forgotten.has(job.id) ? undefined : writeOnce(job)))
     .catch((err: Error) => {
-      console.error(`Could not write the record for job ${job.id}: ${err.message}`);
+      /* `errorFields`, not `err.message`. This line used to be a `console.error`
+         that printed the message and threw the stack away — and the stack is the
+         only part that says *which* write failed, out of the several this file
+         queues. That loss is the whole reason the logger exists. */
+      log("jobs").error(
+        { ...errorFields(err), jobId: job.id, slug: job.slug },
+        `could not write the record for job ${job.id} — ${job.slug}`,
+      );
     });
   writes.set(job.id, next);
   // Drop the chain once it drains, so finished jobs do not sit in this map for
@@ -233,15 +241,36 @@ async function loadFromDisk(): Promise<void> {
     return; // nothing has ever been queued here
   }
 
+  /* Collected and reported once, rather than a line each.
+     `data/_jobs/` grows without limit until `prune` runs, so "one warn per
+     unreadable file" is bounded by nothing — and this runs on the first request
+     after a cold start, where Vercel allows 256 log lines for the whole
+     request. A hundred corrupt records would spend the entire budget saying the
+     same thing a hundred times, and bury the request that triggered it.
+     A count, plus enough names to go and look. Raised by GPT/Codex in review. */
+  const unreadable: string[] = [];
+
   for (const file of files) {
     let job: Job;
     try {
       job = JSON.parse(await readFile(path.join(JOBS_DIR, file), "utf8")) as Job;
     } catch {
-      continue; // an unreadable job record is not worth failing a page load over
+      unreadable.push(file);
+      continue;
     }
     if (sweepStopped(job)) await persist(job);
     jobs.set(job.id, job);
+  }
+
+  /* Still not worth failing a page load over — but not worth passing over in
+     silence either. A record that will not parse means a process died in the
+     middle of writing it, which is a thing that happened rather than a thing
+     that is missing, and the file names are the only clue left to it. */
+  if (unreadable.length > 0) {
+    log("jobs").warn(
+      { count: unreadable.length, files: unreadable.slice(0, 5), of: files.length },
+      `skipped ${unreadable.length} unreadable job record(s) of ${files.length}`,
+    );
   }
 }
 
@@ -266,6 +295,25 @@ function newStep(name: StepName, force: boolean): JobStep {
  * a tree for the previous version of the article, which looks entirely fine.
  */
 async function runJob(job: Job, controller: AbortController): Promise<void> {
+  /* A child logger, made here and used locally. Not a module-level "current
+     job" variable: Vercel's Fluid Compute runs several requests concurrently in
+     one instance, so a shared one would stamp lines with whichever article was
+     most recently started — intermittently, and only in production. Rule 4 at
+     the top of src/log.ts. */
+  const jlog = log("jobs").child({ jobId: job.id, slug: job.slug });
+  const jobStarted = Date.now();
+
+  /* One line per job however it ends, so an ingest can be found by its end as
+     well as its start. `warn` for a cancel, because the reader chose it and it
+     is neither a fault nor a clean finish. An `error` outcome stays at `info`
+     here on purpose — the step that failed has already logged the stack at
+     `error`, and repeating it would double every failure in an alert count. */
+  const finished = (status: Job["status"]) => {
+    const line = { ms: since(jobStarted), status };
+    if (status === "cancelled") jlog.warn(line, `job cancelled: ${job.slug}`);
+    else jlog.info(line, `job ${status}: ${job.slug}`);
+  };
+
   // Cancelled while it sat in the queue. `cancelJob` cannot mark it for us —
   // p-queue no longer removes it (see the note at `queue.add`) — so the check
   // belongs here, before anything is written.
@@ -274,6 +322,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
     job.finishedAt = new Date().toISOString();
     delete job.cancelling;
     await persist(job);
+    finished("cancelled");
     return;
   }
 
@@ -289,6 +338,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
       job.finishedAt = new Date().toISOString();
       delete job.cancelling;
       await persist(job);
+      finished("cancelled");
       return;
     }
 
@@ -308,13 +358,22 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
     if (!step.force && (await stepIsDone(STEPS[step.name], ctx))) {
       step.status = "skipped";
       step.detail = "already done";
+      // `debug`, not `info`. Most steps of most jobs skip — a re-run of one
+      // stage skips the four before it — so at `info` this would be the bulk of
+      // the log and the lines that matter would be sitting in it.
+      jlog.debug({ step: step.name }, `step skipped: ${step.name} — ${job.slug}`);
       await persist(job);
       continue;
     }
 
+    /* Timed here rather than read back off `startedAt`/`finishedAt`. Those are
+       ISO strings because they go to the browser, and a duration you have to
+       subtract two strings to get is a duration nobody charts. */
+    const stepStarted = Date.now();
     step.status = "running";
     step.startedAt = new Date().toISOString();
     delete step.error;
+    jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
     await persist(job);
 
     try {
@@ -326,12 +385,48 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
       if (controller.signal.aborted) throw new Error("Cancelled");
       step.status = "done";
       step.finishedAt = new Date().toISOString();
+      /* **`step.detail` is deliberately not logged**, though it is the obvious
+         thing to put here and the first version did.
+
+         `detail` is whatever a step chose to return, so what it holds is a
+         different kind of thing for each one — and for `extract` it is the
+         article's title, which is article content on a line that goes out at
+         production `info`. The generic field is the problem rather than the
+         title: a step added later can put anything in it, and nothing in this
+         file would notice.
+
+         Nothing diagnostic is lost. src/pipeline.ts logs each step's real
+         numbers — tokens, model, block counts — under the `pipeline`
+         component, where the fields are named and auditable. Found by
+         GPT/Codex reviewing this change. */
+      jlog.info({ step: step.name, ms: since(stepStarted) }, `step done: ${step.name} — ${job.slug}`);
       // The title only exists once extraction has run, and the moment it does
       // is the moment the progress card can stop calling the article by its slug.
       if (step.name === "extract") job.title = step.detail;
       await persist(job);
     } catch (err) {
       const message = (err as Error).message;
+      /* A cancel unwinds through here too — the `throw new Error("Cancelled")`
+         above, and any step that honours the signal by throwing. The reader
+         pressing Stop is not a fault of the step's, and giving it an `error`
+         line would make Stop the most common error in the log. The job's own
+         `warn` below is the record of it.
+
+         The message string says which step and which article and stops there:
+         an error's own text can carry the URL, or whatever a remote server put
+         in a body, and rule 3 in src/log.ts is that `redact` cannot reach
+         anything inside `msg`. The full error goes in the object, where it can. */
+      if (controller.signal.aborted) {
+        jlog.debug(
+          { step: step.name, ms: since(stepStarted) },
+          `step cancelled: ${step.name} — ${job.slug}`,
+        );
+      } else {
+        jlog.error(
+          { ...errorFields(err), step: step.name, ms: since(stepStarted) },
+          `step failed: ${step.name} — ${job.slug}`,
+        );
+      }
       step.status = "error";
       step.error = message;
       step.finishedAt = new Date().toISOString();
@@ -340,6 +435,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
       job.finishedAt = new Date().toISOString();
       delete job.cancelling;
       await persist(job);
+      finished(job.status);
       return;
     }
   }
@@ -348,6 +444,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
   job.finishedAt = new Date().toISOString();
   delete job.cancelling;
   await persist(job);
+  finished("done");
   await prune();
 }
 
@@ -436,6 +533,15 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   aborts.set(job.id, controller);
   await persist(job);
 
+  /* The step list and the forced list, because "why did this job cost two model
+     calls" and "why did it finish in a second" are both answered here and
+     nowhere else. Not the URL: `slug` already identifies the article, and the
+     log is a reading history either way — see the note on `url` in src/log.ts. */
+  log("jobs").info(
+    { jobId: job.id, slug, steps: names, forced: [...forced] },
+    `job queued: ${slug} — ${names.join(", ")}${forced.size ? ` (forced: ${[...forced].join(", ")})` : ""}`,
+  );
+
   /* **No `signal` on `queue.add`.**
    *
    * It looks like exactly the right option and it is a trap. p-queue races the
@@ -459,6 +565,15 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     .catch(async (err: Error) => {
       // `runJob` handles its own step failures, so anything reaching here is a
       // bug in it — and must be visible rather than swallowed.
+      //
+      // Visible to the *reader* was all this did: the card turned red and said
+      // the message. The stack — the only part that says where the bug is —
+      // went nowhere at all, and this is the one path where nobody can guess it
+      // from the step that failed, because no step failed.
+      log("jobs").error(
+        { ...errorFields(err), jobId: job.id, slug: job.slug },
+        `the job runner threw — ${job.slug}`,
+      );
       job.status = "error";
       job.error = err.message;
       job.finishedAt = new Date().toISOString();

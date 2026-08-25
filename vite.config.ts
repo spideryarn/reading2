@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { handleApi } from "./src/routes.js";
 import { loadEnvLocal } from "./src/env.js";
+import { errorFields, log } from "./src/log.js";
 
 /**
  * One process, one command (`npm run dev`). The API is mounted as dev middleware
@@ -19,6 +20,21 @@ const apiMiddleware: Connect.NextHandleFunction = (req, res, next) => {
     (err: Error) => {
       // handleApi answers its own expected failures; reaching here means a bug,
       // and a hung request would look exactly like a slow model call.
+      //
+      // It also means handleApi's own `finally` never ran, so this is the only
+      // line the request will ever get — hence the stack, and hence logging
+      // before answering rather than after: `res.end` is the last thing that
+      // can go wrong, and losing the reason to it would be the worst trade
+      // here.
+      // The path without its query string, the same as `handleApi` does and for
+      // the same reason: this writes it into the message as well as the object,
+      // and redaction matches key paths, never text. A `?token=…` here would be
+      // unredactable in both places. See docs/project/logging.md.
+      const path = (req.url ?? "").split("?")[0] ?? "";
+      log("http").error(
+        { ...errorFields(err), method: req.method, path, status: 500 },
+        `${req.method} ${path} 500`,
+      );
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
       res.end(JSON.stringify({ error: err.message }));

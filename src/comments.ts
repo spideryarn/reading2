@@ -18,6 +18,17 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Comment } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
+import { errorFields, log } from "./log.js";
+
+/**
+ * What may be logged from this file: ids, slugs, counts, statuses.
+ *
+ * **Never `quote`, never `answer`, never the block's text.** A comment is the
+ * reader's private note about what they were reading, and a log is the one place
+ * in this app where private text turns into a durable copy nobody chose to keep.
+ * `redact` in log.ts matches key names rather than values, so it cannot help
+ * here — the only thing that keeps prose out of the log is not putting it in.
+ */
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -55,6 +66,13 @@ export async function loadComments(slug: string): Promise<Comment[]> {
     return parsed.comments ?? [];
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    // **error, and the highest-stakes line in this file.** No file yet is
+    // normal; a file that exists and will not parse means the reader's
+    // questions and answers are unreadable, which is the worst data loss this
+    // app can currently cause. It wedges every comment for the article at once
+    // — see the note on `save` below for how one gets into that state. Without
+    // this the only symptom is a failed request.
+    log("store").error({ slug, ...errorFields(err) }, "comments file unreadable");
     throw err;
   }
 }
@@ -130,8 +148,10 @@ export async function createComment(
   now: () => string = () => new Date().toISOString(),
 ): Promise<Comment> {
   let stored!: Comment;
+  let reset = false;
   await update(slug, (comments) => {
     const existing = comments.find((c) => c.id === input.id);
+    reset = existing !== undefined;
     // Reset in place: the answer, citations, searches and error all go, because
     // they belong to the attempt being replaced. `createdAt` stays — the reader
     // asked the question once.
@@ -160,20 +180,61 @@ export async function createComment(
     };
     return [...comments, stored];
   });
+  // After the write, so the line means "this is on disk" rather than "this was
+  // attempted". `reset` is worth a field: a duplicate POST and a genuine retry
+  // look identical from here, and both land as a reset rather than a second
+  // row, so a run of them is the signal that something upstream is repeating
+  // itself. Ids only — the quote is the reader's, and it never goes to stdout.
+  log("store").info({ slug, id: stored.id, blockId: stored.blockId, reset }, "comment created");
   return stored;
 }
 
-/** Replace one comment's fields, leaving the rest of the file alone. */
-export function patchComment(
+/**
+ * Replace one comment's fields, leaving the rest of the file alone.
+ *
+ * `quiet` suppresses the failure line below, for a caller patching a *batch* of
+ * comments to `error` at once — the orphan sweep in src/routes.ts, which can
+ * touch every pending comment on an article in one request. One line each is
+ * bounded by nothing, and Vercel allows 256 for the whole request. The sweep
+ * says it once, with a count. Raised by GPT/Codex in review.
+ */
+export async function patchComment(
   slug: string,
   id: string,
   patch: Partial<Comment>,
+  opts: { quiet?: boolean } = {},
 ): Promise<Comment[]> {
-  return update(slug, (comments) =>
+  const next = await update(slug, (comments) =>
     comments.map((c) => (c.id === id ? { ...c, ...patch, id: c.id } : c)),
   );
+  /* A question that failed to get an answer. The reader sees this — the comment
+     shows as errored — so it is not silent to them; it is silent to whoever is
+     running the server.
+
+     **The stored `error` string is deliberately NOT logged**, and the reasoning
+     is worth keeping because the first version did log it and it looked
+     harmless. That string is whatever `explain` threw, and one of the things
+     `explain` throws is `OpenRouter ${status}: ${body.slice(0, 400)}` — four
+     hundred characters of a provider's response body. A provider that echoes
+     the request back in an error puts the reader's selected quote, and the
+     article prose around it, into that string. It would have arrived here as a
+     field called `reason` on a line that reads like a status code.
+
+     Nothing is lost by dropping it: src/explain.ts logs its own failure line
+     with the model, the HTTP status, the elapsed time and whether the deadline
+     fired, which is what actually tells a bad key from a slow model. Found by
+     GPT/Codex reviewing this change. */
+  if (patch.status === "error" && !opts.quiet) {
+    log("store").warn({ slug, id }, "comment answer failed");
+  }
+  return next;
 }
 
-export function deleteComment(slug: string, id: string): Promise<Comment[]> {
-  return update(slug, (comments) => comments.filter((c) => c.id !== id));
+export async function deleteComment(slug: string, id: string): Promise<Comment[]> {
+  const remaining = await update(slug, (comments) => comments.filter((c) => c.id !== id));
+  // Logged because it is destructive and there is no undo: the file is rewritten
+  // without that comment. `remaining` is the count, so a delete that removed
+  // nothing (a stale id from a second tab) can be told apart from one that did.
+  log("store").info({ slug, id, remaining: remaining.length }, "comment deleted");
+  return remaining;
 }
