@@ -27,6 +27,7 @@ import path from "node:path";
 import type { ChatMessage, ChatThread } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
+import { parseJsonFrom } from "./parse-json.js";
 
 /**
  * What may be logged from this file: ids, slugs, counts, statuses.
@@ -72,9 +73,15 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
 export async function loadThreads(slug: string): Promise<ChatThread[]> {
   assertSlug(slug);
   try {
-    const parsed = JSON.parse(await readFile(fileFor(slug), "utf8")) as {
-      threads?: ChatThread[];
-    };
+    /* `parseJsonFrom`, not `JSON.parse`: V8's own parse error quotes the first
+       characters of the malformed input back, and those characters are the
+       reader's conversation. The `error` line below keeps `message` and
+       `stack`, so it would have been written down twice. src/parse-json.ts, and
+       the same change in src/comments.ts and src/searches.ts. */
+    const parsed = parseJsonFrom<{ threads?: ChatThread[] }>(
+      await readFile(fileFor(slug), "utf8"),
+      `chat.json for ${slug}`,
+    );
     return parsed.threads ?? [];
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -323,4 +330,161 @@ export async function finishTurn(
     log("store").warn({ slug, threadId, messageId }, "chat answer failed");
   }
   return next;
+}
+
+/**
+ * A retry or an edit that the stored conversation will not accept.
+ *
+ * Its own class so the route can answer 409 rather than 500, because every one
+ * of these is a *stale client*, not a broken server: two tabs open on one
+ * thread, a Back button, a retry pressed on a turn that a moment ago was the
+ * last one. The right answer to all of them is "reload and look again", and a
+ * 500 would send whoever is running the server hunting for a bug that is not
+ * there.
+ */
+export class ChatConflict extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChatConflict";
+  }
+}
+
+/**
+ * Blank an answer so the model can have another go at the same question.
+ *
+ * **The row is reused, id and all**, rather than deleted and re-appended. That
+ * is the difference between a retry and a new turn, and it is what keeps
+ * everything pointing at the answer still pointing at it — the client's
+ * optimistic patches, `?thread=`, the `streaming` key the route builds from
+ * `slug/threadId/messageId`. A fresh id would have meant a second row appearing
+ * under the first, which is precisely the permanent-spinner bug `finishTurn`
+ * exists to avoid.
+ *
+ * **Only the last answer may be retried**, and that restriction is doing real
+ * work. Regenerating a turn in the middle leaves every later turn answering a
+ * question about words that no longer exist — the conversation reads as a
+ * non-sequitur and nothing says why. The products that allow it all pay for it
+ * with a message tree and a branch pager; docs/plans/chat-mode.md § What a
+ * retry may touch says why we are not buying that for a four-turn conversation
+ * in a 400px panel. Retry the last one, or edit the question.
+ */
+export async function retryTurn(
+  slug: string,
+  threadId: string,
+  messageId: string,
+  now: () => string = () => new Date().toISOString(),
+): Promise<{ thread: ChatThread; reply: ChatMessage; question: string }> {
+  let out!: { thread: ChatThread; reply: ChatMessage; question: string };
+  await update(slug, (threads) => {
+    const at = now();
+    const existing = threads.find((t) => t.id === threadId);
+    if (!existing) throw new ChatConflict("That conversation is not there any more.");
+    const last = existing.messages.at(-1);
+    if (!last || last.id !== messageId) {
+      throw new ChatConflict("Only the most recent answer can be retried.");
+    }
+    if (last.role !== "assistant") throw new ChatConflict("That is not an answer.");
+    const question = existing.messages.at(-2);
+    if (!question || question.role !== "user") {
+      throw new ChatConflict("That answer has no question above it.");
+    }
+    /* Rebuilt field by field rather than spread-and-overwrite. A spread would
+       carry `citations`, `searches`, `model`, `error` and `stopped` from the
+       attempt being replaced, and the ones the new answer does not set would
+       survive it — a retry that runs no web search would keep the old answer's
+       sources, sitting under text that never mentions them. */
+    const reply: ChatMessage = {
+      id: last.id,
+      role: "assistant",
+      text: "",
+      createdAt: at,
+      status: "pending",
+    };
+    const thread: ChatThread = {
+      ...existing,
+      updatedAt: at,
+      messages: [...existing.messages.slice(0, -1), reply],
+    };
+    out = { thread, reply, question: question.text };
+    return threads.map((t) => (t.id === thread.id ? thread : t));
+  });
+  log("store").info(
+    { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
+    "chat answer retried",
+  );
+  return out;
+}
+
+/**
+ * Rewrite one of the reader's questions and ask it again.
+ *
+ * Everything after the edited message is **discarded** — the answer it had, and
+ * every turn that followed. There is no branch kept behind a pager. Two
+ * reasons, and the second is the one that decided it:
+ *
+ *  - a hidden branch is the single most complained-about thing in the products
+ *    that have one, because a conversation that is still there but not on
+ *    screen is indistinguishable from one that was deleted;
+ *  - and this panel is four hundred pixels wide beside an article the reader is
+ *    supposed to be reading. A branch pager is a second navigation problem in a
+ *    column that already has one.
+ *
+ * So the panel warns before it discards — it says how many turns will go — and
+ * that warning is the whole safety mechanism. It is deliberately not a modal:
+ * see docs/plans/chat-mode.md § Editing a question.
+ *
+ * The old text is not kept either. `editedAt` records only *that* it happened,
+ * which is what stops a reader reading an answer that no longer matches the
+ * question above it and thinking the model wandered.
+ */
+export async function editTurn(
+  slug: string,
+  threadId: string,
+  messageId: string,
+  question: string,
+  now: () => string = () => new Date().toISOString(),
+): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage; discarded: number }> {
+  let out!: { thread: ChatThread; user: ChatMessage; reply: ChatMessage; discarded: number };
+  await update(slug, (threads) => {
+    const at = now();
+    const existing = threads.find((t) => t.id === threadId);
+    if (!existing) throw new ChatConflict("That conversation is not there any more.");
+    const index = existing.messages.findIndex((m) => m.id === messageId);
+    if (index < 0) throw new ChatConflict("That message is not in this conversation.");
+    const target = existing.messages[index];
+    if (target?.role !== "user") throw new ChatConflict("Only your own questions can be edited.");
+    const user: ChatMessage = { ...target, text: question, editedAt: at };
+    const reply: ChatMessage = {
+      // Minted against the ids that SURVIVE the edit, not against the ones
+      // being discarded — an id freed by the truncation is free.
+      id: mintUniqueId(taken(threads.map((t) => (t.id === threadId ? { ...t, messages: existing.messages.slice(0, index) } : t)))),
+      role: "assistant",
+      text: "",
+      createdAt: at,
+      status: "pending",
+    };
+    const thread: ChatThread = {
+      ...existing,
+      // The first question names the thread, so rewriting the first question
+      // renames it. Rewriting a later one does not — same rule as `beginTurn`.
+      title: index === 0 ? titleFrom(question) : existing.title,
+      updatedAt: at,
+      messages: [...existing.messages.slice(0, index), user, reply],
+    };
+    out = { thread, user, reply, discarded: existing.messages.length - index - 1 };
+    return threads.map((t) => (t.id === thread.id ? thread : t));
+  });
+  log("store").info(
+    {
+      slug,
+      threadId: out.thread.id,
+      messageId: out.reply.id,
+      // The number is the point of the line: an edit is the only thing in this
+      // file that destroys stored turns, and this is how many it took.
+      discarded: out.discarded,
+      turns: out.thread.messages.length,
+    },
+    "chat question edited",
+  );
+  return out;
 }

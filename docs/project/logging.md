@@ -194,7 +194,16 @@ Two things about it are worth knowing, both found while wiring it up:
 
 ## What never gets logged
 
-The redact list is in [`src/log.ts`](../../src/log.ts). Beyond it, three standing rules:
+The redact list is in [`src/log-redaction.ts`](../../src/log-redaction.ts) — its own module rather
+than a constant inside [`src/log.ts`](../../src/log.ts), so that `tests/log.test.ts` can *import* it
+instead of parsing it out of the source with a regex. **Adding or removing a path is a two-line
+change**, one in that module and one in `REQUIRED_PATHS` at the top of the test, which keeps a
+hand-written copy of the list and compares the two. That duplication is deliberate: a test whose
+coverage is derived entirely from the configuration proves every configured path works, and can never
+prove the right paths are configured — delete one and the derived checks quietly stop asking about
+it. See [§ Proving redaction, not assuming it](#proving-redaction-not-assuming-it).
+
+Beyond the list, three standing rules:
 
 - **No article prose, ever.** Not the text, not a comment's `quote`, not the model's `answer`. The
   reader's selected sentence is the most private thing this app holds. Ids, slugs, counts, statuses
@@ -284,12 +293,140 @@ the log are in different files. `src/toc.ts` validated a node's range and threw
 ``Node "${mn.title}" has a range not in blocks.json`` — a label the model wrote *about the article*,
 put into an error message. Nothing logs it there. But a pipeline step that throws is logged by
 [`src/jobs.ts`](../../src/jobs.ts) with `errorFields`, which keeps `message` **and** `stack`, so the
-title would have landed in the log twice, from a file that never calls the logger at all. It now
-throws the block-id range instead, which is the more useful half anyway.
+title would have landed in the log twice, from a file that never calls the logger at all.
+
+**The first fix dropped the title, kept the range, and was half a fix with a confident comment on
+it.** The comment said the range was "the pair of block ids you would go and look up" — a property
+the code had never checked. `mn` is `JSON.parse` of the model's response with a TypeScript cast in
+front of it, and **the cast proves nothing at runtime**: a model that writes
+`"range": ["Feeling is metabolic, not computational", "spya-k3m9qt"]` misses the lookup, which is
+precisely the branch that throws, and the sentence goes into the message. One piece of model output
+had been swapped for another. That is lesson 2 above happening again, to the person who had just
+written it down. Found by a second GPT/Codex review, 2026-08-26.
+
+The rule the code keeps now is narrower and checkable: **name a value only once it has passed
+validation, and describe the shape of anything that hasn't.** A string that passes
+[`isSpideryarnId`](../../src/ids.ts) is `spya-` plus six characters from a fixed 32-character
+alphabet ([block-ids.md](block-ids.md#the-format)) and cannot spell a word of anybody's article, so
+quoting it is safe. Anything else is reported as `not a block id (a 71-character string, withheld)`,
+alongside the node's position in the model's own tree — `root > child 2` — which is derived from the
+shape of the answer rather than from anything in it, and is what you would go and look at anyway.
+`checkCoverage` had the same hole in its invented-label check and is closed the same way: the count
+is always exact, the well-formed ids are named, the rest are withheld. Both are held by tests in
+[`tests/toc-build.test.ts`](../../tests/toc-build.test.ts) that feed a phrase of article prose where
+a block id belongs and assert it never reaches the thrown message.
 
 So the rule has a second half: **an error is a value that travels, and where it is thrown is not
 where it is written down.** Anything interpolated into a message that can reach a catch-all has been
 logged, whatever the file it was thrown from thought it was doing.
+
+### Proving redaction, not assuming it
+
+[`tests/log.test.ts`](../../tests/log.test.ts) reads the bytes on file descriptor 1 and asserts the
+secret **is not in them** — a stronger claim than "the line says `[redacted]`", which a key that
+vanished entirely would also satisfy. That much has been true since the tests were written.
+
+What was not true was the coverage. The first version derived *both* its list of paths to try *and*
+the fixture carrying the sentinels from the logger's own `REDACT`. That proves every configured path
+works and says nothing about whether the right paths are configured. GPT/Codex found the mutation
+that shows it: delete `req.headers.authorization` from the list, and no sentinel is generated for it,
+the shape checks still see plenty of plausible paths and still see `apiKey`, the hand-picked fixture
+never mentioned it — **the whole suite passes while that header leaks.** Confirmed by running it,
+2026-08-26: twenty-two green with the value going to stdout in full.
+
+So the test now keeps `REQUIRED_PATHS`, a hand-written copy of the list, and compares the two as sets
+in both directions. A second copy of a constant is normally a smell; here it is the point, because a
+list derived from the thing it is checking cannot disagree with it, and disagreeing with the code
+when the code is wrong is the test's entire job. **Do not tidy it into an import.** Both directions
+are checked because a subset check would let the copy decay into a stale prefix that protects the
+first seventeen paths and nothing added since — so adding a path goes red too, until it is signed for
+in both files.
+
+The sentinel fixture is built from the **union** of the two lists, so a deleted path shows up twice:
+once as a list mismatch, and once as its value appearing in the emitted line. The second is the one
+that matters, because it is the leak itself rather than a statement about configuration.
+
+The same shape of hole was in the exit test. The SIGKILL scenario — the only one that can tell a
+synchronous destination from an asynchronous one — used to switch off the check on how the child
+died, so deleting its `process.kill` line would have left a child that exits cleanly, flushes on the
+way out, and passes: the test silently becoming a duplicate of the one above it, which stays green
+with `sync: true` removed. It now asserts the child really was killed. That is fussier than
+`child.signal === "SIGKILL"`, because `node_modules/.bin/tsx` is a wrapper that spawns the real Node
+underneath and reports its death as **exit status 137** rather than as a signal; the naive assertion
+was written first and went red on a child that had died exactly as intended.
+
+The honest limit on that test: five short lines over a local pipe is not proof of Vercel's freeze
+behaviour, and it is not proof about volume. An asynchronous destination that happened to dispatch
+five small writes immediately would pass it while still losing larger writes or writes behind
+back-pressure. What it pins is the regression that is easy to cause — somebody deleting `sync: true`
+because pino flushes on exit anyway — not the whole property.
+
+### `JSON.parse` quotes the file back at you
+
+The rule above — don't interpolate untrusted content into an error you throw — has a shape nobody
+here wrote and everybody here used. **V8's own `JSON.parse` error message contains the input:**
+
+```
+JSON.parse("I'm sorry, I can't summarise that article")
+→ SyntaxError: Unexpected token 'I', "I'm sorry"... is not valid JSON
+```
+
+Found by a GPT/Codex review, 2026-08-26, and it is the same trap as `FetchFailure`'s `url` one level
+further down: nobody wrote the leak, the platform did, and the code that reaches the log looks
+completely ordinary. Two details, both measured on node v26.7.0 rather than remembered:
+
+- **Up to twenty characters the input is quoted in full**, with no ellipsis. Past that it is the
+  first ten plus `...`. So "about ten characters" understates it — a short corrupt file, or a short
+  model refusal, is echoed whole.
+- **It only fires when the content is malformed from the start.** The other shape,
+  `Expected ':' after property name in JSON at position 14`, is purely positional and gives nothing
+  away. Malformed-from-the-start is exactly what a truncated write looks like, and exactly what a
+  model that answered in prose looks like — so the two commonest real failures are the two that leak.
+
+Everything this app parses is the article's prose, the reader's own writing, or a model's answer
+about one of those. And a `SyntaxError` that reaches a `catch` is written down **twice**, because
+`safeError` keeps `message` and `stack` and the message is embedded in the stack.
+
+The fix is one module, [`src/parse-json.ts`](../../src/parse-json.ts), used by every parse whose
+error can reach a log line. It throws a `MalformedJson` naming the artefact, keeps the byte offset
+(positional, useful, safe), and says which *shape* of failure it was — ran out part-way, never began
+as JSON at all, or broke at an offset — without a character of the content.
+
+Three things about it are load-bearing:
+
+- **`cause` is deliberately not set.** `safeError` follows `cause` chains on purpose, so wrapping the
+  `SyntaxError` — the reflex fix, and the one a reviewer asks for — puts the quotation straight back
+  in under a different key. `tests/parse-json.test.ts` asserts on the absent `cause`.
+- **Truncation is detected from the offset, not from V8's wording.** There are at least three
+  wordings for "the input ran out" and only one of them says so; matching that English is a list that
+  goes stale in a Node upgrade with nothing going red. Breaking at or past the last character is
+  arithmetic, and it means the same thing whatever it was called.
+- **The stage files are the half that is easy to miss.** `src/toc.ts`, `src/arc.ts`,
+  `src/glossary.ts`, `src/tweets.ts` and `src/summarise.ts` never call the logger — but a step that
+  throws is logged by [`src/jobs.ts`](../../src/jobs.ts) with `errorFields`. Same lesson as the
+  `mn.title` throw above: an error is a value that travels, and where it is thrown is not where it is
+  written down. Both their model-response parses *and* their `blocks.json`/`tree.json` reads go
+  through the helper — and `blocks.json` **is** the article.
+
+**A developer debugging a bad model response loses those characters, and that was checked rather than
+waved through.** The stages write `tree.json`, `arc.json` and the rest *after* parsing succeeds, so a
+response that fails to parse is not on disk anywhere — those quoted characters really were the only
+copy. The trade is still right: they are the *first* ten, and after a code fence is stripped the
+first ten characters of a model's JSON are `{"summaries` on every run, successful or not. What
+distinguishes the failures is their shape, and the shape is what the helper reports. There is
+deliberately **no environment variable** that turns the quoting back on — that is the mechanism
+[§ No transports](#1-no-transports-pretty-printing-is-a-shell-pipe) rejected for pino-pretty, living
+in the program and one wrong variable from production. If a raw response ever genuinely needs
+keeping, write it beside the artefact on purpose.
+
+**Where it was left alone, and why.** A dozen other `JSON.parse` calls discard the error entirely —
+`catch { return null }` in the stage files' `readJson`, `catch { previous = undefined }` in
+[`src/blocks.ts`](../../src/blocks.ts), the per-record `catch` in `loadFromDisk`, the per-chunk one in
+[`src/converse.ts`](../../src/converse.ts), and `readBody` in [`src/routes.ts`](../../src/routes.ts),
+which throws a fixed 400 string. None of them can reach a log line, so none of them changed.
+[`src/search.ts`](../../src/search.ts) already had it right before any of this, throwing
+`"The model's list of passages was not valid JSON."` — a fixed string, no content, three named
+outcomes. It is the pattern the rest now follow.
 
 ### What a URL gives away
 
@@ -350,6 +487,31 @@ queue, [`listArticles`](../../src/api.ts) walking the shelf) now collect into an
 line carrying `{ count, first five names, of }`. The count is what tells you the scale, the names are
 what make it actionable, and the cap is what stops a long line being the one that gets truncated by
 whatever is collecting it. The loop that finds the problem is not the right place to report it.
+
+**It came back a third time, in a helper rather than in a loop.** `readJson` in
+[`src/api.ts`](../../src/api.ts) warned once per unreadable file, which is exactly right for the
+seven callers that read a single article — and `describeDir` calls it three times per directory
+inside the shelf walk. Measured on 300 corrupt directories: **300 warnings on one homepage load**,
+past the 256-line ceiling, so the tail of that request's logs was dropped. A helper that logs is
+convenient until it is called in a loop, and the loop is always somewhere else. `readJson` now takes
+an `unreadable` array; passing one moves the *saying* to the caller, never removes it.
+
+Two things that only showed up once it was reproduced, both worth more than the fix:
+
+- **The existing aggregate line was unreachable on the path that needed it.** `Promise.all` rejects
+  on the first corrupt directory while the other 299 are still running and still logging, so the
+  code emitted 300 warnings and never reached the summary. `Promise.allSettled` is what makes a
+  bounded line possible at all; the first rejection is rethrown afterwards, so the shelf still fails
+  exactly as it did.
+- **A capped list of names has to be ordered, or it is not a name.** The five reported were whichever
+  concurrent reads happened to fail first, so the same broken shelf accused different directories on
+  different loads. Verdicts now come back through `allSettled` in *input* order; the `unreadable`
+  names arrive through a throw and so are sorted before being cut. Pinned by
+  `tests/library-log-volume.test.ts`, which runs two real loads and compares — a single call cannot
+  disagree with itself.
+
+Whether one corrupt file *should* blank the whole shelf rather than dropping one card is a separate
+question, deliberately left alone: only the logging changed.
 
 ### Two traps worth knowing before they bite
 
@@ -561,6 +723,14 @@ actually hold.
    wrong. Pinned by `tests/jobs.test.ts`, and the invariant is now stated at `logRequest` itself,
    which is the place someone editing a `throw` two hundred lines away will never look — so treat
    the test as the real guard.
+
+9. **An error message written by the platform rather than by us.** Every rule above is about what
+   *we* interpolate into a message — and `JSON.parse` puts the malformed input into its own
+   `SyntaxError` with nobody's help. So the review question that catches the other eight ("does this
+   code put anything private in the message?") answers *no* here, and is wrong, because the code does
+   not build the message. Closed by [`src/parse-json.ts`](../../src/parse-json.ts) and pinned by
+   `tests/parse-json.test.ts`, which asserts sentinels are absent from the emitted bytes at six real
+   call sites. See [§ `JSON.parse` quotes the file back at you](#jsonparse-quotes-the-file-back-at-you).
 
 ### Two we know about and have not changed
 

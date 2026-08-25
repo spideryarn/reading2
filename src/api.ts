@@ -62,17 +62,40 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * the malformed input back — and the input here is the article. See
  * src/parse-json.ts. `ENOENT` still arrives from `readFile` with its `code`
  * intact, so the "absent means null" contract above is unchanged.
+ *
+ * ## `unreadable`, and why the caller decides
+ *
+ * Pass an array and the file's name is pushed onto it **instead of** being
+ * logged here; the throw is unchanged either way. That is not a switch for
+ * turning the warning off — every caller that passes one is required to report
+ * what it collected — it is a switch for *who says it*.
+ *
+ * It exists because one line per unreadable file is exactly right for the seven
+ * callers below that read one article (four files at worst, and the line names
+ * the file that broke the request), and exactly wrong for `listArticles`, which
+ * calls this three times per directory inside a `Promise.all`. A shelf of 300
+ * corrupt articles emitted 300 warnings on a single homepage load — past
+ * Vercel's 256-line-per-request ceiling, so the *tail of that request's logs was
+ * dropped*, including whatever else it wanted to say. Measured, not estimated;
+ * docs/project/logging.md § Vercel has the rule, and
+ * tests/library-log-volume.test.ts is the guard.
+ *
+ * A helper that logs is convenient until it is called in a loop, and the loop is
+ * always somewhere else.
  */
-async function readJson<T>(file: string): Promise<T | null> {
+async function readJson<T>(file: string, unreadable?: string[]): Promise<T | null> {
   const relative = path.relative(ROOT, file);
   try {
     return parseJsonFrom<T>(await readFile(file, "utf8"), relative);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    log("store").warn(
-      { file: relative, ...errorFields(err) },
-      "artefact exists but could not be read or parsed",
-    );
+    if (unreadable) unreadable.push(relative);
+    else {
+      log("store").warn(
+        { file: relative, ...errorFields(err) },
+        "artefact exists but could not be read or parsed",
+      );
+    }
     throw err;
   }
 }
@@ -529,22 +552,37 @@ export function describeArticle(input: {
   };
 }
 
+/** One directory's verdict: an article for the shelf, or the reason it isn't. */
+type DirVerdict = { entry: LibraryEntry } | { skipped: string };
+
 /**
- * Read one directory into an entry, or null if it isn't a complete article.
+ * Read one directory into an entry, or say why it isn't a complete article.
  *
- * Skipped directories are pushed onto `skipped` rather than logged here. One
- * line per skip would be one line per *directory* per homepage load, and this
- * runs over the whole shelf — so the cost of the log grows with the library
- * while the information in it doesn't. The caller says it once instead.
+ * Nothing here logs. One line per skip would be one line per *directory* per
+ * homepage load, and this runs over the whole shelf — so the cost of the log
+ * grows with the library while the information in it doesn't. The caller says
+ * it once instead.
+ *
+ * The verdict is **returned** rather than pushed onto an array the caller
+ * passes in, and that is the difference between a deterministic line and a line
+ * that changes on every load. These run concurrently, so a shared array ends up
+ * in completion order — and the caller reports only the first five names, which
+ * meant the same broken shelf accused different directories each time. A name
+ * you cannot search for twice is barely a name. Returned verdicts come back in
+ * *input* order from `Promise.allSettled`, so the five are always the same five.
+ *
+ * `unreadable` is the one thing still collected out-of-band, because a corrupt
+ * artefact leaves through a `throw` and a throw has no return value to carry it.
+ * See `readJson`.
  */
 async function describeDir(
   dir: string,
   slug: string,
   fixture: boolean,
-  skipped: string[],
-): Promise<LibraryEntry | null> {
-  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
-  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  unreadable: string[],
+): Promise<DirVerdict> {
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"), unreadable);
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"), unreadable);
   // A half-built directory — extracted but not yet given a tree — is skipped
   // rather than listed as an article that fails to open.
   //
@@ -552,11 +590,10 @@ async function describeDir(
   // leaves a directory the shelf simply never mentions, so the article looks
   // like it was never added.
   if (!blocksFile || !tree) {
-    skipped.push(slug);
-    return null;
+    return { skipped: slug };
   }
 
-  const meta = await readJson<Meta>(path.join(dir, "meta.json"));
+  const meta = await readJson<Meta>(path.join(dir, "meta.json"), unreadable);
 
   // `loadComments`, not a read of `dir/comments.json`. Two reasons, and the
   // first one bit: the file is `{ comments: [...] }` and not a bare array, so
@@ -578,15 +615,17 @@ async function describeDir(
   const addedAt =
     meta?.fetchedAt ?? (await stat(path.join(dir, "blocks.json"))).mtime.toISOString();
 
-  return describeArticle({
-    slug,
-    meta: { ...(meta ?? { slug }), title, slug },
-    blocks: blocksFile.blocks,
-    tree,
-    comments: (await loadComments(slug)).length,
-    addedAt,
-    fixture,
-  });
+  return {
+    entry: describeArticle({
+      slug,
+      meta: { ...(meta ?? { slug }), title, slug },
+      blocks: blocksFile.blocks,
+      tree,
+      comments: (await loadComments(slug)).length,
+      addedAt,
+      fixture,
+    }),
+  };
 }
 
 /**
@@ -616,12 +655,51 @@ export async function listArticles(): Promise<LibraryEntry[]> {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
 
-  // Collected across the whole walk and said once below, not once per directory.
-  const skipped: string[] = [];
-  const found = await Promise.all([
-    ...dirs.map((slug) => describeDir(path.join(ROOT, "data", slug), slug, false, skipped)),
-    describeDir(path.join(ROOT, "example"), FIXTURE_SLUG, true, skipped),
+  /* Collected across the whole walk and said once below, not once per
+     directory. Both of these are the same rule from docs/project/logging.md §
+     Vercel: if the number of lines a piece of code emits grows with the data,
+     the caller says it once instead. The loop that finds the problem is not the
+     right place to report it.
+
+     `allSettled`, not `all`, and that is the whole reason the second line below
+     can exist. Every one of these can throw — a corrupt artefact leaves through
+     `readJson` — and `Promise.all` rejects on the first one while the other 299
+     are still running and still logging. So the aggregate line was unreachable
+     on exactly the path that needed it most: the old code emitted 300 warnings
+     and never got as far as summarising anything. */
+  const unreadable: string[] = [];
+  const settled = await Promise.allSettled([
+    ...dirs.map((slug) => describeDir(path.join(ROOT, "data", slug), slug, false, unreadable)),
+    describeDir(path.join(ROOT, "example"), FIXTURE_SLUG, true, unreadable),
   ]);
+
+  /* warn, and one line however broken the shelf is. A corrupt artefact is a
+     real problem and naming it is the only thing that makes it findable, so
+     this is aggregated rather than dropped.
+
+     Sorted before it is cut to five, because these names are collected as the
+     concurrent reads fail rather than in the order they were started — so
+     without this the same broken shelf accuses different directories on
+     different loads, and a name that moves is one you cannot search for twice.
+     The verdicts below get their order for free from `allSettled`; this one
+     cannot, because it arrives through a throw. */
+  if (unreadable.length > 0) {
+    const names = [...unreadable].sort();
+    log("store").warn(
+      { count: names.length, files: names.slice(0, 5), of: dirs.length + 1 },
+      `${names.length} artefacts could not be read or parsed`,
+    );
+  }
+
+  const found: LibraryEntry[] = [];
+  const skipped: string[] = [];
+  for (const result of settled) {
+    // Rejections are already accounted for in `unreadable` above. Nothing is
+    // swallowed: the first one is rethrown below, once the log has been written.
+    if (result.status !== "fulfilled") continue;
+    if ("entry" in result.value) found.push(result.value.entry);
+    else skipped.push(result.value.skipped);
+  }
 
   // debug rather than warn: a run in progress hits this legitimately on every
   // homepage load until its toc lands, so at warn the shelf would cry wolf
@@ -638,8 +716,14 @@ export async function listArticles(): Promise<LibraryEntry[]> {
     );
   }
 
+  /* Behaviour preserved exactly: a corrupt artefact still fails the whole
+     request, as it did under `Promise.all`. Only the logging changed. Whether
+     one bad file *should* blank the shelf rather than dropping one card is a
+     real question and a separate decision — see docs/project/library.md. */
+  const failed = settled.find((r) => r.status === "rejected");
+  if (failed?.status === "rejected") throw failed.reason;
+
   return found
-    .filter((e): e is LibraryEntry => e !== null)
     // Real articles above the fixture, then newest first. Sorting ISO strings
     // works because they are ISO — no Date objects needed.
     .sort((a, b) => {

@@ -19,6 +19,7 @@ import path from "node:path";
 import type { Comment } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
+import { parseJsonFrom } from "./parse-json.js";
 
 /**
  * What may be logged from this file: ids, slugs, counts, statuses.
@@ -62,7 +63,14 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
 export async function loadComments(slug: string): Promise<Comment[]> {
   assertSlug(slug);
   try {
-    const parsed = JSON.parse(await readFile(fileFor(slug), "utf8")) as { comments?: Comment[] };
+    /* `parseJsonFrom`, not `JSON.parse`: V8's own parse error quotes the first
+       characters of the malformed input back, and those characters are the
+       reader's own questions. The `error` line below keeps `message` and
+       `stack`, so it would have been written down twice. src/parse-json.ts. */
+    const parsed = parseJsonFrom<{ comments?: Comment[] }>(
+      await readFile(fileFor(slug), "utf8"),
+      `comments.json for ${slug}`,
+    );
     return parsed.comments ?? [];
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
