@@ -151,6 +151,9 @@ h1 {
   font-size: 1.45rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  /* Article titles are long and this one wraps often; balancing evens the
+     lines rather than leaving one word stranded on the second. */
+  text-wrap: balance;
 }
 
 /* Title and the disclosure control on one line, the control pushed to the far
@@ -550,10 +553,38 @@ td.gist .title::before {
    reads ~7% faster but comprehends ~12% worse. The measure is applied to
    .prose rather than by using .reading-column, because that class centres
    itself and here the text is left-aligned in a table cell.  */
+/* Vertical rhythm. Every gap in this column is a multiple of --rhythm (17px x
+   1.4 = 23.8px, styles/tokens.css), so paragraph spacing and heading spacing
+   are related by arithmetic rather than by two people's taste on two days.
+
+   Half a unit top and bottom, so the gap BETWEEN two paragraphs — which is two
+   halves, one from each row — is exactly one unit. Padding rather than margin
+   because these are table cells and margins on a <td> do nothing. */
 td.text {
-  padding: 0.7rem 1.4rem 0.7rem 5.2rem;
+  padding: calc(var(--rhythm) / 2) 1.4rem calc(var(--rhythm) / 2) 5.2rem;
   position: relative;
 }
+
+/* A HEADING BELONGS TO WHAT FOLLOWS IT, so the space above it must exceed the
+   space below. The original app had this right — `mt-6 mb-4` against a
+   paragraph's `mb-4` (simple-document-viewer.tsx) — and we had lost it: every
+   block is a table row here, every row had the same padding, and a heading
+   therefore floated exactly halfway between the section it ended and the
+   section it introduced, attached to neither.
+
+   Above: 1 unit + the previous row's half = 1.5 units (35.7px).
+   Below: 0.25 units + the next row's half = 0.75 units (17.9px).
+
+   The class comes off `block.kind`, which the splitter has always set
+   (src/blocks.ts § classify) and which nothing was reading. */
+td.text.kind-heading {
+  padding-top: var(--rhythm);
+  padding-bottom: calc(var(--rhythm) / 4);
+}
+
+/* The first row has nothing above it to be separated from, so the extra unit
+   would just be a gap under the table head. */
+tbody tr:first-child td.text.kind-heading { padding-top: calc(var(--rhythm) / 2); }
 
 tr.row-active td.text { background: var(--panel); }
 
@@ -611,21 +642,41 @@ tr.row-active .block-ref { opacity: 0.95; }
   padding: 0 0.1em;
 }
 
+/* The four reading properties are set on the CONTAINER, not on `p`. They used
+   to be on `.prose p`, which meant a list item, a definition list or a table
+   cell in the article silently rendered at the body default of 1rem/1.55
+   instead of 17px/1.6 — a different size and a different leading for the same
+   prose, depending only on which tag the author reached for. */
 .prose {
   max-width: clamp(45ch, 90vw, var(--reading-measure));
   font-family: var(--font-reading);
-}
-.prose > * { margin: 0; }
-.prose p {
   font-size: var(--reading-size);
   line-height: var(--reading-line-height);
+  font-weight: var(--reading-weight);
 }
-.prose h1 { font-size: 1.5rem; }
-.prose h2 { font-size: 1.15rem; letter-spacing: 0.01em; }
-.prose h3 { font-size: 1rem; }
-.prose h1, .prose h2, .prose h3 {
-  font-family: var(--font-ui);
-  font-weight: 650;
+.prose > * { margin: 0; }
+
+/* Headings are the SAME FACE as the body, with hierarchy carried by size and
+   weight alone. That is the original app's ladder (h1 bold, h2/h3 semibold,
+   h4 medium) and it is why these no longer say --font-ui: a sans heading in
+   the prose column read as our chrome rather than as the author's own
+   structure, and now that the whole column is one face there is no reason to
+   name a different token. See styles/tokens.css § type.
+
+   `text-wrap: balance` was on the original app's wishlist and was never cheap
+   enough to do; it is now. It evens the line lengths of a heading that wraps,
+   which in a 65ch column happens constantly. It applies only up to a handful
+   of lines by spec, so it is safe to set on all six. */
+.prose h1 { font-size: 1.5rem; font-weight: 700; }
+.prose h2 { font-size: 1.25rem; font-weight: 600; }
+.prose h3 { font-size: 1.0625rem; font-weight: 600; }
+.prose h4 { font-size: 1rem; font-weight: 550; }
+.prose h5, .prose h6 { font-size: 0.9375rem; font-weight: 550; }
+.prose h1, .prose h2, .prose h3,
+.prose h4, .prose h5, .prose h6 {
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
 }
 .prose a {
   color: var(--highlight-ink);
@@ -642,14 +693,80 @@ tr.row-active .block-ref { opacity: 0.95; }
    (docs/project/security.md). Every embed the allowlist admits is 16/9 today. */
 .prose iframe { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; }
 .prose figure { margin: 0; }
-.prose figcaption { font-size: 0.85rem; color: var(--ink-faint); }
+/* A caption is set SHORTER than the body — 48ch against 65 — so it reads as
+   belonging to the figure rather than as more prose that happens to sit under
+   it. Their per-genre research put figure captions at 45-50ch, and it is the
+   cheapest of the three things in that section worth taking. */
+.prose figcaption {
+  max-width: 48ch;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+
+/* A quotation is a different voice, so it is set differently rather than just
+   indented: narrower (58ch), a little tighter, and italic. Their research says
+   1.3 for the leading; that number was written for Georgia and is too tight for
+   a sans on a dark ground, where the lines close up visually as well as
+   metrically. 1.45 is the same intent at the right value for this face.
+
+   The italic is real, not synthesised — see the wght-italic.css import in
+   tailwind.css. Without it the browser slants the upright, which on a variable
+   face is visibly wrong. */
 .prose blockquote {
   margin: 0;
+  max-width: 58ch;
   padding-left: 1rem;
   border-left: 2px solid var(--highlight);
   font-style: italic;
+  line-height: 1.45;
   color: var(--ink-soft);
 }
+
+/* ---- content that cannot reflow -------------------------------------
+   A code block or a data table in the article is as wide as its widest line,
+   and neither will wrap. Until now nothing stopped either: the cell grew, the
+   table grew, and the whole PAGE scrolled sideways — which in this view also
+   drags the spine, the masthead and every sticky bar off to the left, because
+   they are pinned to the horizontal scroll (see .masthead above). One wide
+   code sample in one paragraph broke the layout of the entire article.
+
+   The rule we already hold elsewhere: wide content scrolls inside its own box,
+   never the page.
+
+   `display: block` on the <table> is the load-bearing half and it is not a
+   typo — `overflow` does nothing on `display: table`, which sizes itself to its
+   content and ignores `max-width` besides. The cost is that the table no longer
+   fills the column when it is narrow enough to; that is the accepted price, and
+   the alternative — wrapping every table in a scroll container — would have to
+   happen in the annotation stage, which is not this stage's code to touch. */
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.prose th, .prose td {
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--rule);
+  text-align: left;
+}
+.prose code { font-family: var(--font-mono); font-size: 0.9em; }
+/* Inside a <pre> the size is already reduced once by the rule above; without
+   this the nested <code> reduces it again to 0.77em. */
+.prose pre code { font-size: inherit; }
+/* Long URLs and unbroken identifiers are the one thing that can still push the
+   column wider than its measure, and unlike a table they have nowhere to
+   scroll. Break them mid-word rather than let one link widen the article. */
+.prose a { overflow-wrap: break-word; }
 
 /* Media, captions and rules — present, but never competing with the argument. */
 td.text.opaque { background: var(--muted); }
@@ -1336,10 +1453,18 @@ mark.cmt[data-mark-end]::after {
   color: var(--depth-0);
 }
 .ctx-item.tier-cur .ctx-title.ctx-step {
-  font-size: 0.88rem;
+  /* The cell's 0.68rem, not a bigger "current" size: the arc's marker is
+     deliberately the smallest thing in the column, and the sentence under it
+     is the part worth reading. Making it larger than the sentence turned the
+     position into the headline. */
   line-height: 1;
   margin-bottom: 0.45rem;
 }
+/* `/ 9` recedes, as it does in the cell: the pair is one position, not two
+   numbers. Kept as two numbers all the way from context.ts so this is a span
+   and not a slice of a formatted string. */
+.ctx-item .ctx-step .of,
+.tip-title .of { color: var(--ink-faint); font-weight: 400; opacity: 0.8; }
 /* The arc's sentence stays smaller and lighter than a gist, as it was in the
    cell: the arc shares the parts' boundaries exactly, so it has to read as a
    different KIND of thing rather than as a second opinion about the same one
@@ -1438,6 +1563,15 @@ mark.cmt[data-mark-end]::after {
 .ctx-panel {
   position: fixed;
   scroll-behavior: smooth;
+  /* The browser must not touch this scroll position. Scroll anchoring exists
+     to keep visible content still when content ABOVE it changes size — and
+     content above it changes size here on every section boundary, because the
+     outgoing current entry drops its gist and collapses to a title. So the
+     browser would helpfully undo most of the centring this file's layout
+     effect had just done, and the current item would sit tens of pixels above
+     the focus line, further out the deeper the column. Measured in a browser
+     at up to 75px off; the code and the stylesheet both looked right. */
+  overflow-anchor: none;
   /* `top` is set inline from the header row's measured bottom edge — see
      ColumnRect.top in useColumnContext.ts for why it cannot be a constant. */
   bottom: 0;
@@ -1445,18 +1579,23 @@ mark.cmt[data-mark-end]::after {
   padding: 0 0.5rem 0 0.25rem;
   background: var(--panel);
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
+  /* The fade's height comes from ContextPanel.tsx, which also clamps the
+     current item against it — one number, one place. */
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--ctx-fade, 40px)), transparent);
 }
 .ctx-panel.pinned { z-index: 26; }
 /* The lead and the tail are what let the FIRST and LAST items reach the focus
-   line. `scrollTop` cannot go below zero or past the end, so without room
-   either side a short level would sit jammed at the top of its panel while the
-   longer level beside it held its current item at 40% — and the two columns
-   would stop lining up, which is the one thing this view is for. The transform
-   this replaced could slide past both ends freely; padding is the price of
-   scrolling for real. 40vh clears the focus line, 60vh clears what is below
-   it. */
-.ctx-panel-list { padding: calc(0.85rem + 40vh) 0 60vh; }
+   line — the transform this replaced could slide past both ends freely, and
+   padding is the price of scrolling for real. Both come from ContextPanel.tsx,
+   because both are the focus line's position restated: write them here as
+   `40vh` and `60vh` and they are right only while the line is at 0.4. The
+   fallbacks never apply — the panel renders nothing without a rect, and always
+   sets all three properties when it does — and are here only so this rule
+   still means something if it is ever read on its own. */
+.ctx-panel-list { padding: calc(0.85rem + var(--ctx-lead, 40vh)) 0 var(--ctx-tail, 60vh); }
+/* Nothing to centre, so no room needed above it: the list starts at the top of
+   the panel. See `hasCurrent` in ContextPanel.tsx. */
+.ctx-panel.no-current .ctx-panel-list { padding-top: 0.85rem; }
 .ctx-panel.depth-0 { --tint: var(--depth-0); }
 .ctx-panel.depth-1 { --tint: var(--depth-1); --ctx-parent-tint: var(--depth-0); }
 .ctx-panel.depth-2 { --tint: var(--depth-2); --ctx-parent-tint: var(--depth-1); }
@@ -1488,6 +1627,13 @@ mark.cmt[data-mark-end]::after {
   color: var(--ink-soft);
 }
 .tip-entry .own { color: var(--ink-faint); font-weight: 400; }
+/* An arc card's title is a position, not a name — set like the marker in the
+   column it came from rather than like every other card's title. */
+.tip-entry .tip-title.tip-step {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--depth-0);
+}
 
 /* ------------------------------------------------------------------ dock --
    The bottom bar and the drawer that rises out of it — Dock.tsx, and
@@ -1794,4 +1940,151 @@ mark.cmt[data-mark-end]::after {
   border-top: 1px solid var(--rule);
   color: var(--ink-faint);
   font-style: italic;
+}
+
+/* ---------------------------------------------------------------- /design --
+   The design reference page. See DesignPage.tsx for what it is for.
+
+   These rules are the page's own furniture ONLY — the layout of the swatch
+   grid, the spacing between sections. Nothing here may restate a colour, a
+   face or a size that the rest of this file already owns: the page's job is to
+   show what those rules produce, and a stylesheet that gave it its own copy
+   would keep it looking correct after the real one broke. Everything on
+   display comes through var(--…) or through the component itself. */
+.design {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 6rem;
+  font-family: var(--font-ui);
+  color: var(--ink);
+}
+.design-head { margin-bottom: 2.5rem; }
+.design-head h1 { margin-bottom: 0.4rem; }
+.design-head p { margin: 0; font-size: 0.9rem; color: var(--ink-faint); }
+
+.design section {
+  margin-top: 2.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+/* `:not(.prose *)` is load-bearing, and its absence was a small instance of
+   exactly what this page exists to catch. `.design h2` and `.prose h2` have the
+   SAME specificity (0,1,1), so source order decides — and these rules are at
+   the foot of the file, so the page's own section-heading style was winning
+   inside the type sample. The sample was therefore showing this page's chrome
+   rather than the `.prose` rule it claims to demonstrate, at a different size
+   and a different letter-spacing, and it looked entirely plausible.
+
+   A design reference that quietly restyles the thing it is displaying is worse
+   than no design reference. Everything inside `.prose` here is off-limits to
+   this section of the stylesheet. */
+.design :is(h2, h3):not(.prose *) {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.design h3:not(.prose *) {
+  margin: 1.4rem 0 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 550;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+.design-note {
+  margin: 0 0 0.9rem;
+  max-width: 62ch;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+.design-token {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+}
+
+/* A panel, so anything shown on --panel is shown on --panel here too. Several
+   tokens (--highlight-wash especially) are opaque BLENDS with the surface
+   behind them and look like a different colour on the page than in a panel. */
+.design-panel {
+  padding: 1.1rem 1.3rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.design-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+
+.design-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.9rem;
+}
+.design-swatch { display: flex; flex-direction: column; gap: 0.15rem; }
+.design-swatch .design-note { margin: 0; }
+/* The chequerboard shows through anything not fully opaque, which is the only
+   way to see at a glance that a token you assumed was solid is not. */
+.design-chip {
+  height: 3rem;
+  margin-bottom: 0.3rem;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) - 4px);
+  background-image:
+    linear-gradient(45deg, var(--rule-strong) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--rule-strong) 25%, transparent 25%);
+  background-size: 10px 10px;
+}
+
+.design-table { border-collapse: collapse; width: 100%; }
+/* `border-right: 0` is not redundant. The bare `td` rule far above gives EVERY
+   cell in the app a right border in --rule-strong, for the zoom table's column
+   grid; it reaches here, and reaches into an article's own <table> inside
+   .prose as well (which is why .prose th/td restate `border` in full rather
+   than only the parts they want). */
+.design-table td {
+  padding: 0.55rem 0.9rem 0.55rem 0;
+  border-right: 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+.design-table td:first-child { width: 10rem; }
+
+.design-icons { gap: 1.4rem; }
+.design-icon-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+}
+.design-icon-cell em { font-style: normal; }
+
+/* The one place in the app outside the article where --rhythm is legitimate:
+   this section exists to display it. */
+.design-rhythm > * { margin: 0; }
+.design-rhythm p {
+  font-family: var(--font-reading);
+  font-size: var(--reading-size);
+  line-height: var(--reading-line-height);
+  padding-block: calc(var(--rhythm) / 2);
+}
+/* Beats `.design h3:not(.prose *)` (0,2,1) by adding the section class, so this
+   demonstration heading is set as article prose rather than as page chrome. */
+.design-panel.design-rhythm h3 {
+  margin: 0;
+  font-family: var(--font-reading);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  padding-top: var(--rhythm);
+  padding-bottom: calc(var(--rhythm) / 4);
 }

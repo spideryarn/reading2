@@ -342,7 +342,7 @@ Add to `src/web/tailwind.css`:
   --color-ring: var(--ring);
   --color-highlight: var(--spideryarn-orange); /* the ORANGE — see Trap A */
   --font-sans: var(--font-ui);
-  --font-serif: var(--font-reading);
+  --font-prose: var(--font-reading);   /* was --font-serif until the reading face went sans */
   --font-mono: var(--font-mono);
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);

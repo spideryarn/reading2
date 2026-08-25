@@ -71,17 +71,74 @@ polar interpolation drags a mix round to 11.7° and the result is quietly pink i
 
 ## Typography
 
-Four stacks, all in [`tokens.css`](../../styles/tokens.css), and the split is deliberate:
+**One sans for everything the reader looks at** — the article and the chrome alike. Geist,
+self-hosted from `@fontsource-variable/geist`, imported at the top of
+[`tailwind.css`](../../src/web/tailwind.css) with the system stack behind it.
 
 | Token | Used for |
 |---|---|
-| `--font-reading` | Georgia — the article itself, and the reader's own words in a comment |
-| `--font-ui` | system-ui — chrome: controls, masthead facts, column headers |
-| `--font-mono` | block ids, counts, anything that wants to line up |
-| `--font-brand` | the wordmark, and only the wordmark |
+| `--font-sans` | Geist — the family itself. Nothing should name this directly; use one of the two below |
+| `--font-reading` | the article, and the reader's own words in a comment |
+| `--font-ui` | chrome: controls, masthead facts, column headers |
+| `--font-mono` | Geist Mono — counts, and anything that wants to line up |
+| `--font-id` | Courier — block ids, and only block ids (Greg's ask) |
+| `--font-brand` | Trebuchet MS — the wordmark, and only the wordmark |
 
-The reading measure and the size numbers came from the original app's research doc, not from
-taste — [original-version/overview.md](original-version/overview.md) says what was carried over.
+`--font-reading` and `--font-ui` both resolve to `--font-sans` today. They stay separate names
+anyway: the article and the chrome being one face is a *decision*, and undoing it should be one
+line rather than a search-and-replace.
+
+**Georgia was here until 2026-08-25, and it should not have been.** The story is worth knowing
+because it is a documentation failure rather than a design one. Our own notes on the previous app
+([original-version/typography.md](original-version/typography.md)) reported a research doc
+recommending Georgia at 17px on an x-height argument, and that recommendation was carried into
+`tokens.css` as though it were what the previous app had shipped. Checking the actual repo shows it
+never shipped: `app/globals.css` sets `body { font-family: Arial, Helvetica, sans-serif }`, Geist
+Sans sits behind Tailwind's `--font-sans`, and Georgia appears nowhere in it. Its reading surface
+was sans, headings and body in the same face. Greg, 2026-08-25, asked to *"follow how we were doing
+fonts in the previous version"* — so we now follow what they did rather than what they wrote down.
+
+The cost is stated in [`tokens.css`](../../styles/tokens.css) and repeated here because it is the
+thing most likely to want revisiting: **the article column no longer looks different from our own
+chrome.** A gist in the column beside a paragraph is now the same face as the paragraph.
+
+Two numbers from that research doc *are* worth keeping, because they are independently attested:
+
+- **65ch**, the reading measure — which the previous app really did ship, as `max-w-[65ch]`.
+- **Space above a heading exceeds space below it** — `mt-6` against `mb-4` in their document
+  viewer. We had lost this; every block here is a table row and every row had the same padding, so
+  a heading sat exactly halfway between the section it ended and the one it introduced. It is back,
+  as `td.text.kind-heading` in [`styles.css`](../../src/web/styles.css).
+
+### Weight, and the variable axis
+
+`--reading-weight` is **450, not 400**. Light text on a dark ground optically thins; the previous
+app's own wishlist named the fix — *"add ~50 to the weight axis in dark mode"* — and could not use
+it, having no variable face. Geist's axis runs 100–900, so we can. Drop it to 400 the day a light
+theme appears.
+
+### Vertical rhythm
+
+`--rhythm` is `17px × 1.4 ≈ 23.8px`, and every vertical gap **in the article column** is a multiple
+of it: half a unit above and below each block (so one unit between paragraphs), one unit above a
+heading, a quarter below. Theirs, and it is arithmetic rather than evidence — but good arithmetic,
+and the thing that makes a page look considered rather than assembled.
+
+**Scoped to the reading column on purpose.** The chrome keeps its per-rule `rem` values; sweeping
+1,800 lines onto a scale is a different job, and Greg scoped this one to the article. Do not reach
+for `--rhythm` outside `.prose` / `td.text` — the one exception is the section of `/design` that
+exists to display it.
+
+### Content that cannot reflow
+
+A code block or a data table in an article is as wide as its widest line and neither will wrap.
+`.prose pre` and `.prose table` now scroll inside their own box. Until 2026-08-25 nothing stopped
+either, and the consequence was worse here than in most layouts: the *page* scrolls horizontally in
+this view by design, and the masthead, the spine and every sticky bar are pinned to that scroll —
+so one wide code sample in one paragraph dragged the whole article's furniture off to the left.
+
+`display: block` on the `<table>` is load-bearing and is not a typo: `overflow` does nothing on
+`display: table`.
 
 ## What is not written down yet
 
@@ -95,7 +152,13 @@ eventually have to decide whether they are a system or an accident:
 - **Breakpoints.** Exactly one, `max-width: 760px`, plus the collapse widths the spine and the
   columns compute in JS rather than in CSS ([`layout.ts`](../../src/web/layout.ts)). The
   interesting responsive behaviour is not in the stylesheet at all.
-- **Motion.** Two `prefers-reduced-motion` blocks, written independently. Durations are per-rule.
+- **Motion.** Settled, mostly. One global guard in `@layer base` at the foot of
+  [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; four
+  narrower blocks in `styles.css` remain, for the things that are *wrong* when reduced rather than
+  merely fast (a tooltip's transform, the context panel's scroll-behaviour). Written globally
+  before most of the motion it guards exists — which is the lesson from the previous app, where
+  the guard covered two class names while fifteen keyframe animations ran regardless. Individual
+  durations are still per-rule.
 - **What "done" looks like.** Whether this project wants a design system, or whether ~1200 lines
   of well-commented CSS *is* the answer at this size, is genuinely undecided.
 
@@ -106,6 +169,12 @@ eventually have to decide whether they are a system or an accident:
 - [tooltips.md](tooltips.md) — the one component whose appearance is entirely ours
 - [original-version/overview.md](original-version/overview.md) — where the palette and the typography came from
 - [browser-testing.md](browser-testing.md) — **do not judge colour from a screenshot**
+- **`/design`** — not a doc but the live counterpart to this one:
+  [`DesignPage.tsx`](../../src/web/DesignPage.tsx) renders every token, face, weight, button
+  variant, toggle state and icon size on one page against the real ground, with contrast ratios
+  computed in the browser from *resolved* values. Look at it after changing anything in
+  `tokens.css`. It catches what tests cannot: a token change where every component still renders,
+  nothing throws, and one variant nobody looked at is now unreadable
 - [../plans/shadcn-migration.md](../plans/shadcn-migration.md) — how the Tailwind half got here
 - [../reusable/css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md) —
   `position: sticky` declared correctly and doing nothing

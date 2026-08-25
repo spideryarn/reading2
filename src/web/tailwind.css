@@ -37,6 +37,26 @@
  */
 @layer theme, base, app, utilities;
 
+/* The reading face, self-hosted. Three files, not one: Fontsource splits its
+   @font-face rules by `unicode-range`, so a latin-only page downloads only the
+   latin subset (~20KB each) and the cyrillic and vietnamese ones never load.
+   `wght.css` and `wght-italic.css` are the two halves of the SAME family name —
+   drop the italic import and `font-style: italic` silently falls back to the
+   browser synthesising a slant, which on a variable face looks like a bug.
+
+   These are @font-face rules, which do not cascade, so the layer they land in
+   is irrelevant — but they are imported HERE rather than from main.tsx because
+   main.tsx importing a second stylesheet is exactly the mistake this file's
+   note 4 exists to prevent, and the next person will not check whether this
+   particular one was safe.
+
+   Family names are 'Geist Variable' and 'Geist Mono Variable' — Fontsource's
+   naming, not Vercel's. Writing `font-family: Geist` matches nothing and falls
+   through to the system stack, which looks close enough to pass a screenshot. */
+@import "@fontsource-variable/geist/wght.css";
+@import "@fontsource-variable/geist/wght-italic.css";
+@import "@fontsource-variable/geist-mono/wght.css";
+
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
 
@@ -77,6 +97,34 @@
    prefers-color-scheme. */
 @custom-variant dark (&);
 @import "./styles.css" layer(app);
+
+/* The motion guard, written once and globally, BEFORE most of the motion it
+   guards exists. The original app learned this the expensive way: it had a
+   `prefers-reduced-motion` block covering exactly two class names while fifteen
+   bespoke keyframe animations ran regardless, so the guard was present,
+   documented, and missed most of the motion in the app
+   (docs/project/original-version/design-system.md § Accessibility and motion).
+
+   It matters more here than it did there. Their motion was hover flourish on a
+   logo, which a reader can decline by not hovering. Ours is the zoom transition
+   between granularity levels — motion the reader experiences constantly and
+   cannot avoid (docs/project/granularity-zoom.md § Interaction).
+
+   In `base`, so any rule in `app` or `utilities` still wins on layer order
+   alone; the `!important` is what carries it past them. The four narrower
+   blocks in styles.css stay: this one flattens durations, and they turn off
+   things that are wrong when reduced rather than merely fast — a tooltip's
+   transform, the scroll-behaviour on the context panel. */
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
 
 /* ------------------------------------------------------------ the bridge --
    Tailwind's colour/font/radius names, pointed at the tokens in
@@ -131,8 +179,22 @@
   --color-highlight-ink: var(--highlight-ink);
 
   --font-sans: var(--font-ui);
-  --font-serif: var(--font-reading);
   --font-mono: var(--font-mono);
+  /* NOT `--font-serif`, which is what this was until the reading face became
+     Geist (styles/tokens.css § type). The utility still worked afterwards —
+     --font-serif pointed at --font-reading, so `tw:font-serif` rendered the
+     right sans — but a class named `serif` producing a sans is the kind of lie
+     that survives for years because nothing ever breaks. `tw:font-prose` says
+     what it means: the face the article is set in, whatever that face is. */
+  --font-prose: var(--font-reading);
+  /* TRANSITIONAL, delete me. Several agents share this working tree, and one of
+     them has ~550 uncommitted lines of Metadata.tsx in flight; at HEAD that file
+     still asks for `tw:font-serif` in three places. Dropping the name outright
+     would leave those three elements asking for a utility that does not exist —
+     which today is invisible, because everything resolves to the same sans
+     anyway, and would stop being invisible the moment a second face returns.
+     Remove this line once `git grep tw:font-serif` comes back empty. */
+  --font-serif: var(--font-reading);
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);

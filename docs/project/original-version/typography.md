@@ -8,10 +8,37 @@ than merely reasonable — everything else is scaffolding around a paragraph of 
 
 Read alongside [design-css-overview.md](../design-css-overview.md), which maps our stylesheets.
 
-**One caution before the numbers.** The doc is marked "✓ Implemented" at the top and is not: the
-settings UI it specifies never existed. Its *citations*, though, are real and checkable, which puts
-it well ahead of most of that repo — and separates the sourced claims below from the asserted ones,
-which are marked.
+**One caution before the numbers, and it is larger than it first looked.** The doc is marked
+"✓ Implemented" at the top and is not. That was already known about the settings UI it specifies,
+which never existed. It turns out to be true of **the typeface as well**, and we did not notice
+until 2026-08-25, by which point Georgia had been sitting in our own `tokens.css` for a day with a
+comment citing this document as its source.
+
+Checked against the repo itself:
+
+- `app/globals.css` sets `body { font-family: Arial, Helvetica, sans-serif }`.
+- `--font-sans` behind Tailwind is Geist Sans; `--font-mono` is Geist Mono.
+- `grep -r Georgia` over the whole repo returns **nothing**.
+- `components/simple-document-viewer.tsx`, which renders the article, gives headings and body the
+  same face and separates them by size and weight only: h1 `text-3xl font-bold`, h2 `text-2xl
+  font-semibold`, h3 `text-xl font-semibold`, p `text-base`.
+
+So the reading surface was **sans**, and the serif below is a recommendation that was never taken.
+Greg's call on 2026-08-25 was to follow what they did rather than what they wrote — this app is now
+sans throughout the reading surface too, and the reasoning is in
+[../design-css-overview.md § Typography](../design-css-overview.md#typography).
+
+**The lesson is not about fonts.** A document that says "✓ Implemented" is a claim about code, and
+it is the one kind of claim in a doc that can be checked mechanically and almost never is. Two
+separate things were carried out of this file into working code on the strength of that tick. Its
+*citations* are real and checkable, which still puts it ahead of most of that repo — but the tick
+was not, and the sourced claims below are separated from the asserted ones for exactly this reason.
+
+Two numbers here *are* independently attested by the code, and both are kept:
+
+- **65ch** — really shipped, as `max-w-[65ch]` on the document viewer.
+- **A heading's top margin exceeds its bottom margin** — really shipped, as `mt-6 mb-4` against a
+  paragraph's `mb-4`.
 
 ## Line length
 
@@ -49,7 +76,7 @@ Our `.reading-column` is set at 65ch, inside the recommended band.
   is cited for 14–18pt.
 
 **Georgia** is the recommendation, on an x-height argument: 0.485 versus Times New Roman's 0.448,
-about 10% larger lowercase. Alternatives with their x-heights: Merriweather 0.471, Palatino Linotype
+about 10% larger lowercase. **It was never used** — see the caution above. Alternatives with their x-heights: Merriweather 0.471, Palatino Linotype
 0.460 (needing 15–20% more vertical space), Source Serif 4.
 
 One claim to distrust: *"15% faster reading speed vs Times New Roman on screens"* is sourced only to
@@ -111,16 +138,27 @@ Three of these are directly usable here and cost almost nothing: **shorter measu
 last one matches a rule we already hold for other reasons — wide content scrolls inside its own
 container, never the page.
 
+*All three taken, 2026-08-25* (`styles.css` § text), with one deliberate deviation: their
+blockquote leading of 1.3 was written for Georgia and is too tight for a sans on a dark ground,
+where lines close up visually as well as metrically. Ours is 1.45 — same intent, right number for
+the face. The `overflow-x` one turned out to be a live bug rather than a refinement: this view
+scrolls the page horizontally by design and pins the masthead and spine to that scroll, so a single
+wide code block dragged the whole article's furniture sideways.
+
 ## What they wanted and never built
 
 The doc's "future enhancements" section is a wishlist, and none of it exists:
 
 - `text-wrap: balance` on headings, with an `@supports not` fallback to `max-width: 20ch`. **This one
-  is now cheap and well-supported, and would improve our masthead today.**
+  is now cheap and well-supported, and would improve our masthead today.** *Taken, 2026-08-25* — on
+  the masthead title and on all six heading levels inside `.prose`. The fallback turned out to be
+  unnecessary: unsupporting browsers ignore the declaration and wrap normally, which is the
+  behaviour we had anyway.
 - Container queries, so type responds to its container rather than the viewport.
 - Variable fonts, including a nice idea: **add ~50 to the weight axis in dark mode**, because light
-  text on dark ground optically thins. We are dark-only, so if we ever move to a variable face this
-  is worth remembering.
+  text on dark ground optically thins. *Taken, 2026-08-25* — Geist arrived as a variable face with a
+  100–900 axis, so `--reading-weight` is 450 rather than 400. Their own doc could not use this
+  advice; it is the one wishlist item that became possible by accident.
 - A reader settings UI (`CoreSettings { fontSize, lineHeight, colorScheme }`), described as "Phase 1
   MVP". Never built.
 - AI-driven complexity detection auto-tuning the layout; eye-tracking metrics; A/B testing;

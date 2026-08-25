@@ -42,7 +42,9 @@
 
     /* ---- surfaces and text (dark only; see the header) ---------------- */
     /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,
-       because pure white on pure black haloes badly in a serif at reading sizes. */
+       because pure white on pure black haloes at reading sizes. That was first noticed in Georgia,
+       and it did not go away when the reading face became Geist — light-on-dark bloom is about the
+       contrast, not the face. The other half of the same fix is --reading-weight below. */
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.97 0 0);
     --card: oklch(0.205 0 0);
@@ -106,17 +108,58 @@
     --header-height: 4rem;
 
     /* ---- type -------------------------------------------------------- */
+    /* ONE SANS FOR EVERYTHING the reader looks at — article and chrome alike. Geist, self-hosted
+       from @fontsource-variable/geist (imported in src/web/tailwind.css), with the system stack
+       behind it so nothing shifts if the woff2 is slow or blocked.
+
+       This is the original app's stack, and following it was Greg's call, 2026-08-25: "Follow how
+       we were doing fonts in the previous version." What the previous version ACTUALLY did is not
+       what our docs said it did. `docs/project/original-version/typography.md` reports a research
+       doc recommending Georgia at 17px for its x-height, and that recommendation was carried in
+       here as though it were shipped code. It never was: `app/globals.css` in that repo sets
+       `body { font-family: Arial, Helvetica, sans-serif }`, Geist Sans sits behind Tailwind's
+       --font-sans, and a grep of the whole repo finds Georgia nowhere. Their reading surface was
+       sans, headings and body in the same face, hierarchy carried by size and weight alone
+       (simple-document-viewer.tsx: h1 3xl/bold, h2 2xl/semibold, h3 xl/semibold, p base/normal).
+       So the two things that did ship — the 65ch measure and heading-space-above > below — are
+       kept below and in styles.css, and the serif that never shipped is gone.
+
+       The cost, stated plainly: the article column no longer looks different from our own chrome.
+       A gist in the column beside it is now the same face as the prose. If that turns out to be
+       the wrong trade, --font-reading is the ONE line to change, which is why it is still a
+       separate token from --font-ui rather than both being spelled --font-sans at the call site. */
+    --font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+    --font-reading: var(--font-sans);   /* the article itself, and the reader's own words */
+    --font-ui: var(--font-sans);        /* chrome: controls, masthead facts, column headers */
     --font-brand: 'Trebuchet MS', sans-serif;           /* the wordmark, and only the wordmark */
-    --font-ui: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
     --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
-    --font-reading: Georgia, 'Times New Roman', serif;  /* see the research doc: screen serif, big x-height */
 
     /* ---- reading measure --------------------------------------------- */
-    /* 55-70 chars/line; 80 reads ~7% faster but comprehends ~12% worse (Dyson & Kipping 1998). */
+    /* 55-70 chars/line; 80 reads ~7% faster but comprehends ~12% worse (Dyson & Kipping 1998).
+       65ch is also what the original app actually shipped — `max-w-[65ch]` on the document
+       viewer — so this number is the one part of their typography that is doubly attested. */
     --reading-measure: 65ch;
     --reading-size: 1.0625rem;                          /* 17px */
     --reading-line-height: 1.6;
+
+    /* Geist is a VARIABLE face (weight axis 100-900), so body weight need not be a round 400.
+       Light text on a dark ground optically thins — the same bloom that made us pull --foreground
+       back off pure white. The original app's own wishlist named the fix and could not use it,
+       having no variable face: "add ~50 to the weight axis in dark mode". We are dark-only and now
+       have one, so we take it. 450, not 400. Drop this to 400 the day a light theme appears. */
+    --reading-weight: 450;
+
+    /* ---- vertical rhythm (the article column only) --------------------- */
+    /* 17px x 1.4 = 23.8px, and every vertical gap in the reading column is a multiple of it:
+       one unit between paragraphs, one above a heading, a quarter below one. Theirs, from the
+       research doc named in this file's header — arithmetic rather than evidence, but good
+       arithmetic, and the thing that makes a page look considered rather than assembled.
+
+       Deliberately scoped to the reading column. The chrome keeps its per-rule rem values;
+       sweeping 1,800 lines of styles.css onto a scale is a different job and Greg scoped this
+       one to the article (2026-08-25). Do not reach for --rhythm outside .prose / td.text. */
+    --rhythm: calc(var(--reading-size) * 1.4);
 }
 
 /* The article column. Every zoom level renders into this, so the measure never changes
@@ -130,7 +173,7 @@
     font-family: var(--font-reading);
     font-size: var(--reading-size);
     line-height: var(--reading-line-height);
-    font-weight: 400;
+    font-weight: var(--reading-weight);
     color: var(--foreground);
 }
 

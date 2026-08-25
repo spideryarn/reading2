@@ -55,7 +55,9 @@ export type ArticleView = "article" | "metadata" | "tweets";
 
 export type Route =
   | { kind: "library" }
-  | { kind: "read"; slug: string; view: ArticleView };
+  | { kind: "read"; slug: string; view: ArticleView }
+  /** The design reference — every primitive on one page. See DesignPage.tsx. */
+  | { kind: "design" };
 
 /**
  * The path segment for each view. `article` has none — the reading view is the
@@ -91,6 +93,9 @@ const NAVIGATED = "spideryarn:navigated";
  * loses one should not stop working.
  */
 export function parseRoute(pathname: string): Route {
+  // Not under /read/, because it is not about an article. It is the one page in
+  // the app with no data behind it at all.
+  if (/^\/design\/?$/.test(pathname)) return { kind: "design" };
   const m = /^\/read\/([^/]+)(?:\/(metadata|tweets))?\/?$/.exec(pathname);
   if (!m) return { kind: "library" };
   // A malformed escape would throw out of decodeURIComponent and take the whole
@@ -145,6 +150,7 @@ export function carriedSearch(search: string): string {
 }
 
 export const LIBRARY_HREF = "/";
+export const DESIGN_HREF = "/design";
 
 /**
  * Go somewhere, without a page load.

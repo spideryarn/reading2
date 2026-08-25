@@ -14,7 +14,7 @@
  *    navLabels belong: navigation chrome, never shown in place of prose that
  *    could be displayed (granularity-zoom.md#node-shape).
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Article, BlockId, Comment, NodeId } from "../types.js";
 import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
@@ -80,6 +80,8 @@ export function TableView({
 }: Props) {
   const { blocks } = article;
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  /** The panel entry under the pointer, if any — see activeChain below. */
+  const [hoveredNode, setHoveredNode] = useState<NodeId | null>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
   /**
@@ -110,7 +112,7 @@ export function TableView({
             node: a.node,
             blockId: a.node.range[0],
             text: a.text ?? "",
-            step: `${a.index} / ${a.total}`,
+            step: { index: a.index, total: a.total },
           })),
           starts: entries.map(([row]) => row),
         });
@@ -125,10 +127,29 @@ export function TableView({
   // The ancestor path of the hovered row — used to light up the chain across
   // every level at once, which is the whole point of seeing them side by side.
   // The panels carry it too, since they are the levels now (ContextList.tsx).
-  const activeChain = useMemo<Set<NodeId>>(
-    () => new Set(hoveredRow === null ? [] : geometry.chains[hoveredRow]),
-    [hoveredRow, geometry],
-  );
+  // A panel that unmounts fires no mouseleave, so a hover held when the columns
+  // change — or when the mode switches to outline, where there are no panels —
+  // would win over every row hover for the rest of the session.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers
+  useEffect(() => setHoveredNode(null), [panels, colKey]);
+
+  const activeChain = useMemo<Set<NodeId>>(() => {
+    // A panel entry wins over a row, because pointing at one means leaving the
+    // table: `tbody`'s mouseleave clears hoveredRow on the way. The chain is
+    // the entry's ancestors, so pointing at a section still lights the part it
+    // belongs to and the arc above that — one entry per coarser column, which
+    // is what a row hover gives. Its own sections are not lit: a part holds
+    // many, and lighting all of them would be a different gesture.
+    if (hoveredNode) {
+      const chain = new Set<NodeId>();
+      for (let id: NodeId | null = hoveredNode; id; id = article.tree.nodes[id]?.parent ?? null) {
+        if (chain.has(id)) break; // a cycle would hang the render; the tree should never have one
+        chain.add(id);
+      }
+      return chain;
+    }
+    return new Set(hoveredRow === null ? [] : geometry.chains[hoveredRow]);
+  }, [hoveredNode, hoveredRow, geometry, article.tree.nodes]);
   // The panels' lists, built once per change of position rather than once
   // per render: a row hover re-renders the whole table, and a fresh `entries`
   // array would send every panel back through its layout effect.
@@ -356,7 +377,12 @@ export function TableView({
             {showText && (
               <td
                 data-nav-depth={geometry.leafDepth}
-                className={`text pin-right ${!block.gistable ? "opaque" : ""}`}
+                // `kind-*` carries the splitter's classification through to CSS —
+                // today only `kind-heading`, which gets more space above than
+                // below so a heading groups with the section it introduces
+                // (styles.css § td.text.kind-heading). Emitted for every kind
+                // so the next rule that needs one does not have to change JSX.
+                className={`text pin-right kind-${block.kind} ${!block.gistable ? "opaque" : ""}`}
               >
                 <BlockRef className="block-id" id={block.id} onJump={onJump} />
                 <div
@@ -387,6 +413,7 @@ export function TableView({
           activeChain={activeChain}
           crumbFor={crumbFor}
           onJump={onJump}
+          onHoverNode={setHoveredNode}
         />
       ))}
     </>

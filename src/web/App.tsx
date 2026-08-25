@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
 import { Library } from "./Library.js";
+import { DesignPage } from "./DesignPage.js";
 import { type ArticleView, useRoute } from "./router.js";
 import { Metadata } from "./Metadata.js";
 import { Tweets } from "./Tweets.js";
@@ -10,6 +11,7 @@ import { TableView } from "./TableView.js";
 import { Spine } from "./Spine.js";
 import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
+import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
 import { Toggle } from "@/components/ui/toggle";
 import { buildArcColumn, buildGeometry, buildOutline, columnLabel } from "./tree.js";
@@ -25,54 +27,9 @@ import {
 import { fitView } from "./layout.js";
 import { useArrowNav } from "./keynav.js";
 import { useComments } from "./useComments.js";
+import { PILL } from "./pill.js";
 
-/**
- * The granularity pills, restated over shadcn's Toggle.
- *
- * Individual `Toggle`s rather than a `ToggleGroup`, which is what you would
- * normally reach for and what the migration plan called for. The reason is
- * this app's keyboard design: a ToggleGroup wraps its items in Radix's roving
- * focus, which binds ArrowLeft, ArrowRight, ArrowUp AND ArrowDown. Here ↑/↓
- * step through the article and ←/→ are deliberately handed back to the browser
- * to pan a table wider than the window (see keynav.ts and
- * docs/project/keyboard.md). A group would swallow all four whenever focus sat
- * inside the bar — which is precisely where focus lands after you click a
- * pill. Separate toggles give the same `aria-pressed` and `data-state` and
- * leave the arrow keys alone.
- *
- * The class string is mostly undoing shadcn's defaults, because these are
- * pills and its Toggle is a square-ish icon button:
- *
- *  - `rounded-full`, `h-auto`, `py-*` — its default is `h-9 min-w-9 rounded-md`.
- *  - `hover:bg-transparent` — its default hover paints `bg-muted`; ours moves
- *    only the border and the text to orange.
- *  - the `data-[state=on]` trio — its default on-state is `bg-accent`, and in
- *    this palette `--accent` is a raised dark SURFACE, not the brand orange.
- *    Left alone it marks the ON state with dark grey on a near-black page:
- *    not an error, not visibly broken, just the signal quietly gone. Both
- *    tokens.css and styles.css carry warnings about this exact confusion.
- */
-const PILL =
-  // Shape and metrics, matched to the rule this replaced rather than to
-  // Tailwind's defaults: `text-xs` would also set line-height to 1rem, where
-  // these inherited the body's 1.55, and the padding is the original 0.22/0.6
-  // rather than the nearest scale step. Both differences are a couple of
-  // pixels of pill height, which is exactly the sort of drift nobody notices
-  // individually and everybody notices in aggregate.
-  "tw:rounded-full tw:h-auto tw:min-w-0 tw:px-[0.6rem] tw:py-[0.22rem] " +
-  "tw:text-xs tw:leading-[1.55] tw:font-normal " +
-  // font-family and cursor were coming from `.controls button`, which step 8
-  // deletes. Stated here so this string stands on its own and that deletion
-  // cannot quietly change the pills.
-  "tw:font-sans tw:cursor-pointer " +
-  "tw:border tw:border-rule-strong tw:text-ink-faint tw:bg-transparent " +
-  // The base Toggle animates only `color` and `box-shadow`. Background and
-  // border are the two properties that actually say "on" here, so without
-  // this they snap while the text fades — the old rule animated all three.
-  "tw:transition-[color,background-color,border-color] tw:duration-[120ms] " +
-  "tw:hover:bg-transparent tw:hover:border-highlight tw:hover:text-highlight " +
-  "tw:data-[state=on]:bg-highlight-wash tw:data-[state=on]:border-highlight " +
-  "tw:data-[state=on]:text-highlight-ink tw:data-[state=on]:font-semibold";
+
 
 /**
  * Which page you are on, and nothing else.
@@ -85,6 +42,7 @@ const PILL =
 export function App() {
   const route = useRoute();
   if (route.kind === "library") return <Library />;
+  if (route.kind === "design") return <DesignPage />;
   return <ArticlePage slug={route.slug} view={route.view} />;
 }
 
@@ -131,8 +89,13 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
     };
   }, [slug]);
 
+  const slow = useSlow(!article && !error);
+
   if (error) return <pre className="error">{error}</pre>;
-  if (!article) return <div className="loading">Loading…</div>;
+  // Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
+  // then a line naming what is being waited for rather than "Loading…".
+  if (!article)
+    return <div className="loading">{slow ? "Fetching the article and its summaries…" : ""}</div>;
   // Keyed on the slug so switching article remounts rather than trying to carry
   // one article's reading position into another's blocks. NOT keyed on the
   // view: switching view is meant to keep the fetch, which is the whole reason

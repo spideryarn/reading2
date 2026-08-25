@@ -76,6 +76,7 @@ import { Link } from "./Link.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { useJobs } from "./useJobs.js";
+import { useSlow } from "./useSlow.js";
 
 /** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-h)_+_2rem)]";
@@ -92,6 +93,7 @@ type Loaded =
 
 export function Tweets({ slug, article }: { slug: string; article: Article }) {
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
+  const slow = useSlow(loaded.status === "loading");
 
   /**
    * Fetch the thread. Its own endpoint rather than a field on the article — see
@@ -230,12 +232,16 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
           Back to the article
         </Link>
 
-        <h1 className="tw:m-0 tw:font-serif tw:text-2xl tw:leading-snug tw:text-foreground">
+        <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {article.meta.title}
         </h1>
 
-        {loaded.status === "loading" && (
-          <p className="tw:mt-6 tw:text-sm tw:text-muted-foreground">Looking…</p>
+        {/* See useSlow.ts: silent until the wait is worth mentioning, then the
+            step by name. */}
+        {loaded.status === "loading" && slow && (
+          <p className="tw:mt-6 tw:text-sm tw:text-muted-foreground">
+            Looking for a thread for this article…
+          </p>
         )}
 
         {loaded.status === "error" && (
@@ -463,7 +469,7 @@ function Thread({
             {/* `whitespace-pre-line`, because the prompt allows a line break
                 inside a post and a paragraph that eats them changes what the
                 post says. */}
-            <p className="tw:m-0 tw:font-serif tw:text-[0.95rem] tw:leading-relaxed tw:whitespace-pre-line tw:text-foreground">
+            <p className="tw:m-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:whitespace-pre-line tw:text-foreground">
               {tweet.text}
             </p>
             <div className="tw:mt-3 tw:flex tw:items-center tw:gap-3 tw:text-xs tw:text-ink-faint">

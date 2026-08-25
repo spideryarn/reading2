@@ -22,15 +22,17 @@
  * Note the `tw:` prefix on every class — unprefixed names do nothing here.
  */
 import { useCallback, useEffect, useState } from "react";
-import { FileText, MessageCircle } from "lucide-react";
+import { FileText, MessageCircle, Palette } from "lucide-react";
 import type { LibraryEntry } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { Link } from "./Link.js";
-import { readHref } from "./router.js";
+import { DESIGN_HREF, readHref } from "./router.js";
 import { useJobs } from "./useJobs.js";
+import { useSlow } from "./useSlow.js";
 
 export function Library() {
   const [articles, setArticles] = useState<LibraryEntry[] | null>(null);
+  const slow = useSlow(articles === null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -62,7 +64,22 @@ export function Library() {
   return (
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
       <header className="tw:mb-8">
-        <h1 className="tw:font-serif tw:text-3xl tw:text-foreground">Spideryarn</h1>
+        {/* The design reference sits on the masthead line rather than under the
+            strapline, and is deliberately the quietest thing on the page: it is
+            developer furniture, and a reader arriving at their shelf should not
+            have to step over it. Same faint-until-hovered treatment as the
+            back-link in Masthead.tsx, so the two read as one convention. */}
+        <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-4">
+          <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
+          <Link
+            href={DESIGN_HREF}
+            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+            title="Every token, face and component variant on one page — look here after changing tokens.css"
+          >
+            <Palette size={13} />
+            Design
+          </Link>
+        </div>
         <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
           Read deeply, at whatever level of detail you need. Pick a piece.
         </p>
@@ -75,8 +92,12 @@ export function Library() {
           {error}
         </p>
       )}
-      {!error && articles === null && (
-        <p className="tw:text-sm tw:text-muted-foreground">Loading…</p>
+      {/* Silent until the wait is worth mentioning — on a warm shelf this fetch
+          is over well before that, and a line that flashes up and away reads as
+          a fault. After that, say what is being fetched. See useSlow.ts, which
+          owns the threshold. */}
+      {!error && articles === null && slow && (
+        <p className="tw:text-sm tw:text-muted-foreground">Reading the shelf…</p>
       )}
       {articles?.length === 0 && (
         <p className="tw:text-sm tw:text-muted-foreground">
@@ -122,7 +143,7 @@ function Card({ entry }: { entry: LibraryEntry }) {
       href={readHref(entry.slug)}
       className="tw:block tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:no-underline tw:transition-colors tw:hover:border-highlight/60 tw:focus-visible:border-highlight tw:focus-visible:outline-none"
     >
-      <h2 className="tw:m-0 tw:font-serif tw:text-xl tw:leading-snug tw:text-foreground">
+      <h2 className="tw:m-0 tw:font-prose tw:text-xl tw:leading-snug tw:text-foreground">
         {entry.title}
       </h2>
 
@@ -147,7 +168,7 @@ function Card({ entry }: { entry: LibraryEntry }) {
           talking rather than the app — the same distinction the reading view
           makes between prose and chrome. */}
       {entry.gist && (
-        <p className="tw:mt-3 tw:mb-0 tw:font-serif tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
+        <p className="tw:mt-3 tw:mb-0 tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-ink-faint">
           {entry.gist}
         </p>
       )}

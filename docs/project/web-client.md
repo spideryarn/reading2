@@ -242,7 +242,11 @@ How it's put together, and what to know before touching it:
   about 2.6:1 on white. Orange text was borderline in light mode and is comfortable now, so the
   highlight can carry more work than it used to.
 - **Not literally black-on-white inverted.** The page is `oklch(0.145 0 0)` and the text
-  `oklch(0.97 0 0)`, because pure white on pure black haloes badly in Georgia at 17px.
+  `oklch(0.97 0 0)`, because pure white on pure black haloes at reading sizes. First noticed in
+  Georgia, and it did not go away when the reading face became Geist in 2026-08-25 —
+  light-on-dark bloom is about the contrast, not the face. The other half of the same fix is
+  `--reading-weight: 450`; see
+  [design-css-overview.md § Typography](design-css-overview.md#typography).
 - **Soft and faint greys run the other way.** In [`src/web/styles.css`](../../src/web/styles.css),
   `--ink-soft` / `--ink-faint` now *descend* in lightness from `--ink` instead of ascending. Anything
   that read `color-mix(…, black)` to darken the orange became `color-mix(…, white)` to lift it — that

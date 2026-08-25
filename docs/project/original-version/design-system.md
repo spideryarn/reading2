@@ -15,10 +15,19 @@ destructive, sidebar, chart-*. Brand orange `#DB8A45`. This is the part we alrea
 it was almost free precisely because it was a shadcn project
 ([overview.md § The reversal](overview.md#the-reversal-tailwind-and-shadcn-2026-08-25)).
 
-Their font stack is worth noting as a *pattern* rather than for the specific faces: Geist Sans for
-body, Geist Mono for technical text and ids, and **Trebuchet MS scoped to the logo only**. Keeping a
-brand face out of the reading surface is the right instinct — the wordmark can have personality, the
-prose should not.
+Their font stack: Geist Sans for body, Geist Mono for technical text and ids, and **Trebuchet MS
+scoped to the logo only**. Keeping a brand face out of the reading surface is the right instinct —
+the wordmark can have personality, the prose should not.
+
+This paragraph used to end *"worth noting as a pattern rather than for the specific faces"*, on the
+assumption that our reading column was a serif for reasons of its own. It wasn't: the serif came
+from a research doc in the same repo that was never implemented, and this sentence helped hide that
+by treating the two as separate choices. **The faces transferred too.** Greg, 2026-08-25: *"Follow
+how we were doing fonts in the previous version."* We are now on Geist Sans and Geist Mono,
+self-hosted via `@fontsource-variable/*` rather than through Next's font pipeline, with Courier kept
+for block ids and Trebuchet still scoped to the wordmark. See [typography.md](typography.md) for
+what the check actually found, and
+[../design-css-overview.md § Typography](../design-css-overview.md#typography) for where it landed.
 
 ## Icons
 
@@ -57,6 +66,25 @@ We have one place this matters today — the pending state on a comment
 ([comments.md](../comments.md)) — and one arriving, the library card for an article still being
 processed. Both should name the step.
 
+**Both rules are taken, 2026-08-25**, on the metadata page's provenance fetch
+([`Metadata.tsx`](../../../src/web/Metadata.tsx)): it says *"Checking which files the pipeline
+wrote…"* rather than `Looking…`, and it says it only after 600ms, which on localhost means it
+almost never appears at all. See
+[metadata-page.md § A second pass over theirs](../../plans/metadata-page.md#a-second-pass-over-theirs-2026-08-25).
+
+**And on the other three, the same day.** `App.tsx`, `Library.tsx` and `Tweets.tsx` each had a bare
+`Loading…` or `Looking…`; all three now stay silent for 600ms and then name what is being waited
+for. Worth recording *how* that went, because it is a small instance of the thing this folder keeps
+finding: two agents read this section within an hour of each other and each wrote their own timer
+and their own constant — 600 in one file, 1,000 in another — for a rule whose whole value is that
+it is the same everywhere. There is now one hook,
+[`useSlow.ts`](../../../src/web/useSlow.ts), owning one number, and the metadata page imports it.
+
+The comment dialog ([comments.md](../comments.md)) already followed the naming rule and is left
+alone. It also keeps its spinner **un-delayed**, on purpose: a model call is never inside the
+flicker window, and a dialog that opens visibly empty for six-tenths of a second reads worse than
+the spinner ever did. The rule is about flicker, not about hiding.
+
 Skeleton screens are listed as a future enhancement and were never built. Skip them; a named spinner
 is most of the value.
 
@@ -65,13 +93,25 @@ is most of the value.
 `app/design/page.tsx` — 378 lines rendering every button variant, spinner size, alert and colour
 swatch on one route.
 
-**Worth copying, cheaply.** It costs almost nothing to maintain and it catches the class of
-regression that tests can't see: a token change that quietly ruins a variant nobody looked at. We
-now have generated shadcn components in
-[`src/web/components/ui/`](../../../src/web/components/ui/) and a token file they all depend on, so
-the failure mode exists here now. One route rendering our primitives against the dark ground would
-have caught at least one of the bugs already recorded in
-[web-client.md](../web-client.md#what-tailwind-and-shadcn-assume-instead-and-the-bug-it-caused).
+**Worth copying, cheaply** — and *copied, 2026-08-25*, as
+[`DesignPage.tsx`](../../../src/web/DesignPage.tsx) at `/design`. It costs almost nothing to
+maintain and it catches the class of regression that tests can't see: a token change that quietly
+ruins a variant nobody looked at. The failure mode is live here — three generated shadcn components
+in [`src/web/components/ui/`](../../../src/web/components/ui/) and a token file they all depend on —
+and at least one of the bugs recorded in
+[web-client.md](../web-client.md#what-tailwind-and-shadcn-assume-instead-and-the-bug-it-caused)
+would have been visible on it.
+
+Two rules ours holds that theirs did not have to:
+
+- **Render the thing, never describe it.** Nothing on that page may hard-code a colour or a face.
+  If it did, it would keep looking right after the token feeding it broke — which is the exact
+  failure it exists to catch.
+- **Measure contrast from resolved values.** `getComputedStyle(el).getPropertyValue('--x')` returns
+  the *declared* text (`var(--background)`), not an rgb triple, so it cannot be measured. The page
+  paints each token onto a probe element and reads `color` back, which forces the resolution — so
+  the ratios describe what the cascade actually produced. Both contrast bugs this page exists to
+  catch had entirely correct-looking source.
 
 Pair it with [browser-testing.md](../browser-testing.md), which already says how to look at this app
 without being lied to by colour and sticky positioning.
@@ -121,8 +161,12 @@ experiences constantly rather than a hover flourish they can avoid
 ([granularity-zoom.md § Interaction](../granularity-zoom.md#interaction)). A reader who has asked
 their operating system for less motion has asked for it from us too.
 
-Ours belongs in [`tailwind.css`](../../../src/web/tailwind.css), in a named layer, for the reasons
-[design-css-overview.md](../design-css-overview.md) sets out.
+*Adopted, 2026-08-25*, near enough verbatim, at the foot of
+[`tailwind.css`](../../../src/web/tailwind.css) in `@layer base` — named, so anything in `app` or
+`utilities` still wins on layer order and the `!important` is what carries it past them.
+`scroll-behavior: auto` is added to their four declarations. The four narrower blocks in
+`styles.css` stay: this one flattens durations, and they turn off the things that are *wrong* when
+reduced rather than merely fast — a tooltip's transform, the context panel's scrolling.
 
 ## The shadcn migration doc
 
