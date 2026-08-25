@@ -36,7 +36,7 @@
  * ## Two kinds of button, said out loud
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
- * `Home` and `About` navigate; `Questions` opens a drawer *on the reading view*
+ * `Home` and `Metadata` navigate; `Questions` opens a drawer *on the reading view*
  * and navigates everywhere else. That is a real difference and the markup has
  * to tell the truth about it — a link gets `aria-current="page"`, a drawer
  * trigger gets `aria-expanded`, and using either one for the other kind
@@ -52,9 +52,10 @@
  * `?panel=questions` — which is also where a question is worth opening, since
  * clicking one scrolls to the passage it is about.
  *
- * `About` became a link on 2026-08-25, when its drawer panel grew into a page
- * of its own at `/read/<slug>/metadata`. Greg, on what should happen to the
- * panel once the page existed:
+ * The button was `About` and became a link on 2026-08-25, when its drawer panel
+ * grew into a page of its own at `/read/<slug>/metadata`. It is labelled
+ * `Metadata` now, after the page it opens, rather than after the panel it was.
+ * Greg, on what should happen to the panel once the page existed:
  *
  * > We can get rid of the panel, and move all its contents into the new page.
  *
@@ -331,7 +332,7 @@ export function Dock({ slug, view, drawer }: Props) {
           href={readHref(slug, search, "metadata")}
           current={view === "metadata"}
           icon={Info}
-          label="About"
+          label="Metadata"
           title="Where this article came from, what shape it is, and what the pipeline wrote"
         />
 

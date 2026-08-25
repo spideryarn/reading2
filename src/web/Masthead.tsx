@@ -26,7 +26,7 @@
  * facts you want *without* going back to the top first.
  *
  * It moved once more the same day, out of the drawer and onto a page of its
- * own — Metadata.tsx, `/read/<slug>/metadata`, reached from the bar's About
+ * own — Metadata.tsx, `/read/<slug>/metadata`, reached from the bar's Metadata
  * button (docs/plans/metadata-page.md). So there are two superseded spellings
  * of it in old links, `?about=1` and `?panel=about`, and main.tsx rewrites both
  * to the page.
