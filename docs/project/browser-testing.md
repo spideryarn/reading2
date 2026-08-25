@@ -80,6 +80,17 @@ call rather than by the rendering step — a fresh page load, a reload, `history
 control. That is enough to cover URL→page restore, the legacy-hash rewrite, and the history
 semantics. Continuous scroll→URL needs a genuinely visible tab.
 
+**A real wheel event is a third thing, and it works.** Driving the mouse wheel through the extension's
+`computer` tool scrolled the page and fired the app's scroll listener — `?at=` updated — in a session
+where `window.scrollTo()` and `scrollIntoView()` both silently did nothing. So when you need the page
+somewhere specific in order to photograph it, scroll it with the wheel rather than with a script.
+
+Which brings up the sharper trap: **`visibilityState` is a good check, not a reliable one.** In that
+same session it read `"hidden"` throughout while `document.hasFocus()` was `true` and successive
+screenshots showed live, correctly-updating content. Read it as "hidden means suspect everything";
+do not read the converse, and do not take a `"hidden"` reading as proof that what you just saw on
+screen wasn't real. Found 2026-08-25, checking the video embed's layout.
+
 **A hidden tab does not scroll smoothly at all — it does not scroll.** Not "it jumps instead of
 animating": `window.scrollTo({ behavior: "smooth" })` returns normally and `window.scrollY` is
 unchanged a second later, because the animation is driven by the same rendering step. The same is now
