@@ -152,11 +152,16 @@ h1 a {
 }
 h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight); }
 
-/* The ▾. `align-self: center` rather than the baseline the flex row otherwise
-   imposes, because a glyph-only button has no text baseline worth aligning. */
+/* The chevron. `align-self: center` rather than the baseline the flex row
+   otherwise imposes, because an icon-only button has no text baseline worth
+   aligning; the inner flex centres the SVG in the circle. Icons are Lucide —
+   docs/project/icons.md. */
 .disclose {
   align-self: center;
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
   background: transparent;
@@ -164,15 +169,13 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   cursor: pointer;
   width: 1.6rem;
   height: 1.6rem;
-  line-height: 1;
   padding: 0;
   transition: color 0.15s, border-color 0.15s;
 }
 .disclose:hover { color: var(--highlight); border-color: var(--highlight); }
 
 .chevron {
-  display: inline-block;
-  font-size: 0.75rem;
+  display: block;
   transition: transform 0.15s;
 }
 .chevron.up { transform: rotate(180deg); }
@@ -983,9 +986,15 @@ mark.cmt[data-mark-end]::after {
   border-radius: var(--radius);
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
   font-family: var(--font-ui);
-  /* Above the tooltip layer (80): a tooltip is a hover, and a hover should never
-     end up on top of something the reader deliberately opened. */
-  z-index: 90;
+  /* Above everything structural — the sticky bars (≤40) and the spine (45) —
+     but BELOW the tooltip layer (.tooltip-anchor, 80).
+     
+     It was 90 first, on the reasoning that a hover should never cover something
+     the reader deliberately opened. That was wrong, and visibly so: the panel
+     has a tooltip of its own on the web-search badge, and at 90 it buried it.
+     A tooltip is dismissed the instant the pointer moves, so it cannot obstruct
+     anything — the transient layer belongs on top. */
+  z-index: 70;
 }
 
 .cmt-dialog header {
@@ -1001,10 +1010,11 @@ mark.cmt[data-mark-end]::after {
   color: var(--ink-faint);
 }
 .cmt-close {
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: none;
   padding: 0 0.15rem;
-  font-size: 1.15rem;
   line-height: 1;
   color: var(--ink-faint);
   cursor: pointer;
@@ -1031,13 +1041,13 @@ mark.cmt[data-mark-end]::after {
   font-size: 0.78rem;
   color: var(--ink-faint);
 }
+/* Lucide's `LoaderCircle` — a single open arc — turned by a CSS keyframe. The
+   recipe, and why it isn't the bordered-div trick any more, is in
+   docs/project/icons.md#the-loading-spinner. Size comes from the `size` prop at
+   the call site, so there is nothing here to keep in sync with it. */
 .cmt-spinner {
   flex: none;
-  width: 0.85rem;
-  height: 0.85rem;
-  border: 2px solid color-mix(in oklab, var(--highlight) 30%, transparent);
-  border-top-color: var(--highlight);
-  border-radius: 50%;
+  color: var(--highlight);
   animation: cmt-spin 0.7s linear infinite;
 }
 @keyframes cmt-spin { to { transform: rotate(360deg); } }
@@ -1134,3 +1144,68 @@ mark.cmt[data-mark-end]::after {
   cursor: pointer;
 }
 .cmt-dialog button.linky:hover { color: var(--highlight); }
+
+/* Stepping between comments, and the web-search badge — comments.md.
+   Several questions can be in flight at once, so the panel is a way of moving
+   between them rather than a view of one. */
+
+.cmt-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: auto;
+  margin-right: 0.15rem;
+}
+.cmt-nav button {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0 0.15rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.cmt-nav button:hover:not(:disabled) { color: var(--highlight); }
+/* Disabled rather than wrapped: the arrows stop at the ends, and a live arrow
+   that goes nowhere reads as "there is more this way" when there isn't. */
+.cmt-nav button:disabled { color: var(--ink-faint); opacity: 0.35; cursor: default; }
+.cmt-count {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  min-width: 2.5rem;
+  text-align: center;
+}
+
+/* The globe. Two states, and the un-searched one is drawn rather than omitted:
+   the model chooses per question, so "didn't search" is a fact about this
+   answer, not an absence of information. `Globe` / `GlobeOff` from Lucide, both
+   inheriting `currentColor`, so the two states are a colour change here. */
+.cmt-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  cursor: default;
+  border-radius: 3px;
+}
+.cmt-search:focus-visible { outline: 1px solid var(--highlight); outline-offset: 2px; }
+.cmt-search.on { color: var(--highlight); }
+.cmt-search.off { color: var(--ink-faint); opacity: 0.65; }
+.cmt-search svg { display: block; }
+.cmt-search-n { font-size: 0.62rem; font-variant-numeric: tabular-nums; }
+.tooltip.tip-search { max-width: 17rem; font-size: 0.75rem; line-height: 1.45; }
+.tooltip.tip-search strong { color: var(--highlight-ink); font-weight: 600; }
+
+/* Work happening somewhere the reader isn't looking. */
+.cmt-inflight {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ink-faint);
+}
+
+/* While a new selection is being dragged, the panel steps aside — it is pinned
+   over the prose column, which is exactly where the next sentence is. */
+.cmt-dialog { transition: opacity 0.1s; }
+.cmt-dialog.dodging { opacity: 0.1; pointer-events: none; }
