@@ -155,8 +155,21 @@
    visible because the border-style is still `none`.
 
    `box-sizing: border-box`, the one part of preflight worth having globally,
-   styles.css already sets on `*`.  */
-@layer components {
+   styles.css already sets on `*`.
+
+   THE LAYER HERE IS LOAD-BEARING, and the obvious choice is wrong. These went
+   into `@layer components` first, which reads correctly and is not named in
+   the statement at the top of this file — and a layer used but never named is
+   appended AFTER every named one. So it outranked `app` and `utilities` both:
+   the granularity pills lost their border, and `background-color: transparent`
+   beat `data-[state=on]:bg-highlight-wash`, taking the orange off the ON state
+   — the exact signal we had just spent an override protecting.
+
+   Nothing said so. The utilities were generated, twMerge had resolved them
+   correctly, and the class was on the element; it was simply outranked. Only
+   `getComputedStyle` on the real page showed it. `base` is named, sits below
+   `app`, and is where preflight belongs anyway.  */
+@layer base {
   [data-slot] {
     border: 0 solid;
   }
