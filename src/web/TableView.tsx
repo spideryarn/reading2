@@ -28,6 +28,11 @@ interface Props {
   /** Explicit pixel widths, one per rendered column. See layout.ts. */
   layout: Layout;
   showText: boolean;
+  /**
+   * The depth ← / → are currently aimed at, so the column can say so. Chosen by
+   * where the pointer is — see keynav.ts, and the `data-nav-depth` tags below.
+   */
+  navDepth: number;
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
 }
@@ -38,6 +43,7 @@ export function TableView({
   columns,
   layout,
   showText,
+  navDepth,
   onJump,
 }: Props) {
   const { blocks } = article;
@@ -79,9 +85,11 @@ export function TableView({
           {columns.map((d) => (
             <th
               key={d}
+              data-nav-depth={d}
               className={[
                 d === pinLeft ? "pin-left" : "",
                 d === pinRight ? "pin-right" : "",
+                d === navDepth ? "nav-aim" : "",
               ].filter(Boolean).join(" ")}
             >
               {columnLabel(d, geometry.leafDepth)}
@@ -89,7 +97,13 @@ export function TableView({
             </th>
           ))}
           {showText && (
-            <th className="pin-right">
+            /* The prose column is the finest granularity there is, so the
+               arrows mean the same thing over it as over the leaf column: one
+               paragraph at a time. Leaves are 1:1 with blocks (src/toc.ts). */
+            <th
+              data-nav-depth={geometry.leafDepth}
+              className={`pin-right${navDepth === geometry.leafDepth ? " nav-aim" : ""}`}
+            >
               Text<span className="depth-tag">verbatim</span>
             </th>
           )}
@@ -112,6 +126,7 @@ export function TableView({
                 <td
                   key={depth}
                   rowSpan={cell.rowSpan}
+                  data-nav-depth={depth}
                   className={[
                     "gist",
                     // On the <td>, NOT the <col>: custom properties inherit
@@ -154,7 +169,10 @@ export function TableView({
               );
             })}
             {showText && (
-              <td className={`text pin-right ${!block.gistable ? "opaque" : ""}`}>
+              <td
+                data-nav-depth={geometry.leafDepth}
+                className={`text pin-right ${!block.gistable ? "opaque" : ""}`}
+              >
                 <span className="block-id">{block.id}</span>
                 <div
                   className="prose"

@@ -42,6 +42,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
+| [`tests/keynav.test.ts`](../../tests/keynav.test.ts) | where ← / → land, and that → then ← is reversible — [keyboard.md](keyboard.md) |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken

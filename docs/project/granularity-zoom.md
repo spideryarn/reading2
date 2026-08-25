@@ -477,9 +477,13 @@ the viewport (the *anchor*). On a zoom change: find the node at the new depth wh
 the anchor, render that level, and scroll so that node sits where the anchor was. The reader's eye
 stays put while the text breathes around it.
 
-- **Zoom out (←)** — each visible group of items collapses into its parent's gist.
-- **Zoom in (→)** — each visible gist is replaced by its children's gists; at the last step, by the
-  actual prose.
+- ~~**Zoom out (←)** — each visible group of items collapses into its parent's gist.~~
+  ~~**Zoom in (→)** — each visible gist is replaced by its children's gists.~~ **Superseded.** That
+  was written for a view showing one level at a time; the tabular view shows every level at once, so
+  there is no single "current level" for a key to move. Choosing levels is the `L0 / L1 / L2` buttons
+  and `?cols=` ([url-state.md](url-state.md#the-parameters)). ← / → were therefore free, and now
+  **step through the article one item at a time, at whichever level the pointer is hovering** —
+  [keyboard.md](keyboard.md).
 - **Discrete levels, animated between.** v1 snaps to integer depths; continuous zoom is a later
   question ([Q4](open-questions.md#q4)).
 - **Click a gist to descend into just that node**, leaving the rest of the article coarse. This is

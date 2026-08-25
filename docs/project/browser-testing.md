@@ -80,6 +80,28 @@ call rather than by the rendering step — a fresh page load, a reload, `history
 control. That is enough to cover URL→page restore, the legacy-hash rewrite, and the history
 semantics. Continuous scroll→URL needs a genuinely visible tab.
 
+**A hidden tab does not scroll smoothly at all — it does not scroll.** Not "it jumps instead of
+animating": `window.scrollTo({ behavior: "smooth" })` returns normally and `window.scrollY` is
+unchanged a second later, because the animation is driven by the same rendering step. The same is now
+true of our own glide ([`scroll.ts`](../../src/web/scroll.ts)), which is rAF-driven for exactly the
+reason described there. So **nothing that goes through `scrollToBlock` can be verified in a hidden
+tab** — not a gist click, not a spine click, not an arrow keypress
+([keyboard.md](keyboard.md)) — and the failure is textbook
+[silent success](../reusable/silent-success.md): the call succeeds, the page stays put, and the check
+you'd naturally run (`scrollY`) agrees with the code that nothing happened.
+
+Two ways round it, if the tab cannot be made visible:
+
+```js
+// 1. Ask for the instant path by claiming the reader wants less motion.
+const mm = window.matchMedia.bind(window);
+window.matchMedia = (q) => q.includes('reduced-motion') ? { matches: true, media: q, addEventListener(){}, removeEventListener(){} } : mm(q);
+// 2. Or bypass the animation entirely and force `behavior: "auto"`.
+```
+
+Either verifies *where* a jump lands, which is the part with arithmetic in it. Neither verifies the
+animation, so the duration and the easing are eyeball-only.
+
 **Two things here are rAF-coalesced, and they fail differently.** The `?at=` tracker
 ([url-state.md](url-state.md)) goes stale — annoying, self-correcting the moment you scroll in a real
 tab. The spine's re-measure ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)) is
@@ -87,6 +109,31 @@ worse: it sizes its bands from measured row heights, so measuring while the rend
 gives it wrong proportions, and a wrong-but-plausible rail is exactly the thing a screenshot cannot
 tell you about. If the spine looks subtly off, check `document.visibilityState` before you go looking
 at `Spine.tsx`.
+
+## The arrow keys, and the thing that makes them hard to check
+
+← / → step through the article at whichever level the pointer is hovering
+([keyboard.md](keyboard.md)). The awkward part for testing is that **the input is two-handed**: a
+keypress alone proves nothing, because the aim comes from the mouse. Set the pointer first, then
+press.
+
+Five checks that between them catch every wiring mistake:
+
+1. **Slide the pointer across the columns without pressing anything.** The header underline and the
+   `←→ …` label in the controls bar should follow it, and they should agree. Over the spine both
+   should say *Parts*; over the masthead or the controls bar, *Sections*.
+2. **Park in each column and press →.** The distance travelled should get shorter as you move right:
+   a part, a section, a paragraph.
+3. **Scroll to the middle of a section and press ←.** It should go to the top of *that* section, not
+   the one before — then ← again leaves it. Then → should put you back exactly where the second ←
+   started. If that round trip doesn't close, the track-skip rule is broken.
+4. **Press → twice quickly.** You should advance two items. One item means the chaining in
+   `keynav.ts` is measuring mid-flight instead of stepping from its own last target.
+5. **Press Back.** As with scrolling, it must leave the page — arrow keys write `?at=` through the
+   ordinary position listener and must never push a history entry.
+
+And two negatives worth confirming, because both are silent when wrong: Alt+→ should still be the
+browser's Back, and holding → down should do nothing after the first step (auto-repeat is dropped).
 
 ## Do not judge colour from a screenshot
 

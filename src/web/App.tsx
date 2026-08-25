@@ -6,8 +6,14 @@ import { Spine } from "./Spine.js";
 import { buildGeometry, buildOutline, columnLabel } from "./tree.js";
 import { atParam, colsParam, slugParam, textParam } from "./params.js";
 import { STICKY_OFFSET, scrollToBlock } from "./scroll.js";
-import { activeSectionIndex, buildSections, type Section } from "./position.js";
+import {
+  activeSectionIndex,
+  buildSections,
+  sectionDepth,
+  type Section,
+} from "./position.js";
 import { fitView } from "./layout.js";
+import { useArrowNav } from "./keynav.js";
 
 /**
  * Nothing here is `useState` any more except the fetched article itself, which
@@ -186,6 +192,15 @@ function Reader({ article }: { article: Article }) {
   const layoutKey = `${fit.columns.join(",")}|${showText}|${windowWidth}`;
   const jumpTo = useReadingPosition(sections, layoutKey);
 
+  /**
+   * ← / → step through one level of the tree, and *which* level is whichever
+   * column the pointer is sitting in — see keynav.ts. It writes no state of its
+   * own: it scrolls, and the listener above notices, exactly as it would for a
+   * wheel. Off any tagged column the stride falls back to the section, which is
+   * the unit `?at=` already stores.
+   */
+  const navDepth = useArrowNav(geometry, article.blocks, sectionDepth(geometry));
+
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
 
@@ -280,6 +295,14 @@ function Reader({ article }: { article: Article }) {
           </button>
         )}
         <span className="mode">{showText ? "reading" : "outline"}</span>
+        {/* The aim, said out loud. The arrows are useless as an experiment if
+            you cannot tell what they are pointing at before you press one. */}
+        <span
+          className="keynav"
+          title="Left and right arrows step through this level — move the pointer to another column to change it"
+        >
+          ←→ {columnLabel(navDepth, geometry.leafDepth)}
+        </span>
         <span className="provenance" title={article.tree.generator}>
           {article.tree.version}
         </span>
@@ -290,6 +313,7 @@ function Reader({ article }: { article: Article }) {
         columns={fit.columns}
         layout={fit}
         showText={showText}
+        navDepth={navDepth}
         onJump={jumpTo}
       />
     </div>

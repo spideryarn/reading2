@@ -198,11 +198,24 @@ export function Spine({ outline, layoutKey, narrow, onJump }: Props) {
   }, [metrics, scrollY, viewportH]);
 
   if (!metrics || metrics.l1.length === 0) {
-    return <aside className="spine" aria-hidden="true" />;
+    // Tagged for the keyboard even while it is empty: the rail occupies its
+    // width from the first paint but only measures on the next frame, and a
+    // rail that quietly meant "sections" for that frame would be a level that
+    // changed under the pointer without the pointer moving.
+    return <aside className="spine" aria-hidden="true" data-nav-depth={1} />;
   }
 
   return (
-    <aside className={`spine${narrow ? " narrow" : ""}`} aria-label="Article outline">
+    <aside
+      className={`spine${narrow ? " narrow" : ""}`}
+      aria-label="Article outline"
+      /* The whole rail is one keyboard-navigation zone, meaning L1: it draws
+         parts as bands and names the current one in the header strip, so ← / →
+         over it step part by part. Its click targets are L2 — finer than its
+         bands, because a 1px tick is unhittable — but that is a pointing
+         concession, not what the rail is *about*. See keynav.ts. */
+      data-nav-depth={1}
+    >
       {/* Where you are, spelled out. The bands below can be one pixel tall;
           this never is. */}
       {!narrow && (

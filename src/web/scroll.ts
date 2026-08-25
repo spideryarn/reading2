@@ -1,12 +1,12 @@
 /**
  * Scrolling to a block, in one place.
  *
- * Three things now want to do this — the deep link in the URL hash, a click on
- * a gist, and a click on a spine segment — and they must agree, because they
- * are all claiming to put the *same* block under the reader's eye. They used to
- * disagree: the hash landed the row's top below the sticky bars, while a gist
- * click used `scrollIntoView({ block: "center" })`, which centres a row that may
- * be a single line or may be a 900-word paragraph.
+ * Four things now want to do this — the deep link in the URL, a click on a
+ * gist, a click on a spine segment, and an arrow keypress (keynav.ts) — and
+ * they must agree, because they are all claiming to put the *same* block under
+ * the reader's eye. They used to disagree: the hash landed the row's top below
+ * the sticky bars, while a gist click used `scrollIntoView({ block: "center" })`,
+ * which centres a row that may be a single line or may be a 900-word paragraph.
  *
  * Everything addresses the block by its stable id — never by offset or selector
  * path. See docs/project/block-ids.md.
@@ -19,6 +19,75 @@
  */
 export const STICKY_OFFSET = 84;
 
+/**
+ * How long a jump takes — the same length whatever the distance.
+ *
+ * Greg, 2026-08-25: "can you make it scroll a bit faster so I don't have to
+ * wait so long?"
+ *
+ * That wait is not a constant we chose; it is the browser's. `behavior:
+ * "smooth"` runs an animation whose duration Chrome scales with how far you are
+ * going, and this view routinely jumps thousands of pixels — a section, a part,
+ * the far end of the article — so the very moves that most need to feel like a
+ * jump are the ones the browser makes longest. There is no API to shorten it,
+ * so we run the animation ourselves and hold the duration flat: near or far, a
+ * jump costs the same fifth of a second.
+ *
+ * Short, but deliberately not zero. The travel is what tells you the article
+ * moved *under* you rather than being replaced — with the arrow keys pressed
+ * repeatedly that is the difference between reading a document and shuffling
+ * through slides.
+ */
+export const SCROLL_MS = 200;
+
+/** Fast off the mark, gentle into the stop. */
+const ease = (t: number) => 1 - (1 - t) ** 3;
+
+let frame = 0;
+let release: (() => void) | null = null;
+
+/** Abandon any jump in flight — a newer one, or the reader taking over. */
+function cancel() {
+  if (frame) cancelAnimationFrame(frame);
+  frame = 0;
+  release?.();
+  release = null;
+}
+
+function glide(to: number) {
+  cancel();
+  const from = window.scrollY;
+  const distance = to - from;
+  if (Math.abs(distance) < 1) return;
+  const started = performance.now();
+
+  // The browser's own smooth scroll gives up the moment you touch the wheel.
+  // Ours has to be told, or we would drag the reader back to a destination they
+  // have visibly changed their mind about.
+  const bail = () => cancel();
+  window.addEventListener("wheel", bail, { passive: true });
+  window.addEventListener("touchstart", bail, { passive: true });
+  release = () => {
+    window.removeEventListener("wheel", bail);
+    window.removeEventListener("touchstart", bail);
+  };
+
+  const tick = (now: number) => {
+    const t = Math.min(1, (now - started) / SCROLL_MS);
+    // `top` only: omitting `left` keeps the horizontal position, which matters
+    // because a deep tree scrolls the table sideways (layout.ts § overflowing).
+    window.scrollTo({ top: from + distance * ease(t), behavior: "auto" });
+    if (t < 1) frame = requestAnimationFrame(tick);
+    else cancel();
+  };
+  frame = requestAnimationFrame(tick);
+}
+
+/** Whoever asked for motion, this reader has said no. */
+function reducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
   const row = document.querySelector<HTMLElement>(
     `tr[data-block="${CSS.escape(id)}"]`,
@@ -29,5 +98,10 @@ export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
   // inside a cell that spans dozens of others.
   const top = row.getBoundingClientRect().top + window.scrollY - STICKY_OFFSET;
   const max = document.documentElement.scrollHeight - window.innerHeight;
-  window.scrollTo({ top: Math.max(0, Math.min(top, max)), behavior });
+  const target = Math.max(0, Math.min(top, max));
+  if (behavior === "smooth" && !reducedMotion()) glide(target);
+  else {
+    cancel();
+    window.scrollTo({ top: target, behavior: "auto" });
+  }
 }

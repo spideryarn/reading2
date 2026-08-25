@@ -27,6 +27,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → the section that goes in `?at=` |
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically |
+| [`src/web/keynav.ts`](../../src/web/keynav.ts) | ← / → nav, aimed by the pointer — [keyboard.md](keyboard.md) |
 | [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
 
 Running it: [setup-dev.md](setup-dev.md). Slug selection is `/?slug=<slug>`, defaulting to
