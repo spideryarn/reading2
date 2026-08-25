@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "toc": "tsx src/toc.ts",
     "arc": "tsx src/arc.ts",
+    "tweets": "tsx src/tweets.ts",
     "typecheck": "tsx scripts/typecheck.ts"
   },
   "keywords": [],

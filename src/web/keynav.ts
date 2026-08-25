@@ -142,6 +142,17 @@ export function useArrowNav(
   geometry: Geometry,
   blocks: Block[],
   fallbackDepth: number,
+  /**
+   * Whether the keys are live. False while the bottom drawer is open (App.tsx):
+   * the reader is looking at a panel, not at the article, and scrolling the
+   * page underneath a dim they cannot see through loses them their place
+   * without ever looking like it did anything.
+   *
+   * Only the *keys* go quiet. The pointer keeps aiming, so the controls bar
+   * still says which level ↑/↓ would step by, and closing the drawer resumes
+   * exactly where it left off rather than snapping back to the section.
+   */
+  enabled = true,
 ): number {
   const [depth, setDepth] = useState(fallbackDepth);
   /** Last known pointer position, for a fresh hit-test at keypress time. */
@@ -183,6 +194,7 @@ export function useArrowNav(
     };
 
     const onKey = (e: KeyboardEvent) => {
+      if (!enabled) return;
       const dir = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
       if (dir === 0) return;
       // Cmd+↓ jumps to the end of the document, Alt+↓ and Shift+↓ have their own
@@ -223,7 +235,7 @@ export function useArrowNav(
       window.removeEventListener("pointerdown", drop);
       window.clearTimeout(timer);
     };
-  }, [geometry, blocks, fallbackDepth]);
+  }, [geometry, blocks, fallbackDepth, enabled]);
 
   return depth;
 }

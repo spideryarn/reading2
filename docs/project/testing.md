@@ -58,6 +58,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/comment-nav.test.ts`](../../tests/comment-nav.test.ts) | comments in reading order and stepping between them — including that the order comes from the block **index**, never the id string |
 | [`tests/jobs.test.ts`](../../tests/jobs.test.ts) | the ingest queue's decisions — step ordering, the restart sweep, and the request parsing that stands between a POST body and `path.join("data", slug)` ([ingest-queue.md](ingest-queue.md)). **Nothing here runs a job**: queuing one fetches somebody's website and spends money at two model endpoints |
 | [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | what an article gets called, and whether that name is safe to make a path out of |
+| [`tests/tweets.test.ts`](../../tests/tweets.test.ts) | stage 5c's deterministic halves — counting a post's characters, the artefact shape, how many posts to ask for, and **`threadIsCurrent`**, the first step freshness check in the repo ([tweet-thread-page.md](../plans/tweet-thread-page.md)) |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken

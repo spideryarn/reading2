@@ -13,6 +13,7 @@
 import { JSDOM } from "jsdom";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { sanitizeInPlace } from "./sanitize.js";
 
@@ -402,7 +403,7 @@ export interface BlocksRun extends SplitResult {
  *
  * **Ids are carried over from the existing blocks.json, not re-minted.** That
  * is the whole reason a re-extraction is survivable — see
- * docs/project/block-ids.md#surviving-stage-2.
+ * docs/project/block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters.
  */
 export async function runBlocks(opts: {
   htmlFile: string;
@@ -455,6 +456,11 @@ async function main() {
   console.log(`Blocks:    ${path.resolve(outJson)}`);
 }
 
+/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
+   also matches when a *different* entry file with the same basename imports this
+   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
+   effect of the import, which is the one thing this guard exists to prevent. */
 const isMain =
-  process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain) void main();

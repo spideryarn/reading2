@@ -13,7 +13,16 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"]
+    "types": ["node"],
+
+    /* The same `@/` alias src/web/tsconfig.json declares, pointed at the same
+       directory from here. A test that imports a component which imports a
+       shadcn one — `tweets-page.test.ts` was the first — pulls `@/components/
+       ui/button` into *this* project, where the alias did not exist, and the
+       typecheck failed on a module vite and vitest both resolve perfectly
+       well. Runtime already had it (vitest.config.ts); this is the third of
+       the three resolvers that doc names. */
+    "paths": { "@/*": ["../src/web/*"] }
   },
   /* The ambient declaration for html-encoding-sniffer lives beside the module
      that uses it, and this project pulls that module in without owning the

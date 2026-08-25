@@ -29,6 +29,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Arc, ArcEntry, Block, Tree, TreeNode } from "./types.js";
 
 const MODEL = "claude-opus-5";
@@ -170,19 +171,34 @@ function parseJson(raw: string): { arc: string[] } {
   return JSON.parse(text);
 }
 
-async function main(): Promise<void> {
-  const dir = process.argv[2];
-  if (!dir) {
-    console.error("Usage: tsx src/arc.ts <dir with blocks.json + tree.json>");
-    process.exit(1);
-  }
-  const { blocks } = JSON.parse(
-    await readFile(path.join(dir, "blocks.json"), "utf-8"),
-  ) as { blocks: Block[] };
-  const tree = JSON.parse(await readFile(path.join(dir, "tree.json"), "utf-8")) as Tree;
-  const parts = partsOf(tree);
+export interface ArcRun {
+  arc: Arc;
+  outFile: string;
+  parts: TreeNode[];
+  blocks: number;
+  inputTokens: number;
+  outputTokens: number;
+  elapsedMs: number;
+}
 
-  console.log(`${parts.length} parts, ${blocks.length} blocks → ${MODEL}`);
+/**
+ * Stage 5b over a data directory: one model call, then `arc.json` beside the
+ * tree it was written against.
+ *
+ * Exported because two callers run this stage and they must not drift —
+ * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
+ */
+export async function generateArc(opts: {
+  dir: string;
+  onProgress?: (detail: string) => void;
+  /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
+  signal?: AbortSignal;
+}): Promise<ArcRun> {
+  const { blocks } = JSON.parse(
+    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
+  ) as { blocks: Block[] };
+  const tree = JSON.parse(await readFile(path.join(opts.dir, "tree.json"), "utf-8")) as Tree;
+  const parts = partsOf(tree);
   const started = Date.now();
 
   const client = new Anthropic();
@@ -193,7 +209,20 @@ async function main(): Promise<void> {
     output_config: { effort: "high" },
     system: SYSTEM,
     messages: [{ role: "user", content: renderPrompt(tree, blocks) }],
-  });
+  }, { signal: opts.signal });
+
+  if (opts.onProgress) {
+    const report = opts.onProgress;
+    let chars = 0;
+    let last = 0;
+    stream.on("text", (delta) => {
+      chars += delta.length;
+      const now = Date.now();
+      if (now - last < 500) return;
+      last = now;
+      report(`${parts.length} parts, ${Math.round(chars / 1000)}k characters so far`);
+    });
+  }
 
   const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") {
@@ -209,18 +238,49 @@ async function main(): Promise<void> {
     .join("");
 
   const arc = buildArc(parseJson(raw).arc, tree, tree.slug);
-  const outFile = path.join(dir, "arc.json");
+  const outFile = path.join(opts.dir, "arc.json");
   await writeFile(outFile, JSON.stringify(arc, null, 2), "utf-8");
 
-  const u = message.usage;
-  console.log(`\nTokens:    ${u.input_tokens} in, ${u.output_tokens} out`);
-  console.log(`Elapsed:   ${((Date.now() - started) / 1000).toFixed(1)}s`);
-  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
-  arc.entries.forEach((e, i) => {
-    console.log(`${String(i + 1).padStart(2)}. ${parts[i]?.title ?? ""}\n    ${e.text}\n`);
+  return {
+    arc,
+    outFile,
+    parts,
+    blocks: blocks.length,
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    elapsedMs: Date.now() - started,
+  };
+}
+
+async function main(): Promise<void> {
+  const dir = process.argv[2];
+  if (!dir) {
+    console.error("Usage: tsx src/arc.ts <dir with blocks.json + tree.json>");
+    process.exit(1);
+  }
+  // Before the call, not after. This is the only thing on screen for the two
+  // minutes the model takes, and printing it afterwards made `npm run arc` look
+  // hung for the whole request.
+  console.log(`Writing the arc with ${MODEL}\u2026`);
+  const run = await generateArc({
+    dir,
+    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
+  });
+
+  console.log(`\n${run.parts.length} parts, ${run.blocks} blocks → ${MODEL}`);
+  console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
+  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
+  console.log(`Wrote:     ${path.resolve(run.outFile)}\n`);
+  run.arc.entries.forEach((e, i) => {
+    console.log(`${String(i + 1).padStart(2)}. ${run.parts[i]?.title ?? ""}\n    ${e.text}\n`);
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  await main();
-}
+/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
+   also matches when a *different* entry file with the same basename imports this
+   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
+   effect of the import, which is the one thing this guard exists to prevent. */
+const isMain =
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) void main();

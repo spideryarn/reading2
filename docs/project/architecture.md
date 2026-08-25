@@ -96,6 +96,7 @@ artefacts on disk, not by reaching into another stage's code.
 | 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
+| 5c | the thread — the article as numbered posts ([tweet-thread-page.md](../plans/tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
 | 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view). **Sanitises again at ingress** ([security.md](security.md#sanitised-twice-on-purpose)) — stage 3 used jsdom's parser, this one uses the browser's | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
 | 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | `data/_jobs/`, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
@@ -132,11 +133,20 @@ Filesystem, one directory per article, no database:
     tree.json       nodes: ranges, titles, gists
     arc.json        one sentence per part: where the argument stands there
                     (stage 5b — joined to the tree by RANGE, never by node id)
+    tweets.json     the article as a numbered thread (stage 5c, on demand only —
+                    docs/plans/tweet-thread-page.md). Carries a sourceHash of
+                    blocks.json, so a thread that has gone stale can say so.
     reader.json     per-reader state: progress, highlights, notes (all keyed by block id)
 ```
 
 Anything expensive is cached on a content hash. `tree.json` is keyed on
 `hash(blocks.json) + prompt version + model id` — change any of those and it regenerates.
+
+**That was aspirational until 2026-08-25, and now one artefact really does it.** `tweets.json`
+carries a `sourceHash` and the pipeline reads it (`isDone` on a step, see
+[ingest-queue.md](ingest-queue.md#a-step-can-now-say-whether-its-artefact-is-current-not-just-present));
+`tree.json` and `arc.json` still carry no hash, so for them "cached" still means "the file is
+there", and they still rely on the force-cascade to notice that something upstream moved.
 
 `blocks.json` is the exception: it is a **source artefact, not a cache**. It is the only place the
 ids live, and stage 3 carries them forward by matching text on re-run — so deleting it destroys

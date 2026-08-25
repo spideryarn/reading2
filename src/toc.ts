@@ -20,6 +20,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 
 const MODEL = "claude-opus-5";
@@ -175,22 +176,49 @@ export function buildTree(
   return { version: PROMPT_VERSION, generator: MODEL, slug, rootId, nodes };
 }
 
-async function main(): Promise<void> {
-  const blocksPath = process.argv[2];
-  if (!blocksPath) {
-    console.error("Usage: tsx src/toc.ts <blocks.json> [outDir]");
-    process.exit(1);
-  }
-  const { blocks } = JSON.parse(await readFile(blocksPath, "utf-8")) as { blocks: Block[] };
-  const slug = path.basename(blocksPath).replace(/\.blocks\.json$/, "").replace(/\.json$/, "");
-  const outDir = process.argv[3] ?? path.join("data", slug);
+/** The slug a blocks.json path implies — `foo.blocks.json` and `foo.json` both give `foo`. */
+export function slugForBlocksPath(blocksPath: string): string {
+  return path.basename(blocksPath).replace(/\.blocks\.json$/, "").replace(/\.json$/, "");
+}
 
+export interface TocRun {
+  tree: Tree;
+  outDir: string;
+  blocks: number;
+  gistable: number;
+  labelled: number;
+  internal: number;
+  inputTokens: number;
+  outputTokens: number;
+  elapsedMs: number;
+}
+
+/**
+ * Stage 4 over a blocks.json on disk: one model call, then `tree.json` and a
+ * copy of `blocks.json` beside it.
+ *
+ * Exported because two callers run this stage and they must not drift —
+ * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
+ *
+ * `onProgress` is called as the model streams. There is nothing useful to say
+ * about *what* it has written — the JSON is unparseable until it is complete —
+ * so what it reports is that something is still arriving, which is the question
+ * a reader watching a two-minute step is actually asking.
+ */
+export async function generateToc(opts: {
+  blocksPath: string;
+  outDir?: string;
+  onProgress?: (detail: string) => void;
+  /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
+  signal?: AbortSignal;
+}): Promise<TocRun> {
+  const { blocks } = JSON.parse(await readFile(opts.blocksPath, "utf-8")) as { blocks: Block[] };
+  const slug = slugForBlocksPath(opts.blocksPath);
+  const outDir = opts.outDir ?? path.join("data", slug);
   const gistable = blocks.filter((b) => b.gistable).length;
-  console.log(`${blocks.length} blocks (${gistable} gistable) → ${MODEL}`);
-
-  const client = new Anthropic();
   const started = Date.now();
 
+  const client = new Anthropic();
   const stream = client.messages.stream({
     model: MODEL,
     max_tokens: 32000,
@@ -198,7 +226,22 @@ async function main(): Promise<void> {
     output_config: { effort: "high" },
     system: SYSTEM,
     messages: [{ role: "user", content: renderBlocks(blocks) }],
-  });
+  }, { signal: opts.signal });
+
+  if (opts.onProgress) {
+    const report = opts.onProgress;
+    let chars = 0;
+    let last = 0;
+    stream.on("text", (delta) => {
+      chars += delta.length;
+      // Throttled, because the model emits deltas far faster than anyone can
+      // read them and every one of these is a write the poller may pick up.
+      const now = Date.now();
+      if (now - last < 500) return;
+      last = now;
+      report(`${Math.round(chars / 1000)}k characters of tree so far`);
+    });
+  }
 
   const message = await stream.finalMessage();
   const raw = message.content
@@ -220,17 +263,49 @@ async function main(): Promise<void> {
   await writeFile(path.join(outDir, "tree.json"), JSON.stringify(tree, null, 2), "utf-8");
   await writeFile(path.join(outDir, "blocks.json"), JSON.stringify({ blocks }, null, 2), "utf-8");
 
-  const internal = Object.values(tree.nodes).filter((n) => n.children.length > 0).length;
-  const labelled = Object.values(tree.nodes).filter((n) => n.navLabel).length;
-  const u = message.usage;
-
-  console.log(`\nNodes:     ${Object.keys(tree.nodes).length} (${internal} internal)`);
-  console.log(`Labelled:  ${labelled} / ${gistable} gistable blocks`);
-  console.log(`Tokens:    ${u.input_tokens} in, ${u.output_tokens} out`);
-  console.log(`Elapsed:   ${((Date.now() - started) / 1000).toFixed(1)}s`);
-  console.log(`\nWrote:     ${path.resolve(outDir)}/tree.json`);
-  console.log(`Validate:  npm run validate-tree -- ${outDir}`);
+  return {
+    tree,
+    outDir,
+    blocks: blocks.length,
+    gistable,
+    labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
+    internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    elapsedMs: Date.now() - started,
+  };
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+async function main(): Promise<void> {
+  const blocksPath = process.argv[2];
+  if (!blocksPath) {
+    console.error("Usage: tsx src/toc.ts <blocks.json> [outDir]");
+    process.exit(1);
+  }
+  const argOutDir = process.argv[3];
+  // Before the call, not after: this is the only thing on screen for the two
+  // minutes the model takes.
+  console.log(`Building the tree with ${MODEL}\u2026`);
+  const run = await generateToc({
+    blocksPath,
+    ...(argOutDir ? { outDir: argOutDir } : {}),
+    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
+  });
+
+  console.log(`\n${run.blocks} blocks (${run.gistable} gistable) → ${MODEL}`);
+  console.log(`\nNodes:     ${Object.keys(run.tree.nodes).length} (${run.internal} internal)`);
+  console.log(`Labelled:  ${run.labelled} / ${run.gistable} gistable blocks`);
+  console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
+  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
+  console.log(`\nWrote:     ${path.resolve(run.outDir)}/tree.json`);
+  console.log(`Validate:  npm run validate-tree -- ${run.outDir}`);
+}
+
+/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
+   also matches when a *different* entry file with the same basename imports this
+   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
+   effect of the import, which is the one thing this guard exists to prevent. */
+const isMain =
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain) void main();

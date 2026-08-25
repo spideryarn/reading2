@@ -14,60 +14,46 @@
  * got wrong (tree.js § the arc). Title, byline, source, counts: all constant,
  * all here.
  *
- * Two levels, because most of it is worth knowing once and then never again:
+ * What is here is only the half you want *before* deciding to read: title, who
+ * wrote it and where, and the one-sentence gist of the whole piece.
  *
- *  - **Always visible** — title, who wrote it and where, and the one-sentence
- *    gist of the whole piece. The facts you want before deciding to read.
- *  - **Behind the ▾** — provenance and shape: the source link, the counts, and
- *    which model built the tree and the arc. The facts you want when something
- *    looks wrong, which is rarely, and never while reading.
+ * The other half — provenance and shape, the source link, the counts, which
+ * model built the tree — used to be here too, behind a `▾`. It moved to the
+ * bottom drawer on 2026-08-25 (Dock.tsx), and the reason is the paragraph
+ * below: **this element scrolls away.** Its disclosure was therefore only
+ * reachable from the very top of the article, and opening it pushed the whole
+ * table down. The facts you want when something looks wrong are exactly the
+ * facts you want *without* going back to the top first.
  *
- * The disclosure is URL state like everything else (`?about=1`), so a link to
- * an article can arrive with its provenance already open — see params.ts.
+ * It moved once more the same day, out of the drawer and onto a page of its
+ * own — Metadata.tsx, `/read/<slug>/metadata`, reached from the bar's About
+ * button (docs/plans/metadata-page.md). So there are two superseded spellings
+ * of it in old links, `?about=1` and `?panel=about`, and main.tsx rewrites both
+ * to the page.
+ *
+ * Whether this masthead should link there is open — it shows the title and
+ * byline, and a reader who wants more currently has to find the bottom bar.
  *
  * Note the masthead scrolls away by design (it is `position: sticky` only on
  * the horizontal axis, so it stays put when the table scrolls sideways). What
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo } from "react";
-import { ChevronDown } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { ArrowLeft } from "lucide-react";
 import type { Article } from "../types.js";
-
-/** Words per minute. The middling end of the usual 200–250 range for prose. */
-const WPM = 230;
+import { Link } from "./Link.js";
+import { LIBRARY_HREF } from "./router.js";
+import { articleStats } from "./stats.js";
 
 interface Props {
   article: Article;
-  expanded: boolean;
-  onToggle(): void;
 }
 
-/** Everything countable about the article, derived rather than stored. */
-function useStats(article: Article) {
-  return useMemo(() => {
-    const words = article.blocks.reduce((n, b) => n + b.words, 0);
-    const byDepth = new Map<number, number>();
-    for (const node of Object.values(article.tree.nodes)) {
-      byDepth.set(node.depth, (byDepth.get(node.depth) ?? 0) + 1);
-    }
-    return {
-      words,
-      minutes: Math.max(1, Math.round(words / WPM)),
-      blocks: article.blocks.length,
-      parts: byDepth.get(1) ?? 0,
-      sections: byDepth.get(2) ?? 0,
-    };
-  }, [article]);
-}
-
-export function Masthead({ article, expanded, onToggle }: Props) {
-  const { meta, tree, arc } = article;
-  const stats = useStats(article);
+export function Masthead({ article }: Props) {
+  const { meta, tree } = article;
+  // The counts live in stats.ts now, because the drawer's About panel needs the
+  // same arithmetic and two copies of it would drift.
+  const stats = useMemo(() => articleStats(article), [article]);
   const root = tree.nodes[tree.rootId];
 
   // Only the parts of the facts line this article actually has. Joining a
@@ -83,114 +69,46 @@ export function Masthead({ article, expanded, onToggle }: Props) {
 
   return (
     <div className="masthead">
-      {/* `asChild` on all three, so Radix adds NO elements of its own — it
-          merges its props onto the div, the button and the dl that were
-          already here. That matters more than tidiness: this page measures its
-          own geometry (Spine.tsx, scroll.ts and keynav.ts all find things by
-          selector), and a surprise wrapper is exactly the kind of change that
-          shifts a rect without looking like it broke anything.
+      <div className="masthead-inner">
+        {/* The way back to the shelf. Here rather than in the sticky controls
+            bar because it belongs with the article's identity, not with the
+            granularity controls — and because the bar is measured by
+            `stickyOffset()`, so anything added to it changes where every deep
+            link and arrow jump lands (scroll.ts). Browser Back does the same
+            job; this is for the reader who arrived by pasted link and has no
+            Back to press. The bottom bar has a Home button too, and that is not
+            a duplicate: this one scrolls away with the masthead, and that one
+            is the way back once you are three screens into the piece.
+            Utilities rather than a rule in styles.css: chrome is what Tailwind
+            is here for (web-client.md#tailwind-and-shadcn-components). */}
+        <Link
+          href={LIBRARY_HREF}
+          className="tw:mb-1.5 tw:inline-flex tw:items-center tw:gap-1 tw:font-sans tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+        >
+          <ArrowLeft size={13} />
+          Library
+        </Link>
+        <h1>
+          {meta.url ? (
+            <a href={meta.url} target="_blank" rel="noreferrer noopener">
+              {meta.title}
+            </a>
+          ) : (
+            meta.title
+          )}
+        </h1>
 
-          What Radix contributes is the aria-expanded/aria-controls pairing and
-          the open-state management, not markup. The URL stays the source of
-          truth: `open` comes from ?about= and every change goes back out
-          through onToggle — see docs/project/url-state.md. */}
-      <Collapsible open={expanded} onOpenChange={onToggle} asChild>
-        <div className="masthead-inner">
-          <div className="masthead-head">
-            <h1>
-              {meta.url ? (
-                <a href={meta.url} target="_blank" rel="noreferrer noopener">
-                  {meta.title}
-                </a>
-              ) : (
-                meta.title
-              )}
-            </h1>
-            {/* No aria-expanded and no onClick here any more: the trigger
-                supplies both, and keeping our own alongside would be two
-                sources of truth for one piece of state. */}
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="disclose"
-                title={expanded ? "Hide article details" : "Show article details"}
-              >
-                <ChevronDown className={`chevron${expanded ? " up" : ""}`} size={14} />
-              </button>
-            </CollapsibleTrigger>
-          </div>
+        <p className="facts">
+          {facts.map((f, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static line, rebuilt whole, no child state
+            <span key={i}>{f}</span>
+          ))}
+        </p>
 
-          <p className="facts">
-            {facts.map((f, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: static line, rebuilt whole, no child state
-              <span key={i}>{f}</span>
-            ))}
-          </p>
-
-          {/* The whole piece in one sentence — the coarsest thing there is, and
-              constant, so it belongs here rather than in a column. */}
-          {root?.gist && <p className="root-gist">{root.gist}</p>}
-
-          {/* Rendered unconditionally now, because Radix unmounts it while
-              closed rather than us doing it with `expanded &&`.
-
-              Worth knowing if that ever changes: `.about` is `display: grid`,
-              and with forceMount Radix hides content using the `hidden`
-              attribute instead of unmounting. The UA's `[hidden] { display:
-              none }` LOSES to a class that sets `display`, so the panel would
-              stay on screen with nothing to say it was open. Add
-              `.about[hidden] { display: none }` if that day comes. */}
-          <CollapsibleContent asChild>
-            <dl className="about">
-              {meta.url && (
-                <>
-                  <dt>Source</dt>
-                  <dd>
-                    <a href={meta.url} target="_blank" rel="noreferrer noopener">
-                      {meta.url}
-                    </a>
-                  </dd>
-                </>
-              )}
-              <dt>Slug</dt>
-              <dd className="mono">{meta.slug}</dd>
-              {meta.lang && (
-                <>
-                  <dt>Language</dt>
-                  <dd>{meta.lang}</dd>
-                </>
-              )}
-              <dt>Shape</dt>
-              <dd>
-                {stats.parts} parts · {stats.sections} sections · {stats.blocks} blocks ·{" "}
-                {stats.words.toLocaleString()} words
-              </dd>
-              <dt>Tree</dt>
-              <dd className="mono">
-                {tree.generator} · {tree.version}
-              </dd>
-              {/* Absent until `npm run arc` has run, and saying so is the
-                  quickest answer to "why is the left column empty?". */}
-              <dt>Arc</dt>
-              <dd className="mono">
-                {arc ? `${arc.generator} · ${arc.version}` : "not generated"}
-              </dd>
-              {root?.summary && (
-                <>
-                  <dt>Summary</dt>
-                  <dd>{root.summary}</dd>
-                </>
-              )}
-              {meta.note && (
-                <>
-                  <dt>Note</dt>
-                  <dd>{meta.note}</dd>
-                </>
-              )}
-            </dl>
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
+        {/* The whole piece in one sentence — the coarsest thing there is, and
+            constant, so it belongs here rather than in a column. */}
+        {root?.gist && <p className="root-gist">{root.gist}</p>}
+      </div>
     </div>
   );
 }

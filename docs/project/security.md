@@ -1,14 +1,19 @@
 # Security
 
-One threat matters here, and it isn't the usual one.
+**Two untrusted parties, and neither is another user.**
 
-**The untrusted party is the content, not another user.** Spideryarn is a local, single-user tool,
-which normally shrinks a security problem to nothing. It doesn't help here, because the single user
-is precisely who is targeted — every time they point the app at somebody else's article. And
+**The content**, which is what most of this document is about. Spideryarn is a local, single-user
+tool, which normally shrinks a security problem to nothing. It doesn't help here, because the single
+user is precisely who is targeted — every time they point the app at somebody else's article. And
 pointing it at arbitrary URLs is the entire product, so "don't open untrusted articles" was never
 available as a mitigation.
 
-Everything below follows from that.
+**The URL**, which is a second one and was missed for a day —
+[§ The URL is the second untrusted party](#the-url-is-the-second-untrusted-party). Every `/api/…`
+path segment is attacker-controllable the moment anything at all can make the browser issue a
+request, and three of them were being joined onto a filesystem path unchecked.
+
+Everything in the first half below follows from the first of those.
 
 - The gate: [`src/sanitize.ts`](../../src/sanitize.ts), called from stage 3 in
   [`src/blocks.ts`](../../src/blocks.ts)
@@ -279,6 +284,86 @@ it. Stage 3 already parsed a JSDOM per article before this change, and so does s
 makes an existing cost roughly a third worse; it does not introduce it. If the server process ever
 needs to ingest many articles without restarting, the fix belongs to the queue — see
 [ingest-queue.md](ingest-queue.md) — not here.
+
+## The URL is the second untrusted party <a id="the-url-is-the-second-untrusted-party"></a>
+
+**Found and fixed 2026-08-25.** A confirmed path traversal in the read API, demonstrated rather than
+argued: a `blocks.json` and `tree.json` planted in a directory under `/tmp`, then requested through
+`GET /api/article/` with a slug of twelve `..%2F` followed by that path. HTTP 200, with the planted
+text in the response body.
+
+The chain, and every link of it looked reasonable on its own:
+
+```
+/api/article/..%2F..%2F…             the route pattern is [\w.%-]+ — `%` and `.` both allowed
+  → part(m, 1)                        percent-decodes  →  "../../…"
+  → loadArticle(slug)                 no validation
+  → path.join(ROOT, "data", slug)     `..` is NORMALISED, not refused
+  → outside the repo
+```
+
+**`path.join` does not defend anything.** It resolves `..` segments as an ordinary part of its job;
+refusing them is not among its responsibilities. Anywhere a value that came from outside meets
+`path.join`, the validation has to have happened already.
+
+### Why it survived being looked at
+
+The disguise is the fixture fallback. `loadArticle` tries `data/<slug>/` and then `example/`, so a
+*shallow* traversal — `../../etc`, the thing you would naturally try — finds no `blocks.json`, falls
+through, and serves the example article. That reads exactly like a refusal. You have to climb all the
+way out and land on a directory you control before the behaviour differs at all, so a probe that
+stops short reports the endpoint safe. Another [silent success](../reusable/silent-success.md): the
+check you would naturally run returns the answer you were hoping for, because it shares an
+assumption with the code.
+
+The tests in [`tests/routes.test.ts`](../../tests/routes.test.ts) therefore use a deliberately deep
+escape, and say why — a short one would pass against the vulnerable code.
+
+### The write side, which was already guarded
+
+`POST /api/comments/:slug` would have been worse than a leak: `save()` in
+[`src/comments.ts`](../../src/comments.ts) does `mkdir(..., { recursive: true })` before writing, so
+an unchecked slug there is arbitrary directory creation plus an arbitrary write of a file called
+`comments.json`. It was not exploitable, because that module has always validated at its own door —
+`assertSlug`, with the right instinct written beside it: *"anything that isn't [a path segment] is
+refused outright rather than sanitised, because sanitising invites arguing about whether it
+worked."* It surfaced as a 500 rather than a 400, which is now fixed at the route.
+
+### What the fix is
+
+`slugPart()` in [`src/routes.ts`](../../src/routes.ts), beside `part()`, and the file states the rule
+rather than leaving it to be inferred: **`part` for identifiers that are only ever looked up in a
+list; `slugPart` for every capture that becomes a directory name.** The next person adding a route
+will copy whichever line they read first, so which is which has to be written down.
+
+Behind it, `requireSlug()` in [`src/api.ts`](../../src/api.ts) checks again at the point of the
+`path.join`. That is not redundancy for its own sake: the route is what turns a bad slug into a 400,
+and the store-level check is what stops the hole reopening the next time one of these functions is
+called from somewhere that is not a route — which already happens, in `answer()`.
+
+Affected and now closed: `/api/article/:slug`, `/api/metadata/:slug`, `/api/comments/:slug` (GET,
+POST, DELETE). `/api/tweets/:slug` was guarded when it was written.
+
+### The knowledge was already in the codebase
+
+This is the part worth sitting with. `parseJobRequest` in the *same file* validates its slug and says
+exactly why: *"it is joined onto `data/` and `output/`, so an unchecked one is a path traversal."*
+`src/comments.ts` validates at its own door. Both were written by people who had the whole thought.
+It simply never reached the three read routes, because nobody was looking at them at the time.
+
+A rule stated in one function is not a rule the codebase follows. The two things that make it one
+are a shared helper the wrong choice is visibly absent from, and a test that fails when it is.
+
+### Still open here
+
+- **`isSlug` and `assertSlug` are two different definitions of a slug.**
+  [`src/ingest.ts`](../../src/ingest.ts) says `^[a-z0-9][a-z0-9-]*$`;
+  [`src/comments.ts`](../../src/comments.ts) says `^[\w.-]+$`. Neither admits a `/`, so neither is a
+  traversal, but a codebase with two answers to "what is a slug" will eventually be asked the
+  question by something that only checks one of them.
+- **Nothing rate-limits or authenticates any of this**, which is fine for one process on a laptop and
+  is not fine on the public internet — see
+  [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md), which has this going online.
 
 ## Known gaps
 

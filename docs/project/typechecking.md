@@ -58,25 +58,27 @@ function signature that had not existed for weeks and stay green.
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed
-([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)). Three things
-resolve it, from three different files, and each fails its own way:
+([web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components)). Four things
+resolve it, from four different files, and each fails its own way:
 
 | Resolver | Reads | If the alias is missing there |
 |---|---|---|
 | vite | [`vite.config.ts`](../../vite.config.ts) | the dev server and the build cannot find the module |
 | vitest | [`vitest.config.ts`](../../vitest.config.ts) | **vitest loads this file instead of `vite.config.ts`**, so an alias declared only there is invisible to tests while the dev server is perfectly happy |
-| tsc | [`src/web/tsconfig.json`](../../src/web/tsconfig.json) | the typecheck fails, or worse, resolves somewhere wrong |
+| tsc, the client | [`src/web/tsconfig.json`](../../src/web/tsconfig.json) | the typecheck fails, or worse, resolves somewhere wrong |
+| tsc, the tests | [`tests/tsconfig.json`](../../tests/tsconfig.json) | a test that imports a component which imports a shadcn one fails to typecheck, on a module vite and vitest both resolve perfectly well. Added 2026-08-25, when `tweets-page.test.ts` became the first test to reach one |
 
-**`paths` lives in `src/web/tsconfig.json`, never in the base.** `paths` entries resolve relative to
+**`paths` lives in the project that needs it, never in the base.** `paths` entries resolve relative to
 the config file that declares them, so in `tsconfig.base.json` a `"@/*": ["./*"]` would point at the
 repo root for `tests/` and the node side too, and `@/lib/utils` would resolve to a file that does not
-exist there. The alias points at `src/web` deliberately: these are browser modules and the node side
-must not be able to reach them by this name.
+exist there. **Both copies point at `src/web`** — `./*` from inside it, `../src/web/*` from `tests/`
+— which is the point: these are browser modules, and the node project still has no way to reach them
+by this name.
 
 **There is no `baseUrl`, and there must not be.** The migration plan called for `"baseUrl": "."`;
 **TypeScript 7 has removed it outright** (error TS5102). `paths` now resolves relative to its own
 config file, which is exactly the behaviour we wanted anyway. This was caught by the typecheck rather
-than reasoned out, which is the argument for proving the alias in all three runtimes instead of one.
+than reasoned out, which is the argument for proving the alias in every runtime instead of one.
 
 ### The trap: the shadcn CLI cannot resolve the alias here
 

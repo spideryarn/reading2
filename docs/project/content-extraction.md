@@ -3,7 +3,8 @@
 Strips a rich HTML page (article/blog post) down to the main content — drops nav, ads, sidebars, comments — using [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View algorithm).
 
 - Script: `src/extract.ts`
-- Run: `npm run extract -- <url> [outFile]` (defaults to `output/article.html`), **or paste the URL
+- Run: `npm run extract -- <url> [outFile]` (the output defaults to `output/<slug>.html`, with
+  the slug derived from the URL — it used to be a fixed `output/article.html`), **or paste the URL
   into the homepage's add box** and the ingest queue runs it, along with the four stages after it —
   [ingest-queue.md](ingest-queue.md). The CLI and the queue call the same function, so there is one
   code path and no way for them to disagree.

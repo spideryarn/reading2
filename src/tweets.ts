@@ -1,0 +1,457 @@
+/**
+ * Pipeline stage 5c — the **thread**: the article as a short numbered sequence
+ * of standalone posts. See docs/plans/tweet-thread-page.md.
+ *
+ *   npm run tweets -- data/writes
+ *
+ * Why this exists, and the awkwardness it has to answer to. A tweet thread sits
+ * close to two of vision.md's anti-goals — "read this in 2 minutes" and
+ * "auto-generated confident claims with no path back to the source". Greg asked
+ * for it anyway, and said what it is for: a reading aid first, copyable second.
+ * So the prompt below is written against hype rather than for it, and when
+ * accuracy and "good on X" pull apart, accuracy wins.
+ *
+ * **It is not part of a plain "add this URL".** `tweets` is in `STEP_ORDER` so
+ * it sorts and so the API will accept the name, but `DEFAULT_INGEST_STEPS` in
+ * src/pipeline.ts deliberately excludes it: a thread costs a model call and
+ * exists only for articles somebody asks for one for.
+ *
+ * **Nothing here is silently modified.** The original version of this feature
+ * fought its character limit twice — first truncating overlong posts to fit,
+ * then reverting that on principle and rejecting the whole thread instead. Both
+ * are bad: one hides what the model said, the other throws away eleven good
+ * posts to punish one long one. We keep everything the model wrote, count the
+ * characters ourselves, and record the count so the page can show the overrun.
+ * See docs/plans/tweet-thread-page.md#the-character-limit-which-they-fought-about-twice.
+ */
+
+import Anthropic from "@anthropic-ai/sdk";
+import { createHash } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { partsOf } from "./arc.js";
+import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
+
+const MODEL = "claude-opus-5";
+const PROMPT_VERSION = "tweets/1";
+
+/**
+ * The per-post limit, in one place.
+ *
+ * The original left three different numbers lying around — the prompt said 270,
+ * the schema said 280, the tooltip said 280 — which is the residue of the fight
+ * described in the plan. Here there is one limit and one target, they mean
+ * different things, and both are interpolated rather than retyped.
+ *
+ * `TARGET` is lower than `LIMIT` on purpose: whatever shows the thread puts a
+ * "12/14 " in front of each post, and on X that prefix counts too.
+ */
+export const LIMIT = 280;
+export const TARGET = 260;
+
+/**
+ * How many characters a post is, as a person would count them.
+ *
+ * Code points, not UTF-16 units: `"𝕏".length` is 2 and that is an artefact of
+ * how JavaScript stores strings, not something a reader would ever say. This is
+ * deliberately **not** X's own weighted algorithm, which counts CJK and emoji
+ * double — our articles are English prose and the prompt forbids emoji, so the
+ * two agree on everything we actually produce, and this one is explicable.
+ */
+export function countChars(text: string): number {
+  return [...text].length;
+}
+
+/**
+ * A fingerprint of the article the thread was written from.
+ *
+ * The ids **and** the text, not the raw bytes of blocks.json. Bytes would
+ * change when a field we don't read is recomputed, and would not change if two
+ * blocks swapped ids — this changes exactly when what a reader would read
+ * changes, which is the only question `sourceHash` is asked.
+ *
+ * Sixteen hex characters. It is compared for equality, never for closeness, and
+ * a full sha256 in every artefact buys nothing but width.
+ */
+export function hashBlocks(blocks: Block[]): string {
+  const canonical = blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
+}
+
+/**
+ * Does this thread still describe the article on disk?
+ *
+ * The one thing their version could not answer. Their cache was "until the
+ * document changes", enforced by a database row nobody re-checked, so a thread
+ * outlived the article it summarised with nothing anywhere saying so.
+ *
+ * Pure, and used at both ends: `GET /api/tweets/:slug` puts the answer in the
+ * response so the page can say the thread is out of date, and `threadIsCurrent`
+ * below wraps it so the pipeline will not skip a step whose artefact has gone
+ * stale.
+ */
+export function isStale(thread: TweetThread, blocks: Block[]): boolean {
+  return thread.sourceHash !== hashBlocks(blocks);
+}
+
+async function readJson<T>(file: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(file, "utf-8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is the thread on disk one we would write again today?
+ *
+ * This is the step's `isDone` (src/pipeline.ts), and it is the difference
+ * between a cache and a file that happens to exist. Every other step answers
+ * "is the artefact there"; a thread that is *there* but describes last week's
+ * text would make the step report "already done" with a green tick over it, and
+ * serve a summary of an article nobody is reading — a
+ * [silent success](docs/reusable/silent-success.md) of exactly the kind this
+ * repo keeps finding.
+ *
+ * Three things have to still hold, which is what architecture.md#storage has
+ * always specified for a cached artefact and what nothing had implemented: the
+ * blocks it was written from, the prompt that wrote it, and the model that ran.
+ * Change any one and the thread regenerates by itself, with no `force` and
+ * nobody having to remember.
+ *
+ * Anything unreadable answers **false**. Not-current is the safe way to be
+ * wrong: the cost is one model call, where the other way round is a wrong
+ * thread served for ever.
+ */
+export async function threadIsCurrent(dir: string): Promise<boolean> {
+  const thread = await readJson<TweetThread>(path.join(dir, "tweets.json"));
+  if (!thread) return false;
+  if (thread.version !== PROMPT_VERSION) return false;
+  if (thread.generator !== MODEL) return false;
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  if (!blocksFile?.blocks) return false;
+  return !isStale(thread, blocksFile.blocks);
+}
+
+/**
+ * How many posts to ask for.
+ *
+ * The original asked for a flat 12 — "based on research: 10-15 tweets optimal
+ * for academic content" — which is a fine number for a corpus of papers that
+ * are all roughly one length. This pipeline eats a 500-word blog post and a
+ * 13,000-word magazine essay, and twelve posts is a padding exercise for the
+ * first and a compression to nothing for the second.
+ *
+ * So: one post per ~700 words, which is about the length of one idea in an
+ * essay, clamped at both ends. The clamp is what stops a stub becoming a single
+ * post and a book-length piece becoming forty. Our long test article (8,275
+ * words) lands on 12, which is a decent sanity check on the divisor rather than
+ * a coincidence worth claiming.
+ */
+export function suggestedLength(words: number): number {
+  return Math.min(15, Math.max(4, Math.round(words / 700)));
+}
+
+const SYSTEM = `You are writing a NUMBERED THREAD: one long article compressed into a short
+sequence of standalone posts, each a few sentences long.
+
+It is a READING AID. Someone reads the thread to decide whether to read the
+article, or to hold its shape in mind after they have. Nobody is being sold
+anything, and nothing here is promotion.
+
+WHOSE VOICE IT IS
+
+Yours, as a reader reporting what the piece says. Never the author's. This is
+the difference between a summary and a misattribution, and it becomes invisible
+the moment the thread is copied somewhere else.
+
+  bad:  "I've spent ten years on this, and here is what I found."
+  good: "Seth argues that ten years of this work point one way."
+  bad:  "Consciousness is metabolic, not computational."
+  good: "Consciousness, Seth argues, is metabolic rather than computational."
+
+Attribute every contested claim. Where the piece states something uncontested as
+plain fact, you may state it plainly too — a thread that hedges every sentence
+is unreadable.
+
+THE FIRST POST
+
+Says what the piece CLAIMS. Not what it is about, and never a tease.
+
+  bad:  "A fascinating new essay asks the question nobody wants to answer."
+  bad:  "What if everything you know about machine consciousness is wrong?"
+  good: "Anil Seth argues the question of machine consciousness is malformed:
+         we keep asking it of the wrong kind of thing."
+
+THE LAST POST
+
+Says what the piece leaves open or deliberately unsettled. Not a call to action,
+not "follow for more", not credits — whatever shows this thread carries the
+article's own link already.
+
+RULES
+
+- One idea per post. Each must stand alone, and the sequence must still read in
+  order.
+- ${TARGET} characters or fewer per post. Count them as you write. Going over is
+  not fatal — nothing is truncated and nothing is discarded — but it is a defect
+  and it will be shown as one.
+- NO numbering. Do not write "1/", "3/12", or "🧵". The numbering is added when
+  the thread is shown.
+- No emoji, no hashtags, no "a thread:", no all-caps for emphasis.
+- **Carry the caveats across.** Where the piece limits its own claim, hedges, or
+  says what it has not shown, say so too. A thread that drops an argument's
+  limits has changed the argument, and that is the failure this whole thing is
+  most likely to commit.
+- Use the author's own distinctive vocabulary. Those words are the reader's
+  handholds if they go on to the article.
+- Never introduce a fact that is not in the article. No outside knowledge, no
+  numbers you inferred, no examples of your own.
+- No hype. Never "game-changing", "mind-blowing", "this changes everything",
+  "buckle up", "let that sink in".
+- No meta-narration: never "this section explores", "the author then turns to",
+  "the piece goes on to argue". Say the thing the piece says.
+- Prioritise comprehension over engagement.
+
+OUTPUT
+
+JSON only, no prose, no code fence:
+
+{"tweets": ["...", "...", ...]}
+
+Each element is one post's text, in order, with no numbering in it. Nothing
+else — no summary, no title, no commentary about the thread.`;
+
+/**
+ * The article, and enough about who wrote it to attribute anything to them.
+ *
+ * The byline is not decoration here: the voice rule above is "Seth argues",
+ * and without a name the model can only write "the author argues" over and
+ * over, which reads like a book report. Absent, we say so plainly rather than
+ * letting the model invent one.
+ *
+ * The skeleton comes first for the same reason it does in the arc: it is what
+ * lets the thread follow the piece's argument rather than its paragraphs. The
+ * full text follows it so the posts stay in the author's own words rather than
+ * becoming a summary of a summary.
+ */
+function renderPrompt(opts: {
+  meta: Meta | null;
+  tree: Tree;
+  blocks: Block[];
+  posts: number;
+}): string {
+  const { meta, tree, blocks, posts } = opts;
+  const skeleton = partsOf(tree)
+    .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
+    .join("\n\n");
+  const text = blocks.map((b) => b.text).filter(Boolean).join("\n\n");
+
+  const author = meta?.byline
+    ? `Written by ${meta.byline}. Refer to them by surname.`
+    : "The byline is unknown. Write \"the author\" — do not guess a name.";
+
+  return `Write about ${posts} posts. Adjust that up or down a little if the piece
+genuinely needs it.
+
+=== THE ARTICLE ===
+
+Title: ${meta?.title ?? tree.slug}
+${author}${meta?.siteName ? `\nPublished by ${meta.siteName}.` : ""}
+
+=== ITS SHAPE ===
+
+${skeleton}
+
+=== ITS FULL TEXT ===
+
+${text}`;
+}
+
+/** Strip a stray code fence if the model wraps its JSON despite instructions. */
+function parseJson(raw: string): { tweets: string[] } {
+  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
+  return JSON.parse(text);
+}
+
+/**
+ * Count the posts' characters, without changing a character of any of them.
+ *
+ * **There is no stored post number**, and that is deliberate. Position is the
+ * array's job and the array already does it; a `number` field beside the index
+ * is a second copy of the same fact, and the two can only ever disagree — which
+ * is how a page comes to render "3/12" twice. `index + 1` at the point of
+ * display cannot.
+ *
+ * An empty thread throws. A zero-post thread is not a degenerate success, it is
+ * a model call that produced nothing, and writing it to disk would make the
+ * step report done for ever after.
+ */
+export function buildThread(
+  parsed: { tweets: string[] },
+  opts: { slug: string; sourceHash: string; elapsedMs: number },
+): TweetThread {
+  const texts = parsed.tweets.map((t) => t.trim()).filter((t) => t.length > 0);
+  if (texts.length === 0) {
+    throw new Error("The model returned no posts. Nothing to write.");
+  }
+  const tweets: Tweet[] = texts.map((text) => ({ text, chars: countChars(text) }));
+  return {
+    version: PROMPT_VERSION,
+    generator: MODEL,
+    slug: opts.slug,
+    sourceHash: opts.sourceHash,
+    limit: LIMIT,
+    tweets,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: opts.elapsedMs,
+  };
+}
+
+/** How many posts went over the limit. What the step and the CLI report. */
+export function overLimit(thread: TweetThread): number {
+  return thread.tweets.filter((t) => t.chars > thread.limit).length;
+}
+
+export interface TweetsRun {
+  thread: TweetThread;
+  outFile: string;
+  blocks: number;
+  words: number;
+  over: number;
+  inputTokens: number;
+  outputTokens: number;
+  elapsedMs: number;
+}
+
+/**
+ * Stage 5c over a data directory: one model call, then `tweets.json` beside the
+ * tree and the arc.
+ *
+ * Exported because two callers run this stage and they must not drift —
+ * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
+ *
+ * The call is timed from **out here**, not from the SDK's own timestamps. The
+ * previous version of this project asked the SDK and got empty values back,
+ * which its display then rendered as `0ms` — a duration that reads as "instant"
+ * rather than as "we don't know". See
+ * docs/project/original-version/borrow-list.md.
+ */
+export async function generateTweets(opts: {
+  dir: string;
+  onProgress?: (detail: string) => void;
+  /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
+  signal?: AbortSignal;
+}): Promise<TweetsRun> {
+  const { blocks } = JSON.parse(
+    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
+  ) as { blocks: Block[] };
+  const tree = JSON.parse(await readFile(path.join(opts.dir, "tree.json"), "utf-8")) as Tree;
+  // Optional, and only ever used for attribution. A missing meta.json costs the
+  // thread the author's name, which the prompt handles; it is not worth failing
+  // the whole stage over.
+  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
+    .then((raw) => JSON.parse(raw) as Meta)
+    .catch(() => null);
+
+  const words = blocks.reduce((n, b) => n + b.words, 0);
+  const posts = suggestedLength(words);
+  const started = Date.now();
+
+  const client = new Anthropic();
+  const stream = client.messages.stream({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "high" },
+    system: SYSTEM,
+    messages: [{ role: "user", content: renderPrompt({ meta, tree, blocks, posts }) }],
+  }, { signal: opts.signal });
+
+  if (opts.onProgress) {
+    const report = opts.onProgress;
+    let chars = 0;
+    let last = 0;
+    stream.on("text", (delta) => {
+      chars += delta.length;
+      // Throttled: the model emits deltas far faster than anyone can read them,
+      // and every one of these is a write the job poller may pick up.
+      const now = Date.now();
+      if (now - last < 500) return;
+      last = now;
+      report(`about ${posts} posts, ${Math.round(chars / 1000)}k characters so far`);
+    });
+  }
+
+  const message = await stream.finalMessage();
+  if (message.stop_reason === "refusal") {
+    throw new Error(`Model refused: ${JSON.stringify(message.stop_details)}`);
+  }
+  if (message.stop_reason === "max_tokens") {
+    throw new Error("Hit max_tokens — the JSON is truncated. Raise it and retry.");
+  }
+
+  const raw = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+
+  const thread = buildThread(parseJson(raw), {
+    slug: tree.slug,
+    sourceHash: hashBlocks(blocks),
+    elapsedMs: Date.now() - started,
+  });
+
+  const outFile = path.join(opts.dir, "tweets.json");
+  await writeFile(outFile, JSON.stringify(thread, null, 2), "utf-8");
+
+  return {
+    thread,
+    outFile,
+    blocks: blocks.length,
+    words,
+    over: overLimit(thread),
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    elapsedMs: thread.elapsedMs,
+  };
+}
+
+async function main(): Promise<void> {
+  const dir = process.argv[2];
+  if (!dir) {
+    console.error("Usage: tsx src/tweets.ts <dir with blocks.json + tree.json>");
+    process.exit(1);
+  }
+  // Before the call, not after. This is the only thing on screen while the
+  // model works, and printing it afterwards makes the command look hung.
+  console.log(`Writing the thread with ${MODEL}…`);
+  const run = await generateTweets({
+    dir,
+    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
+  });
+
+  console.log(`\n${run.blocks} blocks, ${run.words} words → ${run.thread.tweets.length} posts`);
+  console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
+  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
+  console.log(`Over ${LIMIT}:   ${run.over}`);
+  console.log(`Wrote:     ${path.resolve(run.outFile)}\n`);
+  run.thread.tweets.forEach((t, i) => {
+    // Only a real violation is flagged. A 190-character post is not a warning
+    // about anything, and colouring it as one teaches the reader to ignore the
+    // flag that matters.
+    const flag = t.chars > run.thread.limit ? " ← over" : "";
+    console.log(`${i + 1}/${run.thread.tweets.length}  (${t.chars})${flag}\n${t.text}\n`);
+  });
+}
+
+/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
+   also matches when a *different* entry file with the same basename imports this
+   module — `scripts/tweets.ts` importing `src/tweets.ts` would run the CLI as a
+   side effect of the import, which is the one thing this guard exists to
+   prevent. */
+const isMain =
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) void main();

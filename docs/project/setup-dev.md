@@ -12,8 +12,10 @@ npm install
 npm run dev            # Vite + the /api/article/:slug middleware, http://localhost:5273
 ```
 
-That opens the reading view on the `example` slug. Other slugs: `/?slug=<slug>` — see
-[web-client.md](web-client.md).
+That opens the **library** at `/` — every article you have run through the pipeline, plus the
+committed `example/` fixture so a fresh clone has something to read ([library.md](library.md)).
+Click one and you are at `/read/<slug>`, which is the reading view ([web-client.md](web-client.md)).
+Old `/?slug=<slug>` links still work; they are rewritten on the way in.
 
 ## Secrets
 
@@ -39,10 +41,12 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 
 | Command | Stage | Writes |
 |---|---|---|
-| `npm run extract -- <url>` | 1–2, fetch + Readability ([content-extraction.md](content-extraction.md)) | `output/<slug>.html` |
+| `npm run fetch -- <url> [dir]` | 1, fetch the page and say what came back ([fetching.md](fetching.md)) | `data/<slug>/raw.html`, or `raw.pdf` |
+| `npm run extract -- <url>` | 1–2, fetch + Readability ([content-extraction.md](content-extraction.md)) | `output/<slug>.html`, `data/<slug>/meta.json` |
 | `npm run blocks -- <article.html>` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | `<article>.blocks.json` |
 | `npm run toc:flatten -- …` | 4, ToC → tree ([table-of-contents.md](table-of-contents.md)) | `tree.json` |
 | `npm run arc -- <dir>` | 5b, one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | `arc.json` |
+| `npm run tweets -- <dir>` | 5c, the article as a numbered thread ([tweet-thread-page.md](../plans/tweet-thread-page.md)) | `tweets.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
@@ -52,6 +56,27 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 The comment endpoints have no CLI stage — they are driven from the reading view. They write
 `data/<slug>/comments.json`; deleting that file forgets every question asked about the article, and
 nothing else breaks.
+
+**You do not have to run any of this by hand.** Paste a URL into the homepage's add box and the
+ingest queue runs the same chain in the server process, with each stage named as it goes —
+[ingest-queue.md](ingest-queue.md). The commands are for when you want one stage on its own, or want
+to see its output.
+
+**Except `tweets`, which an add never runs.** It is in the pipeline's order but not in its default
+list, so a thread is written only when something asks for one by name — the command above, or
+`POST /api/jobs { slug, steps: ["tweets"] }`. It costs a model call, and it is a page you go to
+rather than part of making an article readable
+([tweet-thread-page.md](../plans/tweet-thread-page.md#the-one-real-snag-stated-precisely)). Read it
+back with `GET /api/tweets/<slug>`, which also says whether the thread still describes the article.
+
+It is also the one stage that will not re-run over its own good output: running it twice in a row
+does nothing the second time, because it checks whether the thread still matches the blocks on disk
+rather than whether the file exists. Add `force: ["tweets"]` to the job to write a different one
+anyway.
+
+They are literally the same code: each script above is a thin argv wrapper around an exported
+function, and the queue calls that function. So there is one code path per stage and no way for the
+CLI and the queue to drift — which is the thing to preserve if you change a stage.
 
 **Run the validator.** A tree that violates the invariants doesn't crash the client — it silently
 draws a *wrong article*. See [`example/README.md`](../../example/README.md).
@@ -94,7 +119,8 @@ broken, just the signal quietly gone.
 
 ## Where things live
 
-- `data/<slug>/` — real pipeline output. Gitignored.
+- `data/<slug>/` — real pipeline output. Gitignored. Every directory in here with a `blocks.json`
+  and a `tree.json` appears on the homepage ([library.md](library.md)).
 - [`example/`](../../example/README.md) — the hand-authored placeholder the client falls back to when
   `data/<slug>/` doesn't exist yet.
 - `output/` — the prototype extractor's scratch output, including the test article.

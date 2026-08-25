@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
 import { Library } from "./Library.js";
-import { useRoute } from "./router.js";
+import { type ArticleView, useRoute } from "./router.js";
+import { Metadata } from "./Metadata.js";
+import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
 import { Spine } from "./Spine.js";
@@ -75,25 +77,32 @@ const PILL =
 /**
  * Which page you are on, and nothing else.
  *
- * The path says which article (`/read/<slug>`) or that you want the shelf
- * (`/`); the query string says how you are looking at it. See router.ts for
- * that division, and params.js for the parameters themselves.
+ * The path says which article (`/read/<slug>`) and which of its three views
+ * (`/metadata`, `/tweets`, or the reading view itself), or that you want the
+ * shelf (`/`); the query string says how you are looking at it. See router.ts
+ * for that division, and params.js for the parameters themselves.
  */
 export function App() {
   const route = useRoute();
   if (route.kind === "library") return <Library />;
-  return <ArticlePage slug={route.slug} />;
+  return <ArticlePage slug={route.slug} view={route.view} />;
 }
 
 /**
- * One article, fetched.
+ * One article, fetched **once for all three of its views**.
+ *
+ * The fetch lives here rather than in the reading view because the metadata and
+ * tweet pages need the same payload, and because this component does not
+ * remount when only the view changes: stepping out to the metadata page and
+ * back is then free, rather than 150KB and a spinner each way. The remount that
+ * *does* matter is keyed below, on the slug.
  *
  * Nothing here is `useState` except the article itself, which is derived from
  * the URL rather than part of it. Everything the reader can change lives in the
  * path or the query string — see params.js for why, and for which of these
  * changes push a history entry and which quietly replace one.
  */
-function ArticlePage({ slug }: { slug: string }) {
+function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
   const [article, setArticle] = useState<Article | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,7 +134,11 @@ function ArticlePage({ slug }: { slug: string }) {
   if (error) return <pre className="error">{error}</pre>;
   if (!article) return <div className="loading">Loading…</div>;
   // Keyed on the slug so switching article remounts rather than trying to carry
-  // one article's reading position into another's blocks.
+  // one article's reading position into another's blocks. NOT keyed on the
+  // view: switching view is meant to keep the fetch, which is the whole reason
+  // it happens up here.
+  if (view === "metadata") return <Metadata key={slug} slug={slug} article={article} />;
+  if (view === "tweets") return <Tweets key={slug} slug={slug} article={article} />;
   return <Reader key={slug} slug={slug} article={article} />;
 }
 
@@ -524,16 +537,19 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           one less thing to reason about when something appears underneath
           something else. */}
       <Dock
-        article={article}
-        comments={ordered}
-        panel={panel}
-        onPanel={(next) => void setPanel(next)}
-        onOpenComment={(id) => {
-          // Close the drawer on the way through: the dialog it opens would
-          // otherwise be underneath the dim, which looks exactly like nothing
-          // happening.
-          void setPanel(null);
-          goToComment(id);
+        slug={slug}
+        view="article"
+        drawer={{
+          comments: ordered,
+          panel,
+          onPanel: (next) => void setPanel(next),
+          onOpenComment: (id) => {
+            // Close the drawer on the way through: the dialog it opens would
+            // otherwise be underneath the dim, which looks exactly like nothing
+            // happening.
+            void setPanel(null);
+            goToComment(id);
+          },
         }}
       />
     </div>

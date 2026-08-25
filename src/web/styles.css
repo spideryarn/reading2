@@ -181,34 +181,11 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   opacity: 0.6;
 }
 
-/* Provenance and shape, behind the ▾. Two columns rather than a bullet list,
-   because every row is a label and a value and nothing here is prose. */
-.about {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 0.3rem 1rem;
-  margin: 0.9rem 0 0.2rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid var(--rule);
-  font-family: var(--font-ui);
-  font-size: 0.8rem;
-}
-.about dt {
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-size: 0.68rem;
-  padding-top: 0.12rem;
-}
-.about dd {
-  margin: 0;
-  color: var(--ink-soft);
-  /* A URL has no spaces to break at, so without this it sets the grid's
-     minimum width and pushes the whole masthead wider than the window. */
-  overflow-wrap: anywhere;
-}
-.about dd.mono { font-family: var(--font-mono); font-size: 0.72rem; }
-.about a { color: var(--highlight); }
+/* `.about` was here: the provenance list, first behind the masthead's ▾ and
+   then in the bottom drawer. It is gone because the panel is — the details are
+   a page of their own now, Metadata.tsx, styled with Tailwind utilities like
+   the rest of the chrome (web-client.md#tailwind-and-shadcn-components).
+   docs/plans/metadata-page.md. */
 
 .root-gist {
   margin: 0.55rem 0 0;
@@ -656,6 +633,14 @@ tr.row-active .block-ref { opacity: 0.95; }
   text-underline-offset: 2px;
 }
 .prose img { max-width: 100%; height: auto; }
+/* Video embeds arrive with the host's own `width="560" height="315"`, which is
+   wider than a reading column and overflowed it visibly. `height: auto` alone
+   won't do here as it does for an image: an iframe has no intrinsic ratio, so
+   without `aspect-ratio` it would collapse to the 150px CSS default. 16/9 is
+   hard-coded because the ratio can't be read off the attributes in CSS, and the
+   obvious escape — an inline `style` — is forbidden by the sanitiser on purpose
+   (docs/project/security.md). Every embed the allowlist admits is 16/9 today. */
+.prose iframe { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; }
 .prose figure { margin: 0; }
 .prose figcaption { font-size: 0.85rem; color: var(--ink-faint); }
 .prose blockquote {
@@ -1524,7 +1509,13 @@ mark.cmt[data-mark-end]::after {
   bottom: 0;
   width: 100vw;
   height: var(--dock-h);
-  z-index: 90; /* over the spine (45), the sticky bars (≤40) and the dialog (70) */
+  /* Above the scrim (92) and the drawer (95), not below them. The bar is how
+     you switch panels and how you shut the drawer, so dimming it along with the
+     article makes the live controls read as disabled — which is worse than
+     wrong, because it looks deliberate. The drawer sits exactly on top of the
+     bar rather than over it (`bottom: var(--dock-h)`), so nothing is hidden by
+     putting the bar in front. */
+  z-index: 96;
   display: flex;
   align-items: stretch;
   gap: 0.15rem;
@@ -1792,10 +1783,15 @@ mark.cmt[data-mark-end]::after {
   color: var(--ink-soft);
 }
 /* What that project learned the hard way — the part worth carrying. Set apart
-   so it doesn't read as more of the description. */
-.tip-soon-learned {
+   so it doesn't read as more of the description.
+
+   Selector written as `.tip-soon p.tip-soon-learned` rather than the class on
+   its own so it outranks `.tip-soon p` above without an `!important`. Same
+   result, and the next person to add a rule here inherits a specificity ladder
+   they can reason about rather than one they have to escalate past. */
+.tip-soon p.tip-soon-learned {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
-  color: var(--ink-faint) !important;
+  color: var(--ink-faint);
   font-style: italic;
 }

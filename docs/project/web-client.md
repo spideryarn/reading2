@@ -16,13 +16,18 @@ Why the feature exists and what a gist may and may not be:
 
 | File | What it does |
 |---|---|
-| [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters |
-| [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, then fetches `/api/article/<slug>` — masthead, the granularity controls |
-| [`src/web/router.ts`](../../src/web/router.ts) + [`Link.tsx`](../../src/web/Link.tsx) | `/` vs `/read/<slug>` — [library.md](library.md) |
-| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the shelf of articles and the add box — [library.md](library.md) |
+| [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters. It also calls **`enableHistorySync()`**, without which nuqs cannot see our own navigations and router.ts's whole argument is false |
+| [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, then fetches `/api/article/<slug>` **once for all three of an article's views** — masthead, the granularity controls |
+| [`src/web/router.ts`](../../src/web/router.ts) + [`Link.tsx`](../../src/web/Link.tsx) | `/`, `/read/<slug>`, and its `/metadata` and `/tweets` pages — [library.md](library.md) |
+| [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [metadata-page.md](../plans/metadata-page.md) |
+| [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) | `/read/<slug>/tweets`: the article as a numbered thread, with the button that writes one and the line that says the thread is out of date — [tweet-thread-page.md](../plans/tweet-thread-page.md) |
+| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the shelf of articles — [library.md](library.md) |
+| [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) + [`useJobs.ts`](../../src/web/useJobs.ts) | paste a URL, watch the five stages tick over — [ingest-queue.md](ingest-queue.md). The poll is deliberate; the hook's header says why it is not server-sent events. `useJobs` has two ways in: `add(url)` for an ingest, `run({slug, steps})` for a named step on an article already on the shelf — the thread page is the only caller of the second |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
-| [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts, with the provenance behind a `▾` — everything about the article that does not vary with position |
+| [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: your questions, the way home, the links to the metadata and thread pages, and the ideas not built yet — [bottom-bar.md](../plans/bottom-bar.md). Its buttons are now two kinds, and the markup says which |
+| [`src/web/stats.ts`](../../src/web/stats.ts) | word, block, part, section and depth counts, pure — used by the masthead's facts line and the metadata page |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
@@ -38,7 +43,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
-| [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)` and `listArticles()`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
+| [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
 
 Running it: [setup-dev.md](setup-dev.md). `npm run dev` opens the **library** at `/`
 ([library.md](library.md)); an article is `/read/<slug>`, and a fresh clone that has never run the
@@ -48,6 +53,11 @@ pipeline still has the committed `example/` fixture to open ([`src/api.ts`](../.
 Deep links are `/read/<slug>?at=spya-k6fpme`. Every other bit of view state is in the query string
 too — see [url-state.md](url-state.md) for the full set, for the rule that divides the path from the
 query, and for why scrolling *replaces* the history entry while toggling a column *pushes* one.
+
+An article has **three pages**, and which one is a third path segment: the reading view itself,
+`/metadata` ([metadata-page.md](../plans/metadata-page.md)) and `/tweets`
+([tweet-thread-page.md](../plans/tweet-thread-page.md)). They share the fetch, the bottom bar and the
+query string, so moving between them keeps your place and costs no request.
 
 ## Tailwind and shadcn components
 
@@ -59,11 +69,17 @@ Read that as **adopting shadcn components**, not switching the reading view to s
 the full accounting are [shadcn-migration.md](../plans/shadcn-migration.md); this section is
 what actually landed and what a future reader would otherwise have to reverse-engineer.
 
-**What shadcn now stands behind:** the granularity pills in [`App.tsx`](../../src/web/App.tsx), the
-masthead `▾` in [`Masthead.tsx`](../../src/web/Masthead.tsx), and a `Button` waiting for the comment
-dialog. Roughly eleven clickable chrome elements. What it buys is accessibility we did not have —
-`aria-pressed` on the toggles, `aria-controls`/`aria-expanded` on the disclosure — and a house style
-for chrome not yet built.
+**What shadcn now stands behind:** the granularity pills in [`App.tsx`](../../src/web/App.tsx) and a
+`Button` waiting for the comment dialog. What it buys is accessibility we did not have —
+`aria-pressed` on the toggles — and a house style for chrome not yet built.
+
+The masthead's `▾` used to be on this list, over shadcn's `Collapsible`. It went when the article's
+details moved to the bottom drawer ([bottom-bar.md](../plans/bottom-bar.md)), and the drawer that
+replaced it is hand-written rather than a `Sheet` — worth recording, because a `Sheet` is exactly
+what the migration plan would have predicted here. The reason is the z-index ladder: the drawer has
+to interleave with the spine, the sticky bars, the comment dialog and the tooltip layer at
+*specific* rungs, and a component that manages its own portal and overlay stacking is harder to
+place in an order that already exists than 40 lines of CSS that simply state the rung.
 
 **What is staying hand-written, and always will be:** the spine, the table geometry and its
 `rowSpan` arithmetic, the sticky-bar ladder and its z-index order, the reading measure, `mark.cmt`

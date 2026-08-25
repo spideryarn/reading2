@@ -125,3 +125,23 @@ export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
     window.scrollTo({ top: target, behavior: "auto" });
   }
 }
+
+/**
+ * Whether a block's row is already comfortably in view.
+ *
+ * Used to decide whether stepping between comments should scroll at all. Two
+ * comments in the same paragraph are the common case, and jolting the page
+ * between them costs the reader their place for nothing.
+ *
+ * "Comfortably" means clear of the sticky bars at the top and not jammed against
+ * the bottom edge — a row whose first line is hidden under the header is not on
+ * screen in any sense the reader cares about. The margin is a tenth of the
+ * window rather than a constant, so it scales with the viewport.
+ */
+export function isBlockOnScreen(id: string): boolean {
+  const row = document.querySelector<HTMLElement>(`tr[data-block="${CSS.escape(id)}"]`);
+  if (!row) return false;
+  const { top, bottom } = row.getBoundingClientRect();
+  const margin = window.innerHeight * 0.1;
+  return top >= stickyOffset() && bottom <= window.innerHeight - margin;
+}

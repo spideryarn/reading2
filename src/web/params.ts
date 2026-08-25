@@ -23,20 +23,15 @@
  * would also mean two unsynchronised state systems — `hashchange` for position,
  * `popstate` for everything else. One query string, one listener.
  */
-import { createParser, debounce, parseAsString } from "nuqs";
+import { createParser, debounce } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
 
-/**
- * The article you get with no `?slug=`.
- *
- * The real pipeline output rather than the 34-block test fixture: 139 blocks,
- * 9 parts, 36 sections, which is the first size at which the spine and the
- * granularity columns show what they are for. Safe to point at something
- * gitignored — `data/` is not committed, and `loadArticle` falls back to
- * `example/` for any slug it can't find (src/api.ts), so a fresh clone gets the
- * fixture and still works.
- */
-export const DEFAULT_SLUG = "noema-mythology-of-conscious-ai";
+/* Which article is NOT in here. It is the path — `/read/<slug>` — and has been
+   since the library landed, 2026-08-25. The rule the two halves divide on:
+   **the path says which article, the query string says how you are looking at
+   it.** See router.ts, and docs/project/url-state.md#which-article-is-the-path.
+
+   Old `/?slug=x` links still work; main.tsx rewrites them on the way in. */
 
 /**
  * How long the reader has to stop scrolling before the URL catches up.
@@ -99,16 +94,11 @@ export const parseAsDepths = createParser<number[]>({
    > scrolling should replace rather than adding to history because we don't
    > need the back button to change scrolling
 
-   So position replaces, and the three deliberate acts — loading a different
-   article, toggling a column, switching to outline mode — push. Back then undoes
+   So position replaces, and the deliberate acts — toggling a column, switching
+   to outline mode, opening an article from the library — push. Back then undoes
    the last thing you *did*, and never crawls you back up the page one screen at
    a time. Clicking a gist to jump is the one scroll that pushes, because it is
    a deliberate act too; that override lives at the call site in TableView. */
-
-/** Which article. */
-export const slugParam = parseAsString
-  .withDefault(DEFAULT_SLUG)
-  .withOptions({ history: "push" });
 
 /** Reading mode (text column on) vs outline mode. */
 export const textParam = parseAsBit
@@ -146,13 +136,35 @@ export const atParam = parseAsBlockId.withOptions({
 export const noteParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
- * Whether the masthead's details panel is open — see Masthead.tsx.
+ * Which drawer panel is open, or nothing — see Dock.tsx and
+ * docs/plans/bottom-bar.md.
+ *
+ * **One value, where there were two.** `about` is gone: the article's details
+ * outgrew a drawer and became a page, `/read/<slug>/metadata`
+ * (docs/plans/metadata-page.md). So this parameter now has exactly one legal
+ * value, and it stays a parameter rather than becoming a flag because the next
+ * panel will want the same shape.
+ *
+ * That leaves **two** superseded spellings of the same thing, and main.tsx
+ * rewrites both to the metadata page on the way in: `?about=1`, which was the
+ * masthead's ▾ disclosure, and `?panel=about`, which was this drawer. Same
+ * trick the old `/?slug=` links get, and for the same reason — one spelling
+ * reaches React and every old link keeps working.
  *
  * `replace`, for the same reason as `note`: opening and closing a panel twice
  * would otherwise cost four presses of Back to undo. It is in the URL at all so
- * that a link can arrive with the provenance already showing, which is the one
- * time anybody wants it.
+ * that a link can arrive with the panel already showing, which is the one time
+ * anybody wants it.
+ *
+ * An unknown value parses to null — a closed drawer — rather than throwing, so
+ * a link from a future version that has more panels degrades to the article
+ * instead of to an error. Same rule as `parseAsBlockId`. Note that `about=`
+ * therefore degrades safely too, for any link main.tsx did not catch.
  */
-export const aboutParam = parseAsBit.withDefault(false).withOptions({
-  history: "replace",
-});
+export const PANELS = ["questions"] as const;
+export type Panel = (typeof PANELS)[number];
+
+export const panelParam = createParser<Panel>({
+  parse: (v) => (PANELS.includes(v as Panel) ? (v as Panel) : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });

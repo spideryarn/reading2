@@ -1,7 +1,8 @@
 # URL state
 
-Everything the reader can change lives in the query string. Nothing the reader can change lives in
-`useState`, and nothing lives in `localStorage`.
+Everything about *how you are looking at an article* lives in the query string. Nothing the reader
+can change lives in `useState`, and nothing lives in `localStorage`. Which article you are looking at
+is the **path** — see [§ Which article is the path](#which-article-is-the-path).
 
 > Ideally, I would like to be able to remember the state. So if I, for example, scroll down to a
 > particular place in the doc for example (or changed something else, etc etc), that should update
@@ -25,12 +26,18 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 
 | Param | Meaning | History | Example |
 |---|---|---|---|
-| `slug` | which article | push | `?slug=noema-mythology-of-conscious-ai` |
 | `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
 | `text` | `1` reading mode, `0` outline mode | push | `?text=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
-| `about` | the masthead's details panel — source, counts, which model built the tree and the arc | **replace** | `?about=1` |
+| `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
+
+**Two superseded spellings, both still working.** `?about=1` was the masthead's details disclosure
+and `?panel=about` was the drawer panel that replaced it. Both are gone: the article's details are a
+page now, `/read/<slug>/metadata` ([metadata-page.md](../plans/metadata-page.md)). Old links carrying
+either spelling are rewritten to that page before React mounts, by
+[`main.tsx`](../../src/web/main.tsx), keeping every other parameter they arrived with. `about=0` is
+left alone — it meant the panel was shut, which is not a reason to send anybody anywhere.
 
 The bird's-eye rail is deliberately **not** a parameter. Its visibility is derived, not chosen — it
 is off in outline mode and collapses to ticks when labels would cost a gist column, both decided by
@@ -41,6 +48,40 @@ param, and `parseAsBit` is already the right parser for it.
 `cols=none` exists because the empty list would otherwise serialize to an empty string, which is
 indistinguishable from the parameter being absent — and absent means *automatic*, which is the
 opposite of "the reader turned every column off".
+
+## Which article is the path
+
+`?slug=` is gone. An article is `/read/<slug>`, and the parameters above describe how you are looking
+at it. One rule divides them:
+
+**The path says which article. The query string says how you are looking at it.**
+
+That arrived with the library ([library.md](library.md)) on 2026-08-25, and it is the reason an
+article now has an address rather than a setting. `/` is the shelf; anything that is not
+`/read/<slug>` is also the shelf, including nonsense, so a mistyped link lands somewhere useful
+instead of on a 404.
+
+**A third segment says which of the article's pages**, added the same day:
+`/read/<slug>/metadata` and `/read/<slug>/tweets`. That does not bend the rule — those are still the
+same article, and which page you are on is not something you would want to reset by changing a
+parameter. An unknown third segment is the shelf too. The query string travels between all three, so
+stepping out to the metadata page and back returns you to the paragraph you left; `?panel=` is the
+one thing left behind, because a drawer is not a place you were. See `carriedSearch` in
+[`router.ts`](../../src/web/router.ts) and
+[library.md § The routes](library.md#the-routes).
+
+Old `/?slug=x` links keep working. [`main.tsx`](../../src/web/main.tsx) rewrites them to `/read/x`
+before React mounts, carrying every other parameter across untouched — the same trick, and for the
+same reason, as the `/#spya-…` rewrite below. It uses `replaceState`: the old address is not a page
+the reader visited, it is a spelling they arrived in, and Back should not return them to it.
+
+The routing is [`src/web/router.ts`](../../src/web/router.ts), fifty lines of our own rather than a
+router library. [library.md § Fifty lines of router](library.md#fifty-lines-of-router-not-react-router)
+has the argument, and the load-bearing half of it is about nuqs: told to, it patches
+`history.pushState`, so calling `pushState` ourselves means nuqs sees our navigations exactly as it
+sees its own. **Told to** is the operative part — `main.tsx` calls `enableHistorySync()`, and until
+it did (2026-08-25) none of that was true and a debounced `?at=` write could land on the next
+page's URL.
 
 ## Three decisions
 
@@ -122,8 +163,11 @@ runtime dependency.
 Two things decided it over the alternatives:
 
 - **It does not require a router.** `nuqs/adapters/react` is the plain-SPA adapter: one
-  `<NuqsAdapter>` in `main.tsx`, no route tree, no Vite config. If this app ever gains a router we
-  change that one import and every call site is untouched.
+  `<NuqsAdapter>` in `main.tsx`, no route tree, no Vite config. Still true after the library added
+  path routing, because [that router](library.md#fifty-lines-of-router-not-react-router) is fifty
+  lines of `history.pushState` rather than a library — and nuqs patches `pushState`, so it stays in
+  step with no adapter change. If a real router ever arrives we change that one import and every call
+  site is untouched.
 - **Rate-limiting and replace-vs-push are the API**, not something bolted on. Those are exactly the
   two decisions above, and they are one option each.
 
@@ -139,6 +183,7 @@ Gotcha worth knowing: `throttleMs` is deprecated as of nuqs 2.5.0. Use
 
 ## See also
 
+- [library.md](library.md) — the homepage, and the path half of a link
 - [web-client.md](web-client.md) — the reading view this is the state layer for
 - [granularity-zoom.md](granularity-zoom.md) — what the columns and the spine actually do
 - [block-ids.md](block-ids.md) — **read before touching anything that resolves an id**
