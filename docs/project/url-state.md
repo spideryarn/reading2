@@ -29,6 +29,8 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
 | `text` | `1` reading mode, `0` outline mode | push | `?text=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
+| `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
+| `about` | the masthead's details panel — source, counts, which model built the tree and the arc | **replace** | `?about=1` |
 
 The bird's-eye rail is deliberately **not** a parameter. Its visibility is derived, not chosen — it
 is off in outline mode and collapses to ticks when labels would cost a gist column, both decided by
@@ -142,3 +144,15 @@ Gotcha worth knowing: `throttleMs` is deprecated as of nuqs 2.5.0. Use
 - [block-ids.md](block-ids.md) — **read before touching anything that resolves an id**
 - [browser-testing.md](browser-testing.md) — the URLs worth checking by hand
 - [testing.md](testing.md) — what's pinned deterministically
+
+## `note` replaces, even though opening a dialog is deliberate
+
+Every other deliberate act pushes. `note` is the exception, and the reason is arithmetic rather than
+principle: opening a panel and closing it again is *two* state changes, so pushing would put two
+entries on the stack for one gesture and Back would walk the reader through panels they had already
+finished with. Replacing keeps the paste-a-link property, which is the part that earns the parameter
+its place.
+
+A comment id is minted by the same `mintId` as a block id ([block-ids.md](block-ids.md)), so
+`parseAsBlockId` validates it and a mangled `?note=` degrades to "no dialog" rather than to an
+error — the same bargain as `?at=`.

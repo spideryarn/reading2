@@ -43,12 +43,22 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
 | [`tests/keynav.test.ts`](../../tests/keynav.test.ts) | where ← / → land, and that → then ← is reversible — [keyboard.md](keyboard.md) |
+| [`tests/annotate.test.ts`](../../tests/annotate.test.ts) | drawing a comment's mark over prose, and re-finding a quote whose offset went stale — [comments.md](comments.md) |
+| [`tests/selection.test.ts`](../../tests/selection.test.ts) | mouse selection → a storable anchor: the minimum length, and clamping to one block |
+| [`tests/comments.test.ts`](../../tests/comments.test.ts) | comment storage, and that two comments made at once don't eat each other |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken
 partition draws a wrong article; editorial ones only warn, because failing a build over clumsy prose
 teaches everyone to ignore the validator. Splitting them also lets the two be edited without
 colliding.
+
+Two of these — `annotate` and `selection` — run under **jsdom** rather than the node default,
+declared per-file with
+`// @vitest-environment jsdom` so [`vitest.config.ts`](../../vitest.config.ts) stays node-only. That
+is not convenience: the offset space comments are anchored in is *defined* as what the browser's
+parser produces, so a hand-rolled equivalent tested under node would pass against itself and
+disagree with Chrome. See [comments.md § The offset space](comments.md#offset-space).
 
 **Not tested, on purpose (for now):**
 

@@ -1,38 +1,45 @@
 import { defineConfig, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
-import { loadArticle } from "./src/api.js";
+import { handleApi } from "./src/routes.js";
+import { loadEnvLocal } from "./src/env.js";
 
 /**
  * One process, one command (`npm run dev`). The API is mounted as dev middleware
  * rather than as a separate server so there's nothing to run in a second
- * terminal while the ideas are still moving — see src/api.ts for the seam where
- * a standalone server slots in later.
+ * terminal while the ideas are still moving — see src/routes.ts for the routes
+ * themselves, and for the seam a standalone server slots into later.
  */
-const apiMiddleware: Connect.NextHandleFunction = async (req, res, next) => {
-  const match = req.url?.match(/^\/api\/article\/([\w.-]+)$/);
-  if (!match) return next();
-  try {
-    const article = await loadArticle(decodeURIComponent(match[1]));
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify(article));
-  } catch (err) {
-    res.statusCode = 404;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: (err as Error).message }));
-  }
+const apiMiddleware: Connect.NextHandleFunction = (req, res, next) => {
+  handleApi(req, res).then(
+    (handled) => {
+      if (!handled) next();
+    },
+    (err: Error) => {
+      // handleApi answers its own expected failures; reaching here means a bug,
+      // and a hung request would look exactly like a slow model call.
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: err.message }));
+    },
+  );
 };
 
-export default defineConfig({
-  plugins: [
-    react(),
-    {
-      name: "spideryarn-api",
-      // Block body, not an arrow-with-expression: configureServer treats a
-      // returned value as a post-hook, and `.use()` returns the connect app.
-      configureServer(server) {
-        server.middlewares.use(apiMiddleware);
+export default defineConfig(() => {
+  // Before the server starts, so OPENROUTER_API_KEY is in process.env by the
+  // time the first /api/comments POST arrives. See src/env.ts.
+  loadEnvLocal();
+  return {
+    plugins: [
+      react(),
+      {
+        name: "spideryarn-api",
+        // Block body, not an arrow-with-expression: configureServer treats a
+        // returned value as a post-hook, and `.use()` returns the connect app.
+        configureServer(server) {
+          server.middlewares.use(apiMiddleware);
+        },
       },
-    },
-  ],
-  server: { port: 5273, open: true },
+    ],
+    server: { port: 5273, open: true },
+  };
 });

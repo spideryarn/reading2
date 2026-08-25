@@ -94,7 +94,9 @@ artefacts on disk, not by reaching into another stage's code.
 | 3 | blocks + stable ids — see [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
 | 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
-| 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view) | **granularity zoom** | `src/api.ts`, `src/web/` |
+| 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
+| 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view) | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
+| 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
 
 Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the ToC, since the
 ToC is the first thing that has to address blocks and would otherwise be built on someone else's
@@ -117,6 +119,8 @@ Filesystem, one directory per article, no database:
     blocks.json     the block sequence with stable ids   ← the spine
                     (array order IS document order — block-ids.md)
     tree.json       nodes: ranges, titles, gists
+    arc.json        one sentence per part: where the argument stands there
+                    (stage 5b — joined to the tree by RANGE, never by node id)
     reader.json     per-reader state: progress, highlights, notes (all keyed by block id)
 ```
 
@@ -140,7 +144,10 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   the hand-authored placeholder. Real pipeline output therefore supersedes the fixture with no code
   change.
 - API is thin: `GET /api/article/<slug>` returns `meta + blocks + tree`. The client has everything
-  it needs for every zoom level in one payload; zooming must never hit the network.
+  it needs for every zoom level in one payload; zooming must never hit the network. The comment
+  endpoints are the only other routes — [comments.md](comments.md). All of them live in
+  [`src/routes.ts`](../../src/routes.ts), which is the connect-shaped wrapper a standalone server
+  would mount unchanged.
 - React client. The reading view is described in
   [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) — note especially that scroll
   position is a **block id**, never a pixel offset. Brand and reading tokens come from
@@ -149,8 +156,13 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   [original-version.md](original-version.md). Plain CSS variables, adopt or remap as you like;
   Spideryarn orange `#DB8A45` is the accent, on a dark-only palette — see
   [web-client.md](web-client.md).
-- LLM calls happen in the pipeline, not in request handlers. Before writing any Anthropic SDK code,
-  load the `claude-api` skill for current model ids and parameters.
+- LLM calls happen in the pipeline, not in request handlers — with **one deliberate exception**,
+  [`src/explain.ts`](../../src/explain.ts). A reader's text selection cannot be precomputed or
+  cached on a content hash, because it does not exist until they make it. See
+  [comments.md § Why this call is not a pipeline stage](comments.md#why-this-call-is-not-a-pipeline-stage).
+  That call goes to **OpenRouter** (`OPENROUTER_API_KEY`); everything in the pipeline uses the
+  Anthropic SDK. Before writing any Anthropic SDK code, load the `claude-api` skill for current
+  model ids and parameters.
 
 ## Conventions
 

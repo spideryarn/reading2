@@ -15,6 +15,23 @@ npm run dev            # Vite + the /api/article/:slug middleware, http://localh
 That opens the reading view on the `example` slug. Other slugs: `/?slug=<slug>` — see
 [web-client.md](web-client.md).
 
+## Secrets
+
+One file, `.env.local`, gitignored, loaded by [`src/env.ts`](../../src/env.ts):
+
+```
+OPENROUTER_API_KEY=sk-or-…
+```
+
+It is needed by exactly one thing: the explain-this-passage call in
+[`src/explain.ts`](../../src/explain.ts), which is the only LLM call that happens in a request
+handler rather than in the pipeline ([comments.md](comments.md)). Without it the reading view works
+normally and selecting a passage returns an error into the dialog saying so.
+
+A variable already in the environment wins over the file, so
+`SPIDERYARN_EXPLAIN_MODEL=anthropic/claude-opus-4.5 npm run dev` does what it looks like it does.
+The pipeline stages use the Anthropic SDK and want `ANTHROPIC_API_KEY` instead.
+
 ## The pipeline stages
 
 Each stage runs on its own against a slug, so any one can be re-run without the others
@@ -25,9 +42,14 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run extract -- <url>` | 1–2, fetch + Readability ([content-extraction.md](content-extraction.md)) | `output/<slug>.html` |
 | `npm run blocks -- <article.html>` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | `<article>.blocks.json` |
 | `npm run toc:flatten -- …` | 4, ToC → tree ([table-of-contents.md](table-of-contents.md)) | `tree.json` |
+| `npm run arc -- <dir>` | 5b, one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | `arc.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
+
+The comment endpoints have no CLI stage — they are driven from the reading view. They write
+`data/<slug>/comments.json`; deleting that file forgets every question asked about the article, and
+nothing else breaks.
 
 **Run the validator.** A tree that violates the invariants doesn't crash the client — it silently
 draws a *wrong article*. See [`example/README.md`](../../example/README.md).

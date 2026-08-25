@@ -31,7 +31,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
 | [tooltips.md](docs/project/tooltips.md) | the spine's hover tooltips: which library, why Floating UI over Radix and Tippy, and the four things that fail silently |
-| [keyboard.md](docs/project/keyboard.md) | ← / → step through the article, and the level they step by is whichever column the pointer is in |
+| [keyboard.md](docs/project/keyboard.md) | ↑ / ↓ step through the article, and the level they step by is whichever column the pointer is in |
 | [comments.md](docs/project/comments.md) | select a sentence and the model explains it: the dialog (not a column), when it searches the web, and why the anchor is the quote rather than an offset |
 | [url-state.md](docs/project/url-state.md) | every bit of view state lives in the URL: the parameters, which ones push history and which replace, and why position is a *section* |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |

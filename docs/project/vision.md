@@ -74,7 +74,8 @@ The same block-id spine ([architecture.md § Pipeline](architecture.md#pipeline)
 these, each to be judged against the principles above:
 
 - **Ask in place** — a question about the paragraph under the cursor, answered from the surrounding
-  context, cited back to block ids.
+  context, cited back to block ids. **Built**, as of 2026-08-25: select a passage and the model
+  explains it, researching the web when it judges it needs to. See [comments.md](comments.md).
 - **Author's glossary** — the terms this piece uses in a non-obvious way, defined from the piece itself.
 - **Argument view** — claims, the support offered for each, and the moves the author doesn't make.
 - **Confusion signal** — the reader marks a passage as unclear; the highest-value input we can get.

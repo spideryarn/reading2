@@ -19,15 +19,17 @@ Why the feature exists and what a gist may and may not be:
 | [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry |
 | [`src/web/App.tsx`](../../src/web/App.tsx) | fetches `/api/article/<slug>`, masthead, the granularity controls |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
-| [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links |
+| [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
+| [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts, with the provenance behind a `▾` — everything about the article that does not vary with position |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version.md) |
+| [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | ask the model about a selected passage — [comments.md](comments.md) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → the section that goes in `?at=` |
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) |
-| [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically |
-| [`src/web/keynav.ts`](../../src/web/keynav.ts) | ← / → nav, aimed by the pointer — [keyboard.md](keyboard.md) |
+| [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
+| [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
 | [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
 
 Running it: [setup-dev.md](setup-dev.md). Slug selection is `/?slug=<slug>`, defaulting to
@@ -97,6 +99,17 @@ which would give the reader no way to override it.
 - **The table geometry assumes a valid tree.** Contiguous ranges, children exactly partitioning
   their parent ([granularity-zoom.md § The tree](granularity-zoom.md#the-tree)). A tree that breaks
   those renders a plausible *wrong* article rather than an error — run `npm run validate-tree`.
+- **Generated text is rendered as text, never as HTML.** The explanation in
+  [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) is React children, not
+  `dangerouslySetInnerHTML` — model output sits beside the author's prose and must not be able to
+  dress itself up as it. The one `dangerouslySetInnerHTML` in the client is the author's own
+  block html. See [comments.md](comments.md).
+- **The height of the sticky bars is measured, never written down.** Deep links, the `?at=` tracker
+  and the arrow keys all offset by it, and it used to be the literal `84` in two places with a
+  comment asking you to keep it in step with `--bar-h` and `--head-h`. `stickyOffset()` measures
+  `.controls` and `thead th` instead: drift there is pure
+  [silent success](../reusable/silent-success.md) — nothing throws, every jump just lands slightly
+  under the bar, and `scrollY` confirms the scroll happened.
 - **Never substitute generated text for prose silently.** The verbatim column is the author's words;
   a gist stands in for text only where the reader chose that level. See
   [vision.md](vision.md#principles) — "no hidden reformulation".

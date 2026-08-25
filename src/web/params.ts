@@ -129,3 +129,30 @@ export const atParam = parseAsBlockId.withOptions({
   history: "replace",
   limitUrlUpdates: debounce(POSITION_SETTLE_MS),
 });
+
+/**
+ * Which explanation dialog is open — see docs/project/comments.md.
+ *
+ * A comment id is a block id by construction (both come from `mintId`), so the
+ * same parser validates it and the same "mangled link degrades to nothing"
+ * behaviour falls out.
+ *
+ * `replace`, not `push`, even though opening a dialog is a deliberate act.
+ * Pushing would put *two* entries on the stack for every open-then-close, so
+ * Back would walk the reader through a history of panels they had already
+ * finished with. The link still works when pasted, which is the part that
+ * matters.
+ */
+export const noteParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * Whether the masthead's details panel is open — see Masthead.tsx.
+ *
+ * `replace`, for the same reason as `note`: opening and closing a panel twice
+ * would otherwise cost four presses of Back to undo. It is in the URL at all so
+ * that a link can arrive with the provenance already showing, which is the one
+ * time anybody wants it.
+ */
+export const aboutParam = parseAsBit.withDefault(false).withOptions({
+  history: "replace",
+});
