@@ -34,6 +34,20 @@ A variable already in the environment wins over the file, so
 `SPIDERYARN_EXPLAIN_MODEL=anthropic/claude-opus-4.5 npm run dev` does what it looks like it does.
 The pipeline stages use the Anthropic SDK and want `ANTHROPIC_API_KEY` instead.
 
+## The database, locally
+
+There is a full Supabase stack in Docker for this repo — Postgres, auth, Studio — and **nothing in
+the app talks to it yet**. It is there to develop the storage layer against.
+
+```bash
+npm run db:start       # needs Docker running: `open -a OrbStack`
+npm run db:status      # URLs and keys
+npm run db:stop
+```
+
+Studio is at <http://127.0.0.1:54363>. The ports, the two settings that are not the CLI defaults, and
+the ways it fails quietly are in [supabase-local.md](supabase-local.md).
+
 ## The pipeline stages
 
 Each stage runs on its own against a slug, so any one can be re-run without the others
