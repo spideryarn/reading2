@@ -44,6 +44,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [icons.md](docs/project/icons.md) | Lucide, not Phosphor: why, the one stroke weight everything uses, the loading spinner recipe, and the two ways swapping a glyph for an SVG breaks a layout quietly |
 | [auth.md](docs/project/auth.md) | **the one-email beta gate** (stub): why auth here is about an open proxy and an open wallet rather than user accounts, why Supabase Auth won, the list of five providers that RLS restricts you to, and the one test that has to exist |
 | [security.md](docs/project/security.md) | **two untrusted parties, and neither is another user** — the content, and the URL: why Readability let `<img onerror>` reach the reading view, where the sanitiser sits and why it's stage 3, the video-embed allowlist, the confirmed path traversal in the read API and the fixture fallback that disguised it as a refusal, the four ways to break it silently, and an honest list of what's still open |
+| [logging.md](docs/project/logging.md) | **what the server says to whoever is running it**: why Pino, the three ways its config deliberately differs from the original version's, what each level means here, why redaction being path-based makes the message string a rule rather than a preference, Vercel's one-day retention and the two traps in its log view, why the pipeline's token counts are logged from the seam rather than from inside anyone's stage — and why the CLI's `console.log` output is not logging and is staying |
 | [linting.md](docs/project/linting.md) | `npm run lint`: why Biome rather than ESLint (TypeScript 7 removed the API ESLint needs), the config-file extension that silently discards your settings, and which rules are off on purpose |
 | [typechecking.md](docs/project/typechecking.md) | `npm run typecheck`: the three tsconfigs, the strict flags we turned on and the one we didn't, and the guard that stops a typecheck checking nothing |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
@@ -175,6 +176,15 @@ Not descriptions of code, which the code already provides.
   summaries, Readability edge cases, overlapping highlights, stable element ids — check
   [original-version/](docs/project/original-version/overview.md). It's a library to consult, not a backlog
   to import: that project is far larger in scope, and this one is staying tight.
+- **Log from the server, `console.log` from the CLI — the rule is the destination, not the function
+  name.** If a person is watching it scroll past `npm run toc`, it is output and `console.log` is
+  right. If you would want it a week later with a timestamp and a slug on it, it is a log and it goes
+  through [`src/log.ts`](src/log.ts): `log("jobs").info({ slug, ms }, \`ingest done for ${slug}\`)`.
+  A `console.log` in a request path is a bug. Two things that are easy to get wrong and impossible to
+  see afterwards: **nothing sensitive in the message string** (redaction matches key paths, never the
+  message, so an interpolated secret can never be redacted), and **no article prose in a log** — not
+  the text, not a comment's quote, not the model's answer. [logging.md](docs/project/logging.md) has
+  the rest, including why there is deliberately no logging in `src/web/`.
 - **Run `npm test` and `npm run typecheck` when you finish a change, not just before you commit.**
   Both are deterministic and take a few seconds, and finding out at commit time that a change from
   half an hour ago was wrong is the expensive way to find out. `npm run lint` too, on the files you
@@ -182,6 +192,8 @@ Not descriptions of code, which the code already provides.
   [linting.md](docs/project/linting.md). What the tests cover, and what they don't, is in
   [testing.md](docs/project/testing.md); why the typecheck needs a script of its own rather than a
   bare `tsc` is in [typechecking.md](docs/project/typechecking.md).
+- **Reproduce a bug with a failing test before you fix it.** Write the test first and watch it go
+  red — a test that was never red proves nothing. Then fix, and check it's gone green.
 - **Root-cause every bug in a subagent, and write it up.** When you're fixing a bug, hand the
   investigation to a subagent and tell it to keep going until it really understands the cause — not
   the line that broke, but why that line was written. It should come back with: the root cause, which
