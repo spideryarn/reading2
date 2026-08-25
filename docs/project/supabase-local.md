@@ -40,7 +40,10 @@ exists from last time.
 
 `.env.local` carries `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and
 `DATABASE_URL`, loaded by [`src/env.ts`](../../src/env.ts) like everything else
-([setup-dev.md § Secrets](setup-dev.md#secrets)).
+([setup-dev.md § Secrets](setup-dev.md#secrets)). The **remote** project's values sit in `.env.prod`
+alongside it — same variable names, so code written against local finds them in production — and
+**nothing loads that file**: `src/env.ts` reads `.env.local` and only `.env.local`. Both are
+gitignored by `.env*`, which covers the next one somebody makes as well.
 
 **Those keys are not secret.** They are the CLI's fixed local demo values — byte-identical on every
 Supabase developer's machine on earth, and signed with a JWT secret that is the literal string
@@ -119,11 +122,11 @@ not RLS. That is the safe default and it should stay until something specific ne
   `supabase/migrations/`, which is empty here on purpose, so it drops the `spideryarn` schema and
   reports success. It is not the "start again from the schema" command it looks like — that is
   `npm run db:reset` **followed by** `npm run db:migrate`.
-- **`npm run db:migrate` goes wherever `DATABASE_URL` points, and does not say where that was.** It
-  is the local container today. The moment the remote connection string lands in `.env.local` — to
-  try one thing, to check one row — that command migrates **production**, with no prompt and no
-  host in its output. Keep the remote string out of `.env.local` and pass it explicitly for the one
-  command that needs it.
+- **`npm run db:migrate` goes wherever `DATABASE_URL` points** — and there is now a remote for it to
+  point at. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) guards this: it refuses any URL
+  that is not `127.0.0.1` or `localhost` unless `DB_MIGRATE_ALLOW_REMOTE=yes` is set as well. Keep
+  that variable out of every env file and off your shell profile — it is meant to be a thing you
+  type deliberately, once, and never a thing that is already true.
 - **The CLI picks its project from the working directory.** Run `supabase status` from the old repo
   and you get the old repo's stack, with a confident answer and the wrong ports. The two are told
   apart by `project_id` — ours is `spideryarn2`, theirs is `syr` — which is also what every container
