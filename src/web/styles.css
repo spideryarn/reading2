@@ -256,26 +256,45 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin-right: 0.3rem;
 }
 
-.controls button {
+/* The granularity pills used to be styled from here, by a `.controls button`
+   block plus `:hover` and `.on`. They are shadcn `Toggle`s now, carrying the
+   PILL string in App.tsx, and Radix marks the on state with `data-state="on"`
+   rather than a class — so `.controls button.on` had stopped matching anything
+   at all, and the rest was being overridden a declaration at a time.
+
+   What is left is the one control in this bar that never became a Toggle. It
+   is spelled out in full rather than leaning on a shared button reset, because
+   there is no longer a shared button reset to lean on. */
+
+/* A control that reads as a link rather than a toggle — it does something once
+   rather than being on or off. */
+.controls button.linky {
+  /* `font: inherit` is the load-bearing half of any button reset: without it
+     the UA supplies its own 13.3px Arial. Everything below restates what this
+     button used to inherit, so the pixels are unchanged. */
   font: inherit;
   font-size: 0.75rem;
-  padding: 0.22rem 0.6rem;
-  border: 1px solid var(--rule-strong);
+  padding: 0.22rem 0.3rem;
+  /* Transparent, not absent. The border is 2px of box, and the pills beside it
+     have one — drop it and this control alone shrinks from 27.6px to 25.6px
+     and its underline lifts off the line the others sit on. The radius is not
+     dead either, despite there being nothing to round: a focus ring follows
+     `border-radius`, so it is what keeps the keyboard outline a lozenge. */
+  border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--ink-faint);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  /* Only the colour ever moves. The old rule also animated background and
+     border-color, but this control's are both permanently transparent — the
+     `.controls button:hover` border was already losing to the transparent one
+     above it, on source order at equal specificity. */
+  transition: color 0.12s;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.controls button:hover { border-color: var(--highlight); color: var(--highlight); }
-
-.controls button.on {
-  background: var(--highlight-wash);
-  border-color: var(--highlight);
-  color: var(--highlight-ink);
-  font-weight: 600;
-}
+.controls button.linky:hover { color: var(--highlight); }
 
 .mode {
   font-size: 0.68rem;
@@ -344,8 +363,8 @@ thead th {
   opacity: 0.7;
 }
 
-/* The column the arrow keys are aimed at. Deliberately quieter than a
-   `.controls button.on`: this one follows the mouse, and a thing that changes
+/* The column the arrow keys are aimed at. Deliberately quieter than a switched-on
+   granularity pill: this one follows the mouse, and a thing that changes
    on every sideways twitch of the pointer must not shout. A bottom rule rather
    than a background, so it cannot be mistaken for the pinned-column shading. */
 thead th.nav-aim {
@@ -792,15 +811,6 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 .spine.narrow .spine-part::before { width: 100%; opacity: 0.3; }
 .spine.narrow .spine-part.active::before { opacity: 0.75; }
 
-/* A control that reads as a link rather than a toggle — it does something once
-   rather than being on or off. */
-.controls button.linky {
-  border-color: transparent;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  padding-inline: 0.3rem;
-}
-
 /* --------------------------------------------------------------- tooltip --
    The hover panel — Tooltip.tsx, over Floating UI, which positions and ships no
    styles of its own. Everything visual is here.
@@ -1130,9 +1140,10 @@ mark.cmt[data-mark-end]::after {
   white-space: nowrap;
 }
 
-/* `.linky` is scoped to `.controls` (it inherits that block's button reset), so
-   the dialog's own link-shaped buttons need saying here rather than reusing a
-   class name that would silently style nothing. */
+/* `.linky` is a shape, not a shared class: the `.controls` one and this one are
+   two independent rules that happen to agree about underlines. Neither inherits
+   a button reset from anywhere — there isn't one — so each states its own in
+   full, and styling one does nothing to the other. */
 .cmt-dialog button.linky {
   background: none;
   border: none;
