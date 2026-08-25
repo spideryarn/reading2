@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "lint": "biome lint src tests scripts vite.config.ts vitest.config.ts",
+    "lint:fix": "biome lint --write src tests scripts vite.config.ts vitest.config.ts",
     "extract": "tsx src/extract.ts",
     "blocks": "tsx src/blocks.ts",
     "dev": "vite",
@@ -29,6 +31,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.10",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",

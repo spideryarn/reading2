@@ -34,6 +34,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [keyboard.md](docs/project/keyboard.md) | ↑ / ↓ step through the article, and the level they step by is whichever column the pointer is in |
 | [comments.md](docs/project/comments.md) | select a sentence and the model explains it: the dialog (not a column), when it searches the web, and why the anchor is the quote rather than an offset |
 | [url-state.md](docs/project/url-state.md) | every bit of view state lives in the URL: the parameters, which ones push history and which replace, and why position is a *section* |
+| [linting.md](docs/project/linting.md) | `npm run lint`: why Biome rather than ESLint (TypeScript 7 removed the API ESLint needs), the config-file extension that silently discards your settings, and which rules are off on purpose |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
 | [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
 | [testing.md](docs/project/testing.md) | the test runner, what's deterministic enough to test, and what we deliberately don't |
@@ -129,6 +130,8 @@ Not descriptions of code, which the code already provides.
   to import: that project is far larger in scope, and this one is staying tight.
 - **Run `npm test` before you commit.** It is deterministic and takes ~2s. What's covered, and what
   isn't, is in [testing.md](docs/project/testing.md).
+  Run `npm run lint` too, though its baseline is not clean yet — see
+  [linting.md](docs/project/linting.md).
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.
 - **Committing, with several agents in one working tree.** We're deliberately not using git

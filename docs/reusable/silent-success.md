@@ -1,7 +1,7 @@
 # Silent success: when the natural check agrees with the bug
 
 Not project-specific. A pattern, collected because six unrelated bugs turned up in one evening and
-every one of them had the same shape.
+every one of them had the same shape. Others keep arriving in the same shape; they get added below.
 
 > **A thing reports success while doing nothing, and the check you would naturally run returns the
 > answer you were hoping for.**
@@ -11,7 +11,7 @@ correct, the tests are green. The defect lives in the gap between *what you aske
 meant*, and the natural check is on the wrong side of that gap — usually because it shares an
 assumption with the code. That is why it agrees with it.
 
-## The six
+## The seven
 
 | The bug | What the natural check said | What you had to measure instead |
 |---|---|---|
@@ -21,6 +21,7 @@ assumption with the code. That is why it agrees with it.
 | A hidden browser tab | `window.scrollY` after `scrollTo()` → the number you asked for | `document.visibilityState`; a counter on the scroll listener |
 | A renamed heading, and links into it | Click the link: a page loads | Whether the anchor exists in the target's headings |
 | A test that matches nothing | The suite is green | Mutate the input so it *must* fail, and check it does |
+| A `//` comment in `biome.json` (comments need `.jsonc`) | `npm run lint` runs and reports findings, exit code as expected | Whether a rule you switched **off** still fires — and `grep` the output for `unknown key` |
 
 ## Why the natural check agrees with the bug
 

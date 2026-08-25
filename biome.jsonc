@@ -1,0 +1,61 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+
+  "files": {
+    "includes": ["src/**", "tests/**", "scripts/**", "vite.config.ts", "vitest.config.ts"]
+  },
+
+  // This file is biome.jsonc, not biome.json, and the extension is load-bearing.
+  // Biome only parses comments in a .jsonc file. Put a // comment in biome.json
+  // and it drops everything after it — no error, no warning, exit code
+  // unchanged, and every rule you thought you had configured quietly reverts to
+  // its default. See docs/reusable/silent-success.md.
+
+  // Formatter off on purpose. Biome's default is tabs; this codebase is spaces,
+  // so enabling it rewrites every file at once — a diff nobody can review, in a
+  // tree where several agents have edits in flight. Lint first. Turning the
+  // formatter on would be its own commit, if we ever want it at all.
+  "formatter": { "enabled": false },
+
+  // Same reason: organizeImports would reorder imports across the whole tree.
+  "assist": { "enabled": false },
+
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+
+      "nursery": {
+        // Catches `doThing()` where doThing is async and nobody awaits it. The
+        // failure mode is silence — the work never happens and nothing says so
+        // — which is the house bug (docs/reusable/silent-success.md).
+        // It lives in `nursery` because it needs type inference; that means it
+        // can move or change between Biome versions, which is why
+        // @biomejs/biome is pinned to an exact version in package.json.
+        "noFloatingPromises": "error"
+      },
+
+      "style": {
+        // Off deliberately. Every hit is an `x!`, and the count is climbing:
+        // tsconfig.base.json turns on noUncheckedIndexedAccess, so each
+        // blocks[i] now needs a real check or a `!`. Whether a given `!` is a
+        // lie is a question about that line's logic, which this rule cannot
+        // see — so it flags all 83 and buries the findings that mean something.
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+
+  "overrides": [
+    {
+      // noFocusedTests looks for bare calls to `fit`/`fdescribe` — Jasmine's
+      // focused-it. tests/layout.test.ts defines a local helper genuinely named
+      // `fit` (it wraps fitView from src/web/layout.ts), so the rule fires 19
+      // times there and every one is wrong. Scoped off to that one file rather
+      // than globally, so a real `it.only` left behind elsewhere still fails.
+      "includes": ["tests/layout.test.ts"],
+      "linter": { "rules": { "suspicious": { "noFocusedTests": "off" } } }
+    }
+  ]
+}

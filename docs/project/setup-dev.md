@@ -46,6 +46,7 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
+| `npm run lint` | Biome over `src/`, `tests/`, `scripts/` ([linting.md](linting.md)) | — |
 
 The comment endpoints have no CLI stage — they are driven from the reading view. They write
 `data/<slug>/comments.json`; deleting that file forgets every question asked about the article, and
