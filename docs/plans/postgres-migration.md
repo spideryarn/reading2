@@ -118,8 +118,20 @@ otherwise get wrong:
   *already-exposed* schemas, and `spideryarn` is not one. Worth knowing before someone adds
   `spideryarn` to the exposed list "just to look at it in the table editor" and quietly publishes
   every article to the anon key.
-- **SSL is not enforced on incoming connections.** The toggle is off by default. Turn it on before
-  anything real connects.
+- **SSL is now enforced on incoming connections.** It is off by default; Greg asked for it on,
+  2026-08-25, and now is the cheap moment because nothing connects to the remote yet.
+
+  It has a consequence in code, which is why it is here rather than only in a settings list:
+  **`pg` does not use SSL by default**, so an enforced-SSL server refuses it with an error that
+  reads like a credentials problem. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) keys SSL
+  off the same is-this-local test that guards remote runs, so local (a container with no certificate)
+  and remote (which now requires one) both work without a flag anyone has to remember.
+
+  Two levels, and the gap between them is the part worth knowing: with `PGSSLROOTCERT` pointing at
+  Supabase's certificate the server is **verified**; without it the traffic is still encrypted but
+  any certificate is accepted, which defeats man-in-the-middle protection *while looking exactly like
+  a secure connection*. It warns rather than doing that quietly. **Download the certificate before
+  the first real connection.**
 - **`spideryarn` does not merely fail to be exposed — it does not exist.** Only `public` and
   `graphql_public` are exposed, and `public` is empty. So the starting state is genuinely clean.
 

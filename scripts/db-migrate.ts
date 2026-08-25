@@ -28,6 +28,7 @@
  * in conflict, and the session pooler is what satisfies both.
  */
 
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -62,8 +63,44 @@ if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
   process.exit(1);
 }
 
+/**
+ * SSL, which `pg` does NOT turn on by default.
+ *
+ * The remote project has "Enforce SSL on incoming connections" ON (Greg's call,
+ * 2026-08-25), so a plain connection is refused there. Local Postgres is a
+ * container on 127.0.0.1 with no certificate at all, so requiring SSL there
+ * fails the other way. Hence: keyed off the same `isLocal` test as above, not a
+ * flag somebody has to remember.
+ *
+ * Two levels, and the difference matters:
+ *
+ * - With a CA certificate (`PGSSLROOTCERT`, the path to Supabase's downloadable
+ *   cert), the server is **verified** — the connection is encrypted *and* we
+ *   know who we are talking to.
+ * - Without one, `rejectUnauthorized: false` still **encrypts**, but accepts
+ *   whatever certificate it is handed. That defeats man-in-the-middle
+ *   protection while looking exactly like a secure connection, which is why it
+ *   warns rather than doing it quietly.
+ *
+ * **Untested against the real host**, because nothing has connected to the
+ * remote yet. If the first remote migration fails on TLS, this is the code to
+ * look at, and the fix is the certificate rather than turning SSL off.
+ */
+function sslConfig(): false | { rejectUnauthorized: boolean; ca?: string } {
+  if (isLocal) return false;
+  const caPath = process.env.PGSSLROOTCERT;
+  if (caPath) return { rejectUnauthorized: true, ca: readFileSync(caPath, "utf8") };
+  console.warn(
+    "\u26a0 Connecting over SSL without a CA certificate: encrypted, but the " +
+      "server is not verified.\n  Download the certificate from the Supabase " +
+      "dashboard (Settings -> Database -> SSL Configuration)\n  and set " +
+      "PGSSLROOTCERT to its path.",
+  );
+  return { rejectUnauthorized: false };
+}
+
 /** One connection, used once. `max: 1` because a migrator has no concurrency. */
-const pool = new Pool({ connectionString: url, max: 1 });
+const pool = new Pool({ connectionString: url, max: 1, ssl: sslConfig() });
 
 try {
   const db = drizzle(pool);
