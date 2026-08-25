@@ -154,6 +154,11 @@ Not descriptions of code, which the code already provides.
   bare `tsc` is in [typechecking.md](docs/project/typechecking.md).
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.
+- **Never run a git command that throws work away.** Other agents' unsaved edits are sitting in
+  this same tree and there is no second copy of them. So: no `git checkout -- …`, no `git restore`,
+  no `git stash`, no `git reset --hard`, no `git clean`, no switching or rebasing branches — not
+  even "just on my own file", because you can't tell whose edits are in it. Undo your own mistake by
+  editing the text back the way it was. If you think you really need one of these, ask Greg first.
 - **Committing, with several agents in one working tree.** We're deliberately not using git
   worktrees yet — not worth the complexity — so the tree has other agents' in-flight edits in it.
   Commit only your own files, by naming them explicitly and doing it in one atomic command:
