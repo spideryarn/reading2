@@ -106,6 +106,30 @@ migration ledger, the `auth.users` trigger, the nine inherited users. This one w
 the only item on the list that can stop the app answering requests. **Worth resolving before
 anything depends on it.**
 
+Four more things read off the dashboard on 2026-08-25, each of which changes something we would
+otherwise get wrong:
+
+- **The direct connection is IPv6-only**, and IPv4 is a paid add-on. `db.<ref>.supabase.co:5432`
+  simply will not resolve from an IPv4-only network — and Vercel is one. The IPv4 path is the shared
+  pooler, `aws-0-eu-west-2.pooler.supabase.com`, where the username carries the project ref
+  (`postgres.<ref>`) rather than being plain `postgres`. **Migrations want the *session* pooler, not
+  the transaction pooler on 6543**, because DDL and the migrator's bookkeeping want a session.
+- **"Automatically expose new tables" is ON.** Harmless as things stand — it exposes new tables in
+  *already-exposed* schemas, and `spideryarn` is not one. Worth knowing before someone adds
+  `spideryarn` to the exposed list "just to look at it in the table editor" and quietly publishes
+  every article to the anon key.
+- **SSL is not enforced on incoming connections.** The toggle is off by default. Turn it on before
+  anything real connects.
+- **`spideryarn` does not merely fail to be exposed — it does not exist.** Only `public` and
+  `graphql_public` are exposed, and `public` is empty. So the starting state is genuinely clean.
+
+One discrepancy worth not glossing over: the Users table says *"No users in your project"* while the
+footer stat says **"Total: 10 users (estimated)"**. Almost certainly a stale row-count estimate on a
+new project — but "the new project has no inherited users" is load-bearing for
+[the beta gate](deploy-and-repo-move.md#the-beta-gate), so it should be confirmed with
+`select count(*) from auth.users` the first time we hold a connection, rather than taken from a
+dashboard that is currently contradicting itself.
+
 Nothing has been applied to it yet. The schema has only ever been run against
 [the local stack](../project/supabase-local.md), and the first thing to happen against the remote is
 [step 1](#the-order-of-work): the roles, and confirming `spideryarn` is not in the exposed schemas.
@@ -883,8 +907,11 @@ lists four requirements. Answering its explicit question — **it is storage, no
 
 ## Open questions
 
-1. ~~The billing banner on the Supabase project.~~ **Gone** with the new-project decision. The old
-   project's billing state can no longer take the new app down.
+1. **The billing banner. Still open, and the only item here that can stop the app answering
+   requests.** *"Grace period is over · Your projects will not be able to serve requests when you use
+   up your quota."* A previous version of this entry said the new project deleted it. **It did not** —
+   the grace period belongs to the **organization** ("GD personal"), and the new project is in the
+   same one, so the banner is on its dashboard too. Resolve before anything depends on it.
 2. ~~Mutations in production: closed, or a minimal gate?~~ **Answered** by
    [the beta gate](deploy-and-repo-move.md#the-beta-gate) — a one-email allowlist, now against an
    empty user pool rather than 9 inherited accounts.

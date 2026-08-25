@@ -13,11 +13,19 @@
  *
  * See docs/plans/postgres-migration.md and docs/project/supabase-local.md.
  *
- * A migration connection is a **direct/session** connection, never the
- * transaction pooler: DDL, advisory locks and the migrator's own bookkeeping all
- * want a session. Locally that distinction does not exist — there is one
- * Postgres on 54362 — but the connection string in production must be the
- * direct one, and this is where that gets got wrong if it gets got wrong.
+ * A migration connection is a **direct or session** connection, never the
+ * transaction pooler on 6543: DDL and the migrator's own bookkeeping want a
+ * session. Locally that distinction does not exist — there is one Postgres on
+ * 54362 — so this is a rule that only ever bites against the remote.
+ *
+ * And against the remote there is a second trap in front of it. Supabase's
+ * direct host, `db.<ref>.supabase.co:5432`, is **IPv6-only** unless the paid
+ * IPv4 add-on is on. From an IPv4-only network — Vercel is one — it does not
+ * resolve. The IPv4 path is the shared pooler at
+ * `aws-0-<region>.pooler.supabase.com`, whose username carries the project ref
+ * (`postgres.<ref>`) rather than being plain `postgres`, and whose SESSION port
+ * is the one to use here. So "use the direct connection" and "use IPv4" can be
+ * in conflict, and the session pooler is what satisfies both.
  */
 
 import path from "node:path";
