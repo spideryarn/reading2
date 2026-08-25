@@ -24,6 +24,7 @@ import type { Section } from "./position.js";
 import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
 import { ContextPanel } from "./ContextPanel.js";
 import { useColumnContext } from "./useColumnContext.js";
+import { BlockRange, BlockRef } from "./BlockRef.js";
 
 interface Props {
   article: Article;
@@ -339,9 +340,7 @@ export function TableView({
                             )}
                           </div>
                           <p className="gist-text">{node.gist}</p>
-                          <div className="range">
-                            {node.range[0]}–{node.range[1]}
-                          </div>
+                          <BlockRange className="range" range={node.range} onJump={onJump} />
                         </>
                       ) : (
                         // A leaf: navigation chrome only, and only in outline mode.
@@ -357,7 +356,7 @@ export function TableView({
                 data-nav-depth={geometry.leafDepth}
                 className={`text pin-right ${!block.gistable ? "opaque" : ""}`}
               >
-                <span className="block-id">{block.id}</span>
+                <BlockRef className="block-id" id={block.id} onJump={onJump} />
                 <div
                   className="prose"
                   dangerouslySetInnerHTML={{

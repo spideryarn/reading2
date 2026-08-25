@@ -22,6 +22,7 @@
 import type { BlockId, NodeId } from "../types.js";
 import type { ContextEntry, ContextItem } from "./context.js";
 import { Tooltip } from "./Tooltip.js";
+import { BlockRange } from "./BlockRef.js";
 
 interface Props {
   entries: ContextEntry[];
@@ -98,9 +99,7 @@ export function ContextList({ entries, onJump, activeChain, crumbFor }: Props) {
                   a copy of the parts column. See TableView § levels. */}
               {body && <p className="gist-text">{body}</p>}
               {!e.item.step && (
-                <div className="range">
-                  {node.range[0]}–{node.range[1]}
-                </div>
+                <BlockRange className="range" range={node.range} onJump={onJump} />
               )}
             </li>
           );

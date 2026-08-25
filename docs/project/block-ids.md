@@ -117,6 +117,40 @@ at a diagram — they simply must not generate a row of their own. On the test a
 pull-quotes are word-for-word repeats of body sentences, so without this the ToC would grow eleven
 phantom rows quoting text it had already listed.
 
+## Showing an id
+
+Ids are on screen in three places: the gutter beside every paragraph, and both ends of the block
+range under a gist — in a table cell and in a column panel. All three draw
+[`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart.
+
+**The `spya-` prefix is not shown.** Every id on screen has it, so it costs five characters and
+carries nothing. It is still in the `title` attribute and still in the link's address, which is
+where anything anybody pastes comes from. The prefix earns its keep in the *data* — it is what makes
+"is this id ours?" decidable when stage 3 re-reads a page (above) — not in the reading view.
+
+**An id is a link.** Greg, 2026-08-25:
+
+> make them clickable/right-clickable (e.g. to update the url, open in a new window, copy url, etc)
+
+So it renders a real `<a href>` pointing at this article with `?at=` set to that block, and every
+other view parameter carried along — see [url-state.md](url-state.md). The browser then supplies the
+rest for free: the status bar shows the destination, right-click offers "copy link address",
+⌘-click opens the block in its own tab. A plain left-click is intercepted and handed to the same
+jump the gist cells use, because a page load to move down the page you are already on is a waste.
+
+Two things this costs, both deliberate:
+
+- The gutter id used to be `user-select: all`, so one click selected the whole id for pasting into
+  a conversation. That cannot coexist with a click that navigates. The context menu now yields the
+  *URL* instead, which is the more useful thing, and the id is still selectable by dragging.
+- Both ends of a range sit inside a cell whose own handler jumps to the range's **start**, so
+  `BlockRef` stops the click from bubbling. Without that, clicking the far end of a range would
+  quietly take you to the near end — the click would work, and go to the wrong place.
+
+The type is small, faint and Courier (`--font-id` in
+[`styles/tokens.css`](../../styles/tokens.css)), at Greg's asking: an id is machine text sitting
+beside prose and should read as a footnote to the block, not as part of it.
+
 ## If this ever changes
 
 Changing how ids are assigned invalidates every cached artefact downstream. Bump the pipeline
@@ -127,4 +161,6 @@ version and let stale caches be *detectable* rather than silently wrong — neve
 - [architecture.md](architecture.md) — where stage 3 sits, and the `blocks.json` shape
 - [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) — what is built on top of these ids
 - [table-of-contents.md](table-of-contents.md) — the ToC that addresses blocks by id
+- [url-state.md](url-state.md) — the `?at=` an id links to, and what else rides in the URL
+- [web-client.md](web-client.md) — the reading view these ids are drawn in
 - [open-questions.md](open-questions.md) — what is still undecided

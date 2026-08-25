@@ -78,6 +78,10 @@
 
   --bar-h: 2.75rem; /* .controls */
   --head-h: 2.5rem; /* thead */
+  /* The bottom bar — Dock.tsx. Read by the comment dialog and the overflow
+     fade, both of which have to stop above it, so it is a token rather than a
+     number written out three times. */
+  --dock-h: 2.5rem;
 }
 
 * { box-sizing: border-box; }
@@ -152,13 +156,6 @@ h1 {
 /* Title and the disclosure control on one line, the control pushed to the far
    right of the *inner* width rather than the window's, so it sits at the end of
    the measure instead of stranded across an empty 1600px. */
-.masthead-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
 h1 a {
   color: inherit;
   text-decoration: none;
@@ -169,30 +166,6 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    otherwise imposes, because an icon-only button has no text baseline worth
    aligning; the inner flex centres the SVG in the circle. Icons are Lucide —
    docs/project/icons.md. */
-.disclose {
-  align-self: center;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--rule-strong);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-faint);
-  cursor: pointer;
-  width: 1.6rem;
-  height: 1.6rem;
-  padding: 0;
-  transition: color 0.15s, border-color 0.15s;
-}
-.disclose:hover { color: var(--highlight); border-color: var(--highlight); }
-
-.chevron {
-  display: block;
-  transition: transform 0.15s;
-}
-.chevron.up { transform: rotate(180deg); }
-
 /* The facts line: byline, source, and the article's measurements. Separators
    are drawn by ::before on every span after the first, so a missing byline or
    siteName can't leave a stranded interpunct. */
@@ -473,7 +446,9 @@ thead th.pin-left { z-index: 35; }
   position: fixed;
   top: var(--bar-h);
   right: 0;
-  bottom: 0;
+  /* Stops at the bar. Run to 0 and the gradient washes over the dock's right
+     end, which does not scroll and has nothing more to the right of it. */
+  bottom: var(--dock-h);
   width: 2rem;
   z-index: 20;
   pointer-events: none;
@@ -538,14 +513,9 @@ td.gist .gist-text {
   color: var(--ink-soft);
 }
 
-td.gist .range {
-  margin-top: 0.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  line-height: 1;
-  color: var(--ink-faint);
-  opacity: 0.7;
-}
+/* Only the spacing lives here. The type is .block-ref's, wherever it appears —
+   see BlockRef.tsx. */
+td.gist .range { margin-top: 0.5rem; }
 
 /* Continuation cells must stay opaque: when pinned, transparent would let the
    scrolling columns show through them. */
@@ -611,22 +581,58 @@ td.text {
 tr.row-active td.text { background: var(--panel); }
 
 /* The id gutter is for debugging and for quoting a block in conversation, so it
-   is present but recessive until you're on the row. */
+   is present but recessive until you're on the row. Position only — the type is
+   in the .block-ref block below. */
 .block-id {
   position: absolute;
   left: 1rem;
-  top: 1.05rem;
+  top: 1.1rem;
   width: 4rem;
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  line-height: 1;
-  color: var(--ink-faint);
-  opacity: 0.55;
-  user-select: all;
-  transition: opacity 0.12s;
 }
 
-tr.row-active .block-id { opacity: 0.95; }
+tr.row-active .block-ref { opacity: 0.95; }
+
+/* ---------------------------------------------------------- block ids --
+   Every block id on screen, wherever it is: the gutter beside a paragraph and
+   both ends of a gist's range. Courier at Greg's asking, and small and faint on
+   purpose — an id is machine text sitting next to prose, and it should read as
+   a footnote to the thing it labels rather than as part of it.
+
+   It is a link (BlockRef.tsx), so it needs to look clickable when you are on it
+   and like nothing at all when you are not. Hence: no underline at rest, no
+   colour of its own, and both on hover. */
+.block-ref {
+  font-family: var(--font-id);
+  font-size: 0.58rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  opacity: 0.5;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.12s, color 0.12s;
+}
+.block-ref:hover {
+  opacity: 1;
+  color: var(--highlight-ink);
+  text-decoration: underline;
+}
+.block-ref:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+/* The dash is not inside either link, so dragging across one id selects that
+   id and not the pair. */
+.block-range { line-height: 1; }
+.block-range-dash {
+  font-family: var(--font-id);
+  font-size: 0.58rem;
+  color: var(--ink-faint);
+  opacity: 0.5;
+  padding: 0 0.1em;
+}
 
 .prose {
   max-width: clamp(45ch, 90vw, var(--reading-measure));
@@ -838,7 +844,12 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
    forward, so it sits above --panel, which already sits above --page (see the
    note in tokens.css). It must be opaque — it is drawn over prose. */
 .tooltip-anchor {
-  z-index: 80; /* above the spine (45) and both sticky bars */
+  /* Above EVERYTHING, drawer included. It was 80 — above the spine (45) and
+     both sticky bars — which was true until the bottom drawer arrived at 95 and
+     took the bar's own tooltips underneath it with it. A tooltip is always
+     about the thing you are pointing at, so it is always the frontmost thing on
+     screen; anything else is a hover that appears to do nothing. */
+  z-index: 100;
   /* The panel takes hover of its own only where that is wanted; for the spine
      it must not, or a tooltip that lands under the pointer keeps itself open. */
   pointer-events: none;
@@ -1003,9 +1014,14 @@ mark.cmt[data-mark-end]::after {
 .cmt-dialog {
   position: fixed;
   right: 1.25rem;
-  bottom: 1.25rem;
+  /* Clear of the bottom bar. Written in terms of --dock-h rather than as a
+     bigger number so that changing the bar's height cannot leave the dialog
+     half underneath it — the failure would be a few pixels of the delete button
+     going unclickable, which reads as a dead button rather than as a layout
+     bug. */
+  bottom: calc(var(--dock-h) + 0.75rem);
   width: min(24rem, calc(100vw - 2.5rem));
-  max-height: min(34rem, calc(100vh - 8rem));
+  max-height: min(34rem, calc(100vh - 8rem - var(--dock-h)));
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -1417,3 +1433,299 @@ mark.cmt[data-mark-end]::after {
   color: var(--ink-soft);
 }
 .tip-entry .own { color: var(--ink-faint); font-weight: 400; }
+
+/* ------------------------------------------------------------------ dock --
+   The bottom bar and the drawer that rises out of it — Dock.tsx, and
+   docs/plans/bottom-bar.md for why the bottom rather than the left.
+
+   The whole point of this edge is that it costs the table nothing. Note what is
+   NOT here as a result: no `--dock-w`, no term added to any `calc()` that
+   `.reader`, the sticky bars or `td.pin-left` depend on, and nothing in
+   layout.ts. The page grows a bar's worth of bottom padding and that is the
+   entire interaction with the reading view.
+
+   `position: fixed`, so horizontal scrolling does not drag it sideways. That is
+   the one thing the spine had to be careful about too (see § spine) and the one
+   thing this gets for free: `fixed` is viewport-relative, and a bar that spans
+   the viewport has nowhere to drift to. */
+.dock {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100vw;
+  height: var(--dock-h);
+  z-index: 90; /* over the spine (45), the sticky bars (≤40) and the dialog (70) */
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  padding: 0 0.4rem;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--rule-strong);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+
+/* The reader must be able to scroll to the true end of the article. Without
+   this the last paragraph finishes underneath the bar, which does not look like
+   a bug — it looks like the article ends there. */
+.reader { padding-bottom: var(--dock-h); }
+
+.dock-gap { flex: 1; }
+
+.dock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.6rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  /* The active marker is an inset top border rather than a real one, so
+     switching panels cannot shift the row by a pixel. */
+  box-shadow: inset 0 2px 0 transparent;
+  transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
+}
+.dock-btn:hover { color: var(--highlight); background: var(--panel); }
+.dock-btn:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: -2px;
+}
+/* NOT `background: var(--accent)`. In this palette --accent is a raised dark
+   SURFACE, not the brand orange — an on-state painted with it is dark grey on
+   a near-black page: not an error, not visibly broken, just the signal quietly
+   gone. Both tokens.css and App.tsx's PILL carry the same warning. */
+.dock-btn.on {
+  color: var(--highlight-ink);
+  background: var(--highlight-wash);
+  box-shadow: inset 0 2px 0 var(--highlight);
+}
+
+/* Not built yet. Dimmed and inert, but still focusable and still hoverable —
+   the tooltip IS the content, so a button the pointer slides off would have
+   nothing to say. `aria-disabled` rather than `disabled` for the same reason:
+   `disabled` would take it out of the tab order and stop it firing the hover
+   events the tooltip needs. */
+.dock-btn.soon {
+  color: var(--ink-faintest, var(--ink-faint));
+  opacity: 0.5;
+  cursor: default;
+}
+.dock-btn.soon:hover {
+  color: var(--ink-soft);
+  background: transparent;
+  opacity: 0.75;
+}
+
+.dock-count {
+  min-width: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  text-align: center;
+}
+/* Something is still with the model. The same signal the dialog gives, said
+   where you can see it without opening anything. */
+.dock-count.pending {
+  background: var(--highlight);
+  color: var(--page);
+}
+
+.dock-chev {
+  opacity: 0.5;
+  transition: transform 0.15s;
+}
+.dock-chev.open { transform: rotate(180deg); }
+
+/* The dim. A <button>, so it is reachable by keyboard and announced as
+   something you can press — hence the reset, which is undoing the fact that it
+   is a button rather than styling it as one. */
+.dock-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 92;
+  border: none;
+  padding: 0;
+  background: color-mix(in oklab, var(--page) 72%, transparent);
+  cursor: default;
+  animation: dock-fade 120ms ease-out;
+}
+
+.dock-drawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--dock-h);
+  z-index: 95;
+  max-height: min(60vh, 32rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--rule-strong);
+  box-shadow: 0 -12px 32px -12px rgb(0 0 0 / 0.6);
+  animation: dock-rise 140ms ease-out;
+}
+
+@keyframes dock-fade {
+  from { opacity: 0; }
+}
+@keyframes dock-rise {
+  from { transform: translateY(1.5rem); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock-scrim, .dock-drawer { animation: none; }
+}
+
+.dock-drawer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.55rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-ui);
+}
+.dock-drawer-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The wordmark. Structure and class names are the original app's so its
+   CSS-only logo animations can be dropped in later as one file — see
+   docs/project/original-version/design-system.md, and the argument there for
+   not doing that. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--highlight);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+.logo-image { display: block; }
+
+.dock-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.dock-close:hover { color: var(--highlight); border-color: var(--highlight); }
+
+.dock-drawer-body {
+  overflow-y: auto;
+  padding: 0.9rem 1.1rem 1.1rem;
+}
+
+.dock-empty {
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+}
+
+/* The questions list. Two columns where there is room, because these are short
+   and a single column down a wide drawer wastes the shape of it. */
+.dock-questions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2 22rem;
+  column-gap: 1.5rem;
+}
+.dock-questions li {
+  /* Without this a card can be split down the middle by the column break, which
+     looks like two broken cards rather than one whole one. */
+  break-inside: avoid;
+  margin: 0 0 0.4rem;
+}
+.dock-question {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+.dock-question:hover {
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+}
+.dock-question-quote {
+  /* Two lines and then stop: the quote is here to be recognised, not read.
+     `-webkit-box` is not a legacy spelling to be tidied away — it is still the
+     only display type `line-clamp` works against in every shipping browser, and
+     it is what makes this a block-level element too. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-family: var(--font-reading);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.dock-question-state {
+  display: block;
+  margin-top: 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--ink-faint);
+}
+.dock-question-state.pending { color: var(--highlight); font-style: italic; }
+.dock-question-state.error { color: var(--danger, var(--highlight)); }
+
+/* The placeholders' tooltips carry three lines rather than a label, so they
+   need room the spine's band cards don't. */
+.tooltip.tip-soon { max-width: 22rem; }
+.tip-soon-head {
+  font-weight: 600;
+  color: var(--ink);
+}
+.tip-soon-flag {
+  margin-left: 0.4rem;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tip-soon p {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+/* What that project learned the hard way — the part worth carrying. Set apart
+   so it doesn't read as more of the description. */
+.tip-soon-learned {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint) !important;
+  font-style: italic;
+}

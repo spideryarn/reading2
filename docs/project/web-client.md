@@ -17,14 +17,17 @@ Why the feature exists and what a gist may and may not be:
 | File | What it does |
 |---|---|
 | [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters |
-| [`src/web/App.tsx`](../../src/web/App.tsx) | fetches `/api/article/<slug>`, masthead, the granularity controls |
+| [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, then fetches `/api/article/<slug>` — masthead, the granularity controls |
+| [`src/web/router.ts`](../../src/web/router.ts) + [`Link.tsx`](../../src/web/Link.tsx) | `/` vs `/read/<slug>` — [library.md](library.md) |
+| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the shelf of articles and the add box — [library.md](library.md) |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts, with the provenance behind a `▾` — everything about the article that does not vary with position |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
+| [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
-| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
+| [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle`, `collapsible` |
 | [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
@@ -35,14 +38,16 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
-| [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
+| [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)` and `listArticles()`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
 
-Running it: [setup-dev.md](setup-dev.md). Slug selection is `/?slug=<slug>`, defaulting to
-`noema-mythology-of-conscious-ai` — the real pipeline output, which is gitignored, so a fresh clone
-falls through to the committed `example/` fixture and still works ([`src/api.ts`](../../src/api.ts)).
-Deep links are `/?at=spya-k6fpme`. Every other bit of view state is in the URL too —
-see [url-state.md](url-state.md) for the full set and for why scrolling *replaces* the history
-entry while toggling a column *pushes* one.
+Running it: [setup-dev.md](setup-dev.md). `npm run dev` opens the **library** at `/`
+([library.md](library.md)); an article is `/read/<slug>`, and a fresh clone that has never run the
+pipeline still has the committed `example/` fixture to open ([`src/api.ts`](../../src/api.ts)). Old
+`/?slug=<slug>` links are rewritten on the way in and keep working.
+
+Deep links are `/read/<slug>?at=spya-k6fpme`. Every other bit of view state is in the query string
+too — see [url-state.md](url-state.md) for the full set, for the rule that divides the path from the
+query, and for why scrolling *replaces* the history entry while toggling a column *pushes* one.
 
 ## Tailwind and shadcn components
 
@@ -96,7 +101,7 @@ never point it at a directory containing prose.
 One thing that went right by design: `twMerge` correctly drops shadcn's
 `data-[state=on]:bg-accent`, so the orange on-state we override survives. `--accent` in this palette
 is a raised dark **surface**, not the brand orange — the trap
-[original-version.md § Brand facts](original-version/overview.md#brand-facts-now-load-bearing) records,
+[original-version/overview.md § Brand facts](original-version/overview.md#brand-facts-now-load-bearing) records,
 arriving through the front door in the first component we adopted. The orange has its own Tailwind
 name, `--color-highlight`, so nobody can reach for `tw:bg-accent` expecting it.
 
@@ -206,7 +211,7 @@ unchanged. There is no toggle, no `prefers-color-scheme` branch and no light fal
 > possible.
 
 This reverses the "light mode only" inherited from the original app — see
-[original-version.md § Decision: the palette](original-version/overview.md#decision-the-palette), which now
+[original-version/overview.md § Decision: the palette](original-version/overview.md#decision-the-palette), which now
 records the reversal. What made it cheap: the palette had already been collapsed into one source, so
 switching themes meant changing values, not chasing colours through the stylesheet.
 
@@ -229,7 +234,7 @@ How it's put together, and what to know before touching it:
 - **Panels are lighter than the page, not darker.** `--sidebar` sits above `--background`; on a dark
   ground a raised surface reads as forward. The same inversion catches `--accent`, which is still
   shadcn's "hover surface" meaning and is now a dark grey — the trap described in
-  [original-version.md](original-version/overview.md#brand-facts-now-load-bearing) is unchanged in kind, only
+  [original-version/overview.md](original-version/overview.md#brand-facts-now-load-bearing) is unchanged in kind, only
   the failure mode flipped: a highlight that goes near-white becomes one that vanishes into the page.
 - **`color-scheme: dark` is declared twice on purpose** — on `:root` in `tokens.css` for scrollbars
   and form controls, and again as a `<meta>` in [`index.html`](../../index.html) so the browser

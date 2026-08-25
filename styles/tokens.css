@@ -109,6 +109,7 @@
     --font-brand: 'Trebuchet MS', sans-serif;           /* the wordmark, and only the wordmark */
     --font-ui: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-id: 'Courier New', Courier, var(--font-mono);   /* block ids, and only block ids */
     --font-reading: Georgia, 'Times New Roman', serif;  /* see the research doc: screen serif, big x-height */
 
     /* ---- reading measure --------------------------------------------- */
