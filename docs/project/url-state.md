@@ -31,8 +31,6 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `about` | the masthead's details panel — source, counts, which model built the tree and the arc | **replace** | `?about=1` |
-| `ctx` | which column-context experiment is on — [column-context.md](column-context.md). Absent means off; the four values are mutually exclusive by construction | push | `?ctx=siblings` |
-| `prog` | the progress hairline in the current cell, independent of `ctx` | push | `?prog=1` |
 
 The bird's-eye rail is deliberately **not** a parameter. Its visibility is derived, not chosen — it
 is off in outline mode and collapses to ticks when labels would cost a gist column, both decided by

@@ -62,80 +62,103 @@ Two web searches (Sonnet, 2026-08-25) and a design review by GPT via
   section in another part is beyond the list, however close its row. The panels count distance along
   the list and let the part headings mark the tree's boundaries instead.
 
-## The modes
+## What a gist column shows now
 
-All URL state — `?ctx=siblings|neighbours|panel|centred` and `?prog=1` — pushing history like
-`cols` ([url-state.md](url-state.md#the-parameters)). Off by default, so nothing changes until a pill
-is pressed. The three column treatments are mutually exclusive by construction (one parameter); the
-hairline combines with any of them. "Current" is always decided by the scroll position, never the
-pointer, and every mode leaves the leaves alone: a leaf has no gist, so there is nothing to list,
-and the [navLabel contract](granularity-zoom.md#node-shape) is untouched. That includes the
-*continuation* cells — a leaf repeated down a deeper column because its branch ended early
-([`tree.ts`](../../src/web/tree.ts)) — which are not items at that level and are never listed.
+> Let's make Centred always-on, and get rid of Siblings, Neighbours, and Panel.
+>
+> — Greg, 2026-08-25, after comparing all four as toggles
 
-| Pill | Draws where | Shows |
-|---|---|---|
-| **Siblings** | inside the current cell's sticky box | that level's siblings: every part at L1; the current part's sections at L2, with the previous and next part named faintly at either end. Current = title + gist; adjacent = title; the rest fainter; the ones already read fade. Other cells on screen draw as before. |
-| **Neighbours** | inside the current cell | the previous item's title faintly above the gist, and the next item's title pinned to the bottom of the viewport until the cell ends, where it settles. VS Code's sticky scroll, both ways. |
-| **Panel** | a fixed panel over the column, top-anchored | the whole level as a list, with the parts as headings between the sections, the current item open. The list stays still and slides only when the current item would leave a comfortable band. |
-| **Centred** | the same panel, centre-anchored | Greg's sketch: the current item held on the focus line, 40% down the window, neighbours above and below in fixed tiers. |
-| **Progress** | the current item, every level | a hairline filling as you read through the item. |
+In reading mode every gist column — the arc, the parts, the sections — is drawn by a fixed panel
+laid over it, listing the **whole level** with the **current item held on the focus line**, 40%
+down the window, and the rest as landmarks in fixed tiers above and below. Focus follows the scroll,
+never the pointer. The panel is clipped, never scrollable, so the wheel always moves the article.
+Hovering any landmark shows its title and gist; the group's open delay is 150ms — enough that
+crossing the list fires nothing, short enough not to feel like a wait — and once one is open its
+neighbours are instant. In outline mode there is no panel: the table is itself the list.
 
-Where things live: [`context.ts`](../../src/web/context.ts) decides what each mode lists and is
+There is no control. Every toggle this work added has gone: the four modes, and then the progress
+hairline — a line under the current item filling as you read through it, which survived the first
+cut as the one remaining pill and went the same afternoon:
+
+> please completely remove that new "Progress" pill & machinery - I found it very distracting.
+>
+> — Greg, 2026-08-25
+
+Worth keeping as a finding rather than a footnote: a thing that moves every scroll frame in the
+corner of the eye is a cost even when it is two pixels tall.
+
+Where things live: [`context.ts`](../../src/web/context.ts) decides what the level lists and is
 tested in [`tests/context.test.ts`](../../tests/context.test.ts);
-[`useColumnContext.ts`](../../src/web/useColumnContext.ts) is the live half — which cell is current,
-where the columns are, how far through; [`ContextList.tsx`](../../src/web/ContextList.tsx) draws
-the list; [`ContextPanel.tsx`](../../src/web/ContextPanel.tsx) is the hoisted panel;
-[`ContextControls.tsx`](../../src/web/ContextControls.tsx) is the pills and their tooltips; the
-in-cell modes are in [`TableView.tsx`](../../src/web/TableView.tsx); the styles are the
+[`useColumnContext.ts`](../../src/web/useColumnContext.ts) is the live half — which item is under
+the focus line, where the columns are, how far through; [`ContextList.tsx`](../../src/web/ContextList.tsx)
+draws the list and the landmarks' tooltips; [`ContextPanel.tsx`](../../src/web/ContextPanel.tsx) is
+the panel; the cells under the panel are in [`TableView.tsx`](../../src/web/TableView.tsx); the styles are the
 `column context` section of [`styles.css`](../../src/web/styles.css).
 
-## Decisions worth keeping
+### What the panel replaced, and what it cost
 
-- **The in-cell modes keep the cell, not the edge.** Siblings puts the earlier siblings above the
-  current title, and Neighbours the previous title, so the current gist no longer starts exactly at
-  its cell's top boundary — it starts a few lines down, inside the cell it belongs to. The plan
-  overclaimed this and GPT's code review caught it. The cell boundary itself is untouched, which is
-  the part the alignment invariant is actually about.
-- **Two "current" lines, named separately.** The in-cell modes and the hairline use the *sticky
-  line* (`stickyOffset() + 1`) — the same line `?at=` is measured against, so the list changes at
-  the exact moment the cell it lives in hands over. The centred panel uses the *focus line*, 40% down
-  the viewport, because a panel that centred the item under the header would be describing a section
-  the eye had already left. GPT's review caught this: the plan had one "current" doing both jobs.
-- **The panel is a bounded window, not a scrollable outline.** A level can hold dozens of sections.
-  If the panel scrolled, the wheel would move the panel instead of the article and "focus follows
-  scroll" would stop being true. So it clips, with a fade at each end, and the group headings are the
-  landmarks for what lies beyond. The spine stays the view of the whole article.
-- **Panel and Centred knowingly step outside the alignment invariant.** Their rows are not the
-  table's rows, and they are equal-weight lists where the spine is deliberately proportional. That is
-  the experiment, stated rather than hidden; the cells underneath keep their borders and tints so the
-  two can be compared on one screen.
-- **Progress never touches React.** It changes every frame while scrolling, so the sampler writes
-  it straight to `--ctx-progress-<depth>` on the root element. Row changes — the only thing that
-  re-renders — happen at section boundaries. One sampler, reads before writes, so no frame forces
-  layout twice. It measures against whichever line chose the item it sits under: the sticky line,
-  or the focus line in Centred mode.
-- **Neighbours' bottom pin needs a fill.** A `position: sticky; bottom: 0` element only has range if
-  its normal position is at the bottom of its containing block, and a cell's content sits at the
-  top. So the cell gets an absolutely positioned fill and the next-title lives at the bottom of that.
-  The fill's containing block is made with `position: sticky` and no insets, **not** `relative`:
-  the pinned end columns are already sticky with a `left`, and `relative` overrode it and un-pinned
-  L0 — found in the browser, exactly as the plan said it would have to be.
-- **Kept against advice.** GPT recommended cutting Neighbours as adding little on the weakest CSS
-  mechanism. It stayed because the brief was to compare several ways, and it is the cheapest one to
-  compare the richer modes against. Its tooltip says so.
+> it looks like the new centred-panel view is occluding what used to be there … What have we lost by
+> adding this centred-panel? Look for a way to get the best of all worlds.
+>
+> — Greg, 2026-08-25
 
-## Known costs, stated plainly
+The panel covered the column's cells, whose sticky box carried the title, the `§` mark for the
+author's own heading, the gist and the block range, and which lit up along the hovered row's ancestor
+path. A fade at the panel's top edge let the cell's title show through, which is what Greg saw. Taken
+one by one:
 
-- **Siblings clips on a short cell.** A one-paragraph section cannot hold a list of six siblings;
-  the sticky box has no range and the list overflows the cell. The Panel modes exist to compare
-  against exactly this.
-- **Neighbours doubles up at a handover.** For the moment the current cell's end and the next cell's
-  start are both on screen, "↓ next" sits directly above the next cell's own title.
-- **Centred is half empty at the ends.** At the first and last items, centring leaves the panel
-  half blank — and the research is unkind to the premise, since nobody reads the shrunk items.
-- **The panel is one frame late when the table scrolls sideways.** It is `position: fixed` at the
-  column header's measured x, re-measured on scroll.
+- **The content** — title, `§`, gist, range, the arc's step marker — is now drawn by the panel's
+  current entry, in the same sizes, and the cell draws none of it. Nothing is shown twice.
+- **The hover wash** carries over: entries on the hovered row's ancestor path light up the way the
+  cells did, at every level at once.
+- **Clicking to jump** works on every entry and on the cells' remaining strip.
+- **The boundaries beside the prose** — the one thing a fixed panel genuinely cannot carry, because
+  its rows are not the table's rows — are kept by leaving a 10px gutter down the left of the column
+  uncovered. The cells underneath still draw their borders, and each gist cell draws a short tick in
+  its own tint at its top edge, so the strip reads as a ruler: this is the row where this section
+  begins. That is the alignment invariant's remaining visible trace at these levels.
+- **The panel is opaque and has no top fade** now, so nothing shows through it.
+
+What is still lost, stated plainly: the current title no longer *starts* on the row its text starts
+on. It sits on the focus line instead. That is the trade Centred makes by definition, and Greg chose
+it.
+
+### Boundaries in the finer columns
+
+> In the further-right i.e. lower-level columns, can we make it clearer where the higher-level
+> boundaries are? I think we're using small-caps right now, but it's not enough.
+>
+> — Greg, 2026-08-25
+
+Three treatments were built and screenshotted side by side at the top of the article, where the
+sections column shows two part boundaries at once:
+
+- **A — rule and bracket.** Small caps in the parent level's tint, a hairline rule above, the run
+  of sections bracketed in the same tint down their left edge. Clear as a *divider*, but a section
+  still reads as an item that happens to follow a label.
+- **B — tinted band.** The heading is a strip in the parent level's tint, and the sections under it
+  sit on a faint wash of the same tint. Reads as a *container*: the sections visibly belong to the
+  part.
+- **C — heavier rule, normal case.** A 2px tint rule, the part's title in normal case with a `§`
+  prefix, deeper indentation. The heading reads as one more orange title, and `§` already means
+  "the author's own heading" elsewhere on the page, so it cannot be borrowed.
+
+**B is what ships.** The parent's tint is the point in all three: it is the parts column's colour,
+not the sections column's, so the eye files the heading with the column to its left. The part you
+are in is at full strength; the others recede with their sections. Screenshots are in the session
+that made the choice; the CSS comment at `.ctx-group` in
+[`styles.css`](../../src/web/styles.css) carries the reasoning.
+
+### The three that went
+
+All four were built as URL-state toggles with tooltips carrying their research, compared, and cut
+down to one. Kept here because each taught something:
+
+| Mode | Was | Why it went |
+|---|---|---|
+| **Siblings** | the level's siblings inside the current cell's sticky box | kept the cell boundary, but a cell shorter than its list clipped it, and the current title sat under its earlier siblings anyway — the alignment it promised was not delivered |
+| **Neighbours** | previous title above the gist, next title pinned to the bottom of the viewport with `sticky; bottom` inside an absolute fill | the least information of the four, on the most fragile CSS; GPT had advised cutting it before it was built |
+| **Panel** | the same panel, top-anchored, sliding only when the current item left a comfortable band | Centred with less motion, and it lost the one thing Centred is for: the item you are reading held where your eye is |
 
 ## How to decide
 

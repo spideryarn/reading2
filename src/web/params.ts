@@ -25,7 +25,6 @@
  */
 import { createParser, debounce, parseAsString } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
-import { type ContextMode, isContextMode } from "./context.js";
 
 /**
  * The article you get with no `?slug=`.
@@ -157,21 +156,3 @@ export const noteParam = parseAsBlockId.withOptions({ history: "replace" });
 export const aboutParam = parseAsBit.withDefault(false).withOptions({
   history: "replace",
 });
-
-/**
- * Which column-context experiment is on — see docs/project/column-context.md.
- *
- * One of `siblings | neighbours | panel | centred`, or absent for off. The
- * three column treatments are mutually exclusive by construction: one
- * parameter, one value. `push`, like `cols`: choosing how the columns read is
- * a deliberate act, and Back should undo it.
- */
-export const ctxParam = createParser<ContextMode>({
-  parse: (value) => (isContextMode(value) ? value : null),
-  serialize: (value) => value,
-})
-  .withDefault("off")
-  .withOptions({ history: "push" });
-
-/** The progress hairline in the current cell — `prog=1`. Independent of `ctx`. */
-export const progParam = parseAsBit.withDefault(false).withOptions({ history: "push" });

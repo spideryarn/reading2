@@ -14,27 +14,16 @@
  *    navLabels belong: navigation chrome, never shown in place of prose that
  *    could be displayed (granularity-zoom.md#node-shape).
  */
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { useQueryState } from "nuqs";
+import { useMemo, useRef, useState } from "react";
 import type { Article, BlockId, Comment, NodeId } from "../types.js";
 import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
 import { annotateHtml, renderedText, resolveMark, type Mark } from "./annotate.js";
 import { readSelection } from "./selection.js";
 import type { Section } from "./position.js";
-import {
-  currentIndex,
-  isPanel,
-  itemsFromCells,
-  levelList,
-  neighbours,
-  siblingList,
-  type ContextItem,
-} from "./context.js";
-import { ContextList } from "./ContextList.js";
+import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
 import { ContextPanel } from "./ContextPanel.js";
 import { useColumnContext } from "./useColumnContext.js";
-import { ctxParam, progParam } from "./params.js";
 
 interface Props {
   article: Article;
@@ -93,12 +82,13 @@ export function TableView({
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
   /**
-   * Column context — see docs/project/column-context.md. Read here as well as
-   * in ContextControls so the wiring stays out of App; nuqs keeps them in step.
+   * Column context — see docs/project/column-context.md. In reading mode
+   * every gist column is drawn by a ContextPanel laid over it, and the cells
+   * underneath draw only their boundaries; the panel's current entry carries
+   * everything the cell's sticky box used to. In outline mode the table is
+   * the list, so the cells draw themselves as they always did.
    */
-  const [ctx] = useQueryState("ctx", ctxParam);
-  const [progress] = useQueryState("prog", progParam);
-  const ctxOn = ctx !== "off" || progress;
+  const panels = showText;
 
   // The items of each gist column, in document order, with the row each one
   // starts on. The arc column's items carry the sentence and a step marker
@@ -129,123 +119,36 @@ export function TableView({
     }
     return m;
   }, [colKey, geometry, arcCells, blocks]);
-  const starts = useMemo(
-    () => new Map([...levels].map(([d, l]) => [d, l.starts])),
-    [levels],
-  );
-  const live = useColumnContext({
-    sections,
-    starts,
-    enabled: ctxOn,
-    layoutKey,
-    wantRects: isPanel(ctx),
-    wantProgress: progress,
-    // The hairline measures against whichever line chose the item it sits
-    // under. Centred picks its item on the focus line, so its fraction must be
-    // the focus line's too — measured against the sticky line it would show
-    // the previous item's fraction under the current title (GPT's review).
-    progressLine: ctx === "centred" ? "focus" : "sticky",
-  });
-  // Which item each column is in. The in-cell modes and the hairline follow
-  // the sticky line; the centred panel follows the focus line. Two lines, two
-  // maps — see useColumnContext.ts for why they are not the same thing.
-  const curOf = (d: number, row: number) => {
-    const l = levels.get(d);
-    return l ? currentIndex(l.starts, row) : -1;
-  };
-  // The panels' lists, built once per change of position rather than once
-  // per render: a row hover re-renders the whole table, and a fresh `entries`
-  // array would send every panel back through its layout effect.
-  const panelLists = useMemo(() => {
-    if (!isPanel(ctx)) return new Map<number, ReturnType<typeof levelList>>();
-    const row = ctx === "centred" ? live.focusRow : live.row;
-    return new Map(
-      [...levels].map(([d, l]) => [
-        d,
-        levelList(l.items, currentIndex(l.starts, row), article.tree.nodes),
-      ]),
-    );
-  }, [ctx, levels, live.row, live.focusRow, article.tree.nodes]);
-  const isCurrentCell = (d: number, startRow: number) =>
-    ctxOn && (levels.get(d)?.starts[curOf(d, live.row)] ?? -1) === startRow;
-  const hairline = (d: number) =>
-    progress ? (
-      <div className="ctx-progress">
-        <div
-          className="ctx-progress-fill"
-          style={{ width: `calc(var(--ctx-progress-${d}, 0) * 100%)` }}
-        />
-      </div>
-    ) : null;
-  /** The in-cell context for the current cell of column `d`, or null for plain. */
-  const inCell = (d: number, startRow: number, plain: ReactNode) => {
-    const l = levels.get(d);
-    if (!l || !isCurrentCell(d, startRow)) return plain;
-    const i = curOf(d, live.row);
-    if (ctx === "siblings") {
-      return (
-        <ContextList
-          entries={siblingList(l.items, i, article.tree.nodes)}
-          onJump={onJump}
-          progress={progress}
-          depth={d}
-        />
-      );
-    }
-    if (ctx === "neighbours") {
-      const { prev } = neighbours(l.items, i);
-      return (
-        <>
-          {prev && (
-            <div
-              className="ctx-prev"
-              onClick={(e) => {
-                e.stopPropagation();
-                onJump(prev.blockId);
-              }}
-            >
-              ↑ {prev.step ?? prev.node.title}
-            </div>
-          )}
-          {plain}
-          {hairline(d)}
-        </>
-      );
-    }
-    return (
-      <>
-        {plain}
-        {hairline(d)}
-      </>
-    );
-  };
-  /** Neighbours mode's bottom-pinned "next", outside the sticky box. See styles.css. */
-  const nextFill = (d: number, startRow: number) => {
-    const l = levels.get(d);
-    if (ctx !== "neighbours" || !l || !isCurrentCell(d, startRow)) return null;
-    const { next } = neighbours(l.items, curOf(d, live.row));
-    if (!next) return null;
-    return (
-      <div className="cell-fill">
-        <div
-          className="ctx-next"
-          onClick={(e) => {
-            e.stopPropagation();
-            onJump(next.blockId);
-          }}
-        >
-          ↓ {next.step ?? next.node.title}
-        </div>
-      </div>
-    );
-  };
-
+  const depths = useMemo(() => [...levels.keys()], [levels]);
+  const live = useColumnContext({ sections, depths, enabled: panels, layoutKey });
   // The ancestor path of the hovered row — used to light up the chain across
   // every level at once, which is the whole point of seeing them side by side.
+  // The panels carry it too, since they are the levels now (ContextList.tsx).
   const activeChain = useMemo<Set<NodeId>>(
     () => new Set(hoveredRow === null ? [] : geometry.chains[hoveredRow]),
     [hoveredRow, geometry],
   );
+  // The panels' lists, built once per change of position rather than once
+  // per render: a row hover re-renders the whole table, and a fresh `entries`
+  // array would send every panel back through its layout effect.
+  const panelLists = useMemo(() => {
+    if (!panels) return new Map<number, ReturnType<typeof levelList>>();
+    return new Map(
+      [...levels].map(([d, l]) => [
+        d,
+        levelList(l.items, currentIndex(l.starts, live.focusRow), article.tree.nodes),
+      ]),
+    );
+  }, [panels, levels, live.focusRow, article.tree.nodes]);
+  /** The crumb on a landmark's tooltip: the part a section is in, or which part this is. */
+  const crumbFor = (item: ContextItem): string | null => {
+    const parent = item.node.parent === null ? undefined : article.tree.nodes[item.node.parent];
+    if (parent && parent.depth >= 1) return parent.title;
+    if (item.step) return "The argument";
+    const level = levels.get(item.node.depth);
+    const n = level ? level.items.indexOf(item) + 1 : 0;
+    return n ? `Part ${n} of ${level!.items.length}` : null;
+  };
 
   /**
    * Comments, resolved against the prose they were made on and grouped by block.
@@ -370,33 +273,28 @@ export function TableView({
                     key={depth}
                     rowSpan={arc.rowSpan}
                     data-nav-depth={1}
-                    data-cell={`0:${row}`}
                     className={[
                       "gist arc depth-0",
                       activeChain.has(arc.node.id) ? "active" : "",
                       depth === pinLeft ? "pin-left" : "",
                       depth === pinRight ? "pin-right" : "",
-                      ctx === "neighbours" ? "has-fill" : "",
                     ].filter(Boolean).join(" ")}
                     onClick={() => onJump(arc.node.range[0])}
                   >
-                    <div className="sticky">
-                      {inCell(
-                        0,
-                        row,
-                        <>
-                          <div className="arc-step">
-                            {arc.index} <span className="of">/ {arc.total}</span>
-                          </div>
-                          {/* No fallback if the sentence is missing: an empty cell
-                              is a failure the reader can see, and borrowing the
-                              part's own gist here would quietly turn this column
-                              back into a copy of the next one. */}
-                          <p className="gist-text">{arc.text}</p>
-                        </>,
-                      )}
-                    </div>
-                    {nextFill(0, row)}
+                    {/* Under a panel the cell is a boundary and a click target;
+                        its content is the panel's current entry. */}
+                    {!panels && (
+                      <div className="sticky">
+                        <div className="arc-step">
+                          {arc.index} <span className="of">/ {arc.total}</span>
+                        </div>
+                        {/* No fallback if the sentence is missing: an empty cell
+                            is a failure the reader can see, and borrowing the
+                            part's own gist here would quietly turn this column
+                            back into a copy of the next one. */}
+                        <p className="gist-text">{arc.text}</p>
+                      </div>
+                    )}
                   </td>
                 );
               }
@@ -409,7 +307,6 @@ export function TableView({
                   key={depth}
                   rowSpan={cell.rowSpan}
                   data-nav-depth={depth}
-                  data-cell={`${depth}:${row}`}
                   className={[
                     "gist",
                     // On the <td>, NOT the <col>: custom properties inherit
@@ -424,40 +321,34 @@ export function TableView({
                     depth === geometry.leafDepth ? "leaf" : "",
                     depth === pinLeft ? "pin-left" : "",
                     depth === pinRight ? "pin-right" : "",
-                    ctx === "neighbours" && depth !== geometry.leafDepth ? "has-fill" : "",
                   ].filter(Boolean).join(" ")}
                   onClick={() => onJump(node.range[0])}
                 >
-                  {!cell.continuation && (
+                  {/* A gist cell under a panel draws only its boundary; the
+                      panel's current entry carries its content. The leaf
+                      column is never under a panel — it has no gist, and
+                      context.ts lists nothing for it (granularity-zoom.md#node-shape). */}
+                  {!cell.continuation && !(panels && depth !== geometry.leafDepth) && (
                     <div className="sticky">
                       {node.gist ? (
-                        /* Context only ever wraps a cell that HAS a gist. A
-                           leaf has none, and context.ts lists nothing for the
-                           leaf column, so the navLabel branch below is never
-                           touched by any mode (granularity-zoom.md#node-shape). */
-                        inCell(
-                          depth,
-                          row,
-                          <>
-                            <div className="title">
-                              {node.title}
-                              {node.sourceHeading && (
-                                <span className="own" title="the author's own heading">§</span>
-                              )}
-                            </div>
-                            <p className="gist-text">{node.gist}</p>
-                            <div className="range">
-                              {node.range[0]}–{node.range[1]}
-                            </div>
-                          </>,
-                        )
+                        <>
+                          <div className="title">
+                            {node.title}
+                            {node.sourceHeading && (
+                              <span className="own" title="the author's own heading">§</span>
+                            )}
+                          </div>
+                          <p className="gist-text">{node.gist}</p>
+                          <div className="range">
+                            {node.range[0]}–{node.range[1]}
+                          </div>
+                        </>
                       ) : (
                         // A leaf: navigation chrome only, and only in outline mode.
                         <div className="nav-label">{node.navLabel ?? node.title}</div>
                       )}
                     </div>
                   )}
-                  {!cell.continuation && depth !== geometry.leafDepth && nextFill(depth, row)}
                 </td>
               );
             })}
@@ -479,20 +370,19 @@ export function TableView({
         ))}
       </tbody>
     </table>
-    {/* The hoisted modes: one panel per gist column, laid over it. The
-        centred panel follows the focus line, the top-anchored one the sticky
-        line — see useColumnContext.ts. */}
-    {isPanel(ctx) &&
+    {/* One panel per gist column, laid over it, following the focus line —
+        see useColumnContext.ts. */}
+    {panels &&
       [...panelLists].map(([d, entries]) => (
         <ContextPanel
           key={d}
           depth={d}
           navDepth={d === 0 && arcCells ? 1 : d}
           entries={entries}
-          anchor={ctx === "centred" ? "centre" : "top"}
           rect={live.rects.get(d) ?? null}
           viewportH={live.viewportH}
-          progress={progress}
+          activeChain={activeChain}
+          crumbFor={crumbFor}
           onJump={onJump}
         />
       ))}

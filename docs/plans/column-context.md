@@ -1,6 +1,8 @@
 # Column context: four experiments, side by side
 
-**Status:** built, 2026-08-25. What landed and what it taught is in
+**Status:** built and then decided, 2026-08-25. All four were built as toggles, compared, and
+Greg chose Centred as the only one — *"Let's make Centred always-on, and get rid of Siblings,
+Neighbours, and Panel."* What survives, and what the three dropped modes taught, is in
 [column-context.md](../project/column-context.md); this is the plan and the reasoning as they stood
 before the code, kept so the *why* survives. Two things the build changed: continuation cells are
 not items (GPT's code review — they broke the sibling-run assumption on an unbalanced tree), and the

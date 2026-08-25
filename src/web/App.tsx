@@ -5,7 +5,6 @@ import { TableView } from "./TableView.js";
 import { Spine } from "./Spine.js";
 import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
-import { ContextControls } from "./ContextControls.js";
 import { Toggle } from "@/components/ui/toggle";
 import { buildArcColumn, buildGeometry, buildOutline, columnLabel } from "./tree.js";
 import { aboutParam, atParam, colsParam, noteParam, slugParam, textParam } from "./params.js";
@@ -418,9 +417,6 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           </button>
         )}
         <span className="mode">{showText ? "reading" : "outline"}</span>
-        {/* Four experiments in what the gist columns show around where you
-            are, and a progress hairline — docs/project/column-context.md. */}
-        <ContextControls pill={PILL} />
         {/* The aim, said out loud. The arrows are useless as an experiment if
             you cannot tell what they are pointing at before you press one. */}
         <span

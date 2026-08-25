@@ -1,76 +1,126 @@
 /**
- * The list a column context mode draws — shared by the in-cell modes in
- * TableView.tsx and the hoisted ContextPanel.tsx, so the four experiments
- * differ only in *where* the list sits and what it contains, never in how an
- * entry looks. What goes in it is decided in context.ts.
+ * The list a gist column draws: its whole level, the current item open and
+ * the rest as landmarks. What goes in it is decided in context.ts; where it
+ * sits is ContextPanel.tsx.
  *
  * Tiers are classes, not sizes computed here: `tier-cur`, `tier-near`,
  * `tier-mid`, `tier-far`, and `before` for entries already read. The
  * stylesheet gives each a fixed size — discrete steps, deliberately, see
  * context.ts — so an entry is either readable or a landmark, never in between.
+ *
+ * **The current entry is the cell.** Everything the column's sticky cell used
+ * to show — title, the author's-own-heading mark, gist, block range, the arc's
+ * step marker — is shown here and nowhere else now, so nothing that was on
+ * screen before the panel existed has been lost to it. The row-hover wash
+ * comes along too: entries on the hovered row's ancestor path light up, which
+ * is what the cells did.
+ *
+ * Every other entry carries a tooltip with the same content, so a landmark
+ * can be read without jumping to it. The group's delay is short — see
+ * ContextPanel.tsx — so sweeping the list neither strobes nor waits.
  */
-import type { BlockId } from "../types.js";
-import type { ContextEntry } from "./context.js";
+import type { BlockId, NodeId } from "../types.js";
+import type { ContextEntry, ContextItem } from "./context.js";
+import { Tooltip } from "./Tooltip.js";
 
 interface Props {
   entries: ContextEntry[];
   onJump(blockId: BlockId): void;
-  /** Draw the progress hairline under the current entry. */
-  progress: boolean;
-  /** The depth, so the hairline can read its own `--ctx-progress-<depth>`. */
-  depth: number;
+  /** Node ids on the hovered row's root-to-leaf path — see TableView. */
+  activeChain: Set<NodeId>;
+  /** Title of the level's parent for a crumb, e.g. the part a section is in. */
+  crumbFor(item: ContextItem): string | null;
 }
 
-export function ContextList({ entries, onJump, progress, depth }: Props) {
+/** What a landmark says when hovered: the same things the open entry shows. */
+function EntryCard({ item, crumb }: { item: ContextItem; crumb: string | null }) {
+  const { node } = item;
+  const body = item.text ?? node.gist;
+  return (
+    <div className="tip-entry">
+      {crumb && <div className="tip-crumb">{crumb}</div>}
+      <div className="tip-title">
+        {item.step ?? node.title}
+        {node.sourceHeading && <span className="own"> §</span>}
+      </div>
+      {body && <p className="tip-gist">{body}</p>}
+    </div>
+  );
+}
+
+export function ContextList({ entries, onJump, activeChain, crumbFor }: Props) {
   return (
     <ul className="ctx-list">
       {entries.map((e) => {
         const { node } = e.item;
+        const jump = (ev: React.MouseEvent) => {
+          ev.stopPropagation();
+          onJump(e.item.blockId);
+        };
         if (e.kind === "group") {
-          // A parent named at the edge of the list: where the siblings stop
-          // and the next part begins. Clickable, like everything else here.
+          // The parent a run of items belongs to: where one part's sections
+          // stop and the next part's begin. Clickable, like everything here.
           return (
             <li
               key={`g:${node.id}:${e.index}`}
-              className={`ctx-group${e.before ? " before" : ""}`}
-              onClick={(ev) => {
-                ev.stopPropagation();
-                onJump(e.item.blockId);
-              }}
+              className={[
+                "ctx-group",
+                e.before ? "before" : "",
+                e.holdsCurrent ? "holds-current" : "",
+                activeChain.has(node.id) ? "active" : "",
+              ].filter(Boolean).join(" ")}
+              onClick={jump}
             >
-              {e.before ? "↑ " : "↓ "}
-              {node.title}
+              <span className="ctx-group-title">{node.title}</span>
             </li>
           );
         }
         const cur = e.tier === "cur";
-        // The arc column has no titles: its step marker stands in, and the
-        // sentence itself is the landmark, clamped to a line when not current.
         const heading = e.item.step ?? node.title;
         const body = e.item.text ?? node.gist;
-        return (
-          <li
-            key={node.id}
-            className={`ctx-item tier-${e.tier}${e.before ? " before" : ""}`}
-            onClick={(ev) => {
-              ev.stopPropagation();
-              onJump(e.item.blockId);
-            }}
-          >
-            <div className="ctx-title">
-              {heading}
-              {e.item.step && !cur && <span className="ctx-clamp">{body}</span>}
-            </div>
-            {cur && body && <p className="gist-text">{body}</p>}
-            {cur && progress && (
-              <div className="ctx-progress">
-                <div
-                  className="ctx-progress-fill"
-                  style={{ width: `calc(var(--ctx-progress-${depth}, 0) * 100%)` }}
-                />
+        const className = [
+          "ctx-item",
+          `tier-${e.tier}`,
+          e.before ? "before" : "",
+          activeChain.has(node.id) ? "active" : "",
+        ].filter(Boolean).join(" ");
+        if (cur) {
+          return (
+            <li key={node.id} className={className} onClick={jump}>
+              <div className="ctx-title">
+                {heading}
+                {node.sourceHeading && (
+                  <span className="own" title="the author's own heading">§</span>
+                )}
               </div>
-            )}
-          </li>
+              {/* Empty string for an arc with no sentence draws nothing —
+                  never the part's gist, which would turn the arc column into
+                  a copy of the parts column. See TableView § levels. */}
+              {body && <p className="gist-text">{body}</p>}
+              {!e.item.step && (
+                <div className="range">
+                  {node.range[0]}–{node.range[1]}
+                </div>
+              )}
+            </li>
+          );
+        }
+        return (
+          <Tooltip
+            key={node.id}
+            placement="right"
+            className="tip-entry-panel"
+            content={<EntryCard item={e.item} crumb={crumbFor(e.item)} />}
+          >
+            <li className={className} onClick={jump}>
+              <div className="ctx-title">
+                {heading}
+                {/* The arc column has no titles: its sentence, clamped to a
+                    line, is the landmark. */}
+                {e.item.step && <span className="ctx-clamp">{body}</span>}
+              </div>
+            </li>
+          </Tooltip>
         );
       })}
     </ul>
