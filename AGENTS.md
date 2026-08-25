@@ -176,15 +176,10 @@ Not descriptions of code, which the code already provides.
   summaries, Readability edge cases, overlapping highlights, stable element ids — check
   [original-version/](docs/project/original-version/overview.md). It's a library to consult, not a backlog
   to import: that project is far larger in scope, and this one is staying tight.
-- **Log from the server, `console.log` from the CLI — the rule is the destination, not the function
-  name.** If a person is watching it scroll past `npm run toc`, it is output and `console.log` is
-  right. If you would want it a week later with a timestamp and a slug on it, it is a log and it goes
-  through [`src/log.ts`](src/log.ts): `log("jobs").info({ slug, ms }, \`ingest done for ${slug}\`)`.
-  A `console.log` in a request path is a bug. Two things that are easy to get wrong and impossible to
-  see afterwards: **nothing sensitive in the message string** (redaction matches key paths, never the
-  message, so an interpolated secret can never be redacted), and **no article prose in a log** — not
-  the text, not a comment's quote, not the model's answer. [logging.md](docs/project/logging.md) has
-  the rest, including why there is deliberately no logging in `src/web/`.
+- **Log from the server, `console.log` from the CLI** — the rule is the destination, not the
+  function name. Anything in a request path goes through [`src/log.ts`](src/log.ts), and a
+  `console.log` there is a bug. Never put anything sensitive, or any article prose, in a log.
+  [logging.md](docs/project/logging.md) has the why, the levels, and what fails silently.
 - **Run `npm test` and `npm run typecheck` when you finish a change, not just before you commit.**
   Both are deterministic and take a few seconds, and finding out at commit time that a change from
   half an hour ago was wrong is the expensive way to find out. `npm run lint` too, on the files you
