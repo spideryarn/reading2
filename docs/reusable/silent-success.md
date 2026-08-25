@@ -120,6 +120,15 @@ same wrong conclusion. Optimise for shortening that interval, not for the fix.
   bad luck rather than by degree: the old stylesheet styled its buttons by descendant selector
   (`.controls button`, `.cmt-nav button`), which is exactly where the new components were going.
 
+  It has a sibling that bites from the other direction: **a layer you use but never name is
+  appended after every layer you did name.** Declare `@layer theme, base, app, utilities`, then
+  write a rule into `@layer components`, and that rule outranks all four — including the utilities
+  it was meant to sit beneath. Two lines of component reset, written to put back a fraction of a
+  framework reset, silently beat both the hand-written stylesheet and the framework. The tell is
+  the same in both directions: a declaration that is present, valid and simply not winning. Layer
+  order is not source order, and it is not specificity; it is the order of the statement, plus
+  everything unnamed on the end.
+
   Two ways to measure it. `getComputedStyle(el)` for the property in dispute, which is an outcome and
   not a declaration. Or read the compiled CSS and check which `@layer` each rule landed in — a
   suspiciously **empty** layer beside rules sitting outside every layer is the whole diagnosis.
