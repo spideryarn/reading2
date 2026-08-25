@@ -319,6 +319,14 @@ assumption with the code.
 The tests in [`tests/routes.test.ts`](../../tests/routes.test.ts) therefore use a deliberately deep
 escape, and say why — a short one would pass against the vulnerable code.
 
+**The fallback now says when it fires.** `loadArticle` logs a `warn` — *"article served from the
+fixture, not from its own directory"* — whenever a slug other than `example` is answered out of
+`example/`. It does not make the disguise less convincing in the *response*, which is still an
+indistinguishable HTTP 200; it means the server says out loud what the response cannot. See
+[logging.md § The fixture alarm](logging.md#the-fixture-alarm-and-what-it-can-never-fire-for), which
+also records the thing that surprised us: an *absent* `blocks.json` falls through to the fixture, but
+a *malformed* one throws a 500 and never reaches it.
+
 ### The write side, which was already guarded
 
 `POST /api/comments/:slug` would have been worse than a leak: `save()` in
