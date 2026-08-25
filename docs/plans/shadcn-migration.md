@@ -841,6 +841,53 @@ which suits a repo that is deliberately one Vite process and no build cleverness
 | [browser-testing.md](../project/browser-testing.md) | Two new checks: a utility that does nothing means the layer order is wrong, not that Tailwind failed to install; and `/?text=0` is where a scanner collision would show. |
 | [../reusable/silent-success.md](../reusable/silent-success.md) | **Two strong new worked examples**, both from this plan and both textbook: a text scanner inventing a class you already use, and unlayered CSS silently outranking layered utilities. Valid CSS, correct install, class present in the DOM, every natural check agreeing with the bug. |
 
+## What actually happened <a id="what-actually-happened"></a>
+
+*Added 2026-08-25, after the work landed. The plan above is left as written; this section says
+where it was wrong, because that is the part worth reading twice.*
+
+**Steps 1–6 landed. Steps 7 and 8 did not**, and not for technical reasons: `CommentDialog.tsx` had
+~150 uncommitted lines and `styles.css` ~94 from other agents working this tree, and a second
+clobber in one day was not worth it. Both remain outstanding, and § 11's ordering still holds.
+
+### Where the plan was wrong
+
+| The plan said | What happened |
+|---|---|
+| Generated components arrive unprefixed; find-and-replace each one | `"prefix": "tw"` in `components.json` is enough — the CLI prefixes them itself |
+| Watch out for the `src/components` trap | The CLI cannot resolve `@/` at all here (it reads the ROOT tsconfig, our `paths` are in `src/web/`), so it writes a literal `./@/` directory that must be moved by hand |
+| Add `"baseUrl": "."` | TypeScript 7 has **removed** `baseUrl` (TS5102). `paths` resolves relative to its own config |
+| Use `ToggleGroup` for the controls bar | Rejected. Radix's roving focus binds all four arrow keys; ↑/↓ belong to the article and ←/→ to panning the table. Individual `Toggle`s give the same `aria-pressed` and leave the keys alone |
+| Three guards: prefix, layer, no preflight | **Four.** v4 auto-detects sources from the project root, so it scanned `docs/` and compiled the `tw:` examples in *this document's prose* into the production bundle. `source(none)` + an explicit `@source` |
+
+### Two bugs the plan never saw
+
+- **`dark:` was dead.** Tailwind compiles it to `@media (prefers-color-scheme: dark)`; this app is
+  dark unconditionally with no media query. On a **light-mode OS** every shadcn `dark:` rule would
+  have failed and components would have rendered their light branch on a dark page. The failure
+  depended on the OS setting of whoever *viewed* it. `@custom-variant dark (&)`.
+- **A layer used but never named is appended after every named one.** The mini-preflight went into
+  `@layer components`, absent from `@layer theme, base, app, utilities`, so it outranked the app
+  stylesheet *and* the utilities: every pill lost its border and
+  `button[data-slot] { background-color: transparent }` beat the orange on-state — the exact signal
+  [Trap A](#the-token-bridge) had just been written to protect. Moved to `@layer base`.
+
+  The second one is the lesson of the whole exercise. Both checks run beforehand — *is the utility
+  emitted?* and *does twMerge keep ours?* — **passed**, because both ask about the stylesheet and the
+  bug was in the cascade. Only `getComputedStyle` on the rendered page disagreed.
+
+### How it was verified
+
+Screenshots and computed values before and after, at 1000×900, in a real Chrome. The result: `/`,
+`/?text=0` and `/?cols=0,1,2,3&text=1` are **byte-identical** to their baselines (matching md5), every
+rect matches to two decimal places, and the `L0` pill matches its baseline width and height to six.
+The arrow keys were checked with event logging: ↑/↓ reach the app with `defaultPrevented: true` and
+focus never moves between pills; ←/→ pan with `defaultPrevented: false`. Full account, including
+seven things that could **not** be verified because the tab was `hidden` throughout, in the
+verification notes kept alongside the baseline capture.
+
+---
+
 ## See also
 
 - [web-client.md](../project/web-client.md) — the view being migrated, and its constraints
