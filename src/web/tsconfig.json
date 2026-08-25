@@ -1,19 +1,31 @@
 {
-  "extends": "../../tsconfig.json",
+  /* The browser client. Bundler resolution and the DOM libs, because vite is
+     what builds this and a browser is what runs it.
+
+     "exclude" is stated explicitly, and must stay stated: the base config
+     deliberately carries no file list, but if one ever creeps back in it would
+     be inherited here and could silently empty this project. `npm run
+     typecheck` fails if any project checks zero files, which is the real
+     guard — see scripts/typecheck.ts. */
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "noEmit": true,
-    "rootDir": "../..",
-    "outDir": null,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+
+    /* The `@/` alias shadcn generates its imports against. It lives HERE and
+       not in tsconfig.base.json, because `baseUrl` resolves relative to the
+       config that declares it: in the base it would point at the repo root
+       for tests/ and the node side too, and `@/lib/utils` would resolve to
+       a file that does not exist there. Mirrored in vite.config.ts and
+       vitest.config.ts — three resolvers, three separate failure modes.
+       No `baseUrl`: TypeScript 7 removed it (TS5102), and `paths` entries now
+       resolve relative to this file, which is what we want anyway.
+       See docs/project/typechecking.md. */
+    "paths": { "@/*": ["./*"] }
   },
-  /* The root config excludes "src/web" so that `tsc -p tsconfig.json` builds the
-     node side alone. `exclude` is inherited through `extends`, so without this
-     line that exclusion also applies here — and this config then excluded
-     exactly what it includes, checked zero files, and exited 0 every time.
-     A verification step that always passes is worse than none, because it is
-     quoted as evidence. See docs/reusable/silent-success.md. */
-  "exclude": [],
-  "include": [".", "../types.ts"]
+  "include": [".", "../types.ts"],
+  "exclude": []
 }

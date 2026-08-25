@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -45,6 +46,12 @@ export default defineConfig(() => {
         },
       },
     ],
+    // `@/` -> src/web, matching "paths" in src/web/tsconfig.json. Points at the
+    // client directory rather than at src/, because these are browser modules
+    // and the node side must not be able to reach them by this name.
+    resolve: {
+      alias: { "@": fileURLToPath(new URL("./src/web", import.meta.url)) },
+    },
     server: { port: 5273, open: true },
   };
 });

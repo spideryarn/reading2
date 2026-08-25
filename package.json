@@ -26,11 +26,13 @@
     "@anthropic-ai/sdk": "^0.120.0",
     "@floating-ui/react": "^0.27.20",
     "@mozilla/readability": "^0.6.0",
+    "clsx": "^2.1.1",
     "jsdom": "^29.1.1",
     "lucide-react": "^1.34.0",
     "nuqs": "^2.10.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.10",
