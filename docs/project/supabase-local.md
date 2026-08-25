@@ -5,7 +5,7 @@
 Set up 2026-08-25.
 
 The reading app still reads and writes JSON files under `data/`; this is the database the storage
-layer is being built against, and the thing [`drizzle-kit migrate`](../../drizzle.config.ts) points
+layer is being built against, and what [`npm run db:migrate`](../../scripts/db-migrate.ts) points
 at while the schema is being worked out. What goes *in* the database is
 [postgres-migration.md](../plans/postgres-migration.md); where the data lives today is
 [database.md](database.md).
@@ -48,10 +48,10 @@ Supabase developer's machine on earth, and signed with a JWT secret that is the 
 category error in one direction; forgetting that `service_role` bypasses every policy is the error
 in the other, so keep it server-side even here, where "even here" costs nothing.
 
-## The two settings that are not the default
+## The ports, and the Postgres version
 
-Both are in [`supabase/config.toml`](../../supabase/config.toml), which also says this in a comment
-at the top, because that file gets regenerated.
+Both live in [`supabase/config.toml`](../../supabase/config.toml), which repeats the reasoning in a
+comment at the top, because that file gets regenerated.
 
 **Ports are the `5436x` block, not the CLI's `5432x`.** The old app at
 `/Users/greg/dev/spideryarn/reading` runs *its own* local Supabase
@@ -70,20 +70,30 @@ wholesale rather than in the two spots that clash today.
 | Shadow db | 54360 | 54320 | 54320 |
 | Pooler | 54369 | 54329 | 54329 |
 
-**Postgres is 15.8, not the CLI's default 17 — and this one is now unfinished business.** It was
-pinned to match the remote we expected to reuse, the old app's project, which runs **15.8**
-([§ The live project](../plans/postgres-migration.md#the-live-project)). Hours later Greg reversed
-that and chose a **new** project instead ([§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes)) —
-and a new Supabase project is created on 17. So local is currently pinned to the version of a
-database we have decided not to use.
+**`major_version` is 17, and the rule is that it tracks the remote — not the CLI.** It happens to
+equal the CLI's default today, which is exactly why it is worth writing down: nobody should read
+this line as "we left it alone". It was **15** for the first few hours of this stack's life, pinned
+to the old app's project (**15.8**) back when we expected to reuse it
+([§ The live project](../plans/postgres-migration.md#the-live-project)). Greg then chose a **new**
+project ([§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes)),
+which Supabase creates on 17, so local moved to 17 — **17.6** as of 2026-08-25.
 
-It is pinned in the *safe* direction, which is why it has not been changed in a hurry: writing SQL
-on 15 and running it on 17 works, and 17-on-15 is the pairing that fails at deploy time in something
-written weeks earlier. But it is still a mismatch, and the moment the new project exists this line
-should move to whatever that project actually reports. Changing it is one line in `config.toml`,
-then `supabase stop --no-backup && supabase start` — **the major version cannot change under an
-existing data directory**, so that is a wipe, and every migration has to be re-applied with
-`drizzle-kit migrate` afterwards.
+Two reasons to keep them equal rather than merely close. The obvious one is that 17-only SQL written
+against a 15 remote fails at deploy time, in something authored weeks earlier. The quieter one is
+that a *lower* local version doesn't error either — it just means the thing you tested is not the
+thing you shipped, and the difference surfaces as behaviour rather than as a message.
+
+**Changing it is a wipe.** The major version cannot change under an existing data directory, so:
+
+```bash
+# after editing major_version in supabase/config.toml
+supabase stop --no-backup && supabase start
+npm run db:migrate        # every migration has to be applied again
+```
+
+Done once already, going 15 → 17, and the local database is empty enough that it cost nothing.
+Check what is in it before doing it again — anything applied by hand in Studio, and any auth user
+you created to test the gate with, is gone and is not in a migration file.
 
 One more thing worth knowing rather than changing: **`[api].schemas` does not list `spideryarn`.**
 The `spideryarn` schema is deliberately invisible to PostgREST, because
@@ -106,14 +116,15 @@ not RLS. That is the safe default and it should stay until something specific ne
 - **`npm run db:reset` empties the database and puts nothing back.** `supabase db reset` replays
   `supabase/migrations/`, which is empty here on purpose, so it drops the `spideryarn` schema and
   reports success. It is not the "start again from the schema" command it looks like — that is
-  `npm run db:reset` **followed by** `drizzle-kit migrate`.
+  `npm run db:reset` **followed by** `npm run db:migrate`.
 - **The CLI picks its project from the working directory.** Run `supabase status` from the old repo
   and you get the old repo's stack, with a confident answer and the wrong ports. The two are told
   apart by `project_id` — ours is `spideryarn2`, theirs is `syr` — which is also what every container
   is named after (`supabase_db_spideryarn2`).
-- **Upgrading the CLI and re-running `supabase init --force` rewrites `config.toml`** and throws the
-  port block and the Postgres version away. It reports success, `supabase start` works, and the
-  collision only shows up when both stacks are up at once. Diff the file afterwards.
+- **Upgrading the CLI and re-running `supabase init --force` rewrites `config.toml`.** The port block
+  goes, and `major_version` goes back to whatever the CLI defaults to — which matches the remote
+  today only by coincidence. It reports success and `supabase start` works, so the collision shows up
+  later, when both stacks are up at once. Diff the file afterwards.
 - **`supabase stop` keeps your data; it is not a reset.** So a schema you applied by hand in Studio
   survives a stop/start and does *not* survive a `db:reset`, which is the opposite of what people
   expect from a container. Anything that matters belongs in a migration file.
@@ -127,9 +138,12 @@ not RLS. That is the safe default and it should stay until something specific ne
   nothing else.
 - **`supabase/migrations/` is empty, and stays empty.** That is not a gap — **the Supabase CLI is not
   our migration tool.** The schema lives in [`src/db/schema.ts`](../../src/db/schema.ts), the SQL is
-  generated into [`drizzle/`](../../drizzle), and `drizzle-kit migrate` applies it against
-  `DATABASE_URL`. Read [`drizzle.config.ts`](../../drizzle.config.ts) before running anything: it
-  explains why `push` is never safe and why the ledger is deliberately in its own schema.
+  generated into [`drizzle/`](../../drizzle), and [`npm run db:migrate`](../../scripts/db-migrate.ts)
+  applies it against `DATABASE_URL`. Note that it is **not** `drizzle-kit migrate`: drizzle-kit takes
+  its connection from [`drizzle.config.ts`](../../drizzle.config.ts), and credentials there would
+  also hand a live database to `drizzle-kit push`, which must never reach one. The config is
+  credential-free on purpose, so `push` fails with "no connection" rather than relying on everyone
+  remembering.
 - **No `seed.sql`.** `supabase start` warns about the missing file on every run. That warning is
   expected and harmless until there is something to seed — possibly the `example` fixture, which is
   [an open question](../plans/postgres-migration.md#open-questions).

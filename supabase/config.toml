@@ -6,10 +6,11 @@
 #    (/Users/greg/dev/spideryarn/reading) runs its own local Supabase on
 #    54341-54344, and the defaults collide with its shadow and pooler ports.
 #    Both stacks have to be able to run at once.
-# 2. major_version is 15, not the CLI default 17. It was pinned to match the
-#    old app's project back when we expected to reuse it; Greg then chose a NEW
-#    project, which will be on 17. Pinned in the safe direction, but a mismatch
-#    - docs/project/supabase-local.md says what changing it costs.
+# 2. major_version is 17 and must track whatever the remote project actually
+#    reports - not whatever the CLI defaults to. It was pinned to 15 while we
+#    expected to reuse the old app's project (15.8) and moved to 17 when Greg
+#    chose a new project instead. Changing it is a wipe: the version cannot
+#    change under an existing data directory. See docs/project/supabase-local.md.
 #
 # `[api].schemas` deliberately does NOT list `spideryarn`: the API layer is the
 # security boundary here, so PostgREST never needs to see our tables.
@@ -54,7 +55,7 @@ shadow_port = 54360
 health_timeout = "2m"
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
 # server_version;` on the remote database to check.
-major_version = 15
+major_version = 17
 
 [db.pooler]
 enabled = false

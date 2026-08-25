@@ -653,6 +653,14 @@ rather than quietly enjoying it. Both problems were real, and only one of them c
 A new project costs nothing and deletes both, along with the old project's "Grace period is over"
 billing banner, which could have taken the new app down for reasons unrelated to either app's code.
 
+**It also moves the target to Postgres 17.** Supabase creates new projects on 17, where the old one
+is 15.8, so the local stack was re-pinned to match — 17.6 as of 2026-08-25. The rule written down
+with it is that the local major version tracks *the remote*, never the CLI default, and that
+changing it is a wipe rather than an edit:
+[supabase-local.md § The ports, and the Postgres version](../project/supabase-local.md#the-ports-and-the-postgres-version).
+Nothing in the schema moves with it — `UNIQUE NULLS NOT DISTINCT` above arrived in 15, and it is the
+newest thing this design asks for.
+
 Two things still worth carrying across, because they are good practice rather than workarounds:
 
 - **The Drizzle ledger is still explicitly named** (`spideryarn_migrations.__drizzle_migrations`)
