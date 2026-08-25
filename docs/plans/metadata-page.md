@@ -35,7 +35,8 @@ panel once a full page exists, Greg, 2026-08-25:
 > We can get rid of the panel, and move all its contents into the new page.
 
 So this is not an addition alongside the panel. It is the panel, grown into the room it needed. The
-`About` button in the bar stops opening a drawer and starts being a link.
+`About` button in the bar stops opening a drawer and starts being a link (and is
+relabelled `Metadata`, after the page rather than the panel).
 
 ## What the original had
 
@@ -187,7 +188,7 @@ reason is not bytes: it is that "what is on disk right now" is answered by looki
 belong in a payload that is cached and reused.
 
 The bar's buttons become a **mix of two kinds**, and the code should say so rather than pretend they
-are uniform: `Home`, `About` and `Tweets` navigate; `Questions` still opens a drawer.
+are uniform: `Home`, `Metadata` and `Tweets` navigate; `Questions` still opens a drawer.
 `Dock.tsx`'s `DockTab` currently sets `aria-expanded`, which is the honest relationship for a
 drawer and a lie for a link — a link that navigates should be a `<Link>` with `aria-current="page"`.
 
@@ -388,6 +389,97 @@ line of the page sits under the bar, with nothing reported anywhere. `_+_` is th
 Two things not in the plan that had to happen anyway: `stats.ts` gained a `depth` field (the "3
 levels deep" line had nowhere to come from), and the dead `.about` block was deleted from
 [`styles.css`](../../src/web/styles.css) when the panel it styled went.
+
+## A second pass over theirs, 2026-08-25
+
+Greg, after the page was built:
+
+> Have a look at the Metadata functionality. See if there's anything from the version we had in
+> `docs/project/original-version/` that we should borrow, e.g. the new version seems to be missing
+> some of the design polish and other functionality. (Though obviously it now needs to fit with the
+> new version's dark-mode design). If there's some stuff that we'd like to add but we don't yet have
+> the functionality (e.g. missing data), perhaps add design placeholders with a tooltip to say that
+> these are not yet implemented.
+
+So `components/tools/MetadataPanel.tsx` was read again — the component this time, not
+`TOOL_METADATA_TAB.md`, for the reason § What the original had already gives — this time looking for
+what *ours* had left behind rather than for what to avoid.
+
+**The finding was not about facts. It was about legibility.** Our page had every number theirs had
+and several it never got, and it presented them as five headings with a sentence under each. Their
+page presented the same kind of material as *surfaces you can scan*, and at a glance theirs was
+easier to read. That is the whole gap, and it is a real one on a page whose entire job is answering
+a question quickly.
+
+### What came across
+
+**1. Cards instead of rules.** Their sections were bordered surfaces with divided rows. Ours were
+prose under a horizontal rule, which reads as one continuous page rather than as five separate
+answers. Same tokens as a library card ([`Library.tsx`](../../src/web/Library.tsx)), so the two
+pages now look like one app.
+
+**2. The counts became a grid of numbers.** *"9,142 words · 40 min · 214 blocks"* makes you parse a
+sentence to find one number. Six stat cards — Words, Read time, Blocks, Parts, Sections, Levels —
+each with the number big and the label small, is the thing you can read at a glance. `Length` and
+`Shape` merged into one `At a glance` section on the way, because they were always the same question.
+
+**3. A pill per stage, not a tick in a table column.** Theirs said `Generated` / `Not generated` as a
+coloured pill, and it scans far better than a column of ticks. The four-column table went with it:
+it needed `overflow-x: auto` to survive a narrow window, and a horizontal scrollbar hides the model
+name, which is half of what the row is for. Rows that wrap do not.
+
+**4. Tooltips that say what a number means.** Read time is the clearest case — ours is words ÷ 230
+and the reader has no way to know that, so the tooltip says so, and says it by importing `WPM` from
+[`reading-time.ts`](../../src/reading-time.ts) rather than typing `230` into a string where it could
+drift from the arithmetic it describes. Dotted underline and `cursor-help`, the same convention
+theirs used.
+
+**5. A relative timestamp with the absolute one on hover.** *"fetched 3 days ago"* is what you want
+to know; the exact stamp is what you want when the answer is surprising. Theirs used date-fns'
+`formatDistanceToNow` for this one string; `Intl.RelativeTimeFormat` has been in the platform since
+2018 and this app has no other use for a date library.
+
+**6. Their loading rules, which are short and right.**
+[design-system.md § Loading states](../project/original-version/design-system.md#loading-states)
+says show nothing under a second and name the step. The page said `Looking…` immediately; it now
+says *"Checking which files the pipeline wrote…"* and only after 600ms, which on localhost means it
+almost never appears at all. A spinner that flashes for 200ms is worse than nothing — the flicker
+reads as breakage.
+
+### What was looked at and left there
+
+- **Their gradient icon chips and white `shadow-sm` cards.** Lifted-white-on-grey is a light-mode
+  idiom with no dark translation: depth here comes from `--card` being *lighter* than `--page`
+  ([design-css-overview.md](../project/design-css-overview.md)), and a saturated gradient chip in
+  every row would be louder than the numbers it is labelling. Flat raised chips instead.
+- **The reading-difficulty badge.** Still declined, and for the reason in § Reading Difficulty
+  above. Note that it is deliberately *not* in the new "Not built yet" section either — that section
+  lists things we mean to build, and putting this there would promise it.
+- **Book pages, per-file sizes, per-file mtimes.** Dropped in the first pass and staying dropped.
+- **The privacy toggle, the owner email, and the editable title.** They describe an app with
+  accounts, and an article whose title is stored rather than extracted.
+
+### The placeholders, and the convention they follow
+
+Three things this page should say and cannot yet, as dimmed rows with tooltips:
+**Your reading purpose**, **Re-run a stage**, **Delete this article**. Each tooltip carries the
+label, a `not built yet` flag, what the thing would be, and — set apart in italics — what the
+previous version's attempt at it taught us.
+
+**That shape is not new here.** It is `SOON` in [`Dock.tsx`](../../src/web/Dock.tsx) and the
+`.tip-soon` styles it already added to [`styles.css`](../../src/web/styles.css), reused rather than
+reinvented, so a reader who has met a dimmed button in the bottom bar already knows what a dimmed
+row on this page means. One convention for *"this is an intention, not an oversight"* is worth more
+than two good ones.
+
+### One new fact, and where it had to come from
+
+The plan's mock-up had **"7 questions asked"** and the built page did not, because § The shell
+forbids this page from calling `useComments` — that hook fetches on mount, so a visit would buy a
+drawer nobody opened. The resolution is that the *count* is not the comments: `GET /api/metadata/:slug`
+is already walking this article's directory, so it now returns `comments` too and the page gets its
+line for nothing. The number links back to the reading view with `?panel=questions`, which is where a
+question is worth opening, since clicking one scrolls to the passage it is about.
 
 ## See also
 

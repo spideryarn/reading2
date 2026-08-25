@@ -334,6 +334,27 @@ reload rather than leaving a permanent unanswered mark. Nothing to clean up.
   [an explicit anti-goal](vision.md#anti-goals).
 - **Comments are per-article, not per-reader.** There is one reader.
 
+## The other way to ask
+
+Since 2026-08-25 there are two. This one is scoped to a passage you selected and answers in a
+dialog anchored to it. The other is **chat** ([chat-mode.md](../plans/chat-mode.md)): you type a
+question about the article and the answer cites block ids back.
+
+They are not competing, and the division is worth keeping straight when deciding where a new idea
+belongs:
+
+| | Comments (here) | Chat |
+|---|---|---|
+| What you address | a span you selected | the whole article |
+| Where the answer goes | a dialog over the prose, anchored to the words | the band beside the prose |
+| The anchor back to the text | the quote itself | block ids the model cites |
+| Stored as | `comments.json`, one flat list | `chat.json`, threads |
+| Transport | one POST, the answer comes back with it | a stream |
+
+**Comments are the narrower and safer feature**, and the one whose scoping vision.md's anti-goals
+actually argue for. Chat is the one that had to earn its place; the argument is in
+[chat-mode.md § Say the awkward thing first](../plans/chat-mode.md#say-the-awkward-thing-first).
+
 ## See also
 
 - [vision.md](vision.md#where-this-goes-after-granularity-zoom) — where "ask in place" sits in the plan

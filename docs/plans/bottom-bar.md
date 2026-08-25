@@ -20,7 +20,7 @@ Code: [`src/web/Dock.tsx`](../../src/web/Dock.tsx), with the styles at the end o
  │  ▇▇         │        │        │                             │
  │  ▇▇▇▇       │        │        │                             │
  ├─────────────┴────────┴────────┴─────────────────────────────┤
- │ ⌂ Home   ✳ Questions 3   ⓘ About        ▨ ▨ ▨ ▨ ▨          │
+ │ ⌂ Home   ✳ Questions 3   ⓘ Metadata     ▨ ▨ ▨ ▨ ▨          │
  └─────────────────────────────────────────────────────────────┘
    spine and table exactly as before          not built yet
 
@@ -36,7 +36,7 @@ Code: [`src/web/Dock.tsx`](../../src/web/Dock.tsx), with the styles at the end o
  │  “the second law implies…”          thinking…               │
  │  “where does this figure come…”     It comes from table 3,  │
  ├─────────────────────────────────────────────────────────────┤
- │ ⌂ Home   ✳ Questions 3   ⓘ About        ▨ ▨ ▨ ▨ ▨          │
+ │ ⌂ Home   ✳ Questions 3   ⓘ Metadata     ▨ ▨ ▨ ▨ ▨          │
  └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -87,19 +87,43 @@ So the choice was not left-versus-right. It was *horizontal versus vertical*, an
 |---|---|---|
 | ⌂ | **Home** | A link, not a panel. The masthead has one too and this is not a duplicate: the masthead scrolls away, so that one is for the reader who has just arrived and this one is for the reader three screens in |
 | ✳ | **Questions** | Every question asked about this article, in reading order, with a count on the button and the count turning orange while anything is still with the model. Clicking one closes the drawer and opens its answer where the passage is. **A drawer on the reading view only** — on the metadata and tweets pages it is a link back, carrying `?panel=questions`, because `useComments` fetches on mount and those pages have no passages to scroll to |
-| ⓘ | **About** | Source, slug, shape, which model built the tree and the arc. **Moved out of the masthead**, see below. Since 2026-08-25 it is a *link* rather than a panel — the details grew into a page, [metadata-page.md](metadata-page.md) |
+| ⓘ | **Metadata** | Source, slug, shape, which model built the tree and the arc. **Moved out of the masthead**, see below. Since 2026-08-25 it is a *link* rather than a panel — the details grew into a page, [metadata-page.md](metadata-page.md) — and it is labelled after that page rather than after the `About` panel it used to open |
 
 Then five dimmed placeholders — Summaries, Glossary, Highlights, Search, Reading time — each with a
 tooltip saying what it would be *and the one thing the original version learned the hard way about
 it*. Greg, 2026-08-25: *"Also see docs/project/original-version/overview.md for ideas - for now, add
 extra ideas as placeholders with rich tooltips."*
 
+**That shape is now the house convention for "this is an intention, not an oversight"**, and it has
+one owner: `SOON` in [`Dock.tsx`](../../src/web/Dock.tsx) and the `.tip-soon` rules it added to
+[`styles.css`](../../src/web/styles.css). The metadata page reuses both for its own three —
+reading purpose, re-run a stage, delete this article
+([metadata-page.md § A second pass over theirs](metadata-page.md#a-second-pass-over-theirs-2026-08-25))
+— so a reader who has met a dimmed button in the bar already knows what a dimmed row on a page
+means. Anything else that needs to say the same thing should reuse it too rather than invent a
+second good way.
+
 They are not a backlog. The standing rule from
 [original-version/overview.md](../project/original-version/overview.md) is *a library to consult, not
-a backlog to import*, and two features from over there are deliberately absent even as placeholders:
-**chat**, which [their own docs](../project/original-version/search-and-chat.md#chat-the-one-to-be-suspicious-of)
-single out as the one to be most suspicious of and which sits closest to our
-[anti-goals](../project/vision.md#anti-goals), and tweet threads, which are simply not what this is.
+a backlog to import*.
+
+> **Both of the features this section originally refused are now buttons in this bar**, and the
+> refusals are left standing above rather than quietly edited out, because what they said is still
+> the argument each feature had to answer.
+>
+> - **Tweet threads** — "simply not what this is", written a few hours before Greg asked for them.
+>   Answered in [tweet-thread-page.md § Say the awkward thing first](tweet-thread-page.md#say-the-awkward-thing-first).
+> - **Chat** — the stronger objection: [their own docs](../project/original-version/search-and-chat.md#chat-the-one-to-be-suspicious-of)
+>   single it out as the one to be most suspicious of, and it sits closest to our
+>   [anti-goals](../project/vision.md#anti-goals). Built 2026-08-25 at Greg's request, and **not as
+>   the thing that was refused**: it is a *mode* in the band between the spine and the prose rather
+>   than a pane over the article, and every claim it makes carries a block id you can press. The
+>   full argument, including which half of the original version's own constraint we did not keep, is
+>   in [chat-mode.md § Say the awkward thing first](chat-mode.md#say-the-awkward-thing-first).
+>
+> The lesson for whoever writes the next refusal here: say *why*, in terms of what would have to be
+> true for the answer to change. Both of these were reversed within a day, and both reversals were
+> cheaper to argue because the objection had been written down properly.
 
 Also deliberately absent, from the design round before the move to the bottom:
 
@@ -215,6 +239,8 @@ Two behaviours needed arbitrating rather than styling:
 
 ## See also
 
+- [chat-mode.md](chat-mode.md) — the Chat button, and the **mode band** it introduced: the middle
+  columns are now a slot, and the table of contents is the default thing in it
 - [web-client.md](../project/web-client.md) — the reading view this attaches to
 - [comments.md](../project/comments.md) — where the questions come from
 - [library.md](../project/library.md) — where Home goes

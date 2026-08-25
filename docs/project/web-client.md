@@ -26,7 +26,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: your questions, the way home, the links to the metadata and thread pages, and the ideas not built yet — [bottom-bar.md](../plans/bottom-bar.md). Its buttons are now two kinds, and the markup says which |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: your questions, the way home, the links to the metadata and thread pages, the Chat mode switch, and the ideas not built yet — [bottom-bar.md](../plans/bottom-bar.md). Its buttons are now **three** kinds — navigate, open a drawer, switch mode — and the markup says which |
 | [`src/web/stats.ts`](../../src/web/stats.ts) | word, block, part, section and depth counts, pure — used by the masthead's facts line and the metadata page |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | hover tooltips over Floating UI — [tooltips.md](tooltips.md) |
@@ -38,9 +38,11 @@ Why the feature exists and what a gist may and may not be:
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
 | [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | ask the model about a selected passage — [comments.md](comments.md) |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | comments in reading order, and the panel's prev/next — [comments.md](comments.md#several-at-once) |
+| [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) + [`useChat.ts`](../../src/web/useChat.ts) | **chat**, in the band between the spine and the prose: threads, the streamed answer, and the block-id chips that jump the article — [chat-mode.md](../plans/chat-mode.md) |
+| [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [chat-mode.md § The citation contract](../plans/chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → the section that goes in `?at=` |
-| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) |
+| [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
 | [`src/api.ts`](../../src/api.ts) | server side: `loadArticle(slug)`, `listArticles()` and `articleMetadata(slug)`, mounted as dev middleware in [`vite.config.ts`](../../vite.config.ts) |
@@ -58,6 +60,28 @@ An article has **three pages**, and which one is a third path segment: the readi
 `/metadata` ([metadata-page.md](../plans/metadata-page.md)) and `/tweets`
 ([tweet-thread-page.md](../plans/tweet-thread-page.md)). They share the fetch, the bottom bar and the
 query string, so moving between them keeps your place and costs no request.
+
+## The middle is a slot
+
+Since 2026-08-25 the reading view has three regions rather than two-plus-columns, and the middle one
+is **whatever mode you are in**. Greg's framing, which is the whole of it:
+
+> I'm thinking that this might be a common pattern, that when we switch into a mode (e.g. Chat,
+> Glossary, etc) we'll want to keep the spine and article, but reuse the middle sections. In fact,
+> the current "Table of Contents" middle sections are just such a mode that can be chosen from the
+> bottom-bar (the default).
+>
+> — Greg, 2026-08-25
+
+So two things are permanent — **where you are** (the spine) and **what you are reading** (the
+prose) — and the band between them is the working surface. `?mode=` says which mode owns it,
+absent meaning the granularity columns; `fitView` reserves the band's width; and four CSS rules add
+a `--mode-w` term that is `0px` in the default mode.
+
+Chat is the first mode that is not the table of contents
+([chat-mode.md](../plans/chat-mode.md)). Adding a second — the Glossary in Greg's example — is a
+value in `MODES`, a component, and a width; it is deliberately not a new negotiation with
+`layout.ts` each time.
 
 ## Tailwind and shadcn components
 

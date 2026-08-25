@@ -42,6 +42,22 @@ const GIST_IDEAL = 240; // 15rem — comfortable for a one-sentence gist
 const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
 const PROSE_MIN = 544; // 34rem — the narrowest the reading column may be
 
+/**
+ * The **mode band** — the strip between the spine and the prose when the middle
+ * is something other than the table of contents (chat, and whatever comes after
+ * it). See docs/plans/chat-mode.md, and note what it replaces: in a mode, the
+ * gist columns are not squeezed, they are *gone*, so this is not a fourth term
+ * in the shrink-then-drop negotiation. It is what the negotiation is about
+ * instead.
+ *
+ * Wider than a gist column because it holds a conversation rather than a
+ * sentence: an answer at 176px would be four words a line. It still yields to
+ * the prose — `PROSE_MIN` wins, and the band shrinks to `MODE_MIN` before the
+ * reading column gives up a pixel.
+ */
+export const MODE_IDEAL = 400; // 25rem
+export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading as prose
+
 export type SpineMode = "full" | "narrow" | "off";
 
 export interface Layout {
@@ -62,6 +78,12 @@ export interface Fit extends Layout {
   spine: SpineMode;
   /** What `.reader` needs as an inline min-width so the sticky bars have range. */
   minWidth: number;
+  /**
+   * The width of the mode band, and `0` when the middle is the table of
+   * contents. Set as `--mode-w` on `.reader`; every rule that has to make room
+   * for the band reads it from there (styles.css § mode band).
+   */
+  modeW: number;
 }
 
 export function spineWidth(mode: SpineMode): number {
@@ -84,6 +106,12 @@ export interface FitInput {
    * free to drop coarse levels.
    */
   chosen: number[] | null;
+  /**
+   * True when the middle band belongs to a mode rather than to the table of
+   * contents — see `MODE_IDEAL`. The gist columns are dropped entirely and the
+   * band takes their place.
+   */
+  modeBand?: boolean;
 }
 
 export function fitView({
@@ -92,7 +120,19 @@ export function fitView({
   leafDepth,
   showText,
   chosen,
+  modeBand = false,
 }: FitInput): Fit {
+  /* A mode owns the middle band, so there are no gist columns to fit and no
+     choice for the reader to have made about them. Handled first and returned
+     early rather than woven into the arithmetic below, because every line of
+     that arithmetic is about a negotiation that does not happen here — and a
+     `modeBand &&` on each of them would be five chances to get one wrong.
+
+     Note what this does NOT do: it does not consult `chosen`. `?cols=` survives
+     the trip through chat untouched and means what it always meant when the
+     reader comes back. */
+  if (modeBand) return fitMode(windowWidth, showText);
+
   // Outline mode has no prose; the leaf column is the detail column, and it
   // holds nav labels rather than paragraphs, so it needs far less room.
   const detailMin = showText ? PROSE_MIN : GIST_IDEAL;
@@ -179,5 +219,45 @@ export function fitView({
     overflowing: tableW > avail,
     minWidth: spineWidth(spine) + tableW,
     spine,
+    modeW: 0,
+  };
+}
+
+/**
+ * The layout when the middle band belongs to a mode: spine, band, prose.
+ *
+ * Three things are decided here and each is a judgement rather than arithmetic:
+ *
+ *  - **The spine keeps its labels** whenever the window is wide enough for
+ *    them. The non-monotonic trap the ToC layout works around cannot happen
+ *    here — there are no columns to drop, so widening the window can never
+ *    take anything away — which means the tie-break that exists over there is
+ *    not needed and would only make the rail flicker between two modes as the
+ *    band resized.
+ *  - **The prose wins.** The band shrinks from `MODE_IDEAL` to `MODE_MIN`
+ *    before the reading column drops below `PROSE_MIN`, and past that the page
+ *    overflows and scrolls rather than either of them getting narrower. Same
+ *    order of preference the ToC layout has: the article is what is being read.
+ *  - **`showText` is ignored** and the text column is always on. Outline mode
+ *    with a mode band would be a chat panel and an empty page — see App.tsx,
+ *    which forces the toggle off the screen rather than leaving a control that
+ *    does nothing.
+ */
+function fitMode(windowWidth: number, _showText: boolean): Fit {
+  const spine: SpineMode = windowWidth >= SPINE_LABELS_MIN_WINDOW ? "full" : "narrow";
+  const avail = Math.max(0, windowWidth - spineWidth(spine));
+  const modeW = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
+  const proseW = Math.max(PROSE_MIN, avail - modeW);
+  return {
+    // The table is the prose column and nothing else. Its own `pin-left` and
+    // `pin-right` land on the same single column, which is what they already do
+    // in outline mode with one level.
+    columns: [],
+    widths: [proseW],
+    tableW: proseW,
+    overflowing: modeW + proseW > avail,
+    minWidth: spineWidth(spine) + modeW + proseW,
+    spine,
+    modeW,
   };
 }
