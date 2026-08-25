@@ -84,16 +84,27 @@ Two things to look at before building on it:
   and the claim was removed rather than the feature invented to match. See
   [§ Job de-duplication](#job-de-duplication-still-unsolved).
 
-Both of those bullets are now moot for us, and that is the point:
-[§ A new project](#a-new-project-and-what-that-deletes).
+The second bullet is moot for us now: [§ A new project](#a-new-project-and-what-that-deletes). The
+first followed us to the new project, because it was never really about the project —
+[§ The project we are actually using](#the-project-we-are-actually-using).
 
 ### The project we are actually using
 
 **`alschkahzfagtppxspfq`**, created by Greg on 2026-08-25.
 
 Empty, ours, and sharing nothing with the old app — no inherited users, no `public` tables, no
-trigger on `auth.users`, no billing banner belonging to another project. **Postgres 17**, which is
-what Supabase creates new projects on today.
+trigger on `auth.users`. Read off the dashboard on 2026-08-25: **"Spideryarn Reading 2"**,
+**`eu-west-2` (London)**, **Postgres 17.6.1.165**. That last number is where local's `major_version`
+comes from, and local is 17.6 — matched, not merely close.
+
+**One thing the new project did not escape: the billing banner.**
+[§ A new project](#a-new-project-and-what-that-deletes) below says the reversal deleted the old
+project's *"Grace period is over"* warning. It did not. The same banner sits on this project's
+dashboard, because a grace period belongs to the **organization**, not to a project, and this one
+lives in the same organization. Everything else that reversal removed is genuinely gone — the shared
+migration ledger, the `auth.users` trigger, the nine inherited users. This one was wishful, and it is
+the only item on the list that can stop the app answering requests. **Worth resolving before
+anything depends on it.**
 
 Nothing has been applied to it yet. The schema has only ever been run against
 [the local stack](../project/supabase-local.md), and the first thing to happen against the remote is
@@ -684,11 +695,13 @@ rather than quietly enjoying it. Both problems were real, and only one of them c
   written a row into the old app — and a failure there would have failed the signup. Greg's own
   login would not have fired it, so it would not have appeared in testing.
 
-A new project costs nothing and deletes both, along with the old project's "Grace period is over"
-billing banner, which could have taken the new app down for reasons unrelated to either app's code.
+A new project costs nothing and deletes both. It does **not** delete the "Grace period is over"
+billing banner — an earlier version of this sentence said it did, and that was checked afterwards and
+found to be wrong. The warning is organization-level and appears on the new project too:
+[§ The project we are actually using](#the-project-we-are-actually-using).
 
-**It also moves the target to Postgres 17.** Supabase creates new projects on 17, where the old one
-is 15.8, so the local stack was re-pinned to match — 17.6 as of 2026-08-25. The rule written down
+**It also moves the target to Postgres 17.** The new project reports **17.6.1.165**, where the old
+one is 15.8, so the local stack was re-pinned to match — 17.6 as of 2026-08-25. The rule written down
 with it is that the local major version tracks *the remote*, never the CLI default, and that
 changing it is a wipe rather than an edit:
 [supabase-local.md § The ports, and the Postgres version](../project/supabase-local.md#the-ports-and-the-postgres-version).

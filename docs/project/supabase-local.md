@@ -76,7 +76,9 @@ this line as "we left it alone". It was **15** for the first few hours of this s
 to the old app's project (**15.8**) back when we expected to reuse it
 ([§ The old project](../plans/postgres-migration.md#the-old-project-we-inspected-and-did-not-use)). Greg then chose a **new**
 project ([§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes)),
-which Supabase creates on 17, so local moved to 17 — **17.6** as of 2026-08-25.
+so local moved to 17. That project now exists — `alschkahzfagtppxspfq`, `eu-west-2` — and reports
+**17.6.1.165**; local reports **17.6**. Checked against the dashboard on 2026-08-25 rather than
+assumed from the CLI's default, which is the whole point of the rule.
 
 Two reasons to keep them equal rather than merely close. The obvious one is that 17-only SQL written
 against a 15 remote fails at deploy time, in something authored weeks earlier. The quieter one is
@@ -117,6 +119,11 @@ not RLS. That is the safe default and it should stay until something specific ne
   `supabase/migrations/`, which is empty here on purpose, so it drops the `spideryarn` schema and
   reports success. It is not the "start again from the schema" command it looks like — that is
   `npm run db:reset` **followed by** `npm run db:migrate`.
+- **`npm run db:migrate` goes wherever `DATABASE_URL` points, and does not say where that was.** It
+  is the local container today. The moment the remote connection string lands in `.env.local` — to
+  try one thing, to check one row — that command migrates **production**, with no prompt and no
+  host in its output. Keep the remote string out of `.env.local` and pass it explicitly for the one
+  command that needs it.
 - **The CLI picks its project from the working directory.** Run `supabase status` from the old repo
   and you get the old repo's stack, with a confident answer and the wrong ports. The two are told
   apart by `project_id` — ours is `spideryarn2`, theirs is `syr` — which is also what every container
