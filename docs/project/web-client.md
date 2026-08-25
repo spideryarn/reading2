@@ -131,7 +131,21 @@ they touch:
   `.cmt-dialog button.linky` are still hand-written; `Button` is generated and unused. Keep the
   `<aside>`, `.cmt-dialog` and `z-index: 70` when it happens — [comments.md](comments.md).
 - **Step 8 — deleting the dead CSS.** `.controls button` and friends are superseded but still in
-  `styles.css`. Harmless, because `@layer app` means the utilities win anyway, but confusing.
+  `styles.css`, and they are **not** simply harmless — a first draft of this note said they were,
+  on the reasoning that `@layer app` lets the utilities win. That only holds where the two
+  *conflict*. Where the old rule declares something no utility mentions, it is still the thing
+  painting. Two cases, both found by review rather than by looking:
+  - `.controls button` supplied `font-family` (via `font: inherit`) and `cursor: pointer` to the
+    new pills. Both are now stated in `PILL` in [`App.tsx`](../../src/web/App.tsx), so the
+    deletion cannot change them — but that had to be done first.
+  - `.controls button.linky`, which styles the `auto` control, only overrides border-colour,
+    underline and inline padding. It leans on the base rule for everything else, so deleting
+    `.controls button` would drop it back towards UA button styling. **Give `.linky` a complete
+    standalone rule before removing the base**, or the cleanup lands as a visible regression in
+    the one control that was not migrated.
+
+  `.controls button.on` *is* genuinely dead: Radix marks state with `data-state="on"`, never a
+  class.
 
 Also deferred: `styles.css`'s header comment does not yet say the file is imported into `@layer app`
 by `tailwind.css`. It should, or the next person adds a utility and watches it do nothing.

@@ -53,8 +53,23 @@ import { useComments } from "./useComments.js";
  *    tokens.css and styles.css carry warnings about this exact confusion.
  */
 const PILL =
-  "tw:rounded-full tw:h-auto tw:min-w-0 tw:px-2.5 tw:py-1 tw:text-xs tw:font-normal " +
+  // Shape and metrics, matched to the rule this replaced rather than to
+  // Tailwind's defaults: `text-xs` would also set line-height to 1rem, where
+  // these inherited the body's 1.55, and the padding is the original 0.22/0.6
+  // rather than the nearest scale step. Both differences are a couple of
+  // pixels of pill height, which is exactly the sort of drift nobody notices
+  // individually and everybody notices in aggregate.
+  "tw:rounded-full tw:h-auto tw:min-w-0 tw:px-[0.6rem] tw:py-[0.22rem] " +
+  "tw:text-xs tw:leading-[1.55] tw:font-normal " +
+  // font-family and cursor were coming from `.controls button`, which step 8
+  // deletes. Stated here so this string stands on its own and that deletion
+  // cannot quietly change the pills.
+  "tw:font-sans tw:cursor-pointer " +
   "tw:border tw:border-rule-strong tw:text-ink-faint tw:bg-transparent " +
+  // The base Toggle animates only `color` and `box-shadow`. Background and
+  // border are the two properties that actually say "on" here, so without
+  // this they snap while the text fades — the old rule animated all three.
+  "tw:transition-[color,background-color,border-color] tw:duration-[120ms] " +
   "tw:hover:bg-transparent tw:hover:border-highlight tw:hover:text-highlight " +
   "tw:data-[state=on]:bg-highlight-wash tw:data-[state=on]:border-highlight " +
   "tw:data-[state=on]:text-highlight-ink tw:data-[state=on]:font-semibold";
