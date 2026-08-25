@@ -217,6 +217,7 @@ agrees with it.
 ## See also
 
 - [web-client.md](web-client.md) — the reading view these live in, and its constraints
+- [design-css-overview.md](design-css-overview.md) — where the stylesheets live and which one owns a rule
 - [tooltips.md](tooltips.md) — the other third-party UI dependency, chosen the same way
 - [original-version.md](original-version.md) — Phosphor there, and the rest of what we did and didn't lift
 - [../reusable/third-party-library-selection.md](../reusable/third-party-library-selection.md) — the process this followed

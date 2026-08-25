@@ -891,6 +891,7 @@ verification notes kept alongside the baseline capture.
 ## See also
 
 - [web-client.md](../project/web-client.md) — the view being migrated, and its constraints
+- [design-css-overview.md](../project/design-css-overview.md) — the short map this plan is the long version of
 - [original-version.md](../project/original-version.md) — where the tokens came from, and the decision being reversed
 - [tooltips.md](../project/tooltips.md) — the Floating-UI-over-Radix choice this narrows
 - [icons.md](../project/icons.md) — Lucide, chosen for shadcn compatibility before we had shadcn
