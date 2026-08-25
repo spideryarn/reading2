@@ -8,8 +8,8 @@
 **Nothing here has been implemented. This is the plan.** It was written after three agents read the
 old app, the live Supabase project and this codebase, and after **two** GPT-5.6 reviews — one of the
 seven decisions that actually matter, and a second, adversarial one of the client decision after
-Greg reopened it. Where a review changed our minds, this document says so, and where it caught us
-being wrong it says that too.
+Greg reopened it — plus a third opinion to break the one tie those two left. Where a review changed
+our minds, this document says so, and where it caught us being wrong it says that too.
 
 This is the work [deploy-and-repo-move.md](deploy-and-repo-move.md#what-this-plan-needs-from-the-supabase-work)
 is waiting on. That plan lists four things it needs; [§ What the deploy plan asked for](#what-the-deploy-plan-asked-for)
@@ -518,32 +518,62 @@ same rule covers stage output as well as job rows.
 It stops being right when redelivery, multiple workers, backoff, dead-letters or scheduled work
 become requirements.
 
-### The driver underneath Drizzle is not settled
+### The driver underneath Drizzle: `pg`
 
-Drizzle sits on a Postgres driver, and the two reviews disagreed about which:
+Drizzle sits on a Postgres driver, and the two reviews disagreed. This plan's first pass said
+**`postgres.js`** — Drizzle's most idiomatic driver, and the one
+[Supabase's own Drizzle guide](https://supabase.com/docs/guides/database/drizzle) uses. The second
+review said **`node-postgres` (`pg`)**, citing an open transaction bug and Vercel's pool helper. A
+third opinion broke the tie by reading the issue rather than relaying it.
 
-| | Position |
-|---|---|
-| this plan's first pass | **`postgres.js`** — Drizzle's most idiomatic driver, and the one Supabase's own docs use |
-| the second review | **`node-postgres` (`pg`)** — citing an open transaction-reservation report on `postgres.js` ([porsager/postgres#1189](https://github.com/porsager/postgres/issues/1189)) with possible cross-request transaction contamination, and better alignment with Vercel's documented pool lifecycle helper |
+**Use `pg`** — `drizzle-orm/node-postgres`. By a modest margin, and the margin is worth stating
+honestly, because the reasoning matters more than the answer:
 
-**Unresolved, and deliberately not resolved here.** A third opinion was commissioned to break the
-tie and did not come back; rather than launder one reviewer's citation into a decision, it is written
-down as a question. Neither claim in that second row has been checked against the issue itself — and
-a bug report about *transaction contamination* is exactly the kind of claim that must be read
-first-hand, because the failure it describes (one request seeing another's transaction) would be
-severe here, and the difference between "affects `reserve()` under a specific misuse" and "affects
-`sql.begin()` generally" is the whole decision.
+**At this scale the choice barely matters.** Both drivers will serve one user flawlessly. Nobody
+should re-open this expecting a performance difference; there isn't one to find.
 
-**Do this before step 3**, since it is fifteen minutes of reading: open the issue, check whether it
-touches plain transactions, check the current published version and release cadence, then pick. The
-schema, the migrations and every transaction helper in this plan are driver-agnostic, so this can be
-decided late — but it must be decided *deliberately*, not by whichever `npm install` line got copied
-from a tutorial first.
+What decided it was tail risk plus maintenance posture, both pointing the same way:
 
-If the issue turns out not to touch `sql.begin()`, `postgres.js` stands. If it does, or if it can't
-be ruled out, take `pg` — at this traffic the ergonomic difference between them is worth nothing and
-transaction correctness is worth everything.
+- **[porsager/postgres#1189](https://github.com/porsager/postgres/issues/1189) is real, open, and in
+  the transaction path** — "BEGIN can reach PostgreSQL without reserving the transaction connection",
+  opened 2026-08-09, no maintainer reply. It affects plain `sql.begin()`, not only `reserve()`: the
+  reservation hook is skipped after BEGIN's bytes are written, so the backend sits *idle in
+  transaction* and another caller's queries can land inside your transaction.
+- **But the second review overstated it, and the correction is the useful part.** The deterministic
+  reproduction uses non-default settings (`max_pipeline: 1`). Under defaults you would need ~100
+  concurrently pipelined queries on one connection at the instant BEGIN is written, or socket
+  backpressure. For a one-user beta that is essentially unreachable. **This bug would almost
+  certainly never have fired here.**
+- **The stronger half is maintenance.** `postgres.js`'s latest release is v3.4.9, from 2025-04-05 —
+  about sixteen months old, single maintainer, and a correctness issue in the transaction path sitting
+  unanswered. `pg` releases regularly and has several maintainers.
+- **Vercel's pool helper.** `attachDatabasePool` from `@vercel/functions` releases idle pool
+  connections before a function suspends. It is not `pg`-specific — it supports several drivers — but
+  `postgres.js` is not among them, because it exposes no pg-style `Pool`. So the point stands even
+  though the claim behind it was loosely worded.
+
+So the honest summary is: **an unfixed correctness bug that probably wouldn't have bitten us, in a
+library that hasn't shipped in sixteen months, versus a maintained driver that Vercel's lifecycle
+helper actually manages — for a one-line difference at the call site.** Cheap insurance, bought
+knowingly rather than out of fear.
+
+Two consequences that would otherwise be found the hard way:
+
+- **Cap the pool small: `new Pool({ max: 2 })`.** Even the blessed combination of `pg` +
+  `attachDatabasePool` + Supavisor has a reported connection-growth problem on Fluid compute
+  ([supabase#40671](https://github.com/orgs/supabase/discussions/40671)). At one user, a pool of one
+  or two connections costs nothing and sidesteps it.
+- **Never hand-roll `BEGIN`/`COMMIT` through `pool.query`.** Each `pool.query` may take a different
+  connection, so a hand-written transaction would scatter its statements across connections and the
+  `FOR UPDATE` lock in [the queue](#the-queue) would guard nothing — silently, since every statement
+  still succeeds. Drizzle's `db.transaction()` checks out one client and is correct; the rule is
+  simply never to reach past it.
+
+One thing left unverified, flagged rather than asserted: the tie-breaker believed `pg` under Supavisor
+transaction mode needs no `prepare: false` equivalent, because Drizzle's `pg` driver sends unnamed
+statements — but marked that as inference rather than something it checked. **Confirm it against a
+real pooled connection in step 3**, since a wrong answer here shows up as a runtime error on the
+first transaction, not at connect time.
 
 ### Connections: transaction pooling, and the five things it takes away
 
@@ -559,8 +589,11 @@ expire the recorded lease using *database* time, select and mark one job, store 
 and expiry, commit — with the long fetch-and-model work happening strictly after the commit, and
 heartbeats and completion as their own short transactions.
 
-Prepared statements must be off (`prepare: false`). The cost is server-side reuse of parsed and
-planned statements; queries stay parameterised and safe. At this traffic it is immaterial.
+**Named prepared statements must not be used.** With `postgres.js` this is the explicit
+`prepare: false` that Supabase's guide sets; with `pg` it is believed to need no setting at all
+(see the caveat [above](#the-driver-underneath-drizzle-pg)). Either way the cost is only server-side
+reuse of parsed and planned statements — queries stay parameterised and safe, and at this traffic it
+is immaterial.
 
 **What transaction pooling silently takes away.** None of these error at connect time — they fail, or
 quietly do nothing, at the moment you rely on them:
