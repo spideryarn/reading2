@@ -7,7 +7,7 @@ layout without anyone noticing.
 ## The decision
 
 Chosen 2026-08-25. The obvious move was to reuse what the previous version used —
-[original-version.md](original-version.md) records `docs/reference/DESIGN_ICONS.md` there as
+[original-version/overview.md](original-version/overview.md) records `docs/reference/DESIGN_ICONS.md` there as
 *"Phosphor Icons provides comprehensive, consistent iconography across the entire application"*, and
 carrying the same set across would have kept the two apps looking like siblings.
 
@@ -219,6 +219,6 @@ agrees with it.
 - [web-client.md](web-client.md) — the reading view these live in, and its constraints
 - [design-css-overview.md](design-css-overview.md) — where the stylesheets live and which one owns a rule
 - [tooltips.md](tooltips.md) — the other third-party UI dependency, chosen the same way
-- [original-version.md](original-version.md) — Phosphor there, and the rest of what we did and didn't lift
+- [original-version/overview.md](original-version/overview.md) — Phosphor there, and the rest of what we did and didn't lift
 - [../reusable/third-party-library-selection.md](../reusable/third-party-library-selection.md) — the process this followed
 - [../reusable/silent-success.md](../reusable/silent-success.md) — the pattern behind both failure modes above

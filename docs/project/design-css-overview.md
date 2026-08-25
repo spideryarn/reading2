@@ -81,7 +81,7 @@ Four stacks, all in [`tokens.css`](../../styles/tokens.css), and the split is de
 | `--font-brand` | the wordmark, and only the wordmark |
 
 The reading measure and the size numbers came from the original app's research doc, not from
-taste — [original-version.md](original-version.md) says what was carried over.
+taste — [original-version/overview.md](original-version/overview.md) says what was carried over.
 
 ## What is not written down yet
 
@@ -104,7 +104,7 @@ eventually have to decide whether they are a system or an accident:
 - [web-client.md](web-client.md) — the view all of this styles, and its constraints
 - [icons.md](icons.md) — Lucide, one stroke weight, and two ways an SVG breaks a layout quietly
 - [tooltips.md](tooltips.md) — the one component whose appearance is entirely ours
-- [original-version.md](original-version.md) — where the palette and the typography came from
+- [original-version/overview.md](original-version/overview.md) — where the palette and the typography came from
 - [browser-testing.md](browser-testing.md) — **do not judge colour from a screenshot**
 - [../plans/shadcn-migration.md](../plans/shadcn-migration.md) — how the Tailwind half got here
 - [../reusable/css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md) —

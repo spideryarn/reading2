@@ -56,7 +56,7 @@ const SEARCH_ROOTS = [".", "docs/project", "docs/reusable"];
  * Citations of a *different* repository, which are correctly dangling here.
  * `styles/tokens.css` credits the original app's own docs under a `Source:`
  * line naming its absolute path; those files were deliberately not carried over
- * (docs/project/original-version.md). Listed explicitly rather than inferred:
+ * (docs/project/original-version/overview.md). Listed explicitly rather than inferred:
  * "the directory doesn't exist so it must be external" would also swallow a
  * genuine typo in a directory name, which is exactly a break worth catching.
  */

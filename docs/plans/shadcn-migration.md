@@ -50,7 +50,7 @@ what makes the fix in [§ 2](#the-cascade-layer-problem) a one-line change.
 
 [`styles/tokens.css`](../../styles/tokens.css) sits at the **repo root**, not under `src/`. It is
 shared ground: deliberately plain CSS, lifted from the original app —
-[original-version.md § Already lifted](../project/original-version/overview.md#already-lifted-into-this-repo).
+[original-version/overview.md § Already lifted](../project/original-version/overview.md#already-lifted-into-this-repo).
 `styles.css` layers reading-view semantics (`--ink`, `--page`, `--panel`, `--rule`, `--highlight`,
 `--surface-raised`) on top of it.
 
@@ -64,7 +64,7 @@ inherit those defaults for free.
 
 | Doc | What it said | What we are doing |
 |---|---|---|
-| [original-version.md § Deliberately not lifted](../project/original-version/overview.md#deliberately-not-lifted) | *"**shadcn/ui, Radix, Tailwind v4, Phosphor.** … Adopting Tailwind later is fine; inheriting a component library now is not."* | Adopting both. The "later" clause is being cashed in; the component-library half is a straight reversal. |
+| [original-version/overview.md § Deliberately not lifted](../project/original-version/overview.md#deliberately-not-lifted) | *"**shadcn/ui, Radix, Tailwind v4, Phosphor.** … Adopting Tailwind later is fine; inheriting a component library now is not."* | Adopting both. The "later" clause is being cashed in; the component-library half is a straight reversal. |
 | [`styles/tokens.css`](../../styles/tokens.css) header | *"Deliberately plain CSS custom properties: no Tailwind, no shadcn, no build step."* | Becomes false. The file stays plain CSS and stays canonical, but a `@theme inline` block now reads it. Rewrite the comment — [§ 11](#docs-to-update). |
 | [tooltips.md § What we chose](../project/tooltips.md#what-we-chose) | Floating UI chosen **over** `@radix-ui/react-tooltip` | **Narrowed, not reversed.** One of its two reasons expires; the other stands and decides it. [§ 7](#the-floating-ui-question). |
 | [AGENTS.md](../../AGENTS.md) § Working agreements | *"Prefer boring: … no framework churn while the ideas are still moving."* | This is framework churn. Greg has asked for it; that is his call, recorded here so nobody later thinks the principle was forgotten. |
@@ -359,7 +359,7 @@ nothing charts.
 
 Both [`styles/tokens.css`](../../styles/tokens.css) and
 [`src/web/styles.css`](../../src/web/styles.css) carry a shouted comment about this, and
-[original-version.md § Brand facts](../project/original-version/overview.md#brand-facts-now-load-bearing)
+[original-version/overview.md § Brand facts](../project/original-version/overview.md#brand-facts-now-load-bearing)
 records the failure mode. `--accent` means shadcn's **raised dark surface** for hover states,
 `oklch(0.269 0 0)` — *not* the brand orange.
 
@@ -829,7 +829,7 @@ which suits a repo that is deliberately one Vite process and no build cleverness
 | [AGENTS.md](../../AGENTS.md) | A signpost row for `docs/plans/` — this file is currently unlinked, which by the repo's own rule means it may as well not exist. Amend the *"Prefer boring… no framework churn"* bullet to record that shadcn components were adopted deliberately on 2026-08-25. |
 | [`styles/tokens.css`](../../styles/tokens.css) **header** | *"no Tailwind, no shadcn, no build step"* becomes false. Rewrite: still plain CSS, still canonical, now *referenced* by `@theme inline`. Extend the `--accent` warning: `tw:bg-accent` utilities now exist and read like "the accent colour", and shadcn's own Toggle uses `--accent` for its on-state. |
 | [`src/web/styles.css`](../../src/web/styles.css) **header** | Must say the file is imported into `@layer app` by `src/web/tailwind.css`, and why — otherwise the next person adds a utility and watches it do nothing. |
-| [original-version.md § Deliberately not lifted](../project/original-version/overview.md#deliberately-not-lifted) | **The direct reversal.** Move shadcn/Radix/Tailwind into [§ Already lifted](../project/original-version/overview.md#already-lifted-into-this-repo), and say what changed and when. Keep Phosphor where it is. |
+| [original-version/overview.md § Deliberately not lifted](../project/original-version/overview.md#deliberately-not-lifted) | **The direct reversal.** Move shadcn/Radix/Tailwind into [§ Already lifted](../project/original-version/overview.md#already-lifted-into-this-repo), and say what changed and when. Keep Phosphor where it is. |
 | [web-client.md § Where the code is](../project/web-client.md#where-the-code-is) | Rows for `src/web/tailwind.css`, `src/web/components/ui/`, `src/web/lib/utils.ts`, `components.json`. Note `main.tsx` now imports `tailwind.css`, not `styles.css`. |
 | [web-client.md § Dark mode](../project/web-client.md#dark-mode) | That `init` writes a light `:root` block we revert every time; the `@theme inline` bridge; `tokens.css` stays canonical. |
 | [tooltips.md](../project/tooltips.md) | Record that the choice was revisited on 2026-08-25, that the "no component convention here" argument **expired**, and that it was kept on the grouping behaviour alone. A decision re-affirmed for a *narrower* reason is worth writing down. |
@@ -929,7 +929,7 @@ verification notes kept alongside the baseline capture.
 
 - [web-client.md](../project/web-client.md) — the view being migrated, and its constraints
 - [design-css-overview.md](../project/design-css-overview.md) — the short map this plan is the long version of
-- [original-version.md](../project/original-version/overview.md) — where the tokens came from, and the decision being reversed
+- [original-version/overview.md](../project/original-version/overview.md) — where the tokens came from, and the decision being reversed
 - [tooltips.md](../project/tooltips.md) — the Floating-UI-over-Radix choice this narrows
 - [icons.md](../project/icons.md) — Lucide, chosen for shadcn compatibility before we had shadcn
 - [typechecking.md](../project/typechecking.md), [testing.md](../project/testing.md), [linting.md](../project/linting.md) — the three checks every step must pass
