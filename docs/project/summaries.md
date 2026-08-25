@@ -404,6 +404,16 @@ interpreted. Rendering arbitrary model output as HTML is what [security.md](secu
   called that *"noticeable but not overwhelming — borderline"*, which is the honest reading. Nothing
   enforces it; `cited: 0` in the log is how we would find out it had decayed the other way, which
   means finding out afterwards.
+- **A browser check reported the hover card rendering behind the Length/Depth pills. It does not.**
+  Recorded because it cost half an hour and would cost it again. The tooltip layer is `z-index: 100`
+  (styles.css § `.tooltip-anchor`), above the spine at 45, the band at 44 and the drawer at 95, and
+  it portals into `<body>`, so nothing in the band can paint over it. What the screenshot caught was
+  the 120ms opacity fade in `useTransitionStyles` — and the giveaway is in the screenshot itself: the
+  card's *text* is drawn **over** the pills, uniformly translucent, rather than being occluded by
+  them. A stacking failure looks like crisp pills hiding the card; this looked like both at once,
+  everywhere. The other candidate — `--surface-raised` failing to resolve in a portalled node, which
+  would leave the card genuinely transparent — is impossible: it is defined on `:root` and custom
+  properties inherit to every element in the document.
 - **The hover card is wider than the band it opens in** — 26rem against a band of 18–25rem
   ([`layout.ts`](../../src/web/layout.ts) § `MODE_MIN`/`MODE_IDEAL`) — so a card anchored near the
   band's left edge draws over the spine rail. It is on top (the tooltip layer is `z-index: 100`) and
