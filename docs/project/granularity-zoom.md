@@ -224,7 +224,9 @@ Greg, 2026-08-24:
 Those are two different requests and both are satisfied, but not by the same change.
 
 **One level higher** is literal: depth 0 now gets its own column. Without it the coarsest thing on
-screen was the parts list, and there was no single place saying what the piece *is*.
+screen was the parts list, and there was no single place saying what the piece *is*. (What that
+column *renders* changed later — the root node turned out to be a constant, and the column now
+carries [the arc](#the-arc). "What the piece is" moved to the masthead.)
 
 **Seeing the whole table of contents** is not about adding a column, and this is the part worth
 understanding. In reading mode the ToC rows are all present — but a part's row and the next part's
@@ -340,8 +342,81 @@ Four decisions worth keeping:
   that one function answers every "how wide is anything" question.
 
 Because the spine now carries the coarse levels, the **L0 column is the first thing auto-fit gives
-up** on a narrow window (below), and the article-level gist is repeated in the masthead so that
-giving it up costs nothing.
+up** on a narrow window (below), and what the article *is* lives in the masthead, so that giving it
+up costs nothing.
+
+### The arc
+
+> I can't currently see any value to the L0 column. It just has a single entry. Can you? Can we do
+> more with it? If not, should we remove it?
+>
+> — Greg, 2026-08-25
+
+He was right, and the reason is structural rather than a matter of taste. **Depth 0 is the tree's
+root, and a tree has one root**, so `buildGeometry` emitted exactly one cell spanning all 139 rows,
+for every article, forever. A column in this view means *this level's value at your position*; a
+column with one cell is a constant, carrying zero information per pixel travelled — and it was not
+even new information, because the same sentence was in the masthead an inch above it.
+
+It was not free, either. L0 appears whenever three gist columns fit, which is from ~1100px up — so
+on any laptop at full screen. Across 1100–1440px it squeezed L1 and L2 down to 176–229px *and* held
+the prose at its 544px floor. Removing it gives both gist columns their full 240px and hands 50–240px
+back to the reading column.
+
+So the question became: is there anything that is genuinely **article-level** and still **varies
+vertically**? One thing, and it is not a level of the tree:
+
+- An **L1 gist** says what this part says, in the part's own terms. Delete the rest of the article
+  and it still reads correctly.
+- An **arc sentence** says where the whole argument stands by the time you reach this part: what has
+  been established, what is still owed, or the turn between the two. It is a claim about the article,
+  made from a position inside it. Delete the rest of the article and it stops making sense — which is
+  the test, and the reason it cannot collapse into being a second gist.
+
+```
+  arc (L0)                              part gist (L1)
+  "Brains are not Turing machines;      "Leaving Turing world drags the
+   what is left is to say where          material substrate back into any
+   else there is to stand."              account of experience."
+```
+
+**No narrating the article.** The first draft of the prompt got sentences like *"The piece opens by
+asking whether…"* and *"…the argument then turns to…"*: a whole clause spent announcing that a
+summary is coming, in the narrowest column on screen. So the prompt now forbids making the article
+the subject — no "the piece", "the article", "the argument", "the author" — and asks for the state of
+the argument said directly. Relational is still required; it just has to be carried by the claim
+("Brains are not Turing machines; what is left is…") rather than by a stage direction.
+
+**Its cells are the parts' cells.** The arc is built from the L1 column's own geometry
+([`tree.ts` § the arc](../../src/web/tree.ts)), so the two share boundaries by construction rather
+than by two walks of the tree happening to agree. That also settles the arrow keys: the arc column
+tags itself `data-nav-depth="1"`, because part-to-part is what its boundaries actually mean.
+
+Three decisions worth keeping:
+
+- **It reads as a different kind of thing, not a second opinion.** Same boundaries as L1 means the
+  risk is looking like a duplicate column, so it carries no title — a step marker (`3 / 9`) instead —
+  and sets its sentence smaller and lighter. The distinction has to be visible before it is read.
+- **A missing sentence draws an empty cell.** Never the part's gist, which would quietly turn the
+  column back into a copy of its neighbour, and never a skipped `<td>` — a missing cell in an HTML
+  table does not leave a gap, it shifts every later cell in the row one column left, so the whole
+  view would silently misalign. Every part gets a cell whether or not the arc has words for it.
+- **It is a separate artefact, joined by range.** `arc.json`, not a field on `tree.json`, because
+  the tree is stage 4's and `npm run toc` rewrites it wholesale — anything merged in would vanish
+  without a trace on the next run. Entries are matched to parts by block range and never by node id:
+  ids are positional, a re-run renumbers them, and matching by index would hand every sentence to
+  its neighbour while still looking perfectly plausible. An entry that no longer matches is dropped.
+
+Generation is [`src/arc.ts`](../../src/arc.ts) — stage 5b, one model pass over the tree skeleton plus
+the full text, run with `npm run arc -- data/<slug>`. Both inputs on purpose: you cannot write "what
+remains" without seeing what comes after, and the full text is what keeps the sentences in the
+author's vocabulary rather than in a summary of a summary. Without `arc.json` the column falls back
+to the root node exactly as before, so the feature is additive and an article is readable without it.
+
+**Still open.** Whether this earns its column at all is being judged by using it, and the honest risk
+is the one the [vision](vision.md) warns about: an arc sentence is generated prose about the argument
+rather than a door into it. The defence is that it says *where you are in a case being made*, which
+is orientation rather than substitution — but that is an argument, not evidence.
 
 ### Too many levels: fit the columns, don't just scroll them
 
@@ -481,9 +556,10 @@ stays put while the text breathes around it.
   ~~**Zoom in (→)** — each visible gist is replaced by its children's gists.~~ **Superseded.** That
   was written for a view showing one level at a time; the tabular view shows every level at once, so
   there is no single "current level" for a key to move. Choosing levels is the `L0 / L1 / L2` buttons
-  and `?cols=` ([url-state.md](url-state.md#the-parameters)). ← / → were therefore free, and now
-  **step through the article one item at a time, at whichever level the pointer is hovering** —
-  [keyboard.md](keyboard.md).
+  and `?cols=` ([url-state.md](url-state.md#the-parameters)). The keys went instead to **stepping
+  through the article one item at a time, at whichever level the pointer is hovering** — and ended up
+  on ↑ / ↓ rather than ← / →, because up-down is the axis that means "further through the piece" at
+  every level of this view. See [keyboard.md](keyboard.md).
 - **Discrete levels, animated between.** v1 snaps to integer depths; continuous zoom is a later
   question ([Q4](open-questions.md#q4)).
 - **Click a gist to descend into just that node**, leaving the rest of the article coarse. This is
