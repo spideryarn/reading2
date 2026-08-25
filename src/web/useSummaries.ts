@@ -41,8 +41,15 @@ export interface UseSummaries {
   job: Job | null;
   /** Why the job this session started stopped, if it stopped badly. */
   failed: string | null;
-  /** Write them. `force` is for the case where the step thinks it is current. */
-  write(force?: boolean): Promise<void>;
+  /**
+   * Write them. `force` is for the case where the step thinks it is current.
+   *
+   * `guidance` is the reader's own note about what they are reading for. It
+   * steers what the summaries put first and nothing else — the rules that hold
+   * it to that are in src/summarise.ts, in the constant half of the prompt.
+   * Blank and absent are the same thing.
+   */
+  write(force?: boolean, guidance?: string): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -143,12 +150,16 @@ export function useSummaries(slug: string): UseSummaries {
   }, [queue.jobs, startedId]);
 
   const write = useCallback(
-    async (force = false) => {
+    async (force = false, guidance?: string) => {
       setStartedId(null);
+      const steer = guidance?.trim();
       const started = await queue.run({
         slug,
         steps: ["summary"],
         ...(force ? { force: ["summary" as const] } : {}),
+        // Trimmed to nothing is not sent at all, so a box the reader typed in
+        // and then cleared does not become an empty instruction in the prompt.
+        ...(steer ? { guidance: steer } : {}),
       });
       setPostFailed(started === null);
       if (started) setStartedId(started.id);

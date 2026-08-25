@@ -50,7 +50,13 @@ export interface UseJobs {
    * to do with the exception, and every other action here already reports that
    * way.
    */
-  run(request: { slug: string; steps: StepName[]; force?: StepName[] }): Promise<Job | null>;
+  run(request: {
+    slug: string;
+    steps: StepName[];
+    force?: StepName[];
+    /** A free-text steer, for the steps that take one. Only `summary` does. */
+    guidance?: string;
+  }): Promise<Job | null>;
   cancel(id: string): Promise<void>;
   retry(id: string): Promise<void>;
   forget(id: string): Promise<void>;

@@ -35,7 +35,7 @@ import {
   STEPS,
   stepIsDone,
 } from "../src/pipeline.js";
-import { parseJobRequest } from "../src/routes.js";
+import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
 function step(name: StepName, status: JobStep["status"]): JobStep {
@@ -267,14 +267,20 @@ describe("what a step counts as done", () => {
   };
 
   it("lists every file a step writes, not just the first", () => {
-    // `extract` writes the HTML and meta.json; `toc` writes tree.json and its
-    // copy of blocks.json. Checking only one would let a crash between the two
-    // writes leave a step reporting itself finished with half its output — and
-    // the stage after it would then consume the missing half.
+    // `extract` writes the HTML and meta.json; `toc` writes tree.json,
+    // labels.json and its copy of blocks.json. Checking only one would let a
+    // crash between the writes leave a step reporting itself finished with half
+    // its output — and the stage after it would then consume the missing half.
+    //
+    // `toc` went from two files to three when the nav labels became a second
+    // model pass (docs/plans/toc-scaling.md). A tree with no labels.json beside
+    // it is a half-run step, not a finished one, which is also why src/toc.ts
+    // writes tree.json last of the three.
     expect(STEPS.extract.outputs(ctx)).toHaveLength(2);
-    expect(STEPS.toc.outputs(ctx)).toHaveLength(2);
+    expect(STEPS.toc.outputs(ctx)).toHaveLength(3);
     expect(STEPS.extract.outputs(ctx).some((f) => f.endsWith("meta.json"))).toBe(true);
     expect(STEPS.toc.outputs(ctx).some((f) => f.endsWith("blocks.json"))).toBe(true);
+    expect(STEPS.toc.outputs(ctx).some((f) => f.endsWith("labels.json"))).toBe(true);
   });
 
   it("checks its own artefact, not the copy a later stage makes", () => {
@@ -387,6 +393,51 @@ describe("parseJobRequest", () => {
       expect(message).not.toContain("SECRET-8888");
       expect(message).not.toContain("pw-7777");
       expect(message).not.toContain(secret);
+    }
+  });
+
+  /**
+   * The reader's steer for the summary step, checked where it arrives.
+   *
+   * This string is interpolated into a model prompt, which is what makes the
+   * cap a security check rather than a tidiness one: uncapped, it is a way to
+   * spend somebody else's tokens by the megabyte, and a long enough one pushes
+   * the article out of the context the summaries are supposed to be of.
+   */
+  it("takes a steer, trimmed", () => {
+    expect(parseJobRequest({ slug: "a", guidance: "  the evidence  " }).guidance).toBe(
+      "the evidence",
+    );
+  });
+
+  it("treats a blank steer as no steer", () => {
+    // A box the reader typed in and then cleared must not become an empty
+    // instruction sitting in the prompt.
+    expect(parseJobRequest({ slug: "a", guidance: "   " }).guidance).toBeUndefined();
+    expect(parseJobRequest({ slug: "a" }).guidance).toBeUndefined();
+  });
+
+  it("refuses a steer that is not a string", () => {
+    expect(() => parseJobRequest({ slug: "a", guidance: { evil: 1 } })).toThrow();
+  });
+
+  it("refuses an over-long steer rather than silently shortening it", () => {
+    /* Refused, not truncated. A shortened instruction is one the reader
+       believes they gave and did not, and they would have no way to find out —
+       docs/reusable/silent-success.md. */
+    const long = "x".repeat(MAX_GUIDANCE_CHARS + 1);
+    expect(() => parseJobRequest({ slug: "a", guidance: long })).toThrow(/600/);
+    expect(parseJobRequest({ slug: "a", guidance: "x".repeat(MAX_GUIDANCE_CHARS) }).guidance)
+      .toHaveLength(MAX_GUIDANCE_CHARS);
+  });
+
+  it("does not repeat the steer back in the refusal", () => {
+    // `httpError`'s message is logged as `reason` (logRequest, src/routes.ts),
+    // and this is the reader's own note about what they are reading for.
+    try {
+      parseJobRequest({ slug: "a", guidance: `${"x".repeat(600)}MY-PRIVATE-NOTE` });
+    } catch (err) {
+      expect((err as Error).message).not.toContain("MY-PRIVATE-NOTE");
     }
   });
 

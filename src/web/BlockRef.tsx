@@ -2,9 +2,11 @@
  * A block id, drawn the way you want to read one and behaving the way you want
  * to click one.
  *
- * Ids are on screen in three places — the gutter beside every paragraph, and
- * the range under a gist in both the table's cells and a column panel — so
- * they get one component rather than three spans that drift apart.
+ * Ids are on screen in five places — the gutter beside every paragraph, the
+ * range under a gist in both the table's cells and a column panel, the same
+ * range under each entry of the summary panel, and the ids the model cites
+ * inside a chat answer or a summary (Cited.tsx) — so they get one component
+ * rather than five spans that drift apart.
  *
  * Three things it does:
  *

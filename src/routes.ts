@@ -18,14 +18,18 @@
  *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
  *   DELETE /api/comments/:slug/:id
  *   GET    /api/chat/:slug       every stored conversation for the article
- *   POST   /api/chat/:slug       { threadId, question, at? } → **a stream**, see `streamChat`
+ *   POST   /api/chat/:slug       → **a stream**, see `streamChat`. Three bodies:
+ *                                  { threadId, question, at? }      ask
+ *                                  { threadId, retry: messageId }   answer again
+ *                                  { threadId, edit: messageId, question, at? }
+ *   POST   /api/chat/:slug/:threadId/stop  { messageId } → { stopped }
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
  *   GET    /api/search/:slug     every saved meaning-search for the article
  *   POST   /api/search/:slug     { id?, criterion } → the finished run
  *   DELETE /api/search/:slug/:id
  *   GET    /api/jobs             every ingest job this server knows about
- *   POST   /api/jobs             { url } | { slug, steps?, force? } → the queued job
+ *   POST   /api/jobs             { url } | { slug, steps?, force?, guidance? } → the queued job
  *   GET    /api/jobs/:id         one job, for the progress indicator to poll
  *   DELETE /api/jobs/:id         forget a finished job's record
  *   POST   /api/jobs/:id/cancel
@@ -47,10 +51,13 @@ import {
 } from "./api.js";
 import {
   beginTurn,
+  ChatConflict,
   deleteThread,
+  editTurn,
   finishTurn,
   loadThreads,
   renameThread,
+  retryTurn,
   update as updateThreads,
 } from "./chat.js";
 import { beginRun, deleteRun, finishRun, loadRuns, update as updateRuns } from "./searches.js";
@@ -215,7 +222,28 @@ async function answer(slug: string, body: unknown): Promise<Comment> {
  * running process can tell an answer in flight from one that died with the
  * process that was writing it.
  */
-const streaming = new Set<string>();
+interface Live {
+  /**
+   * Fired when the reader presses stop, and when an edit or a retry supersedes
+   * this answer. src/converse.ts tells it apart from its own deadline and stall
+   * signals and finishes the turn normally rather than throwing.
+   */
+  stop: AbortController;
+  /**
+   * Resolves when this stream has finished writing — not when it was aborted.
+   *
+   * The reason it exists is a race that only shows up under a retry.
+   * `retryTurn` reuses the answer's row, id and all, so an aborted stream whose
+   * `finishTurn` lands *after* the reset would put the stopped half-answer back
+   * over the fresh `pending` row — and then nothing would ever clear it, because
+   * the retry's own stream is writing to the same id and will simply overwrite
+   * a row it thinks it owns. Aborting is not enough; the supersede has to wait
+   * for the writer to let go. See `settleThread`.
+   */
+  done: Promise<void>;
+}
+
+const streaming = new Map<string, Live>();
 
 /**
  * How long a `pending` answer is left alone before a sweep calls it abandoned.
@@ -234,6 +262,28 @@ const streaming = new Set<string>();
  * deadline in converse.ts permits (120s), plus room for the write.
  */
 const CHAT_ORPHAN_GRACE_MS = 150_000;
+
+/**
+ * Stop whatever this process is streaming into a thread, and wait for it to
+ * finish writing.
+ *
+ * Called before an edit or a retry, both of which rewrite rows a live stream
+ * may be about to write to. Aborting alone leaves the interleaving open — see
+ * `Live.done` — so this awaits, and the wait is bounded by the same deadline
+ * every answer has.
+ *
+ * Like `streaming` itself this only knows about **this process**; a second
+ * server streaming into the same file is the unfixed problem recorded in
+ * docs/plans/chat-mode.md § What is still open, and it is the same problem, not
+ * a new one.
+ */
+async function settleThread(slug: string, threadId: string): Promise<void> {
+  const prefix = `${slug}/${threadId}/`;
+  const live = [...streaming.entries()].filter(([k]) => k.startsWith(prefix)).map(([, v]) => v);
+  if (live.length === 0) return;
+  for (const l of live) l.stop.abort(new Error("superseded"));
+  await Promise.all(live.map((l) => l.done));
+}
 
 /** Turn abandoned `pending` answers into `error`, so the reader can ask again. */
 async function sweepChat(slug: string, threads: ChatThread[]): Promise<ChatThread[]> {
@@ -304,22 +354,54 @@ async function sweepChat(slug: string, threads: ChatThread[]): Promise<ChatThrea
  *    error on it rather than discarded. See the note in `sweepChat`.
  */
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { threadId, question, at } = (body ?? {}) as Record<string, unknown>;
-  if (typeof question !== "string" || question.trim() === "") {
+  const { threadId, question, at, retry, edit } = (body ?? {}) as Record<string, unknown>;
+  if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
+  /* Three ways to start a turn, one endpoint, one stream.
+
+     A retry and an edit could each have had a route of their own, and each
+     would then have needed its own copy of the header flush, the `begin` frame,
+     the delta loop, the two terminal frames and the four things that must not
+     throw after the headers are gone. That code is the hard part and it is
+     identical in all three cases; what actually differs is one question — which
+     rows does the model answer *from*, and which row does it write *into*. So
+     that is the only thing branched on, and it is branched on before a byte
+     goes out. */
+  const wantsRetry = typeof retry === "string";
+  const wantsEdit = typeof edit === "string";
+  if (wantsRetry && wantsEdit) throw httpError(400, "Send retry or edit, not both");
+  if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
-  if (typeof threadId !== "string") {
-    throw httpError(400, "Expected { threadId, question }");
-  }
-  if (question.length > MAX_QUESTION_CHARS) {
+  if (typeof question === "string" && question.length > MAX_QUESTION_CHARS) {
     throw httpError(413, `A question may be at most ${MAX_QUESTION_CHARS} characters`);
   }
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
   // 404 rather than an `error` frame inside a 200 stream.
   const article = await loadArticle(slug);
 
-  const { thread, reply } = await beginTurn(slug, { threadId, question: question.trim() });
+  /* Both of these rewrite rows that a live answer in this thread may be halfway
+     through writing, so the live one is stopped and *waited for* first. Not
+     needed for an ordinary send: that appends, and appending beside a stream is
+     already ordered correctly by the serialised queue in src/chat.ts. */
+  if (wantsRetry || wantsEdit) await settleThread(slug, threadId);
+
+  const begun = wantsRetry
+    ? await retryTurn(slug, threadId, retry as string)
+    : wantsEdit
+      ? await editTurn(slug, threadId, edit as string, (question as string).trim())
+      : await beginTurn(slug, { threadId, question: (question as string).trim() });
+  const { thread, reply } = begun;
+  /* A retry answers the question already on disk. Taking it from the request
+     instead would let a stale tab retry one question and store the answer under
+     another — the row above saying one thing and the answer below it being to
+     something else, with nothing on screen to show the two had parted. */
+  const asked = "question" in begun ? begun.question : (question as string).trim();
   const key = `${slug}/${thread.id}/${reply.id}`;
+  const stop = new AbortController();
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
 
   /* Everything from here is inside one try/finally, and the `streaming` key is
      added on the first line of it rather than just before it.
@@ -353,7 +435,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
 
   let text = "";
   try {
-    streaming.add(key);
+    streaming.set(key, { stop, done });
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -372,27 +454,29 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       meta: article.meta,
       blocks: article.blocks,
       history: thread.messages.slice(0, -2), // everything before this turn
-      question: question.trim(),
+      question: asked,
       at: typeof at === "string" ? at : undefined,
+      signal: stop.signal,
     })) {
       if (event.type === "delta") {
         text += event.text;
         frame("delta", { text: event.text });
         continue;
       }
-      await finishTurn(slug, thread.id, reply.id, {
+      /* A stopped answer is stored `done`, with a flag. It is not a failure —
+         see the `stopped` field in src/types.ts — and `...(x ? {x} : {})` rather
+         than `stopped: event.stopped` so an ordinary answer does not carry a
+         `false` into the file for every turn ever written. */
+      const finished = {
         text: event.text,
-        status: "done",
+        status: "done" as const,
         citations: event.citations,
         searches: event.searches,
         model: event.model,
-      });
-      frame("done", {
-        text: event.text,
-        citations: event.citations,
-        searches: event.searches,
-        model: event.model,
-      });
+        ...(event.stopped ? { stopped: true } : {}),
+      };
+      await finishTurn(slug, thread.id, reply.id, finished);
+      frame("done", finished);
     }
   } catch (err) {
     /* **Nothing in here may throw**, and that is why it is wrapped again.
@@ -417,8 +501,43 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     frame("error", { error: message, text });
   } finally {
     streaming.delete(key);
+    // After the delete, so a supersede that was waiting on this cannot see the
+    // key again and abort a stream that has already let go of the row.
+    release();
     if (!res.writableEnded) res.end();
   }
+}
+
+/**
+ * Stop an answer the reader has read enough of.
+ *
+ * A route rather than a socket close, and that is the whole design. Closing the
+ * connection is what happens when a reader switches thread or shuts the tab,
+ * and `streamChat` deliberately lets the answer finish in that case — they will
+ * want it when they come back, and it has already been paid for. The two are
+ * indistinguishable from this end, so the deliberate one has to say so in a
+ * request of its own. See the header note on `streamChat`, point 3.
+ *
+ * Waits for the writer, so a reader who presses stop and immediately reloads
+ * sees the partial answer rather than a spinner that a sweep clears two minutes
+ * later.
+ */
+async function stopChat(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ stopped: boolean }> {
+  const { messageId } = (body ?? {}) as Record<string, unknown>;
+  if (typeof messageId !== "string") throw httpError(400, "Expected { messageId }");
+  const live = streaming.get(`${slug}/${threadId}/${messageId}`);
+  /* Not an error. The answer finished a moment ago, or the other dev server is
+     writing it, or this is a second tab pressing stop on something already
+     stopped. `false` says "there was nothing to stop", which is all the client
+     needs and is true in every one of those cases. */
+  if (!live) return { stopped: false };
+  live.stop.abort(new Error("stopped by the reader"));
+  await live.done;
+  return { stopped: true };
 }
 
 /** Long enough for a paragraph of context, short enough that nothing runs away. */
@@ -591,8 +710,9 @@ export function parseJobRequest(body: unknown): {
   url?: string;
   steps?: StepName[];
   force?: StepName[];
+  guidance?: string;
 } {
-  const { url, slug, steps, force } = (body ?? {}) as Record<string, unknown>;
+  const { url, slug, steps, force, guidance } = (body ?? {}) as Record<string, unknown>;
 
   const stepList = (value: unknown, field: string): StepName[] | undefined => {
     if (value === undefined) return undefined;
@@ -603,6 +723,7 @@ export function parseJobRequest(body: unknown): {
   };
   const parsedSteps = stepList(steps, "steps");
   const parsedForce = stepList(force, "force");
+  const parsedGuidance = readGuidance(guidance);
 
   if (typeof url === "string" && url.trim() !== "") {
     // **The slug is derived, never accepted.** It used to fall back to a
@@ -632,6 +753,7 @@ export function parseJobRequest(body: unknown): {
       url: url.trim(),
       ...(parsedSteps ? { steps: parsedSteps } : {}),
       ...(parsedForce ? { force: parsedForce } : {}),
+      ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
     };
   }
 
@@ -642,7 +764,39 @@ export function parseJobRequest(body: unknown): {
     slug,
     ...(parsedSteps ? { steps: parsedSteps } : {}),
     ...(parsedForce ? { force: parsedForce } : {}),
+    ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
   };
+}
+
+/**
+ * The reader's steer for a step that takes one, checked at the boundary.
+ *
+ * Three things, and the third is the one that matters. It must be a string;
+ * blank is the same as absent, so a box the reader cleared does not become an
+ * empty instruction; and it is **capped**, because this string is interpolated
+ * into a model prompt. Uncapped, it is a way to spend somebody else's tokens by
+ * the megabyte, and a long enough one would push the article itself out of the
+ * context the summaries are supposed to be of.
+ *
+ * Refused rather than truncated. A silently shortened instruction is one the
+ * reader believes they gave and did not — see docs/reusable/silent-success.md.
+ * The message says the limit, so the fix is obvious from the response alone.
+ *
+ * The *text* is deliberately not in the error message: `httpError`'s message is
+ * logged as `reason` (see `logRequest` below), and this is the reader's own
+ * words about what they are reading for.
+ */
+export const MAX_GUIDANCE_CHARS = 600;
+
+function readGuidance(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw httpError(400, "guidance must be a string");
+  const text = value.trim();
+  if (text === "") return undefined;
+  if (text.length > MAX_GUIDANCE_CHARS) {
+    throw httpError(400, `guidance must be ${MAX_GUIDANCE_CHARS} characters or fewer`);
+  }
+  return text;
 }
 
 /**
@@ -763,6 +917,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
   const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(url);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(url);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const allJobs = url === "/api/jobs";
@@ -838,6 +993,12 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
          catch below answers it as ordinary JSON; after that, the failure is an
          `error` frame inside a 200, because the status line is long gone. */
       await streamChat(slugPart(chat, 1), await readBody(req), res);
+      return true;
+    }
+    if (chatStop && req.method === "POST") {
+      // The slug becomes a directory; the ids are only ever matched in a Map.
+      const [slug, id] = [slugPart(chatStop, 1), part(chatStop, 2)];
+      send(res, 200, await stopChat(slug, id, await readBody(req)));
       return true;
     }
     if (oneThread && req.method === "PATCH") {
@@ -923,6 +1084,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     // "no such article", which is the wrong thing to go and investigate.
     const status =
       (err as { status?: number }).status ??
+      /* A retry or an edit the stored conversation will not accept — a stale
+         tab, a second window, a Back button. 409 rather than 500, because
+         nothing here is broken and the client's job is to reload and look
+         again. See `ChatConflict` in src/chat.ts. */
+      (err instanceof ChatConflict ? 409 : null) ??
       ((err as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500);
     // Handed to `logRequest`, which decides how much of it to write down — the
     // message for a failure this file chose, the whole stack for one it did

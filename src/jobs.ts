@@ -353,6 +353,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
         step.detail = detail;
       },
       signal: controller.signal,
+      ...(job.guidance !== undefined && { guidance: job.guidance }),
     };
 
     if (!step.force && (await stepIsDone(STEPS[step.name], ctx))) {
@@ -478,6 +479,14 @@ export interface EnqueueRequest {
    * over it.
    */
   force?: StepName[];
+  /**
+   * A free-text steer for the steps that take one — today, only `summary`.
+   *
+   * The queue does not interpret it. It carries it onto the job, so that it
+   * survives a restart and so that two differently-steered requests are two
+   * different jobs (`sameWork` below).
+   */
+  guidance?: string;
 }
 
 /**
@@ -517,7 +526,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   // happened. Anything else queues behind, which is safe: concurrency is 1 and
   // a cancelled job now really does release its slot last (see `queue.add`).
   const running = activeFor(slug);
-  if (running && sameWork(running, names, forced)) return running;
+  if (running && sameWork(running, names, forced, request.guidance)) return running;
 
   const job: Job = {
     id: mintId(),
@@ -526,6 +535,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     steps: names.map((n) => newStep(n, forced.has(n))),
     status: "queued",
     createdAt: new Date().toISOString(),
+    ...(request.guidance ? { guidance: request.guidance } : {}),
   };
 
   jobs.set(job.id, job);
@@ -601,9 +611,28 @@ function activeFor(slug: string): Job | undefined {
   );
 }
 
-/** The same steps, forced the same way — the only case a caller can safely share. */
-function sameWork(job: Job, names: StepName[], forced: Set<StepName>): boolean {
+/**
+ * The same steps, forced the same way, steered the same way — the only case a
+ * caller can safely share.
+ *
+ * The guidance is part of the comparison, and has to be. Without it, a reader
+ * who presses "Write them again", changes their mind about what they are after,
+ * and presses it once more gets handed the *first* job: it succeeds, the panel
+ * refreshes, and the summaries are the ones written to the note they replaced.
+ * Nothing anywhere would say so. Same trap the `steps` comparison was added
+ * for, one field later.
+ *
+ * `?? ""` on both sides so "no steer" and "" are one case rather than two that
+ * fail to match each other.
+ */
+function sameWork(
+  job: Job,
+  names: StepName[],
+  forced: Set<StepName>,
+  guidance?: string,
+): boolean {
   if (job.steps.length !== names.length) return false;
+  if ((job.guidance ?? "") !== (guidance ?? "")) return false;
   return job.steps.every(
     (s, i) => s.name === names[i] && (s.force === true) === forced.has(s.name),
   );
@@ -746,6 +775,9 @@ export async function retryJob(id: string): Promise<Job | null> {
     ...(old.url ? { url: old.url } : {}),
     steps: old.steps.map((s) => s.name),
     force: forceForRetry(old.steps),
+    // Copied, unlike force. The steer is not a thing the first attempt used up
+    // — a retry of a summary run that was steered is still that run.
+    ...(old.guidance ? { guidance: old.guidance } : {}),
   });
 }
 

@@ -223,6 +223,145 @@ ids are positional, and a re-run of `npm run toc` renumbers them — so a shared
 of sections that are no longer the ones you opened. It would be long *and* quietly wrong. The depth
 is the stable half, so the depth is what a link carries.
 
+## A summary is a door
+
+**Added 2026-08-26, the same day the rest of it landed.** Greg:
+
+> Add block-ids to the summary output (make them clickable, to scroll the text there, and also with
+> rich-tooltips).
+>
+> And make it easier to click a section in the summary (right now you have to click the
+> section-title).
+>
+> — Greg, 2026-08-26
+
+The two asks are one idea from two sides. This whole feature sits one inch from the thing
+[vision.md](vision.md) forbids — *"instead of trying to make things too easy, trying to replace the
+words with quick and easy summaries"* — and the difference between a summary that augments reading
+and one that replaces it is entirely whether you can get from the summary back into the passage
+without effort. Ids are the door; a bigger click target is the handle.
+
+### The ids
+
+Two kinds, and they arrive by different routes.
+
+| What | Where it comes from | Present when |
+|---|---|---|
+| **The citations inside the prose** — `[spya-k3m9qt]` after a claim | the model, because [`textOf`](../../src/summarise.ts) now labels every paragraph it is shown with its id | `short` and `long`, written by `summary/2` or later |
+| **The section's range** under each entry | the tree, already there | always, every rung |
+
+The range earns its place precisely because the citations do not always exist. `gist` is the
+**default** rung, gists are written by stage 4 which knows nothing about any of this, and most
+articles have never had a model call for the other two — so without the range the ordinary case would
+have no ids on screen at all. It is the same `<BlockRange>` a gist cell carries in
+[`TableView.tsx`](../../src/web/TableView.tsx), in the same position, for the same reason.
+
+Both are drawn by [`Cited.tsx`](../../src/web/Cited.tsx) and
+[`BlockRef.tsx`](../../src/web/BlockRef.tsx), which are shared with chat rather than copied. **Two
+copies of "what a citation looks like and what hovering one shows" would drift**, and the day they
+drift is the day a chip means something slightly different depending on which band it is in. The
+rules for what counts as an id and what happens to one the article does not have live in
+[`citations.ts`](../../src/web/citations.ts), DOM-free and tested; an unknown id is rendered as
+**plain text, never as a link that goes nowhere** — a dead chip is worse than visible noise, because
+the reader presses it, the page does not move, and nothing distinguishes that from a bug in the
+scrolling.
+
+The hover card is the paragraph itself, truncated. Enough to see whether the section says what the
+summary claims; not enough to read instead of going there. That check — the model against the
+article, without leaving the sentence you are on — is the whole justification for generating any of
+this.
+
+### What the citations cost the prompt, and what stops them taking over
+
+An id after every clause is not scholarship, it is noise, and noise is what a reader stops reading.
+So the prompt asks for **one or two in a `short`, at most one a sentence in a `long`**, and forbids a
+list of sources at the end. There is no code enforcing that; it is a prompt rule, and it is the sort
+of prompt rule that decays quietly.
+
+Which is why [`countCitations`](../../src/summarise.ts) puts two numbers in the step's log line:
+
+| Field | What it means | Why it is there |
+|---|---|---|
+| `cited` | block ids across every entry | A run that starts reporting **0** is the model having stopped citing. Nothing breaks: the panel renders prose, and the summaries quietly go back to being a substitute for the passage rather than a way into it. |
+| `unknownCited` | of those, ids this article does not have | An invented id is a door into the wrong room. The client drops it silently, so this is where anybody would find out it was happening. |
+
+Neither is an error. Both are [silent-success](../reusable/silent-success.md) counters, and the same
+pair chat keeps for the same reason.
+
+### The click target
+
+The title was a bad target and it is worth saying why: it is one line of 0.82rem text as wide as the
+heading happens to be, so a two-word section is a two-centimetre target inside a panel four times
+that wide. The number beside it, the paragraph count, the summary itself and all the whitespace
+looked exactly as pressable and did nothing.
+
+Now the whole entry — header, summary and range together — is the target, which is what the gist
+cells in the table have always done with a whole `<td>`. Two things keep that honest:
+
+- **The keyboard path is unchanged.** The title is still a real `<button>`; tab reaches it, Enter
+  jumps. The `<div>` adds mouse area, not a second way to operate the panel. That is what its two
+  `biome-ignore` lines say, and it is a statement rather than a shrug — a `role="button"` there would
+  be worse than nothing, claiming to be one control while containing three and taking the twist out
+  of the tab order.
+- **Anything that is itself pressable wins.** The handler bows out when the click landed on a button
+  or a link, so opening a section does not also scroll the article, and a block id goes to *its*
+  paragraph rather than to the top of the section it is in.
+
+## Steering a rewrite
+
+**Added 2026-08-26.** A box beside the write button, in
+[`SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx) § `Steer`. Greg:
+
+> for the "Write them again", add an input-textbox so the user can give guidance to steer the summary
+> generation - this should be added to the prompt and tweak the output that gets generated, but make
+> sure the LLM doesn't overweight this and give a really distorted summary, i.e. we want to stay
+> faithful to the text.
+>
+> — Greg, 2026-08-26
+
+**The second half of that sentence is the whole design problem.** A note like *"I care about the
+evidence, not the history"* asks the model to choose what to put first. The failure it invites is the
+model quietly reporting an article as being *about* evidence because that is what it was asked about
+— and a distorted summary is undetectable from the panel, which is the one failure that would make
+this feature not worth having.
+
+Almost none of the answer is in the UI. It is four rules in the **constant** half of the prompt
+(`SYSTEM`, [`src/summarise.ts`](../../src/summarise.ts) § IF THE READER ASKS FOR SOMETHING IN
+PARTICULAR):
+
+- Summarise the section. Do not answer the reader's question and do not address them.
+- Where the section bears on it, lead with that and give it more room.
+- Where it does not, write the summary you would have written anyway — and **never say the section
+  does not cover it**, which spends the reader's line telling them nothing about the section.
+- Never add, sharpen or bend a claim to fit the request, and keep the article's own proportions. A
+  request cannot promote a passing remark into the main point.
+
+They are in `SYSTEM` rather than beside the note **so the constraint cannot be edited by the thing it
+constrains**, and because `SYSTEM` is a constant that every batch shares. The note itself goes in the
+user prompt, near the top where it will be read, with a two-line reminder standing next to it — a
+constraint three thousand tokens above the text it constrains is one the model has stopped weighing.
+
+Three smaller decisions worth keeping:
+
+- **The note is stored on the artefact** (`Summaries.guidance`) and put back in the box on the next
+  visit. A steered summary that looks like an ordinary one is one the reader cannot weigh, and six
+  months later *"why does this one lean so hard on the economics"* has an answer on the artefact
+  rather than nowhere.
+- **Emptying the box is a real answer.** The panel holds `steer: string | null` where `null` means
+  "not touched", so the effective value falls through to the artefact's — and a reader who clears it
+  gets an unsteered rewrite instead of the old note reappearing.
+- **The steer is capped at 600 characters and refused, not truncated**
+  ([`readGuidance`](../../src/routes.ts)). It is interpolated into a model prompt, which makes the cap
+  a spending check as much as a tidiness one; and a silently shortened instruction is one the reader
+  believes they gave and did not. It is not logged — only its length is — because it is the reader's
+  own note about what they are reading for.
+
+It is **not** part of `summariesAreCurrent`. A steer is a reason to force a rewrite, which is what the
+button carrying it already does; it is not a reason for the next ordinary run to decide the artefact
+has gone stale. It *is* part of `sameWork` in [`src/jobs.ts`](../../src/jobs.ts), which is a different
+question — without that, a reader who presses the button, changes their mind, and presses it again
+would be handed the first job and get summaries written to the note they had just replaced.
+
 ## What this deliberately does not have
 
 **The expertise axis.** Their second version crossed three lengths with three reading levels
@@ -253,7 +392,22 @@ interpreted. Rendering arbitrary model output as HTML is what [security.md](secu
   map at all.
 - **A section whose summary is subtly wrong** is undetectable from here. `missing` catches an absent
   summary; nothing catches a plausible one about the wrong thing, which is the same residual risk the
-  citation counting in [chat-mode.md](../plans/chat-mode.md) leaves behind.
+  citation counting in [chat-mode.md](../plans/chat-mode.md) leaves behind. A steer makes this risk
+  *larger*, which is why the rules holding it to emphasis are written where they are — and there is
+  still nothing that would catch a summary that quietly followed the note off the text.
+- **Nothing checks that a cited id is the right paragraph.** `unknownCited` catches an id that does
+  not exist; an id that exists and carries a different claim reads exactly like a good one. The
+  hover card is the mitigation, and it works only if somebody hovers.
+- **The citation density is a prompt rule with no floor under it, and it currently runs at the top of
+  what the rule allows.** Measured on the first real run (Graham, *Writes and Write-Nots*): 65
+  citations over nine entries, about one per sentence, two or three per paragraph. A browser check
+  called that *"noticeable but not overwhelming — borderline"*, which is the honest reading. Nothing
+  enforces it; `cited: 0` in the log is how we would find out it had decayed the other way, which
+  means finding out afterwards.
+- **The hover card is wider than the band it opens in** — 26rem against a band of 18–25rem
+  ([`layout.ts`](../../src/web/layout.ts) § `MODE_MIN`/`MODE_IDEAL`) — so a card anchored near the
+  band's left edge draws over the spine rail. It is on top (the tooltip layer is `z-index: 100`) and
+  it is transient, so this is untidy rather than broken, and narrowing it would only make it taller.
 - **Re-running replaces rather than extends.** There is no "write me more detail on just this
   section" — the whole artefact is rewritten. That is the right default and the wrong thing if the
   ladder ever grows a fourth rung.
@@ -269,7 +423,9 @@ interpreted. Rendering arbitrary model output as HTML is what [security.md](secu
   depth are one axis
 - [table-of-contents.md](table-of-contents.md) — the length rules per depth, and why a row's job is to
   distinguish itself from its siblings
-- [block-ids.md](block-ids.md) — the contract the range anchoring rests on
+- [block-ids.md](block-ids.md) — the contract the range anchoring rests on, and what a shown id is
+- [../plans/chat-mode.md](../plans/chat-mode.md) — the citation contract these chips share, and where
+  `Cited.tsx` came from
 - [architecture.md](architecture.md) — where stage 5e sits, and the storage layout
 - [ingest-queue.md](ingest-queue.md) — the job that writes them, and why it is not part of adding an
   article

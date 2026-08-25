@@ -1,5 +1,12 @@
+// @vitest-environment jsdom
 /**
  * Stage 5e's arithmetic, and the client-side join that reads what it wrote.
+ *
+ * jsdom rather than node, for one reason: the panel draws block ids, and a
+ * block id is an `<a href>` built from `location` (BlockRef.tsx § blockHref) so
+ * that the browser's own affordances — status bar, copy link, ⌘-click — work on
+ * it. `renderToStaticMarkup` of that in a node environment throws on the bare
+ * `location`. Nothing else here needs a DOM.
  *
  * Everything here is deterministic — no network, no model. See
  * docs/project/testing.md for what that division buys and what it leaves out.
@@ -26,11 +33,14 @@ import {
   batchesOf,
   BATCH_SIZE,
   buildSummaries,
+  countCitations,
   isStale,
   MIN_BLOCKS,
   parseJson,
+  renderPrompt,
   rungsFor,
   targetsOf,
+  textOf,
 } from "../src/summarise.js";
 import { SummaryPanel } from "../src/web/SummaryPanel.js";
 import { buildSummaryTree, rungText } from "../src/web/tree.js";
@@ -493,6 +503,116 @@ describe("rungText", () => {
  * band is where it should be. That needs a real browser
  * (docs/project/browser-testing.md) and has not been done.
  */
+/**
+ * The paragraph labels, which are what makes a citation possible at all.
+ *
+ * A model that cannot see the ids cannot cite them, and nothing about that
+ * failure is visible: the summaries come out fluent and uncited, the panel
+ * renders them as prose, and the feature is quietly gone. This is the one test
+ * standing between here and that.
+ */
+describe("textOf", () => {
+  const order = new Map(BLOCKS.map((b, i) => [b.id, i]));
+  const range = (lo: number, hi: number) =>
+    ({ id: "n", depth: 1, range: [id(lo), id(hi)] }) as unknown as TreeNode;
+
+  it("labels every paragraph with its block id", () => {
+    const text = textOf(range(0, 2), BLOCKS, order);
+    expect(text).toContain(`${id(0)}: some prose here`);
+    expect(text.match(/spya-/g)).toHaveLength(3);
+  });
+
+  it("keeps the blocks in document order", () => {
+    const lines = textOf(range(0, 3), BLOCKS, order).split("\n\n");
+    expect(lines.map((l) => l.split(":")[0])).toEqual([id(0), id(1), id(2), id(3)]);
+  });
+
+  /* An image block has an id and no words. Labelling it would hand the model a
+     citable id for a paragraph with nothing in it — an id the reader can press
+     that arrives at nothing to read. The filter runs before the labels for
+     exactly this reason, which is the sort of ordering that is invisible until
+     it is wrong. */
+  it("does not label a block with no text of its own", () => {
+    const withImage = [block(id(0)), block(id(1), ""), block(id(2))];
+    const text = textOf(range(0, 2), withImage, new Map(withImage.map((b, i) => [b.id, i])));
+    expect(text).not.toContain(id(1));
+    expect(text.match(/spya-/g)).toHaveLength(2);
+  });
+
+  it("gives nothing back for a range the blocks do not resolve", () => {
+    expect(textOf(range(0, 0), [], new Map())).toBe("");
+  });
+});
+
+/**
+ * The reader's steer, and the two things that must be true of it.
+ *
+ * It has to reach the model — a box that changes nothing is worse than no box,
+ * because the reader believes they steered something. And its *absence* has to
+ * leave no trace: a prompt that always carries the header with nothing under it
+ * teaches the model to expect an instruction and to look for one in the text.
+ */
+describe("renderPrompt", () => {
+  const targets = targetsOf(TREE, BLOCKS);
+  const batch = batchesOf(TREE, targets)[0]!;
+  const base = { meta: null, tree: TREE, blocks: BLOCKS, batch };
+
+  it("carries the reader's steer into the prompt", () => {
+    const out = renderPrompt({ ...base, guidance: "I care about the evidence" });
+    expect(out).toContain("WHAT THIS READER IS AFTER");
+    expect(out).toContain("I care about the evidence");
+  });
+
+  it("says nothing at all about a steer when there is none", () => {
+    expect(renderPrompt(base)).not.toContain("WHAT THIS READER IS AFTER");
+  });
+
+  /* The steer is a note about emphasis, and the prompt has to say so where the
+     note is, not only three thousand tokens above it in SYSTEM. A constraint
+     that far from the thing it constrains is one the model has stopped
+     weighing by the time it reads the article. */
+  it("re-bounds the steer where it stands", () => {
+    const out = renderPrompt({ ...base, guidance: "the economics" });
+    expect(out).toContain("never what the article says");
+  });
+
+  it("puts the block ids in front of the model", () => {
+    expect(renderPrompt(base)).toContain(`${id(0)}: `);
+  });
+});
+
+/**
+ * Counting the doors.
+ *
+ * Neither number is an error and neither changes what is rendered. They are in
+ * the step's log line because a run that quietly starts returning `cited: 0` is
+ * the model having stopped citing — which breaks nothing visible and turns a
+ * summary back into a substitute for the passage rather than a way into it.
+ */
+describe("countCitations", () => {
+  const withCites = (short: string, long?: string): Summaries => ({
+    ...SUMMARIES,
+    entries: [{ range: [id(0), id(9)], depth: 0, short, ...(long ? { long } : {}) }],
+  });
+
+  it("counts the ids in both rungs", () => {
+    const out = countCitations(withCites(`a [${id(1)}]`, `b [${id(2)}] c [${id(3)}]`), BLOCKS);
+    expect(out).toEqual({ cited: 3, unknown: 0 });
+  });
+
+  it("counts an id the article does not have, and still counts it as cited", () => {
+    // Both, deliberately: `cited` answers "is it citing at all" and `unknown`
+    // answers "is it citing real things". An invented id is a failure of the
+    // second, not evidence of the first.
+    const out = countCitations(withCites(`a [spya-zzzzzz]`), BLOCKS);
+    expect(out).toEqual({ cited: 1, unknown: 1 });
+  });
+
+  it("counts nothing when nothing cites", () => {
+    expect(countCitations(withCites("no ids here"), BLOCKS)).toEqual({ cited: 0, unknown: 0 });
+  });
+});
+
 describe("SummaryPanel", () => {
   /* Typed as the component's own props rather than inferred: an object literal
      infers `status: "ready"` as a literal type, so a spread that overrides it
@@ -508,6 +628,7 @@ describe("SummaryPanel", () => {
     write: async () => {},
     cancel: () => {},
     root: buildSummaryTree(TREE, BLOCKS, SUMMARIES),
+    blocks: new Map(BLOCKS.map((b) => [b.id, b.text])),
     rung: "long",
     onRung: () => {},
     deep: 2,
@@ -585,5 +706,95 @@ describe("SummaryPanel", () => {
 
   it("renders with no tree at all rather than throwing", () => {
     expect(html({ root: null })).toContain("no usable tree");
+  });
+
+  /* ------------------------------------------ the ids, and getting to them -- */
+
+  /**
+   * The three things Greg asked for on 2026-08-26, in the order he asked them.
+   *
+   * All three are about the same thing from different sides: a summary is only
+   * allowed to exist here if it is a *door* into the passage rather than a
+   * substitute for it (vision.md, principle 2). Ids you can press are the door,
+   * a bigger click target is the handle, and the steer is what stops a reader
+   * asking the model to summarise something other than the article.
+   */
+  const cited: Summaries = {
+    ...SUMMARIES,
+    entries: [
+      {
+        range: [id(0), id(9)],
+        depth: 0,
+        long: `The argument turns on the body [${id(3)}], not the brain.`,
+      },
+    ],
+  };
+
+  it("draws a cited block id as a link into the article", () => {
+    const out = html({ summaries: cited, root: buildSummaryTree(TREE, BLOCKS, cited) });
+    // The chip, and a real href — BlockRef renders an `<a>` so ⌘-click, the
+    // status bar and copy-link all work. block-ids.md#showing-an-id.
+    expect(out).toContain(`at=${id(3)}`);
+    expect(out).toContain("block-ref");
+    // The prefix is dropped where it is shown and kept in the link.
+    expect(out).toContain(">aaaaa3<");
+    // And the brackets go: they are punctuation around something that no
+    // longer reads as text.
+    expect(out).not.toContain(`[${id(3)}]`);
+  });
+
+  it("leaves an id the article does not have as plain text", () => {
+    /* Not a link that goes nowhere. A dead chip is the worse failure: the
+       reader presses it, the page does not move, and nothing distinguishes
+       that from a bug in the scrolling. Same contract as chat's — the rule
+       lives in citations.ts and is tested there; this is the summary panel
+       being wired to it rather than to a copy of it. */
+    const bogus: Summaries = {
+      ...SUMMARIES,
+      entries: [{ range: [id(0), id(9)], depth: 0, long: "As it says [spya-zzzzzz]." }],
+    };
+    const out = html({ summaries: bogus, root: buildSummaryTree(TREE, BLOCKS, bogus) });
+    expect(out).toContain("spya-zzzzzz");
+    expect(out).not.toContain("at=spya-zzzzzz");
+  });
+
+  it("shows each section's range, so there are ids even at the gist rung", () => {
+    // The default rung is `gist`, gists are written by stage 4 and carry no
+    // citations, and most articles have never had a model call for the other
+    // two. Without the range there would be no ids on screen at all in the
+    // ordinary case.
+    const out = html({ rung: "gist" });
+    expect(out).toContain("summ-range");
+    expect(out).toContain("block-range");
+  });
+
+  it("makes the whole entry the click target, not just the title", () => {
+    // Greg, 2026-08-26: "make it easier to click a section in the summary
+    // (right now you have to click the section-title)". The title button is
+    // still there — it is the keyboard path — and the body is what widened.
+    const out = html();
+    expect(out).toContain('class="summ-body"');
+    expect(out).toContain('class="summ-title"');
+  });
+
+  it("offers a steer, closed, when nobody has given one", () => {
+    expect(html()).toContain("Steer these summaries");
+    expect(html()).not.toContain("summ-steer-box");
+  });
+
+  it("shows the steer these summaries were written with", () => {
+    /* Open and filled, which is the honest half of the feature: a steered
+       summary that looks like an ordinary one is one the reader cannot weigh.
+       It is also what explains why a section reads the way it does. */
+    const steered: Summaries = { ...SUMMARIES, guidance: "I care about the evidence" };
+    const out = html({ summaries: steered });
+    expect(out).toContain("summ-steer-box");
+    expect(out).toContain("I care about the evidence");
+  });
+
+  it("offers the steer on a stale article too", () => {
+    // The foot is hidden while the summaries are stale, so without this the one
+    // article most likely to be rewritten is the one you cannot steer.
+    expect(html({ stale: true })).toContain("Steer these summaries");
   });
 });

@@ -55,9 +55,12 @@
  * give you the one you asked for: a partly-written artefact must not read as a
  * complete one (src/summarise.ts § partial salvage).
  */
-import { useState } from "react";
-import { ChevronRight, Layers, Loader2, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { type MouseEvent, useState } from "react";
+import { ChevronRight, Compass, Layers, Loader2, RotateCcw, TriangleAlert, X } from "lucide-react";
 import type { BlockId, Job } from "../types.js";
+import { BlockRange } from "./BlockRef.js";
+import { CitedText } from "./Cited.js";
+import { TooltipGroup } from "./Tooltip.js";
 import type { Rung } from "./params.js";
 import { MAX_SUMMARY_DEPTH, RUNGS } from "./params.js";
 import { rungText, type SummaryNode } from "./tree.js";
@@ -66,6 +69,14 @@ import type { UseSummaries } from "./useSummaries.js";
 interface Props extends UseSummaries {
   /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
   root: SummaryNode | null;
+  /**
+   * Every block this article has, id to plain text.
+   *
+   * Two jobs, both belonging to the citations in the summary prose: it is the
+   * "does this id exist" check, and it is what a chip's hover card shows. Same
+   * map chat is handed, for the same reason (src/web/Cited.tsx).
+   */
+  blocks: Map<string, string>;
   rung: Rung;
   onRung(rung: Rung): void;
   deep: number;
@@ -98,6 +109,7 @@ export function SummaryPanel({
   write,
   cancel,
   root,
+  blocks,
   rung,
   onRung,
   deep,
@@ -121,6 +133,18 @@ export function SummaryPanel({
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  /**
+   * What the reader wants these summaries to lean towards.
+   *
+   * `null` means "the reader has not touched the box", which is a different
+   * state from "the reader emptied it" — so the effective value below can fall
+   * through to whatever the artefact was written with, and a reader who clears
+   * the box still gets an unsteered rewrite. One variable for the two would
+   * make clearing it impossible: the artefact's note would keep reappearing.
+   */
+  const [steer, setSteer] = useState<string | null>(null);
+  const guidance = steer ?? summaries?.guidance ?? "";
 
   /* Whether the two longer rungs exist at all. Not `status === "ready"`: an
      artefact can be present and still have holes in it, and what decides
@@ -202,26 +226,43 @@ export function SummaryPanel({
             <TriangleAlert size={13} />
             These summaries describe an older version of the article.
           </p>
+          {/* The box is here too, and not only in the foot below: the foot is
+              hidden while the summaries are stale, so without this the one
+              article most likely to be rewritten is the one you cannot steer. */}
+          <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
           {/* No `force` needed: the step's own freshness check already knows
               this artefact is out of date, so an ordinary run rewrites it. */}
-          <Progress job={job} failed={failed} onRun={() => write()} onCancel={cancel} label="Rewrite them" />
+          <Progress
+            job={job}
+            failed={failed}
+            onRun={() => write(false, guidance)}
+            onCancel={cancel}
+            label="Rewrite them"
+          />
         </div>
       )}
 
       <div className="summ-scroll">
         {root ? (
-          <ol className="summ-list">
-            <Entry
-              entry={root}
-              rung={rung}
-              deep={deep}
-              closed={closed}
-              onToggle={toggle}
-              atRow={atRow}
-              onJump={onJump}
-              root
-            />
-          </ol>
+          /* One group for the whole outline, so running the pointer down a
+             column of block ids shows each card immediately rather than
+             waiting out the open delay again at every one. Chat's answers do
+             the same — Tooltip.tsx. */
+          <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
+            <ol className="summ-list">
+              <Entry
+                entry={root}
+                rung={rung}
+                deep={deep}
+                closed={closed}
+                onToggle={toggle}
+                atRow={atRow}
+                onJump={onJump}
+                blocks={blocks}
+                root
+              />
+            </ol>
+          </TooltipGroup>
         ) : (
           <p className="summ-quiet">This article has no usable tree to summarise.</p>
         )}
@@ -237,10 +278,11 @@ export function SummaryPanel({
                 Only the one-sentence gists so far. Writing the longer two rungs is a few model
                 calls over the whole article and takes a minute or two — done once and kept.
               </p>
+              <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
               <Progress
                 job={job}
                 failed={failed}
-                onRun={() => write()}
+                onRun={() => write(false, guidance)}
                 onCancel={cancel}
                 label="Write the summaries"
               />
@@ -263,12 +305,17 @@ export function SummaryPanel({
                     nothing back and fall back to their one-sentence gist.
                   </p>
                 )}
+                <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
                 <Progress
                   job={job}
                   failed={failed}
                   // Forced: the step believes this artefact is current, and it
-                  // is right — the reader is asking for it anyway.
-                  onRun={() => write(true)}
+                  // is right — the reader is asking for it anyway. Which is
+                  // also why the steer does not go anywhere near
+                  // `summariesAreCurrent`: a note about what you are reading
+                  // for is not a reason for the *next* ordinary run to decide
+                  // the artefact has gone stale.
+                  onRun={() => write(true, guidance)}
                   onCancel={cancel}
                   label="Write them again"
                   icon="redo"
@@ -288,6 +335,29 @@ export function SummaryPanel({
  * The root renders without a title row — it *is* the article, and the masthead
  * two inches to the right already says its name. What it contributes is the
  * top-level summary, which is the one the previous version actually shipped.
+ *
+ * ## The whole entry is the click target
+ *
+ * Greg, 2026-08-26: *"make it easier to click a section in the summary (right
+ * now you have to click the section-title)"*. He is right, and the title was a
+ * bad target for a reason worth writing down: it is one line of 0.82rem text
+ * whose width is whatever the heading happens to be, so a two-word section is a
+ * two-centimetre target inside a panel four times that wide. Everything else in
+ * the row — the number, the paragraph count, the summary itself, the whitespace
+ * — looked exactly as pressable and did nothing.
+ *
+ * So the click lives on `.summ-body`, which is the header, the summary and the
+ * range together, and it does what the gist cells in TableView already do with
+ * a whole `<td>`. Two things keep that honest:
+ *
+ *  - **The keyboard target is still a real button.** The title is unchanged;
+ *    tab still reaches it and Enter still jumps. The div adds mouse area, not a
+ *    second way to operate the panel, which is why its `biome-ignore` below is
+ *    a statement rather than a shrug.
+ *  - **Anything that is itself pressable wins.** The handler bows out when the
+ *    click landed on a button or a link, so the twist opens a section without
+ *    also scrolling the article, and a block id goes to its own paragraph
+ *    rather than to the top of the section it is in.
  */
 function Entry({
   entry,
@@ -297,6 +367,7 @@ function Entry({
   onToggle,
   atRow,
   onJump,
+  blocks,
   root = false,
 }: {
   entry: SummaryNode;
@@ -306,6 +377,7 @@ function Entry({
   onToggle(id: string): void;
   atRow: number | null;
   onJump(id: BlockId): void;
+  blocks: Map<string, string>;
   root?: boolean;
 }) {
   const shown = rungText(entry, rung);
@@ -329,54 +401,85 @@ function Entry({
      always on and so tells you nothing. */
   const here = !root && atRow !== null && atRow >= entry.startRow && atRow <= entry.endRow;
 
+  /** A click anywhere in the entry that nothing else has already claimed. */
+  const jumpFromBody = (event: MouseEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest("button, a")) return;
+    onJump(entry.node.range[0]);
+  };
+
   return (
     <li className={`summ-entry d${entry.node.depth}${here ? " here" : ""}`}>
-      {!root && (
-        <div className="summ-title-row">
-          <button
-            type="button"
-            className={`summ-twist${openable ? "" : " leaf"}${shut ? "" : " open"}`}
-            aria-expanded={openable ? !shut : undefined}
-            aria-label={shut ? `Open ${entry.node.title}` : `Close ${entry.node.title}`}
-            disabled={!openable}
-            onClick={() => onToggle(entry.node.id)}
-          >
-            <ChevronRight size={12} />
-          </button>
-          <button
-            type="button"
-            className="summ-title"
-            title="Go to this section in the article"
-            onClick={() => onJump(entry.node.range[0])}
-          >
-            <span className="summ-number">{entry.number}</span>
-            {entry.node.title}
-          </button>
-          {/* "How much is under this" — the gap their "+N hidden" badge filled
-              and our gist columns still cannot: a section holding forty
-              paragraphs and one holding three look identical in an L2 cell.
-              See docs/project/original-version/structure-panel.md. */}
-          <span className="summ-size" title={`${entry.blocks} paragraphs in this section`}>
-            {cap(entry.blocks)}¶
-          </span>
-        </div>
-      )}
-
-      {shown ? (
-        <p className={`summ-text${shown.rung !== rung ? " fell-back" : ""}`}>
-          {/* The rung actually shown, when it is not the one asked for. Silent
-              fallback is what makes a half-written artefact read as a whole
-              one. */}
-          {shown.rung !== rung && (
-            <span className="summ-rung-tag" title={`No ${rung} summary for this one`}>
-              {shown.rung}
+      {/* Both of these are the same statement, and it is the one in the header:
+          the keyboard path is the real `.summ-title` button inside this div,
+          which is unchanged and still focusable. This handler only widens the
+          MOUSE target to the whole entry — it adds no way to operate the panel
+          that was not already there. A `role="button"` would be worse than
+          nothing: it would claim to be one control while containing three, and
+          it would take the twist out of the tab order.
+          biome-ignore lint/a11y/useKeyWithClickEvents: as above
+          biome-ignore lint/a11y/noStaticElementInteractions: as above */}
+      <div className="summ-body" onClick={jumpFromBody}>
+        {!root && (
+          <div className="summ-title-row">
+            <button
+              type="button"
+              className={`summ-twist${openable ? "" : " leaf"}${shut ? "" : " open"}`}
+              aria-expanded={openable ? !shut : undefined}
+              aria-label={shut ? `Open ${entry.node.title}` : `Close ${entry.node.title}`}
+              disabled={!openable}
+              onClick={() => onToggle(entry.node.id)}
+            >
+              <ChevronRight size={12} />
+            </button>
+            <button
+              type="button"
+              className="summ-title"
+              title="Go to this section in the article"
+              onClick={() => onJump(entry.node.range[0])}
+            >
+              <span className="summ-number">{entry.number}</span>
+              {entry.node.title}
+            </button>
+            {/* "How much is under this" — the gap their "+N hidden" badge filled
+                and our gist columns still cannot: a section holding forty
+                paragraphs and one holding three look identical in an L2 cell.
+                See docs/project/original-version/structure-panel.md. */}
+            <span className="summ-size" title={`${entry.blocks} paragraphs in this section`}>
+              {cap(entry.blocks)}¶
             </span>
-          )}
-          {shown.text}
-        </p>
-      ) : (
-        !root && <p className="summ-text missing">No summary for this section.</p>
-      )}
+          </div>
+        )}
+
+        {shown ? (
+          <p className={`summ-text${shown.rung !== rung ? " fell-back" : ""}`}>
+            {/* The rung actually shown, when it is not the one asked for. Silent
+                fallback is what makes a half-written artefact read as a whole
+                one. */}
+            {shown.rung !== rung && (
+              <span className="summ-rung-tag" title={`No ${rung} summary for this one`}>
+                {shown.rung}
+              </span>
+            )}
+            {/* The block ids the model cited, as chips you can press, with the
+                paragraph itself on hover. A summary is a door into the passage
+                and this is the handle — same component chat draws its
+                citations with (Cited.tsx), so the two cannot mean different
+                things. A `gist` carries none: it is written by stage 4, which
+                knows nothing about this, and the text simply comes through
+                unchanged. */}
+            <CitedText text={shown.text} blocks={blocks} onJump={onJump} />
+          </p>
+        ) : (
+          !root && <p className="summ-text missing">No summary for this section.</p>
+        )}
+
+        {/* Where this section starts and ends, as two ids you can press.
+            The same pair a gist cell carries in TableView, and here for the
+            same two reasons: it is the address of the section, and it is the
+            one place ids appear at the `gist` rung — which is the default, and
+            the rung on every article nobody has paid a model call for. */}
+        {!root && <BlockRange className="summ-range" range={entry.node.range} onJump={onJump} />}
+      </div>
 
       {hidden > 0 && (
         <button
@@ -409,6 +512,7 @@ function Entry({
               onToggle={onToggle}
               atRow={atRow}
               onJump={onJump}
+              blocks={blocks}
             />
           ))}
         </ol>
@@ -424,6 +528,92 @@ function Entry({
  */
 function cap(n: number): string {
   return n > 99 ? "99+" : String(n);
+}
+
+/**
+ * The box you steer a rewrite with.
+ *
+ * Greg, 2026-08-26:
+ *
+ * > for the "Write them again", add an input-textbox so the user can give
+ * > guidance to steer the summary generation - this should be added to the
+ * > prompt and tweak the output that gets generated, but make sure the LLM
+ * > doesn't overweight this and give a really distorted summary, i.e. we want
+ * > to stay faithful to the text.
+ *
+ * **The second half of that sentence is the whole design problem**, and almost
+ * none of the answer is in this file. A note like *"I care about the economics"*
+ * asks the model to choose what to put first; the failure it invites is the
+ * model quietly reporting an article as being about economics because that is
+ * what it was asked about. The rules that hold it to emphasis — never a claim,
+ * never the proportions, never a line saying the section does not cover it —
+ * live in the constant half of the prompt, in src/summarise.ts § IF THE READER
+ * ASKS FOR SOMETHING IN PARTICULAR. They are in `SYSTEM` rather than beside the
+ * note itself so that the constraint cannot be edited by the thing it
+ * constrains.
+ *
+ * What this file contributes is the two honest bits:
+ *
+ *  - **The box shows what the summaries on screen were written with**, because
+ *    it is seeded from the artefact. A steered summary that looks like an
+ *    ordinary one is one the reader cannot weigh, and the note is the only
+ *    thing that explains why a section reads the way it does.
+ *  - **Emptying it is a real answer.** Clear the box and the rewrite is
+ *    unsteered — see the `steer ?? summaries?.guidance` note above, which is
+ *    why that is two variables and not one.
+ *
+ * Collapsed until it has something to say, so the ordinary case is one line of
+ * chrome. `maxLength` matches `MAX_GUIDANCE_CHARS` in src/routes.ts, which
+ * refuses rather than truncates — a shortened instruction is one the reader
+ * believes they gave and did not.
+ */
+const MAX_GUIDANCE = 600;
+
+function Steer({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange(next: string): void;
+  disabled: boolean;
+}) {
+  // Open if there is anything to show. `useState` initialiser, not an effect:
+  // this is the state's starting value, and re-opening the box every time the
+  // job poll returns would fight a reader who had just closed it.
+  const [open, setOpen] = useState(() => value !== "");
+
+  if (!open) {
+    return (
+      <button type="button" className="summ-steer-open" onClick={() => setOpen(true)}>
+        <Compass size={12} />
+        Steer these summaries…
+      </button>
+    );
+  }
+
+  return (
+    <div className="summ-steer">
+      <label className="summ-steer-label" htmlFor="summ-steer-box">
+        What are you reading this for?
+      </label>
+      <textarea
+        id="summ-steer-box"
+        className="summ-steer-box"
+        rows={2}
+        maxLength={MAX_GUIDANCE}
+        disabled={disabled}
+        placeholder="e.g. I care about the evidence, not the history"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="summ-steer-note">
+        Changes what each summary puts first. It never changes what the article
+        says — a section that has nothing on this is summarised as it would have
+        been anyway.
+      </p>
+    </div>
+  );
 }
 
 /**

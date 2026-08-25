@@ -74,6 +74,7 @@ import { fileURLToPath } from "node:url";
 import { MODEL } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { parseJsonFrom } from "./parse-json.js";
 import type {
   Block,
   BlockId,
@@ -84,7 +85,7 @@ import type {
   TreeNode,
 } from "./types.js";
 
-const PROMPT_VERSION = "summary/1";
+const PROMPT_VERSION = "summary/2";
 
 /* ----------------------------------------------------------- the ladder --
    Two generated rungs, and a third the reader gets for free.
@@ -356,6 +357,44 @@ RULES
 - Provide only the summary itself, without any superfluous conversation or
   commentary.
 
+POINTING BACK INTO THE ARTICLE
+
+Every paragraph you are given is labelled with a block id like spya-k3m9qt. Say
+where a claim lives: put the id of the paragraph it comes from in square
+brackets at the end of the sentence that makes it.
+
+  Perception is a controlled hallucination, not a window [spya-k3m9qt].
+
+- Use only ids that appear in the text below. NEVER invent one and never guess
+  at one you half-remember. A wrong id sends the reader to the wrong paragraph,
+  which is worse than no id at all.
+- Cite the paragraph that actually carries the claim, not one near it.
+- Two or three ids in one bracket when a point is spread across paragraphs:
+  [spya-k3m9qt spya-p7w2dn].
+- Cite sparingly. One or two in a short summary; at most one a sentence in a
+  long one. These are doors, not footnotes, and an id after every clause is
+  noise a reader stops reading.
+- The id goes inside the sentence's punctuation and nowhere else. Do not write
+  a list of sources at the end.
+
+IF THE READER ASKS FOR SOMETHING IN PARTICULAR
+
+The prompt may carry a section headed WHAT THIS READER IS AFTER. That is the
+reader's own note about why they are reading this piece. It changes what you
+choose to put first and what you spend words on. It changes nothing else.
+
+- Summarise the section. Do not answer the reader's question, do not address
+  them, and do not write about their interest.
+- Where the section genuinely bears on what they asked for, lead with that and
+  give it more of the room.
+- Where it does not, write exactly the summary you would have written anyway.
+  Never say that the section does not cover it — that spends the reader's line
+  telling them nothing about the section.
+- Never add, sharpen, or bend a claim to fit the request. If the article does
+  not say it, it does not go in.
+- Keep the article's own proportions. A request cannot promote a passing remark
+  into the main point of a section.
+
 OUTPUT
 
 JSON only, no prose, no code fence:
@@ -388,23 +427,53 @@ function skeletonOf(tree: Tree): string {
     .join("\n\n");
 }
 
-/** The text a node covers, in document order. */
+/**
+ * The text a node covers, in document order, **each paragraph labelled with its
+ * block id**.
+ *
+ * The label is what makes a summary a door rather than a substitute. A model
+ * that cannot see the ids cannot cite them, and a summary with no way back into
+ * the passage is the thing vision.md's second principle refuses — the summary
+ * standing where the paragraph should. Greg asked for the ids on 2026-08-26;
+ * this line is where they become possible.
+ *
+ * `id: text`, which is the shape src/converse.ts and src/explain.ts already use
+ * for the same purpose. One article rendering the model has to learn, not
+ * three.
+ *
+ * The empty-text filter runs **before** the labels are attached, not after — an
+ * image block would otherwise arrive as a bare id followed by nothing, which is
+ * an id the model can cite for a paragraph that has no words in it.
+ */
 export function textOf(node: TreeNode, blocks: Block[], order: Map<BlockId, number>): string {
   const lo = order.get(node.range[0]);
   const hi = order.get(node.range[1]);
   if (lo === undefined || hi === undefined || lo > hi) return "";
   return blocks
     .slice(lo, hi + 1)
-    .map((b) => b.text)
-    .filter(Boolean)
+    .filter((b) => b.text)
+    .map((b) => `${b.id}: ${b.text}`)
     .join("\n\n");
 }
 
-function renderPrompt(opts: {
+/* Exported for the tests, like `textOf` and `assign` beside it. What is worth
+   pinning is that the reader's steer reaches the model at all and that its
+   absence leaves no trace — a prompt that always carries an empty guidance
+   header is a prompt that has taught the model to expect one. */
+export function renderPrompt(opts: {
   meta: Meta | null;
   tree: Tree;
   blocks: Block[];
   batch: Batch;
+  /**
+   * The reader's own note about what they are reading for.
+   *
+   * In the **user** prompt and never in `SYSTEM`, which is a constant: the
+   * rules for how much weight this may carry are the same on every run and
+   * belong in the cached half, while the note itself changes per run and would
+   * bust the cache for every batch if it lived there.
+   */
+  guidance?: string;
   /** Fed back on the one retry, so the second attempt knows what was wrong with the first. */
   repair?: string;
 }): string {
@@ -431,10 +500,33 @@ function renderPrompt(opts: {
   const title = opts.meta?.title ? `"${opts.meta.title}"` : "this article";
   const scopeLabel = scope.depth === 0 ? "the whole article" : `the part "${scope.title}"`;
 
-  return `${opts.repair ? `Your previous answer could not be read: ${opts.repair}\nReturn valid JSON this time, in exactly the shape described.\n\n` : ""}Summaries for ${title}.
+  /* **`repair` used to be prepended here, at position zero.** Every byte of the
+     prompt behind it moved when it was present, so the one call most likely to
+     be repeating work it had already paid for — a retry over the same sections
+     of the same article — was guaranteed to miss the cache the first attempt
+     had just written. It goes at the end now, with the other instructions.
+     docs/plans/prompt-caching.md. */
+  return `Summaries for ${title}.
 
 Write ${targets.length} ${targets.length === 1 ? "entry" : "entries"}, one per numbered section below.
+${
+  /* Near the top, where it will be read, and immediately re-bounded. The long
+     version of these rules is in SYSTEM; this is the reminder standing next to
+     the thing it is about, because a constraint three thousand tokens above
+     the text it constrains is a constraint the model has stopped weighing. */
+  opts.guidance
+    ? `
+=== WHAT THIS READER IS AFTER ===
 
+${opts.guidance}
+
+Lead with this where a section genuinely bears on it. Where a section does not,
+summarise it exactly as you would have anyway, and do not mention the request.
+It changes emphasis only: never what the article says, and never its
+proportions.
+`
+    : ""
+}
 === SECTIONS TO SUMMARISE ===
 
 ${list}
@@ -445,7 +537,11 @@ ${skeletonOf(opts.tree)}
 
 === FULL TEXT OF ${scopeLabel.toUpperCase()} ===
 
-${textOf(scope, opts.blocks, order)}`;
+${textOf(scope, opts.blocks, order)}${
+    opts.repair
+      ? `\n\n=== YOUR PREVIOUS ANSWER COULD NOT BE READ ===\n\n${opts.repair}\n\nReturn valid JSON this time, in exactly the shape described.`
+      : ""
+  }`;
 }
 
 /* ---------------------------------------------------- reading the answer --- */
@@ -554,6 +650,8 @@ export function buildSummaries(
     blocks: Block[];
     sourceHash: string;
     elapsedMs: number;
+    /** The reader's steer, kept so the panel can say these were written to it. */
+    guidance?: string;
   },
 ): Summaries {
   const order = orderOf(opts.blocks);
@@ -587,10 +685,47 @@ export function buildSummaries(
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     entries,
+    /* Stored, because a steered summary that does not say so is a summary the
+       reader cannot weigh. Six months later "why does this one lean so hard on
+       the economics" has an answer on the artefact rather than nowhere. */
+    ...(opts.guidance ? { guidance: opts.guidance } : {}),
     missing: opts.targets.length - entries.length,
     generatedAt: new Date().toISOString(),
     elapsedMs: opts.elapsedMs,
   };
+}
+
+/**
+ * How many block ids the summaries cite, and how many of those the article does
+ * not have.
+ *
+ * Both go in the step's log line, and neither is an error. The point is the
+ * **first** number: a run that quietly starts returning zero is the model
+ * having stopped citing, which breaks nothing visible — the panel simply
+ * renders prose — and turns the summaries back into the thing they are not
+ * allowed to be, a replacement for the passage. The second is the same check
+ * `unknownCitedIds` does for chat, for the same reason: an invented id is a
+ * door into the wrong room, and the client drops it silently.
+ *
+ * Its own small function rather than converse.ts's, which is the same six lines
+ * behind an import that would drag the whole chat stage into this one.
+ */
+export function countCitations(
+  summaries: Summaries,
+  blocks: Block[],
+): { cited: number; unknown: number } {
+  const known = new Set(blocks.map((b) => b.id));
+  let cited = 0;
+  let unknown = 0;
+  for (const entry of summaries.entries) {
+    for (const text of [entry.short, entry.long]) {
+      for (const id of text?.match(/spya-[a-z0-9]{6}/g) ?? []) {
+        cited++;
+        if (!known.has(id)) unknown++;
+      }
+    }
+  }
+  return { cited, unknown };
 }
 
 /* ---------------------------------------------------------- freshness ---- */
@@ -683,6 +818,9 @@ export interface SummariesRun {
   /** Batches that failed even after the repair attempt. Their nodes are in `missing`. */
   failedBatches: number;
   blocks: number;
+  /** Block ids the summaries point at, and how many of those do not exist. */
+  cited: number;
+  unknownCited: number;
   inputTokens: number;
   outputTokens: number;
   elapsedMs: number;
@@ -695,6 +833,7 @@ async function runBatch(opts: {
   tree: Tree;
   blocks: Block[];
   batch: Batch;
+  guidance?: string;
   signal?: AbortSignal;
   onTokens(input: number, output: number): void;
 }): Promise<{ assigned: Assigned[]; failed: boolean }> {
@@ -732,6 +871,7 @@ async function runBatch(opts: {
               tree: opts.tree,
               blocks: opts.blocks,
               batch,
+              ...(opts.guidance !== undefined && { guidance: opts.guidance }),
               ...(repair !== undefined && { repair }),
             }),
           },
@@ -791,6 +931,17 @@ async function runBatch(opts: {
  */
 export async function generateSummaries(opts: {
   dir: string;
+  /**
+   * The reader's own note about what they want out of this article.
+   *
+   * Optional, and the ordinary case is that it is absent. What it may and may
+   * not do to the output is set out in `SYSTEM` above — in short, emphasis
+   * only. It is deliberately **not** part of `summariesAreCurrent`: a steer is
+   * a reason to force a rewrite, which is what the button that carries it
+   * already does, not a reason for the next ordinary run to decide the artefact
+   * is stale.
+   */
+  guidance?: string;
   onProgress?: (detail: string) => void;
   /** Cancel the calls. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -832,6 +983,7 @@ export async function generateSummaries(opts: {
       tree,
       blocks,
       batch,
+      ...(opts.guidance !== undefined && { guidance: opts.guidance }),
       ...(opts.signal !== undefined && { signal: opts.signal }),
       onTokens: (i, o) => {
         inputTokens += i;
@@ -854,8 +1006,11 @@ export async function generateSummaries(opts: {
       blocks,
       sourceHash: hashBlocks(blocks),
       elapsedMs: Date.now() - started,
+      ...(opts.guidance !== undefined && { guidance: opts.guidance }),
     },
   );
+
+  const citations = countCitations(summaries, blocks);
 
   const outFile = path.join(opts.dir, "summary.json");
   await writeFile(outFile, JSON.stringify(summaries, null, 2), "utf-8");
@@ -868,6 +1023,8 @@ export async function generateSummaries(opts: {
     batches: batches.length,
     failedBatches: results.filter((r) => r.failed).length,
     blocks: blocks.length,
+    cited: citations.cited,
+    unknownCited: citations.unknown,
     inputTokens,
     outputTokens,
     elapsedMs: Date.now() - started,
@@ -877,15 +1034,21 @@ export async function generateSummaries(opts: {
 async function main(): Promise<void> {
   const dir = process.argv[2];
   if (!dir) {
-    console.error("Usage: tsx src/summarise.ts <dir with blocks.json + tree.json>");
+    console.error(
+      'Usage: tsx src/summarise.ts <dir with blocks.json + tree.json> ["what you are reading for"]',
+    );
     process.exit(1);
   }
+  // The same steer the panel's box sends, so the CLI and the button exercise
+  // one path. Quoted as one argument; anything past it is ignored.
+  const guidance = process.argv[3]?.trim();
   // Before the calls, not after. This is the only thing on screen for the
   // minute or two the model takes, and printing it afterwards made the sibling
   // stages look hung for the whole request.
   console.log(`Writing the summaries with ${MODEL}…`);
   const run = await generateSummaries({
     dir,
+    ...(guidance ? { guidance } : {}),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
@@ -894,6 +1057,9 @@ async function main(): Promise<void> {
       `${run.blocks} blocks → ${MODEL}`,
   );
   console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
+  console.log(
+    `Citations: ${run.cited}${run.unknownCited > 0 ? ` (${run.unknownCited} unknown)` : ""}`,
+  );
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   if (run.summaries.missing > 0) {
     console.log(

@@ -727,7 +727,7 @@ function ChatBand({
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
 }) {
-  const { threads, loaded, send, begin, rename, remove, error } = useChat(slug);
+  const { threads, loaded, send, retry, edit, stop, begin, rename, remove, error } = useChat(slug);
   const [thread, setThread] = useQueryState("thread", threadParam);
 
   /**
@@ -795,6 +795,13 @@ function ChatBand({
         // Back to the list rather than to a conversation that is not there.
         if (id === thread) void setThread(null);
       }}
+      /* All three carry the *open* thread rather than a thread id from the
+         panel, because the panel only ever shows one and the id it would send
+         back is the one it was given. `thread` is non-null wherever these can
+         be pressed — the conversation view is what renders them. */
+      onRetry={(messageId) => thread && retry(thread, messageId)}
+      onEdit={(messageId, question) => thread && edit(thread, messageId, question, at)}
+      onStop={(messageId) => thread && stop(thread, messageId)}
       onJump={onJump}
       blocks={blocks}
       focusNonce={focusNonce}
@@ -1066,10 +1073,21 @@ function SummaryBand({
     return i === -1 ? null : i;
   }, [at, article.blocks]);
 
+  /* Id to plain text, for the block ids the summaries cite: the panel needs it
+     to tell a real id from an invented one, and to put the paragraph in a
+     chip's hover card. The same map `Reader` builds for chat — built again
+     here rather than threaded down, because this band is rendered only in its
+     own mode and a prop would make every reader of every article pay for it. */
+  const blockText = useMemo(
+    () => new Map(article.blocks.map((b) => [b.id, b.text])),
+    [article.blocks],
+  );
+
   return (
     <SummaryPanel
       {...summaries}
       root={root}
+      blocks={blockText}
       rung={rung}
       onRung={(next) => void setRung(next)}
       deep={deep}

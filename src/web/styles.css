@@ -2438,21 +2438,25 @@ td.text.has-hit {
 
 /* Block-id chips. The whole feature, visually: a claim you can press to go and
    check. Deliberately quiet — they are punctuation in a sentence, not buttons —
-   and they light up on hover, where the tooltip also says where they go. */
-.chat-cite {
+   and they light up on hover, where the tooltip also says where they go.
+
+   Not chat's any more: the summary panel draws the same chips from the same
+   component (Cited.tsx), so the class lost its `chat-` prefix rather than
+   growing a second copy under a different one. */
+.cite {
   display: inline-flex;
   gap: 0.2rem;
   margin: 0 0.1rem;
   vertical-align: baseline;
 }
-.chat-cite .block-ref {
+.cite .block-ref {
   padding: 0 0.28rem;
   border: 1px solid var(--rule-strong);
   border-radius: 0.4rem;
   background: var(--surface-raised);
   font-size: 0.72em;
 }
-.chat-cite .block-ref:hover {
+.cite .block-ref:hover {
   border-color: var(--highlight);
   color: var(--highlight-ink);
 }
@@ -3357,8 +3361,29 @@ td.text.has-hit {
    too — see the note in SummaryPanel.tsx: at a shallow depth cut-off the part
    you are inside is the honest answer to "where am I", and marking only the
    deepest visible node would leave the panel with nothing lit at all. */
-.summ-entry.here > .summ-title-row > .summ-title { color: var(--highlight-ink); }
+.summ-entry.here > .summ-body > .summ-title-row > .summ-title { color: var(--highlight-ink); }
 .summ-entry.here > .summ-children { border-left-color: var(--highlight); }
+
+/* The click target, and the reason it exists: the title alone was a line of
+   0.82rem text as wide as the heading happened to be, inside a panel four times
+   that. Everything around it looked as pressable and did nothing. Now the
+   header, the summary and the range are one target — the same call TableView
+   makes with a whole gist `<td>`. SummaryPanel.tsx § the whole entry.
+
+   The negative margin plus matching padding is what lets the highlight reach
+   past the text without indenting it: the entry keeps the position it had, and
+   the hover extends into the panel's own gutter. */
+.summ-body {
+  margin: 0 -0.35rem;
+  padding: 0.15rem 0.35rem 0.2rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.12s;
+}
+.summ-body:hover { background: var(--surface-raised); }
+@media (prefers-reduced-motion: reduce) {
+  .summ-body { transition: none; }
+}
 
 .summ-title-row {
   display: flex;
@@ -3433,12 +3458,33 @@ td.text.has-hit {
   /* Paragraphs in the longer rungs arrive as blank lines in one string. */
   white-space: pre-wrap;
 }
-.summ-list > .summ-entry > .summ-text {
+.summ-list > .summ-entry > .summ-body > .summ-text {
   /* The root has no title row to indent under. */
   margin-left: 0;
   color: var(--ink);
 }
 .summ-text.missing { color: var(--ink-faint); font-style: italic; }
+
+/* The citation chips inside a summary. Smaller than chat's, because a summary
+   is denser than an answer and the chips are punctuation in it rather than
+   claims of their own. `white-space: normal` undoes `.summ-text`'s `pre-wrap`
+   for the chip alone — inside a `pre-wrap` box the space between two ids in one
+   bracket is preserved twice and the flex gap adds a third. */
+.summ-text .cite {
+  white-space: normal;
+  vertical-align: baseline;
+}
+.summ-text .cite .block-ref { font-size: 0.62rem; }
+
+/* Where this section starts and ends. Under the summary, as in a gist cell —
+   and the one place ids appear at the `gist` rung, which is the default and the
+   only rung an article nobody has paid for has at all. */
+.summ-range {
+  margin: 0.2rem 0 0 1.25rem;
+  opacity: 0.75;
+}
+.summ-range:hover { opacity: 1; }
+.summ-list > .summ-entry > .summ-body > .summ-range { margin-left: 0; }
 
 /* Which rung this actually is, when it is not the one that was asked for. The
    whole point is that it is visible: a silent fallback is what makes a
@@ -3506,6 +3552,63 @@ td.text.has-hit {
   margin: 0 0 0.4rem;
   color: var(--highlight-ink);
   font-size: 0.78rem;
+}
+
+/* The steer. Collapsed to one quiet line until it has something to say, so the
+   ordinary case — nobody is steering anything — costs the foot one row.
+   SummaryPanel.tsx § the box you steer a rewrite with. */
+.summ-steer-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.summ-steer-open:hover { color: var(--highlight-ink); }
+
+.summ-steer { margin-bottom: 0.5rem; }
+.summ-steer-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.summ-steer-box {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  /* The reading face: this is a sentence somebody writes, not a setting. */
+  font-family: var(--font-reading);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  resize: vertical;
+}
+.summ-steer-box:focus-visible {
+  outline: none;
+  border-color: var(--highlight);
+}
+.summ-steer-box:disabled { opacity: 0.5; }
+/* Said where the reader is typing, not in a doc: this is the promise that makes
+   the box safe to use, and the rules that keep it are in the prompt. */
+.summ-steer-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  line-height: 1.35;
 }
 
 .summ-btn {
@@ -3589,7 +3692,7 @@ td.text.has-hit {
 /* The hit area a citation tooltip anchors to. `inline-flex` so the anchor is
    exactly the chip and not a full-width line box — a tooltip hung off a line
    box points at whitespace. */
-.chat-cite-hit { display: inline-flex; }
+.cite-hit { display: inline-flex; }
 
 /* The card itself: the paragraph the chip points at, so a claim can be checked
    without leaving the sentence you are reading. */
@@ -3624,4 +3727,128 @@ td.text.has-hit {
   font-family: var(--font-ui);
   font-size: 0.72rem;
   color: var(--ink-faint);
+}
+
+/* --------------------------------------------- § chat actions and stopping ---
+   Copy, retry, edit, stop, and jump-to-latest. Everything a reader does to a
+   turn *after* it has arrived. See ChatPanel.tsx and docs/plans/chat-mode.md.
+
+   The governing constraint is width: this band is around 400px and the answers
+   in it are prose. So the controls are hover-revealed rather than permanent —
+   five always-on icons per turn would turn a conversation into a toolbar with
+   text between the rows. */
+
+.chat-actions {
+  display: flex;
+  gap: 0.15rem;
+  margin-top: 0.25rem;
+  /* Hidden by opacity rather than `display: none`, so the row still takes its
+     height. Otherwise every turn grows by 22px the moment the pointer touches
+     it, and a hover near the bottom of a streaming answer makes the whole
+     conversation jump under the reader. */
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.chat-turn:hover .chat-actions,
+/* Keyboard reach: without this the buttons are tabbable but invisible, which is
+   worse than not having them. `:focus-within` is what makes the hover-reveal
+   pattern usable without a pointer at all. */
+.chat-turn:focus-within .chat-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* Nothing to hover with. A touch reader would otherwise have no way to reach
+     any of this. */
+  .chat-actions { opacity: 1; }
+}
+
+/* `edited`, beside the reader's own question. Quiet — it is a footnote about
+   the conversation, not part of what they asked. */
+.chat-edited {
+  margin-left: 0.4rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
+/* Deliberately NOT `.chat-failed`'s colour. A stopped answer is a `done` one —
+   see the `stopped` field in src/types.ts — and dressing it as a failure would
+   apologise for a button the reader pressed on purpose. */
+.chat-stopped {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+}
+
+.chat-turn.you.editing { background: var(--surface-raised); }
+.chat-edit-box {
+  display: block;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  resize: vertical;
+}
+.chat-edit-box:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
+/* The count of what an edit will throw away. The only warning there is, so it
+   is the one thing in the editing box that is not quiet. */
+.chat-discard-warning {
+  margin: 0.35rem 0 0;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+}
+
+.chat-send.stop {
+  border-color: var(--highlight);
+  color: var(--highlight-ink);
+}
+
+/* Jump to the latest. Outside the scroller — see ChatPanel.tsx — so it is
+   positioned against the panel and sits just above the composer. */
+.chat-to-bottom {
+  position: absolute;
+  bottom: 3.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  /* Opaque, not translucent: it sits over prose, and text behind text at this
+     size is unreadable rather than subtle. */
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  cursor: pointer;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.14);
+}
+.chat-to-bottom:hover { color: var(--ink); border-color: var(--highlight); }
+
+/* Text for screen readers only.
+   The standard clip-rect recipe rather than `display: none` or `visibility:
+   hidden`, both of which take the element out of the accessibility tree — which
+   would make an `aria-live` region announce nothing at all, silently, which is
+   the whole failure mode this app keeps a document about. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

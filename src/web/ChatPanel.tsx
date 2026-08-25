@@ -34,13 +34,25 @@
  * output as HTML is the one thing docs/project/security.md is about. Blank
  * lines split paragraphs; nothing else is interpreted.
  */
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, LoaderCircle, MessageSquarePlus, Pencil, SendHorizontal, Trash2, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  ArrowDown,
+  Check,
+  ClipboardCheck,
+  Copy,
+  LoaderCircle,
+  MessageSquarePlus,
+  Pencil,
+  RotateCcw,
+  SendHorizontal,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { BlockId, ChatMessage, ChatThread } from "../types.js";
-import { BlockRef, shortBlockId } from "./BlockRef.js";
+import { CitedText } from "./Cited.js";
 import { isWebUrl } from "../urls.js";
-import { Tooltip, TooltipGroup } from "./Tooltip.js";
-import { snippet, splitCitations, splitEmphasis } from "./citations.js";
+import { TooltipGroup } from "./Tooltip.js";
 
 interface Props {
   threads: ChatThread[];
@@ -51,6 +63,12 @@ interface Props {
   onNew(): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
+  /** Answer the last question again, over the top of the answer it has. */
+  onRetry(messageId: string): void;
+  /** Rewrite one of the reader's questions. Discards everything after it. */
+  onEdit(messageId: string, question: string): void;
+  /** Stop an answer that is still arriving. What has appeared is kept. */
+  onStop(messageId: string): void;
   /** Jump to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
   /**
@@ -139,6 +157,9 @@ export function ChatPanel({
   onNew,
   onRename,
   onDelete,
+  onRetry,
+  onEdit,
+  onStop,
   onJump,
   blocks,
   focusNonce,
@@ -172,6 +193,9 @@ export function ChatPanel({
           onJump={onJump}
           blocks={blocks}
           onSend={onSend}
+          onRetry={onRetry}
+          onEdit={onEdit}
+          onStop={onStop}
           focusNonce={focusNonce}
         />
       ) : (
@@ -316,17 +340,34 @@ function Conversation({
   onJump,
   blocks,
   onSend,
+  onRetry,
+  onEdit,
+  onStop,
   focusNonce,
 }: {
   thread: ChatThread;
   onJump(id: BlockId): void;
   blocks: Map<string, string>;
   onSend(question: string): void;
+  onRetry(messageId: string): void;
+  onEdit(messageId: string, question: string): void;
+  onStop(messageId: string): void;
   focusNonce: number;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const last = thread.messages.at(-1);
   const chars = last?.text.length ?? 0;
+  const busy = last?.status === "pending";
+  /**
+   * Which question the reader is rewriting, if any.
+   *
+   * State here rather than inside each `Turn`, so that opening a second editor
+   * closes the first. Two open at once is not a mode anybody wants and it makes
+   * the "this will discard N turns" count below ambiguous about which N.
+   */
+  const [editing, setEditing] = useState<string | null>(null);
+  /** Whether the reader has scrolled up, which is what shows the jump button. */
+  const [away, setAway] = useState(false);
 
   /**
    * Follow the answer down as it arrives — but only if the reader is already at
@@ -337,31 +378,121 @@ function Conversation({
    * words would make it impossible. The 60px slack is for the fact that "at the
    * bottom" is never exact once a line is half-rendered.
    *
-   * `useLayoutEffect` rather than `useEffect`: the check has to happen against
-   * the scroll position from *before* the new text was painted, or the answer
-   * that just grew has already moved the bottom out of reach and every reader
-   * reads as scrolled-up.
+   * **`stick` changes only when the reader scrolls**, never when the content
+   * grows, and that is the fix for a bug this had in its first version. It used
+   * to be recomputed in a layout effect after every commit, which measures the
+   * DOM *after* the new content is in it — so any commit that added more than
+   * 60px at once decided the reader had scrolled away, when all that had
+   * happened was the page getting taller under them. The commit that does that
+   * routinely is the last one: `done` adds the action row and, if the model
+   * searched, the whole source list. The reader was pinned to the bottom, the
+   * answer finished, and from then on nothing followed anything — with no
+   * "Latest" button either, because `away` was updated from a different effect
+   * that the same commit did not trigger. One source now, and it is the only
+   * event that means what it says. Found in review, 2026-08-26.
    */
   const stick = useRef(true);
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  });
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
   useEffect(() => {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [chars, thread.messages.length]);
 
+  const toBottom = () => {
+    const el = scroller.current;
+    if (!el) return;
+    stick.current = true;
+    setAway(false);
+    el.scrollTop = el.scrollHeight;
+  };
+
   return (
     <>
-      <div className="chat-scroll" ref={scroller}>
+      <div
+        className="chat-scroll"
+        ref={scroller}
+        /* The one place `stick` is decided — see the note above. Fired by the
+           reader's own scrolling and by the effect's `scrollTop = scrollHeight`
+           alike, and both mean the same thing here: this is where the view is
+           now. `away` is set beside it rather than derived later, so a button
+           and a ref cannot end up disagreeing about where the reader is. */
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+          stick.current = atBottom;
+          setAway(!atBottom);
+        }}
+      >
         {thread.messages.length === 0 && <Suggestions onAsk={onSend} />}
-        {thread.messages.map((m) => (
-          <Turn key={m.id} message={m} onJump={onJump} blocks={blocks} />
+        {thread.messages.map((m, i) => (
+          <Turn
+            key={m.id}
+            message={m}
+            onJump={onJump}
+            blocks={blocks}
+            /* Only the last answer may be retried — see `retryTurn` in
+               src/chat.ts. The button is hidden rather than shown-and-refused,
+               because a button that exists and always says no is worse than one
+               that was never there. */
+            onRetry={i === thread.messages.length - 1 ? onRetry : undefined}
+            /* And nothing may be edited while an answer is arriving: the edit
+               would discard the row being written into. The server settles the
+               stream first and would cope, but offering it mid-answer invites
+               the reader to do something they would then watch half-happen. */
+            onEdit={onEdit}
+            /* The pencil goes away while an answer is arriving; an editor
+               already OPEN does not. Withdrawing `onEdit` wholesale unmounted a
+               half-typed rewrite the moment the reader asked something else —
+               and then remounted it, by itself, with the original text back in
+               it, because `editing` still named the row. Found in review. */
+            canEdit={!busy}
+            editing={editing === m.id}
+            onEditing={(on) => setEditing(on ? m.id : null)}
+            /* How many turns an edit here would throw away. Counted from the
+               rendered list rather than passed down, so it cannot drift from
+               what is on screen. */
+            discards={thread.messages.length - i - 1}
+          />
         ))}
       </div>
-      <Composer onSend={onSend} busy={last?.status === "pending"} focusNonce={focusNonce} />
+      {/* The jump button sits *outside* the scroller so it does not scroll with
+          it, and only exists while the reader is somewhere else — a permanent
+          one is a permanent claim that you are lost. */}
+      {away && (
+        <button type="button" className="chat-to-bottom" onClick={toBottom} title="Jump to the latest">
+          <ArrowDown size={13} /> Latest
+        </button>
+      )}
+      {/*
+        What a screen reader is told, and deliberately not the answer itself.
+
+        The canonical chat pattern is a polite live region round the transcript,
+        and it is wrong here: the text of an answer changes on every token, so
+        the region fires a hundred times and a screen reader reads a growing
+        prefix of the same paragraph over and over. Announcing the *finished*
+        text once instead means putting the whole answer in the DOM twice.
+
+        So the region carries a status line and nothing else. It tells you when
+        to go and read, and the answer stays in one place to be read. See the
+        streaming-accessibility note in docs/plans/chat-mode.md.
+      */}
+      <p className="sr-only" aria-live="polite">
+        {busy
+          ? "Answering."
+          : last?.role === "assistant" && last.status === "done"
+            ? last.stopped
+              ? "Answer stopped."
+              : "Answer ready."
+            : last?.status === "error"
+              ? "The answer failed."
+              : ""}
+      </p>
+      <Composer
+        onSend={onSend}
+        busy={busy}
+        onStop={busy && last ? () => onStop(last.id) : undefined}
+        focusNonce={focusNonce}
+      />
     </>
   );
 }
@@ -398,13 +529,69 @@ function Turn({
   message,
   onJump,
   blocks,
+  onRetry,
+  onEdit,
+  canEdit,
+  editing,
+  onEditing,
+  discards,
 }: {
   message: ChatMessage;
   onJump(id: BlockId): void;
   blocks: Map<string, string>;
+  /** Present only on the last message. See the call site. */
+  onRetry?: ((messageId: string) => void) | undefined;
+  onEdit(messageId: string, question: string): void;
+  /** Whether the pencil is offered. False while an answer is arriving. */
+  canEdit: boolean;
+  editing: boolean;
+  onEditing(on: boolean): void;
+  /** Turns an edit here would discard. */
+  discards: number;
 }) {
   if (message.role === "user") {
-    return <div className="chat-turn you">{message.text}</div>;
+    if (editing) {
+      return (
+        <EditQuestion
+          text={message.text}
+          discards={discards}
+          onCancel={() => onEditing(false)}
+          onDone={(next) => {
+            onEditing(false);
+            // An edit to the same words is not an edit. Re-running would throw
+            // away the answers below to arrive at the same question.
+            if (next.trim() !== "" && next.trim() !== message.text.trim()) {
+              onEdit(message.id, next.trim());
+            }
+          }}
+        />
+      );
+    }
+    return (
+      <div className="chat-turn you">
+        {message.text}
+        {message.editedAt && (
+          /* The only trace that this conversation once went elsewhere. Without
+             it, a reader coming back to a thread they edited reads answers that
+             do not quite match the questions and has no way to know why. */
+          <span className="chat-edited" title="You rewrote this question">
+            edited
+          </span>
+        )}
+        {canEdit && (
+          <div className="chat-actions">
+            <button
+              type="button"
+              className="chat-icon"
+              title="Rewrite this question"
+              onClick={() => onEditing(true)}
+            >
+              <Pencil size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
   const thinking = message.status === "pending" && message.text === "";
   return (
@@ -413,17 +600,26 @@ function Turn({
         <span className="chat-thinking">
           <LoaderCircle className="cmt-spinner" size={13} /> thinking…
         </span>
-      ) : (
+      ) : message.text === "" ? /* Stopped before a word arrived, or failed
+          before one did. `Answer` splits on blank lines and would render one
+          empty paragraph, which is a stray gap above the line that explains
+          it. */ null : (
         <Answer
           text={message.text}
           onJump={onJump}
           blocks={blocks}
-          /* Tooltips only once the answer has landed — see renderCitations. */
+          /* Tooltips only once the answer has landed — see Cited.tsx. */
           live={message.status === "pending"}
         />
       )}
       {message.status === "pending" && message.text !== "" && <span className="chat-cursor" />}
       {message.status === "error" && <p className="chat-failed">{message.error}</p>}
+      {message.stopped && (
+        /* Not styled as a failure, because it is not one. An answer that ends
+           mid-sentence with nothing to explain it is the thing that reads like
+           a bug; one line saying who ended it is the whole fix. */
+        <p className="chat-stopped">You stopped this answer.</p>
+      )}
       {message.citations && message.citations.length > 0 && (
         <ul className="chat-sources">
           {/* Filtered again here, and the repetition is deliberate. The server
@@ -441,6 +637,155 @@ function Turn({
           ))}
         </ul>
       )}
+      {message.status !== "pending" && (
+        <div className="chat-actions">
+          {message.text !== "" && <CopyAnswer text={message.text} />}
+          {onRetry && (
+            <button
+              type="button"
+              className="chat-icon"
+              title="Answer again"
+              onClick={() => onRetry(message.id)}
+            >
+              <RotateCcw size={12} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Put an answer on the clipboard.
+ *
+ * **What is copied is the model's own text, block ids and all.** They look like
+ * noise outside the app and they are the opposite: they are the provenance, and
+ * an answer pasted into a note without them is exactly the confident unsourced
+ * claim vision.md names as an anti-goal. Stripping them would make the pasted
+ * version *less* checkable than the one on screen.
+ *
+ * The tick is not decoration either. `navigator.clipboard` is a promise that
+ * can reject — no permission, a browser that will not do it from this event —
+ * and a copy button that has visibly done nothing is the silent-success shape
+ * (docs/reusable/silent-success.md). So the state has three values, not two,
+ * and a refusal says so.
+ *
+ * **The guard is a statement rather than `navigator.clipboard?.writeText(…)`,
+ * and that is not style.** Optional chaining short-circuits the *whole* chain,
+ * `.catch` included: where there is no clipboard object the expression is
+ * `undefined`, nothing throws, nothing rejects, and `state` stays `"idle"` —
+ * a copy button that quietly does nothing, inside the very component whose
+ * comment claims that cannot happen. And "no clipboard object" is not exotic:
+ * `navigator.clipboard` is undefined in every insecure context, which includes
+ * reaching this app at `http://192.168.1.x:5273` from a phone. Written the
+ * careless way first, caught in review, 2026-08-26.
+ */
+function CopyAnswer({ text }: { text: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  // Cleared on a timer, and the timer is cleaned up: a reader who leaves the
+  // thread mid-tick would otherwise get a setState on an unmounted component.
+  useEffect(() => {
+    if (state === "idle") return;
+    const timer = setTimeout(() => setState("idle"), 1600);
+    return () => clearTimeout(timer);
+  }, [state]);
+  return (
+    <button
+      type="button"
+      className="chat-icon"
+      title={
+        state === "failed"
+          ? "Your browser would not allow the copy — an insecure connection is the usual reason"
+          : "Copy this answer"
+      }
+      onClick={() => {
+        if (!navigator.clipboard) {
+          setState("failed");
+          return;
+        }
+        navigator.clipboard
+          .writeText(text)
+          .then(() => setState("copied"))
+          .catch(() => setState("failed"));
+      }}
+    >
+      {state === "copied" ? (
+        <ClipboardCheck size={12} />
+      ) : state === "failed" ? (
+        <X size={12} />
+      ) : (
+        <Copy size={12} />
+      )}
+    </button>
+  );
+}
+
+/**
+ * Rewriting a question, in place, with the cost of it stated.
+ *
+ * The count is the entire safety mechanism, and it is a sentence rather than a
+ * modal on purpose. A confirmation dialog in front of an edit is a tax on every
+ * typo fix, and readers learn to dismiss it without reading — so it stops
+ * protecting the case it was put there for. A line that says *what will happen*
+ * before you commit is read once and believed.
+ *
+ * Enter submits and Escape cancels, matching the rename box above; Shift+Enter
+ * makes a newline, matching the composer below. Every key press is stopped from
+ * bubbling for the reason the composer gives: the article's ↑/↓ navigation is
+ * on the window and would scroll the page under the reader's caret.
+ */
+function EditQuestion({
+  text,
+  discards,
+  onDone,
+  onCancel,
+}: {
+  text: string;
+  discards: number;
+  onDone(next: string): void;
+  onCancel(): void;
+}) {
+  const [value, setValue] = useState(text);
+  const box = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.focus();
+    // The caret at the end rather than the whole question selected: the common
+    // edit is adding a clause, and a select-all turns the first keystroke into
+    // a delete of everything.
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+  return (
+    <div className="chat-turn you editing">
+      <textarea
+        ref={box}
+        className="chat-edit-box"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Escape") onCancel();
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            onDone(value);
+          }
+        }}
+      />
+      {discards > 0 && (
+        <p className="chat-discard-warning">
+          Asking again will discard the {discards} message{discards === 1 ? "" : "s"} below.
+        </p>
+      )}
+      <div className="chat-actions">
+        <button type="button" className="chat-icon" title="Ask again (Enter)" onClick={() => onDone(value)}>
+          <Check size={12} />
+        </button>
+        <button type="button" className="chat-icon" title="Cancel (Esc)" onClick={onCancel}>
+          <X size={12} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -488,85 +833,16 @@ function Answer({
     <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
       {text.split(/\n{2,}/).map((para, p) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs of one immutable string
-        <p key={p}>{renderCitations(para, onJump, blocks, live)}</p>
+        <p key={p}>
+          {/* The chips, the hover cards and the bold runs all live in
+              Cited.tsx, shared with the summary panel. Two copies of what a
+              citation looks like would drift, and a chip that means something
+              slightly different depending on which band it is in is worse than
+              either version. */}
+          <CitedText text={para} blocks={blocks} onJump={onJump} live={live} />
+        </p>
       ))}
     </TooltipGroup>
-  );
-}
-
-function renderCitations(
-  para: string,
-  onJump: (id: BlockId) => void,
-  blocks: Map<string, string>,
-  live: boolean,
-): (string | React.ReactElement)[] {
-  return splitCitations(para, blocks).map((seg, i) =>
-    seg.kind === "text" ? (
-      // biome-ignore lint/suspicious/noArrayIndexKey: segments of one immutable string, rebuilt whole
-      <Fragment key={`t${i}`}>{emphasised(seg.text)}</Fragment>
-    ) : (
-      // biome-ignore lint/suspicious/noArrayIndexKey: segments of one immutable string, rebuilt whole
-      <span className="chat-cite" key={`c${i}`}>
-        {seg.ids.map((id) =>
-          live ? (
-            /* **No tooltip while the answer is still arriving.** The whole
-               answer re-renders on every streamed token, so a Floating UI
-               instance per chip would be a dozen `useFloating` hooks created
-               and torn down a hundred times during one reply. Once the message
-               is `done` it re-renders no more, and the tooltips cost nothing —
-               which is also the only time anybody is reading carefully enough
-               to hover one. The native `title` on BlockRef covers the gap. */
-            <BlockRef key={id} id={id} onJump={onJump} />
-          ) : (
-            <Tooltip
-              key={id}
-              placement="top"
-              className="tip-cite"
-              content={<CitedBlock id={id} text={blocks.get(id) ?? ""} />}
-            >
-              <span className="chat-cite-hit">
-                <BlockRef id={id} onJump={onJump} />
-              </span>
-            </Tooltip>
-          ),
-        )}
-      </span>
-    ),
-  );
-}
-
-/**
- * What a citation chip shows on hover: **the paragraph itself**.
- *
- * Greg, 2026-08-26, asked for a rich tooltip here, and the only content worth
- * putting in one is the thing the citation points at. A chip saying
- * "go to this passage" tells the reader what clicking does; a chip showing the
- * passage lets them decide whether to click at all — and, more to the point,
- * lets them check the model against the article without leaving the sentence
- * they are reading. That check is the whole justification for the feature
- * (docs/plans/chat-mode.md § Say the awkward thing first), and until now it
- * cost a jump and a scroll back.
- *
- * Truncated, deliberately and not generously. Enough to recognise the
- * paragraph and see whether it says what the answer claims; not enough to read
- * instead of going there. The original version learned the same thing about
- * search results and kept two lengths for it —
- * docs/project/original-version/search-and-chat.md.
- */
-function CitedBlock({ id, text }: { id: BlockId; text: string }) {
-  const shown = snippet(text);
-  return (
-    <>
-      <div className="tip-cite-head">{shortBlockId(id)}</div>
-      {shown === "" ? (
-        // A block with no text of its own — an image, a figure. Saying so beats
-        // an empty card that looks like a tooltip that failed to load.
-        <p className="tip-cite-empty">This block has no text of its own.</p>
-      ) : (
-        <p className="tip-cite-text">{shown}</p>
-      )}
-      <div className="tip-cite-go">Click to go there</div>
-    </>
   );
 }
 
@@ -589,24 +865,6 @@ function hostOf(url: string): string {
 }
 
 /**
- * `**a term**` as a real `<strong>`, and everything else as it was written.
- *
- * Text in, React elements out — never HTML. See splitEmphasis in citations.ts
- * for what is interpreted (bold, and nothing else) and why that list is short
- * on purpose.
- */
-function emphasised(text: string): (string | React.ReactElement)[] {
-  return splitEmphasis(text).map((run, i) =>
-    run.bold ? (
-      // biome-ignore lint/suspicious/noArrayIndexKey: runs of one immutable string, rebuilt whole
-      <strong key={`b${i}`}>{run.text}</strong>
-    ) : (
-      run.text
-    ),
-  );
-}
-
-/**
  * The box you type into.
  *
  * Enter sends, Shift-Enter makes a new line — the convention every chat has, so
@@ -617,10 +875,13 @@ function emphasised(text: string): (string | React.ReactElement)[] {
 function Composer({
   onSend,
   busy,
+  onStop,
   focusNonce,
 }: {
   onSend(question: string): void;
   busy: boolean;
+  /** Present only while an answer is arriving. */
+  onStop?: (() => void) | undefined;
   focusNonce: number;
 }) {
   const [value, setValue] = useState("");
@@ -684,11 +945,36 @@ function Composer({
             e.preventDefault();
             submit();
           }
+          /* Escape, in three steps, most-urgent first.
+
+             It has to be a ladder rather than one action because the composer
+             swallows every key press (see above), so Escape has no other
+             meaning available to it — and the three things a reader wants from
+             it here are genuinely different: stop the answer, drop the question
+             I was typing, give me the reading keys back. Doing them in that
+             order means the destructive one is never reached by accident: you
+             cannot clear a draft you have not typed, and you cannot blur while
+             there is anything else Escape could still be for. */
+          if (e.key === "Escape") {
+            if (onStop) onStop();
+            else if (value !== "") setValue("");
+            else box.current?.blur();
+          }
         }}
       />
-      <button type="submit" className="chat-send" disabled={busy || value.trim() === ""} title="Send (Enter)">
-        {busy ? <LoaderCircle className="cmt-spinner" size={14} /> : <SendHorizontal size={14} />}
-      </button>
+      {/* Stop *replaces* send while an answer is arriving, rather than sitting
+          beside it. Two buttons in a 400px composer is one too many, and the
+          send button was disabled in that state anyway — so the space was
+          already spoken for by a control that could not be pressed. */}
+      {onStop ? (
+        <button type="button" className="chat-send stop" onClick={onStop} title="Stop (Esc)">
+          <Square size={12} fill="currentColor" />
+        </button>
+      ) : (
+        <button type="submit" className="chat-send" disabled={busy || value.trim() === ""} title="Send (Enter)">
+          {busy ? <LoaderCircle className="cmt-spinner" size={14} /> : <SendHorizontal size={14} />}
+        </button>
+      )}
     </form>
   );
 }

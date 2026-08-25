@@ -119,9 +119,18 @@ phantom rows quoting text it had already listed.
 
 ## Showing an id
 
-Ids are on screen in three places: the gutter beside every paragraph, and both ends of the block
-range under a gist — in a table cell and in a column panel. All three draw
-[`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart.
+Ids are on screen in five places: the gutter beside every paragraph; both ends of the block range
+under a gist, in a table cell and in a column panel; and — since 2026-08-26 — the same range under
+each entry of the summary panel, plus the ids the model cites inside a chat answer or a summary. All
+of them draw [`BlockRef`](../../src/web/BlockRef.tsx), so they cannot drift apart, and the two that
+come out of model prose share [`Cited.tsx`](../../src/web/Cited.tsx) on top of it.
+
+A cited id is drawn as a **chip with a hover card carrying the paragraph itself**, which is the one
+thing that makes a model's claim checkable without leaving the sentence you are reading — see
+[summaries.md § A summary is a door](summaries.md#a-summary-is-a-door). An id the article does not
+have is rendered as plain text rather than a link that goes nowhere: a dead chip is worse than
+visible noise, because pressing it does nothing and nothing distinguishes that from a bug in the
+scrolling.
 
 **The `spya-` prefix is not shown.** Every id on screen has it, so it costs five characters and
 carries nothing. It is still in the `title` attribute and still in the link's address, which is

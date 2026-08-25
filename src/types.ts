@@ -267,8 +267,50 @@ export interface GlossaryEntry {
    * docs/plans/glossary-entries-worth-reading.md § Provenance is structural.
    */
   fromOutside?: boolean;
+  /**
+   * What came back when the reader asked us to check this term on the web.
+   *
+   * **Absent until somebody presses the button**, and that is the design rather
+   * than a limitation. The batch call that writes an entry does not search: it
+   * is one call over a whole article, already capped and paginated because
+   * output tokens caused 504s in the previous version, and a dozen serialised
+   * searches inside it would spend money on entries nobody opens. So the web is
+   * per entry, reader-initiated, and its result lands here beside the
+   * remembered `background` rather than replacing it — *checked* has to stay
+   * visibly different from *remembered*.
+   *
+   * See docs/plans/glossary-entries-worth-reading.md § The web.
+   */
+  lookup?: GlossaryLookup;
   /** Every block that uses this term, in document order. Found by us. Empty is meaningful. */
   blocks: BlockId[];
+}
+
+/**
+ * One answer from the web, and where it came from.
+ *
+ * The same four fields a `Comment` stores, because it is the same call — see
+ * `explain` in src/explain.ts. That is not a coincidence being exploited: our
+ * review of the version this was borrowed from argued a glossary should be *the
+ * same mechanism as comments with a different prompt* rather than a second
+ * system, and docs/project/glossary.md § What is still open has been carrying
+ * that as an open question since the feature landed. This is the first half of
+ * it paid off.
+ */
+export interface GlossaryLookup {
+  answer: string;
+  /** What the model actually cited. Every URL passed `safeUrl` before it was stored. */
+  citations: Citation[];
+  /**
+   * How many web searches the model chose to run — **`0` is a real answer**,
+   * not a missing one. The model decides per call, so an answer with no
+   * searches means it judged it already knew, and the panel says so rather than
+   * leaving the reader to guess which kind of answer they are looking at.
+   */
+  searches: number;
+  model: string;
+  /** ISO 8601. An answer is about the web on the day it was asked. */
+  at: string;
 }
 
 /**
@@ -386,6 +428,18 @@ export interface Summaries {
   sourceHash: string;
   /** Document order, coarse before fine — the order the panel renders them in. */
   entries: SummaryEntry[];
+  /**
+   * What the reader asked these summaries to lean towards, if they asked
+   * anything.
+   *
+   * Kept on the artefact rather than only in the request, so that a summary
+   * written to a steer **says so**. A steered summary that looks like an
+   * ordinary one is a summary the reader cannot weigh, and the whole risk of
+   * the feature is that a request quietly bends what the article is reported
+   * to say (src/summarise.ts § IF THE READER ASKS FOR SOMETHING IN PARTICULAR).
+   * It is also what the panel puts back in the box next time.
+   */
+  guidance?: string;
   /**
    * Nodes whose batch came back unusable and were written without text.
    *
@@ -611,6 +665,19 @@ export interface Job {
   error?: string;
   /** Stop has been pressed and the abort has not landed yet. */
   cancelling?: boolean;
+  /**
+   * A free-text steer for the steps that take one. Only `summary` does today.
+   *
+   * On the job rather than in a step's own options because the queue is what
+   * survives a restart, and a job resumed from disk with its guidance dropped
+   * would run the plain prompt and report success — the reader's steer silently
+   * not applied, with a green tick over it.
+   *
+   * It is part of what makes two jobs different work: see `sameWork` in
+   * src/jobs.ts, where leaving it out would let a second, differently-steered
+   * request be answered with the first one's job.
+   */
+  guidance?: string;
 }
 
 /* ------------------------------------------------------------------ chat --
@@ -643,6 +710,28 @@ export interface ChatMessage {
   searches?: number;
   model?: string;
   error?: string;
+  /**
+   * The reader pressed stop, so this answer is short on purpose.
+   *
+   * A flag rather than a fourth `status`, and the distinction is the whole
+   * point: a stopped answer is `done`. It is not a failure — nothing went
+   * wrong, the reader had read enough — so it must not render as one, and it
+   * must not be swept, retried, or apologised for. What it does need is to say
+   * so, because an answer that ends mid-sentence with nothing to explain it
+   * reads exactly like a bug.
+   *
+   * Assistant turns only. Kept in the history sent back to the model: it said
+   * those words, and pretending otherwise would have it contradict itself.
+   */
+  stopped?: boolean;
+  /**
+   * When the reader last rewrote this message. User turns only.
+   *
+   * Editing a question discards every turn after it and asks again, so this is
+   * the only trace that the conversation above once went somewhere else. The
+   * old text is **not** kept — see docs/plans/chat-mode.md § Editing a question.
+   */
+  editedAt?: string;
 }
 
 /**

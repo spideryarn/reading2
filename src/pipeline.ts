@@ -158,6 +158,19 @@ export interface StepContext {
   /** Say something short about how this step is going. Shown live; not persisted. */
   report(detail: string): void;
   signal: AbortSignal;
+  /**
+   * A free-text steer from the reader, for the steps that take one.
+   *
+   * Only `summary` reads it today. It is on the context rather than passed as
+   * an argument for the same reason `url` is: a step's inputs arrive one way,
+   * and the queue does not need to know which steps care.
+   *
+   * **It is not part of any step's `isDone`.** A steer is a reason to force a
+   * rewrite — which is what the button carrying it does — not a reason for the
+   * next ordinary run to believe the artefact has gone stale. See
+   * `summariesAreCurrent` in src/summarise.ts.
+   */
+  guidance?: string;
 }
 
 export interface PipelineStep {
@@ -480,7 +493,14 @@ export const STEPS: Record<StepName, PipelineStep> = {
   toc: {
     name: "toc",
     label: "Building the table of contents",
-    outputs: (ctx) => [path.join(ctx.dir, "tree.json"), path.join(ctx.dir, "blocks.json")],
+    /* `labels.json` is in here as well as the tree, because stage 4 is two model
+       passes now and a directory with a tree but no labels is a half-run step,
+       not a finished one. src/toc.ts writes the tree last for the same reason. */
+    outputs: (ctx) => [
+      path.join(ctx.dir, "tree.json"),
+      path.join(ctx.dir, "labels.json"),
+      path.join(ctx.dir, "blocks.json"),
+    ],
     async run(ctx) {
       const run = await generateToc({
         blocksPath: blocksPathFor(ctx),
@@ -500,6 +520,8 @@ export const STEPS: Record<StepName, PipelineStep> = {
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
           ms: run.elapsedMs,
           blocks: run.blocks,
           sections: run.internal,
@@ -528,6 +550,8 @@ export const STEPS: Record<StepName, PipelineStep> = {
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
           ms: run.elapsedMs,
           blocks: run.blocks,
           parts: run.parts.length,
@@ -571,6 +595,8 @@ export const STEPS: Record<StepName, PipelineStep> = {
           model: run.thread.generator,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
           ms: run.elapsedMs,
           posts: run.thread.tweets.length,
           over: run.over,
@@ -610,6 +636,8 @@ export const STEPS: Record<StepName, PipelineStep> = {
           model: run.model,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
           ms: run.elapsedMs,
           terms: total,
           added: run.added,
@@ -636,6 +664,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     async run(ctx) {
       const run = await generateSummaries({
         dir: ctx.dir,
+        ...(ctx.guidance !== undefined && { guidance: ctx.guidance }),
         onProgress: ctx.report,
         signal: ctx.signal,
       });
@@ -660,6 +689,18 @@ export const STEPS: Record<StepName, PipelineStep> = {
              counted. See docs/reusable/silent-success.md. */
           missing,
           failedBatches: run.failedBatches,
+          /* How many doors back into the article these summaries carry, and
+             how many lead nowhere. A run that starts reporting `cited: 0` is
+             the model having stopped citing — which breaks nothing visible and
+             turns a summary back into a substitute for the passage rather than
+             a way in. src/summarise.ts § countCitations. */
+          cited: run.cited,
+          unknownCited: run.unknownCited,
+          /* The steer's LENGTH, never the steer. It is the reader's own words
+             about what they are reading for, which is exactly the kind of thing
+             docs/project/logging.md keeps out of the log. The number is enough
+             to answer "was one sent at all". */
+          guidanceChars: ctx.guidance?.length ?? 0,
         },
         `summary ${ctx.slug}: ${run.targets - missing}/${run.targets} sections in ${run.batches} groups`,
       );
