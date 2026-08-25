@@ -19,6 +19,15 @@ import { describeFetchFailure } from "./useComments.js";
 
 export interface ChatApi {
   threads: ChatThread[];
+  /**
+   * Has the first fetch come back?
+   *
+   * The caller opens a new conversation when there are none, and "none" is
+   * indistinguishable from "not asked yet" without this — so every visit to
+   * chat mode would create a thread before the reader's real ones had arrived,
+   * and then not create one when they legitimately had none.
+   */
+  loaded: boolean;
   /* No `streaming` flag here, and its absence is deliberate.
      One was exported and nothing used it — the composer takes its `busy` state
      from the *message* it is waiting on, which is the honest source: sends can
@@ -51,6 +60,7 @@ export interface ChatApi {
 
 export function useChat(slug: string): ChatApi {
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -76,6 +86,7 @@ export function useChat(slug: string): ChatApi {
   useEffect(() => {
     let live = true;
     setThreads([]);
+    setLoaded(false);
     fetch(`/api/chat/${encodeURIComponent(slug)}`)
       .then((r) => r.json())
       .then((body: { threads?: ChatThread[]; error?: string }) => {
@@ -83,7 +94,14 @@ export function useChat(slug: string): ChatApi {
         if (body.error) setError(body.error);
         else setThreads(body.threads ?? []);
       })
-      .catch((e: Error) => live && setError(describeFetchFailure(e)));
+      .catch((e: Error) => live && setError(describeFetchFailure(e)))
+      // `loaded` even when the fetch failed. It means "we have asked", not "it
+      // worked" — a reader whose server is down should still be able to open a
+      // conversation and see the send fail with a reason, rather than face a
+      // panel that never resolves into anything.
+      .finally(() => {
+        if (live) setLoaded(true);
+      });
     return () => {
       live = false;
     };
@@ -305,7 +323,7 @@ export function useChat(slug: string): ChatApi {
     [write],
   );
 
-  return { threads, send, begin, rename, remove, error };
+  return { threads, loaded, send, begin, rename, remove, error };
 }
 
 interface ServerEvent {

@@ -12,6 +12,18 @@
  */
 import { ID_PATTERN, ID_PREFIX } from "../ids.js";
 
+/**
+ * Whatever can answer "is this one of the article's blocks?".
+ *
+ * Structural rather than `ReadonlySet<string>` so that a `Map` of block id to
+ * block text satisfies it too — the panel needs that map anyway, to put the
+ * cited paragraph in a chip's tooltip, and building a parallel Set beside it
+ * would be a second copy of one fact.
+ */
+export interface Known {
+  has(id: string): boolean;
+}
+
 /** A run of prose, or a run of ids the model cited together. */
 export type Segment = { kind: "text"; text: string } | { kind: "cite"; ids: string[] };
 
@@ -79,7 +91,7 @@ const ID_SHAPED = /spya-[a-z0-9]{6}/g;
  * Empty text segments are never emitted, so a paragraph that is nothing but a
  * citation does not come back with empty strings on either side of it.
  */
-export function splitCitations(para: string, known: ReadonlySet<string>): Segment[] {
+export function splitCitations(para: string, known: Known): Segment[] {
   const out: Segment[] = [];
   let last = 0;
   const push = (text: string) => {
@@ -114,7 +126,7 @@ export function splitCitations(para: string, known: ReadonlySet<string>): Segmen
  * question "did the model make one up" has one definition on both sides rather
  * than two that can drift.
  */
-export function unknownIds(text: string, known: ReadonlySet<string>): string[] {
+export function unknownIds(text: string, known: Known): string[] {
   const bad = new Set<string>();
   for (const raw of text.match(new RegExp(`${ID_PREFIX}[a-z0-9]{6}`, "g")) ?? []) {
     if (ID_PATTERN.test(raw) && !known.has(raw)) bad.add(raw);
@@ -155,4 +167,27 @@ export function splitEmphasis(text: string): Emphasis[] {
   }
   if (last < text.length) out.push({ text: text.slice(last), bold: false });
   return out;
+}
+
+/**
+ * A short, readable piece of a block, for a citation chip's hover card.
+ *
+ * Cut on a word boundary and only when there is something to cut — a short
+ * paragraph is shown whole rather than given an ellipsis it has not earned.
+ *
+ * **`lastIndexOf` returns -1 when there is no space to cut at**, and
+ * `slice(0, -1)` is not "nothing", it is "everything but the last character".
+ * So the naive version silently showed a 5,000-character block *in full* inside
+ * a tooltip — the failure mode being a card the height of the window, from the
+ * one input that has no spaces in it. The same trap `titleFrom` in src/chat.ts
+ * carries a note about; second sighting, hence a shared shape and a test.
+ */
+export function snippet(text: string, max = 260): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  // A word boundary only if there is one worth using; otherwise a hard cut,
+  // which is still a bounded string.
+  return `${space > max / 4 ? cut.slice(0, space) : cut}…`;
 }

@@ -13,7 +13,8 @@ import { describe, expect, it } from "vitest";
 import { titleFrom } from "../src/chat.js";
 import { nextModeIndex } from "../src/web/Dock.js";
 import { recentHistory, unknownCitedIds } from "../src/converse.js";
-import { splitCitations, splitEmphasis, unknownIds } from "../src/web/citations.js";
+import { snippet, splitCitations, splitEmphasis, unknownIds } from "../src/web/citations.js";
+import { SUGGESTIONS } from "../src/web/ChatPanel.js";
 import { fitView, MODE_IDEAL, MODE_MIN } from "../src/web/layout.js";
 import type { ChatMessage } from "../src/types.js";
 
@@ -447,5 +448,67 @@ describe("splitCitations — prose inside brackets, and duplicates", () => {
      children with the same key. */
   it("draws one chip when the model cites the same block twice", () => {
     expect(shape("[spya-k3m9qt spya-k3m9qt]")).toEqual(["cite:spya-k3m9qt"]);
+  });
+});
+
+describe("snippet — what a citation chip shows on hover", () => {
+  it("shows a short paragraph whole, with no ellipsis it has not earned", () => {
+    expect(snippet("A short block.")).toBe("A short block.");
+  });
+
+  it("collapses the whitespace the article's own markup leaves behind", () => {
+    expect(snippet("two\n\n  words")).toBe("two words");
+  });
+
+  it("cuts a long paragraph on a word boundary", () => {
+    const long = `${"word ".repeat(200)}end`;
+    const out = snippet(long, 60);
+    expect(out.endsWith("…")).toBe(true);
+    expect(out.length).toBeLessThanOrEqual(61);
+    // The kept part is a prefix of the original AND the original's next
+    // character is a space — checking only the prefix would pass for a cut
+    // through the middle of a word, which is the failure this is about.
+    const kept = out.slice(0, -1);
+    expect(long.startsWith(kept)).toBe(true);
+    expect(long[kept.length]).toBe(" ");
+  });
+
+  /* `lastIndexOf` returns -1 with no space to cut at, and `slice(0, -1)` is not
+     "nothing" — it is "everything but the last character". The naive version
+     therefore showed a 5,000-character block IN FULL inside a hover card, from
+     the one input that has no spaces in it. */
+  it("still bounds a long string that has no spaces in it", () => {
+    const wall = "x".repeat(5000);
+    const out = snippet(wall, 60);
+    expect(out.length).toBeLessThanOrEqual(61);
+    expect(out.endsWith("…")).toBe(true);
+  });
+
+  it("says nothing for a block with no text of its own", () => {
+    expect(snippet("   ")).toBe("");
+  });
+});
+
+describe("the chat suggestions", () => {
+  /**
+   * **The rule, enforced.** Every suggestion has to send the reader back into
+   * the article; the one that does the opposite is the app's named anti-goal
+   * (vision.md: "a chatbot with the article stuffed in the context window"), and
+   * it is also the single most obvious thing for somebody to add here in good
+   * faith. A comment saying "don't" is not much of a guard against that.
+   */
+  it("never offers to summarise the article", () => {
+    for (const s of SUGGESTIONS) {
+      expect(`${s.label} ${s.ask}`.toLowerCase()).not.toMatch(/summar[iy]|tl;?dr|in a nutshell/);
+    }
+  });
+
+  it("asks a real question in every one", () => {
+    for (const s of SUGGESTIONS) {
+      expect(s.label.trim()).not.toBe("");
+      // The label is a button; the ask is what the reader appears to have typed,
+      // so it has to stand on its own in the transcript.
+      expect(s.ask.length).toBeGreaterThan(s.label.length);
+    }
   });
 });

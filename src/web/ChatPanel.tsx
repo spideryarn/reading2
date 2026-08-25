@@ -37,9 +37,10 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, LoaderCircle, MessageSquarePlus, Pencil, SendHorizontal, Trash2, X } from "lucide-react";
 import type { BlockId, ChatMessage, ChatThread } from "../types.js";
-import { BlockRef } from "./BlockRef.js";
+import { BlockRef, shortBlockId } from "./BlockRef.js";
 import { isWebUrl } from "../urls.js";
-import { splitCitations, splitEmphasis } from "./citations.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { snippet, splitCitations, splitEmphasis } from "./citations.js";
 
 interface Props {
   threads: ChatThread[];
@@ -52,11 +53,83 @@ interface Props {
   onDelete(id: string): void;
   /** Jump to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
-  /** Ids this article actually has — a cited id not in here is not a link. */
-  knownIds: Set<string>;
+  /**
+   * Every block this article has, id to its plain text.
+   *
+   * Two jobs in one map: a cited id that is not a key is not turned into a
+   * link, and the text is what a chip's tooltip shows — so the reader can check
+   * a citation without leaving the conversation, which is most of the point of
+   * citing at all.
+   */
+  blocks: Map<string, string>;
+  /**
+   * Rises by one each time a *new* conversation is started; the composer takes
+   * focus when it changes. See ChatBand in App.tsx for why a counter, and why
+   * opening an existing conversation deliberately does not do this.
+   */
+  focusNonce: number;
   /** A transport failure. Model failures live on the message that failed. */
   error: string | null;
 }
+
+/**
+ * What to ask, for a reader looking at an empty conversation.
+ *
+ * **Every one of these sends you back into the article.** That is the filter,
+ * and it is why the most obvious suggestion — "summarise this" — is not here
+ * and must not be added: it is the anti-goal
+ * ([vision.md](../../docs/project/vision.md)) in a single click, and a chat
+ * that opens by offering to replace the reading is not the feature that was
+ * argued for in docs/plans/chat-mode.md.
+ *
+ * They are borrowed rather than invented. Greg, 2026-08-26: *"borrow ideas from
+ * docs/project/original-version/ for suggestions for the user about what to use
+ * the Chat for."* Each traces to something that project built or that ours has
+ * already planned:
+ *
+ *  - **Where is it argued** — their criterion highlighting, where the reader
+ *    types a criterion in plain words (*"arguments supporting the main thesis"*,
+ *    *"statistical evidence"*) and the model marks the passages that match.
+ *    original-version/highlighting.md. Here the block ids do the marking.
+ *  - **Evidence or assertion** — the same tool, pointed at the distinction it
+ *    was most useful for.
+ *  - **What it assumes you know** — their glossary: *"the terms this piece uses
+ *    in a non-obvious way, defined from the piece itself"*.
+ *    original-version/glossary.md, and vision.md's own author's-glossary entry.
+ *  - **What the author does not say** — vision.md's *argument view*: "claims,
+ *    the support offered for each, and **the moves the author doesn't make**".
+ *    The one on this list nothing else in the app can do.
+ *  - **Check my understanding** — vision.md's *recall*: "a few durable
+ *    questions generated from what the reader actually dwelt on". A reader who
+ *    can answer has read it; a reader who cannot has just found out cheaply.
+ *
+ * The label is what the button says; the `ask` is what is sent, verbatim, so
+ * the conversation reads as though the reader typed it. Clicking sends rather
+ * than filling the box: these are complete questions, and an extra press to
+ * confirm a thing you just chose is a step that buys nothing.
+ */
+export const SUGGESTIONS: { label: string; ask: string }[] = [
+  {
+    label: "Where is the main claim argued?",
+    ask: "What is the central claim of this piece, and which paragraphs actually argue for it?",
+  },
+  {
+    label: "Evidence or assertion?",
+    ask: "Which parts of this article offer real evidence, and which are asserted without support?",
+  },
+  {
+    label: "What does it assume I know?",
+    ask: "What terms, people or debates does this piece assume I already know? Define them as this article uses them.",
+  },
+  {
+    label: "What does the author not say?",
+    ask: "What obvious objection or counter-argument does the author never address?",
+  },
+  {
+    label: "Check my understanding",
+    ask: "Ask me two questions that would show whether I have followed the argument so far. Don't answer them.",
+  },
+];
 
 export function ChatPanel({
   threads,
@@ -67,7 +140,8 @@ export function ChatPanel({
   onRename,
   onDelete,
   onJump,
-  knownIds,
+  blocks,
+  focusNonce,
   error,
 }: Props) {
   const open = threads.find((t) => t.id === threadId) ?? null;
@@ -93,7 +167,13 @@ export function ChatPanel({
       {error && <p className="chat-error">{error}</p>}
 
       {open ? (
-        <Conversation thread={open} onJump={onJump} knownIds={knownIds} onSend={onSend} />
+        <Conversation
+          thread={open}
+          onJump={onJump}
+          blocks={blocks}
+          onSend={onSend}
+          focusNonce={focusNonce}
+        />
       ) : (
         <ThreadList
           threads={threads}
@@ -234,13 +314,15 @@ function RenameRow({
 function Conversation({
   thread,
   onJump,
-  knownIds,
+  blocks,
   onSend,
+  focusNonce,
 }: {
   thread: ChatThread;
   onJump(id: BlockId): void;
-  knownIds: Set<string>;
+  blocks: Map<string, string>;
   onSend(question: string): void;
+  focusNonce: number;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const last = thread.messages.at(-1);
@@ -274,28 +356,52 @@ function Conversation({
   return (
     <>
       <div className="chat-scroll" ref={scroller}>
-        {thread.messages.length === 0 && (
-          <p className="chat-empty-hint">
-            Ask anything about this article. Answers point back at the paragraphs they came from.
-          </p>
-        )}
+        {thread.messages.length === 0 && <Suggestions onAsk={onSend} />}
         {thread.messages.map((m) => (
-          <Turn key={m.id} message={m} onJump={onJump} knownIds={knownIds} />
+          <Turn key={m.id} message={m} onJump={onJump} blocks={blocks} />
         ))}
       </div>
-      <Composer onSend={onSend} busy={last?.status === "pending"} />
+      <Composer onSend={onSend} busy={last?.status === "pending"} focusNonce={focusNonce} />
     </>
+  );
+}
+
+/**
+ * The opening state of a conversation: a line about what this is for, and five
+ * things worth asking.
+ *
+ * Shown only while the thread is empty. It is not a placeholder for the panel —
+ * it is the panel's most useful screen, because "what do I even ask an article"
+ * is the actual barrier, and a blank box answers it with nothing.
+ */
+function Suggestions({ onAsk }: { onAsk(question: string): void }) {
+  return (
+    <div className="chat-suggest">
+      <p className="chat-empty-hint">
+        Ask anything about this article. Answers cite the paragraphs they came from — press one to go
+        there.
+      </p>
+      <ul>
+        {SUGGESTIONS.map((s) => (
+          <li key={s.label}>
+            <button type="button" className="chat-suggest-btn" onClick={() => onAsk(s.ask)}>
+              {s.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 function Turn({
   message,
   onJump,
-  knownIds,
+  blocks,
 }: {
   message: ChatMessage;
   onJump(id: BlockId): void;
-  knownIds: Set<string>;
+  blocks: Map<string, string>;
 }) {
   if (message.role === "user") {
     return <div className="chat-turn you">{message.text}</div>;
@@ -308,7 +414,13 @@ function Turn({
           <LoaderCircle className="cmt-spinner" size={13} /> thinking…
         </span>
       ) : (
-        <Answer text={message.text} onJump={onJump} knownIds={knownIds} />
+        <Answer
+          text={message.text}
+          onJump={onJump}
+          blocks={blocks}
+          /* Tooltips only once the answer has landed — see renderCitations. */
+          live={message.status === "pending"}
+        />
       )}
       {message.status === "pending" && message.text !== "" && <span className="chat-cursor" />}
       {message.status === "error" && <p className="chat-failed">{message.error}</p>}
@@ -361,44 +473,100 @@ function Turn({
 function Answer({
   text,
   onJump,
-  knownIds,
+  blocks,
+  live,
 }: {
   text: string;
   onJump(id: BlockId): void;
-  knownIds: Set<string>;
+  blocks: Map<string, string>;
+  live: boolean;
 }) {
   return (
-    <>
+    /* One group for the whole answer, so moving along a row of citations shows
+       each card immediately instead of waiting out the open delay again. Same
+       reason the dock's placeholder buttons share one — Tooltip.tsx. */
+    <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
       {text.split(/\n{2,}/).map((para, p) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs of one immutable string
-        <p key={p}>{renderCitations(para, onJump, knownIds)}</p>
+        <p key={p}>{renderCitations(para, onJump, blocks, live)}</p>
       ))}
-    </>
+    </TooltipGroup>
   );
 }
 
 function renderCitations(
   para: string,
   onJump: (id: BlockId) => void,
-  known: Set<string>,
+  blocks: Map<string, string>,
+  live: boolean,
 ): (string | React.ReactElement)[] {
-  return splitCitations(para, known).map((seg, i) =>
+  return splitCitations(para, blocks).map((seg, i) =>
     seg.kind === "text" ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: segments of one immutable string, rebuilt whole
       <Fragment key={`t${i}`}>{emphasised(seg.text)}</Fragment>
     ) : (
-      /* No <Tooltip> around these, and it is a performance decision rather than
-         a design one. The whole answer re-renders on **every streamed token**,
-         so a Floating UI instance per chip means a dozen `useFloating` hooks
-         created and torn down a hundred times during one answer, for a hover
-         hint. BlockRef already carries the full id in a native `title`. */
       // biome-ignore lint/suspicious/noArrayIndexKey: segments of one immutable string, rebuilt whole
-      <span className="chat-cite" key={`c${i}`} title="Go to this passage">
-        {seg.ids.map((id) => (
-          <BlockRef key={id} id={id} onJump={onJump} />
-        ))}
+      <span className="chat-cite" key={`c${i}`}>
+        {seg.ids.map((id) =>
+          live ? (
+            /* **No tooltip while the answer is still arriving.** The whole
+               answer re-renders on every streamed token, so a Floating UI
+               instance per chip would be a dozen `useFloating` hooks created
+               and torn down a hundred times during one reply. Once the message
+               is `done` it re-renders no more, and the tooltips cost nothing —
+               which is also the only time anybody is reading carefully enough
+               to hover one. The native `title` on BlockRef covers the gap. */
+            <BlockRef key={id} id={id} onJump={onJump} />
+          ) : (
+            <Tooltip
+              key={id}
+              placement="top"
+              className="tip-cite"
+              content={<CitedBlock id={id} text={blocks.get(id) ?? ""} />}
+            >
+              <span className="chat-cite-hit">
+                <BlockRef id={id} onJump={onJump} />
+              </span>
+            </Tooltip>
+          ),
+        )}
       </span>
     ),
+  );
+}
+
+/**
+ * What a citation chip shows on hover: **the paragraph itself**.
+ *
+ * Greg, 2026-08-26, asked for a rich tooltip here, and the only content worth
+ * putting in one is the thing the citation points at. A chip saying
+ * "go to this passage" tells the reader what clicking does; a chip showing the
+ * passage lets them decide whether to click at all — and, more to the point,
+ * lets them check the model against the article without leaving the sentence
+ * they are reading. That check is the whole justification for the feature
+ * (docs/plans/chat-mode.md § Say the awkward thing first), and until now it
+ * cost a jump and a scroll back.
+ *
+ * Truncated, deliberately and not generously. Enough to recognise the
+ * paragraph and see whether it says what the answer claims; not enough to read
+ * instead of going there. The original version learned the same thing about
+ * search results and kept two lengths for it —
+ * docs/project/original-version/search-and-chat.md.
+ */
+function CitedBlock({ id, text }: { id: BlockId; text: string }) {
+  const shown = snippet(text);
+  return (
+    <>
+      <div className="tip-cite-head">{shortBlockId(id)}</div>
+      {shown === "" ? (
+        // A block with no text of its own — an image, a figure. Saying so beats
+        // an empty card that looks like a tooltip that failed to load.
+        <p className="tip-cite-empty">This block has no text of its own.</p>
+      ) : (
+        <p className="tip-cite-text">{shown}</p>
+      )}
+      <div className="tip-cite-go">Click to go there</div>
+    </>
   );
 }
 
@@ -446,9 +614,31 @@ function emphasised(text: string): (string | React.ReactElement)[] {
  * what is in it up to a limit, because a question worth asking is often two
  * sentences and a single-line input makes it feel like it should not be.
  */
-function Composer({ onSend, busy }: { onSend(question: string): void; busy: boolean }) {
+function Composer({
+  onSend,
+  busy,
+  focusNonce,
+}: {
+  onSend(question: string): void;
+  busy: boolean;
+  focusNonce: number;
+}) {
   const [value, setValue] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Take focus when a new conversation has just been started.
+   *
+   * Greg, 2026-08-26: *"when a new chat is started, move focus to the input
+   * box."* Which is the only time it is right — see ChatBand in App.tsx. The
+   * guard on `0` is what keeps a plain page load, or the reader opening a
+   * conversation they already had, from stealing the caret; a focused textarea
+   * turns ↑ / ↓ from "step through the article" into "move the cursor", and
+   * nothing on screen would say why.
+   */
+  useEffect(() => {
+    if (focusNonce > 0) box.current?.focus();
+  }, [focusNonce]);
 
   // Height follows content. Reset to `auto` first, or the box can only ever
   // grow: `scrollHeight` of an element already tall enough is its own height.

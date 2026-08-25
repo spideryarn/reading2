@@ -138,6 +138,35 @@ chat, and `fitView` is where it would go.
                                                      chat.json         streaming
 ```
 
+### What an empty conversation offers
+
+**Chat opens *in* a conversation, not in front of a list of them.** Greg, 2026-08-26: *"By default,
+if no existing Chats, start a new one."* A list is worth showing when it has something in it; when
+it does not, it is a screen whose only content is a button, and pressing that button was the only
+thing anybody was going to do. Starting a new one also takes the focus — *"when a new chat is
+started, move focus to the input box"* — and only then, because focus in a textarea turns ↑ / ↓ from
+"step through the article" into "move the cursor", and nothing on screen would explain why.
+
+The empty conversation is not blank. It carries five suggestions, and **the filter on them is that
+every one sends the reader back into the article.** The obvious suggestion — *summarise this* — is
+deliberately absent and should stay absent: it is [the anti-goal](../project/vision.md#anti-goals) in
+a single click, and a chat that opens by offering to replace the reading is not the feature argued
+for at the top of this file.
+
+They were borrowed rather than invented, at Greg's suggestion — *"borrow ideas from
+docs/project/original-version/ for suggestions for the user about what to use the Chat for"*:
+
+| Suggestion | Borrowed from |
+|---|---|
+| Where is the main claim argued? | their **criterion highlighting**, where the reader types a criterion in plain words — *"arguments supporting the main thesis"* ([highlighting.md](../project/original-version/highlighting.md)). Block ids do the marking here |
+| Evidence or assertion? | the same tool, aimed at the distinction it was most useful for — their other worked example was *"statistical evidence"* |
+| What does it assume I know? | their **glossary**: *"the terms this piece uses in a non-obvious way, defined from the piece itself"* ([glossary.md](../project/original-version/glossary.md)) |
+| What does the author not say? | vision.md's **argument view** — "claims, the support offered for each, and **the moves the author doesn't make**". The only one on the list nothing else in the app can do |
+| Check my understanding | vision.md's **recall** — "a few durable questions generated from what the reader actually dwelt on" |
+
+Clicking sends, rather than filling the box: these are complete questions, and a confirming press
+after choosing one buys nothing.
+
 ### The citation contract
 
 The prompt in [`converse.ts`](../../src/converse.ts) requires a block id in square brackets on any
@@ -185,6 +214,20 @@ property.
 
 Blank lines separate paragraphs; single newlines are preserved by `white-space: pre-wrap`, so the
 occasional short bullet list the prompt permits does not collapse onto one line.
+
+**A chip shows the paragraph it points at, on hover.** Added 2026-08-26 at Greg's request for a rich
+tooltip, and the only content worth putting in one is the thing the citation points *at*: a card
+saying "go to this passage" tells the reader what clicking does, whereas the paragraph itself lets
+them check the model against the article without leaving the sentence they are reading. That check
+is the entire justification for the feature, and until now it cost a jump and a scroll back. The
+text is truncated at ~260 characters — enough to recognise the paragraph and see whether it says
+what the answer claims, not enough to read instead of going there. The original version reached the
+same conclusion about search results and kept two lengths for it
+([search-and-chat.md](../project/original-version/search-and-chat.md)).
+
+The tooltips appear **only once the answer has finished**. While it streams the chips are plain,
+because of the next paragraph — and because nobody is hovering a citation in a sentence that is
+still being written.
 
 One consequence of streaming worth knowing before editing the panel: **the whole answer re-renders
 on every token.** That is what killed the Floating UI tooltip that used to sit on each citation chip
