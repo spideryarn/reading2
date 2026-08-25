@@ -12,7 +12,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { Article, Block, Meta, Tree } from "./types.js";
+import type { Arc, Article, Block, Meta, Tree } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -49,7 +49,12 @@ export async function loadArticle(slug: string): Promise<Article> {
           slug,
       } satisfies Meta);
 
-    return { meta, blocks: blocksFile.blocks, tree };
+    // Optional, and stays optional: the arc (stage 5b, src/arc.ts) is a
+    // second model pass, so an article can be perfectly readable without one.
+    // Absent means the L0 column falls back to the root gist.
+    const arc = await readJson<Arc>(path.join(dir, "arc.json"));
+
+    return { meta, blocks: blocksFile.blocks, tree, ...(arc ? { arc } : {}) };
   }
   throw new Error(
     `No article artefacts for "${slug}". Looked in:\n  ${candidateDirs(slug).join("\n  ")}\n` +

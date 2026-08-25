@@ -62,6 +62,26 @@ export interface Tree {
   nodes: Record<NodeId, TreeNode>;
 }
 
+/**
+ * One article-level sentence per part: where the argument stands there.
+ *
+ * Stage 5b, in its own `arc.json` rather than as a field on the tree — see
+ * src/arc.ts for why, and docs/project/granularity-zoom.md#the-arc for what an
+ * arc sentence is and how it differs from a gist.
+ */
+export interface ArcEntry {
+  /** The part this belongs to, as its block range. Matched by range, never by node id. */
+  range: [BlockId, BlockId];
+  text: string;
+}
+
+export interface Arc {
+  version: string;
+  generator: string;
+  slug: string;
+  entries: ArcEntry[];
+}
+
 export interface Meta {
   slug: string;
   title: string;
@@ -77,4 +97,40 @@ export interface Article {
   meta: Meta;
   blocks: Block[];
   tree: Tree;
+  /** Absent until `npm run arc` has been run — the L0 column falls back to the root gist. */
+  arc?: Arc;
+}
+
+/** A source the model consulted, from OpenRouter's `annotations`. See src/explain.ts. */
+export interface Citation {
+  url: string;
+  title?: string;
+}
+
+/**
+ * A reader's question about a stretch of prose, and the model's answer.
+ *
+ * Stored in `data/<slug>/comments.json` — reader state, so it lives beside the
+ * article rather than in it. See docs/project/comments.md.
+ *
+ * The anchor is `blockId` plus the exact `quote`; `start` only picks between
+ * repeats of the same words within the block. That ordering matters: an offset
+ * alone would silently drift the moment the paragraph changed, which is the
+ * failure random block ids exist to prevent (docs/project/block-ids.md).
+ */
+export interface Comment {
+  id: string;
+  blockId: BlockId;
+  quote: string;
+  /** Where `quote` sat in the block's rendered text when the comment was made. */
+  start: number;
+  createdAt: string;
+  /** `pending` is written to disk *before* the model call, so a crash is visible rather than silent. */
+  status: "pending" | "done" | "error";
+  answer?: string;
+  citations?: Citation[];
+  /** How many web searches the model chose to run. 0 means it was sure. */
+  searches?: number;
+  model?: string;
+  error?: string;
 }

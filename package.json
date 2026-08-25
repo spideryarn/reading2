@@ -12,7 +12,8 @@
     "validate-tree": "tsx src/validate-tree.ts",
     "toc:flatten": "tsx src/toc-flatten.ts",
     "test:watch": "vitest",
-    "toc": "tsx src/toc.ts"
+    "toc": "tsx src/toc.ts",
+    "arc": "tsx src/arc.ts"
   },
   "keywords": [],
   "author": "",

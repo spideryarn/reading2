@@ -13,7 +13,7 @@
  * automatically the same at every level of granularity, which is the invariant
  * the whole feature rests on.
  */
-import type { Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
+import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
 
 export interface Cell {
   node: TreeNode;
@@ -110,15 +110,73 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
   return { columnDepths, leafDepth: maxDepth, cells, cellAt, chains };
 }
 
-/** Human label for a column. */
-export function columnLabel(depth: number, leafDepth: number): string {
+/** Human label for a column. `hasArc` renames L0, which stops being the root. */
+export function columnLabel(depth: number, leafDepth: number, hasArc = false): string {
   if (depth === leafDepth) return "Paragraphs";
   switch (depth) {
-    case 0: return "Article";
+    case 0: return hasArc ? "The argument" : "Article";
     case 1: return "Parts";
     case 2: return "Sections";
     default: return `Level ${depth}`;
   }
+}
+
+/* -------------------------------------------------------------- the arc --
+   What the L0 column renders once stage 5b has run (src/arc.ts).
+
+   Rendering the root there made the column a single cell spanning the whole
+   article — a constant on an axis that means "this changes as you move down
+   the page", duplicating the masthead and costing 240px to do it. The arc
+   replaces it with one sentence per part saying where the argument stands,
+   which is the only content that is both article-level and vertically varying.
+   See granularity-zoom.md#the-arc. */
+
+export interface ArcCell {
+  /** The part this sits against. Boundaries are L1's, exactly. */
+  node: TreeNode;
+  rowSpan: number;
+  /** Absent when no arc entry matched this part — draws empty, never borrowed. */
+  text?: string;
+  /** 1-based position among the parts, for the step marker. */
+  index: number;
+  total: number;
+}
+
+/**
+ * The arc column, keyed by the row each cell starts on.
+ *
+ * Built from the L1 column's own cells, so the two columns share boundaries by
+ * construction rather than by two walks of the tree agreeing. **Every part gets
+ * a cell**, even one the arc has no sentence for: a missing `<td>` does not
+ * leave a gap in an HTML table, it shifts every later cell in the row one
+ * column left, so the whole view would silently misalign.
+ *
+ * Entries are matched to parts by block range, never by node id — ids are
+ * positional and a re-run of `npm run toc` renumbers them, which would quietly
+ * hand each sentence to its neighbour. An unmatched entry is dropped.
+ */
+export function buildArcColumn(
+  geometry: Geometry,
+  arc: Arc | undefined,
+): Map<number, ArcCell> | null {
+  const parts = geometry.cells[1];
+  if (!arc || !parts?.length) return null;
+
+  const byRange = new Map(arc.entries.map((e) => [`${e.range[0]}|${e.range[1]}`, e.text]));
+  const out = new Map<number, ArcCell>();
+  let row = 0;
+  parts.forEach((cell, i) => {
+    const key = `${cell.node.range[0]}|${cell.node.range[1]}`;
+    out.set(row, {
+      node: cell.node,
+      rowSpan: cell.rowSpan,
+      index: i + 1,
+      total: parts.length,
+      ...(byRange.has(key) ? { text: byRange.get(key) } : {}),
+    });
+    row += cell.rowSpan;
+  });
+  return out;
 }
 
 /* -------------------------------------------------------------- the spine --

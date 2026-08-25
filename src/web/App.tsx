@@ -3,9 +3,11 @@ import { useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
 import { TableView } from "./TableView.js";
 import { Spine } from "./Spine.js";
-import { buildGeometry, buildOutline, columnLabel } from "./tree.js";
-import { atParam, colsParam, slugParam, textParam } from "./params.js";
-import { STICKY_OFFSET, scrollToBlock } from "./scroll.js";
+import { CommentDialog } from "./CommentDialog.js";
+import { Masthead } from "./Masthead.js";
+import { buildArcColumn, buildGeometry, buildOutline, columnLabel } from "./tree.js";
+import { aboutParam, atParam, colsParam, noteParam, slugParam, textParam } from "./params.js";
+import { scrollToBlock, stickyOffset } from "./scroll.js";
 import {
   activeSectionIndex,
   buildSections,
@@ -14,6 +16,7 @@ import {
 } from "./position.js";
 import { fitView } from "./layout.js";
 import { useArrowNav } from "./keynav.js";
+import { useComments } from "./useComments.js";
 
 /**
  * Nothing here is `useState` any more except the fetched article itself, which
@@ -50,7 +53,7 @@ export function App() {
   if (!article) return <div className="loading">Loading…</div>;
   // Keyed on the slug so switching article remounts rather than trying to carry
   // one article's reading position into another's blocks.
-  return <Reader key={slug} article={article} />;
+  return <Reader key={slug} slug={slug} article={article} />;
 }
 
 /** The window width, as state, because the whole layout is computed from it. */
@@ -101,7 +104,7 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
       frame = 0;
       // Above the first section there is no section to name, and saying so keeps
       // ?at= out of the URL until the reader has actually moved.
-      if (window.scrollY <= STICKY_OFFSET) {
+      if (window.scrollY <= stickyOffset()) {
         if (synced.current === null) return;
         synced.current = null;
         void setAt(null);
@@ -110,7 +113,7 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
       const tops = rows.map((el) =>
         el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
       );
-      const id = sections[activeSectionIndex(tops, STICKY_OFFSET + 1)]?.blockId ?? null;
+      const id = sections[activeSectionIndex(tops, stickyOffset() + 1)]?.blockId ?? null;
       if (id === null || id === synced.current) return;
       synced.current = id;
       void setAt(id);
@@ -139,7 +142,7 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
   );
 }
 
-function Reader({ article }: { article: Article }) {
+function Reader({ slug, article }: { slug: string; article: Article }) {
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -193,13 +196,24 @@ function Reader({ article }: { article: Article }) {
   const jumpTo = useReadingPosition(sections, layoutKey);
 
   /**
-   * ← / → step through one level of the tree, and *which* level is whichever
+   * ↑ / ↓ step through one level of the tree, and *which* level is whichever
    * column the pointer is sitting in — see keynav.ts. It writes no state of its
    * own: it scrolls, and the listener above notices, exactly as it would for a
    * wheel. Off any tagged column the stride falls back to the section, which is
    * the unit `?at=` already stores.
    */
   const navDepth = useArrowNav(geometry, article.blocks, sectionDepth(geometry));
+
+  /**
+   * Comments: selecting prose asks a question of the model, and the answer
+   * arrives in a floating dialog. See docs/project/comments.md.
+   *
+   * Note what is *not* here — no column, no change to `fit`, nothing threaded
+   * through the layout arithmetic. That was the point of choosing a dialog.
+   */
+  const [note, setNote] = useQueryState("note", noteParam);
+  const { comments, ask, retry, remove, error: commentError } = useComments(slug);
+  const openComment = comments.find((c) => c.id === note) ?? null;
 
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
@@ -219,7 +233,18 @@ function Reader({ article }: { article: Article }) {
     setCols([...next].sort((a, b) => a - b));
   };
 
-  const root = article.tree.nodes[article.tree.rootId];
+  /**
+   * What the L0 column renders — one sentence per part on where the argument
+   * stands there, rather than the root node repeated down the whole page.
+   * Null until `npm run arc` has been run for this article, and then the column
+   * falls back to the root exactly as it used to. See tree.js § the arc.
+   */
+  const arcCells = useMemo(
+    () => buildArcColumn(geometry, article.arc),
+    [geometry, article.arc],
+  );
+
+  const [about, setAbout] = useQueryState("about", aboutParam);
 
   return (
     <div
@@ -240,16 +265,14 @@ function Reader({ article }: { article: Article }) {
           onJump={jumpTo}
         />
       )}
-      <div className="masthead">
-        <div className="masthead-inner">
-          <h1>{article.meta.title}</h1>
-          {article.meta.byline && <p className="byline">{article.meta.byline}</p>}
-          {/* The article-level gist lives here as well as in the L0 column,
-              because L0 is the first column auto-fit gives up on a narrow
-              window, and this is the one line that says what the piece is. */}
-          {root?.gist && <p className="root-gist">{root.gist}</p>}
-        </div>
-      </div>
+      {/* Everything constant about the article — see Masthead.tsx for why
+          constant is the word that decides it belongs here and not in a
+          column. */}
+      <Masthead
+        article={article}
+        expanded={about}
+        onToggle={() => void setAbout(about ? null : true)}
+      />
       <div className="controls">
         <span className="controls-label">Granularity</span>
         {gistDepths.map((d) => (
@@ -257,7 +280,7 @@ function Reader({ article }: { article: Article }) {
             key={d}
             className={shownGists.includes(d) ? "on" : ""}
             onClick={() => toggle(d)}
-            title={`Show or hide the ${columnLabel(d, geometry.leafDepth).toLowerCase()} column`}
+            title={`Show or hide the ${columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells).toLowerCase()} column`}
           >
             L{d}
           </button>
@@ -299,10 +322,17 @@ function Reader({ article }: { article: Article }) {
             you cannot tell what they are pointing at before you press one. */}
         <span
           className="keynav"
-          title="Left and right arrows step through this level — move the pointer to another column to change it"
+          title="Up and down arrows step through this level — move the pointer to another column to change it"
         >
-          ←→ {columnLabel(navDepth, geometry.leafDepth)}
+          ↑↓ {columnLabel(navDepth, geometry.leafDepth)}
         </span>
+        {/* Failures of the comment transport belong here rather than in the
+            dialog: if the fetch never landed there is no dialog to put them in. */}
+        {commentError && (
+          <span className="cmt-transport-error" title={commentError}>
+            comments: {commentError}
+          </span>
+        )}
         <span className="provenance" title={article.tree.generator}>
           {article.tree.version}
         </span>
@@ -314,8 +344,31 @@ function Reader({ article }: { article: Article }) {
         layout={fit}
         showText={showText}
         navDepth={navDepth}
+        arcCells={arcCells}
         onJump={jumpTo}
+        comments={comments}
+        openComment={note}
+        onSelect={(anchor) => {
+          if (!anchor) return;
+          void setNote(ask(anchor));
+          // Drop the browser's own selection highlight. It sits on top of the
+          // mark we just drew, so leaving it makes the new artefact invisible
+          // until the reader happens to click elsewhere.
+          window.getSelection()?.removeAllRanges();
+        }}
+        onOpenComment={(id) => void setNote(id)}
       />
+      {openComment && (
+        <CommentDialog
+          comment={openComment}
+          onClose={() => void setNote(null)}
+          onRetry={() => retry(openComment.id)}
+          onDelete={() => {
+            remove(openComment.id);
+            void setNote(null);
+          }}
+        />
+      )}
     </div>
   );
 }
