@@ -25,6 +25,7 @@ import {
   dedupe,
   findOccurrences,
   glossaryIsCurrent,
+  PROMPT_VERSION,
   inDocumentOrder,
   isStale,
   normaliseTerm,
@@ -48,6 +49,7 @@ import {
   rowScores,
   sortEntries,
   splitsOnPriority,
+  entryProse,
 } from "../src/web/GlossaryPanel.js";
 import { gateParam } from "../src/web/params.js";
 import type { Block, Glossary, GlossaryEntry } from "../src/types.js";
@@ -69,10 +71,29 @@ function entry(over: Partial<GlossaryEntry> & { name: string }): GlossaryEntry {
     id: `spya-${over.name.slice(0, 6).padEnd(6, "a").replace(/[^a-z0-9]/g, "a")}`,
     kind: "concept",
     aliases: [],
-    gloss: `What ${over.name} means here.`,
+    /* `senseHere` and not `gloss`, since glossary/2. The old field still exists
+       on the type for artefacts written before the split, and a few tests below
+       set it deliberately to exercise that path — but the default shape a test
+       gets should be the shape the pipeline now writes. */
+    senseHere: `What ${over.name} means here.`,
     blocks: [],
     ...over,
   };
+}
+
+/**
+ * The same fixture with one prose field removed.
+ *
+ * `entry({ senseHere: undefined })` would be the obvious spelling and the
+ * typecheck refuses it: `exactOptionalPropertyTypes` draws a distinction
+ * between "absent" and "present and undefined", and for these two fields that
+ * distinction is the feature — an absent `senseHere` is what a person simply
+ * quoted is supposed to have (src/glossary.ts § WHAT AN ENTRY SUPPLIES).
+ */
+function without(e: GlossaryEntry, key: "senseHere" | "background"): GlossaryEntry {
+  const copy = { ...e };
+  delete copy[key];
+  return copy;
 }
 
 const BLOCKS = [
@@ -372,7 +393,7 @@ describe("isStale / glossaryIsCurrent", () => {
 
   function glossary(over: Partial<Glossary> = {}): Glossary {
     return {
-      version: "glossary/1",
+      version: PROMPT_VERSION,
       generator: MODEL,
       slug: "a-slug",
       sourceHash: hashBlocks(BLOCKS),
@@ -399,7 +420,10 @@ describe("isStale / glossaryIsCurrent", () => {
   it("is not current when the prompt version or the model changed", async () => {
     const dir = await scratch();
     await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: BLOCKS }));
-    await writeFile(path.join(dir, "glossary.json"), JSON.stringify(glossary({ version: "glossary/0" })));
+    await writeFile(
+      path.join(dir, "glossary.json"),
+      JSON.stringify(glossary({ version: "glossary/0" })),
+    );
     expect(await glossaryIsCurrent(dir)).toBe(false);
     await writeFile(
       path.join(dir, "glossary.json"),
@@ -729,5 +753,144 @@ describe("the threshold slider", () => {
     }
     expect(gateParam.parse("0")).toBe(0);
     expect(gateParam.parse("1")).toBe(1);
+  });
+});
+
+describe("what an entry says — the glossary/2 field split", () => {
+  /* The rewrite of 2026-08-26. Greg, on the entry for a person the article
+     quotes once — "Computer scientist quoted for the line '...', which the
+     article uses to argue writing and thinking are inseparable":
+
+     > it's pretty weak! It adds almost nothing to the user's knowledge of
+     > Leslie Lamport, nor does it add any useful explanatory gloss
+
+     The diagnosis is that the entry is the model obeying a prompt that had no
+     good answer for an allusion, and the fix is two fields whose names carry
+     their provenance. What is testable is the plumbing that shape needs; the
+     prose itself is a model call and is not. See
+     docs/plans/glossary-entries-worth-reading.md. */
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
+
+  it("keeps an entry with only one of the two prose fields", () => {
+    /* The whole point. A coinage needs no background; a person simply quoted
+       needs no senseHere — and being forced to write one is what produced the
+       sentence that started this. Both must survive the drop rule. */
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "write-nots", senseHere: "Graham's coinage for those who will not write." },
+          { name: "Leslie Lamport", background: "Turing Award-winning computer scientist." },
+          { name: "both", senseHere: "Narrowed here.", background: "Ordinarily wider." },
+        ],
+      },
+      opts,
+    );
+    expect(g.entries.map((e) => e.name)).toEqual(["write-nots", "Leslie Lamport", "both"]);
+    expect(g.entries[0]?.background).toBeUndefined();
+    expect(g.entries[1]?.senseHere).toBeUndefined();
+  });
+
+  it("throws away an entry that has a name and nothing else", () => {
+    // The new drop rule. A name on its own is not an entry, it is a word.
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "silent" },
+          { name: "blank", senseHere: "   " },
+          { name: "kept", background: "Something." },
+        ],
+      },
+      opts,
+    );
+    expect(g.entries.map((e) => e.name)).toEqual(["kept"]);
+  });
+
+  it("folds a glossary/1 answer into background rather than dropping it", () => {
+    /* The model is asked for the new fields and sometimes writes the old ones —
+       the name it was trained on is a strong prior. `background` and not
+       `senseHere` on purpose: the old `gloss` blended the two, and the panel
+       labels senseHere "in this piece", so putting a blend there would
+       attribute the model's own knowledge to the article. That is the one
+       direction of error this design exists to prevent. */
+    const g = buildGlossary(
+      { entries: [{ name: "Seth", gloss: "The author.", detail: "Wrote a book." }] },
+      opts,
+    );
+    expect(g.entries[0]?.background).toBe("The author. Wrote a book.");
+    expect(g.entries[0]?.senseHere).toBeUndefined();
+    expect(g.entries[0]?.gloss).toBeUndefined();
+  });
+
+  it("no longer emits fromOutside, because the field it flagged is gone", () => {
+    // The boolean was a flag over a blob: no dose, no location. It fired on the
+    // Lamport entry, which contained nothing from outside at all.
+    const g = buildGlossary(
+      { entries: [{ name: "Seth", background: "The author.", fromOutside: true }] },
+      opts,
+    );
+    expect(g.entries[0]?.fromOutside).toBeUndefined();
+  });
+
+  it("keeps both entries' prose through a merge, not just the winner's", () => {
+    /* The line that had to change when one required field became two optional
+       ones. `merge` used to take `gloss` from the winner outright, which was
+       safe only because every entry had one. Here the richer name came back
+       with the background and the poorer one with what the article means by it
+       — taking the winner's outright would silently delete the only senseHere
+       in the pair, in a dedup whose whole promise is that nothing is thrown
+       away. */
+    const out = dedupe([
+      without(entry({ name: "nonreductive", senseHere: "Seth's narrowed sense." }), "background"),
+      without(
+        entry({
+          name: "nonreductive explanation",
+          aliases: ["nonreductive"],
+          background: "The ordinary philosophical use.",
+        }),
+        "senseHere",
+      ),
+    ]);
+    expect(out).toHaveLength(1);
+    // The richer name won, as it always did.
+    expect(out[0]?.name).toBe("nonreductive explanation");
+    expect(out[0]?.senseHere).toBe("Seth's narrowed sense.");
+    expect(out[0]?.background).toBe("The ordinary philosophical use.");
+  });
+});
+
+describe("entryProse", () => {
+  it("leads with what the article means, and falls back to background", () => {
+    /* The one line that makes the split self-correcting. Told to leave out a
+       senseHere that would only restate the page, the model writes background
+       only for a person simply quoted — so the informative sentence is the one
+       that reaches the closed row, and the panel never has to know what kind of
+       term it is looking at. */
+    expect(entryProse(entry({ name: "a", senseHere: "Here.", background: "Out there." })).lead).toBe(
+      "Here.",
+    );
+    expect(
+      entryProse(without(entry({ name: "b", background: "Out there." }), "senseHere")).lead,
+    ).toBe("Out there.");
+  });
+
+  it("labels each section with where it came from", () => {
+    const prose = entryProse(entry({ name: "a", senseHere: "Here.", background: "Out there." }));
+    expect(prose.sections.map((s) => [s.key, s.label])).toEqual([
+      ["senseHere", "in this piece"],
+      ["background", "background"],
+    ]);
+    expect(prose.legacy).toBe(false);
+  });
+
+  it("renders a glossary/1 entry the old way rather than labelling a blend", () => {
+    /* There is no honest label for a blended field. Putting the old `gloss`
+       under "in this piece" would attribute the model's own knowledge to the
+       article; putting it under "background" would deny the article the half
+       that came from it. So it stays unlabelled until somebody regenerates —
+       which the version bump is already prompting them to do. */
+    const old = entryProse(without(entry({ name: "a", gloss: "A blend of both." }), "senseHere"));
+    expect(old.legacy).toBe(true);
+    expect(old.lead).toBe("A blend of both.");
+    expect(old.sections).toEqual([]);
   });
 });

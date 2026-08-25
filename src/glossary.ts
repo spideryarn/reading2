@@ -57,7 +57,19 @@ import type {
   Tree,
 } from "./types.js";
 
-const PROMPT_VERSION = "glossary/1";
+/**
+ * Bumped whenever the prompt changes in a way that changes what an entry *is*.
+ *
+ * `glossary/2`, 2026-08-26: one blended `gloss` became `senseHere` and
+ * `background` — see docs/plans/glossary-entries-worth-reading.md. Bumping it
+ * is what marks every existing glossary stale, which is not a side effect but
+ * the migration: the panel says so at the top and offers "Find them again".
+ *
+ * Exported so tests can assert against the current value rather than pin a
+ * literal that has to be edited on every bump — a fixture that hardcodes the
+ * version tests the fixture.
+ */
+export const PROMPT_VERSION = "glossary/2";
 
 /**
  * The most entries one call may return.
@@ -191,6 +203,13 @@ interface RawEntry {
   name?: unknown;
   kind?: unknown;
   aliases?: unknown;
+  senseHere?: unknown;
+  background?: unknown;
+  /* `glossary/1`'s two prose fields. Still read, because a model told to write
+     the new shape occasionally writes the old one — the name it was trained on
+     is a strong prior — and an entry is more useful in the wrong field than
+     dropped. `toEntries` maps them on: `gloss` was a blend of the two new
+     fields, and the honest place to put a blend is the one that claims less. */
   gloss?: unknown;
   detail?: unknown;
   url?: unknown;
@@ -206,17 +225,38 @@ function text(value: unknown): string {
 /**
  * Turn what the model said into entries, believing as little of it as possible.
  *
- * An entry with no name or no gloss is dropped — those are the two fields the
- * panel cannot render without — and everything else degrades to a default
- * rather than failing the batch. Thirty good entries must not be lost because
- * one came back with `centrality: "high"`.
+ * **The drop rule is a name and at least one line of prose.** It used to be a
+ * name and a `gloss`, and the change is forced rather than chosen: from
+ * `glossary/2` on, either prose field may legitimately be absent — a coinage
+ * needs no `background`, and a person simply quoted needs no `senseHere`, which
+ * is the entire fix for the entry that prompted the rewrite. What cannot be
+ * absent is *both*, because an entry with a name and nothing else says nothing
+ * at all.
+ *
+ * Everything else degrades to a default rather than failing the batch. Thirty
+ * good entries must not be lost because one came back with `centrality: "high"`.
+ *
+ * **A `glossary/1` answer still lands somewhere.** The model is asked for the
+ * new fields and sometimes writes the old ones anyway; `gloss` is mapped to
+ * `background` and `detail` is appended to it. `background` and not
+ * `senseHere`, deliberately: the old `gloss` was a blend of the two, and the
+ * panel labels `senseHere` "in this piece" — putting a blend there would
+ * attribute the model's own knowledge to the article, which is the one
+ * direction of error this design is built to avoid.
  */
 function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
   const out: GlossaryEntry[] = [];
   for (const item of raw) {
     const name = text(item.name);
-    const gloss = text(item.gloss);
-    if (!name || !gloss) continue;
+    const senseHere = text(item.senseHere);
+    /* The old shape, folded in rather than dropped — see the docstring. Joined
+       with a space and not a newline: nothing renders these as blocks, and a
+       newline inside a paragraph is invisible in the panel and mangled in a
+       `title` attribute. */
+    const background = [text(item.background), text(item.gloss), text(item.detail)]
+      .filter(Boolean)
+      .join(" ");
+    if (!name || (!senseHere && !background)) continue;
 
     const kindText = text(item.kind).toLowerCase();
     const kind = (KINDS.has(kindText) ? kindText : "other") as GlossaryKind;
@@ -235,7 +275,6 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
       aliases.push(value);
     }
 
-    const detail = text(item.detail);
     const url = safeUrl(item.url);
     const difficulty = score(item.difficulty);
     const centrality = score(item.centrality);
@@ -245,12 +284,11 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
       name,
       kind,
       aliases,
-      gloss,
-      ...(detail ? { detail } : {}),
+      ...(senseHere ? { senseHere } : {}),
+      ...(background ? { background } : {}),
       ...(url ? { url } : {}),
       ...(difficulty === undefined ? {} : { difficulty }),
       ...(centrality === undefined ? {} : { centrality }),
-      ...(item.fromOutside === true ? { fromOutside: true } : {}),
       blocks: [],
     });
   }
@@ -283,25 +321,42 @@ function merge(incumbent: GlossaryEntry, challenger: GlossaryEntry): GlossaryEnt
     aliases.push(alias);
   }
 
-  const detail = winner.detail ?? loser.detail;
+  /* **Field by field, winner first, loser as the fallback** — and this is the
+     line that changed when one required prose field became two optional ones.
+     The old rule took `gloss` from the winner outright, which was safe only
+     because every entry had one. Doing that to `senseHere` would silently
+     delete the loser's, in exactly the case where it is the only one there: two
+     entries for the same thing where the richer *name* came back with the
+     background and the poorer one with what the article means by it. The whole
+     point of this dedup is that nothing is thrown away. */
+  const senseHere = winner.senseHere ?? loser.senseHere;
+  const background = winner.background ?? loser.background;
   const url = winner.url ?? loser.url;
   const difficulty = winner.difficulty ?? loser.difficulty;
   const centrality = winner.centrality ?? loser.centrality;
+  /* `glossary/1` fields. `toEntries` no longer produces them and the append
+     gate no longer lets an old list meet a new one, so in practice this runs
+     over two old entries or over none — carried anyway, because the cost is
+     three lines and the failure it prevents is an old entry coming back from a
+     merge with all of its prose gone. */
+  const gloss = winner.gloss ?? loser.gloss;
+  const detail = winner.detail ?? loser.detail;
 
   return {
     id: incumbent.id,
     name: winner.name,
     kind: winner.kind === "other" ? loser.kind : winner.kind,
     aliases,
-    gloss: winner.gloss,
+    ...(senseHere ? { senseHere } : {}),
+    ...(background ? { background } : {}),
+    ...(gloss ? { gloss } : {}),
     ...(detail ? { detail } : {}),
     ...(url ? { url } : {}),
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(centrality === undefined ? {} : { centrality }),
-    // Either half drawing on outside knowledge makes the merged entry do so.
-    // The safe direction: a badge that is there when it needn't be costs the
-    // reader nothing, and one that is missing is the failure the flag exists
-    // to prevent.
+    // Either half drawing on outside knowledge keeps the merged entry marked.
+    // Only ever true of `glossary/1` entries; kept so a merge between two of
+    // them does not quietly clear a badge the panel is still rendering.
     ...(winner.fromOutside || loser.fromOutside ? { fromOutside: true } : {}),
     blocks: [],
   };
@@ -551,21 +606,66 @@ WHAT DOES NOT
   actually depend on. This is a glossary FOR this article, not an encyclopaedia
   entry that happens to be adjacent to it.
 
-DEFINING FROM THE PIECE
+WHAT AN ENTRY SUPPLIES
 
-The gloss says what THIS AUTHOR means, in this article. Where the piece uses a
-term in its ordinary sense, say the ordinary thing briefly. Where the piece
-bends it, say how — that is the entry worth having.
+The reader has the article in front of them. Never spend an entry describing
+what the article does with a term — "quoted for the line ...", "the author's
+example of ...", "used to argue that ..." are all descriptions of a page the
+reader can already see, and an entry made of them adds nothing. An entry exists
+to supply what is NOT on the page.
 
-If you need to draw on knowledge from outside the text, be very explicit about
-it, e.g. "Although the text doesn't mention it, ..." or "As you may know, ...",
-and set "fromOutside": true on that entry. Being caught out saying more than
-the article does is not the failure here; saying it invisibly is.
+There are two kinds of missing thing, and they are the entry's two fields.
+
+"senseHere" — what THIS author means by the term, where a reader could not get
+that from the sentences around it: the narrowed sense, the coinage, how the
+piece bends an ordinary word. From the article and only the article. If the
+piece's use is plain once you know what the term is — a person simply quoted, a
+work simply named — LEAVE THIS FIELD OUT rather than restate the page. An absent
+field is a real answer.
+
+"background" — what the reader needs to bring TO the piece: who this person is,
+what this work or event is, what the term ordinarily means outside this article.
+This is your knowledge, not the article's, and the reader will be told so, so
+write it as knowledge rather than as hedged commentary on the article. Pick the
+two or three facts that make THIS article's use of it land — for a person quoted
+as an authority, the facts that say why the author reached for that name — and
+stop. A biography is padding, and so is any fact the piece does not lean on.
+
+A coinage of the author's usually needs only "senseHere". A person named without
+introduction usually needs only "background". A borrowed term the author bends
+needs both. At least one of the two must be there.
+
+If you do not actually know who or what something is beyond what the article
+says, leave "background" out. Do not guess, and never invent a fact about a
+person or an organisation.
+
+FOR EXAMPLE
+
+An article quotes Leslie Lamport on writing, without saying who he is.
+
+BAD — "senseHere": "Computer scientist quoted for the line 'If you're thinking
+without writing, you only think you're thinking,' which the article uses to
+argue writing and thinking are inseparable."
+That describes the page the reader is looking at. It is the whole failure.
+
+GOOD — "background": "Turing Award-winning computer scientist, known for
+distributed systems and for writing LaTeX. A byword for the view that precise
+writing is the test of precise thought, which is what his line is being borrowed
+for."
+That is what makes the quotation land, and it is not on the page.
 
 NAMES AND ALIASES
 
 "name" is the canonical and unambiguous way to refer to it (usually the longest
 or official form, e.g. "United States of America" rather than "America").
+
+Name the THING, not the topic. The name is what a reader would look up: the
+person, the work, the term. Do not compose a heading out of the thing plus what
+the article says about it — "JFK speechwriting" and "MLK plagiarism controversy"
+are topics; "John F. Kennedy" and "Martin Luther King Jr." are the entries, and
+what the article does with them belongs in the fields below, if anywhere. A
+composed name is also a name that appears nowhere in the article, so nothing
+will match it.
 
 "aliases" are the other forms this article actually uses — abbreviations, short
 forms, the plural if it is irregular, the surname where the piece introduced a
@@ -586,13 +686,15 @@ Both are your judgment and both are shown as your judgment. Do not inflate them.
 
 WRITING
 
-- "gloss": one or two plain sentences. This is the line the reader sees first.
-- "detail": a short paragraph, only where there is genuinely more to say. Leave
-  it out rather than padding.
+- "senseHere": one or two plain sentences, or absent.
+- "background": one to three plain sentences, or absent.
 - Plain prose in both. No Markdown, no bullet lists, no headings, no bold.
 - Do not begin with "refers to" or "is a term for". Say the thing.
+- Do not hedge about the article ("the article doesn't say, but ..."). The panel
+  labels which field is which; saying it again in the prose spends the reader's
+  line on something they are already being told.
 - Never invent a fact about a person or an organisation. If you are not sure who
-  someone is, say what the article treats them as and stop.
+  someone is, leave "background" out.
 
 OUTPUT
 
@@ -603,18 +705,20 @@ JSON only, no prose, no code fence:
     "name": "...",
     "kind": "person|place|organization|event|work|concept|term|other",
     "aliases": ["...", "..."],
-    "gloss": "...",
-    "detail": "...",
+    "senseHere": "...",
+    "background": "...",
     "difficulty": 0.0,
     "centrality": 0.0,
-    "fromOutside": false,
     "url": "https://..."
   }
 ]}
 
 "url" is optional and only for a term with an obvious canonical page. Omit it
-rather than guessing — a wrong link is worse than none. "detail", "url" and
-"fromOutside" may all be omitted. Nothing else may.`;
+rather than guessing — a wrong link is worse than none.
+
+"senseHere", "background" and "url" may each be omitted, but an entry with
+neither "senseHere" nor "background" says nothing and will be thrown away.
+Nothing else may be omitted.`;
 
 /**
  * What the model is shown.
@@ -736,20 +840,39 @@ export async function generateGlossary(opts: {
 
   const sourceHash = hashBlocks(blocks);
   const onDisk = await readGlossary(opts.dir);
-  // Append only to a glossary that still describes THIS text. See the note above.
-  const existing = onDisk && onDisk.sourceHash === sourceHash ? onDisk : null;
+  /* Append only to a glossary that still describes THIS text, **and that this
+     prompt wrote**. See the note above for the first half.
+   
+     The version half arrived with `glossary/2` on 2026-08-26, which replaced
+     one blended `gloss` with `senseHere` and `background`. Without it, "Find
+     more terms" on an old list would hand `dedupe` two vocabularies to merge
+     and produce a list where half the entries answer a different question from
+     the other half — and `merge` would have to pick between a `gloss` and a
+     `background` that are not the same field. Falling back to a fresh list is
+     the cheap, legible outcome: the panel already says the list is stale and
+     already offers to find them again. */
+  const existing =
+    onDisk && onDisk.sourceHash === sourceHash && onDisk.version === PROMPT_VERSION
+      ? onDisk
+      : null;
 
   const words = blocks.reduce((n, b) => n + b.words, 0);
   const count = suggestedCount(words);
   const started = Date.now();
 
   /* Bounded by `count`, which is bounded by BATCH_SIZE — the whole reason the
-     answer has a ceiling at all. Each entry is a name, a handful of aliases, a
-     gloss and sometimes a paragraph, which comes to a few hundred tokens.
+     answer has a ceiling at all. Each entry is a name, a handful of aliases,
+     and one or two short prose fields, which comes to a few hundred tokens.
      The allowance still scales with the article because the model reads the
      whole piece and thinks about it inside this same number. See
-     src/token-budget.ts. */
-  const answerTokens = 600 + count * 260;
+     src/token-budget.ts.
+
+     Raised from 260 with `glossary/2`: a `background` for a person named in
+     passing runs longer than the gloss it replaced, because it is now carrying
+     the facts that make the name land rather than a sentence about the
+     quotation. Undersizing this does not degrade — it throws
+     `truncatedMessage` and loses the whole pass. */
+  const answerTokens = 600 + count * 340;
   const maxTokens = budgetFor("glossary", answerTokens);
 
   const client = new Anthropic();
@@ -866,10 +989,17 @@ async function main(): Promise<void> {
     // occurrences is the alias instruction not landing, and it is the one thing
     // reading this output is good for.
     const where = entry.blocks.length === 0 ? "no blocks ←" : `${entry.blocks.length} blocks`;
-    const outside = entry.fromOutside ? " · outside the text" : "";
-    console.log(`${entry.name}  [${entry.kind}] (${where})${outside}`);
+    console.log(`${entry.name}  [${entry.kind}] (${where})`);
     if (entry.aliases.length > 0) console.log(`  aka ${entry.aliases.join(", ")}`);
-    console.log(`  ${entry.gloss}\n`);
+    /* Labelled, and both, because which field the model filled is the thing
+       worth looking at after a prompt change — an entry whose `senseHere` is a
+       sentence about the article rather than about the term is the failure
+       `glossary/2` exists to fix, and it is invisible in an unlabelled dump.
+       `gloss` for anything written before that. */
+    if (entry.senseHere) console.log(`  here: ${entry.senseHere}`);
+    if (entry.background) console.log(`  bg:   ${entry.background}`);
+    if (entry.gloss) console.log(`  ${entry.gloss}`);
+    console.log("");
   }
 }
 

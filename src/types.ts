@@ -203,9 +203,39 @@ export interface GlossaryEntry {
   kind: GlossaryKind;
   /** Other forms the piece uses. Never includes `name`; lower-cased and de-duplicated. */
   aliases: string[];
-  /** One or two sentences. What this piece means by the term. Plain text, never Markdown. */
-  gloss: string;
-  /** A paragraph, for the reader who wants more. Optional, and often absent. */
+  /**
+   * What **this author** means by the term, where the sentences around it do
+   * not give it to you: the narrowed sense, the coinage, the ordinary word
+   * bent. From the article and only the article.
+   *
+   * **Absent is a real answer**, and the most important one this field has. A
+   * person simply quoted, a work simply named — the article's use of those is
+   * plain once you know what the thing is, and an entry that restates it is a
+   * description of a page the reader is looking at. That was the Lamport bug:
+   * see docs/plans/glossary-entries-worth-reading.md.
+   *
+   * Plain text, never Markdown.
+   */
+  senseHere?: string;
+  /**
+   * What the reader has to bring **to** the piece — who this person is, what
+   * this work or event is, what the term ordinarily means outside this
+   * article. The model's own knowledge, and labelled as such in the panel.
+   *
+   * Two or three facts that make *this* article's use of it land, not a
+   * biography. Absent when the model does not know: an entry with only a
+   * `senseHere` is visibly missing its background, where a plausible invented
+   * one is not.
+   */
+  background?: string;
+  /**
+   * **Superseded on 2026-08-26, and still read.** The single blended prose
+   * field `senseHere` and `background` replaced, kept because artefacts
+   * written before that date have it and the panel renders them unchanged
+   * until somebody regenerates. Never written by a `glossary/2` pass.
+   */
+  gloss?: string;
+  /** Superseded with `gloss`, and read for the same reason. */
   detail?: string;
   /** Validated as a real URL at build time, and dropped rather than trusted if it isn't one. */
   url?: string;
@@ -222,18 +252,19 @@ export interface GlossaryEntry {
   difficulty?: number;
   centrality?: number;
   /**
-   * True when any part of this entry draws on knowledge that is not in the
-   * article.
+   * **Superseded on 2026-08-26, and still read** — same as `gloss` above.
    *
-   * Borrowed from the best line in their prompt — *"If you need to draw on
-   * knowledge from outside the text, be very explicit about it, e.g. 'Although
-   * the text doesn't mention it, ...'"* — which is hallucination made **visible
-   * instead of silent**.
+   * It was a boolean over a blob: true when *any part* of the entry drew on
+   * knowledge outside the article. The failure that retired it is that a flag
+   * over prose has no dose and no location — it fired on the Lamport entry,
+   * whose two sentences contained nothing from outside at all, and when it
+   * fires correctly it still cannot say *which two words*.
    *
-   * The flag and that phrasing are not two copies of one fact, and both are
-   * asked for: the flag is about the *entry*, so the panel can badge it, and
-   * the phrase is about the *clause*, so the honesty survives the text being
-   * read or copied away from the badge.
+   * What replaced it is not a better flag. It is the field split: `senseHere`
+   * is from the article, `background` is not, and the labels on those two
+   * sections answer "which bits" exactly. Provenance the model **writes into**
+   * rather than **reports about** — see
+   * docs/plans/glossary-entries-worth-reading.md § Provenance is structural.
    */
   fromOutside?: boolean;
   /** Every block that uses this term, in document order. Found by us. Empty is meaningful. */

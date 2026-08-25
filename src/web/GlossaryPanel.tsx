@@ -66,6 +66,7 @@ import { useState } from "react";
 import {
   BookA,
   ExternalLink,
+  Info,
   Loader2,
   RotateCcw,
   Search,
@@ -75,6 +76,7 @@ import {
 import type { BlockId, Glossary, GlossaryEntry, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
+import { Tooltip } from "./Tooltip.js";
 import type { UseGlossary } from "./useGlossary.js";
 
 interface Props extends UseGlossary {
@@ -568,6 +570,69 @@ export function rowScores(entry: GlossaryEntry, sort: TermSort | null): RowScore
   return [];
 }
 
+/* ------------------------------------------------------- what an entry says --
+   Rewritten 2026-08-26. Greg, looking at the entry for a person the article
+   quotes once:
+
+   > it's pretty weak! It adds almost nothing to the user's knowledge of Leslie
+   > Lamport, nor does it add any useful explanatory gloss to help understand
+   > the article itself. […] And "Goes beyond what the article says" is
+   > vague/confusing - either be clearer, or indicate in the glossary entry
+   > itself clearly […] which bits are/not from the article.
+
+   Both halves of that have the same answer, and it is a field split rather
+   than a better badge. See docs/plans/glossary-entries-worth-reading.md. */
+
+/** One labelled section of an open entry. The label IS the provenance. */
+export interface ProseSection {
+  key: "senseHere" | "background";
+  label: string;
+  text: string;
+}
+
+export interface EntryProse {
+  /** The one line a closed row shows. Empty only for an entry we would not store. */
+  lead: string;
+  /** The open row, labelled. Empty for an entry written before `glossary/2`. */
+  sections: ProseSection[];
+  /** True when this entry has the old single blended field and renders the old way. */
+  legacy: boolean;
+}
+
+/**
+ * What to put on a row, and under which label.
+ *
+ * **The lead is `senseHere` if there is one and `background` if there is not**,
+ * and that single line is what makes the design self-correcting. The model is
+ * told to leave `senseHere` out rather than restate a page the reader is
+ * looking at — so for a person simply quoted it writes background only, and the
+ * informative sentence is the one that reaches the closed row. The panel never
+ * has to know what kind of term it is looking at.
+ *
+ * **Old entries render exactly as they did.** `glossary/1` wrote one `gloss`
+ * that blended what the article means with what the model knows, and there is
+ * no honest way to label a blend — putting it under "in this piece" would
+ * attribute the model's own knowledge to the article, which is the one
+ * direction of error this whole change exists to prevent. So it stays
+ * unlabelled, keeps its `detail` and its warning badge, and stops being a
+ * problem the moment somebody presses "Find them again" — which the panel is
+ * already offering, because bumping the prompt version made every old glossary
+ * read as stale.
+ */
+export function entryProse(entry: GlossaryEntry): EntryProse {
+  const sections: ProseSection[] = [];
+  if (entry.senseHere) {
+    sections.push({ key: "senseHere", label: "in this piece", text: entry.senseHere });
+  }
+  if (entry.background) {
+    sections.push({ key: "background", label: "background", text: entry.background });
+  }
+  if (sections.length === 0) {
+    return { lead: entry.gloss ?? "", sections: [], legacy: true };
+  }
+  return { lead: sections[0]!.text, sections, legacy: false };
+}
+
 /** Which sorts this particular glossary can actually offer. */
 function SortBar({
   entries,
@@ -749,6 +814,7 @@ function Term({
   onJump(id: BlockId): void;
 }) {
   const scores = rowScores(entry, showScore);
+  const prose = entryProse(entry);
 
   return (
     <li className={`gloss-term${selected ? " on" : ""}`}>
@@ -785,33 +851,90 @@ function Term({
             </span>
           )}
         </span>
-        <span className="gloss-gloss">{entry.gloss}</span>
+        {/* Hidden while the entry is open, because the open state shows the
+            same words again with a label on them. One line closed, the labelled
+            structure open — no sentence appears twice, and the label does the
+            provenance work rather than a badge underneath it. */}
+        {!selected && <span className="gloss-gloss">{prose.lead}</span>}
       </button>
 
       {selected && (
         <div className="gloss-open">
+          {/* Labelled sections, and the label is the whole provenance story:
+              everything under "in this piece" is from the article, everything
+              under "background" is the model's own knowledge. That is the
+              answer to "which bits are/not from the article" — all of this one,
+              none of that one — and it needs no marks inside the prose, which
+              would mean markup in a stored string and a restricted renderer to
+              show it. See the plan doc for why inline marking was rejected. */}
+          {prose.sections.map((section) => (
+            <div key={section.key} className={`gloss-part gloss-part-${section.key}`}>
+              <p className="gloss-part-label">
+                {section.label}
+                {section.key === "background" && (
+                  <Tooltip
+                    content="The article doesn't say this — it's what the model knows about the term. Nothing here has been checked against a source."
+                    placement="top"
+                  >
+                    <span
+                      className="gloss-part-hint"
+                      /* The same call CommentDialog's search badge makes, and for the
+                         same reason: without it the only way to read this caption is
+                         to hover it, so removing the tabIndex would take accessibility
+                         away rather than add it. */
+                      // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the tooltip
+                      tabIndex={0}
+                      role="note"
+                      aria-label="Where this section comes from"
+                    >
+                      <Info size={10} />
+                    </span>
+                  </Tooltip>
+                )}
+              </p>
+              <p className="gloss-part-text">{section.text}</p>
+              {/* The canonical link lives INSIDE the background section, because
+                  checking the background is the only thing it is for. It is the
+                  model's guess at a page rather than a source it visited — the
+                  glossary call does not search — which is what the tooltip
+                  says. */}
+              {section.key === "background" && entry.url && (
+                /* `rel="noreferrer"` as well as `noopener`: the article's own
+                   URL is a reading history, and a model-supplied link should not
+                   be handed ours as a referrer. The scheme was checked
+                   server-side — `safeUrl` in src/glossary.ts — because a
+                   `javascript:` href here would be a script injection with a
+                   very short path. */
+                <p className="gloss-link">
+                  <Tooltip content={`Where to check this: ${entry.url}`} placement="top">
+                    <a href={entry.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={11} />
+                      {hostOf(entry.url)}
+                    </a>
+                  </Tooltip>
+                </p>
+              )}
+            </div>
+          ))}
+
           {entry.aliases.length > 0 && (
             <p className="gloss-aliases">also: {entry.aliases.join(", ")}</p>
           )}
 
-          {entry.detail && <p className="gloss-detail">{entry.detail}</p>}
+          {/* Everything from here to the occurrence list is `glossary/1` only —
+              one blended field, its paragraph, its badge and its bare link. Kept
+              rendering rather than migrated, because a blend cannot be labelled
+              honestly. `entryProse` says why. */}
+          {prose.legacy && entry.detail && <p className="gloss-detail">{entry.detail}</p>}
 
-          {/* The model saying it went past the article, said out loud rather
-              than left in the prose to be noticed. Borrowed from the best line
-              in their prompt — see src/glossary.ts § SYSTEM. */}
-          {entry.fromOutside && (
+          {prose.legacy && entry.fromOutside && (
             <p className="gloss-outside">
               <TriangleAlert size={11} />
               Goes beyond what the article says.
             </p>
           )}
 
-          {entry.url && (
-            /* `rel="noreferrer"` as well as `noopener`: the article's own URL is
-               a reading history, and a model-supplied link should not be handed
-               ours as a referrer. The scheme was checked server-side —
-               `safeUrl` in src/glossary.ts — because a `javascript:` href here
-               would be a script injection with a very short path. */
+          {prose.legacy && entry.url && (
             <p className="gloss-link">
               <a href={entry.url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink size={11} />

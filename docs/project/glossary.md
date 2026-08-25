@@ -32,11 +32,16 @@ until you know what they are for.
  │             ├─────────────────────┤                         │
  │             │ nonreductive  d·72   │ … the nonreductive case│
  │             │ explanation   c·85   │   ┈┈┈┈┈┈┈┈┈┈┈┈          │
- │             │ Seth's term for an   │   does not collapse …  │
- │             │ account that…        │                         │
- │             │ ▸ also: nonredu…     │      ↑ underlined only │
- │             │ ▸ used in 3 places   │        while that term │
- │             │   k3m9qt qw82nf      │        is selected     │
+ │             │ │IN THIS PIECE       │   does not collapse …  │
+ │             │ │Seth's term for an  │                         │
+ │             │ │account that…       │      ↑ underlined only │
+ │             │ ┊BACKGROUND      (i) │        while that term │
+ │             │ ┊The ordinary use in │        is selected     │
+ │             │ ┊philosophy of mind… │                         │
+ │             │ ┊ ↗ en.wikipedia.org │                         │
+ │             │ ▸ also: nonredu…     │                         │
+ │             │ ▸ used in 3 places   │                         │
+ │             │   k3m9qt qw82nf      │                         │
  │             │ interoception d·66 c·61                        │
  │             ├─────────────────────┤                         │
  │             │ THE REST         18 │                         │
@@ -54,6 +59,14 @@ until you know what they are for.
  each group the order is first use — the reader's own order through the
  piece — so within a group the model has chosen nothing. Both numbers are
  on every row; the product they were gated on never is.
+
+ The two labelled sections under an open term are the provenance, and they
+ are the whole answer to "which bits are and are not from the article": all
+ of the solid-ruled one, none of the dotted one. IN THIS PIECE is from the
+ article; BACKGROUND is what the model knows, and the link to check it sits
+ inside that section because checking it is all the link is for. A closed
+ row shows whichever of the two exists — for a person quoted once there is
+ no "in this piece" worth writing, and saying so is the entry's whole job.
 
  The threshold row is where that product's one free number lives. Drag it
  left and the top group swallows the list; drag it right and it narrows to
@@ -246,6 +259,106 @@ holds — and it answers the question the list otherwise raises on every entry, 
 this piece actually use that*. Pressing the selected term again clears it, which is the only way to
 take the underlines back out; a selection you cannot cancel is a mode inside a mode.
 
+## What an entry says, and which half came from where
+
+**Rewritten 2026-08-26.** Greg looked at the entry for a person the article quotes once:
+
+> **Leslie Lamport** *person* — Computer scientist quoted for the line 'If you're thinking without
+> writing, you only think you're thinking,' which the article uses to argue writing and thinking are
+> inseparable. ⚠ Goes beyond what the article says.
+
+> it's pretty weak! It adds almost nothing to the user's knowledge of Leslie Lamport, nor does it add
+> any useful explanatory gloss to help understand the article itself. […] And "Goes beyond what the
+> article says" is vague/confusing - either be clearer, or indicate in the glossary entry itself
+> clearly (e.g. with tooltips or highlighting) which bits are/not from the article.
+>
+> — Greg, 2026-08-26
+
+**That entry was the model obeying the prompt.** `SYSTEM` said the gloss says *what THIS AUTHOR
+means, in this article*, which is exactly right for a term the author **bends** and unanswerable for
+one they merely **borrow**. The article does not *mean* anything by Leslie Lamport; it quotes him.
+Asked what the author means by the name, the only article-grounded sentence available is a
+description of the quotation — and a description of the quotation is a description of a page the
+reader is looking at.
+
+Two things follow, and they land in different places:
+
+- **Searching the web would not have helped.** The model knows who Lamport is. The prompt told it not
+  to say.
+- **`fromOutside` fired on an entry containing nothing from outside.** A boolean over a blob has no
+  dose and no location; even when it is right it cannot say *which two words*.
+
+### The two fields
+
+| field | what it holds | where it comes from |
+|---|---|---|
+| `senseHere` | what *this author* means, where the surrounding sentences do not give it to you | the article, and only the article |
+| `background` | who this person is, what this work is, what the term ordinarily means | the model's own knowledge, labelled as such |
+
+**At least one, and usually only one.** A coinage of the author's needs only `senseHere`; a person
+named without introduction needs only `background`; a borrowed term the author bends needs both. The
+prompt says `LEAVE THIS FIELD OUT rather than restate the page. An absent field is a real answer` —
+and carries the bad Lamport entry verbatim as a worked example, because the failure is a *register*
+the model falls into, and a negative example is the strongest guard against a register.
+
+**The closed row shows `senseHere` if there is one and `background` if there is not**
+(`entryProse`, [`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx)). That one line is what makes
+the design self-correcting: the panel never has to know what kind of term it is looking at. Nothing
+branches on `kind`, deliberately — kind is a proxy and it leaks both ways. A concept can be an
+allusion (*Paxos*), and a person can be fully introduced by the article.
+
+Run against the article that started this, the split does the work with no branching at all:
+
+```
+writes and write-nots   here: The author's coined split of society into two groups …
+Leslie Lamport          bg:   A Turing Award-winning computer scientist known for
+                              foundational work in distributed systems and for creating
+                              LaTeX. He is often invoked as an authority on rigorous
+                              thought, which is why his aphorism … is used here.
+```
+
+### Provenance is the label, not a badge
+
+The open entry is two labelled sections, **in this piece** and **background**, and the label is the
+whole answer to *which bits are and are not from the article*: all of this one, none of that one.
+`background` carries a hover caption saying the article doesn't say it, and the canonical `url` —
+which is the model's guess at a page, not a source it visited — sits **inside** that section, because
+checking the background is the only thing it is for.
+
+**The ⚠ is gone.** Warning styling treats outside knowledge as a hazard, when for an allusion it is
+the entire product. The panel still reserves alarm for an actual failed check — *"These exact words
+do not appear in the article"* — which is where it belongs.
+
+**Inline marking was rejected**, and it was Greg's own suggestion, so the reasons are written out in
+full in [the plan](../plans/glossary-entries-worth-reading.md#rejected-marking-the-outside-bits-inline):
+a model tagging its own sentences will misattribute some and a wrong inline tag is uncheckable;
+markup inside a stored string would reverse the plain-text stance below; and stippled two-colour text
+in an 18rem band is noise. Field granularity *forces* the separation that sentence granularity would
+have to detect.
+
+### Name the thing, not the topic
+
+One guard added after watching the first run: the model came back with **"JFK speechwriting"** and
+**"MLK plagiarism controversy"** — the person fused with what the article says about them. That is
+not a fussy naming preference. Occurrences are matched on the name and its aliases
+([`term-match.ts`](../../src/term-match.ts)), so a composed name is a name that **appears nowhere in
+the article**, and those two entries only found their blocks because `JFK` and `MLK` happened to be
+aliases. The prompt now names both as examples of what not to do, and the re-run gave
+*John F. Kennedy* and *Martin Luther King Jr.*
+
+### What this replaced, and how old glossaries behave
+
+`glossary/1`'s `gloss`, `detail` and `fromOutside` are **still read and still rendered**, unlabelled
+and with their badge, exactly as before. There is no honest label for a blend: putting the old
+`gloss` under "in this piece" would attribute the model's own knowledge to the article, which is the
+one direction of error this change exists to prevent.
+
+They do not linger. `PROMPT_VERSION` went to `glossary/2`, which makes every existing glossary read
+as **stale** — the panel says so at the top and offers *Find them again*. And the append gate in
+`generateGlossary` now requires the version to match as well as the source hash, so *Find more terms*
+on an old list starts a new one rather than handing [`dedupe`](#two-their-dedup-deleted-the-more-specific-term)
+two vocabularies to merge.
+
 ## The scores, and the condition attached to keeping them
 
 Every entry may carry `difficulty` and `centrality`, 0–1, the model's own judgment. Our review of
@@ -384,7 +497,7 @@ It reads the blocks and the tree and nothing reads what it writes, so the positi
 buy a model call for nothing — **and** forcing this step appends, so being swept in would silently
 lengthen the reader's glossary as a side effect of re-fetching the article.
 
-## Four ways to break this quietly
+## Five ways to break this quietly
 
 1. **Change the matching rule on one side.** `src/term-match.ts` is imported by the stage and by the
    reading view. Inlining a "quick" regex in either half makes the occurrence list and the underlines
@@ -397,6 +510,11 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
    validated with, accepts `javascript:`.
 4. **Let the cascade force it.** See above. The symptom is a glossary that grows every time somebody
    refreshes an article, with nothing anywhere saying why.
+5. **Take the winner's prose outright in `merge`.** It used to do exactly that with `gloss`, and it
+   was safe only because every entry had one. With two optional fields it deletes the loser's
+   `senseHere` whenever the winner has none — which is precisely the case where it is the only one
+   in the pair. Every field goes `winner.x ?? loser.x`, and the dedup's whole promise is that nothing
+   is thrown away.
 
 ## What is still open
 
@@ -406,9 +524,16 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 - **No keyboard traversal of the term list.** ↑ / ↓ belong to the article
   ([keyboard.md](keyboard.md)) and taking them inside the band needs a focus story the band does not
   have yet. Same gap chat has.
-- **`detail` is plain text, deliberately.** The model is told no Markdown, and nothing renders any —
-  rendering arbitrary model output as HTML is what [security.md](security.md) is about. If entries
-  ever want emphasis, the answer is a restricted renderer, not `dangerouslySetInnerHTML`.
+- **The prose fields are plain text, deliberately.** The model is told no Markdown, and nothing
+  renders any — rendering arbitrary model output as HTML is what [security.md](security.md) is
+  about. If entries ever want emphasis, the answer is a restricted renderer, not
+  `dangerouslySetInnerHTML`. This is also the second reason inline provenance marking was rejected
+  on 2026-08-26: marks inside the prose mean markup inside a stored string, and that reverses this.
+- **Nothing has been checked against a source.** `background` is the model's memory, and `url` is
+  its guess at a canonical page rather than one it visited. The glossary call does not search the
+  web, and [the plan](../plans/glossary-entries-worth-reading.md#3-the-web-on-demand-per-entry-never-in-the-batch)
+  says why the answer is a per-entry lookup the reader asks for rather than search in the batch
+  call — including the reason searching would not have fixed the entry that prompted all this.
 - **Nothing ties a term to a question.** [comments.md](comments.md) already answers "what does this
   mean" for a selected passage, and our review of their version argued a glossary should be *the same
   mechanism with a different prompt* rather than a second system. It is currently a second system —

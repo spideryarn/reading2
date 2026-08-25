@@ -2781,6 +2781,49 @@ td.text.has-hit {
   line-height: 1.45;
 }
 
+/* The two labelled sections of an open entry, added 2026-08-26. The label is
+   the provenance — "in this piece" is from the article, "background" is the
+   model's own knowledge — so it has to read as a label rather than as a
+   heading somebody might mistake for part of the definition. Hence small,
+   faint, lowercase and letter-spaced, the same register as the group headings
+   in the prioritised order. */
+.gloss-part { margin-bottom: 0.5rem; }
+.gloss-part:last-child { margin-bottom: 0; }
+.gloss-part-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0.15rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+/* A left rule rather than a colour, because the difference between these two
+   sections is a claim about where words came from, and colour is the one
+   channel this app has already learned not to trust for meaning
+   (docs/project/browser-testing.md). The rule is visible in both themes and
+   survives a screenshot. */
+.gloss-part-senseHere { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
+.gloss-part-background { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+.gloss-part-text {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+/* `tabIndex={0}` on the span it wraps, so the tooltip is reachable by keyboard
+   and not only by hover — the same treatment the comment dialog's search badge
+   gets, and for the same reason. */
+.gloss-part-hint {
+  display: inline-flex;
+  color: var(--ink-faint);
+  cursor: help;
+}
+.gloss-part-hint:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
 .gloss-open { padding: 0 0.7rem 0.65rem; }
 .gloss-open p { margin: 0 0 0.4rem; font-size: 0.76rem; line-height: 1.45; }
 .gloss-open p:last-child { margin-bottom: 0; }
