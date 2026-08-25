@@ -256,6 +256,25 @@ All of this came out of a GPT/Codex review of the change (2026-08-25). It is wri
 because every one of these looked completely fine, and three of them were written by an agent that
 had just finished writing the rules they broke.
 
+**And it came back the next day, which is the part worth learning from.** `src/chat.ts` was written
+by copying `src/comments.ts`, and it copied the `reason` field — the exact line that had just been
+removed, carrying its own comment explaining that the value was safe because it is "the stored error
+string, never the answer". True, and not the point: the stored error string is where the provider's
+response body is. A fix that lives only in one file's history does not survive that file being used
+as a template, so both places now carry the reasoning in full and say to keep each other in step.
+
+The same review found the rule broken in a second shape, which is easier to miss because the leak and
+the log are in different files. `src/toc.ts` validated a node's range and threw
+``Node "${mn.title}" has a range not in blocks.json`` — a label the model wrote *about the article*,
+put into an error message. Nothing logs it there. But a pipeline step that throws is logged by
+[`src/jobs.ts`](../../src/jobs.ts) with `errorFields`, which keeps `message` **and** `stack`, so the
+title would have landed in the log twice, from a file that never calls the logger at all. It now
+throws the block-id range instead, which is the more useful half anyway.
+
+So the rule has a second half: **an error is a value that travels, and where it is thrown is not
+where it is written down.** Anything interpolated into a message that can reach a catch-all has been
+logged, whatever the file it was thrown from thought it was doing.
+
 ### What a URL gives away
 
 **No log line carries a full article URL today.** The `slug` identifies the article everywhere, and
@@ -289,6 +308,15 @@ everything below. Logs are enough for "I deployed and something is wrong". They 
 **Limits:** 256 KB per line, **256 lines per request**, 1 MB per request. Roomy, but a line per block
 during an ingest would blow the line ceiling on a long article, and past it you can only query the
 most recent. This is why `store` logging is sparing and why per-block logging does not exist.
+
+So there is a rule, and it is about shape rather than volume: **if the number of lines a piece of
+code emits grows with the data, the caller says it once instead.** A line per skipped directory is a
+line per *article on the shelf*, on every homepage load — the cost grows with the library while the
+information in it does not. Both places this came up ([`loadFromDisk`](../../src/jobs.ts) reading the
+queue, [`listArticles`](../../src/api.ts) walking the shelf) now collect into an array and emit one
+line carrying `{ count, first five names, of }`. The count is what tells you the scale, the names are
+what make it actionable, and the cap is what stops a long line being the one that gets truncated by
+whatever is collecting it. The loop that finds the problem is not the right place to report it.
 
 ### Two traps worth knowing before they bite
 

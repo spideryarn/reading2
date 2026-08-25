@@ -15,6 +15,13 @@
  * than the presence of `[redacted]`: a key that vanished entirely, or a
  * redaction that ran on a copy, would satisfy the second and not the first.
  *
+ * One thing is read from the source rather than from the output, and it is
+ * worth naming because it is the exception: `redactedPaths()` parses the
+ * `REDACT` array out of `src/log.ts` to find out *which* paths to try. That is
+ * a list of questions to ask, not an answer — every claim about what the logger
+ * does is still measured from the bytes. The alternative was a copy of the list
+ * kept in this file, which is a copy that goes stale silently.
+ *
  * ## Why a child process
  *
  * `src/log.ts` builds its logger at import time — the level comes from the
@@ -25,10 +32,13 @@
  * process gives us the real module, at a real level, and the real bytes it put
  * on fd 1 — a measurement that cannot share an assumption with the code.
  *
- * The cost is honest: ~1s per scenario, five scenarios. Lines are batched into
- * one child per environment rather than one child per assertion.
+ * The cost is honest: a few hundred milliseconds per scenario, six of them.
+ * Lines are batched into one child per environment rather than one child per
+ * assertion — two of the six are scenarios that end the process on purpose and
+ * cannot share a child with anything.
  */
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
 import { errorFields, since } from "../src/log.js";
@@ -47,6 +57,70 @@ const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
  */
 const LOG_MODULE =
   process.env.LOG_TEST_MODULE ?? fileURLToPath(new URL("../src/log.ts", import.meta.url));
+
+/**
+ * Every path `src/log.ts` redacts — read out of the file, not copied into here.
+ *
+ * A hand-written copy of the list drifts the first day somebody adds a
+ * nineteenth path: the suite still passes, because it is a test of the list it
+ * was handed rather than of the list the logger uses. That is the vacuous-test
+ * shape from silent-success.md — coverage measured against the wrong thing
+ * agrees with the gap. Reading the array out of the source keeps the two the
+ * same list, so a new path immediately gets a sentinel logged at it and has to
+ * make that sentinel vanish.
+ *
+ * It parses text, and that is the honest cost of not exporting `REDACT`. The
+ * module's public surface should not grow a member that exists only for a test,
+ * and the array is a plain literal that has not moved since it was written.
+ * Line comments are stripped first because there are several inside the array;
+ * a double-quoted word inside one of those comments would fool this, which is
+ * what "the parse found a plausible list" below exists to catch — a parse that
+ * silently returns nothing is exactly a collector that matches nothing.
+ */
+function redactedPaths(): string[] {
+  const source = readFileSync(LOG_MODULE, "utf8");
+  const literal = /const REDACT = \[([\s\S]*?)\n\];/.exec(source)?.[1];
+  if (literal === undefined) {
+    throw new Error(`could not find the REDACT array in ${LOG_MODULE}`);
+  }
+  return [...literal.replace(/\/\/.*$/gm, "").matchAll(/"([^"]+)"/g)].flatMap((m) =>
+    m[1] === undefined ? [] : [m[1]],
+  );
+}
+
+const REDACT_PATHS = redactedPaths();
+
+/**
+ * One sentinel per configured path. Distinct, so that no assertion can pass on
+ * another path's value, and each one carries its own path so that a failure
+ * names the leak rather than making you count commas.
+ */
+const PATH_SECRETS: ReadonlyArray<readonly [string, string]> = REDACT_PATHS.map((path, i) => [
+  path,
+  `redacted-${i}-${path.replace(/\W/g, "-")}-ZZZZ`,
+]);
+
+/** `{"a.b": v}` → `{ a: { b: v } }`, merging paths that share a prefix. */
+function nest(into: Record<string, unknown>, path: string, value: string): void {
+  const parts = path.split(".");
+  const leaf = parts.pop();
+  // Only reachable from an empty path, which would mean the parse above went
+  // wrong — so it says so rather than quietly building a fixture with a hole.
+  if (leaf === undefined) throw new Error(`empty redact path in ${LOG_MODULE}`);
+  let node = into;
+  for (const part of parts) {
+    if (typeof node[part] !== "object" || node[part] === null) node[part] = {};
+    node = node[part] as Record<string, unknown>;
+  }
+  node[leaf] = value;
+}
+
+/** One object carrying a sentinel at every path `REDACT` names. */
+const PATH_FIXTURE = ((): Record<string, unknown> => {
+  const fixture: Record<string, unknown> = {};
+  for (const [path, secret] of PATH_SECRETS) nest(fixture, path, secret);
+  return fixture;
+})();
 
 /** Distinct values per key, so no assertion can pass on another key's secret. */
 const SECRETS = {
@@ -88,7 +162,14 @@ const SECRET_IN_THROWN_OBJECT = "teapot-QQQQ";
  * green-for-the-wrong-reason, or red, depending on the level you happened to
  * pick. A test's environment has to be the test's, not the shell's.
  */
-function emit(scenario: { NODE_ENV: string; LOG_LEVEL?: string }, body: string): string {
+function emit(
+  scenario: { NODE_ENV: string; LOG_LEVEL?: string },
+  body: string,
+  // For the scenarios that end the process themselves. A child that exits on a
+  // signal has no status to check, and one that calls `process.exit(0)` has an
+  // ordinary one — so this only turns the check off, it never relaxes it.
+  opts: { killsItself?: boolean } = {},
+): string {
   const script = `import(${JSON.stringify(LOG_MODULE)}).then(({ log, errorFields }) => {\n${body}\n});`;
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.LOG_LEVEL;
@@ -96,7 +177,7 @@ function emit(scenario: { NODE_ENV: string; LOG_LEVEL?: string }, body: string):
   if (scenario.LOG_LEVEL) env.LOG_LEVEL = scenario.LOG_LEVEL;
 
   const child = spawnSync(TSX, ["-e", script], { env, encoding: "utf8" });
-  if (child.status !== 0) {
+  if (!opts.killsItself && child.status !== 0) {
     throw new Error(`logger child exited ${child.status}:\n${child.stderr}`);
   }
   return child.stdout;
@@ -134,6 +215,12 @@ const BODY = [
   `  params: [${q(BOUND_PARAM)}],`,
   `  url: ${q(ARTICLE_URL)},`,
   `}, "every redacted path");`,
+  // The same claim again, but derived from the module's own list rather than
+  // from the hand-written one above — and its control, which is what stops the
+  // derived half passing because the fixture came out empty. See the two tests
+  // named after these messages.
+  `log("jobs").info(${q(PATH_FIXTURE)}, "every configured redact path");`,
+  `log("jobs").info({ notRedacted: ${q(PATH_FIXTURE)} }, "the same values somewhere unredacted");`,
   `log("model").info({ apiKey: ${q(HOLE)} }, "the secret in a field");`,
   `log("model").info("the secret in a message: " + ${q(HOLE)});`,
   `log("pipeline").error(errorFields(new Error("boom")), "a real Error");`,
@@ -156,7 +243,17 @@ const BODY = [
   `log("http").debug({}, "a debug line");`,
 ].join("\n");
 
-const EXPECTED_LINES = 11;
+/**
+ * How many lines `BODY` puts on fd 1 — hand-counted on purpose.
+ *
+ * It is the vacuity guard for everything below: nearly every assertion here is
+ * about the *absence* of a string from a collection, and a collection that came
+ * back empty satisfies all of them at once. Deriving this from `BODY` would
+ * make it agree with whatever went wrong, so it is a number a person wrote
+ * down. If you add a log call to `BODY`, add one here too — and if that feels
+ * annoying, that is the check doing its job.
+ */
+const EXPECTED_LINES = 13;
 
 describe("what reaches stdout", () => {
   let lines: Line[] = [];
@@ -191,6 +288,52 @@ describe("what reaches stdout", () => {
        otherwise "the secret is absent" is true of a logger that logs nothing. */
     expect(line.obj.msg).toBe("every redacted path");
     expect(line.raw).toContain("Greg");
+  });
+
+  it("found a plausible list of redacted paths to test against", () => {
+    /* Runs first of the derived pair, because `redactedPaths` parses text and
+       a regex that stops matching returns `[]` rather than complaining. Zero
+       paths would make the next test pass while inspecting nothing at all.
+       These are shape checks, not a second copy of the list: a count, and one
+       path that has been in `REDACT` since the file was written. */
+    expect(REDACT_PATHS.length).toBeGreaterThan(10);
+    expect(REDACT_PATHS).toContain("apiKey");
+    expect(REDACT_PATHS.every((path) => /^[\w$]+(\.[\w$]+)*$/.test(path))).toBe(true);
+  });
+
+  it("keeps out a secret at every path the module configures, not just the ones listed here", () => {
+    /* The test above it covers a hand-picked object in realistic shapes, which
+       is worth having and cannot stay complete: five paths were configured and
+       never exercised for a while, `req.headers.authorization` among them —
+       nested one level deeper than the `headers.*` pair, so the tests that
+       passed said nothing about it.
+
+       This one builds its fixture out of the module's own `REDACT` array, so
+       "every path is covered" is true by construction rather than by somebody
+       remembering. Add a path to `REDACT` and a sentinel appears at it here. */
+    const line = lineFor(lines, "every configured redact path");
+    for (const [path, secret] of PATH_SECRETS) {
+      expect(line.raw, `${path} reached stdout as ${secret}`).not.toContain(secret);
+    }
+    expect(line.obj.msg).toBe("every configured redact path");
+  });
+
+  it("proves those sentinels would otherwise have been visible", () => {
+    /* The control for the test above, and the reason it is not vacuous. Every
+       assertion there is an absence, and a fixture builder that quietly
+       produced `{}` — a bad path split, a rename, an empty parse — satisfies
+       all of them. So the identical values are logged again one level down,
+       under a key nothing redacts, and here they must ALL be present.
+
+       It doubles as a second statement of rule 3's neighbour: `redact` paths
+       are absolute, so `apiKey` at the top level is censored and the same key
+       one level in is not. If a wildcard path is ever added this goes red,
+       which is the right moment to re-read that decision rather than discover
+       it later. */
+    const line = lineFor(lines, "the same values somewhere unredacted");
+    for (const [path, secret] of PATH_SECRETS) {
+      expect(line.raw, `${path}'s sentinel never reached the line at all`).toContain(secret);
+    }
   });
 
   it("leaves url alone, which is a decision and not a gap", () => {
@@ -322,6 +465,80 @@ describe("how much comes out, and when", () => {
     const lines = parse(emit({ NODE_ENV: "production" }, NOISY));
     expect(lines.map((line) => line.obj.msg)).toEqual(["an info line", "an error line"]);
     expect(lines.every((line) => line.obj.env === "production")).toBe(true);
+  }, 60_000);
+});
+
+/**
+ * What happens to a line written just before the process stops.
+ *
+ * This is rule 2 in `src/log.ts` — `pino.destination({ sync: true })` — and the
+ * reason it is a rule is Vercel: **a function freezes at response time**, so a
+ * line sitting in a buffer waiting for the next turn of the event loop is a
+ * line nobody ever reads. The lines lost are the ones at the end of a request,
+ * which are the ones you wanted.
+ *
+ * The two tests below are deliberately a pair, because only the second one can
+ * tell a synchronous destination from an asynchronous one. Read them together
+ * before adding a third.
+ */
+describe("a line written just before the end", () => {
+  const FIVE_LINES = [
+    `const l = log("http");`,
+    `for (let i = 0; i < 5; i++) l.info({ i }, "before the end " + i);`,
+  ].join("\n");
+
+  it("lands when the process exits in the same tick", () => {
+    /* **This one stays green with `sync: true` removed, and saying so is the
+       point of the comment.** Measured, 2026-08-25 on pino 10.3.1: when `sync`
+       is false pino hands the destination to `on-exit-leak-free`, which
+       registers a `process.on("exit")` handler that calls `flushSync()`.
+       `process.exit(0)` fires that event, so the buffer is flushed on the way
+       out and all five lines land either way — even eight megabytes of them.
+
+       So it proves the guarantee (a line logged immediately before an orderly
+       exit is not lost) without proving what provides it. That is worth
+       pinning, and it is exactly the shape silent-success.md warns about if it
+       is read as evidence for the setting: the check agrees with the bug,
+       because a natural exit flushes both kinds of destination. The next test
+       is the one that does not. */
+    const lines = parse(
+      emit({ NODE_ENV: "development" }, `${FIVE_LINES}\nprocess.exit(0);`, {
+        killsItself: true,
+      }),
+    );
+    expect(lines.map((line) => line.obj.msg)).toEqual([
+      "before the end 0",
+      "before the end 1",
+      "before the end 2",
+      "before the end 3",
+      "before the end 4",
+    ]);
+  }, 60_000);
+
+  it("lands even when nothing gets to run on the way out — this is what sync: true buys", () => {
+    /* `sync: true` means the bytes are on file descriptor 1 by the time the
+       log call returns, rather than in a buffer that some later flush will
+       deal with. The way to see that difference is to take the later flush
+       away, so the child SIGKILLs itself in the same tick: a signal that
+       cannot be caught, that runs no `exit` handler, and that is the closest
+       thing available here to a function frozen mid-request.
+
+       Red-then-green, measured against a copy of `src/log.ts` with `sync: true`
+       removed (2026-08-25, pino 10.3.1, macOS):
+
+           sync: true          5 5 5 5 5 5 5 5   (lines received, eight runs)
+           pino.destination({}) 1 1 1 1 1 1 1 1
+
+       One rather than zero, because the first write is dispatched immediately
+       and the other four are still in SonicBoom's buffer. Not a race: their
+       release callback needs a turn of the event loop that never arrives. */
+    const lines = parse(
+      emit({ NODE_ENV: "development" }, `${FIVE_LINES}\nprocess.kill(process.pid, "SIGKILL");`, {
+        killsItself: true,
+      }),
+    );
+    expect(lines).toHaveLength(5);
+    expect(lines.map((line) => line.obj.msg)).toContain("before the end 4");
   }, 60_000);
 });
 

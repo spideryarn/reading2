@@ -288,7 +288,13 @@ export function buildTree(
     const lo = index.get(mn.range[0]);
     const hi = index.get(mn.range[1]);
     if (lo === undefined || hi === undefined) {
-      throw new Error(`Node "${mn.title}" has a range not in blocks.json: ${mn.range.join("…")}`);
+      // The range, not the title. `mn.title` is a label the model wrote about a
+      // section of the article, and this error travels: a step that throws is
+      // logged by src/jobs.ts with its message AND its stack, so the title would
+      // land in the log twice, and redaction is path-based and can reach neither
+      // (docs/project/logging.md). The range is also the more useful half — it
+      // is the pair of block ids you would go and look up.
+      throw new Error(`Node range not in blocks.json: ${mn.range.join("…")}`);
     }
     for (let i = lo; i <= hi; i++) {
       // In range: lo and hi both came out of `index`, which is built over

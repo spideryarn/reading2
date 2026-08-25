@@ -478,11 +478,19 @@ export function describeArticle(input: {
   };
 }
 
-/** Read one directory into an entry, or null if it isn't a complete article. */
+/**
+ * Read one directory into an entry, or null if it isn't a complete article.
+ *
+ * Skipped directories are pushed onto `skipped` rather than logged here. One
+ * line per skip would be one line per *directory* per homepage load, and this
+ * runs over the whole shelf — so the cost of the log grows with the library
+ * while the information in it doesn't. The caller says it once instead.
+ */
 async function describeDir(
   dir: string,
   slug: string,
   fixture: boolean,
+  skipped: string[],
 ): Promise<LibraryEntry | null> {
   const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   const tree = await readJson<Tree>(path.join(dir, "tree.json"));
@@ -491,13 +499,9 @@ async function describeDir(
   //
   // Silent by design, and that is the problem: an ingest that died after stage 3
   // leaves a directory the shelf simply never mentions, so the article looks
-  // like it was never added. debug rather than warn, because a run in progress
-  // hits this legitimately on every homepage load until the toc lands.
+  // like it was never added.
   if (!blocksFile || !tree) {
-    log("store").debug(
-      { slug, dir: path.relative(ROOT, dir), blocks: !!blocksFile, tree: !!tree },
-      "directory skipped: not a complete article",
-    );
+    skipped.push(slug);
     return null;
   }
 
@@ -561,10 +565,27 @@ export async function listArticles(): Promise<LibraryEntry[]> {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
 
+  // Collected across the whole walk and said once below, not once per directory.
+  const skipped: string[] = [];
   const found = await Promise.all([
-    ...dirs.map((slug) => describeDir(path.join(ROOT, "data", slug), slug, false)),
-    describeDir(path.join(ROOT, "example"), FIXTURE_SLUG, true),
+    ...dirs.map((slug) => describeDir(path.join(ROOT, "data", slug), slug, false, skipped)),
+    describeDir(path.join(ROOT, "example"), FIXTURE_SLUG, true, skipped),
   ]);
+
+  // debug rather than warn: a run in progress hits this legitimately on every
+  // homepage load until its toc lands, so at warn the shelf would cry wolf
+  // through every ingest. It becomes interesting only when it doesn't go away.
+  //
+  // A count, and at most five names. The names are what make it actionable —
+  // "three were skipped" sends you to read the whole of data/ — but all of them
+  // would be a line that grows with the library, and a long line is the one
+  // most likely to be truncated or dropped by whatever is collecting it.
+  if (skipped.length > 0) {
+    log("store").debug(
+      { count: skipped.length, slugs: skipped.slice(0, 5), of: dirs.length + 1 },
+      `${skipped.length} directories skipped: not complete articles`,
+    );
+  }
 
   return found
     .filter((e): e is LibraryEntry => e !== null)
