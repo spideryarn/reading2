@@ -39,7 +39,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [column-context.md](docs/project/column-context.md) | how a gist column reads: the whole level in a panel with the current item held on the reading line — Greg's centred fisheye, chosen over three alternatives built beside it; the research, GPT's review, what the panel replaced and what it cost |
 | [ingest-queue.md](docs/project/ingest-queue.md) | **paste a URL and it becomes an article**: the five steps as data, why p-queue and not BullMQ or pg-boss, why it polls rather than streaming, and an honest account of how far "idempotent" actually goes |
 | [library.md](docs/project/library.md) | the homepage: browsing past articles, `/read/<slug>`, what a card says and why the blurb is the root gist, and the one file a move to Postgres goes behind |
-| [design-css-overview.md](docs/project/design-css-overview.md) | **the map for anything visual** (stub): the four stylesheets and the order they load in, which of the three mechanisms owns a given rule, the colour and type tokens, and an honest list of what isn't decided |
+| [design-css-overview.md](docs/project/design-css-overview.md) | **the map for anything visual** (stub): the four stylesheets and the order they load in, which of the three mechanisms owns a given rule, the colour and type tokens, the sans that replaced Georgia and why the previous version's docs were wrong about its own fonts, the vertical rhythm, and an honest list of what isn't decided. Its live counterpart is **`/design`** ([`DesignPage.tsx`](src/web/DesignPage.tsx)) — every token, face, weight and component variant on one page, with contrast measured in the browser; look at it after touching `tokens.css` |
 | [icons.md](docs/project/icons.md) | Lucide, not Phosphor: why, the one stroke weight everything uses, the loading spinner recipe, and the two ways swapping a glyph for an SVG breaks a layout quietly |
 | [auth.md](docs/project/auth.md) | **the one-email beta gate** (stub): why auth here is about an open proxy and an open wallet rather than user accounts, why Supabase Auth won, the list of five providers that RLS restricts you to, and the one test that has to exist |
 | [security.md](docs/project/security.md) | **two untrusted parties, and neither is another user** — the content, and the URL: why Readability let `<img onerror>` reach the reading view, where the sanitiser sits and why it's stage 3, the video-embed allowlist, the confirmed path traversal in the read API and the fixture fallback that disguised it as a refusal, the four ways to break it silently, and an honest list of what's still open |
@@ -54,23 +54,13 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 `docs/plans/` holds plans for work that is being done or has just been done — the reasoning and the
 evidence behind a change, written before it landed and kept afterwards so the *why* survives.
 
-| Plan | What's in it |
-|---|---|
-| [shadcn-migration.md](docs/plans/shadcn-migration.md) | adopting Tailwind and shadcn components, 2026-08-25: the four guards Tailwind needs here, what shadcn covers and what it never will, and an honest account of what it buys. **Read it with [web-client.md § Tailwind and shadcn](docs/project/web-client.md#tailwind-and-shadcn-components) beside it** — several of its predictions were wrong in practice, and that section records what actually happened |
-| [bottom-bar.md](docs/plans/bottom-bar.md) | the bar across the bottom and the drawer that rises out of it, 2026-08-25: why the bottom rather than the left (this view's hard problem is horizontal), what's in it and what's deliberately not, the ▾ that moved out of the masthead, and the three rules that had to move out of its way without ever looking broken |
-| [deploy-and-repo-move.md](docs/plans/deploy-and-repo-move.md) | **putting this on spideryarn.com and moving the repo**, planned 2026-08-25: the four things about one-process-with-a-disk that Vercel doesn't have and which of them Supabase removes, why Supabase is the store and the login but never the transport (RLS and realtime both deferred, and the trigger that should bring RLS back), the hard-coded one-email beta gate and the three ways a gate fails open, why the domain move should be a *new* Vercel project so rollback is one click, and the five things that break quietly when everything moves into `legacy/` |
-| [postgres-migration.md](docs/plans/postgres-migration.md) | **moving storage from JSON files to Supabase Postgres**, planned 2026-08-25: why a block id is an *identity* and its text is a *revision* (and why foreign-keying comments to the current blocks would have broken a documented behaviour), why the tree stays JSONB while the blocks become rows, why **Drizzle replaced `supabase-js`** the moment RLS stopped being the security boundary (and what that hands us: transactions, pooling and migration isolation become our problem), the cross-article id collision that arrives at ~100 articles, the separate migration ledger that is necessary but *not* sufficient, and the old project's `auth.users` trigger that will write a row into the old app on every future signup |
-| [metadata-page.md](docs/plans/metadata-page.md) | **everything we know about an article, on a page of its own** at `/read/<slug>/metadata`, planned 2026-08-25: borrowed from the original version's Metadata tab, which was a tab and should not have been; what we take and the difficulty verdict we deliberately don't; the routing change both new pages need; why the page refuses to tell you anything is stale; the two copies of `WPM = 230` found while writing it; and [a second pass over theirs](docs/plans/metadata-page.md#a-second-pass-over-theirs-2026-08-25) that found the gap was legibility rather than facts — cards, a grid of numbers, a pill per stage, and three placeholders sharing the bottom bar's "not built yet" convention |
-| [tweet-thread-page.md](docs/plans/tweet-thread-page.md) | **the article as a numbered thread**, at `/read/<slug>/tweets`, planned 2026-08-25: their prompt quoted in full and the three things wrong with it, the fact that they built this and then deleted it, why generation goes through the ingest queue rather than a thirty-second request, the `STEP_ORDER` split that stops every ingest writing a thread, the anti-goals this feature has to answer to, and [a second pass over theirs](docs/plans/tweet-thread-page.md#a-second-pass-over-theirs-2026-08-25) that took back three things and left the gradients — including the `onClick={onWrite}` shorthand that would have forced every press |
-| [deterministic-block-ids.md](docs/plans/deterministic-block-ids.md) | **hashing a block id from its text instead of minting it at random** — considered 2026-08-25 and *decided against*: why `matchKey` is already the deterministic function and what would be left to build, the eleven duplicate pull-quotes a hash has to disambiguate, why it would freeze `normalize` into a public contract, and the one thing to carry away — putting **position** in the hash input silently orphans every note below an inserted paragraph |
-
 `docs/research/` holds the working behind a decision — the options weighed, the sources, and the
 dead ends — kept so nobody has to run the search again. A plan says what we're doing; a research doc
 says what else we could have done and why we didn't.
 
-| Research | What's in it |
-|---|---|
-| [auth-options.md](docs/research/auth-options.md) | **how we chose an auth provider**, 2026-08-25: the one line of schema that decided it, the five providers Supabase's RLS restricts you to and the irony that the proprietary ones qualify while the open-source ones don't, an honest account of Better Auth (which Auth.js merged into) and why it still loses here, why self-hosting an identity provider for one user is absurd, and three dead ends — Lucia, Vercel's $150 password protection, and FusionAuth's licence |
+Neither folder is listed here. There are a lot of them and they keep arriving, so list the directory
+and read the file names — they say what each one is about, and the first paragraph of a plan says
+the rest.
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
 
@@ -82,8 +72,8 @@ says what else we could have done and why we didn't.
   decision down. Followed for Vitest in [testing.md](docs/project/testing.md)
 - [docs/reusable/silent-success.md](docs/reusable/silent-success.md) — **the pattern behind most of
   a day's bugs.** A thing reports success while doing nothing, and the check you'd naturally run
-  returns the answer you were hoping for — because it shares an assumption with the code. Nine worked
-  examples and the habit that catches them.
+  returns the answer you were hoping for — because it shares an assumption with the code. A dozen
+  worked examples and the habit that catches them.
 - [docs/reusable/css-sticky-containing-block.md](docs/reusable/css-sticky-containing-block.md) —
   why `position: sticky` can be declared correctly and do nothing: its range is its containing
   block's size minus its own, so a `100vw` bar in a `100vw` parent has zero range and fails
@@ -125,8 +115,10 @@ Not descriptions of code, which the code already provides.
 - **File names are lower-case kebab-case.** `table-of-contents.md`, not `TABLE_OF_CONTENTS.md`.
   This holds everywhere under `docs/`, including `docs/reusable/`, even when the doc was copied in
   from somewhere that shouted. Rename on sight and fix the links.
-- **New doc ⇒ new signpost.** Every time you add a doc, add a line for it to the table above in this
-  file. A doc nothing links to may as well not exist.
+- **New doc ⇒ new signpost.** Every time you add a doc under `docs/project/`, add a line for it to
+  the table above in this file. A doc nothing links to may as well not exist. Plans and research docs
+  don't get a line — they're found by listing their folder — but link to them from the project docs
+  they bear on.
 - **Quote Greg directly.** Where a document captures something he said, use his exact wording, or as
   near to it as possible, in a blockquote — the phrasing carries intent that a paraphrase loses.
   Attribute and date it. If you later find you've flattened a quote into your own voice, put his back.
