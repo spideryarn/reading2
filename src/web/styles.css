@@ -3446,3 +3446,79 @@ td.text.has-hit {
 @media (prefers-reduced-motion: reduce) {
   .summ-spin { animation: none; }
 }
+
+/* ------------------------------------ chat: suggestions and cited blocks --
+   Two additions from 2026-08-26: what an empty conversation offers, and what a
+   citation chip shows on hover. See ChatPanel.tsx § SUGGESTIONS and CitedBlock,
+   and docs/plans/chat-mode.md. */
+
+.chat-suggest ul {
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  /* A column, not wrapped chips. The band is ~25rem at its widest and these are
+     sentences, not tags — wrapped, they break mid-question and read as a bag of
+     fragments rather than a list of things to ask. */
+  gap: 0.3rem;
+}
+.chat-suggest-btn {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background-color 0.12s;
+}
+.chat-suggest-btn:hover {
+  border-color: var(--highlight);
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+/* The hit area a citation tooltip anchors to. `inline-flex` so the anchor is
+   exactly the chip and not a full-width line box — a tooltip hung off a line
+   box points at whitespace. */
+.chat-cite-hit { display: inline-flex; }
+
+/* The card itself: the paragraph the chip points at, so a claim can be checked
+   without leaving the sentence you are reading. */
+.tooltip.tip-cite { max-width: 26rem; }
+.tip-cite-head {
+  /* `--font-id`, the token tokens.css reserves for "block ids, and only block
+     ids" — this is one, and BlockRef beside it uses the same. */
+  font-family: var(--font-id);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  margin-bottom: 0.3rem;
+}
+.tip-cite-text {
+  margin: 0;
+  /* The reading face, because this IS the article — set in the UI font it would
+     read as a description of the paragraph rather than as the paragraph. */
+  font-family: var(--font-reading);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.tip-cite-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--ink-faint);
+}
+.tip-cite-go {
+  margin-top: 0.45rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}

@@ -160,8 +160,25 @@ Concretely, three things worth doing here:
    here too. Our tooltips read from `tree.json` ([tooltips.md](../tooltips.md)); that is a property
    worth defending, not an accident.
 
+### Where they landed, 2026-08-26
+
+Points 1 and 2 both shipped in the **summary mode** ([../summaries.md](../summaries.md)), and point 3
+is still true and still defended.
+
+- The paragraph count on every row is "how much is under this" — `18¶`, from the same range the
+  panel already resolves. The "+N sections" badge is here too, capped at `99+` and suppressed at
+  zero exactly as their reviewer asked, and it is a **control** when the reader closed those sections
+  and a **fact** when the depth cut-off hid them.
+- The two ways to be hidden are two variables, which is this page's best single sentence.
+- The depth cut-off is in the URL (`?deep=`). **Per-node open/closed is not**, and that is a partial
+  decline of the advice above rather than a repeat of their mistake: the only way to write that set
+  down is a list of node ids, and node ids here are positional — a re-run of `npm run toc` renumbers
+  them, so a shared link would open a set of sections that are no longer the ones you opened. The
+  depth is the stable half. See [../summaries.md](../summaries.md).
+
 ## See also
 
+- [../summaries.md](../summaries.md) — the mode that took the badge, the cut-off and the two-variable rule
 - [overview.md](overview.md) — the map to that codebase
 - [../granularity-zoom.md](../granularity-zoom.md) — our version of this idea, taken much further
 - [../table-of-contents.md](../table-of-contents.md) — our tree and what a row is for

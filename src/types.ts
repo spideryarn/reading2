@@ -289,6 +289,97 @@ export interface GlossaryResponse {
   stale: boolean;
 }
 
+/* -------------------------------------------------------------- summaries --
+   The article, and each of its parts and sections, at more than one length —
+   `data/<slug>/summary.json`, and a **mode** in the band between the spine and
+   the prose. Stage 5e. See docs/project/summaries.md.
+
+   The shape is the original version's, taken deliberately: a **named length
+   ladder** rather than a token count, generated for every rung in one call
+   rather than one call per rung. What is not theirs is where the ladder is
+   wired. They generated nine granularities of the whole document and showed one
+   hardcoded rung in one tooltip; here every level of the tree carries the
+   ladder, which is the gap their own docs record
+   (docs/project/original-version/summaries.md). */
+
+/**
+ * A rung of the ladder, above the gist.
+ *
+ * `gist` is not in here on purpose: it is one sentence, it lives on the tree
+ * node (stage 4), and nothing about it is this stage's to write. The panel
+ * offers it as the shortest rung by reading the tree, so the ladder the reader
+ * sees has three steps while only two are generated.
+ *
+ * **Named, not numbered, and the steps are not even.** One sentence, then a few
+ * sentences, then a paragraph or more. That unevenness is a finding rather than
+ * a shrug — theirs ran 10, 15, 25, 30, 50, 100, 200, 400, 800 tokens, fine at
+ * the bottom and geometric at the top, because the difference between a phrase
+ * and a sentence changes what a line can *do* while the difference between two
+ * long summaries is just more of the same.
+ */
+export type SummaryRung = "short" | "long";
+
+/**
+ * One node's summaries, anchored the way the arc is: **by block range, never by
+ * node id.**
+ *
+ * Node ids are positional, so a re-run of `npm run toc` renumbers them and
+ * every summary would silently move one node sideways — a plausible paragraph
+ * against the wrong section, which is a lie the reader has no way to detect.
+ * A range that no longer matches a node is dropped instead. Same rule, and the
+ * same reasoning, as `ArcEntry` above.
+ */
+export interface SummaryEntry {
+  /** Inclusive, contiguous — resolved through the blocks index, never by string compare. */
+  range: [BlockId, BlockId];
+  /** The depth of the node this was written for. Kept for the panel's indentation. */
+  depth: number;
+  /** A few sentences. Absent when the batch that should have carried it came back malformed. */
+  short?: string;
+  /** A paragraph for a section, more for a part, about a page for the whole piece. */
+  long?: string;
+}
+
+/**
+ * The article's summaries. Stage 5e, `data/<slug>/summary.json`.
+ *
+ * Generated on demand rather than as part of every ingest — `summary` is in
+ * `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS` (src/pipeline.ts), for the
+ * same reason `tweets` and `glossary` are not.
+ */
+export interface Summaries {
+  version: string;
+  generator: string;
+  slug: string;
+  /** Fingerprint of the blocks it was written from — `hashBlocks`, src/source-hash.ts. */
+  sourceHash: string;
+  /** Document order, coarse before fine — the order the panel renders them in. */
+  entries: SummaryEntry[];
+  /**
+   * Nodes whose batch came back unusable and were written without text.
+   *
+   * **Counted rather than hidden, because their version discarded eight good
+   * summaries when the ninth was malformed.** Salvaging partials is the fix;
+   * the number is what stops a half-empty artefact reading as a complete one.
+   */
+  missing: number;
+  generatedAt: string;
+  /** Timed from outside the SDK, whose own timing fields came back empty over there. */
+  elapsedMs: number;
+}
+
+/**
+ * What `GET /api/summary/:slug` returns.
+ *
+ * `stale` for the same reason `GlossaryResponse` carries one, and computed the
+ * same way at read time: a flag stored at generation time is right until the
+ * moment it matters.
+ */
+export interface SummariesResponse {
+  summaries: Summaries;
+  stale: boolean;
+}
+
 export interface Meta {
   slug: string;
   title: string;
@@ -440,15 +531,15 @@ export interface Comment {
 /**
  * One stage of the pipeline. Ordered by `STEP_ORDER` in src/pipeline.ts.
  *
- * `tweets` and `glossary` are in that order but **not** in
+ * `tweets`, `glossary` and `summary` are in that order but **not** in
  * `DEFAULT_INGEST_STEPS` — they are steps you can ask for by name, not ones a
- * plain "add this URL" runs. Each costs a model call over the whole article and
+ * plain "add this URL" runs. Each costs model calls over the whole article and
  * each belongs to a page or a mode you have to go to. See
- * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely and
- * docs/project/glossary.md.
+ * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely,
+ * docs/project/glossary.md and docs/project/summaries.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "toc" | "arc" | "tweets" | "glossary";
+  | "fetch" | "extract" | "blocks" | "toc" | "arc" | "tweets" | "glossary" | "summary";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -538,4 +629,65 @@ export interface ChatThread {
   /** Bumped on every stored message, so the list can show recent first. */
   updatedAt: string;
   messages: ChatMessage[];
+}
+
+/* ---------------------------------------------------------------- search --
+   Finding a passage by what it says. Reader state, so a saved search lives
+   beside the article in `data/<slug>/searches.json`, exactly as comments.json
+   and chat.json do.
+
+   See docs/project/search.md. Note that only the *meaning* half of the feature
+   has a stored shape at all: matching on the letters you typed happens in the
+   browser, costs nothing, and is fully described by `?find=` in the URL. There
+   is nothing to persist about a substring match, and a stored one would be a
+   cache of an instant computation. */
+
+/**
+ * One passage the model says matches the reader's criterion.
+ *
+ * The anchor is `blockId` plus `quote` — id first, text second, offsets never —
+ * which is the contract in docs/project/block-ids.md and the same one a
+ * `Comment` follows. `start` is a *hint* for choosing between repeats of the
+ * same words within one block, and it is measured in `block.text`'s offset
+ * space because that is the string the server can see; the client re-finds the
+ * quote in the rendered text rather than trusting it (src/quote-match.ts).
+ */
+export interface SearchHit {
+  blockId: BlockId;
+  /** The exact words the model pointed at, inside that block. */
+  quote: string;
+  /**
+   * How sure the model is, **0–100, integer, and one unit everywhere**.
+   *
+   * The version this is borrowed from had a genuine bug here: its API documented
+   * this field as 0–1 and its highlighting code read it as 0–100, so somewhere
+   * between fetch and render there was an undocumented conversion
+   * (docs/project/original-version/highlighting.md). A unit that changes
+   * silently as it crosses a boundary is a bug waiting for someone to move a
+   * line of code, so this one is stated on the type, enforced in src/search.ts,
+   * and never rescaled anywhere else.
+   */
+  confidence: number;
+  /** One line on why this passage matches. Shown in the list, under the quote. */
+  reasoning: string;
+  /** Where `quote` sat in `block.text` — a disambiguator, never the anchor. */
+  start?: number;
+}
+
+/**
+ * One meaning-search: what the reader asked for, and what came back.
+ *
+ * `status` exists for the reason it exists on a `Comment`: the row is written
+ * to disk *before* the model is called, so a crash mid-search leaves a visible
+ * unfinished run rather than a criterion that silently evaporated.
+ */
+export interface SearchRun {
+  id: string;
+  /** What the reader typed, in their own words. Never logged — it is prose. */
+  criterion: string;
+  createdAt: string;
+  status: "pending" | "done" | "error";
+  hits: SearchHit[];
+  model?: string;
+  error?: string;
 }

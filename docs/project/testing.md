@@ -189,6 +189,32 @@ quoting numbers the code no longer produces is worse than a doc quoting none.
    a subprocess, so its tests are slower (~1.5s) than everything else combined. If it ever grows a
    pure `validateTree(blocks, tree)` export, move those tests to it.
 
+## Rendering a component, without a testing library
+
+`tests/summarise.test.ts` renders `SummaryPanel` with **`renderToStaticMarkup` from
+`react-dom/server`**, asserting on the HTML string. It is the only test here that renders a React
+component, and the shape is worth knowing before the next one:
+
+- **No new dependency.** `react-dom` is already here; `@testing-library/react` is not, and adding it
+  is a library decision that would need its own write-up
+  ([../reusable/third-party-library-selection.md](../reusable/third-party-library-selection.md))
+  rather than arriving as a side effect of one test.
+- **It runs in the default `node` environment**, not jsdom. Server rendering needs no DOM, so this
+  costs nothing — unlike `tests/annotate.test.ts` and `tests/search-hits.test.ts`, which really do
+  need a parser and say so at the top of the file.
+- **Type the props object as `ComponentProps<typeof Component>`.** An inferred object literal makes
+  `status: "ready"` a literal type, and a spread that overrides it then fails to typecheck for a
+  reason that has nothing to do with the test.
+
+**What it cannot see is anything about CSS** — position, colour, whether the band is actually where
+it should be. It renders one pass of markup, so it also cannot see anything that happens on a click.
+That still needs a real browser ([browser-testing.md](browser-testing.md)), and calling this a
+render test rather than a UI test is what keeps the difference visible.
+
+Worth it here because the thing being checked is a **silence**: the summary panel falls back down
+the length ladder when a rung is missing, and the mark saying so is the only difference between a
+fallback and a section the model had less to say about ([summaries.md](summaries.md)).
+
 ## A known limit, pinned by a test
 
 A block with neither text nor a `src` — in practice only `<hr>` — gets a **fresh id on every

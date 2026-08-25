@@ -13,7 +13,8 @@
  * automatically the same at every level of granularity, which is the invariant
  * the whole feature rests on.
  */
-import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
+import type { Arc, Block, BlockId, NodeId, Summaries, Tree, TreeNode } from "../types.js";
+import type { Rung } from "./params.js";
 
 export interface Cell {
   node: TreeNode;
@@ -247,4 +248,126 @@ export function buildOutline(
   return (root?.children ?? [])
     .map((id) => entryFor(tree.nodes[id]))
     .filter((e): e is OutlineEntry => e !== null);
+}
+
+/* --------------------------------------------------------- the summaries --
+   What summary mode renders: the tree, indented, with each node carrying every
+   rung of the ladder it has. See docs/project/summaries.md, src/summarise.ts
+   for where the two generated rungs come from, and SummaryPanel.tsx for the
+   view.
+
+   This is the same join `buildArcColumn` above does, and it obeys the same
+   rule for the same reason: **entries are matched by block range, never by node
+   id.** Node ids are positional and a re-run of `npm run toc` renumbers them,
+   so an id join would hand each summary to its neighbour — and a plausible
+   paragraph against the wrong section is a lie the reader has no way to detect.
+   An entry whose range matches nothing is simply dropped.
+
+   Note what this function does *not* need: `summary.json`. Every node already
+   carries a `gist` from stage 4, so the panel has a usable shortest rung for
+   every article whether or not anybody has paid for the other two. That is the
+   whole reason `gist` is the default rung in params.ts. */
+
+export interface SummaryNode {
+  node: TreeNode;
+  /** "2.3" — the reader's address for this section, and its indent level. */
+  number: string;
+  /** Row indices into `blocks`, inclusive at both ends. */
+  startRow: number;
+  endRow: number;
+  /**
+   * How many blocks are under this.
+   *
+   * The answer to the question their structure panel's "+N hidden" badge asked
+   * and our columns still cannot: *how much am I not seeing?* A section holding
+   * forty paragraphs and one holding three look identical in an L2 cell.
+   * See docs/project/original-version/structure-panel.md.
+   */
+  blocks: number;
+  /** One sentence, from the tree. Present on every internal node stage 4 wrote. */
+  gist?: string;
+  /** A few sentences. Absent until `npm run summarise` has been run. */
+  short?: string;
+  /** A paragraph or more, sized by depth. Absent until then too. */
+  long?: string;
+  children: SummaryNode[];
+}
+
+/**
+ * The tree as the summary panel wants it: nested, numbered, and joined to
+ * whatever summaries exist.
+ *
+ * `depthLimit` stops the walk. It is 2 by default because that is where
+ * src/summarise.ts stops writing and where params.ts stops offering — below it
+ * a node is one paragraph, and a summary must never stand where the paragraph
+ * itself could (types.ts § TreeNode.gist).
+ */
+export function buildSummaryTree(
+  tree: Tree,
+  blocks: Block[],
+  summaries: Summaries | null,
+  depthLimit = 2,
+): SummaryNode | null {
+  const order = new Map<BlockId, number>(blocks.map((b, i) => [b.id, i]));
+  const byRange = new Map(
+    (summaries?.entries ?? []).map((e) => [`${e.range[0]}|${e.range[1]}`, e]),
+  );
+
+  const build = (node: TreeNode | undefined, number: string): SummaryNode | null => {
+    if (!node) return null;
+    // Index lookup, never string comparison — block ids carry no order.
+    const startRow = order.get(node.range[0]);
+    const endRow = order.get(node.range[1]);
+    if (startRow === undefined || endRow === undefined || startRow > endRow) return null;
+
+    const found = byRange.get(`${node.range[0]}|${node.range[1]}`);
+    const children =
+      node.depth < depthLimit
+        ? node.children
+            .map((id, i) => build(tree.nodes[id], number ? `${number}.${i + 1}` : `${i + 1}`))
+            .filter((c): c is SummaryNode => c !== null)
+        : [];
+
+    return {
+      node,
+      number,
+      startRow,
+      endRow,
+      blocks: endRow - startRow + 1,
+      ...(node.gist !== undefined && { gist: node.gist }),
+      ...(found?.short !== undefined && { short: found.short }),
+      ...(found?.long !== undefined && { long: found.long }),
+      children,
+    };
+  };
+
+  return build(tree.nodes[tree.rootId], "");
+}
+
+/**
+ * The text to show for one entry at the rung the reader chose, and what was
+ * actually shown.
+ *
+ * **It falls back down the ladder, never up.** A section with no `long` shows
+ * its `short`, and failing that its `gist`; a section with no `gist` shows
+ * nothing at all. Falling *up* — showing a paragraph where a sentence was asked
+ * for — would break the one promise the control makes, which is that everything
+ * on screen is roughly the length you asked for.
+ *
+ * The returned `rung` is what the caller marks the entry with, so a reader on
+ * `long` can see which entries did not have one rather than wondering why some
+ * sections got so much less attention than others. That distinction is
+ * invisible without it, which is what makes a partly-written artefact read as a
+ * complete one — see src/summarise.ts § partial salvage.
+ */
+export function rungText(
+  entry: SummaryNode,
+  want: Rung,
+): { text: string; rung: Rung } | null {
+  const ladder: Rung[] = ["long", "short", "gist"];
+  for (const rung of ladder.slice(ladder.indexOf(want))) {
+    const text = entry[rung];
+    if (text) return { text, rung };
+  }
+  return null;
 }

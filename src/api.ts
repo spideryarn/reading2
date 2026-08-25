@@ -20,8 +20,10 @@ import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadComments } from "./comments.js";
 import { isStale as glossaryIsStale, readGlossary } from "./glossary.js";
+import { isStale as summariesStale, readSummaries } from "./summarise.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
+import { parseJsonFrom } from "./parse-json.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone, type StepContext } from "./pipeline.js";
 import { readingMinutes } from "./reading-time.js";
 import { isStale } from "./tweets.js";
@@ -31,6 +33,7 @@ import type {
   ArticleMetadata,
   Block,
   GlossaryResponse,
+  SummariesResponse,
   LibraryEntry,
   Meta,
   StageState,
@@ -54,14 +57,20 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  *
  * The path is logged relative to the repo root, because an absolute one is
  * mostly the reader's home directory.
+ *
+ * `parseJsonFrom` rather than `JSON.parse`, because V8's own parse error quotes
+ * the malformed input back — and the input here is the article. See
+ * src/parse-json.ts. `ENOENT` still arrives from `readFile` with its `code`
+ * intact, so the "absent means null" contract above is unchanged.
  */
 async function readJson<T>(file: string): Promise<T | null> {
+  const relative = path.relative(ROOT, file);
   try {
-    return JSON.parse(await readFile(file, "utf8")) as T;
+    return parseJsonFrom<T>(await readFile(file, "utf8"), relative);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     log("store").warn(
-      { file: path.relative(ROOT, file), ...errorFields(err) },
+      { file: relative, ...errorFields(err) },
       "artefact exists but could not be read or parsed",
     );
     throw err;
@@ -292,6 +301,48 @@ export async function deleteGlossary(slug: string): Promise<{ deleted: boolean }
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return { deleted: false };
     throw err;
   }
+}
+
+/**
+ * The article's summaries, and whether they still describe the article.
+ *
+ * The read half of stage 5e, and the third copy of a shape that is now settled:
+ * `loadTweets`, `loadGlossary` and this one answer the same question about
+ * different artefacts, and the day they stop agreeing is the day one of them is
+ * wrong. So the same three rules hold here — `articleDir` rather than a
+ * directory of its own, `stale` computed at read time rather than stored, and
+ * 404 for "nobody has asked for these yet", which is the ordinary case and what
+ * the panel's button is for.
+ *
+ * **There is no `deleteSummaries` beside this, and the absence is deliberate.**
+ * `deleteGlossary` exists because asking for that step again *appends* to the
+ * list, so "start over" had no other spelling. This step replaces its artefact
+ * wholesale, so running it again already means start over; a delete would be a
+ * second way to say the same thing, and the only thing it would add is a way to
+ * lose the summaries without getting new ones.
+ */
+export async function loadSummaries(slug: string): Promise<SummariesResponse> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const summaries = await readSummaries(dir);
+  if (!summaries) {
+    throw Object.assign(
+      new Error(
+        `No summaries for "${slug}" yet. Write them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["summary"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  // `articleDir` already proved blocks.json is there, so the fallback is for a
+  // file that has become unreadable between the two reads. Unknown counts as
+  // stale: the honest answer, and the safe way round to be wrong.
+  return { summaries, stale: !blocksFile || summariesStale(summaries, blocksFile.blocks) };
 }
 
 /* ----------------------------------------------------------- provenance --

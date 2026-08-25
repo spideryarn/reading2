@@ -33,6 +33,12 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
 | `mode` | which **mode** owns the band between the spine and the prose, absent for the table-of-contents columns that are the default — [chat-mode.md](../plans/chat-mode.md) | push | `?mode=chat` |
 | `thread` | which conversation is open in chat mode, absent for the list of them | **replace** | `?thread=spya-k3m9qt` |
+| `match` | which matcher search mode is using: the letters you typed, or what they mean — [search.md](search.md) | push | `?match=meaning` |
+| `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
+| `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
+| `order` | how the results list is stacked: `document` or `confidence` | push | `?order=confidence` |
+| `len` | which rung of the length ladder summary mode is showing, absent for `gist` — [summaries.md](summaries.md) | push | `?len=long` |
+| `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
 
 **Two superseded spellings, both still working.** `?about=1` was the masthead's details disclosure
 and `?panel=about` was the drawer panel that replaced it. Both are gone: the article's details are a
@@ -63,17 +69,34 @@ article now has an address rather than a setting. `/` is the shelf; anything tha
 `/read/<slug>` is also the shelf, including nonsense, so a mistyped link lands somewhere useful
 instead of on a 404.
 
-**A mode is a parameter, not a segment.** `?mode=chat` and `?mode=glossary` replace the middle band
-between the spine and the prose ([chat-mode.md](../plans/chat-mode.md),
-[glossary.md](glossary.md)); the default, `toc`, is the gist columns and never appears in a URL. They
-push history, because a mode is where you are rather than a glance. Each carries one parameter of its
-own — `?thread=` for the open conversation, `?term=` for the selected glossary term, both `replace`
-because stepping between them is browsing. `?sort=` orders the glossary and pushes, because
+**A mode is a parameter, not a segment.** `?mode=chat`, `?mode=glossary` and `?mode=search` replace
+the middle band between the spine and the prose ([chat-mode.md](../plans/chat-mode.md),
+[glossary.md](glossary.md), [search.md](search.md)); the default, `toc`, is the gist columns and
+never appears in a URL. They push history, because a mode is where you are rather than a glance. Each
+carries its own parameters — `?thread=` for the open conversation, `?term=` for the selected glossary
+term, `?run=` for the saved search being shown, all `replace` because stepping between them is
+browsing. `?sort=` orders the glossary and `?order=` orders the search results; both push, because
 reordering a list is a deliberate act on the view.
+
+**`?sort=`'s default changed on 2026-08-26**, which is worth stating because a default is what an
+absent parameter *means*. It was `document`; it is now `prioritised`, so a bare `/read/<slug>` in
+glossary mode is the two-group order, and `?sort=document` is the one you now have to ask for. Old
+links are unaffected — they all say what they want — and a glossary whose scores cannot support
+prioritising falls back to `document` in the panel without touching the URL. See
+[glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
 
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
 occurrences in the prose**, so "the article as I am currently looking at it" is not fully described
-without it. Sending someone a link to a term sends them the underlines too.
+without it. Sending someone a link to a term sends them the underlines too. `?find=` and `?run=` are
+there for exactly the same reason, and it is the same reason a fourth time: a search washes the
+passages that match, so a URL without it shows you a different page from the one you were sent.
+
+**Search mode has four parameters and every other mode has one or two**, which is worth explaining
+rather than treating as sprawl: it holds two matchers rather than one feature. `match` says which
+matcher, and then exactly one of `find` and `run` is the thing being matched. Its `?order=` is
+deliberately not the glossary's `?sort=` — two modes' orderings have nothing in common but the word,
+and `sort=difficulty` arriving in search mode would be a value with no meaning that something would
+eventually have to guess at.
 
 **A third segment says which of the article's pages**, added the same day:
 `/read/<slug>/metadata` and `/read/<slug>/tweets`. That does not bend the rule — those are still the

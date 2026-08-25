@@ -463,12 +463,18 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   );
 
   /**
-   * Every block id this article has, for checking what the model cited.
+   * Every block this article has, id to its plain text — for chat's citations.
    *
-   * A Set rather than a scan per citation: an answer can carry a dozen of them
-   * and every one is checked on every keystroke of the stream.
+   * A Map rather than a scan per citation: an answer can carry a dozen ids and
+   * every one is checked on every keystroke of the stream. The text rides along
+   * because a citation chip shows the paragraph it points at on hover, and
+   * building a separate Set of ids beside this would be a second copy of the
+   * same fact.
    */
-  const blockIds = useMemo(() => new Set(article.blocks.map((b) => b.id)), [article.blocks]);
+  const blockText = useMemo(
+    () => new Map(article.blocks.map((b) => [b.id, b.text])),
+    [article.blocks],
+  );
 
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
@@ -653,11 +659,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           fetch inside it from being charged to every reader of every article —
           see ChatBand. */}
       {mode === "chat" && (
-        <ChatBand
-          slug={slug}
-          knownIds={blockIds}
-          onJump={jumpTo}
-        />
+        <ChatBand slug={slug} blocks={blockText} onJump={jumpTo} />
       )}
       {mode === "glossary" && (
         <GlossaryBand slug={slug} onJump={jumpTo} onSelected={setTerm} />
@@ -718,15 +720,56 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
  */
 function ChatBand({
   slug,
-  knownIds,
+  blocks,
   onJump,
 }: {
   slug: string;
-  knownIds: Set<string>;
+  blocks: Map<string, string>;
   onJump(id: BlockId): void;
 }) {
-  const { threads, send, begin, rename, remove, error } = useChat(slug);
+  const { threads, loaded, send, begin, rename, remove, error } = useChat(slug);
   const [thread, setThread] = useQueryState("thread", threadParam);
+
+  /**
+   * A counter that goes up whenever a *new* conversation is started, so the
+   * composer knows to take focus.
+   *
+   * A counter and not a boolean, because "start another new chat" has to be
+   * distinguishable from the last one — a boolean that is already `true` fires
+   * no effect. And a counter rather than focusing from here directly, because
+   * the element belongs to the composer: reaching down for it would mean a ref
+   * threaded through two components that otherwise share nothing.
+   *
+   * Deliberately NOT raised when an existing conversation is opened. Focus in
+   * the textarea means ↑/↓ stop stepping the article (keynav.ts ignores keys
+   * typed into one), so taking it is only right when the reader has just asked
+   * for somewhere to type.
+   */
+  const [focusNonce, setFocusNonce] = useState(0);
+  const startNew = useCallback(() => {
+    void setThread(begin());
+    setFocusNonce((n) => n + 1);
+  }, [begin, setThread]);
+
+  /**
+   * **An empty chat opens a conversation rather than an empty list.**
+   *
+   * Greg, 2026-08-26: *"By default, if no existing Chats, start a new one."*
+   * The list is worth showing when there is something in it; when there is not,
+   * it is a page whose only content is a button, and pressing that button is
+   * the only thing anyone was ever going to do.
+   *
+   * `loaded` is what makes this safe. Without it, "no threads" and "the fetch
+   * has not come back" are the same state, so every visit would create a thread
+   * before the reader's real ones arrived — and having created one, would not
+   * create one on the visit where they genuinely had none. See useChat.ts.
+   *
+   * It cannot loop: `begin` inserts its conversation into `threads` on the spot,
+   * so the condition is false by the next render.
+   */
+  useEffect(() => {
+    if (loaded && threads.length === 0 && thread === null) startNew();
+  }, [loaded, threads.length, thread, startNew]);
   /* Read, never written, and not a subscription: `?at=` is already tracked by
      useReadingPosition in the parent, so this component re-renders whenever it
      changes and `location.search` is current. It is passed to the model so that
@@ -739,7 +782,7 @@ function ChatBand({
       threads={threads}
       threadId={thread}
       onThread={(id) => void setThread(id)}
-      onNew={() => void setThread(begin())}
+      onNew={startNew}
       onSend={(question) => {
         // `send` returns the thread it went to, minted here when this is a new
         // conversation — so the URL can name it before the request lands.
@@ -753,7 +796,8 @@ function ChatBand({
         if (id === thread) void setThread(null);
       }}
       onJump={onJump}
-      knownIds={knownIds}
+      blocks={blocks}
+      focusNonce={focusNonce}
       error={error}
     />
   );

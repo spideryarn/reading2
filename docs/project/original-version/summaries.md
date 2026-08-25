@@ -180,8 +180,30 @@ per-summary control: the reader says once what they know, and it conditions gene
 the zoom axis meaning one thing. Our horizontal axis is already carrying the whole idea of "how much
 detail", and doubling it up is how a clean gesture becomes a control panel.
 
+## Built, 2026-08-26
+
+All four borrowings above landed as **stage 5e** and a mode in the reading band —
+[../summaries.md](../summaries.md) has the feature and
+[`src/summarise.ts`](../../../src/summarise.ts) has the stage. What actually shipped, against the
+four numbered points:
+
+1. **Batching by parent** — one call per parent covering all its children at both rungs. Done.
+2. **Cap the batch and salvage partials** — capped at eight, one bounded retry with the parse error
+   fed back, a failed batch loses only its own sections, and the count of what did not survive is
+   written into the artefact so a half-written file cannot read as a whole one.
+3. **Pre-generated** — nothing is written when the reader moves the Length control.
+4. **Cached on a content hash** — plus the prompt version and the model id.
+
+And the absence this page names — the ladder generated nine ways and shown one hardcoded way — is
+the thing the build is shaped around: the same three rungs hang on the article, every part and every
+section, and one control moves all of them.
+
+Two things here were **not** taken, both on this page's own advice: the expertise axis, and their
+all-or-nothing parse.
+
 ## See also
 
+- [../summaries.md](../summaries.md) — what we built from this page
 - [overview.md](overview.md) — the map to that codebase
 - [../granularity-zoom.md](../granularity-zoom.md) — our version: a gist per node, at every depth
 - [../table-of-contents.md#granularity](../table-of-contents.md#granularity) — our length rules, and why a row's job is to distinguish itself

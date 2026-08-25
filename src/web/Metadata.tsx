@@ -138,6 +138,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   arc: Waypoints,
   tweets: ListOrdered,
   glossary: BookA,
+  summary: Layers,
 };
 
 /**

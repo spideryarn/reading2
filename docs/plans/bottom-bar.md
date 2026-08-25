@@ -94,6 +94,13 @@ tooltip saying what it would be *and the one thing the original version learned 
 it*. Greg, 2026-08-25: *"Also see docs/project/original-version/overview.md for ideas - for now, add
 extra ideas as placeholders with rich tooltips."*
 
+**Three of those five have since been built** and are buttons rather than dimmed labels: Glossary
+and Search as modes in the band on 2026-08-25, and Summary on 2026-08-26
+([summaries.md](../project/summaries.md)). Each cost the bar one row in a table and cost the layout
+nothing at all, which is the strongest evidence so far that the mode band was the right shape —
+see [chat-mode.md](chat-mode.md), where that slot was argued for. Highlights and Reading time are
+still dimmed.
+
 **That shape is now the house convention for "this is an intention, not an oversight"**, and it has
 one owner: `SOON` in [`Dock.tsx`](../../src/web/Dock.tsx) and the `.tip-soon` rules it added to
 [`styles.css`](../../src/web/styles.css). The metadata page reuses both for its own three —

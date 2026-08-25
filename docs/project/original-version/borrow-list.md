@@ -37,7 +37,7 @@ we do dozens. Finish by printing a total at the end of `npm run toc` and writing
 "what does this cost".
 → [prompt-caching.md](prompt-caching.md)
 
-### 2. Batch sibling gists into one call
+### 2. Batch sibling gists into one call — **done for the summaries, 2026-08-26**
 
 One call per parent, returning gists for all its children. About 89% cheaper than one call each in
 their measurement — and it has a second benefit they didn't need: siblings written together can be
@@ -48,6 +48,11 @@ that rule at all.
 Cap the batch and salvage partials. Their version discarded eight good summaries because the ninth
 was malformed, and their glossary's timeouts were caused by output length, not input length.
 → [summaries.md](summaries.md), [glossary.md](glossary.md#bug-one-output-tokens-not-input-tokens-caused-the-timeouts)
+
+**Landed in stage 5e** — one call per parent, capped at eight, with the retry-with-repair from item 3
+below and a `missing` count so a partly-written artefact cannot read as a whole one. The gists in
+stage 4 are still one call for the whole tree; this is the same shape proved next door, and moving
+stage 4 onto it is now a port rather than a design. → [../summaries.md](../summaries.md)
 
 ### 3. Retry-with-repair on structured output
 
@@ -60,11 +65,16 @@ had no retry anywhere for model output.
 Their `AiCallMetrics` shape, as JSON beside each artefact, plus cached-read tokens.
 → [llm-plumbing.md](llm-plumbing.md#logging-right-shape-wrong-storage-for-us)
 
-### 5. "How much is under this" on a gist cell
+### 5. "How much is under this" on a gist cell — **done in the summary panel, 2026-08-26**
 
 Their "+N hidden" badge, adapted. A section holding 40 paragraphs and one holding 3 look identical
 in our L2 column today, and that is a real gap in what the view tells you.
 → [structure-panel.md](structure-panel.md#what-we-take-from-this)
+
+**Landed in the summary panel** — a paragraph count on every row and a "+N sections" badge on a
+closed one. **Still open in the L2 column itself**, which is where this item was originally aimed and
+where the gap is sharpest, since that column is what a reader is looking at while reading.
+→ [../summaries.md](../summaries.md)
 
 ### 6. Resume where you left off
 
@@ -149,8 +159,11 @@ These cost nothing and prevent specific, documented failures.
   that currently means one thing. → [summaries.md](summaries.md#the-second-axis-probably-not)
 - **A command palette**, until there is more than one mode to reach.
   → [url-state-and-keyboard.md](url-state-and-keyboard.md#the-command-palette)
-- **Mark.js, or any wrapper-span highlighter.** Go straight to the CSS Custom Highlight API when a
-  second kind of mark arrives. → [highlighting.md](highlighting.md#the-technical-wall-highlights-cant-overlap)
+- **Mark.js, or any wrapper-span highlighter.** Not copied — but the recommended replacement was not
+  needed either. `annotateHtml` cuts text nodes at mark boundaries rather than wrapping ranges, so
+  three partially-overlapping marks are already expressible without the CSS Custom Highlight API.
+  → [highlighting.md § Built](highlighting.md#built-2026-08-26-and-how-much-of-this-survived-contact),
+  [../search.md](../search.md#drawing-the-marks-and-the-wall-that-wasnt-there)
 - **A logo animation registry and playground**, a reader settings UI, skeleton screens, and
   eye-tracking. All specified there; the first was built at ~4,700 lines and the rest never were.
   → [design-system.md](design-system.md#the-logo-playground), [typography.md](typography.md#what-they-wanted-and-never-built)
