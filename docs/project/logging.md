@@ -305,6 +305,23 @@ reaching the log — not from any line that asked for it, but from
 copied onto every failed-fetch line, credentials and query string included. See
 [§ An error is not a safe thing to log whole](#an-error-is-not-a-safe-thing-to-log-whole).
 
+**The sentence at the top of this section was false twice more before it was true**, and both were
+found by the second GPT/Codex review rather than by anyone writing the code. Neither leak came from
+a line that logged a URL; both came from a URL being put into an error *message*, in a file with no
+logger in it:
+
+- `parseJobRequest` refused an unusable URL with `` `Could not make a slug from ${url}` ``, and
+  `logRequest` writes an `httpError`'s message as `reason`. So the source URL came back at `warn`
+  through the one path that had been carefully stripped forty lines earlier.
+- `fetchDocument` reported an unfollowable redirect as
+  `` `That site redirected somewhere unreadable: ${location}` `` — a header written by a **remote
+  server**, on an error that a failed fetch step hands to `errorFields`.
+
+Both are fixed and pinned by tests. The pattern is worth more than the two instances: a claim about
+what the logs contain cannot be checked by reading the logging code, because the leak is never in the
+logging code. `src/pipeline.ts` also carried a comment asserting the URL "is already written once
+when the job is enqueued" — never true, and it read as permission to relax.
+
 If a URL ever does need logging, put the **hostname** in, not the URL. And if this project ever has
 real users, revisit this alongside [the correlation id](#the-correlation-id-not-yet).
 

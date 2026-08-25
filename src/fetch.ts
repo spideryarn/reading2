@@ -939,7 +939,15 @@ async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): 
       try {
         next = new URL(location, current);
       } catch {
-        throw new FetchFailure("invalid-url", here, `That site redirected somewhere unreadable: ${location}`);
+        // **Not the header.** `location` is written by the remote server, and a
+        // `FetchFailure` message is logged — a failed fetch step reaches
+        // src/jobs.ts, which keeps a thrown error's `message` and its `stack`,
+        // so anything quoted here is written down twice and redaction can reach
+        // neither (docs/project/logging.md). A site that redirects to
+        // `?token=…`, by malice or by bug, would have put it in the log.
+        // The reader loses nothing: they cannot act on an address they never
+        // chose to visit, and `code` already says which failure this was.
+        throw new FetchFailure("invalid-url", here, "That site redirected somewhere unreadable.");
       }
       if (next.protocol !== "http:" && next.protocol !== "https:") {
         throw new FetchFailure(

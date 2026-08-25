@@ -25,6 +25,7 @@ import { runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchHtml } from "./fetch.js";
 import { generateGlossary, glossaryIsCurrent } from "./glossary.js";
+import { generateSummaries, summariesAreCurrent } from "./summarise.js";
 import { log } from "./log.js";
 import { generateToc } from "./toc.js";
 import { generateTweets, threadIsCurrent } from "./tweets.js";
@@ -83,16 +84,20 @@ export const STEP_ORDER: StepName[] = [
   "arc",
   "tweets",
   "glossary",
+  "summary",
 ];
 
 /**
  * What "add this URL" runs: every step that makes the article readable.
  *
- * Not `tweets`, and not `glossary`. Each costs a model call over the whole
- * article and each is a thing you go to — a page, and a mode — so each is
- * generated when somebody asks for it, `{ steps: ["tweets"] }` or
- * `{ steps: ["glossary"] }`, and never as a side effect of adding an article.
- * Greg was asked about both and said no to both, directly (2026-08-25).
+ * Not `tweets`, not `glossary`, and not `summary`. Each costs model calls over
+ * the whole article and each is a thing you go to — a page, and two modes — so
+ * each is generated when somebody asks for it, `{ steps: ["tweets"] }` or
+ * `{ steps: ["glossary"] }` or `{ steps: ["summary"] }`, and never as a side
+ * effect of adding an article. Greg was asked about the first two and said no
+ * to both, directly (2026-08-25); `summary` follows the rule they established,
+ * and it is the most expensive of the three — several batched calls rather than
+ * one. See docs/project/summaries.md.
  */
 export const DEFAULT_INGEST_STEPS: StepName[] = ["fetch", "extract", "blocks", "toc", "arc"];
 
@@ -128,10 +133,18 @@ export const DEFAULT_INGEST_STEPS: StepName[] = ["fetch", "extract", "blocks", "
  * of terms rather than replacing the list (src/glossary.ts § `generateGlossary`),
  * so being swept into the cascade would not merely waste a model call, it would
  * lengthen the reader's glossary as a side effect of re-fetching the article.
+ *
+ * `summary` is here on the same two grounds as `tweets` — it reads the blocks
+ * and the tree, nothing reads what it writes, and `summariesAreCurrent` compares
+ * its stored `sourceHash`, prompt version and model against what is on disk. It
+ * is also the one step where being swept in costs the most: it is not one model
+ * call but one per part, so a cascade would multiply a wasted regeneration by
+ * the width of the article.
  */
 export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
   "tweets",
   "glossary",
+  "summary",
 ]);
 
 export interface StepContext {
@@ -349,11 +362,14 @@ export const STEPS: Record<StepName, PipelineStep> = {
       await writeFile(path.join(ctx.dir, "raw.html"), html, "utf8");
       const kb = Math.round(html.length / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
-         history, and this one is already written once when the job is enqueued
-         (src/jobs.ts) — a second copy per fetch buys nothing and spreads it.
-         The host and the size are what you want when a page comes back
-         suspiciously small, or when one publisher keeps failing.
-         See log.ts's note on `url` not being redacted, and why. */
+         history, and nothing writes one down: the enqueue line in src/jobs.ts
+         deliberately logs the slug and not the url, and says so. (This comment
+         used to claim the URL "is already written once when the job is
+         enqueued", which was never true — it read as a reason to relax here,
+         which is the opposite of what the neighbouring file decided. Found by a
+         GPT/Codex review, 2026-08-26.) The host and the size are what you want
+         when a page comes back suspiciously small, or when one publisher keeps
+         failing. See log.ts's note on `url` not being redacted, and why. */
       plog.debug({ slug: ctx.slug, step: "fetch", host, kb }, `fetch ${ctx.slug}: ${kb} KB`);
       return `${kb} KB`;
     },
@@ -610,6 +626,45 @@ export const STEPS: Record<StepName, PipelineStep> = {
       );
       const added = run.glossary.passes > 1 ? `, ${run.added} new` : "";
       return `${total} ${total === 1 ? "term" : "terms"}${added}`;
+    },
+  },
+  summary: {
+    name: "summary",
+    label: "Writing the summaries",
+    outputs: (ctx) => [path.join(ctx.dir, "summary.json")],
+    isDone: (ctx) => summariesAreCurrent(ctx.dir),
+    async run(ctx) {
+      const run = await generateSummaries({
+        dir: ctx.dir,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+      const { missing } = run.summaries;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "summary",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          ms: run.elapsedMs,
+          sections: run.targets,
+          batches: run.batches,
+          /* The two quality signals in this line, and the reason partial
+             salvage is safe to have at all. `missing` is how many sections came
+             out of this run with no summary; `failedBatches` is how many groups
+             gave up entirely after their one repair attempt. Both are normally
+             zero, neither is an error, and a run that quietly starts returning
+             a handful every time is the prompt or the model having moved —
+             which is exactly the failure that is invisible unless it is
+             counted. See docs/reusable/silent-success.md. */
+          missing,
+          failedBatches: run.failedBatches,
+        },
+        `summary ${ctx.slug}: ${run.targets - missing}/${run.targets} sections in ${run.batches} groups`,
+      );
+      const short = missing > 0 ? `, ${missing} missing` : "";
+      return `${run.targets - missing} of ${run.targets} sections${short}`;
     },
   },
 };

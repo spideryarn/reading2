@@ -559,6 +559,29 @@ describe("redirects", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("doesn't quote an unreadable Location header back into the message", async () => {
+    /* The `Location` header comes from a remote server we do not trust, and a
+       `FetchFailure` message is LOGGED — a failed fetch step reaches
+       src/jobs.ts, which records a thrown error's message and its stack. So
+       whatever a hostile or broken site puts in that header would be written
+       down twice, and redaction is path-based and can reach neither
+       (docs/project/logging.md).
+
+       This message used to interpolate it. Nothing is lost by dropping it: the
+       reader cannot act on an address they never chose to visit, and the code
+       already tells whoever is running the server which failure this was. */
+    const { impl } = scripted([
+      new Response(null, {
+        status: 302,
+        headers: { location: "http://[bad]/private?token=REDIRECT-SECRET-5555" },
+      }),
+    ]);
+    const err = await failureFrom(fetchDocument("https://example.com/", opts({ fetchImpl: impl })));
+    expect(err.code).toBe("invalid-url");
+    expect(err.message).not.toContain("REDIRECT-SECRET-5555");
+    expect(err.message).not.toContain("[bad]");
+  });
+
   it("says so when a redirect names nowhere", async () => {
     const { impl } = scripted([new Response(null, { status: 302 })]);
     const err = await failureFrom(fetchDocument("https://example.com/", opts({ fetchImpl: impl })));
