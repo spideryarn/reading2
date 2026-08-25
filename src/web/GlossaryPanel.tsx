@@ -39,9 +39,25 @@
  * and how much of the argument rests on it. Our review of their version said to
  * drop both, on the grounds that ranking terms for the reader is the model
  * doing the reader's prioritising. Greg kept them, with a condition: **never
- * sort by them silently.** So the list arrives in document order, the sort is a
- * control you press, and the number you sorted by is shown on every row — an
- * order nobody can see the basis of is the thing that was actually objected to.
+ * sort by them silently.**
+ *
+ * On **2026-08-26** he overrode the first half of that condition and kept the
+ * second. The default order is now `prioritised`, which is a ranking nobody
+ * asked for — so everything here is about making it not a silent one:
+ *
+ * - it uses the two scores for **one decision only**, which of two groups an
+ *   entry is in, because a product of two noisy 0–1 scores groups well and
+ *   ranks badly;
+ * - **inside a group the order is first use**, the reader's own order through
+ *   the piece, so the model has chosen nothing there;
+ * - the divider **names the rule** that promoted the group above it;
+ * - **both numbers are on every row**, and never the product, which is our
+ *   arithmetic rather than the model's judgment;
+ * - when the gate does not actually divide the list, all of this **falls back
+ *   to first use** and the control is not offered.
+ *
+ * The four designs this was chosen from, and the two things it is a bet on, are
+ * in docs/plans/glossary-prioritised-order.md.
  */
 import { useState } from "react";
 import {
@@ -85,7 +101,14 @@ export function GlossaryPanel({
   onSort,
   onJump,
 }: Props) {
-  const entries = glossary ? sortEntries(glossary.entries, sort) : [];
+  /* `effectiveSort` and not `sort`: `prioritised` is the default, so it arrives
+     on glossaries whose scores cannot support it, and everything below — the
+     groups, the SortBar's pressed state, the numbers on each row — has to agree
+     about what order the list is actually in. One call, one answer, passed
+     down. */
+  const all = glossary?.entries ?? [];
+  const order = effectiveSort(all, sort);
+  const groups = glossary ? groupEntries(all, order) : [];
 
   return (
     <aside className="mode-band gloss" aria-label="Glossary">
@@ -99,12 +122,13 @@ export function GlossaryPanel({
         )}
       </div>
 
-      {/* Sorting is only a question once there is a list, and only once the
-          model actually returned the scores — an older glossary may have none,
-          and offering a sort that would silently do nothing is worse than not
-          offering it. */}
+      {/* Sorting is only a question once there is a list, and each option is
+          only offered once the model actually returned what it needs — an older
+          glossary may have no scores at all, and offering a sort that would
+          silently do nothing is worse than not offering it. `SortBar` returns
+          nothing when fewer than two survive that. */}
       {glossary && glossary.entries.length > 1 && (
-        <SortBar entries={glossary.entries} sort={sort} onSort={onSort} />
+        <SortBar entries={all} sort={order} onSort={onSort} />
       )}
 
       {error && <p className="gloss-error">{error}</p>}
@@ -146,30 +170,52 @@ export function GlossaryPanel({
             </div>
           )}
 
-          <ol className="gloss-list">
-            {entries.map((entry) => (
-              <Term
-                key={entry.id}
-                entry={entry}
-                selected={entry.id === termId}
-                /* Whichever score the list is ordered by is shown on every row.
-                   An order the reader chose but cannot see the basis of is the
-                   thing the objection to these scores was actually about. */
-                showScore={sort === "document" ? null : sort}
-                onSelect={() => {
-                  // Pressing the selected term again clears it, which is what
-                  // takes the underlines back out of the prose. There is no
-                  // other affordance for that, and a selection you cannot
-                  // cancel is a mode inside a mode.
-                  if (entry.id === termId) return onTerm(null);
-                  onTerm(entry.id);
-                  const first = entry.blocks[0];
-                  if (first) onJump(first);
-                }}
-                onJump={onJump}
-              />
+          {/* A `div` rather than the `ol` it used to be, because it is the
+              scroller and there may now be two lists inside it. Each group
+              keeps its own `ol`; a heading is not a list item and putting one
+              inside an `ol` to draw a divider would be a lie about the
+              structure for the sake of a line of CSS. */}
+          <div className="gloss-list">
+            {groups.map((group) => (
+              <section key={group.key} className="gloss-group">
+                {/* The rule that promoted this group, named. A threshold with
+                    no visible divider is the "silent" in "never sort by them
+                    silently" — see the § docstring at the top of this file. */}
+                {group.label && (
+                  <h3 className="gloss-group-head" title={group.title}>
+                    {group.label}
+                    <span className="gloss-group-count">{group.entries.length}</span>
+                  </h3>
+                )}
+                <ol className="gloss-group-list">
+                  {group.entries.map((entry) => (
+                    <Term
+                      key={entry.id}
+                      entry={entry}
+                      selected={entry.id === termId}
+                      /* Whichever scores the list is ordered by are shown on
+                         every row. An order the reader chose but cannot see the
+                         basis of is the thing the objection to these scores was
+                         actually about — and a default order they did not
+                         choose needs it more, not less. */
+                      showScore={order}
+                      onSelect={() => {
+                        // Pressing the selected term again clears it, which is
+                        // what takes the underlines back out of the prose.
+                        // There is no other affordance for that, and a
+                        // selection you cannot cancel is a mode inside a mode.
+                        if (entry.id === termId) return onTerm(null);
+                        onTerm(entry.id);
+                        const first = entry.blocks[0];
+                        if (first) onJump(first);
+                      }}
+                      onJump={onJump}
+                    />
+                  ))}
+                </ol>
+              </section>
             ))}
-          </ol>
+          </div>
 
           <Foot
             glossary={glossary}
@@ -186,7 +232,7 @@ export function GlossaryPanel({
 }
 
 /**
- * Document order, or one of the model's two scores.
+ * The list in one flat order — document, one of the two scores, or prioritised.
  *
  * Descending on both scores, because "hardest first" and "most central first"
  * are the questions people actually have — nobody opens a glossary looking for
@@ -194,11 +240,15 @@ export function GlossaryPanel({
  * entry the model declined to score is not an entry it scored as trivial, and
  * treating the two the same is the small lie that makes a sort untrustworthy.
  *
+ * `prioritised` is the groups below, flattened, so the two can never disagree
+ * about what order the list is in.
+ *
  * Pure and exported, because it is the only part of this file with a right
- * answer — see tests/glossary-panel.test.ts.
+ * answer — see the `sortEntries` block of tests/glossary.test.ts.
  */
 export function sortEntries(entries: GlossaryEntry[], sort: TermSort): GlossaryEntry[] {
   if (sort === "document") return entries;
+  if (sort === "prioritised") return groupEntries(entries, sort).flatMap((g) => g.entries);
   const value = (entry: GlossaryEntry): number | undefined =>
     sort === "difficulty" ? entry.difficulty : entry.centrality;
   return [...entries]
@@ -214,25 +264,182 @@ export function sortEntries(entries: GlossaryEntry[], sort: TermSort): GlossaryE
     .map((x) => x.entry);
 }
 
+/* ------------------------------------------------------------ prioritised --
+   The default order, added 2026-08-26 at Greg's request:
+
+   > let's add a "Prioritised" order (that should be the default) that somehow
+   > takes into account importance, centrality, and order.
+
+   The whole design is in docs/plans/glossary-prioritised-order.md. The three
+   things worth having in front of you while reading this code:
+
+   1. **The two scores multiply, they do not add.** What the reader wants
+      ordered is the cost of *not* knowing a term, which is "how likely it is to
+      stop me" times "how much of the argument stops with it". A sum gets both
+      ends wrong: a very central, very easy word ("attention", in a piece about
+      attention) scores high and needs no priority, and a very hard, very
+      peripheral one scores high and is exactly the distraction a priority list
+      exists to keep off the top.
+
+   2. **A product of two noisy 0–1 model scores groups well and ranks badly.**
+      Models emit clumped scores, so a continuous composite invents distinctions
+      that are not in the data. So the product decides one thing — in, or out —
+      and inside a group the order is first use, which is the reader's own order
+      and not a judgment at all.
+
+   3. **It is self-cancelling.** When the gate does not actually divide the list
+      it falls back to document order and the control is not offered, so an old
+      glossary with no scores behaves exactly as it did before. */
+
 /**
- * The number to put on a row, or nothing.
+ * The gate: `difficulty × centrality`, both required.
+ *
+ * `0.30` is about `0.6 × 0.5` — the model called it more than half load-bearing
+ * *and* more than half likely to stop you. It is a guess with no feedback loop
+ * behind it, and it is one exported constant so it can be moved once we have
+ * looked at real glossaries.
+ *
+ * An **absolute** gate rather than a relative "top third", deliberately, and
+ * the reason is what each does when it is wrong. If the model's scores run hot
+ * or cold, the absolute gate degenerates to one group — that is, to plain
+ * first-use order, which is what this list did yesterday. A relative gate would
+ * promote exactly a third whatever the scores said, which is inventing a
+ * ranking that is not in the data and putting a label over it.
+ */
+export const PRIORITY_GATE = 0.3;
+
+/** `difficulty × centrality`, or nothing at all if either is missing. */
+export function priorityOf(entry: GlossaryEntry): number | undefined {
+  if (entry.difficulty === undefined || entry.centrality === undefined) return undefined;
+  return entry.difficulty * entry.centrality;
+}
+
+/**
+ * Does the gate actually divide this glossary in two?
+ *
+ * Not "are there scores" — **are there entries on both sides**. SortBar already
+ * refuses to offer a sort that would silently do nothing, and this is that rule
+ * one step further on: a "prioritised" order over a list where everything (or
+ * nothing) clears the gate is first-use order wearing a label that claims a
+ * judgment was made.
+ */
+export function splitsOnPriority(entries: GlossaryEntry[]): boolean {
+  let above = false;
+  let below = false;
+  for (const entry of entries) {
+    const p = priorityOf(entry);
+    if (p !== undefined && p >= PRIORITY_GATE) above = true;
+    else below = true;
+    if (above && below) return true;
+  }
+  return false;
+}
+
+/**
+ * The order actually in force, which is not always the one in the URL.
+ *
+ * `?sort=prioritised` is the default and therefore arrives on lists that cannot
+ * support it. Rather than let the panel show a selected control that does
+ * nothing, everything downstream — the list, the SortBar's pressed state, the
+ * numbers on each row — is driven by this instead of by the raw parameter.
+ */
+export function effectiveSort(entries: GlossaryEntry[], sort: TermSort): TermSort {
+  if (sort !== "prioritised") return sort;
+  return splitsOnPriority(entries) ? "prioritised" : "document";
+}
+
+/** A run of terms under one heading. `label: null` is the whole list, unheaded. */
+export interface TermGroup {
+  key: string;
+  label: string | null;
+  title?: string;
+  entries: GlossaryEntry[];
+}
+
+/**
+ * The list as the panel renders it: one group, or two with a divider.
+ *
+ * Every sort but `prioritised` is a single unheaded group, so the DOM for them
+ * is what it always was. `prioritised` is two, **each in first-use order** —
+ * which is where the third thing Greg asked for, first appearance, actually
+ * lives. It is a stronger form of having it as a weight in a formula, and it
+ * needs no explaining.
+ *
+ * An entry missing either score cannot clear the gate and lands in the lower
+ * group. That is not scoring it as zero — nothing here compares it to anything
+ * — it is the same rule the other sorts follow, which is that an entry the
+ * model declined to score is not one it scored as trivial.
+ */
+export function groupEntries(entries: GlossaryEntry[], sort: TermSort): TermGroup[] {
+  const one = (list: GlossaryEntry[]): TermGroup[] => [
+    { key: "all", label: null, entries: list },
+  ];
+  if (sort !== "prioritised") return one(sortEntries(entries, sort));
+  if (!splitsOnPriority(entries)) return one(entries);
+
+  const top: GlossaryEntry[] = [];
+  const rest: GlossaryEntry[] = [];
+  for (const entry of entries) {
+    const p = priorityOf(entry);
+    (p !== undefined && p >= PRIORITY_GATE ? top : rest).push(entry);
+  }
+  return [
+    {
+      key: "top",
+      label: "worth knowing first",
+      title: `The model called these both load-bearing and not obvious — centrality × difficulty of ${PRIORITY_GATE.toFixed(2)} or more. In first-use order, like the rest.`,
+      entries: top,
+    },
+    {
+      key: "rest",
+      label: "the rest",
+      title: "Everything else this piece uses in a non-obvious way, in first-use order.",
+      entries: rest,
+    },
+  ];
+}
+
+/** One number to put on a row, with the name of what it is. */
+export interface RowScore {
+  key: "difficulty" | "centrality";
+  value: number;
+}
+
+/**
+ * The numbers to put on a row: none, one, or both.
  *
  * **A function rather than a ternary at the call site, because the ternary was
  * wrong** and wrong in the one way this feature cannot afford. It read
  * `showScore === "difficulty" ? entry.difficulty : entry.centrality`, so a
- * `showScore` of `null` — the list in document order, the default — fell
- * through to the `centrality` branch and printed the model's ranking beside
- * every term in a list that was not ranked by it.
+ * `showScore` of `null` — the list in document order — fell through to the
+ * `centrality` branch and printed the model's ranking beside every term in a
+ * list that was not ranked by it.
  *
  * That is precisely the thing the condition on keeping these scores forbids:
  * the objection was never to the numbers existing, it was to the model's
  * prioritising arriving unasked. Found in the browser rather than by a test,
  * which is why there is now a test.
+ *
+ * The rule it keeps, now that a composite is involved: **a row shows exactly
+ * the numbers its position was decided on, and shows none if its position could
+ * not be decided on them.** So `prioritised` shows both — never the product,
+ * which is our arithmetic dressed up as the model's judgment and a number the
+ * reader can neither interpret nor check — and an entry missing either score
+ * shows neither, which is what "this one could not be gated" looks like.
  */
-export function scoreShown(entry: GlossaryEntry, showScore: TermSort | null): number | undefined {
-  if (showScore === "difficulty") return entry.difficulty;
-  if (showScore === "centrality") return entry.centrality;
-  return undefined;
+export function rowScores(entry: GlossaryEntry, sort: TermSort | null): RowScore[] {
+  const d = entry.difficulty;
+  const c = entry.centrality;
+  if (sort === "difficulty") return d === undefined ? [] : [{ key: "difficulty", value: d }];
+  if (sort === "centrality") return c === undefined ? [] : [{ key: "centrality", value: c }];
+  if (sort === "prioritised") {
+    if (d === undefined || c === undefined) return [];
+    return [
+      { key: "difficulty", value: d },
+      { key: "centrality", value: c },
+    ];
+  }
+  return [];
 }
 
 /** Which sorts this particular glossary can actually offer. */
@@ -246,6 +453,21 @@ function SortBar({
   onSort(sort: TermSort): void;
 }) {
   const options: { key: TermSort; label: string; title: string }[] = [
+    /* Offered only when the gate actually divides this list. Same rule the two
+       score sorts below follow — a control that would visibly do nothing is
+       worse than one that isn't there — and here it does a second job: it is
+       what stops the *default* claiming a judgment was made about a glossary
+       whose scores could not support one. */
+    ...(splitsOnPriority(entries)
+      ? [
+          {
+            key: "prioritised" as const,
+            label: "prioritised",
+            title:
+              "The hard and load-bearing terms first, then the rest — each in the order the article introduces them",
+          },
+        ]
+      : []),
     {
       key: "document",
       label: "first use",
@@ -311,11 +533,11 @@ function Term({
 }: {
   entry: GlossaryEntry;
   selected: boolean;
-  showScore: "difficulty" | "centrality" | null;
+  showScore: TermSort | null;
   onSelect(): void;
   onJump(id: BlockId): void;
 }) {
-  const score = scoreShown(entry, showScore);
+  const scores = rowScores(entry, showScore);
 
   return (
     <li className={`gloss-term${selected ? " on" : ""}`}>
@@ -333,9 +555,22 @@ function Term({
           {entry.kind !== "term" && entry.kind !== "other" && (
             <span className="gloss-kind">{entry.kind}</span>
           )}
-          {score !== undefined && (
-            <span className="gloss-score" title={`${showScore}: ${score.toFixed(2)}`}>
-              {score.toFixed(2)}
+          {/* One number under `hardest` or `most central`, both under
+              `prioritised`, none in first-use order. Never the product: that is
+              our arithmetic, not the model's judgment, and a number the reader
+              can neither interpret nor check is the thing the condition on
+              keeping these scores was written against. */}
+          {scores.length > 0 && (
+            <span
+              className="gloss-score"
+              title={scores.map((s) => `${s.key}: ${s.value.toFixed(2)}`).join(" · ")}
+            >
+              {scores.map((s) => (
+                <span key={s.key} className="gloss-score-part">
+                  <span className="gloss-score-key">{s.key[0]}</span>
+                  {s.value.toFixed(2)}
+                </span>
+              ))}
             </span>
           )}
         </span>

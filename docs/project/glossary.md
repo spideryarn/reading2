@@ -18,28 +18,39 @@ until you know what they are for.
 ```
   GLOSSARY MODE — same spine, same article, the band is a list of terms
 
- ┌─────────────┬───────────────────┬───────────────────────────┐
- │             │  Mode: glossary   back to contents            │
- │  ▇▇▇▇▇▇▇▇   ├───────────────────┼───────────────────────────┤
- │  ▇▇▇▇▇      │ Glossary  24 terms│ … a broadly nonreductive  │
- │  ▇▇▇        │ order  first use  │   explanation of what it  │
- │  ▇▇▇▇▇▇▇    │        hardest    │   ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈     │
- │  ▇▇         ├───────────────────┤   is like to be an        │
- │  ▇▇▇▇       │ nonreductive      │   organism …              │
- │             │ explanation       │                           │
- │             │ Seth's term for   │ … the nonreductive case   │
- │             │ an account that…  │   ┈┈┈┈┈┈┈┈┈┈┈┈            │
- │             │ ▸ also: nonredu…  │   does not collapse …     │
- │             │ ▸ used in 3 places│                           │
- │             │   k3m9qt qw82nf   │      ↑ underlined only    │
- │             ├───────────────────┤        while that term    │
- │             │ interoception     │        is selected        │
- │             │ …                 │                           │
- │             ├───────────────────┤                           │
- │             │ Find more · Start │                           │
- ├─────────────┴───────────────────┴───────────────────────────┤
+ ┌─────────────┬─────────────────────┬─────────────────────────┐
+ │             │  Mode: glossary   back to contents              │
+ │  ▇▇▇▇▇▇▇▇   ├─────────────────────┼─────────────────────────┤
+ │  ▇▇▇▇▇      │ Glossary    24 terms│ … a broadly nonreductive│
+ │  ▇▇▇        │ order [prioritised] │   explanation of what it│
+ │  ▇▇▇▇▇▇▇    │   first use hardest │   ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈   │
+ │  ▇▇         ├─────────────────────┤   is like to be an      │
+ │  ▇▇▇▇       │ WORTH KNOWING FIRST 6│  organism …            │
+ │             ├─────────────────────┤                         │
+ │             │ nonreductive  d·72   │ … the nonreductive case│
+ │             │ explanation   c·85   │   ┈┈┈┈┈┈┈┈┈┈┈┈          │
+ │             │ Seth's term for an   │   does not collapse …  │
+ │             │ account that…        │                         │
+ │             │ ▸ also: nonredu…     │      ↑ underlined only │
+ │             │ ▸ used in 3 places   │        while that term │
+ │             │   k3m9qt qw82nf      │        is selected     │
+ │             │ interoception d·66 c·61                        │
+ │             ├─────────────────────┤                         │
+ │             │ THE REST         18 │                         │
+ │             ├─────────────────────┤                         │
+ │             │ blindsight    d·40 c·15                        │
+ │             │ …                   │                         │
+ │             ├─────────────────────┤                         │
+ │             │ Find more · Start   │                         │
+ ├─────────────┴─────────────────────┴─────────────────────────┤
  │ ⌂ Home  ✳ Questions  ⓘ Metadata  ☰ Thread  ⌸ Chat  📖 Glossary ●
  └─────────────────────────────────────────────────────────────┘
+
+ The two headings are the whole of "prioritised": difficulty × centrality
+ decides which side of the divider a term is on, and NOTHING else. Inside
+ each group the order is first use — the reader's own order through the
+ piece — so within a group the model has chosen nothing. Both numbers are
+ on every row; the product they were gated on never is.
 ```
 
 Code: [`src/glossary.ts`](../../src/glossary.ts) (stage 5d — the model call, the dedup, the
@@ -237,8 +248,6 @@ ranked by how important we think they are" is the model doing the reader's prior
 Greg overrode that on 2026-08-25, and the override came with its own condition: **keep both, and
 never sort by them silently.** So:
 
-- the list arrives in **document order** — first use in the article first, which is the reader's own
-  order through the piece and a real order rather than a judgment;
 - the sort is a control you press, and it only offers a score the model actually returned;
 - **the number you sorted by is shown on every row**, because an order the reader chose but cannot
   see the basis of is what was actually being objected to;
@@ -247,6 +256,55 @@ never sort by them silently.** So:
 
 `?sort=` is in the URL like everything else ([url-state.md](url-state.md)), and it pushes history
 because reordering a list is a deliberate act on the view.
+
+### Prioritised, which is now the default
+
+The first clause of that condition — *the list arrives in document order* — lasted a day. On
+2026-08-26 Greg asked for a fourth order and for it to arrive without being asked for:
+
+> for the Glossary, let's add a "Prioritised" order (that should be the default) that somehow takes
+> into account importance, centrality, and order. Perhaps it's a combination of important and
+> centrality and first-order appearance? Or combination of importance and centrality, thresholded
+> somehow, then ordered by first-appearance?
+>
+> — Greg, 2026-08-26
+
+It is the second of those two sketches, with one substitution. The whole argument, the four designs
+it was chosen from and the two things it is a bet on are in
+[glossary-prioritised-order.md](../plans/glossary-prioritised-order.md); the three things to know
+here:
+
+**The two scores multiply. They do not add.** What is worth ordering by is the cost of *not* knowing
+a term — how likely it is to stop you, times how much of the argument stops with it. A sum gets both
+ends wrong at once: a very central, very easy word (*"attention"*, in a piece about attention) scores
+high and needs no flagging, and a very hard, very peripheral one scores high too and is exactly the
+distraction a priority list exists to keep off the top. A product sends both to the bottom.
+
+**The product gates, it does not rank.** Two noisy 0–1 model scores multiplied together separate the
+clear top from the rest and say nothing trustworthy about the middle, so it decides one thing —
+`difficulty × centrality ≥ 0.30`, in or out — and produces **two groups with a labelled divider**.
+Inside a group the order is **first use**, which is where the third thing Greg asked for lives, and
+which means the model has chosen nothing there. Both raw numbers are on every row; the product never
+is, because that is our arithmetic dressed as the model's judgment and a number the reader can
+neither interpret nor check.
+
+**It cancels itself when it cannot help.** If nothing clears the gate, or everything does, or the
+scores are not there at all, the list is one unheaded group in first-use order — exactly what it did
+before — and the control is not offered. That is the same rule the score sorts already followed, one
+step on: *do not offer an order that would visibly do nothing.* Old glossaries with no scores see no
+change whatsoever.
+
+`PRIORITY_GATE` is an **absolute** threshold rather than a relative "top third", and the reason is
+what each does when it is wrong. An absolute gate that misfires degenerates to plain first-use order.
+A relative one would promote exactly a third whatever the scores said — inventing a ranking that is
+not in the data and putting a confident label over it, which is the failure this whole feature has
+been shaped to avoid. `0.30` is a guess and is meant to be moved once we have looked at more real
+glossaries; on `data/writes` it promotes two of eight.
+
+This is an **override of the condition above, not an exception it allows for** — a default ranking is
+in the letter the model's prioritising arriving unasked. What survives is the half that was actually
+being objected to: the order is named in a control that shows as selected, the divider says what
+promoted the group under it, the numbers are on every row, and *first use* is one tap away.
 
 ## Finding more, and starting again
 
@@ -321,6 +379,10 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   before either grows.
 
 ## See also
+
+- [search.md](search.md) — the other mode that marks up the prose, and the rule both follow
+  about when the article may acquire marks. It is also where the third `MarkKind` came from, and
+  where the account of why `annotateHtml` did not need replacing now lives
 
 - [original-version/glossary.md](original-version/glossary.md) — theirs: the prompt, the two bugs,
   and what we said we would do differently

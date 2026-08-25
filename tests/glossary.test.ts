@@ -35,7 +35,15 @@ import {
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { MODEL } from "../src/models.js";
-import { scoreShown, sortEntries } from "../src/web/GlossaryPanel.js";
+import {
+  PRIORITY_GATE,
+  effectiveSort,
+  groupEntries,
+  priorityOf,
+  rowScores,
+  sortEntries,
+  splitsOnPriority,
+} from "../src/web/GlossaryPanel.js";
 import type { Block, Glossary, GlossaryEntry } from "../src/types.js";
 
 function block(id: string, text: string): Block {
@@ -441,7 +449,7 @@ describe("sortEntries", () => {
   });
 });
 
-describe("scoreShown", () => {
+describe("rowScores", () => {
   const e = entry({ name: "term", difficulty: 0.7, centrality: 0.3 });
 
   it("shows nothing at all when the list is in document order", () => {
@@ -454,16 +462,136 @@ describe("scoreShown", () => {
        That is exactly what the condition on keeping these scores forbids: the
        objection was never to the numbers existing, it was to the model's
        prioritising arriving unasked. See docs/project/glossary.md § The scores. */
-    expect(scoreShown(e, null)).toBeUndefined();
-    expect(scoreShown(e, "document")).toBeUndefined();
+    expect(rowScores(e, null)).toEqual([]);
+    expect(rowScores(e, "document")).toEqual([]);
   });
 
   it("shows the one the list is actually ordered by", () => {
-    expect(scoreShown(e, "difficulty")).toBe(0.7);
-    expect(scoreShown(e, "centrality")).toBe(0.3);
+    expect(rowScores(e, "difficulty")).toEqual([{ key: "difficulty", value: 0.7 }]);
+    expect(rowScores(e, "centrality")).toEqual([{ key: "centrality", value: 0.3 }]);
+  });
+
+  it("shows both under prioritised, and never the product", () => {
+    // The composite is our arithmetic dressed as the model's judgment — a
+    // number the reader can neither interpret nor check. The two the gate was
+    // computed from are the honest thing to put on the row.
+    expect(rowScores(e, "prioritised")).toEqual([
+      { key: "difficulty", value: 0.7 },
+      { key: "centrality", value: 0.3 },
+    ]);
   });
 
   it("shows nothing for an entry the model declined to score", () => {
-    expect(scoreShown(entry({ name: "bare" }), "difficulty")).toBeUndefined();
+    expect(rowScores(entry({ name: "bare" }), "difficulty")).toEqual([]);
+  });
+
+  it("shows neither number under prioritised when only one of them is there", () => {
+    // A row shows exactly the numbers its position was decided on. This entry's
+    // position could not be decided on them — it cannot clear a gate that needs
+    // both — so showing the one it has would suggest a basis that isn't there.
+    expect(rowScores(entry({ name: "half", difficulty: 0.9 }), "prioritised")).toEqual([]);
+    expect(rowScores(entry({ name: "half", centrality: 0.9 }), "prioritised")).toEqual([]);
+  });
+});
+
+describe("priorityOf", () => {
+  it("multiplies the two scores rather than adding them", () => {
+    /* The whole design, in one assertion. What the reader wants ordered is the
+       cost of not knowing a term — how likely it is to stop them, times how
+       much of the argument stops with it. A sum gets both ends wrong, and these
+       two entries are the two ends: a central-but-easy word nobody needs
+       flagged, and a hard-but-peripheral one that is exactly the distraction a
+       priority list exists to keep off the top. Both must come out low. */
+    expect(priorityOf(entry({ name: "easy-central", difficulty: 0.1, centrality: 0.9 }))).toBeCloseTo(0.09);
+    expect(priorityOf(entry({ name: "hard-fringe", difficulty: 0.9, centrality: 0.1 }))).toBeCloseTo(0.09);
+    // And the one that is both comes out far above them, on the same scores.
+    expect(priorityOf(entry({ name: "both", difficulty: 0.7, centrality: 0.7 }))).toBeCloseTo(0.49);
+  });
+
+  it("is nothing at all when either score is missing", () => {
+    expect(priorityOf(entry({ name: "d-only", difficulty: 0.9 }))).toBeUndefined();
+    expect(priorityOf(entry({ name: "c-only", centrality: 0.9 }))).toBeUndefined();
+    expect(priorityOf(entry({ name: "bare" }))).toBeUndefined();
+  });
+});
+
+describe("prioritised order", () => {
+  const hard = entry({ name: "hard", difficulty: 0.8, centrality: 0.8 }); // 0.64, in
+  const easy = entry({ name: "easy", difficulty: 0.1, centrality: 0.9 }); // 0.09, out
+  const fringe = entry({ name: "fringe", difficulty: 0.9, centrality: 0.1 }); // 0.09, out
+  const alsoHard = entry({ name: "also-hard", difficulty: 0.6, centrality: 0.7 }); // 0.42, in
+  const bare = entry({ name: "bare" });
+  const list = [easy, hard, fringe, alsoHard, bare];
+
+  it("puts the hard-and-central terms first and everything else after", () => {
+    const groups = groupEntries(list, "prioritised");
+    expect(groups.map((g) => g.label)).toEqual(["worth knowing first", "the rest"]);
+    expect(groups[0]?.entries.map((e) => e.name)).toEqual(["hard", "also-hard"]);
+    expect(groups[1]?.entries.map((e) => e.name)).toEqual(["easy", "fringe", "bare"]);
+  });
+
+  it("keeps first use as the order inside each group", () => {
+    // The third thing Greg asked for, and where it actually lives. `easy` is
+    // first in the document and stays first in its group; `hard` precedes
+    // `also-hard` for the same reason and not because it scored higher.
+    const [top, rest] = groupEntries(list, "prioritised");
+    const docIndex = (name: string) => list.findIndex((e) => e.name === name);
+    for (const group of [top, rest]) {
+      const order = group!.entries.map((e) => docIndex(e.name));
+      expect(order).toEqual([...order].sort((a, b) => a - b));
+    }
+  });
+
+  it("gates on the product, so a high single score is not enough", () => {
+    // 0.95 difficulty and 0.3 centrality is 0.285 — under the gate, and under
+    // it on purpose. This is the assertion that a sum would fail.
+    const nearly = entry({ name: "nearly", difficulty: 0.95, centrality: 0.3 });
+    expect(priorityOf(nearly)!).toBeLessThan(PRIORITY_GATE);
+    const groups = groupEntries([hard, nearly], "prioritised");
+    expect(groups[0]?.entries.map((e) => e.name)).toEqual(["hard"]);
+  });
+
+  it("falls back to first use when the gate divides nothing", () => {
+    /* The self-cancelling half. An old glossary with no scores, or one where
+       everything is above the gate, or one where nothing is — all three are
+       first-use order in a single unheaded group, which is exactly what the
+       list did before this order existed. A default that labelled those a
+       priority would be claiming a judgment nothing supports. */
+    for (const undividable of [
+      [bare, entry({ name: "bare2" })],
+      [hard, alsoHard],
+      [easy, fringe],
+    ]) {
+      expect(splitsOnPriority(undividable)).toBe(false);
+      expect(effectiveSort(undividable, "prioritised")).toBe("document");
+      const groups = groupEntries(undividable, "prioritised");
+      expect(groups).toHaveLength(1);
+      expect(groups[0]?.label).toBeNull();
+      expect(groups[0]?.entries).toEqual(undividable);
+    }
+  });
+
+  it("leaves the other three orders alone", () => {
+    expect(splitsOnPriority(list)).toBe(true);
+    for (const sort of ["document", "difficulty", "centrality"] as const) {
+      expect(effectiveSort(list, sort)).toBe(sort);
+      expect(groupEntries(list, sort)).toHaveLength(1);
+      expect(groupEntries(list, sort)[0]?.label).toBeNull();
+    }
+  });
+
+  it("flattens to the same thing sortEntries returns", () => {
+    // Two ways of asking what order the list is in must not be able to
+    // disagree, so one is defined as the other.
+    expect(sortEntries(list, "prioritised").map((e) => e.name)).toEqual(
+      groupEntries(list, "prioritised").flatMap((g) => g.entries.map((e) => e.name)),
+    );
+  });
+
+  it("does not mutate the list it was given", () => {
+    const before = list.map((e) => e.name);
+    groupEntries(list, "prioritised");
+    sortEntries(list, "prioritised");
+    expect(list.map((e) => e.name)).toEqual(before);
   });
 });

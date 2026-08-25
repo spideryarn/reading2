@@ -2676,6 +2676,13 @@ td.text.has-hit {
   gap: 0.35rem;
 }
 .gloss-name {
+  /* `min-width: 0` because a flex item refuses by default to shrink below its
+     longest word, and this row now carries two numbers as well as a name in an
+     18rem band. Without it a long term name overflows the band instead of
+     wrapping; with it the name wraps and the numbers stay put, which is the
+     right way round. */
+  min-width: 0;
+  overflow-wrap: break-word;
   color: var(--ink);
   font-size: 0.86rem;
   font-weight: 600;
@@ -2694,6 +2701,7 @@ td.text.has-hit {
    are in the cell's `title`. */
 .gloss-score {
   display: flex;
+  flex-shrink: 0; /* the name gives way, not the numbers */
   gap: 0.3rem;
   margin-left: auto;
   color: var(--ink-faint);
@@ -3170,6 +3178,15 @@ td.text.has-hit {
   border-bottom: 1px solid var(--rule);
 }
 .summ-row {
+  /* A `<fieldset>`, so the reset comes first — the UA gives it a groove border,
+     side padding and a margin nobody asked for. `display: flex` is doing a
+     second job beyond layout: a `<legend>` only gets its notched-into-the-
+     border rendering while the fieldset is a block box, so flex is what turns
+     the group's label into an ordinary item on the row. */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0; /* a fieldset defaults to min-content, which refuses to shrink */
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -3181,8 +3198,11 @@ td.text.has-hit {
 }
 .summ-row + .summ-row { margin-top: 0.3rem; }
 .summ-label {
+  /* Also the `<legend>` of each group. `padding: 0` because a UA gives a legend
+     side padding to sit in the border it no longer has. */
   width: 3.4rem;
   flex: none;
+  padding: 0;
   font-size: 0.68rem;
   letter-spacing: 0.09em;
   text-transform: uppercase;
