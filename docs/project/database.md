@@ -100,6 +100,40 @@ touch anything storage-shaped:
   `/api/*` talks to Postgres. The one exception is Auth, which *does* run in the browser — the rule
   that holds is "no application **data** query leaves the server", not "no Supabase call".
 
+## Connecting to the remote
+
+Not needed yet — nothing in the app talks to the remote, and the schema has only ever been applied
+to [the local stack](supabase-local.md). Collected here because these four facts are the ones that
+turn a five-minute job into an afternoon, and each fails in a way that misdirects you.
+
+**Which host.** Supabase offers three, and the obvious one is wrong for production:
+
+| | Use | Why |
+|---|---|---|
+| direct — `db.<ref>.supabase.co:5432` | local admin work | **IPv6-only** unless the paid IPv4 add-on is on. Works from Greg's laptop; will not resolve from Vercel |
+| session pooler | **migrations** | IPv4, and a real session — which DDL and the migrator's bookkeeping both need |
+| transaction pooler — port 6543 | **the running app** | one connection per transaction. `LISTEN/NOTIFY`, session advisory locks and `SET` outside a transaction all silently stop working here |
+
+The username differs too: pooler connections are `postgres.<project-ref>`, not plain `postgres`.
+
+**SSL is enforced**, so a plain connection is refused — and `pg` does not use SSL by default, so the
+refusal arrives looking like a credentials error. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)
+handles this off the same is-this-local test that guards remote runs: local is a container with no
+certificate and must *not* use SSL; remote must.
+
+**The certificate is committed**, at [`certs/supabase-ca.crt`](../../certs/supabase-ca.crt), and
+found by path — so verified connections are the default rather than something to configure.
+[certs/README.md](../../certs/README.md) explains why committing a certificate is right here (it is
+Supabase's public root CA, carrying no project identifier) and what silently degrades without it:
+the connection keeps working and stays encrypted, but stops checking *who it is talking to*, which
+looks identical from the outside. [tests/db-tls.test.ts](../../tests/db-tls.test.ts) is the guard.
+
+**Three credentials, and none of them is the superuser.** A runtime role with DML on `spideryarn`
+and nothing else; a migration role with DDL; and the browser's publishable key, which reaches Auth
+only because `spideryarn` is not an exposed schema. The `postgres` password must not go near Vercel.
+Creating those roles is the one genuinely manual step — it needs passwords, which do not belong in a
+migration file — and it is [step 1](../plans/postgres-migration.md#the-order-of-work).
+
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
 - **The Supabase CLI does not know about our migrations.** Ours are Drizzle's, in
@@ -126,6 +160,9 @@ touch anything storage-shaped:
 ## See also
 
 - [architecture.md](architecture.md) — the pipeline stages and what a block is
+- [supabase-local.md](supabase-local.md) — the Docker stack the schema is developed against
+- [certs/README.md](../../certs/README.md) — the CA certificate, why it is committed, and what
+  quietly stops being checked without it
 - [postgres-migration.md](../plans/postgres-migration.md) — the plan, the schema, the honest risks
 - [auth.md](auth.md) — why the auth provider and the database are the same decision
 - [library.md](library.md) — the homepage, and the one file a move to Postgres goes behind
