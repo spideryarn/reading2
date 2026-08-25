@@ -262,6 +262,23 @@ width of a thirty-second call; it does not close it. Said plainly rather than pa
 last-writer-wins, the loss is one lookup the reader can ask for again, and a term that has *gone*
 gets an honest 409 rather than a lookup written back into a list it is no longer in.
 
+### Checked in a browser
+
+All eleven checks pass: the two labelled sections render with the solid and dotted rules that tell
+them apart, the (i) caption is reachable by Tab, the sources link shows its page title on hover, the
+globe reports *"Searched the web. 1 search on 26/08/2026"*, and **nothing overflows the 18rem band** —
+measured with the full 1,158-character answer open, which was the thing most likely to break it.
+
+Two observations worth keeping, neither a failure:
+
+- **The answer is long for the column.** 1,158 characters of checked answer against a 265-character
+  `background`. It reads as *long* rather than *cluttered* — the labels and rules keep it legible —
+  but the checked half becomes the bulk of the entry. That is `explain`'s length rule, written for a
+  dialog, and it is the strongest argument for eventually giving the lookup a `SYSTEM` of its own.
+- **No entry in this article has both prose fields at once**, so the busiest possible case — two
+  labelled sections *plus* a checked answer — has not actually been seen. Worth looking at on a
+  piece with a bent borrowed term in it.
+
 ### How this most plausibly fails
 
 **The long tail.** For an obscure person in a niche piece, a memory-only `background` is the

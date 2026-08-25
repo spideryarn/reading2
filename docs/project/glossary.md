@@ -621,6 +621,14 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 - **A term nobody has pressed the button on is entirely unchecked**, and the only thing saying so is
   the absence of a "checked" block. That is the cost of making the web reader-initiated, and it is
   the right cost, but it is a cost.
+- **A checked answer is written for a dialog, not for an 18rem column.** Reusing `explain` means
+  reusing its length rule — *"two or three short paragraphs is usually right"* — which was tuned for
+  [`CommentDialog`](comments.md). Measured in a browser at 1,158 characters against a `background` of
+  265: it does not overflow and it is not cramped, but the checked part becomes the bulk of the entry
+  and the entry becomes a footnote to it. The fix is a `SYSTEM` of its own, which means lifting the
+  transport out of `src/explain.ts` into something both callers share — worth doing, not done, and
+  the reason it is worth doing is that the prompt is the *only* part of that file a lookup wants to
+  differ on.
 - **Nothing ties a term to a question.** [comments.md](comments.md) already answers "what does this
   mean" for a selected passage, and our review of their version argued a glossary should be *the same
   mechanism with a different prompt* rather than a second system. It is currently a second system —
