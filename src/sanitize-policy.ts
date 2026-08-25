@@ -105,10 +105,11 @@ const EMBED_ATTRS: ReadonlyArray<readonly [string, string]> = [
  *   silent request to a third party. Prose gets its looks from our stylesheets
  *   (docs/project/design-css-overview.md), so nothing of value is lost.
  * - **The annotation attributes the client owns.** `annotateHtml` adds
- *   `data-comment` / `data-mark-end` / `data-open` and the `cmt` class, and the
- *   reading view treats them as its own. An article that ships
- *   `<mark class="cmt" data-comment="…">` in its source would draw a fake
- *   comment in someone else's document.
+ *   `data-comment` / `data-mark-end` / `data-open` / `data-term` and the `cmt`
+ *   and `term` classes, and the reading view treats them as its own. An article
+ *   that ships `<mark class="cmt" data-comment="…">` in its source would draw a
+ *   fake comment in someone else's document, and `<mark class="term">` would
+ *   underline whatever the publisher chose as though the glossary had found it.
  *
  *   **This is why the browser pass runs at ingress rather than at the render
  *   sink.** Sanitising after `annotateHtml` would have to *allow* these three
@@ -137,7 +138,7 @@ export const ARTICLE_CONFIG: Config = {
     // origin, which is exactly what the sandbox reasoning below assumes cannot
     // happen.
     "srcdoc",
-    "data-comment", "data-mark-end", "data-open",
+    "data-comment", "data-mark-end", "data-open", "data-term",
   ],
 };
 
@@ -178,13 +179,19 @@ export function installArticlePolicy(purify: DOMPurify): void {
     // only, while the browser side keeps working. Caught by tests/sanitize.test.ts.
     const el = node as Element;
 
-    // `cmt` is the reading view's own class for a comment mark (src/web/annotate.ts,
-    // styled in src/web/styles.css). Forbidding the `data-comment` attribute is
-    // not quite enough on its own — the class alone still draws the highlight.
-    if (el.classList?.contains("cmt")) {
-      el.classList.remove("cmt");
-      if (el.classList.length === 0) el.removeAttribute("class");
+    /* `cmt` and `term` are the reading view's own classes for a comment mark
+       and a glossary occurrence (src/web/annotate.ts, styled in
+       src/web/styles.css). Forbidding the `data-` attributes is not quite
+       enough on its own — either class alone still draws its highlight.
+
+       `term` joined `cmt` here when the glossary landed. It is the less obvious
+       of the two and arguably the more useful to a publisher: a comment mark is
+       visibly the reader's, whereas a forged term underline reads as *the app
+       having decided* those words matter. */
+    for (const own of ["cmt", "term"]) {
+      if (el.classList?.contains(own)) el.classList.remove(own);
     }
+    if (el.classList?.length === 0 && el.hasAttribute("class")) el.removeAttribute("class");
 
     if (el.tagName !== "IFRAME") return;
     if (!isAllowedEmbed(el.getAttribute("src"))) {

@@ -56,7 +56,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { ID_PATTERN } from "../ids.js";
-import type { Arc, Citation, JobStep, Tree, TweetThread } from "../types.js";
+import type { Arc, Citation, Glossary, JobStep, Tree, TweetThread } from "../types.js";
 
 export const spideryarn = pgSchema("spideryarn");
 
@@ -181,6 +181,23 @@ export const articleRevisions = spideryarn.table(
      * `chars` was counted against. Not a tidy-up: a functional break.
      */
     tweets: jsonb("tweets").$type<TweetThread>(),
+    /**
+     * The WHOLE `Glossary`, for the same reason as the two above, plus one of
+     * its own: `passes` and `elapsedMs` accumulate across calls, so a column
+     * holding `GlossaryEntry[]` alone would lose the record of how many model
+     * calls built the list — and the "Find more terms" button would have
+     * nothing to show for itself.
+     *
+     * **A document, not an `entries` table**, and that is a real decision
+     * rather than the lazy one. Entries are generated wholesale, deduplicated
+     * against each other wholesale (src/glossary.ts § `dedupe`), and their
+     * `blocks` are recomputed from the current text on every write. A row per
+     * entry would invite a foreign key from some future feature onto an id that
+     * only survives because dedup happens to preserve it. If a reader ever
+     * edits or annotates one, that is the day this becomes a table — and the
+     * day entry ids become a promise rather than an implementation detail.
+     */
+    glossary: jsonb("glossary").$type<Glossary>(),
 
     /**
      * The library's scalars, computed once here instead of by a directory walk
@@ -462,7 +479,7 @@ export const revisionStepRuns = spideryarn.table(
     primaryKey({ columns: [t.revisionId, t.stepName] }),
     check(
       "revision_step_runs_step",
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','arc','tweets')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','arc','tweets','glossary')`,
     ),
     check(
       "revision_step_runs_status",
@@ -487,7 +504,7 @@ export const aiCalls = spideryarn.table("ai_calls", {
   id: uuid("id").primaryKey().defaultRandom(),
   articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
   revisionId: uuid("revision_id").references(() => articleRevisions.id, { onDelete: "set null" }),
-  /** `toc`, `arc`, `tweets`, or `explain` for a reader's question. */
+  /** `toc`, `arc`, `tweets`, `glossary`, or `explain` for a reader's question. */
   purpose: text("purpose").notNull(),
   provider: text("provider").notNull(),
   model: text("model").notNull(),

@@ -58,6 +58,12 @@ The first feature built on this is [granularity zoom](granularity-zoom.md).
 ## Anti-goals
 
 - A chatbot with the article stuffed in the context window.
+  <br>*Greg asked for a chat on 2026-08-25 and it was built. The anti-goal stands as written — it is
+  still the thing to avoid — and the argument that what was built is not it, along with the honest
+  account of where that argument is weakest, is
+  [chat-mode.md § Say the awkward thing first](../plans/chat-mode.md#say-the-awkward-thing-first).
+  In one line: the article never leaves the screen, and every claim carries a block id you can press
+  to go and check it.*
 - "Read this in 2 minutes."
 - Engagement mechanics, streaks, or anything optimising for time-in-app.
 - Auto-generated confident claims with no path back to the source.
@@ -76,7 +82,9 @@ these, each to be judged against the principles above:
 - **Ask in place** — a question about the paragraph under the cursor, answered from the surrounding
   context, cited back to block ids. **Built**, as of 2026-08-25: select a passage and the model
   explains it, researching the web when it judges it needs to. See [comments.md](comments.md).
-- **Author's glossary** — the terms this piece uses in a non-obvious way, defined from the piece itself.
+- **Author's glossary** — the terms this piece uses in a non-obvious way, defined from the piece
+  itself. **Built**, as of 2026-08-25: a mode in the band beside the prose, and selecting a term
+  underlines every place the article uses it. See [glossary.md](glossary.md).
 - **Argument view** — claims, the support offered for each, and the moves the author doesn't make.
 - **Confusion signal** — the reader marks a passage as unclear; the highest-value input we can get.
 - **Notes and highlights** anchored to block ids, surviving re-extraction — which is precisely why

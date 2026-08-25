@@ -97,6 +97,7 @@ artefacts on disk, not by reaching into another stage's code.
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
 | 5c | the thread — the article as numbered posts ([tweet-thread-page.md](../plans/tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
+| 5d | the glossary — the terms this piece uses, defined from it ([glossary.md](glossary.md)). **Not run by a plain add**, same as 5c | **glossary** ([`src/glossary.ts`](../../src/glossary.ts)) | `glossary.json` |
 | 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view). **Sanitises again at ingress** ([security.md](security.md#sanitised-twice-on-purpose)) — stage 3 used jsdom's parser, this one uses the browser's | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
 | 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | `data/_jobs/`, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
@@ -139,6 +140,9 @@ Filesystem, one directory per article, no database:
     tweets.json     the article as a numbered thread (stage 5c, on demand only —
                     docs/plans/tweet-thread-page.md). Carries a sourceHash of
                     blocks.json, so a thread that has gone stale can say so.
+    glossary.json   the terms the piece uses, and which blocks use them (stage 5d,
+                    on demand only — glossary.md). Carries a sourceHash too, and
+                    a `passes` count, because the list grows a batch at a time.
     reader.json     per-reader state: progress, highlights, notes (all keyed by block id)
 ```
 
@@ -190,8 +194,12 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   inside a request handler. Job records survive a restart, and anything left `running` by a dead
   process is turned into a visible error rather than a spinner that never stops — the same argument
   `sweepOrphaned` makes for comments.
-- LLM calls happen in the pipeline, not in request handlers — with **one deliberate exception**,
-  [`src/explain.ts`](../../src/explain.ts). A reader's text selection cannot be precomputed or
+- LLM calls happen in the pipeline, not in request handlers — with **two deliberate exceptions**,
+  [`src/explain.ts`](../../src/explain.ts) and [`src/converse.ts`](../../src/converse.ts) (chat,
+  added 2026-08-25 — [chat-mode.md](../plans/chat-mode.md)). Both take input that does not exist
+  until the reader produces it, so there is nothing to precompute; chat additionally *streams*,
+  which is the first response in this app that is not a single JSON body. A reader's text selection
+  cannot be precomputed or
   cached on a content hash, because it does not exist until they make it. See
   [comments.md § Why this call is not a pipeline stage](comments.md#why-this-call-is-not-a-pipeline-stage).
   That call goes to **OpenRouter** (`OPENROUTER_API_KEY`); everything in the pipeline uses the

@@ -10,7 +10,7 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { describe, expect, it } from "vitest";
-import { annotateHtml, renderedText, resolveMark } from "../src/web/annotate.js";
+import { annotateHtml, renderedText, resolveMark, termMarks } from "../src/web/annotate.js";
 
 describe("renderedText", () => {
   it("is the concatenation of text nodes, with entities decoded", () => {
@@ -181,5 +181,102 @@ describe("foreign content", () => {
     const out = annotateHtml(math, [{ id: "c1", start, end: start + "after".length }]);
     expect(out.slice(out.indexOf("<math"), out.indexOf("</math>"))).not.toContain("<mark");
     expect(out).toMatch(/<mark[^>]*>after<\/mark>/);
+  });
+});
+
+/* ------------------------------------------------------- glossary terms --
+   The second kind of mark. Everything above is a comment: an anchor the reader
+   made, resolved back onto the prose. A term arrives as a list of spellings and
+   the occurrences are found here. See docs/project/glossary.md. */
+
+describe("termMarks", () => {
+  const blocks = [
+    {
+      id: "spya-aaaaaa",
+      tag: "p",
+      kind: "text" as const,
+      text: "A nonreductive explanation is not no explanation.",
+      words: 8,
+      html: "<p>A <em>nonreductive explanation</em> is not no explanation.</p>",
+      gistable: true,
+    },
+    {
+      id: "spya-bbbbbb",
+      tag: "p",
+      kind: "text" as const,
+      text: "Nonreductive accounts have problems.",
+      words: 4,
+      html: "<p>Nonreductive accounts have problems.</p>",
+      gistable: true,
+    },
+  ];
+
+  const selection = {
+    id: "spya-termid",
+    forms: ["nonreductive explanation", "nonreductive"],
+    blocks: ["spya-aaaaaa", "spya-bbbbbb"],
+  };
+
+  it("marks nothing at all when no term is selected", () => {
+    // The whole shape of the decision in GlossaryPanel.tsx: the article
+    // acquires marks when the reader asks for them and at no other time. Their
+    // version underlined every term in every article, always.
+    expect(termMarks(blocks, null).size).toBe(0);
+  });
+
+  it("finds every occurrence, in the rendered-text offset space", () => {
+    const found = termMarks(blocks, selection);
+    const first = found.get("spya-aaaaaa");
+    expect(first).toHaveLength(1);
+    // Offsets are against renderedText(html), NOT block.text — the two are
+    // different lengths and mixing them is what the header of annotate.ts is
+    // about. Slicing the rendered text back out is the only honest check.
+    const text = renderedText(blocks[0]!.html);
+    expect(text.slice(first![0]!.start, first![0]!.end)).toBe("nonreductive explanation");
+    expect(found.get("spya-bbbbbb")).toHaveLength(1);
+  });
+
+  it("only looks in the blocks the server said the term was in", () => {
+    // Not merely an optimisation: it is the agreement between the two halves.
+    // Restricting the search means a disagreement between glossary.json and
+    // this shows up as a MISSING underline rather than as an underline in a
+    // block the panel claims has none — one is a visible bug, the other is the
+    // panel and the prose quietly telling you different things.
+    const narrowed = { ...selection, blocks: ["spya-bbbbbb"] };
+    const found = termMarks(blocks, narrowed);
+    expect(found.has("spya-aaaaaa")).toBe(false);
+    expect(found.has("spya-bbbbbb")).toBe(true);
+  });
+
+  it("draws a term underline that is not a comment", () => {
+    const marks = termMarks(blocks, selection).get("spya-bbbbbb")!;
+    const out = annotateHtml(blocks[1]!.html, marks);
+    expect(out).toContain('class="term"');
+    // A term is inert. `mark.cmt` is what the click handler in TableView
+    // selects on, so carrying that class would make pressing a term try to
+    // open a comment that does not exist.
+    expect(out).not.toContain("data-comment");
+    expect(out).not.toContain("data-mark-end");
+    expect(out).toContain('data-term="spya-termid"');
+  });
+
+  it("merges a comment and a term over the same words into ONE mark", () => {
+    // Two nested <mark>s would stack two underlines on the same words, which
+    // reads as a rendering bug. And the comment must keep `cmt` — a question
+    // asked about a sentence does not stop being clickable because a glossary
+    // term happens to sit in it.
+    const marks = termMarks(blocks, selection).get("spya-bbbbbb")!;
+    const text = renderedText(blocks[1]!.html);
+    const out = annotateHtml(blocks[1]!.html, [
+      { id: "c1", start: 0, end: text.length },
+      ...marks,
+    ]);
+    const host = document.createElement("div");
+    host.innerHTML = out;
+    const both = host.querySelector("mark.cmt.term");
+    expect(both).not.toBeNull();
+    expect(both?.getAttribute("data-comment")).toBe("c1");
+    expect(both?.getAttribute("data-term")).toBe("spya-termid");
+    expect(host.querySelectorAll("mark mark")).toHaveLength(0);
   });
 });

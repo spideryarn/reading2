@@ -31,6 +31,8 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
+| `mode` | which **mode** owns the band between the spine and the prose, absent for the table-of-contents columns that are the default — [chat-mode.md](../plans/chat-mode.md) | push | `?mode=chat` |
+| `thread` | which conversation is open in chat mode, absent for the list of them | **replace** | `?thread=spya-k3m9qt` |
 
 **Two superseded spellings, both still working.** `?about=1` was the masthead's details disclosure
 and `?panel=about` was the drawer panel that replaced it. Both are gone: the article's details are a
@@ -60,6 +62,18 @@ That arrived with the library ([library.md](library.md)) on 2026-08-25, and it i
 article now has an address rather than a setting. `/` is the shelf; anything that is not
 `/read/<slug>` is also the shelf, including nonsense, so a mistyped link lands somewhere useful
 instead of on a 404.
+
+**A mode is a parameter, not a segment.** `?mode=chat` and `?mode=glossary` replace the middle band
+between the spine and the prose ([chat-mode.md](../plans/chat-mode.md),
+[glossary.md](glossary.md)); the default, `toc`, is the gist columns and never appears in a URL. They
+push history, because a mode is where you are rather than a glance. Each carries one parameter of its
+own — `?thread=` for the open conversation, `?term=` for the selected glossary term, both `replace`
+because stepping between them is browsing. `?sort=` orders the glossary and pushes, because
+reordering a list is a deliberate act on the view.
+
+`?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
+occurrences in the prose**, so "the article as I am currently looking at it" is not fully described
+without it. Sending someone a link to a term sends them the underlines too.
 
 **A third segment says which of the article's pages**, added the same day:
 `/read/<slug>/metadata` and `/read/<slug>/tweets`. That does not bend the rule — those are still the

@@ -1,11 +1,11 @@
 /**
  * The ingest pipeline, as data.
  *
- * Six steps, each one a name, a label a reader can watch tick over, the
+ * Seven steps, each one a name, a label a reader can watch tick over, the
  * artefact it produces, and the function that produces it. Everything that
- * knows the *order* of the pipeline knows it from this file — and the sixth,
- * `tweets`, is in the order without being in the default, which is why there
- * are two lists below rather than one.
+ * knows the *order* of the pipeline knows it from this file — and the last two,
+ * `tweets` and `glossary`, are in the order without being in the default, which
+ * is why there are two lists below rather than one.
  *
  * Written as a list rather than as a function that calls four other functions
  * for one reason: Greg asked for jobs beyond "add this URL" — re-run one stage
@@ -24,11 +24,37 @@ import { generateArc } from "./arc.js";
 import { runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchHtml } from "./fetch.js";
+import { generateGlossary, glossaryIsCurrent } from "./glossary.js";
+import { log } from "./log.js";
 import { generateToc } from "./toc.js";
 import { generateTweets, threadIsCurrent } from "./tweets.js";
 import type { Meta, StepName } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/**
+ * One line per step, saying what the step cost.
+ *
+ * **Why the logging lives here rather than in the stages.** Every model stage
+ * already counts its own tokens and times its own call, and then hands those
+ * numbers back in its run object — which the `run()` closures below receive and
+ * currently reduce to a sentence for a progress bar. The stage CLIs print them;
+ * the queue threw them away. So "what did this article's tree cost?" had no
+ * answer once the web UI became the normal way to ingest, which is open question
+ * Q7 in docs/project/open-questions.md.
+ *
+ * The numbers are all in scope *here*, at the seam the queue already owns, so
+ * this file can answer that question without a single edit inside somebody
+ * else's stage — see architecture.md#stage-ownership. The two exceptions are two
+ * lines each: `toc` and `arc` keep `MODEL` private, so they now return it.
+ *
+ * A module-level logger is fine and rule 4 in src/log.ts does not forbid it: it
+ * carries the component name and nothing else. What must never be module-level
+ * is a logger bound to *one job or request*, because several run concurrently in
+ * one process and the lines would be attributed to the wrong article. Every
+ * per-article field below is passed at the call site instead.
+ */
+const plog = log("pipeline");
 
 export type { StepName };
 
@@ -41,19 +67,32 @@ export type { StepName };
  * names the API will accept at all.
  *
  * It used to do a third — being the default for a job that named no steps — and
- * that is `DEFAULT_INGEST_STEPS` now, because `tweets` is the first step that
- * belongs in the order and not in the default. See
- * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely.
+ * that is `DEFAULT_INGEST_STEPS` now, because `tweets` was the first step that
+ * belongs in the order and not in the default. `glossary` is the second, and
+ * the pair of them is what turned that from an exception into the shape of the
+ * list: everything up to `arc` makes the article readable, and everything after
+ * it is a thing somebody asks for. See
+ * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely and
+ * docs/project/glossary.md.
  */
-export const STEP_ORDER: StepName[] = ["fetch", "extract", "blocks", "toc", "arc", "tweets"];
+export const STEP_ORDER: StepName[] = [
+  "fetch",
+  "extract",
+  "blocks",
+  "toc",
+  "arc",
+  "tweets",
+  "glossary",
+];
 
 /**
  * What "add this URL" runs: every step that makes the article readable.
  *
- * Not `tweets`. A thread costs a model call and is a page you go to, so it is
- * generated when somebody asks for one — `{ steps: ["tweets"] }` — and never as
- * a side effect of adding an article. Greg was asked and said no to that
- * directly (2026-08-25).
+ * Not `tweets`, and not `glossary`. Each costs a model call over the whole
+ * article and each is a thing you go to — a page, and a mode — so each is
+ * generated when somebody asks for it, `{ steps: ["tweets"] }` or
+ * `{ steps: ["glossary"] }`, and never as a side effect of adding an article.
+ * Greg was asked about both and said no to both, directly (2026-08-25).
  */
 export const DEFAULT_INGEST_STEPS: StepName[] = ["fetch", "extract", "blocks", "toc", "arc"];
 
@@ -81,8 +120,19 @@ export const DEFAULT_INGEST_STEPS: StepName[] = ["fetch", "extract", "blocks", "
  * `arc` stays in the cascade for exactly the inverse reason: it cannot tell
  * whether it is current, so its position is the only signal there is. Give it a
  * freshness check of its own and it belongs here too.
+ *
+ * `glossary` is here for both halves of the same argument: it reads the blocks
+ * and the tree, nothing reads what it writes, and `glossaryIsCurrent` compares
+ * its stored `sourceHash` against the blocks on disk. **And one thing more that
+ * `tweets` does not have to worry about** — forcing this step *appends* a batch
+ * of terms rather than replacing the list (src/glossary.ts § `generateGlossary`),
+ * so being swept into the cascade would not merely waste a model call, it would
+ * lengthen the reader's glossary as a side effect of re-fetching the article.
  */
-export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>(["tweets"]);
+export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
+  "tweets",
+  "glossary",
+]);
 
 export interface StepContext {
   slug: string;
@@ -147,6 +197,49 @@ export interface PipelineStep {
 /** Stage 3's own artefact, beside the HTML. Stage 4 copies it into `data/<slug>/`. */
 function blocksPathFor(ctx: StepContext): string {
   return ctx.htmlFile.replace(/\.html$/, ".blocks.json");
+}
+
+/**
+ * How many blocks a blocks.json holds, or 0 if it isn't there or isn't readable.
+ *
+ * Every unhappy answer is 0 — missing, half-written, not the shape we expect.
+ * Only logging calls this, and a logging helper must never be the thing that
+ * fails a step, so "we don't know" and "there was nothing" deliberately give the
+ * same answer: stay quiet.
+ */
+async function countBlocksIn(file: string): Promise<number> {
+  try {
+    const parsed = JSON.parse(await readFile(file, "utf-8")) as { blocks?: unknown };
+    return Array.isArray(parsed.blocks) ? parsed.blocks.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Did this article already have ids before stage 3 runs, and how many?
+ *
+ * Only the id-orphaning warn below uses this, and it exists so that warn can
+ * tell apart the two ways a run can carry nothing over: a first ingest, where
+ * minting every id is the correct and only thing to do, and a re-run over an
+ * article that already had ids, where minting every id throws away every anchor
+ * into it. Mere existence would confuse them, because an article whose first
+ * extraction produced nothing leaves a perfectly real `{"blocks": []}` behind.
+ *
+ * **Both copies, and the second one is the point.** Stage 3 carries ids over
+ * from its own copy beside the HTML, so that is what it reads and what this asks
+ * first. But block-ids.md calls `data/<slug>/blocks.json` a source artefact
+ * rather than a cache precisely because losing it loses the ids for good — and
+ * if only stage 3's copy has gone missing, carry-over silently has nothing to
+ * work from while stage 4's copy still sits there recording every id that used
+ * to exist. Asking that copy too is what turns the worst case from an invisible
+ * one into a warn. Read second because it is only needed when the first is
+ * empty.
+ */
+async function previousBlockCount(ctx: StepContext): Promise<number> {
+  const own = await countBlocksIn(blocksPathFor(ctx));
+  if (own > 0) return own;
+  return countBlocksIn(path.join(ctx.dir, "blocks.json"));
 }
 
 async function exists(file: string): Promise<boolean> {
@@ -249,11 +342,20 @@ export const STEPS: Record<StepName, PipelineStep> = {
     outputs: (ctx) => [path.join(ctx.dir, "raw.html")],
     async run(ctx) {
       const url = requireUrl(ctx);
-      ctx.report(new URL(url).hostname);
+      const host = new URL(url).hostname;
+      ctx.report(host);
       const html = await fetchHtml(url, { signal: ctx.signal });
       await mkdir(ctx.dir, { recursive: true });
       await writeFile(path.join(ctx.dir, "raw.html"), html, "utf8");
-      return `${Math.round(html.length / 1024)} KB`;
+      const kb = Math.round(html.length / 1024);
+      /* The **hostname**, not the URL. A log of full article URLs is a reading
+         history, and this one is already written once when the job is enqueued
+         (src/jobs.ts) — a second copy per fetch buys nothing and spreads it.
+         The host and the size are what you want when a page comes back
+         suspiciously small, or when one publisher keeps failing.
+         See log.ts's note on `url` not being redacted, and why. */
+      plog.debug({ slug: ctx.slug, step: "fetch", host, kb }, `fetch ${ctx.slug}: ${kb} KB`);
+      return `${kb} KB`;
     },
   },
 
@@ -296,9 +398,64 @@ export const STEPS: Record<StepName, PipelineStep> = {
      */
     outputs: (ctx) => [blocksPathFor(ctx), ctx.htmlFile],
     async run(ctx) {
+      // Read before the stage runs, because the stage overwrites blocks.json
+      // with its own output. Afterwards there is no way to ask what was there.
+      const previousBlocks = await previousBlockCount(ctx);
+
       const run = await runBlocks({ htmlFile: ctx.htmlFile });
       const { total, minted, carried, reused } = run.stats;
-      return `${total} blocks, ${minted} new ids (${reused + carried} kept)`;
+      const kept = reused + carried;
+
+      const fields = {
+        slug: ctx.slug,
+        step: "blocks",
+        total,
+        minted,
+        carried,
+        reused,
+        previousBlocks,
+      };
+      plog.info(fields, `blocks ${ctx.slug}: ${total} blocks, ${minted} minted, ${kept} kept`);
+
+      /*
+       * The one thing in this pipeline that quietly destroys reader data.
+       *
+       * Block ids are the spine: every comment, and later every note and
+       * highlight, is anchored to one (docs/project/block-ids.md). Stage 3 is
+       * meant to be idempotent — ids already in the HTML are reused, and ids the
+       * previous blocks.json knew are carried over by matching the block's
+       * words, which is what makes a re-extraction survivable. When that works,
+       * `minted` is 0 or nearly 0 on a re-run.
+       *
+       * So: we had blocks before, and not one of them kept its id. Every anchor
+       * into this article now points at nothing. The step still *succeeds* —
+       * that is the whole problem, and it is the shape of failure this project
+       * keeps meeting (docs/reusable/silent-success.md). A warn is the only
+       * thing that would tell you.
+       *
+       * **`kept === 0`, deliberately, and not a ratio.** Zero survivors is
+       * unambiguous, and it has three causes: carry-over is broken, the previous
+       * blocks.json went missing, or the publisher rewrote every paragraph. The
+       * reader's anchors are equally gone in all three, so all three deserve the
+       * line, and none of them needs a threshold anyone has to tune. This warn
+       * therefore says *what happened*, not whose fault it was — which is the
+       * honest thing a log line can say from here.
+       *
+       * A *partial* loss — 5 of 139 survive — is just as real and is **not**
+       * warned about, because any cutoff would be a guess and a guessed alarm
+       * gets ignored. `previousBlocks`, `carried` and `reused` are all in the
+       * info line above, so that case is one query away instead.
+       *
+       * `previousBlocks > 0` is what keeps a first ingest quiet: everything is
+       * minted and nothing is lost, which is the opposite of a problem.
+       */
+      if (previousBlocks > 0 && kept === 0 && minted > 0) {
+        plog.warn(
+          fields,
+          `blocks ${ctx.slug}: all ${minted} ids re-minted — ${previousBlocks} previous ids lost, anchors orphaned`,
+        );
+      }
+      return `${total} blocks, ${minted} new ids (${kept} kept)`;
     },
   },
 
@@ -315,6 +472,24 @@ export const STEPS: Record<StepName, PipelineStep> = {
         onProgress: ctx.report,
         signal: ctx.signal,
       });
+      /* `run.elapsedMs`, not a timer around this closure. The stage times the
+         model call itself, which is the number that answers "what does a tree
+         cost"; a timer out here would fold in reading blocks.json and writing
+         two files, and quietly drift as that IO changed. Same for the other two
+         model steps. */
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "toc",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          ms: run.elapsedMs,
+          blocks: run.blocks,
+          sections: run.internal,
+        },
+        `toc ${ctx.slug}: ${run.internal} sections over ${run.blocks} blocks`,
+      );
       return `${run.internal} sections over ${run.blocks} blocks`;
     },
   },
@@ -330,6 +505,19 @@ export const STEPS: Record<StepName, PipelineStep> = {
         onProgress: ctx.report,
         signal: ctx.signal,
       });
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "arc",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          ms: run.elapsedMs,
+          blocks: run.blocks,
+          parts: run.parts.length,
+        },
+        `arc ${ctx.slug}: ${run.arc.entries.length} sentences over ${run.parts.length} parts`,
+      );
       return `${run.arc.entries.length} sentences, one per part`;
     },
   },
@@ -356,7 +544,72 @@ export const STEPS: Record<StepName, PipelineStep> = {
         signal: ctx.signal,
       });
       const over = run.over > 0 ? `, ${run.over} over ${run.thread.limit}` : "";
+      /* `run.thread.generator` is this stage's model id — it is already stored
+         on the thread, because `threadIsCurrent` compares it to decide whether a
+         thread needs rewriting. So unlike toc and arc, nothing had to be added
+         to src/tweets.ts to log it. */
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "tweets",
+          model: run.thread.generator,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          ms: run.elapsedMs,
+          posts: run.thread.tweets.length,
+          over: run.over,
+        },
+        `tweets ${ctx.slug}: ${run.thread.tweets.length} posts${over}`,
+      );
       return `${run.thread.tweets.length} posts${over}`;
+    },
+  },
+
+  /* Stage 5d — the glossary. In this list but not in DEFAULT_INGEST_STEPS, for
+     the same reason `tweets` is not: it costs a model call and it is a thing
+     somebody asks for.
+
+     The second step with a real `isDone`, and the first whose `run` is not
+     idempotent in the ordinary sense: running it again on a *current* glossary
+     adds terms rather than rewriting the ones there. That is deliberate and it
+     is what "Find more terms" is (docs/project/glossary.md § Finding more), but
+     it is also exactly why this step must never be forced by position — see
+     FORCE_ONLY_WHEN_NAMED above. Read those two notes together. */
+  glossary: {
+    name: "glossary",
+    label: "Finding the terms",
+    outputs: (ctx) => [path.join(ctx.dir, "glossary.json")],
+    isDone: (ctx) => glossaryIsCurrent(ctx.dir),
+    async run(ctx) {
+      const run = await generateGlossary({
+        dir: ctx.dir,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+      });
+      const total = run.glossary.entries.length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "glossary",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          ms: run.elapsedMs,
+          terms: total,
+          added: run.added,
+          pass: run.glossary.passes,
+          /* The one number in this line that is a quality signal rather than a
+             cost. An entry matching no block is the prompt's alias instruction
+             not landing — the model named a term the article does not use in
+             those words. It is not an error and must not fail the step, but it
+             is the thing to watch when a glossary starts feeling wrong, and it
+             is invisible unless it is written down. */
+          unmatched: run.unmatched,
+        },
+        `glossary ${ctx.slug}: ${total} terms (${run.added} new, pass ${run.glossary.passes})`,
+      );
+      const added = run.glossary.passes > 1 ? `, ${run.added} new` : "";
+      return `${total} ${total === 1 ? "term" : "terms"}${added}`;
     },
   },
 };

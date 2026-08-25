@@ -19,6 +19,7 @@
     "toc": "tsx src/toc.ts",
     "arc": "tsx src/arc.ts",
     "tweets": "tsx src/tweets.ts",
+    "glossary": "tsx src/glossary.ts",
     "typecheck": "tsx scripts/typecheck.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",

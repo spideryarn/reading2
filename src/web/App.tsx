@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
 import { Library } from "./Library.js";
@@ -8,14 +8,30 @@ import { Metadata } from "./Metadata.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
+import type { TermSelection } from "./annotate.js";
+import { formsOf } from "../term-match.js";
 import { Spine } from "./Spine.js";
 import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
 import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
+import { ChatPanel } from "./ChatPanel.js";
+import { GlossaryPanel } from "./GlossaryPanel.js";
+import { useGlossary } from "./useGlossary.js";
+import { useChat } from "./useChat.js";
 import { Toggle } from "@/components/ui/toggle";
 import { buildArcColumn, buildGeometry, buildOutline, columnLabel } from "./tree.js";
-import { atParam, colsParam, noteParam, panelParam, textParam } from "./params.js";
+import {
+  atParam,
+  colsParam,
+  modeParam,
+  noteParam,
+  panelParam,
+  sortParam,
+  termParam,
+  textParam,
+  threadParam,
+} from "./params.js";
 import { isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
@@ -227,6 +243,21 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   const [showText, setShowText] = useQueryState("text", textParam);
 
   /**
+   * Which mode owns the middle band — see params.ts § modeParam, and
+   * docs/plans/chat-mode.md.
+   *
+   * Greg's framing, 2026-08-25: the gist columns are not a fixture with things
+   * layered over them, they are *the default mode*, and chat is the second one.
+   * So this is a single value the layout reads, not a flag each feature checks.
+   */
+  const [mode, setMode] = useQueryState("mode", modeParam);
+  /* Any mode that is not the table of contents takes the band. Written as
+     "not toc" rather than as `chat || glossary` on purpose: the third mode cost
+     this line nothing, which is the property the slot was built for, and the
+     fourth should cost it nothing either. */
+  const inMode = mode !== "toc";
+
+  /**
    * An absent `cols` means "whatever fits", not "all of them". All of them is
    * 70rem of table, so on any laptop the obvious default buries a column
    * permanently under the pinned prose. The arithmetic lives in layout.ts, where
@@ -241,13 +272,16 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         leafDepth: geometry.leafDepth,
         showText,
         chosen: cols,
+        modeBand: inMode,
       }),
-    [windowWidth, gistDepths, geometry.leafDepth, showText, cols],
+    [windowWidth, gistDepths, geometry.leafDepth, showText, cols, inMode],
   );
 
   // A string, not the array: a fresh array every render would restart the scroll
-  // listener every render.
-  const layoutKey = `${fit.columns.join(",")}|${showText}|${windowWidth}`;
+  // listener every render. `modeW` is in it because entering a mode moves every
+  // row on the page sideways, and the `?at=` tracker holds row elements it
+  // measured before the move.
+  const layoutKey = `${fit.columns.join(",")}|${showText}|${windowWidth}|${fit.modeW}`;
   const jumpTo = useReadingPosition(sections, layoutKey);
 
   /**
@@ -259,6 +293,23 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    */
   const [note, setNote] = useQueryState("note", noteParam);
   const { comments, ask, retry, remove, error: commentError } = useComments(slug);
+
+  /**
+   * The glossary term whose occurrences are underlined in the prose.
+   *
+   * **Held here rather than in the glossary band, and that is not where it
+   * wants to live.** `useGlossary` fetches on mount, so it has to stay inside a
+   * component that only exists in glossary mode — otherwise every reader of
+   * every article pays a request for a list almost none of them open, which is
+   * the same reason `ChatBand` exists. But the *marks* are drawn in the prose,
+   * which is `TableView`'s, and that is here.
+   *
+   * So the band pushes the selection up as it changes, and clears it on the way
+   * out. The state is a plain setter, which is stable, so the effect that does
+   * the pushing cannot loop. It is one line more than lifting the whole hook,
+   * and it is the line that keeps the fetch where it belongs.
+   */
+  const [term, setTerm] = useState<TermSelection | null>(null);
 
   /**
    * The bottom drawer — see Dock.tsx, and docs/plans/bottom-bar.md for why the
@@ -331,6 +382,14 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
     [comments, setNote],
   );
 
+  /**
+   * Every block id this article has, for checking what the model cited.
+   *
+   * A Set rather than a scan per citation: an answer can carry a dozen of them
+   * and every one is checked on every keystroke of the stream.
+   */
+  const blockIds = useMemo(() => new Set(article.blocks.map((b) => b.id)), [article.blocks]);
+
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
 
@@ -369,7 +428,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
          moves. See docs/reusable/css-sticky-containing-block.md. Set explicitly
          rather than with `max-content`, which a table of prose answers with a
          number in the thousands. */
-      style={{ minWidth: fit.minWidth }}
+      style={{ minWidth: fit.minWidth, "--mode-w": `${fit.modeW}px` } as CSSProperties}
     >
       {fit.spine !== "off" && (
         <Spine
@@ -384,54 +443,77 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           column. */}
       <Masthead article={article} />
       <div className="controls">
-        <span className="controls-label">Granularity</span>
-        {gistDepths.map((d) => (
-          <Toggle
-            key={d}
-            className={PILL}
-            pressed={shownGists.includes(d)}
-            onPressedChange={() => toggle(d)}
-            title={`Show or hide the ${columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells).toLowerCase()} column`}
-          >
-            L{d}
-          </Toggle>
-        ))}
-        {/* The paragraph outline, beside the prose rather than instead of it.
-            Only offered in reading mode: in outline mode this column is the
-            view, and turning it off would leave nothing. */}
-        {showText && (
-          <Toggle
-            className={PILL}
-            pressed={leafOn}
-            onPressedChange={() => toggle(geometry.leafDepth)}
-            title="One line per paragraph, alongside the full text"
-          >
-            L{geometry.leafDepth}
-          </Toggle>
-        )}
-        <Toggle
-          className={PILL}
-          pressed={showText}
-          onPressedChange={() => setShowText((v) => !v)}
-          title="Hide the text to collapse the table into a whole-article outline"
-        >
-          Text
-        </Toggle>
-        {cols === null ? (
-          <span className="mode" title="Columns are following the window width">
-            fit
-          </span>
+        {/* The granularity controls belong to the table-of-contents mode, so
+            they go with it. Leaving them on screen in another mode would offer
+            columns that are not there — a control that looks live, does
+            nothing, and gives the reader no way to tell which. The mode's own
+            name takes their place so the bar still says what the middle band
+            is. */}
+        {inMode ? (
+          <>
+            <span className="controls-label">Mode</span>
+            <span className="mode on">{mode}</span>
+            <button
+              type="button"
+              className="linky"
+              onClick={() => void setMode("toc")}
+              title="Back to the table of contents columns"
+            >
+              back to contents
+            </button>
+          </>
         ) : (
-          <button
-            type="button"
-            className="linky"
-            onClick={() => setCols(null)}
-            title="Let the columns follow the window width again"
+          <>
+          <span className="controls-label">Granularity</span>
+          {gistDepths.map((d) => (
+            <Toggle
+              key={d}
+              className={PILL}
+              pressed={shownGists.includes(d)}
+              onPressedChange={() => toggle(d)}
+              title={`Show or hide the ${columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells).toLowerCase()} column`}
+            >
+              L{d}
+            </Toggle>
+          ))}
+          {/* The paragraph outline, beside the prose rather than instead of it.
+              Only offered in reading mode: in outline mode this column is the
+              view, and turning it off would leave nothing. */}
+          {showText && (
+            <Toggle
+              className={PILL}
+              pressed={leafOn}
+              onPressedChange={() => toggle(geometry.leafDepth)}
+              title="One line per paragraph, alongside the full text"
+            >
+              L{geometry.leafDepth}
+            </Toggle>
+          )}
+          <Toggle
+            className={PILL}
+            pressed={showText}
+            onPressedChange={() => setShowText((v) => !v)}
+            title="Hide the text to collapse the table into a whole-article outline"
           >
-            auto
-          </button>
+            Text
+          </Toggle>
+          {cols === null ? (
+            <span className="mode" title="Columns are following the window width">
+              fit
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="linky"
+              onClick={() => setCols(null)}
+              title="Let the columns follow the window width again"
+            >
+              auto
+            </button>
+          )}
+          <span className="mode">{showText ? "reading" : "outline"}</span>
+          </>
         )}
-        <span className="mode">{showText ? "reading" : "outline"}</span>
         {/* The aim, said out loud. The arrows are useless as an experiment if
             you cannot tell what they are pointing at before you press one. */}
         <span
@@ -464,6 +546,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         onJump={jumpTo}
         comments={comments}
         openComment={note}
+        term={term}
         onSelect={(anchor) => {
           if (!anchor) return;
           void setNote(ask(anchor));
@@ -495,6 +578,20 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           }}
         />
       )}
+      {/* The mode band. Rendered only in its mode, which is what keeps the
+          fetch inside it from being charged to every reader of every article —
+          see ChatBand. */}
+      {mode === "chat" && (
+        <ChatBand
+          slug={slug}
+          knownIds={blockIds}
+          onJump={jumpTo}
+        />
+      )}
+      {mode === "glossary" && (
+        <GlossaryBand slug={slug} onJump={jumpTo} onSelected={setTerm} />
+      )}
+
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
           one less thing to reason about when something appears underneath
@@ -502,6 +599,8 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       <Dock
         slug={slug}
         view="article"
+        mode={mode}
+        onMode={(next) => void setMode(next)}
         drawer={{
           comments: ordered,
           panel,
@@ -516,5 +615,124 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Chat, and the fetch that belongs to it.
+ *
+ * A component of its own for one reason: **`useChat` fetches on mount**, and
+ * calling it up in `Reader` would charge every reader of every article a
+ * request for a conversation almost none of them will open. Hooks cannot be
+ * called conditionally, so the condition has to be a component boundary. Same
+ * reasoning as the `drawer` prop in Dock.tsx, which exists so the metadata page
+ * does not pay for comments it has no use for.
+ *
+ * `?thread=` lives here too, for the same reason — it is meaningless outside
+ * chat mode, and reading it in `Reader` would put a parameter subscription on
+ * every render of the reading view for a value only this component uses.
+ */
+function ChatBand({
+  slug,
+  knownIds,
+  onJump,
+}: {
+  slug: string;
+  knownIds: Set<string>;
+  onJump(id: BlockId): void;
+}) {
+  const { threads, send, begin, rename, remove, error } = useChat(slug);
+  const [thread, setThread] = useQueryState("thread", threadParam);
+  /* Read, never written, and not a subscription: `?at=` is already tracked by
+     useReadingPosition in the parent, so this component re-renders whenever it
+     changes and `location.search` is current. It is passed to the model so that
+     "this bit" and "what he just said" resolve to where the reader actually is.
+     Same read-at-render trick Dock.tsx uses for its carried query string. */
+  const at = new URLSearchParams(location.search).get("at");
+
+  return (
+    <ChatPanel
+      threads={threads}
+      threadId={thread}
+      onThread={(id) => void setThread(id)}
+      onNew={() => void setThread(begin())}
+      onSend={(question) => {
+        // `send` returns the thread it went to, minted here when this is a new
+        // conversation — so the URL can name it before the request lands.
+        const id = send(thread, question, at, (corrected) => void setThread(corrected));
+        if (id !== thread) void setThread(id);
+      }}
+      onRename={rename}
+      onDelete={(id) => {
+        remove(id);
+        // Back to the list rather than to a conversation that is not there.
+        if (id === thread) void setThread(null);
+      }}
+      onJump={onJump}
+      knownIds={knownIds}
+      error={error}
+    />
+  );
+}
+
+/**
+ * The glossary, and the fetch that belongs to it.
+ *
+ * A component of its own for the reason `ChatBand` above is: **`useGlossary`
+ * fetches on mount** — and polls the job list while it is alive — so calling it
+ * up in `Reader` would charge every reader of every article for a list almost
+ * none of them will open. Hooks cannot be called conditionally, so the
+ * condition has to be a component boundary.
+ *
+ * `?term=` and `?sort=` live here too, for the same reason: both are
+ * meaningless outside glossary mode, and reading them in `Reader` would put two
+ * parameter subscriptions on every render of the reading view for values only
+ * this component uses.
+ *
+ * `onSelected` is the one thing that goes back out, and it is the seam
+ * described on `term` in `Reader`: the panel knows which entry is selected, the
+ * prose is where its underlines are drawn, and those are two different
+ * components.
+ */
+function GlossaryBand({
+  slug,
+  onJump,
+  onSelected,
+}: {
+  slug: string;
+  onJump(id: BlockId): void;
+  onSelected(selection: TermSelection | null): void;
+}) {
+  const glossary = useGlossary(slug);
+  const [termId, setTermId] = useQueryState("term", termParam);
+  const [sort, setSort] = useQueryState("sort", sortParam);
+
+  /* `find` returns the entry object out of `glossary.entries`, so its identity
+     is stable across renders until the list itself is refetched — which is what
+     keeps the effect below from firing on every render. */
+  const selected = glossary.glossary?.entries.find((e) => e.id === termId) ?? null;
+
+  useEffect(() => {
+    onSelected(
+      selected ? { id: selected.id, forms: formsOf(selected), blocks: selected.blocks } : null,
+    );
+  }, [selected, onSelected]);
+
+  /* Leaving glossary mode must take the underlines out of the prose with it.
+     Its own effect, with no dependency on `selected`, so it runs on unmount and
+     only on unmount — folding it into the cleanup of the effect above would
+     clear the selection on every change and set it again immediately, which is
+     a visible flicker of every mark on the page. */
+  useEffect(() => () => onSelected(null), [onSelected]);
+
+  return (
+    <GlossaryPanel
+      {...glossary}
+      termId={termId}
+      onTerm={(id) => void setTermId(id)}
+      sort={sort}
+      onSort={(next) => void setSort(next)}
+      onJump={onJump}
+    />
   );
 }

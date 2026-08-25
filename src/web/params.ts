@@ -168,3 +168,105 @@ export const panelParam = createParser<Panel>({
   parse: (v) => (PANELS.includes(v as Panel) ? (v as Panel) : null),
   serialize: (v) => v,
 }).withOptions({ history: "replace" });
+
+/**
+ * Which **mode** the middle band is in — the columns between the spine and the
+ * prose. Absent means the table of contents, which is the default and the only
+ * one there was until 2026-08-25.
+ *
+ * Greg's framing, which is the reason this is a mode rather than a panel:
+ *
+ * > I'm thinking that this might be a common pattern, that when we switch into
+ * > a mode (e.g. Chat, Glossary, etc) we'll want to keep the spine and article,
+ * > but reuse the middle sections. In fact, the current "Table of Contents"
+ * > middle sections are just such a mode that can be chosen from the bottom-bar
+ * > (the default).
+ *
+ * So `toc` is a real value with a real name, even though it is the default and
+ * therefore never appears in a URL. Naming it is what makes the next mode an
+ * addition to a list rather than a second special case.
+ *
+ * **`push`, unlike `?panel=`.** A drawer is a glance; a mode is where you are.
+ * Switching to chat and pressing Back should put the table of contents back,
+ * the same way toggling a column does — and unlike opening and closing a panel,
+ * you do not do it twice in ten seconds, so it will not fill the history.
+ *
+ * An unknown value parses to `toc` rather than throwing, so a link from a
+ * future version with a mode this one has not got degrades to the article
+ * instead of to an error. Same rule as `parseAsBlockId` and `panelParam`.
+ *
+ * The Glossary that paragraph used to name as hypothetical arrived on
+ * 2026-08-25 (docs/project/glossary.md), which is the first evidence that the
+ * slot was the right shape: it cost this list one word.
+ */
+export const MODES = ["toc", "chat", "glossary"] as const;
+export type Mode = (typeof MODES)[number];
+
+export const modeParam = createParser<Mode>({
+  parse: (v) => (MODES.includes(v as Mode) ? (v as Mode) : null),
+  serialize: (v) => v,
+})
+  .withDefault("toc")
+  .withOptions({ history: "push" });
+
+/**
+ * Which conversation is open in chat mode, or none for the list of them.
+ *
+ * A thread id is minted by `mintId`, so it is a block id by construction and
+ * the same parser validates it — and the same "a mangled link degrades to
+ * nothing" behaviour falls out, which here means the thread list rather than an
+ * error.
+ *
+ * `replace`, not `push`. Stepping between conversations while you read is
+ * browsing, not navigating, and `mode` above already put one entry on the stack
+ * for the trip into chat — which is the entry Back should use.
+ */
+export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * Which glossary term is selected, or none for a list nobody has picked from.
+ *
+ * A term id is minted by `mintId` (src/glossary.ts), so it is a block id by
+ * construction and the same parser validates it — the same trick `?thread=`
+ * uses, and the same "a mangled link degrades to nothing" behaviour falls out,
+ * which here means an unselected list rather than an error.
+ *
+ * **It is in the URL because it changes what the article looks like.** A
+ * selected term underlines every one of its occurrences in the prose beside the
+ * panel, so "the article as I am currently looking at it" is not fully
+ * described without it — which is the whole rule this file exists to keep
+ * (url-state.md). Sending someone a link to a term is sending them the
+ * underlines too.
+ *
+ * `replace`, not `push`. Stepping between terms while you read is browsing, not
+ * navigating, and `mode` above already put one entry on the stack for the trip
+ * into the glossary — which is the entry Back should use. Same call as
+ * `?thread=`.
+ */
+export const termParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * How the glossary list is ordered.
+ *
+ * `document` — first use in the article first — is the default and is what the
+ * artefact stores. The other two are the reader asking for the model's own
+ * judgment, which is the whole condition attached to keeping those scores at
+ * all: Greg's call, 2026-08-25, was *keep both, but never sort by them
+ * silently*. A sort the reader chose is not silent; a sort that is simply how
+ * the list arrives is.
+ *
+ * `push`, like `cols` and `text` and unlike `term`: changing the order of a
+ * list is a deliberate act on the view, and Back should undo it.
+ *
+ * An unknown value parses to `document`, so a link written by a version with
+ * more sorts still shows a list.
+ */
+export const TERM_SORTS = ["document", "difficulty", "centrality"] as const;
+export type TermSort = (typeof TERM_SORTS)[number];
+
+export const sortParam = createParser<TermSort>({
+  parse: (v) => (TERM_SORTS.includes(v as TermSort) ? (v as TermSort) : null),
+  serialize: (v) => v,
+})
+  .withDefault("document")
+  .withOptions({ history: "push" });

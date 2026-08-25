@@ -48,6 +48,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/validate-tree.test.ts`](../../tests/validate-tree.test.ts) | the validator catches each **structural** way a tree can go wrong |
 | [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |
 | [`tests/toc-build.test.ts`](../../tests/toc-build.test.ts) | `buildTree` — the model's proposal → the stored tree, and leaf growth |
+| [`tests/token-budget.test.ts`](../../tests/token-budget.test.ts) | that a model call's `max_tokens` **grows with the article**, and that the estimate clears what a real tree cost — written after a typed-in number failed a 360-block article ([postmortem](../postmortems/toc-max-tokens.md)) |
 | [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
@@ -58,6 +59,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/comment-nav.test.ts`](../../tests/comment-nav.test.ts) | comments in reading order and stepping between them — including that the order comes from the block **index**, never the id string |
 | [`tests/jobs.test.ts`](../../tests/jobs.test.ts) | the ingest queue's decisions — step ordering, the restart sweep, and the request parsing that stands between a POST body and `path.join("data", slug)` ([ingest-queue.md](ingest-queue.md)). **Nothing here runs a job**: queuing one fetches somebody's website and spends money at two model endpoints |
 | [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | what an article gets called, and whether that name is safe to make a path out of |
+| [`tests/glossary.test.ts`](../../tests/glossary.test.ts) | stage 5d's deterministic halves — the matching rule (including both directions in which `\b` is wrong about an accented letter), the **richness-scored dedup** that keeps the more specific phrase, the `javascript:` URL check, the occurrence pass, and `glossaryIsCurrent` ([glossary.md](glossary.md)) |
 | [`tests/tweets.test.ts`](../../tests/tweets.test.ts) | stage 5c's deterministic halves — counting a post's characters, the artefact shape, how many posts to ask for, and **`threadIsCurrent`**, the first step freshness check in the repo ([tweet-thread-page.md](../plans/tweet-thread-page.md)) |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 

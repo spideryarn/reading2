@@ -25,14 +25,33 @@ One file, `.env.local`, gitignored, loaded by [`src/env.ts`](../../src/env.ts):
 OPENROUTER_API_KEY=sk-or-…
 ```
 
-It is needed by exactly one thing: the explain-this-passage call in
-[`src/explain.ts`](../../src/explain.ts), which is the only LLM call that happens in a request
-handler rather than in the pipeline ([comments.md](comments.md)). Without it the reading view works
-normally and selecting a passage returns an error into the dialog saying so.
+It is needed by the two LLM calls that happen in a request handler rather than in the pipeline:
+the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
+([comments.md](comments.md)), and the chat in [`src/converse.ts`](../../src/converse.ts)
+([chat-mode.md](../plans/chat-mode.md)). Without it the reading view works normally, selecting a
+passage returns an error into the dialog, and a chat message returns one into the thread.
 
 A variable already in the environment wins over the file, so
-`SPIDERYARN_EXPLAIN_MODEL=anthropic/claude-opus-4.5 npm run dev` does what it looks like it does.
+`SPIDERYARN_CHAT_MODEL=anthropic/claude-opus-5 npm run dev` does what it looks like it does.
 The pipeline stages use the Anthropic SDK and want `ANTHROPIC_API_KEY` instead.
+
+## Which model everything uses
+
+**One file: [`src/models.ts`](../../src/models.ts).** Every in-app call is Claude Sonnet, named
+there in both spellings the app needs — `claude-sonnet-5` for the Anthropic SDK (the pipeline
+stages) and `anthropic/claude-sonnet-5` for OpenRouter (explain and chat). Change it there and
+everything moves together; before 2026-08-25 the same constant was declared separately in four
+files and one of them had drifted a version behind.
+
+Two things that file will tell you and this one will not: why the two spellings are not derived
+from each other, and why editing that line marks stored tweet threads stale.
+
+Per-call overrides, for a one-off comparison run:
+
+| Variable | Overrides |
+|---|---|
+| `SPIDERYARN_EXPLAIN_MODEL` | the explain-a-passage call |
+| `SPIDERYARN_CHAT_MODEL` | the chat |
 
 ## The database, locally
 
@@ -61,6 +80,7 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run toc:flatten -- …` | 4, ToC → tree ([table-of-contents.md](table-of-contents.md)) | `tree.json` |
 | `npm run arc -- <dir>` | 5b, one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | `arc.json` |
 | `npm run tweets -- <dir>` | 5c, the article as a numbered thread ([tweet-thread-page.md](../plans/tweet-thread-page.md)) | `tweets.json` |
+| `npm run glossary -- <dir>` | 5d, the terms this piece uses ([glossary.md](glossary.md)). Run it again to add more | `glossary.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
@@ -76,17 +96,24 @@ ingest queue runs the same chain in the server process, with each stage named as
 [ingest-queue.md](ingest-queue.md). The commands are for when you want one stage on its own, or want
 to see its output.
 
-**Except `tweets`, which an add never runs.** It is in the pipeline's order but not in its default
-list, so a thread is written only when something asks for one by name — the command above, or
-`POST /api/jobs { slug, steps: ["tweets"] }`. It costs a model call, and it is a page you go to
-rather than part of making an article readable
-([tweet-thread-page.md](../plans/tweet-thread-page.md#the-one-real-snag-stated-precisely)). Read it
-back with `GET /api/tweets/<slug>`, which also says whether the thread still describes the article.
+**Except `tweets` and `glossary`, which an add never runs.** Both are in the pipeline's order and
+neither is in its default list, so each is produced only when something asks for it by name — the
+commands above, or `POST /api/jobs { slug, steps: ["tweets"] }` / `{ steps: ["glossary"] }`. Each
+costs a model call over the whole article and each is somewhere you go — a page, and a mode — rather
+than part of making an article readable
+([tweet-thread-page.md](../plans/tweet-thread-page.md#the-one-real-snag-stated-precisely),
+[glossary.md](glossary.md)). Read them back with `GET /api/tweets/<slug>` and
+`GET /api/glossary/<slug>`, both of which also say whether what they return still describes the
+article.
 
-It is also the one stage that will not re-run over its own good output: running it twice in a row
-does nothing the second time, because it checks whether the thread still matches the blocks on disk
-rather than whether the file exists. Add `force: ["tweets"]` to the job to write a different one
-anyway.
+They are also the two stages that will not re-run over their own good output: each checks whether its
+artefact still matches the blocks on disk rather than whether the file exists. Add
+`force: ["tweets"]` to write a different thread.
+
+**`force: ["glossary"]` does something different, and it is the one asymmetry here.** Forcing the
+glossary does not replace the list, it **appends another batch of terms** to it — that is what the
+panel's "Find more" button is. To start the list over, delete it first:
+`DELETE /api/glossary/<slug>`, then run the step. See [glossary.md § Finding more](glossary.md).
 
 They are literally the same code: each script above is a thin argv wrapper around an exported
 function, and the queue calls that function. So there is one code path per stage and no way for the

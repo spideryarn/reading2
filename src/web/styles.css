@@ -1126,6 +1126,29 @@ mark.cmt[data-mark-end]::after {
   color: var(--highlight);
 }
 
+/* A glossary term's occurrences, while that term is selected in the panel.
+   **Transient by design** — the version this was borrowed from underlined every
+   term in every article, always, which is the prose acquiring marks the author
+   did not write on the model's initiative rather than the reader's. These
+   appear when a term is pressed and go when it is unpressed.
+
+   A dotted underline where a comment gets a solid one, and no marker glyph: a
+   comment is an artefact you made and can open, a term occurrence is neither.
+   Same rule as `mark.cmt` about the words themselves — the author's prose does
+   not change colour to advertise our annotation. */
+mark.term {
+  background: color-mix(in oklab, var(--highlight) 7%, transparent);
+  color: inherit;
+  border-bottom: 1px dotted color-mix(in oklab, var(--highlight) 70%, transparent);
+}
+/* A comment and a term over the same words are ONE <mark> carrying both
+   classes (annotate.ts § MarkKind), so this is not a hypothetical pairing. The
+   comment wins the border, because it is the one you can click and the dotted
+   line would make it look inert. */
+mark.cmt.term {
+  border-bottom-style: solid;
+}
+
 .cmt-dialog {
   position: fixed;
   right: 1.25rem;
@@ -2153,8 +2176,15 @@ mark.cmt[data-mark-end]::after {
    `.reader`'s padding-left, `.masthead`, `.controls`, and `td.pin-left`. The
    band itself reserves no space, because a fixed element cannot. Change its
    width anywhere other than by setting `--mode-w` and the article will simply
-   be underneath it, with no error and nothing in the layout to blame. */
-.chat {
+   be underneath it, with no error and nothing in the layout to blame.
+
+   `.mode-band` was `.chat` until the glossary arrived (2026-08-25) and wanted
+   the identical shell. Renaming it rather than adding `.chat, .gloss { … }` is
+   the difference between a slot and two features that happen to agree: the next
+   mode gets the band by saying `className="mode-band …"` and touching nothing
+   here. Each panel keeps a class of its own — `chat`, `gloss` — for whatever
+   only it needs. */
+.mode-band {
   position: fixed;
   /* Left of the spine's right edge, right of nothing — the band starts exactly
      where the spine ends, so the two read as one rail of chrome. */
@@ -2421,3 +2451,255 @@ mark.cmt[data-mark-end]::after {
 }
 .chat-send:disabled { opacity: 0.45; cursor: default; }
 .chat-send:not(:disabled):hover { border-color: var(--highlight); color: var(--highlight-ink); }
+
+/* ------------------------------------------------------- § glossary mode ----
+   The terms this piece uses, in the mode band. The shell is `.mode-band` above;
+   everything here is what goes inside it.
+
+   Read GlossaryPanel.tsx before changing what is on screen: several things this
+   panel does not do were decided rather than skipped — no inline marks in the
+   prose, no silent sort by the model's scores, and no hiding an entry that
+   matches nothing in the article. */
+
+.gloss-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.gloss-head-icon { color: var(--ink-faint); flex: none; }
+.gloss-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.gloss-count { color: var(--ink-faint); font-size: 0.75rem; }
+
+/* The sort control. Small, quiet, and always visible when there is a choice —
+   the whole condition on keeping the model's scores is that ordering by them is
+   something the reader presses rather than something the list arrives already
+   having done. */
+.gloss-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.gloss-sort-label {
+  margin-right: 0.15rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+.gloss-sort-btn {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }
+.gloss-sort-btn.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--highlight-ink);
+}
+.gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.gloss-quiet { padding: 1rem 0.9rem; margin: 0; color: var(--ink-faint); }
+.gloss-error {
+  margin: 0.4rem 0.7rem 0;
+  color: var(--highlight-ink);
+  font-size: 0.78rem;
+}
+
+.gloss-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
+.gloss-empty p { margin: 0 0 0.5rem; }
+.gloss-hint { font-size: 0.82rem; line-height: 1.45; }
+
+.gloss-stale {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.gloss-stale p {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.gloss-stale svg { flex: none; color: var(--highlight); }
+
+/* ---- the list ---- */
+
+.gloss-list {
+  flex: 1;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  overflow-y: auto;
+  /* Or the scroller refuses to shrink and pushes the footer off the band. The
+     same `min-height: 0` the chat scroller needs, and for the same reason. */
+  min-height: 0;
+}
+
+.gloss-term { border-bottom: 1px solid var(--rule); }
+.gloss-term:last-child { border-bottom: none; }
+.gloss-term.on { background: var(--surface-raised); }
+
+/* The whole row is the target. In an 18rem band a name-sized hit area is a
+   dart game, and there is nothing else inside a closed row to click. */
+.gloss-term-btn {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gloss-term-btn:hover { background: var(--surface-raised); }
+.gloss-term-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+
+.gloss-term-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.gloss-name {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.gloss-term.on .gloss-name { color: var(--highlight-ink); }
+.gloss-kind {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+/* Pushed right, and monospaced, because a column of numbers you are sorting by
+   should line up. Only present when the list IS sorted by it. */
+.gloss-score {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+.gloss-gloss {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-soft);
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.gloss-open { padding: 0 0.7rem 0.65rem; }
+.gloss-open p { margin: 0 0 0.4rem; font-size: 0.76rem; line-height: 1.45; }
+.gloss-open p:last-child { margin-bottom: 0; }
+.gloss-aliases { color: var(--ink-faint); }
+.gloss-detail { color: var(--ink-soft); }
+.gloss-outside {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--highlight-ink);
+}
+.gloss-outside svg { flex: none; }
+.gloss-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-faint);
+}
+.gloss-link a:hover { color: var(--highlight-ink); }
+
+/* Where the piece uses it. The ids are `BlockRef`s, so they are real links —
+   right-click gives you a URL to the paragraph, and left-click jumps. */
+.gloss-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+.gloss-where-label { color: var(--ink-faint); }
+.gloss-where .block-ref {
+  padding: 0 0.28rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 0.4rem;
+  background: var(--surface-raised);
+  font-size: 0.72em;
+}
+.gloss-where .block-ref:hover { border-color: var(--highlight); color: var(--highlight-ink); }
+
+/* An entry the article does not actually use in those words. Said rather than
+   hidden — it is the alias instruction not landing, and it is the one signal
+   this panel gives about the quality of what the model returned. */
+.gloss-nowhere { color: var(--ink-faint); font-style: italic; }
+
+/* ---- the foot ---- */
+
+.gloss-foot {
+  padding: 0.5rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.gloss-actions, .gloss-confirm, .gloss-running {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.gloss-confirm p {
+  width: 100%;
+  margin: 0 0 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+.gloss-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.gloss-btn:hover { border-color: var(--highlight); color: var(--ink); }
+.gloss-btn:disabled { opacity: 0.45; cursor: default; }
+.gloss-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-btn.primary { color: var(--ink); border-color: var(--highlight); }
+.gloss-btn.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+
+.gloss-running { font-size: 0.76rem; color: var(--ink-soft); }
+.gloss-running .gloss-btn { margin-left: auto; }
+.gloss-detail-live { color: var(--ink-faint); }
+.gloss-spin { flex: none; color: var(--highlight); animation: gloss-spin 1s linear infinite; }
+@keyframes gloss-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .gloss-spin { animation: none; }
+}
+
+.gloss-provenance {
+  margin: 0.45rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}

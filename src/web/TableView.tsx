@@ -18,7 +18,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Article, BlockId, Comment, NodeId } from "../types.js";
 import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
-import { annotateHtml, renderedText, resolveMark, type Mark } from "./annotate.js";
+import {
+  annotateHtml,
+  renderedText,
+  resolveMark,
+  termMarks,
+  type Mark,
+  type TermSelection,
+} from "./annotate.js";
 import { readSelection } from "./selection.js";
 import type { Section } from "./position.js";
 import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
@@ -56,6 +63,15 @@ interface Props {
   onSelect(anchor: ReturnType<typeof readSelection>): void;
   /** An existing mark was clicked. */
   onOpenComment(id: string): void;
+  /**
+   * The glossary term the reader has selected, or nothing.
+   *
+   * Absent for every reader who has not opened the glossary, which is why it is
+   * optional rather than nullable-and-required: nothing else on this page had
+   * to learn about the feature. See GlossaryPanel.tsx for why the prose is
+   * marked only while a term is selected.
+   */
+  term?: TermSelection | null;
   /** The sections, for the live "which cell am I in" — see useColumnContext.ts. */
   sections: Section[];
   /** Same key as the `?at=` tracker: re-measure when the columns change. */
@@ -75,6 +91,7 @@ export function TableView({
   openComment,
   onSelect,
   onOpenComment,
+  term,
   sections,
   layoutKey,
 }: Props) {
@@ -195,6 +212,21 @@ export function TableView({
     }
     return byBlock;
   }, [comments, blocks, openComment]);
+
+  /**
+   * The selected glossary term's occurrences, as marks.
+   *
+   * A second map rather than entries folded into the one above, because the two
+   * change on completely different clocks: comments change when the reader asks
+   * a question, and this changes every time they press a different term in the
+   * glossary panel. Merging them would recompute every comment's anchor on
+   * every term press, for an article's worth of blocks, and comment resolution
+   * is the expensive half.
+   *
+   * Null whenever the glossary mode is closed or nothing is selected, which is
+   * almost always — see `termMarks` in annotate.ts.
+   */
+  const termMarksByBlock = useMemo(() => termMarks(blocks, term ?? null), [blocks, term]);
 
   // Whether the end columns need to read as a layer depends on whether the
   // table actually outruns the window — which App knows exactly, because it
@@ -388,7 +420,15 @@ export function TableView({
                 <div
                   className="prose"
                   dangerouslySetInnerHTML={{
-                    __html: annotateHtml(block.html, marksByBlock.get(block.id) ?? []),
+                    /* Both kinds in one call. `annotateHtml` cuts each text
+                       node at every mark boundary in one pass, so a comment and
+                       a term over the same words produce one <mark> carrying
+                       both classes — two nested ones would read as a rendering
+                       bug. Concatenating here is what gives it the chance. */
+                    __html: annotateHtml(block.html, [
+                      ...(marksByBlock.get(block.id) ?? []),
+                      ...(termMarksByBlock.get(block.id) ?? []),
+                    ]),
                   }}
                 />
               </td>

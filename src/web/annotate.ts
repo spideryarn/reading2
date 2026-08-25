@@ -33,13 +33,36 @@
  * docs/project/block-ids.md.
  */
 
+import { termPattern, termSpans } from "../term-match.js";
+import type { Block, BlockId } from "../types.js";
+
+/**
+ * What a mark is *for*, and therefore how it is drawn and what listens to it.
+ *
+ * `cmt` is a comment: a persistent artefact the reader made, clickable, and it
+ * carries the ✳ marker at its end. `term` is a glossary occurrence: transient,
+ * present only while that term is selected in the glossary panel, and inert —
+ * nothing listens for a click on one, because pressing it should do what
+ * pressing the prose has always done.
+ *
+ * **The two can cover the same words**, and that is the case worth being
+ * careful about: a reader can ask a question about a sentence that also
+ * contains a term. So the merged `<mark>` carries whichever classes apply, and
+ * the comment attributes are populated from the comment marks alone — a click
+ * handler that read a term's id out of `data-comment` would try to open a
+ * comment that does not exist.
+ */
+export type MarkKind = "cmt" | "term";
+
 export interface Mark {
-  /** The comment this mark belongs to. Ends up in `data-comment`. */
+  /** The comment, or the glossary term, this mark belongs to. */
   id: string;
   /** Inclusive, in the block's rendered-text offset space. */
   start: number;
   /** Exclusive. */
   end: number;
+  /** Defaults to `cmt`, which is what every mark was before the glossary. */
+  kind?: MarkKind;
   /** The comment whose dialog is open, so the prose can say which one it is. */
   open?: boolean;
 }
@@ -82,12 +105,16 @@ export function resolveMark(text: string, anchor: Anchor): { start: number; end:
 }
 
 /**
- * `html` with every mark wrapped in `<mark class="cmt">`.
+ * `html` with every mark wrapped in a `<mark>`.
  *
- * Overlapping marks share one `<mark>` whose `data-comment` lists them
- * space-separated, rather than nesting — two underlines stacked on the same
- * words read as a rendering bug, and the click handler only needs the first id
- * to have something to open.
+ * Overlapping marks share one `<mark>` whose `data-comment` (or `data-term`)
+ * lists them space-separated, rather than nesting — two underlines stacked on
+ * the same words read as a rendering bug, and the click handler only needs the
+ * first id to have something to open.
+ *
+ * Marks of different kinds overlap the same way, which is what makes a comment
+ * on a sentence containing a glossary term draw one element with both classes
+ * rather than two nested ones. See `MarkKind`.
  */
 export function annotateHtml(html: string, marks: Mark[]): string {
   const live = marks.filter((m) => m.end > m.start);
@@ -146,12 +173,24 @@ export function annotateHtml(html: string, marks: Mark[]): string {
         continue;
       }
       const el = doc.createElement("mark");
-      el.className = "cmt";
-      el.setAttribute("data-comment", covering.map((m) => m.id).join(" "));
-      // The asterisk goes on the final run only, so a mark broken across an
-      // <em> still shows exactly one marker.
-      if (covering.some((m) => m.end === nodeStart + to)) el.setAttribute("data-mark-end", "");
-      if (covering.some((m) => m.open)) el.setAttribute("data-open", "");
+      const comments = covering.filter((m) => (m.kind ?? "cmt") === "cmt");
+      const terms = covering.filter((m) => m.kind === "term");
+      // Both classes when both kinds cover these words. `mark.cmt` is what the
+      // click handler in TableView.tsx selects on, so a term must never carry
+      // that class alone — and a comment must never lose it because a term
+      // happens to overlap it.
+      el.className = [comments.length > 0 ? "cmt" : "", terms.length > 0 ? "term" : ""]
+        .filter(Boolean)
+        .join(" ");
+      if (comments.length > 0) {
+        el.setAttribute("data-comment", comments.map((m) => m.id).join(" "));
+        // The asterisk goes on the final run only, so a mark broken across an
+        // <em> still shows exactly one marker. Comments only: a glossary term
+        // is not an artefact the reader made and does not get a marker.
+        if (comments.some((m) => m.end === nodeStart + to)) el.setAttribute("data-mark-end", "");
+      }
+      if (terms.length > 0) el.setAttribute("data-term", terms.map((m) => m.id).join(" "));
+      if (comments.some((m) => m.open)) el.setAttribute("data-open", "");
       el.textContent = piece;
       fragment.appendChild(el);
     }
@@ -179,3 +218,65 @@ function host(html: string): HTMLElement {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/* ---------------------------------------------------------- glossary terms --
+   The other kind of mark, and the only one this file knows how to *find* for
+   itself. A comment arrives with its own anchor; a term arrives as a list of
+   spellings, and where it sits in the prose is a question. */
+
+/** The glossary term the reader has selected, reduced to what drawing it needs. */
+export interface TermSelection {
+  /** The entry's id, so the mark can say which term it belongs to. */
+  id: string;
+  /** Canonical name first, then aliases — `formsOf` in src/term-match.ts. */
+  forms: string[];
+  /**
+   * The blocks the *server* found this term in.
+   *
+   * Not a hint and not an optimisation, though it is also both: it is the
+   * agreement between the two halves. The occurrence list in `glossary.json`
+   * and the underlines here are computed from the same rule
+   * (src/term-match.ts), so restricting the search to the blocks that list
+   * names means a disagreement shows up as **no underline** rather than as an
+   * underline in a block the panel says has none. One of those is a visible
+   * bug; the other is the panel and the prose quietly telling you different
+   * things.
+   *
+   * It is also the difference between scanning six blocks and scanning four
+   * hundred on every render.
+   */
+  blocks: BlockId[];
+}
+
+/**
+ * Every occurrence of the selected term, as marks, grouped by block.
+ *
+ * Empty map for no selection, which is the ordinary case — a reader who has not
+ * opened the glossary, or has not picked a term, and the prose is untouched.
+ * That is the whole shape of the decision recorded in GlossaryPanel.tsx: the
+ * article acquires marks when the reader asks for them and at no other time.
+ */
+export function termMarks(
+  blocks: Block[],
+  selection: TermSelection | null,
+): Map<BlockId, Mark[]> {
+  const byBlock = new Map<BlockId, Mark[]>();
+  if (!selection) return byBlock;
+  const pattern = termPattern(selection.forms);
+  if (!pattern) return byBlock;
+
+  const wanted = new Set(selection.blocks);
+  for (const block of blocks) {
+    if (!wanted.has(block.id)) continue;
+    // `renderedText`, not `block.text` — the offset space every mark in this
+    // file speaks. The two strings are different lengths, and the whole header
+    // of this file is about what happens when you mix them up.
+    const spans = termSpans(renderedText(block.html), pattern);
+    if (spans.length === 0) continue;
+    byBlock.set(
+      block.id,
+      spans.map((span) => ({ id: selection.id, kind: "term" as const, ...span })),
+    );
+  }
+  return byBlock;
+}

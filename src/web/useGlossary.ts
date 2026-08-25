@@ -1,0 +1,209 @@
+/**
+ * The glossary, as the reading view sees it: the list, whether it still
+ * describes the article, and the three things you can ask for.
+ *
+ * The read half is `GET /api/glossary/:slug`; the write half is a **job**,
+ * because finding the terms is a model call over the whole article and takes
+ * tens of seconds (docs/project/ingest-queue.md). So this hook is mostly the
+ * same shape as the thread page's state (src/web/Tweets.tsx), lifted into a
+ * hook because the glossary lives in a band beside the prose rather than on a
+ * page of its own.
+ *
+ * **Three verbs, and the difference between two of them is the whole feature:**
+ *
+ *  - `find()` — no glossary yet, or the one there has gone stale. The step's
+ *    own freshness check agrees, so an ordinary run does the work.
+ *  - `more()` — there is a perfectly good glossary and the reader wants more
+ *    terms. `force` is what gets past the freshness check, and forcing this
+ *    step *appends* rather than replacing (src/glossary.ts).
+ *  - `reset()` — the list is wrong and should be started over. A DELETE, then a
+ *    `find()`. Two acts, because "run it again" already means "add more" and a
+ *    verb cannot mean both.
+ *
+ * See docs/project/glossary.md.
+ */
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Glossary, GlossaryResponse, Job } from "../types.js";
+import { useJobs } from "./useJobs.js";
+
+export type GlossaryStatus = "loading" | "none" | "ready" | "error";
+
+export interface UseGlossary {
+  status: GlossaryStatus;
+  glossary: Glossary | null;
+  /** The article moved after the list was written. Said out loud, never worked around. */
+  stale: boolean;
+  /** A read failure, or the reason the last request could not be started. */
+  error: string | null;
+  /** The job writing this article's glossary, if one is. Null otherwise. */
+  job: Job | null;
+  /** Why the job this session started stopped, if it stopped badly. */
+  failed: string | null;
+  find(): Promise<void>;
+  more(): Promise<void>;
+  reset(): Promise<void>;
+  cancel(id: string): void;
+}
+
+/** Is this job one that would write a glossary? */
+function writesGlossary(job: Job): boolean {
+  return job.steps.some((s) => s.name === "glossary");
+}
+
+export function useGlossary(slug: string): UseGlossary {
+  const [status, setStatus] = useState<GlossaryStatus>("loading");
+  const [glossary, setGlossary] = useState<Glossary | null>(null);
+  const [stale, setStale] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/glossary/${encodeURIComponent(slug)}`);
+      if (res.status === 404) {
+        // The ordinary case, not a fault: most articles have no glossary, and
+        // this is what the panel's button is for.
+        setGlossary(null);
+        setStale(false);
+        setError(null);
+        setStatus("none");
+        return;
+      }
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? res.statusText);
+      const loaded = body as GlossaryResponse;
+      setGlossary(loaded.glossary);
+      setStale(loaded.stale);
+      setError(null);
+      setStatus("ready");
+    } catch (err) {
+      setError((err as Error).message);
+      setStatus("error");
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  /**
+   * `onFinished` rather than watching for a status change: `useJobs` already
+   * knows which jobs it has announced and which were merely on the shelf when
+   * the mode was opened, so entering the glossary does not refetch once per
+   * historical job.
+   *
+   * **The cost, said out loud**, exactly as the thread page says it: `useJobs`
+   * polls the whole job list and never stops, so sitting in glossary mode is
+   * one small request every eight seconds. What it buys is that a run started
+   * in another tab or from `npm run glossary` shows up here as progress rather
+   * than as a button that appears to do nothing. If it ever matters, the fix is
+   * an idle switch in `useJobs`, not a private poller here.
+   */
+  const onFinished = useCallback(
+    (job: Job) => {
+      if (job.slug === slug && writesGlossary(job)) void load();
+    },
+    [slug, load],
+  );
+  const queue = useJobs(onFinished);
+
+  /**
+   * The job writing this article's glossary, if one is.
+   *
+   * Found in the polled list rather than remembered from the click, which is
+   * what makes a run started somewhere else show up here as progress.
+   * `enqueue` hands back the job already in flight for an identical request, so
+   * pressing the button twice cannot start a second one.
+   */
+  const job = useMemo(
+    () =>
+      queue.jobs
+        .filter((j) => j.slug === slug && writesGlossary(j))
+        .find((j) => j.status === "queued" || j.status === "running") ?? null,
+    [queue.jobs, slug],
+  );
+
+  /**
+   * What went wrong, in the two quite different ways it can.
+   *
+   * `postFailed` is the request never landing: no job exists, so nothing will
+   * arrive in the list to explain the silence. `startedId` is the other one,
+   * and it is why this is not a boolean — a job that fails leaves the running
+   * set, so without it the button would simply reappear as though nothing had
+   * happened. Scoped to the job **this session started**, so an old failure
+   * from another day is not dug up and presented as news.
+   */
+  const [postFailed, setPostFailed] = useState(false);
+  const [startedId, setStartedId] = useState<string | null>(null);
+  const stopped = useMemo(() => {
+    const mine = startedId ? queue.jobs.find((j) => j.id === startedId) : undefined;
+    if (!mine) return null;
+    if (mine.status === "error") return mine.error ?? "The job failed.";
+    if (mine.status === "cancelled") return "Stopped.";
+    return null;
+  }, [queue.jobs, startedId]);
+
+  const run = useCallback(
+    async (force: boolean) => {
+      setStartedId(null);
+      const started = await queue.run({
+        slug,
+        steps: ["glossary"],
+        ...(force ? { force: ["glossary" as const] } : {}),
+      });
+      setPostFailed(started === null);
+      if (started) setStartedId(started.id);
+    },
+    [queue, slug],
+  );
+
+  const find = useCallback(() => run(false), [run]);
+  const more = useCallback(() => run(true), [run]);
+
+  /**
+   * Throw the list away and find a new one.
+   *
+   * The DELETE first, and the local state cleared before the job is asked for,
+   * so the panel does not go on showing the old list while the new one is being
+   * written — which would read as the reset having been ignored.
+   *
+   * A failed DELETE stops here rather than running anyway. Carrying on would
+   * *append* to the list the reader just asked to be rid of, which is the exact
+   * opposite of what they pressed.
+   */
+  const reset = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? res.statusText);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+      return;
+    }
+    setGlossary(null);
+    setStale(false);
+    setStatus("none");
+    await run(false);
+  }, [slug, run]);
+
+  /* `queue.error` is read here at render and not inside `run`, where it would
+     be the value from the render that created the closure — the hook sets it
+     during the same `await`, so reading it there gives you the *previous*
+     error, or null, which is how a failed request ends up reported as nothing
+     at all. Learned on the thread page; the same trap is here. */
+  const failed = postFailed ? (queue.error ?? "Couldn't start the job.") : stopped;
+
+  return {
+    status,
+    glossary,
+    stale,
+    error,
+    job,
+    failed,
+    find,
+    more,
+    reset,
+    cancel: (id) => void queue.cancel(id),
+  };
+}

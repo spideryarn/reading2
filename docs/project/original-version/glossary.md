@@ -145,8 +145,26 @@ before reading it. Show the list; don't mark up the prose.
 important terms, ranked by how important we think they are" is the model doing the reader's
 prioritising for them, which is the thing [vision.md](../vision.md) is against.
 
+## What we actually built
+
+**2026-08-25**, and this section is here because the one above it is a set of predictions that can
+now be checked. See [../glossary.md](../glossary.md) for the whole of it. In short:
+
+- **The inline markup was dropped**, as recommended. The prose acquires no marks until the reader
+  selects a term, and then only that term's occurrences.
+- **The scores were kept**, against the recommendation. Greg's call, with a condition: never sort by
+  them silently. The list arrives in document order, the sort is a control, and the number you
+  sorted by is shown.
+- **The list is generated up front**, as recommended — but it is *not* the same mechanism as
+  [comments.md](../comments.md). That merge is still the right idea and is written down as open.
+- **The richness normaliser their plan describes was built**, and is the thing this doc is most
+  useful for having recorded. So was the pagination, for the reason given in Bug one.
+- **`aliases` and `url` were both copied**, and the `url` check is stricter than theirs: Zod's
+  `.url()` accepts `javascript:`, and that string reaches an `href`.
+
 ## See also
 
+- [../glossary.md](../glossary.md) — ours, and what each of the above cost
 - [overview.md](overview.md) — the map to that codebase
 - [../comments.md](../comments.md) — the mechanism a glossary should reuse rather than duplicate
 - [highlighting.md](highlighting.md) — the other feature that marked up the same prose, and why they collided

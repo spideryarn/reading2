@@ -182,11 +182,14 @@ Removed:
   `<svg style="position:fixed;inset:0;width:100vw;height:100vh">` covers the whole reading view and
   takes the clicks. Prose gets its looks from our own stylesheets
   ([design-css-overview.md](design-css-overview.md)), so nothing of value is lost.
-- **the annotation attributes the client owns** — `data-comment`, `data-mark-end`, `data-open`, and
-  the `cmt` class. [`annotateHtml`](../../src/web/annotate.ts) adds these *after* sanitising and the
-  reading view treats them as its own, so an article shipping
+- **the annotation attributes the client owns** — `data-comment`, `data-mark-end`, `data-open`,
+  `data-term`, and the `cmt` and `term` classes. [`annotateHtml`](../../src/web/annotate.ts) adds
+  these *after* sanitising and the reading view treats them as its own, so an article shipping
   `<mark class="cmt" data-comment="…">` in its source would draw a fake comment in someone else's
-  document. See [comments.md](comments.md).
+  document. `term` joined the list when the glossary landed
+  ([glossary.md](glossary.md)) and is the less obvious of the two: a comment mark is visibly the
+  reader's, whereas a forged term underline reads as *the app having decided* those words matter.
+  See [comments.md](comments.md).
 
 ### Video embeds are kept, behind an origin allowlist
 
@@ -372,6 +375,32 @@ are a shared helper the wrong choice is visibly absent from, and a test that fai
 - **Nothing rate-limits or authenticates any of this**, which is fine for one process on a laptop and
   is not fine on the public internet — see
   [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md), which has this going online.
+
+## A third untrusted party: what the model returns
+
+The two above are the content and the URL. There is now a third, and it is quieter because it does
+not feel like input: **strings a language model produced, rendered as markup.**
+
+Everything the model writes in this app is rendered as **text**, deliberately — chat answers, gists,
+arc sentences, tweet posts, glossary entries. No `dangerouslySetInnerHTML` anywhere near any of them,
+and the prompts say plain prose partly for that reason. There is exactly one exception, and it is the
+one to watch:
+
+**`GlossaryEntry.url` becomes an `href`.** A model may return `javascript:alert(1)` there — not
+maliciously, but because a page it half-remembers had one, or because the article it just read
+contained one. `safeUrl` in [`src/glossary.ts`](../../src/glossary.ts) parses it and allows `http:`
+and `https:` and nothing else, and it does so **server-side, at build time**, so a bad scheme never
+reaches the artefact rather than being filtered on the way out.
+
+This is worth a paragraph because of how the original version got it wrong: their record validated
+the same field with Zod's `.url()`, which checks that the string *parses* as a URL — and
+`javascript:alert(1)` parses fine. A validator that looks like a security check and is not is worse
+than none, because it stops anyone looking again. Tested in
+[`tests/glossary.test.ts`](../../tests/glossary.test.ts).
+
+**The rule to carry forward:** any model output that becomes an attribute — an `href`, a `src`, a
+`style`, an `id` — is untrusted input and needs an allowlist, not a parse. Model output that becomes
+a text node does not.
 
 ## Known gaps
 

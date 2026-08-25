@@ -93,6 +93,16 @@ describe("the pipeline", () => {
     for (const name of DEFAULT_INGEST_STEPS) expect(STEP_ORDER).toContain(name);
   });
 
+  it("accepts `glossary`, and keeps it out of what a bare add runs", () => {
+    // Both halves at once, because they are one decision: the glossary is a
+    // step you can ask for by name and never one an "add this URL" spends a
+    // model call on. Greg was asked and said a button, on demand (2026-08-25).
+    // See docs/project/glossary.md.
+    expect(isStepName("glossary")).toBe(true);
+    expect(STEP_ORDER).toContain("glossary");
+    expect(DEFAULT_INGEST_STEPS).not.toContain("glossary");
+  });
+
   it("sorts `tweets` after the steps it reads", () => {
     // Order is about running, not about forcing — `tweets` is exempt from the
     // force-cascade (below) but it still has to run after the stages whose
@@ -168,6 +178,22 @@ describe("cascadeForce", () => {
     expect(FORCE_ONLY_WHEN_NAMED.has("tweets")).toBe(true);
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc"]))]).toEqual(["arc"]);
     expect([...cascadeForce(["toc", "arc", "tweets"], new Set(["toc"]))]).toEqual(["toc", "arc"]);
+  });
+
+  it("does not sweep `glossary` in by position either, and this one appends", () => {
+    /* Same argument as `tweets` — it reads the blocks and the tree, and nothing
+       reads what it writes — plus one that is sharper here. Forcing this step
+       does not rewrite the list, it **adds a batch of terms to it**
+       (src/glossary.ts § generateGlossary). So being swept into the cascade
+       would not merely waste a model call: re-fetching an article would silently
+       make the reader's glossary longer. */
+    expect(FORCE_ONLY_WHEN_NAMED.has("glossary")).toBe(true);
+    expect([...cascadeForce([...STEP_ORDER], new Set(["fetch"]))]).not.toContain("glossary");
+    expect([...cascadeForce(["toc", "glossary"], new Set(["toc"]))]).toEqual(["toc"]);
+  });
+
+  it("still forces `glossary` when it is named — that is the Find more button", () => {
+    expect([...cascadeForce(["glossary"], new Set(["glossary"]))]).toEqual(["glossary"]);
   });
 
   it("still forces `tweets` when it is named", () => {

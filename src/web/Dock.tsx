@@ -33,16 +33,17 @@
  *  - the "there is more over here" fade ran to `bottom: 0`.
  *  - `.tooltip` was at z-index 80, under the drawer — see the note on Z below.
  *
- * ## Two kinds of button, said out loud
+ * ## Three kinds of button, said out loud
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
- * `Home` and `Metadata` navigate; `Questions` opens a drawer *on the reading view*
- * and navigates everywhere else. That is a real difference and the markup has
- * to tell the truth about it — a link gets `aria-current="page"`, a drawer
- * trigger gets `aria-expanded`, and using either one for the other kind
- * announces the wrong thing to a screen reader while looking identical on
- * screen. Hence `DockLink` and `DockTab` below rather than one component with a
- * flag.
+ * `Home`, `Metadata` and `Thread` navigate; `Questions` opens a drawer *on the
+ * reading view* and navigates everywhere else; `Chat` and `Glossary` change what
+ * the middle of the page **is**. That is three real differences and the markup has to tell
+ * the truth about each — a link gets `aria-current="page"`, a drawer trigger
+ * gets `aria-expanded`, a mode switch gets `aria-pressed`, and using any one of
+ * them for another kind announces the wrong thing to a screen reader while
+ * looking identical on screen. Hence `DockLink`, `DockTab` and `DockMode` below
+ * rather than one component with two flags.
  *
  * **The bar looks the same on all three pages and is not the same component
  * twice.** What varies is whether a `drawer` was handed in. Only the reading
@@ -64,7 +65,7 @@
  */
 import { useEffect, type ReactNode } from "react";
 import {
-  BookOpen,
+  BookA,
   ChevronUp,
   Highlighter,
   Home,
@@ -72,12 +73,13 @@ import {
   Layers,
   ListOrdered,
   MessageSquareText,
+  MessagesSquare,
   Search,
   Timer,
   X,
 } from "lucide-react";
 import type { Comment } from "../types.js";
-import type { Panel } from "./params.js";
+import type { Mode, Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -94,6 +96,16 @@ interface Props {
   slug: string;
   /** Which of the article's pages this bar is sitting on. */
   view: ArticleView;
+  /**
+   * Which mode owns the middle band, and how to change it — the reading view
+   * only. See params.ts § modeParam and docs/plans/chat-mode.md.
+   *
+   * Optional for the same reason `drawer` is: the metadata and thread pages
+   * have no middle band to put a mode in, so their Chat button is a link back
+   * to the reading view rather than a switch that would have nothing to switch.
+   */
+  mode?: Mode;
+  onMode?(next: Mode): void;
   /**
    * The drawer, on the one page that has one.
    *
@@ -131,15 +143,19 @@ interface Props {
  *
  * This is not a backlog. The standing rule from
  * docs/project/original-version/overview.md is *a library to consult, not a
- * backlog to import*, and one of that app's features is deliberately missing
- * even from here: **chat**, which its own docs single out as the one to be most
- * suspicious of and which sits closest to our anti-goals (vision.md).
+ * backlog to import*.
  *
- * This list used to name a second one — tweet threads, "simply not what this
- * is" — written a few hours before Greg asked for them. They are a real button
- * in the bar now, and the objection was not waved away: it is answered at
- * length in docs/plans/tweet-thread-page.md#say-the-awkward-thing-first, which
- * is worth reading before anything on that page changes.
+ * **Both of the features this list used to say we would never build are now
+ * buttons in this bar**, and that is worth reading before adding a third
+ * refusal here. Tweet threads were "simply not what this is", written a few
+ * hours before Greg asked for them. Chat was the stronger objection — its own
+ * docs single it out as the one to be most suspicious of, and it sits closest
+ * to our anti-goals (vision.md). Neither objection was waved away; both are
+ * answered at length, in
+ * docs/plans/tweet-thread-page.md#say-the-awkward-thing-first and in
+ * docs/plans/chat-mode.md#say-the-awkward-thing-first. The chat that was built
+ * is not the one that was refused: every claim it makes carries a block id and
+ * the article stays on screen beside it.
  */
 const SOON: { key: string; label: string; icon: typeof Layers; blurb: string; learned: string }[] = [
   {
@@ -149,14 +165,6 @@ const SOON: { key: string; label: string; icon: typeof Layers; blurb: string; le
     blurb: "The whole piece at whichever length you want it, from a sentence to a page.",
     learned:
       "Built once already, and all nine lengths came out of a single model call rather than nine — the ladder was cheaper than it looked.",
-  },
-  {
-    key: "glossary",
-    label: "Glossary",
-    icon: BookOpen,
-    blurb: "The terms this article assumes you know, defined from the article itself.",
-    learned:
-      "Their version normalised names to merge duplicates and quietly deleted the more specific term when two collided.",
   },
   {
     key: "highlights",
@@ -184,7 +192,7 @@ const SOON: { key: string; label: string; icon: typeof Layers; blurb: string; le
   },
 ];
 
-export function Dock({ slug, view, drawer }: Props) {
+export function Dock({ slug, view, mode, onMode, drawer }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
   const pending = drawer?.comments.filter((c) => c.status === "pending").length ?? 0;
@@ -347,6 +355,58 @@ export function Dock({ slug, view, drawer }: Props) {
           title="The article as a numbered thread of short posts"
         />
 
+        {/* The third kind of button in this bar, and the one that made the
+            comment at the top of this file need a third paragraph: it neither
+            navigates nor opens a drawer, it changes what the middle of the page
+            *is*. On the pages that have no middle it degrades to a link, the
+            same way Questions does. See DockMode below for why `aria-pressed`
+            rather than `aria-expanded`. */}
+        {mode !== undefined && onMode ? (
+          <DockMode
+            on={mode === "chat"}
+            onToggle={() => onMode(mode === "chat" ? "toc" : "chat")}
+            icon={MessagesSquare}
+            label="Chat"
+            title="Ask about this article — answers point back at the paragraphs they came from"
+          />
+        ) : (
+          <DockLink
+            href={readHref(slug, withMode(search, "chat"), "article")}
+            current={false}
+            icon={MessagesSquare}
+            label="Chat"
+            title="Ask about this article, back in the article itself"
+          />
+        )}
+
+        {/* The second mode button, and the one that turned "the third kind of
+            button" from a special case into a kind. It was a dimmed idea in
+            `SOON` until 2026-08-25; it is a built button now, and the entry it
+            replaced has gone rather than being left beside it.
+
+            Greg, 2026-08-25: *"Use a button in the bottom-bar to activate it."*
+            and *"When active, it should replace the middle sections of the UI
+            (i.e. right of the spine, left of the doc)."* — which is precisely
+            what a mode is, so it needed no new machinery here at all. See
+            docs/project/glossary.md. */}
+        {mode !== undefined && onMode ? (
+          <DockMode
+            on={mode === "glossary"}
+            onToggle={() => onMode(mode === "glossary" ? "toc" : "glossary")}
+            icon={BookA}
+            label="Glossary"
+            title="The terms this piece uses in a non-obvious way, defined from the piece itself"
+          />
+        ) : (
+          <DockLink
+            href={readHref(slug, withMode(search, "glossary"), "article")}
+            current={false}
+            icon={BookA}
+            label="Glossary"
+            title="The terms this piece uses, back in the article itself"
+          />
+        )}
+
         <span className="dock-gap" />
 
         {/* Not yet built. Tooltips rather than labels, because the point of
@@ -392,6 +452,77 @@ const TITLES: Record<Panel, string> = {
  */
 function withPanel(search: string, panel: Panel): string {
   return search ? `${search}&panel=${panel}` : `panel=${panel}`;
+}
+
+/**
+ * A carried query string with a mode asked for in it.
+ *
+ * The sibling of `withPanel`, and needed for the same reason: `carriedSearch`
+ * strips view state that should not follow you across a navigation, and this
+ * puts one back when the navigation is *for* it.
+ *
+ * Unlike `withPanel` it must overwrite rather than append — `?mode=` may
+ * already be in the carried string, and `mode=toc&mode=chat` is a URL whose
+ * meaning depends on which one the parser happens to read first.
+ */
+function withMode(search: string, mode: Mode): string {
+  const params = new URLSearchParams(search);
+  params.set("mode", mode);
+  return params.toString();
+}
+
+/**
+ * A bar button that switches what the middle of the page is.
+ *
+ * `aria-pressed`, and the choice is worth a sentence because the file's other
+ * two buttons both make a different one. A drawer trigger says `aria-expanded`
+ * because something rises out of the bar; a link says `aria-current` because it
+ * takes you somewhere. This does neither: it is a two-state control that stays
+ * where it is, which is exactly what `aria-pressed` describes.
+ *
+ * **The third mode arrived on 2026-08-25 and this stayed a toggle.** The
+ * paragraph that used to be here said a radiogroup was the answer once there
+ * were three of them, so the reversal is worth stating rather than quietly
+ * dropping: the count was the wrong trigger.
+ *
+ * A radiogroup announces "one of these several", and the bar does not show
+ * several. It shows **two of three** — Chat and Glossary — because `toc` is the
+ * default and has no button; you leave a mode by pressing the one you are in.
+ * So a radiogroup here would name two options and hide the third, which is a
+ * worse lie than `aria-pressed`: "Glossary, not pressed" is true, whereas a
+ * two-option radiogroup asserts that the middle band is one of two things when
+ * it is currently neither.
+ *
+ * The real trigger is therefore **a Table of contents button in the bar**, not
+ * a third mode. Add one and all three become peers, "one of these several"
+ * becomes true, and this should become `role="radiogroup"` with roving
+ * tabindex and arrow-key traversal on the same day.
+ */
+function DockMode({
+  on,
+  onToggle,
+  icon: Icon,
+  label,
+  title,
+}: {
+  on: boolean;
+  onToggle(): void;
+  icon: typeof Home;
+  label: string;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`dock-btn${on ? " on" : ""}`}
+      aria-pressed={on}
+      title={title}
+      onClick={onToggle}
+    >
+      <Icon size={15} />
+      <span>{label}</span>
+    </button>
+  );
 }
 
 /**

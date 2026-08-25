@@ -26,14 +26,15 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
+import { MODEL } from "./models.js";
+import { hashBlocks } from "./source-hash.js";
+import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 
-const MODEL = "claude-opus-5";
 const PROMPT_VERSION = "tweets/1";
 
 /**
@@ -64,20 +65,24 @@ export function countChars(text: string): number {
 }
 
 /**
- * A fingerprint of the article the thread was written from.
+ * A fingerprint of the article the thread was written from — re-exported.
  *
- * The ids **and** the text, not the raw bytes of blocks.json. Bytes would
- * change when a field we don't read is recomputed, and would not change if two
- * blocks swapped ids — this changes exactly when what a reader would read
- * changes, which is the only question `sourceHash` is asked.
+ * **The implementation moved to src/source-hash.ts** when the glossary (stage
+ * 5d) needed the identical question answered about its own artefact. Two stages
+ * computing "the same" hash two ways is the second-copy-of-one-fact problem in
+ * its most dangerous form: they can only ever disagree, and the day they do,
+ * one artefact reports itself current against a different definition of
+ * current. See src/source-hash.ts for the reasoning that used to live here.
  *
- * Sixteen hex characters. It is compared for equality, never for closeness, and
- * a full sha256 in every artefact buys nothing but width.
+ * Re-exported rather than moved outright so that everything already importing
+ * `hashBlocks` from this module — tests included — goes on working.
+ *
+ * Imported *and* re-exported, which looks redundant and is not: a bare
+ * `export … from` re-exports without binding the name locally, so `isStale`
+ * below stops compiling. The typecheck catches it, which is the only reason
+ * this note is short.
  */
-export function hashBlocks(blocks: Block[]): string {
-  const canonical = blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
-  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
-}
+export { hashBlocks };
 
 /**
  * Does this thread still describe the article on disk?
@@ -359,10 +364,17 @@ export async function generateTweets(opts: {
   const posts = suggestedLength(words);
   const started = Date.now();
 
+  /* A thread is a bounded thing — `suggestedLength` caps it — so the answer is
+     a few thousand tokens whatever the article. The allowance still has to
+     scale, because the model reads the whole piece to write it and thinks about
+     it inside this same number. See src/token-budget.ts. */
+  const answerTokens = 500 + posts * 140;
+  const maxTokens = budgetFor("thread", answerTokens);
+
   const client = new Anthropic();
   const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 16000,
+    max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: "high" },
     system: SYSTEM,
@@ -389,7 +401,14 @@ export async function generateTweets(opts: {
     throw new Error(`Model refused: ${JSON.stringify(message.stop_details)}`);
   }
   if (message.stop_reason === "max_tokens") {
-    throw new Error("Hit max_tokens — the JSON is truncated. Raise it and retry.");
+    throw new Error(
+      truncatedMessage("thread", maxTokens, answerTokens, {
+        outputTokens: message.usage.output_tokens,
+        answerChars: message.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .reduce((n, b) => n + b.text.length, 0),
+      }),
+    );
   }
 
   const raw = message.content

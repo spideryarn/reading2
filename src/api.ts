@@ -16,10 +16,12 @@
  * shaped as rows rather than as files (see the note on `LibraryEntry` in
  * types.ts). See docs/project/library.md § When this becomes Postgres.
  */
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadComments } from "./comments.js";
+import { isStale as glossaryIsStale, readGlossary } from "./glossary.js";
 import { isSlug } from "./ingest.js";
+import { errorFields, log } from "./log.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone, type StepContext } from "./pipeline.js";
 import { readingMinutes } from "./reading-time.js";
 import { isStale } from "./tweets.js";
@@ -28,6 +30,7 @@ import type {
   Article,
   ArticleMetadata,
   Block,
+  GlossaryResponse,
   LibraryEntry,
   Meta,
   StageState,
@@ -38,11 +41,29 @@ import type {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
+/**
+ * Read a JSON artefact, or null if it isn't there.
+ *
+ * **`null` means absent and nothing else.** A file that exists and won't parse,
+ * or won't open, throws — and that distinction is the reason for the log line:
+ * absent is the ordinary case (`meta.json` and `arc.json` are both optional, and
+ * half the callers below treat a missing file as "skip this"), whereas a
+ * `blocks.json` that is on disk and unreadable is a corrupted artefact. The
+ * throw is loud at the route, but by then it is one 500 among many; the line
+ * here is what names the file.
+ *
+ * The path is logged relative to the repo root, because an absolute one is
+ * mostly the reader's home directory.
+ */
 async function readJson<T>(file: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(file, "utf8")) as T;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    log("store").warn(
+      { file: path.relative(ROOT, file), ...errorFields(err) },
+      "artefact exists but could not be read or parsed",
+    );
     throw err;
   }
 }
@@ -82,12 +103,39 @@ export async function loadArticle(slug: string): Promise<Article> {
     const tree = await readJson<Tree>(path.join(dir, "tree.json"));
     if (!blocksFile || !tree) continue;
 
+    // **The standing alarm for the fallback that hid a path traversal.**
+    //
+    // When data/<slug>/ has no artefacts we fall through to example/ and serve
+    // the fixture — and the response looks exactly like the endpoint correctly
+    // refusing an unknown slug. That is precisely how a shallow `../../etc`
+    // probe reported this API safe while a deeper one walked out of the repo
+    // and got HTTP 200 (docs/project/security.md § Why it survived being looked
+    // at). Nothing about the response distinguishes the two cases, so the log is
+    // the only place the difference can be seen at all.
+    //
+    // Asking for "example" is not a fallback — that is the fixture's own slug,
+    // and falling through is how it is meant to open (see FIXTURE_SLUG below).
+    if (dir !== path.join(ROOT, "data", slug) && slug !== FIXTURE_SLUG) {
+      log("store").warn(
+        { slug, dir: path.relative(ROOT, dir) },
+        "article served from the fixture, not from its own directory",
+      );
+    }
+
     // meta.json is optional — stages 3-5 don't all write one yet. Falling back
     // to the slug puts "noema-mythology-of-conscious-ai" at the top of the
     // reading view, so derive a real title from the article's own first heading
     // instead, and keep the slug only as the last resort.
+    const stored = await readJson<Meta>(path.join(dir, "meta.json"));
+    // debug, not warn: a missing meta.json is expected for anything stages 3-5
+    // built without stage 2. It is worth a line only because the title the
+    // reader ends up looking at was invented here rather than extracted, and
+    // "the heading is wrong" is otherwise a mystery.
+    if (!stored) {
+      log("store").debug({ slug, dir: path.relative(ROOT, dir) }, "no meta.json; title derived");
+    }
     const meta =
-      (await readJson<Meta>(path.join(dir, "meta.json"))) ??
+      stored ??
       ({
         slug,
         title:
@@ -155,6 +203,95 @@ export async function loadTweets(slug: string): Promise<ThreadResponse> {
   // file that has become unreadable between the two reads. Unknown counts as
   // stale: the honest answer, and the safe way round to be wrong.
   return { thread, stale: !blocksFile || isStale(thread, blocksFile.blocks) };
+}
+
+/**
+ * The article's glossary, and whether it still describes the article.
+ *
+ * The read half of stage 5d. Everything about the shape of this function is
+ * borrowed from `loadTweets` above deliberately, because the two answer the
+ * same question about different artefacts and the day they stop agreeing is the
+ * day one of them is wrong:
+ *
+ *  - **`articleDir`, not a directory of its own**, or `stale` is computed
+ *    against somebody else's `blocks.json` and means nothing. That also
+ *    inherits the fixture fallback for free — `example/` has no glossary, so it
+ *    answers 404 and the panel offers to find one.
+ *  - **`stale` is computed here rather than stored**, because a flag written at
+ *    generation time is right until the moment it matters.
+ *  - **404 for "no glossary yet" is the ordinary case, not a fault.** Most
+ *    articles have none; it is what the panel's button is for, and the message
+ *    says how to ask for one.
+ */
+export async function loadGlossary(slug: string): Promise<GlossaryResponse> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const glossary = await readGlossary(dir);
+  if (!glossary) {
+    throw Object.assign(
+      new Error(
+        `No glossary for "${slug}" yet. Find one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["glossary"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  // `articleDir` already proved blocks.json is there, so the fallback is for a
+  // file that has become unreadable between the two reads. Unknown counts as
+  // stale: the honest answer, and the safe way round to be wrong.
+  return { glossary, stale: !blocksFile || glossaryIsStale(glossary, blocksFile.blocks) };
+}
+
+/**
+ * Throw the glossary away.
+ *
+ * **The one destructive read-side operation in this file, and the reason it
+ * exists.** Asking for the step again does not replace a glossary, it *appends*
+ * to it (src/glossary.ts § `generateGlossary`) — which is right for "find more
+ * terms" and leaves no way at all to say "this list is wrong, start over". A
+ * reader who dislikes what the model found could otherwise only fix it by
+ * changing the article underneath it.
+ *
+ * So: delete, then ask for the step. Two explicit acts rather than one flag
+ * that means different things on different days, and the panel puts a confirm
+ * in front of it.
+ *
+ * A missing file is a success. The caller asked for the glossary to be gone and
+ * it is gone; reporting 404 would make the panel show an error for the outcome
+ * it wanted.
+ */
+export async function deleteGlossary(slug: string): Promise<{ deleted: boolean }> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  /* The fixture is not the reader's to delete. `articleDir` falls through to
+     `example/` for any slug with no pipeline output of its own — including a
+     slug that does not exist at all — so without this the one committed
+     directory in the repo is one DELETE away from an unknown article. It has no
+     glossary.json today, which is exactly the kind of "it can't happen" that
+     stops being true the first time somebody hand-authors one. */
+  const own = path.join(ROOT, "data", slug);
+  if (dir !== own) {
+    throw Object.assign(
+      new Error(`"${slug}" is the built-in example. Its glossary is not yours to delete.`),
+      { status: 403 },
+    );
+  }
+  try {
+    await rm(path.join(dir, "glossary.json"));
+    return { deleted: true };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { deleted: false };
+    throw err;
+  }
 }
 
 /* ----------------------------------------------------------- provenance --
@@ -263,7 +400,14 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
     })),
   );
 
-  return { slug, dir: path.relative(ROOT, dir), stages };
+  // `loadComments` for the same reason `describeArticle`'s caller uses it: the
+  // file is `{ comments: [...] }` rather than a bare array, and reader state
+  // lives under `data/<slug>/` even for the fixture, whose article artefacts do
+  // not. Reading it here is what lets the page say "7 questions asked" without
+  // the client fetching the comments themselves.
+  const comments = (await loadComments(slug)).length;
+
+  return { slug, dir: path.relative(ROOT, dir), stages, comments };
 }
 
 /* ------------------------------------------------------------ the library --
@@ -344,7 +488,18 @@ async function describeDir(
   const tree = await readJson<Tree>(path.join(dir, "tree.json"));
   // A half-built directory — extracted but not yet given a tree — is skipped
   // rather than listed as an article that fails to open.
-  if (!blocksFile || !tree) return null;
+  //
+  // Silent by design, and that is the problem: an ingest that died after stage 3
+  // leaves a directory the shelf simply never mentions, so the article looks
+  // like it was never added. debug rather than warn, because a run in progress
+  // hits this legitimately on every homepage load until the toc lands.
+  if (!blocksFile || !tree) {
+    log("store").debug(
+      { slug, dir: path.relative(ROOT, dir), blocks: !!blocksFile, tree: !!tree },
+      "directory skipped: not a complete article",
+    );
+    return null;
+  }
 
   const meta = await readJson<Meta>(path.join(dir, "meta.json"));
 

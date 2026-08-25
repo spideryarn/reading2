@@ -17,17 +17,19 @@ data/writes/
   arc.json
   comments.json
   tweets.json
+  glossary.json
 data/_jobs/
   spya-*.json   one file per ingest job
 ```
 
 **Reads** all go through [`src/api.ts`](../../src/api.ts) — `loadArticle`, `loadTweets`,
-`articleMetadata`, `listArticles`. [library.md](library.md) makes the same point from the other side.
+`loadGlossary`, `articleMetadata`, `listArticles`. (`deleteGlossary` is the one *write* that goes
+through it, and [glossary.md](glossary.md) says why it has to.) [library.md](library.md) makes the same point from the other side.
 
 **Writes do not.** This doc used to say "`src/api.ts` is the one file the store lives behind", and
 that is only half true — it is the *read* seam. The write path is
 `PipelineStep.outputs(ctx): string[]`, an interface that returns **file paths**, implemented across
-six stage modules (`fetch`, `extract`, `blocks`, `toc`, `arc`, `tweets`). Any estimate that treats
+seven stage modules (`fetch`, `extract`, `blocks`, `toc`, `arc`, `tweets`, `glossary`). Any estimate that treats
 the Postgres move as a one-file change is wrong, and this is where that mistake starts.
 
 Why files at all: *"Prefer boring: filesystem over database, one server process"* —
@@ -35,10 +37,13 @@ Why files at all: *"Prefer boring: filesystem over database, one server process"
 See [architecture.md](architecture.md#stage-ownership).
 
 **Caching is not what the docs claim.** "Anything expensive is cached on a content hash" is true of
-exactly one stage of six: `tweets`, via `hashBlocks` in [`src/tweets.ts`](../../src/tweets.ts) and
-the optional `isDone(ctx)` hook on `PipelineStep`. `toc` and `arc` still use `stepIsDone`, an
+exactly two stages of seven: `tweets` and `glossary`, via `hashBlocks` in
+[`src/source-hash.ts`](../../src/source-hash.ts) and the optional `isDone(ctx)` hook on
+`PipelineStep`. (That helper began life inside `src/tweets.ts` and moved out when the glossary needed
+the identical question answered — two stages computing "the same" fingerprint two ways can only ever
+disagree.) `toc` and `arc` still use `stepIsDone`, an
 `access()` existence check — a file exists, therefore the step is done, whatever it was generated
-from. When it comes to generalising this, copy `tweets`' choice of **hash input**, not just the idea:
+from. When it comes to generalising this, copy their choice of **hash input**, not just the idea:
 it hashes `id \t text` per block, deliberately *not* the bytes of `blocks.json`, because those bytes
 change when an unread field is recomputed and *don't* change when two blocks swap ids.
 
