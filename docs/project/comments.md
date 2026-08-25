@@ -51,15 +51,33 @@ Asked how much web research the explain call should do:
 
 > Only when the model asks for it, but encourage the model to ask for it unless it's very sure
 
-Which is what OpenRouter's `engine: "native"` gives us, and the *only* thing that does. The plugin
-engines (`exa`, `parallel`, `perplexity`, …) run a search on **every** request whether one is wanted
-or not; `native` hands the model the provider's own search tool and lets it choose. The
-encouragement is a paragraph of the system prompt in [`src/explain.ts`](../../src/explain.ts); the
-choice stays with the model.
+That is OpenRouter's **server tool** — `tools: [{ type: "openrouter:web_search" }]` — which hands
+the model a search tool and lets it choose. The encouragement is a paragraph of the system prompt in
+[`src/explain.ts`](../../src/explain.ts); the choice stays with the model.
 
-`usage.server_tool_use_details.web_search_requests` reports what it actually did, and the dialog
-prints it — "3 web searches" or "no web search needed". A claim about research that nobody can check
-is worth nothing.
+The count reports what it actually did, and the dialog prints it — "3 web searches" or "no web
+search needed". A claim about research that nobody can check is worth nothing.
+
+> [!WARNING]
+> **Prefer the server tool over the `plugins` form — but be precise about why.** This was written
+> first as `plugins: [{ id: "web", engine: "native" }]`. The *plain* `plugins: [{ id: "web" }]` form
+> genuinely does run exactly one search per request whatever the model wanted, and would have broken
+> the decision above outright. `engine: "native"` is the documented exception — OpenRouter's docs
+> say it "gives the model control over when and how often to search, rather than always running once
+> per request" — and live calls on 2026-08-25 bore that out: nine stored comments came back with a
+> real mix of search counts, four of them **0**. So the earlier form was honouring the decision, and
+> an account of this that says otherwise is wrong about which form was in the file. The server tool
+> is still the better spelling: it is the shape OpenRouter documents for model-invoked search, and it
+> does not depend on one engine value keeping a special meaning.
+>
+> **The field name is `usage.server_tool_use_details.web_search_requests`.** OpenRouter's own docs
+> say `server_tool_use`; the live API sends `server_tool_use_details`. A cross-model review
+> confidently cited the docs, and following it would have made the count permanently `0` — with a
+> passing test asserting it, because the test mocked the response shape the docs described. Only
+> printing a real `usage` object settled it. [`src/explain.ts`](../../src/explain.ts) now reads
+> both names, and `tests/explain.test.ts` pins both. This is
+> [silent-success.md](../reusable/silent-success.md) twice over: the check you would naturally run
+> shares its assumption with the code.
 
 ### Decision: comments persist on disk <a id="decision-persistence"></a>
 
@@ -70,6 +88,72 @@ committed [`example/`](../../example/README.md) fixture: the fixture is shared, 
 are not, and `data/` is gitignored. `loadArticle` requires *both* `blocks.json` and `tree.json`
 before it accepts a directory ([`src/api.ts`](../../src/api.ts)), so a lone `comments.json` cannot
 make an empty `data/<slug>/` shadow the fixture.
+
+## Several at once <a id="several-at-once"></a>
+
+Greg, 2026-08-25:
+
+> improve the UI so it's possible to kick off multiple selection-searches at the same time (and
+> navigate between them somehow, e.g. with next/prev arrows)
+
+Concurrency itself was never the obstacle — each POST is independent, `explain` runs *outside* the
+write mutex in [`src/comments.ts`](../../src/comments.ts), and the client never awaits one ask before
+allowing another. What was missing was any way to keep track. Three things fix that:
+
+- **Prev/next in the panel header**, with a `3 / 9` counter. The panel shows one comment, so this is
+  how you get back to the ones you are not looking at.
+- **"2 still working"** in the footer whenever other questions are in flight. Firing one and reading
+  on is the whole point, so the panel has to be able to say that work is happening out of sight.
+- **The panel steps aside while you drag.** It is pinned bottom-right, over the prose — which is
+  exactly where the next sentence you want to ask about is. On a pointerdown that *starts* in the
+  prose it drops to 10% opacity and stops taking pointer events; on pointerup it comes back. Only
+  for drags that start in the prose, so pressing one of its own buttons doesn't make it vanish under
+  your finger.
+
+### Reading order, not ask order <a id="reading-order"></a>
+
+The arrows walk you **down the article**, not back through your own afternoon —
+[`comment-nav.ts`](../../src/web/comment-nav.ts), tested in
+[`tests/comment-nav.test.ts`](../../tests/comment-nav.test.ts). Ties inside a block break by offset,
+then by `createdAt`, so two comments on the same paragraph keep a stable order and the counter
+doesn't flicker between renders.
+
+> [!WARNING]
+> Document order comes from the **index in `blocks.json`**, never from the id string. Ids are random
+> ([block-ids.md](block-ids.md#why-random-and-not-sequential)), so `a.blockId < b.blockId` compiles,
+> runs, returns a plausible order, and is meaningless. There is a test that fails on exactly that
+> substitution.
+
+The arrows **stop at the ends rather than wrapping**. A live arrow that goes nowhere reads as "there
+is more this way" when there isn't, and wrapping from the last comment would fling the reader back to
+the top of the article — a big move to get from a small button.
+
+Stepping **scrolls only if the passage isn't already on screen** (`isBlockOnScreen` in
+[`scroll.ts`](../../src/web/scroll.ts)). Two comments in one paragraph is the common case, and
+jolting the page between them costs the reader their place for nothing. Like
+[keynav.ts](keyboard.md), it writes no position state of its own: it scrolls, and the listener in
+`useReadingPosition` notices and updates `?at=`.
+
+Deleting steps to the neighbour instead of closing the panel — deleting one of nine is a tidy-up, not
+a reason to lose your place.
+
+### The web-search badge <a id="search-badge"></a>
+
+Greg, 2026-08-25: "indicate (with an icon + hover-tooltip or similar) in the dialog box whether or
+not a web search was used."
+
+A globe in the footer, with the search count beside it, and a hover tooltip saying what it did. The
+un-searched state gets its **own** icon (`GlobeOff`) rather than no icon at all: the model chooses
+per question ([above](#decision-web-research)), so "did not search" is a fact about *this answer*.
+A badge that only appeared on searched answers would leave the reader unable to tell "checked, and
+it was fine" from "nobody has said".
+
+> [!NOTE]
+> The panel sits at `z-index: 70` — above everything structural, but **below** the tooltip layer
+> (`.tooltip-anchor`, 80). It was 90 first, on the reasoning that a hover should never cover
+> something the reader deliberately opened. That was wrong and visibly so: the panel has a tooltip
+> of its own, and at 90 it buried it. A tooltip is dismissed the instant the pointer moves, so it
+> cannot obstruct anything.
 
 ## Anchoring <a id="anchoring"></a>
 
@@ -231,6 +315,20 @@ reload rather than leaving a permanent unanswered mark. Nothing to clean up.
   appearing to ignore the drag.
 - **A comment is stored `pending` before the model is called**, so a crash mid-answer leaves a
   visible unanswered question rather than a selection that evaporated. The dialog offers a retry.
+- **A `pending` comment nobody is answering becomes an `error` on the next read.** `pending` on disk
+  cannot distinguish "an answer is coming" from "the process writing it died" — so the server keeps
+  the list of what it is actually answering, and anything else that is `pending` is swept to `error`
+  with a message. Without the sweep, a comment orphaned by a `npm run dev` restart reloads as a
+  spinner that never stops. See `sweepOrphaned` in [`src/routes.ts`](../../src/routes.ts).
+- **The model call has a 90-second deadline.** `fetch` has none of its own, so a request that never
+  comes back would hold the comment `pending` for ever. `EXPLAIN_TIMEOUT_MS` in
+  [`src/explain.ts`](../../src/explain.ts); the timeout is reported as a sentence, not `AbortError`.
+- **Deleting while the answer is still in the air wins.** The POST returns the whole comment, so
+  storing it used to put back a row the reader had already deleted, mark and all. `useComments`
+  keeps a tombstone and re-sends the DELETE once the write it was racing has landed.
+- **Selecting inside an existing mark asks a new question**, rather than reopening the comment that
+  is already there. Asking about a narrower part of something you asked about before is ordinary;
+  the mark only takes the click when there is no selection to act on.
 - **No editing, no reply, no follow-up question.** Ask, read, delete. Anything more is a chatbot
   with the article in the context window, which is
   [an explicit anti-goal](vision.md#anti-goals).

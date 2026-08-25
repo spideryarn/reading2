@@ -9,6 +9,10 @@ npm test           # once
 npm run test:watch # while working
 ```
 
+Run [`npm run typecheck`](typechecking.md) alongside it before committing. The two catch different
+things and neither is a substitute for the other — vitest never looks at the types, and `tsc` never
+runs the code.
+
 ## The runner: Vitest
 
 Chosen 2026-08-24 against [third-party-library-selection.md](../reusable/third-party-library-selection.md).
@@ -23,8 +27,10 @@ Config is in [`vitest.config.ts`](../../vitest.config.ts), deliberately **separa
 `vite.config.ts` — that file mounts the `/api` dev middleware and the React plugin, and a node-side
 unit test should not drag either in.
 
-Tests live in [`tests/`](../../tests), not beside the source, so `tsconfig.json`'s `include: ["src"]`
-keeps them out of the build.
+Tests live in [`tests/`](../../tests), not beside the source, so the node-side `tsconfig.json` keeps
+them out of the stages it checks. They are not unchecked, though: they have a project of their own,
+[`tests/tsconfig.json`](../../tests/tsconfig.json), because vitest strips their types without
+looking at them — see [typechecking.md](typechecking.md).
 
 ## What we test, and what we don't
 
@@ -46,6 +52,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/annotate.test.ts`](../../tests/annotate.test.ts) | drawing a comment's mark over prose, and re-finding a quote whose offset went stale — [comments.md](comments.md) |
 | [`tests/selection.test.ts`](../../tests/selection.test.ts) | mouse selection → a storable anchor: the minimum length, and clamping to one block |
 | [`tests/comments.test.ts`](../../tests/comments.test.ts) | comment storage, and that two comments made at once don't eat each other |
+| [`tests/comment-nav.test.ts`](../../tests/comment-nav.test.ts) | comments in reading order and stepping between them — including that the order comes from the block **index**, never the id string |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken
