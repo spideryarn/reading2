@@ -11,6 +11,15 @@
       "gistable": true
     },
     {
+      "id": "spya-cfbkp2",
+      "tag": "p",
+      "kind": "text",
+      "text": "Anil Seth · NOEMA · ~54 min read",
+      "words": 8,
+      "html": "<p id=\"spya-cfbkp2\">\n  Anil Seth · NOEMA\n  · ~54 min read\n</p>",
+      "gistable": true
+    },
+    {
       "id": "spya-d2h6jh",
       "tag": "p",
       "kind": "text",
@@ -109,6 +118,16 @@
       "words": 52,
       "html": "<p id=\"spya-sge6a2\">Perhaps most of all, the way we think about conscious AI matters for how we understand our own human nature and the nature of the conscious experiences that make our lives worth living. If we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves.</p>",
       "gistable": true
+    },
+    {
+      "id": "spya-u774u3",
+      "tag": "iframe",
+      "kind": "media",
+      "text": "",
+      "words": 0,
+      "html": "<iframe width=\"560\" height=\"315\" src=\"https://www.youtube.com/embed/Jg7ooLzzXeg?si=UWQOrVuW-Mjhp-eS\" title=\"YouTube video player\" frameborder=\"0\" allowfullscreen=\"\" sandbox=\"allow-scripts allow-same-origin\" allow=\"fullscreen; picture-in-picture\" referrerpolicy=\"strict-origin-when-cross-origin\" loading=\"lazy\" id=\"spya-u774u3\"></iframe>",
+      "gistable": false,
+      "note": "media"
     },
     {
       "id": "spya-nh8mt7",

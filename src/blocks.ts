@@ -14,6 +14,7 @@ import { JSDOM } from "jsdom";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
+import { sanitizeInPlace } from "./sanitize.js";
 
 /**
  * Blocks are the *finest* unit a reader takes in as one thing, so a `<li>` is a
@@ -24,7 +25,7 @@ import { isSpideryarnId, mintUniqueId } from "./ids.js";
  */
 const LEAF_BLOCKS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6",
-  "LI", "PRE", "BLOCKQUOTE", "FIGURE", "TABLE", "IMG", "HR",
+  "LI", "PRE", "BLOCKQUOTE", "FIGURE", "TABLE", "IMG", "HR", "IFRAME",
 ]);
 
 /** Descended into, never emitted. */
@@ -33,7 +34,16 @@ const CONTAINERS = new Set([
   "HEADER", "FOOTER", "ASIDE", "NAV", "BODY",
 ]);
 
-const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "IFRAME", "FORM", "BUTTON"]);
+/**
+ * `IFRAME` is deliberately not here, though it used to be. By the time this
+ * runs, src/sanitize.ts has already deleted every iframe except a video embed
+ * from an allowlisted origin — so the only ones left are ones Greg decided to
+ * keep (2026-08-25), and skipping them here would drop the video out of the
+ * reading view while leaving it in the HTML file. That is precisely the bug the
+ * allowlist was written to avoid, and it survived until GPT-5's review caught
+ * it. Sanitising is what makes this line safe to change.
+ */
+const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "FORM", "BUTTON"]);
 
 export type BlockKind =
   | "heading" | "text" | "quote" | "code" | "media" | "caption" | "other";
@@ -117,7 +127,9 @@ function classify(el: Element): { kind: BlockKind; level?: number } {
   if (/^H[1-6]$/.test(tag)) return { kind: "heading", level: Number(tag[1]) };
   if (tag === "PRE") return { kind: "code" };
   if (tag === "BLOCKQUOTE") return { kind: "quote" };
-  if (tag === "FIGURE" || tag === "IMG" || tag === "HR") return { kind: "media" };
+  if (tag === "FIGURE" || tag === "IMG" || tag === "HR" || tag === "IFRAME") {
+    return { kind: "media" };
+  }
   if (tag === "TABLE") return { kind: "other" };
   return { kind: "text" };
 }
@@ -129,9 +141,39 @@ function isImageOnly(el: Element): boolean {
   );
 }
 
+/**
+ * Wrap loose text sitting directly inside a container in a `<p>`, so it becomes
+ * addressable instead of vanishing.
+ *
+ * `walk` iterates `el.children`, which is elements only — so a bare text node
+ * between two containers is invisible to it and its words never reach any
+ * block. That was survivable while every wrapper the author wrote survived to
+ * this point, because the text always had *some* element around it. Sanitising
+ * broke that assumption: DOMPurify drops an unrecognised tag but keeps its
+ * contents, so `<x-article>real prose</x-article>` — the kind of custom element
+ * a modern CMS emits, which Readability passes through untouched — arrives here
+ * as naked text and used to be silently dropped, along with whatever id it
+ * carried. GPT-5's review caught it, 2026-08-25.
+ *
+ * Done here rather than in a pass of its own so it inherits `walk`'s decision
+ * about what counts as a container: the only elements this touches are ones we
+ * were about to descend into and emit nothing for.
+ */
+function rewrapOrphanText(el: Element): void {
+  const doc = el.ownerDocument;
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType !== 3) continue; // TEXT_NODE
+    if (normalize(node.nodeValue ?? "").length === 0) continue;
+    const p = doc.createElement("p");
+    el.replaceChild(p, node);
+    p.appendChild(node);
+  }
+}
+
 function collectElements(root: Element): Element[] {
   const out: Element[] = [];
   const walk = (el: Element) => {
+    rewrapOrphanText(el);
     for (const child of Array.from(el.children)) {
       const tag = child.tagName;
       if (SKIP.has(tag)) continue;
@@ -214,6 +256,22 @@ function carryOverIds(previous: Block[] | undefined) {
 export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
   const dom = new JSDOM(html);
   const doc = dom.window.document;
+
+  /*
+   * Before anything reads this document, and before a single id is minted.
+   *
+   * This is the only gate between a stranger's HTML and the reading view: the
+   * client renders `block.html` with dangerouslySetInnerHTML, and Readability
+   * upstream is not a sanitiser and does not claim to be. Doing it here rather
+   * than in the client means the stored blocks.json is clean, so every later
+   * consumer inherits that instead of having to remember. See src/sanitize.ts
+   * for what survives and docs/project/security.md for why.
+   *
+   * Order matters: sanitising first means ids are stamped onto elements that
+   * are staying. Sanitising afterwards would mint ids for elements about to be
+   * deleted, and the blocks array would list ids that the HTML no longer has.
+   */
+  sanitizeInPlace(doc.body);
 
   const elements = collectElements(doc.body);
 
@@ -329,28 +387,59 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
  * branch runs. ESM importers are unaffected either way; this just keeps
  * splitIntoBlocks importable from anywhere.
  */
+export interface BlocksRun extends SplitResult {
+  htmlFile: string;
+  jsonFile: string;
+}
+
+/**
+ * Stage 3 over a file on disk: read, split, write both artefacts back.
+ *
+ * Exported because there are two callers and they must not drift — `main()`
+ * below, and the ingest queue running the same stage in the server process
+ * (src/pipeline.ts). Everything interesting is still in `splitIntoBlocks`,
+ * which is pure; this is the IO around it.
+ *
+ * **Ids are carried over from the existing blocks.json, not re-minted.** That
+ * is the whole reason a re-extraction is survivable — see
+ * docs/project/block-ids.md#surviving-stage-2.
+ */
+export async function runBlocks(opts: {
+  htmlFile: string;
+  jsonFile?: string;
+}): Promise<BlocksRun> {
+  const htmlFile = opts.htmlFile;
+  const jsonFile = opts.jsonFile ?? `${htmlFile.replace(/\.html$/, "")}.blocks.json`;
+
+  // If a previous run's blocks.json is sitting there, use it to carry ids
+  // across a re-extraction that wiped them from the HTML.
+  let previous: Block[] | undefined;
+  try {
+    previous = JSON.parse(await readFile(jsonFile, "utf-8")).blocks as Block[];
+  } catch {
+    previous = undefined; // first run for this article
+  }
+
+  const source = await readFile(htmlFile, "utf-8");
+  const result = splitIntoBlocks(source, previous);
+
+  await writeFile(htmlFile, result.html, "utf-8");
+  await writeFile(jsonFile, JSON.stringify({ blocks: result.blocks }, null, 2), "utf-8");
+
+  return { ...result, htmlFile, jsonFile };
+}
+
 async function main() {
   const input = process.argv[2];
   if (!input) {
     console.error("Usage: tsx src/blocks.ts <article.html> [blocks.json]");
     process.exit(1);
   }
-  const outJson = process.argv[3] ?? `${input.replace(/\.html$/, "")}.blocks.json`;
-
-  // If a previous run's blocks.json is sitting there, use it to carry ids
-  // across a re-extraction that wiped them from the HTML.
-  let previous: Block[] | undefined;
-  try {
-    previous = JSON.parse(await readFile(outJson, "utf-8")).blocks as Block[];
-  } catch {
-    previous = undefined; // first run for this article
-  }
-
-  const source = await readFile(input, "utf-8");
-  const { blocks, html, stats } = splitIntoBlocks(source, previous);
-
-  await writeFile(input, html, "utf-8");
-  await writeFile(outJson, JSON.stringify({ blocks }, null, 2), "utf-8");
+  const argOut = process.argv[3];
+  const { blocks, stats, jsonFile: outJson } = await runBlocks({
+    htmlFile: input,
+    ...(argOut ? { jsonFile: argOut } : {}),
+  });
 
   const byKind = blocks.reduce<Record<string, number>>((acc, b) => {
     acc[b.kind] = (acc[b.kind] ?? 0) + 1;

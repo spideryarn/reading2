@@ -182,3 +182,112 @@ describe("caption detection is by marker, not by length", () => {
     expect(byText("Credits").gistable).toBe(false);
   });
 });
+
+/**
+ * The sanitiser is wired into stage 3, not bolted onto the client — so a
+ * hostile article is already clean by the time it reaches blocks.json, and
+ * every later consumer inherits that. Policy lives in src/sanitize.ts and is
+ * tested in tests/sanitize.test.ts; what matters here is that stage 3 actually
+ * calls it, and that doing so did not disturb ids. See docs/project/security.md.
+ */
+describe("splitIntoBlocks sanitises", () => {
+  const HOSTILE = `
+    <article>
+      <p id="spya-k3m9qt">Prose with an <img src="/x.png" onerror="alert(1)"> image.</p>
+      <p>Prose with a <span onmouseover="alert(1)">span</span> in it.</p>
+      <p>Prose with <svg onload="alert(1)"><circle r="5"/></svg> a diagram.</p>
+      <ul><li>An item with <b onclick="alert(1)">a handler</b> nested inside.</li></ul>
+      <script>alert(1)</script>
+    </article>
+  `;
+
+  it("leaves nothing executable in any block, or in the html it writes back", () => {
+    const { blocks, html } = splitIntoBlocks(HOSTILE);
+    const bad = /\son\w+\s*=|javascript:|<script/i;
+    for (const b of blocks) expect(bad.test(b.html), b.html).toBe(false);
+    expect(bad.test(html)).toBe(false);
+  });
+
+  it("still gives every block an id, and keeps one that was already there", () => {
+    const { blocks } = splitIntoBlocks(HOSTILE);
+    for (const b of blocks) expect(isSpideryarnId(b.id), b.text).toBe(true);
+    // Sanitising happens before ids are minted, so an id on a surviving element
+    // is reused rather than replaced.
+    expect(blocks.some((b) => b.id === "spya-k3m9qt")).toBe(true);
+  });
+
+  it("keeps the prose itself", () => {
+    const { blocks } = splitIntoBlocks(HOSTILE);
+    const text = blocks.map((b) => b.text).join(" ");
+    for (const phrase of ["Prose with an", "span", "a diagram", "An item with"]) {
+      expect(text).toContain(phrase);
+    }
+  });
+
+  it("is idempotent across a re-run, ids and all", () => {
+    // `npm run blocks` writes its html back over its own input and is re-run
+    // routinely, so pass two must be a no-op.
+    const first = splitIntoBlocks(HOSTILE);
+    const second = splitIntoBlocks(first.html, first.blocks);
+    expect(second.html).toBe(first.html);
+    expect(second.blocks.map((b) => b.id)).toEqual(first.blocks.map((b) => b.id));
+    expect(second.stats.minted).toBe(0);
+  });
+});
+
+/**
+ * Both of these are regressions the sanitiser introduced and GPT-5's review
+ * caught, 2026-08-25. See docs/project/security.md.
+ */
+describe("splitIntoBlocks after sanitising", () => {
+  it("makes an allowlisted video embed a real block, so it reaches the reader", () => {
+    // The embed is kept by src/sanitize.ts, but it only reaches the client if
+    // it also becomes a block — blocks.json is all the reading view ever sees.
+    const { blocks } = splitIntoBlocks(
+      `<article><p>Prose before the video, long enough to be a real paragraph.</p>
+       <iframe src="https://www.youtube.com/embed/abc"></iframe>
+       <p>Prose after the video, also long enough to count as one.</p></article>`,
+    );
+    const embed = blocks.find((b) => b.tag === "iframe");
+    expect(embed).toBeDefined();
+    expect(embed?.kind).toBe("media");
+    expect(embed?.gistable).toBe(false); // nothing to write a ToC row about
+    expect(isSpideryarnId(embed!.id)).toBe(true);
+  });
+
+  it("drops an embed from anywhere else entirely", () => {
+    const { blocks, html } = splitIntoBlocks(
+      `<article><p>Prose long enough to be a real paragraph here.</p>
+       <iframe src="https://evil.test/embed/abc"></iframe></article>`,
+    );
+    expect(blocks.some((b) => b.tag === "iframe")).toBe(false);
+    expect(html).not.toContain("evil.test");
+  });
+
+  it("keeps prose that loses its wrapper to the sanitiser", () => {
+    // DOMPurify unwraps an unknown custom element but keeps its text. Without
+    // rewrapping, that text is invisible to the element walk and disappears.
+    const { blocks } = splitIntoBlocks(
+      `<article><x-article>Prose inside a custom element that a CMS emitted.</x-article>
+       <p>An ordinary paragraph following it.</p></article>`,
+    );
+    const text = blocks.map((b) => b.text).join(" ");
+    expect(text).toContain("Prose inside a custom element");
+    expect(text).toContain("An ordinary paragraph");
+    for (const b of blocks) expect(isSpideryarnId(b.id)).toBe(true);
+  });
+
+  it("carries an id across a re-extraction that ate the wrapper", () => {
+    // The point of rewrapping rather than dropping: the words survive, so
+    // carryOverIds can still match them. See docs/project/block-ids.md.
+    const before = splitIntoBlocks(
+      `<article><p>Prose inside a wrapper that is about to vanish.</p></article>`,
+    );
+    const after = splitIntoBlocks(
+      `<article><x-article>Prose inside a wrapper that is about to vanish.</x-article></article>`,
+      before.blocks,
+    );
+    expect(after.blocks[0]?.id).toBe(before.blocks[0]?.id);
+    expect(after.stats.carried).toBe(1);
+  });
+});

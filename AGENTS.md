@@ -10,7 +10,7 @@ An experiment in AI-assisted reading that **augments** rather than replaces read
 > — Greg, 2026-08-24
 
 The product is **Spideryarn**; `spideryarn2` is just this working directory, and the app it's an
-offshoot of is [documented here](docs/project/original-version.md). The first feature is
+offshoot of is [documented here](docs/project/original-version/overview.md). The first feature is
 **granularity zoom** — the article at any of several levels of compression, vertical for position in
 the piece, horizontal for how much detail.
 
@@ -34,15 +34,16 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [keyboard.md](docs/project/keyboard.md) | ↑ / ↓ step through the article, and the level they step by is whichever column the pointer is in |
 | [comments.md](docs/project/comments.md) | select a sentence and the model explains it: the dialog (not a column), when it searches the web, and why the anchor is the quote rather than an offset |
 | [url-state.md](docs/project/url-state.md) | every bit of view state lives in the URL: the parameters, which ones push history and which replace, and why position is a *section* |
-| [column-context.md](docs/project/column-context.md) | four toggleable experiments in making the gist columns scannable — siblings, neighbours, a panel, and Greg's centred fisheye — the research behind them, GPT's review, and how to decide between them |
-| [column-context.md](docs/project/column-context.md) | four toggleable experiments in making the gist columns scannable — siblings, neighbours, a panel, and Greg's centred fisheye — the research behind them, GPT's review, and how to decide between them |
+| [column-context.md](docs/project/column-context.md) | how a gist column reads: the whole level in a panel with the current item held on the reading line — Greg's centred fisheye, chosen over three alternatives built beside it; the research, GPT's review, what the panel replaced and what it cost |
+| [ingest-queue.md](docs/project/ingest-queue.md) | **paste a URL and it becomes an article**: the five steps as data, why p-queue and not BullMQ or pg-boss, why it polls rather than streaming, and an honest account of how far "idempotent" actually goes |
 | [library.md](docs/project/library.md) | the homepage: browsing past articles, `/read/<slug>`, what a card says and why the blurb is the root gist, and the one file a move to Postgres goes behind |
 | [design-css-overview.md](docs/project/design-css-overview.md) | **the map for anything visual** (stub): the four stylesheets and the order they load in, which of the three mechanisms owns a given rule, the colour and type tokens, and an honest list of what isn't decided |
 | [icons.md](docs/project/icons.md) | Lucide, not Phosphor: why, the one stroke weight everything uses, the loading spinner recipe, and the two ways swapping a glyph for an SVG breaks a layout quietly |
+| [security.md](docs/project/security.md) | **the untrusted party is the content, not another user**: why Readability let `<img onerror>` reach the reading view, where the sanitiser sits and why it's stage 3, the video-embed allowlist, the four ways to break it silently, and an honest list of what's still open |
 | [linting.md](docs/project/linting.md) | `npm run lint`: why Biome rather than ESLint (TypeScript 7 removed the API ESLint needs), the config-file extension that silently discards your settings, and which rules are off on purpose |
 | [typechecking.md](docs/project/typechecking.md) | `npm run typecheck`: the three tsconfigs, the strict flags we turned on and the one we didn't, and the guard that stops a typecheck checking nothing |
 | [setup-dev.md](docs/project/setup-dev.md) | install, `npm run dev`, and the command for each pipeline stage |
-| [original-version.md](docs/project/original-version.md) | the app this is an offshoot of: what we borrowed (brand, tokens, typography), what it already solved, what we're leaving behind |
+| [original-version/](docs/project/original-version/overview.md) | **a folder, not a file** — the app this is an offshoot of, one doc per feature: what we borrowed, what it already solved, what it got wrong, and [what to rebuild first](docs/project/original-version/borrow-list.md) |
 | [testing.md](docs/project/testing.md) | the test runner, what's deterministic enough to test, and what we deliberately don't |
 | [browser-testing.md](docs/project/browser-testing.md) | how to drive the reading view in a browser, and the ways it lies to you: colour, sticky positioning, and a hidden tab that fires no scroll events at all |
 | [open-questions.md](docs/project/open-questions.md) | undecided calls, each with a recommendation so nobody is blocked |
@@ -53,6 +54,7 @@ evidence behind a change, written before it landed and kept afterwards so the *w
 | Plan | What's in it |
 |---|---|
 | [shadcn-migration.md](docs/plans/shadcn-migration.md) | adopting Tailwind and shadcn components, 2026-08-25: the four guards Tailwind needs here, what shadcn covers and what it never will, and an honest account of what it buys. **Read it with [web-client.md § Tailwind and shadcn](docs/project/web-client.md#tailwind-and-shadcn-components) beside it** — several of its predictions were wrong in practice, and that section records what actually happened |
+| [left-sidebar.md](docs/plans/left-sidebar.md) | an icon rail left of the spine and a drawer over the top, designed 2026-08-25: what's in it and what's deliberately not, why the left edge rather than the right, the one parameter it adds, and the seven things that will break without an error |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
 
@@ -147,7 +149,7 @@ Not descriptions of code, which the code already provides.
   says what is deliberately staying hand-written.
 - Before rebuilding something the previous version already solved — AI headings, multi-granularity
   summaries, Readability edge cases, overlapping highlights, stable element ids — check
-  [original-version.md](docs/project/original-version.md). It's a library to consult, not a backlog
+  [original-version/](docs/project/original-version/overview.md). It's a library to consult, not a backlog
   to import: that project is far larger in scope, and this one is staying tight.
 - **Run `npm test` and `npm run typecheck` when you finish a change, not just before you commit.**
   Both are deterministic and take a few seconds, and finding out at commit time that a change from

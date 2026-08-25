@@ -41,6 +41,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 |---|---|
 | [`tests/ids.test.ts`](../../tests/ids.test.ts) | the id format and uniqueness — [block-ids.md](block-ids.md) |
 | [`tests/blocks.test.ts`](../../tests/blocks.test.ts) | what counts as a block, and **id survival across re-extraction** |
+| [`tests/sanitize.test.ts`](../../tests/sanitize.test.ts) | what a hostile article may not do to the reading view — every payload verified to survive Readability first, so none is hypothetical ([security.md](security.md)) |
 | [`tests/toc-flatten.test.ts`](../../tests/toc-flatten.test.ts) | tree → sidebar rows — [table-of-contents.md](table-of-contents.md) |
 | [`tests/validate-tree.test.ts`](../../tests/validate-tree.test.ts) | the validator catches each **structural** way a tree can go wrong |
 | [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |

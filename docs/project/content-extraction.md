@@ -23,16 +23,23 @@ id assignment belongs to **stage 3**, not extraction, and ids are random so they
 re-extraction ([block-ids.md](block-ids.md)); a block is the *finest* unit a reader takes in as one
 thing ([architecture.md § What a block is](architecture.md#what-a-block-is)).
 
-What this stage still owes stage 3: HTML whose element structure is stable run-to-run.
+What this stage owes stage 3: HTML whose element structure is stable run-to-run. **Still not
+sanitized HTML** — but that is now a decision rather than an oversight.
 
-> **It does *not* owe sanitized HTML today, and for a while this file said it did.** That sentence
-> used to read "sanitized HTML whose element structure is stable run-to-run", which was a promise
-> nothing in the pipeline kept — Readability is not a sanitiser and
-> [says so in its own SECURITY.md](https://github.com/mozilla/readability/blob/main/SECURITY.md).
-> `<img onerror>` and `<svg onload>` come through and execute in the reading view. The wrong claim
-> was the dangerous part: a reader checking whether extraction was safe would have found this line
-> and stopped looking. Tracked as [open-questions.md § Q9](open-questions.md#q9), where sanitising
-> **here**, at this stage, is the recommendation — at which point this sentence gets its word back.
+> **This file used to promise "sanitized HTML" and no part of the pipeline kept the promise.**
+> Readability is not a sanitiser and
+> [says so in its own SECURITY.md](https://github.com/mozilla/readability/blob/main/SECURITY.md);
+> `<img onerror>` and `<svg onload>` came through and executed in the reading view. The wrong claim
+> was the dangerous part — a reader checking whether extraction was safe would have found that line
+> and stopped looking.
+>
+> Fixed 2026-08-25, at **stage 3** rather than here: see [security.md](security.md) for why, and for
+> what the sanitiser keeps and drops. One consequence lands on this stage and is still open — the
+> standalone debug page this script writes is *not* sanitised, so opening `output/<slug>.html`
+> directly in a browser before running stage 3 will execute whatever survived Readability. Two
+> lines fix it (import `sanitizeInPlace` from [`src/sanitize.ts`](../../src/sanitize.ts), call it on
+> the document before writing); it was left for whoever owns this stage. See
+> [security.md § Known gaps](security.md#known-gaps).
 Ids are preserved by matching on the `spya-` attribute already in the document, so extraction must
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 
@@ -40,10 +47,18 @@ The standalone styled HTML output is a debug view; once the server exists
 ([architecture.md § Server and client](architecture.md#server-and-client)), the durable artefacts are
 `article.html` + `meta.json` under `data/<slug>/`.
 
+`meta.json` landed on 2026-08-25, when the library needed something to put on a card: title, byline,
+site, language, source URL, fetch date and Readability's excerpt. **It is the only place the source
+URL and the byline survive past this script**, and it is written on every run, because re-extracting
+is how you refresh a page and the fetch date should follow. One subtlety worth reading before
+touching it — the slug comes from the *output filename* rather than from the URL, because that is
+what stages 3 and 4 will name the data directory after. Both are in
+[library.md § meta.json](library.md#metajson-and-the-articles-identity).
+
 Why any of this exists at all: [vision.md](vision.md).
 
 ## Prior art
 
 The previous version of Spideryarn ran a Readability-based extraction path in production and wrote
 down what went wrong with it. See
-[original-version.md](original-version.md#things-it-built-that-were-also-building) for the pointers.
+[original-version/extraction.md](original-version/extraction.md) for the pointers.

@@ -26,13 +26,14 @@ constraint, not an apology — keep it boring while the ideas are still moving.
  └──────────┘
    │
    ▼
- ┌──────────┐   Mozilla Readability → sanitized HTML
+ ┌──────────┐   Mozilla Readability (NOT a sanitiser — security.md)
  │ 2 extract│──────────────►  data/<slug>/article.html   + meta.json
  └──────────┘                 (title, byline, siteName, lang, url)
    │
    ▼
- ┌──────────┐   split into blocks, assign STABLE RANDOM IDS (see block-ids.md)
- │ 3 blocks │──────────────►  data/<slug>/blocks.json
+ ┌──────────┐   SANITIZE (security.md), split into blocks, assign STABLE
+ │ 3 blocks │   RANDOM IDS (block-ids.md)
+ │          │──────────────►  data/<slug>/blocks.json
  └──────────┘                 [{id:"spya-k3m9qt", tag, kind, level?, text,
    │                            words, html, gistable, note?}]  — array order
    │                            IS document order
@@ -89,13 +90,14 @@ artefacts on disk, not by reaching into another stage's code.
 
 | # | Stage | Owner | Artefact |
 |---|-------|-------|----------|
-| 1 | fetch | unclaimed (currently inline in `src/extract.ts`) | `raw.html` |
-| 2 | extract / Readability / sanitize — see [content-extraction.md](content-extraction.md) | **extraction agent** | `article.html`, `meta.json` |
-| 3 | blocks + stable ids — see [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
+| 1 | fetch | **granularity zoom** (a step of the ingest queue — [ingest-queue.md](ingest-queue.md)) | `raw.html` |
+| 2 | extract / Readability — see [content-extraction.md](content-extraction.md) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
+| 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
 | 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
 | 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view) | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
+| 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | `data/_jobs/`, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
 
 Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the ToC, since the
@@ -107,14 +109,23 @@ Current code: [`src/extract.ts`](../../src/extract.ts) (documented in
 one script, writing to `output/`. That's the prototype stages 1–2 are growing out of; the
 standalone-HTML output becomes a debug view once the server exists.
 
+**The queue is stage 6's, but the stages are not.** [`src/pipeline.ts`](../../src/pipeline.ts) calls
+each stage through the function that stage exports, and each stage's CLI calls the same function —
+one code path per stage, and no reimplementation of anybody's work. Adding a step means adding an
+entry to `STEPS` there; changing what a step *does* means changing that stage, in its own file, as
+its owner. On 2026-08-25 Greg chose in-process over spawning subprocesses, which is what made a small
+edit to each of the four stage files necessary: see
+[ingest-queue.md § They are the same functions the CLI runs](ingest-queue.md#they-are-the-same-functions-the-cli-runs).
+
 ## Storage
 
 Filesystem, one directory per article, no database:
 
 ```
+  data/_jobs/       ingest job records, one file per job (ingest-queue.md)
   data/<slug>/
-    raw.html        raw fetched page
-    article.html    sanitized, Readability-extracted
+    raw.html        raw fetched page — kept so a re-extraction needn't re-fetch
+    article.html    Readability-extracted — NOT yet sanitised (security.md)
     meta.json       title, byline, site, lang, url, fetchedAt
     blocks.json     the block sequence with stable ids   ← the spine
                     (array order IS document order — block-ids.md)
@@ -144,18 +155,28 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   the hand-authored placeholder. Real pipeline output therefore supersedes the fixture with no code
   change.
 - API is thin: `GET /api/article/<slug>` returns `meta + blocks + tree`. The client has everything
-  it needs for every zoom level in one payload; zooming must never hit the network. The comment
-  endpoints are the only other routes — [comments.md](comments.md). All of them live in
+  it needs for every zoom level in one payload; zooming must never hit the network. `GET /api/library`
+  returns one small record per article for the homepage — [library.md](library.md). The comment
+  endpoints ([comments.md](comments.md)) and the six job endpoints
+  ([ingest-queue.md](ingest-queue.md)) are the rest. All of them live in
   [`src/routes.ts`](../../src/routes.ts), which is the connect-shaped wrapper a standalone server
   would mount unchanged.
+- **`src/api.ts` is the seam a database goes behind.** It is the only file that knows articles are
+  directories; everything above it sees `Article` and `LibraryEntry`, both shaped as rows rather than
+  as files. See [library.md § When this becomes Postgres](library.md#when-this-becomes-postgres).
 - React client. The reading view is described in
   [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) — note especially that scroll
   position is a **block id**, never a pixel offset. Brand and reading tokens come from
   [`styles/tokens.css`](../../styles/tokens.css), and the logo/favicons from
   [`public/`](../../public/) — both lifted from the previous version, see
-  [original-version.md](original-version.md). Plain CSS variables, adopt or remap as you like;
+  [original-version/overview.md](original-version/overview.md). Plain CSS variables, adopt or remap as you like;
   Spideryarn orange `#DB8A45` is the accent, on a dark-only palette — see
   [web-client.md](web-client.md).
+- **The queue runs in the server process** ([`src/jobs.ts`](../../src/jobs.ts), p-queue, concurrency
+  1). `POST /api/jobs` returns 202 with a receipt and the browser polls; nothing long-running happens
+  inside a request handler. Job records survive a restart, and anything left `running` by a dead
+  process is turned into a visible error rather than a spinner that never stops — the same argument
+  `sweepOrphaned` makes for comments.
 - LLM calls happen in the pipeline, not in request handlers — with **one deliberate exception**,
   [`src/explain.ts`](../../src/explain.ts). A reader's text selection cannot be precomputed or
   cached on a content hash, because it does not exist until they make it. See

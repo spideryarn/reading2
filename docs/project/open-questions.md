@@ -120,73 +120,22 @@ the tabular view shows **generated gists**. Those are different bargains with
 
 ---
 
-## Q9 — A hostile article can run JavaScript in the reading view <a id="q9"></a>
+## Q9 — decided <a id="q9"></a>
 
-Found by the linter — `lint/security/noDangerouslySetInnerHtml` at
-[`src/web/TableView.tsx`](../../src/web/TableView.tsx). Not a style complaint. The chain is:
+**A hostile article could run JavaScript in the reading view.** Settled 2026-08-25 and written up in
+[security.md](security.md), which is now the place for anything on this. Anchor kept so older links
+still land.
 
-```
-any URL the reader gives us
-  → fetch → JSDOM → Readability            (src/extract.ts)
-  → output/<slug>.html
-  → content.outerHTML  →  block.html       (src/blocks.ts)
-  → annotateHtml(...)  →  dangerouslySetInnerHTML   (src/web/TableView.tsx)
-```
+Short version: Readability is not a sanitiser and never claimed to be, so `<img onerror>`,
+`<svg onload>`, `<span onmouseover>` and `<video onerror>` all reached `dangerouslySetInnerHTML`.
+DOMPurify now runs at **stage 3** in [`src/blocks.ts`](../../src/blocks.ts), before ids are minted,
+so `blocks.json` is clean and every later consumer inherits that. Video embeds survive behind an
+exact-origin allowlist; author CSS does not.
 
-Readability is **not a sanitiser**, and Mozilla is unusually direct about it in
-[its SECURITY.md](https://github.com/mozilla/readability/blob/main/SECURITY.md):
+Two things worth carrying forward rather than burying:
 
-> `readability` itself does not intend to do security-related input sanitization … it is expected
-> that some interactive/scripting input may remain after `readability` processes input. If you can
-> bypass appropriate sanitization measures like DOMPurify you should report that using their
-> procedures, not Mozilla's.
-
-So "Readability cleaned it" is not a defence; Mozilla will not even take the bug report. Tested
-rather than assumed — a hostile page through the real pipeline, checking what comes out the other
-end:
-
-| Payload | Survives Readability? |
-|---|---|
-| `<script>` | stripped |
-| `<iframe>`, `<form>` | stripped |
-| `javascript:` href | stripped |
-| `onmouseover=` | stripped |
-| **`<img onerror=…>`** | **survives** |
-| **`<svg onload=…>`** | **survives** |
-
-`<script>` inserted via `innerHTML` never executes, which is presumably why this has gone unnoticed.
-`onerror` and `onload` are not so lucky: both fire, and the surviving `<img src="…/x" onerror="…">`
-runs on load failure — which is guaranteed, because the src is bogus. So arbitrary JavaScript from
-the article's author runs in our origin.
-
-**What it gets.** Not much on the open web — no other site's cookies, since we are our own origin.
-Locally it is worse than it looks. `npm run dev` is a Vite dev server, so same-origin `fetch` reaches
-the dev middleware and whatever Vite will serve off disk, and the result can be POSTed anywhere. It
-also reaches our own API, which is not a passive store: `/api/comments/:slug` runs the
-explain-this-passage call in [`src/explain.ts`](../../src/explain.ts) — the one LLM call that happens
-in a request handler ([comments.md](comments.md)) — so injected script can spend the reader's API
-budget silently, and read back every article and every question they have asked. No click required;
-opening the article is enough.
-
-Note the shape of it: **the untrusted party is the content, not another user.** "Local, single-user
-tool" shrinks the blast radius but does not help here, because the single user is precisely who is
-targeted, every time they read someone else's article. And the whole point of the app is pointing it
-at arbitrary URLs, so "don't open untrusted articles" is not available as a mitigation.
-
-**Recommendation: sanitise at stage 3, in [`src/blocks.ts`](../../src/blocks.ts), not in the client.**
-Then the stored `blocks.json` is clean, every later consumer inherits it, and the client stays a
-renderer. Use a real sanitiser — DOMPurify is the boring choice, runs under JSDOM, and is what
-Mozilla points at — rather than a hand-rolled attribute filter, because the interesting cases are
-exactly the ones a hand-rolled filter misses. Follow
-[third-party-library-selection.md](../reusable/third-party-library-selection.md) and write the
-decision down.
-
-One more reason to fix it at the pipeline stage rather than the client:
-[content-extraction.md](content-extraction.md) claimed for months that stage 2 already owed stage 3
-"sanitized HTML". It didn't, and nothing did. That sentence has been corrected, but a doc asserting
-the problem was handled is how this survived unexamined — the same shape as
-[silent-success](../reusable/silent-success.md), one level up.
-
-Left undone deliberately: stage 3 belongs to another agent, this adds a dependency, and it wants a
-deliberate choice rather than a drive-by fix from whoever happened to install the linter. The lint
-error is **not suppressed** — it should keep complaining until this is really fixed.
+- The payload table originally written here **was wrong in a reassuring direction** — it had
+  `onmouseover` and `<iframe>` as stripped, which is true only for the cases it happened to test.
+  Corrected in [security.md § What was wrong](security.md#what-was-wrong).
+- The linter found this (`lint/security/noDangerouslySetInnerHtml`), and the rule was deliberately
+  left unsuppressed until it was really fixed. It stayed useful precisely because nobody silenced it.
