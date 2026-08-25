@@ -30,6 +30,12 @@
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo } from "react";
+import { ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import type { Article } from "../types.js";
 
 /** Words per minute. The middling end of the usual 200–250 range for prose. */
@@ -77,89 +83,113 @@ export function Masthead({ article, expanded, onToggle }: Props) {
 
   return (
     <div className="masthead">
-      <div className="masthead-inner">
-        <div className="masthead-head">
-          <h1>
-            {meta.url ? (
-              <a href={meta.url} target="_blank" rel="noreferrer noopener">
-                {meta.title}
-              </a>
-            ) : (
-              meta.title
-            )}
-          </h1>
-          <button
-            className="disclose"
-            aria-expanded={expanded}
-            onClick={onToggle}
-            title={expanded ? "Hide article details" : "Show article details"}
-          >
-            <span className={`chevron${expanded ? " up" : ""}`} aria-hidden="true">
-              ▾
-            </span>
-          </button>
+      {/* `asChild` on all three, so Radix adds NO elements of its own — it
+          merges its props onto the div, the button and the dl that were
+          already here. That matters more than tidiness: this page measures its
+          own geometry (Spine.tsx, scroll.ts and keynav.ts all find things by
+          selector), and a surprise wrapper is exactly the kind of change that
+          shifts a rect without looking like it broke anything.
+
+          What Radix contributes is the aria-expanded/aria-controls pairing and
+          the open-state management, not markup. The URL stays the source of
+          truth: `open` comes from ?about= and every change goes back out
+          through onToggle — see docs/project/url-state.md. */}
+      <Collapsible open={expanded} onOpenChange={onToggle} asChild>
+        <div className="masthead-inner">
+          <div className="masthead-head">
+            <h1>
+              {meta.url ? (
+                <a href={meta.url} target="_blank" rel="noreferrer noopener">
+                  {meta.title}
+                </a>
+              ) : (
+                meta.title
+              )}
+            </h1>
+            {/* No aria-expanded and no onClick here any more: the trigger
+                supplies both, and keeping our own alongside would be two
+                sources of truth for one piece of state. */}
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="disclose"
+                title={expanded ? "Hide article details" : "Show article details"}
+              >
+                <ChevronDown className={`chevron${expanded ? " up" : ""}`} size={14} />
+              </button>
+            </CollapsibleTrigger>
+          </div>
+
+          <p className="facts">
+            {facts.map((f, i) => (
+              <span key={i}>{f}</span>
+            ))}
+          </p>
+
+          {/* The whole piece in one sentence — the coarsest thing there is, and
+              constant, so it belongs here rather than in a column. */}
+          {root?.gist && <p className="root-gist">{root.gist}</p>}
+
+          {/* Rendered unconditionally now, because Radix unmounts it while
+              closed rather than us doing it with `expanded &&`.
+
+              Worth knowing if that ever changes: `.about` is `display: grid`,
+              and with forceMount Radix hides content using the `hidden`
+              attribute instead of unmounting. The UA's `[hidden] { display:
+              none }` LOSES to a class that sets `display`, so the panel would
+              stay on screen with nothing to say it was open. Add
+              `.about[hidden] { display: none }` if that day comes. */}
+          <CollapsibleContent asChild>
+            <dl className="about">
+              {meta.url && (
+                <>
+                  <dt>Source</dt>
+                  <dd>
+                    <a href={meta.url} target="_blank" rel="noreferrer noopener">
+                      {meta.url}
+                    </a>
+                  </dd>
+                </>
+              )}
+              <dt>Slug</dt>
+              <dd className="mono">{meta.slug}</dd>
+              {meta.lang && (
+                <>
+                  <dt>Language</dt>
+                  <dd>{meta.lang}</dd>
+                </>
+              )}
+              <dt>Shape</dt>
+              <dd>
+                {stats.parts} parts · {stats.sections} sections · {stats.blocks} blocks ·{" "}
+                {stats.words.toLocaleString()} words
+              </dd>
+              <dt>Tree</dt>
+              <dd className="mono">
+                {tree.generator} · {tree.version}
+              </dd>
+              {/* Absent until `npm run arc` has run, and saying so is the
+                  quickest answer to "why is the left column empty?". */}
+              <dt>Arc</dt>
+              <dd className="mono">
+                {arc ? `${arc.generator} · ${arc.version}` : "not generated"}
+              </dd>
+              {root?.summary && (
+                <>
+                  <dt>Summary</dt>
+                  <dd>{root.summary}</dd>
+                </>
+              )}
+              {meta.note && (
+                <>
+                  <dt>Note</dt>
+                  <dd>{meta.note}</dd>
+                </>
+              )}
+            </dl>
+          </CollapsibleContent>
         </div>
-
-        <p className="facts">
-          {facts.map((f, i) => (
-            <span key={i}>{f}</span>
-          ))}
-        </p>
-
-        {/* The whole piece in one sentence — the coarsest thing there is, and
-            constant, so it belongs here rather than in a column. */}
-        {root?.gist && <p className="root-gist">{root.gist}</p>}
-
-        {expanded && (
-          <dl className="about">
-            {meta.url && (
-              <>
-                <dt>Source</dt>
-                <dd>
-                  <a href={meta.url} target="_blank" rel="noreferrer noopener">
-                    {meta.url}
-                  </a>
-                </dd>
-              </>
-            )}
-            <dt>Slug</dt>
-            <dd className="mono">{meta.slug}</dd>
-            {meta.lang && (
-              <>
-                <dt>Language</dt>
-                <dd>{meta.lang}</dd>
-              </>
-            )}
-            <dt>Shape</dt>
-            <dd>
-              {stats.parts} parts · {stats.sections} sections · {stats.blocks} blocks ·{" "}
-              {stats.words.toLocaleString()} words
-            </dd>
-            <dt>Tree</dt>
-            <dd className="mono">
-              {tree.generator} · {tree.version}
-            </dd>
-            {/* Absent until `npm run arc` has run, and saying so is the quickest
-                answer to "why is the left column empty?". */}
-            <dt>Arc</dt>
-            <dd className="mono">
-              {arc ? `${arc.generator} · ${arc.version}` : "not generated"}
-            </dd>
-            {root?.summary && (
-              <>
-                <dt>Summary</dt>
-                <dd>{root.summary}</dd>
-              </>
-            )}
-            {meta.note && (
-              <>
-                <dt>Note</dt>
-                <dd>{meta.note}</dd>
-              </>
-            )}
-          </dl>
-        )}
-      </div>
+      </Collapsible>
     </div>
   );
 }

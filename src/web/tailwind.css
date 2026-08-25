@@ -117,6 +117,19 @@
   --color-ring: var(--ring);
   --color-highlight: var(--spideryarn-orange); /* the ORANGE */
 
+  /* The reading view's own semantic names, so components can use them as
+     utilities instead of reaching for arbitrary `[var(--…)]` values.
+     --color-highlight-wash especially: it is the ORANGE MIXED INTO THE PAGE,
+     an opaque blend, and NOT the same colour as Tailwind's `bg-highlight/20`,
+     which composites the orange over whatever is behind it. The difference
+     shows wherever the wash sits on --panel rather than --page — which is
+     exactly where the active gist cell and the active spine band put it. Use
+     this name; do not "simplify" it to an opacity modifier. */
+  --color-ink-faint: var(--ink-faint);
+  --color-rule-strong: var(--rule-strong);
+  --color-highlight-wash: var(--highlight-wash);
+  --color-highlight-ink: var(--highlight-ink);
+
   --font-sans: var(--font-ui);
   --font-serif: var(--font-reading);
   --font-mono: var(--font-mono);

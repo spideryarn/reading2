@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryState } from "nuqs";
+import { throttle, useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
 import { TableView } from "./TableView.js";
 import { Spine } from "./Spine.js";
 import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
+import { Toggle } from "@/components/ui/toggle";
 import { buildArcColumn, buildGeometry, buildOutline, columnLabel } from "./tree.js";
 import { aboutParam, atParam, colsParam, noteParam, slugParam, textParam } from "./params.js";
-import { scrollToBlock, stickyOffset } from "./scroll.js";
+import { isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
+import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
   activeSectionIndex,
   buildSections,
@@ -24,6 +26,39 @@ import { useComments } from "./useComments.js";
  * change lives in the query string — see params.js for why, and for which of
  * these changes push a history entry and which quietly replace one.
  */
+/**
+ * The granularity pills, restated over shadcn's Toggle.
+ *
+ * Individual `Toggle`s rather than a `ToggleGroup`, which is what you would
+ * normally reach for and what the migration plan called for. The reason is
+ * this app's keyboard design: a ToggleGroup wraps its items in Radix's roving
+ * focus, which binds ArrowLeft, ArrowRight, ArrowUp AND ArrowDown. Here ↑/↓
+ * step through the article and ←/→ are deliberately handed back to the browser
+ * to pan a table wider than the window (see keynav.ts and
+ * docs/project/keyboard.md). A group would swallow all four whenever focus sat
+ * inside the bar — which is precisely where focus lands after you click a
+ * pill. Separate toggles give the same `aria-pressed` and `data-state` and
+ * leave the arrow keys alone.
+ *
+ * The class string is mostly undoing shadcn's defaults, because these are
+ * pills and its Toggle is a square-ish icon button:
+ *
+ *  - `rounded-full`, `h-auto`, `py-*` — its default is `h-9 min-w-9 rounded-md`.
+ *  - `hover:bg-transparent` — its default hover paints `bg-muted`; ours moves
+ *    only the border and the text to orange.
+ *  - the `data-[state=on]` trio — its default on-state is `bg-accent`, and in
+ *    this palette `--accent` is a raised dark SURFACE, not the brand orange.
+ *    Left alone it marks the ON state with dark grey on a near-black page:
+ *    not an error, not visibly broken, just the signal quietly gone. Both
+ *    tokens.css and styles.css carry warnings about this exact confusion.
+ */
+const PILL =
+  "tw:rounded-full tw:h-auto tw:min-w-0 tw:px-2.5 tw:py-1 tw:text-xs tw:font-normal " +
+  "tw:border tw:border-rule-strong tw:text-ink-faint tw:bg-transparent " +
+  "tw:hover:bg-transparent tw:hover:border-highlight tw:hover:text-highlight " +
+  "tw:data-[state=on]:bg-highlight-wash tw:data-[state=on]:border-highlight " +
+  "tw:data-[state=on]:text-highlight-ink tw:data-[state=on]:font-semibold";
+
 export function App() {
   const [slug] = useQueryState("slug", slugParam);
   const [article, setArticle] = useState<Article | null>(null);
@@ -132,10 +167,16 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
   // A jump is the one scroll that pushes history: Back must not undo scrolling,
   // but flinging yourself across the article is a deliberate act. The debounce is
   // cancelled too, so a click isn't sluggish.
+  //
+  // `throttle(0)`, not `undefined`: nuqs resolves this option with `??`, so an
+  // explicit undefined here falls straight through to atParam's
+  // `debounce(POSITION_SETTLE_MS)` and cancels nothing. throttle(0) aborts the
+  // pending debounce and writes the URL on the spot. Caught by
+  // exactOptionalPropertyTypes — see docs/project/typechecking.md.
   return useCallback(
     (blockId: BlockId) => {
       synced.current = blockId;
-      void setAt(blockId, { history: "push", limitUrlUpdates: undefined });
+      void setAt(blockId, { history: "push", limitUrlUpdates: throttle(0) });
       scrollToBlock(blockId);
     },
     [setAt],
@@ -213,7 +254,46 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    */
   const [note, setNote] = useQueryState("note", noteParam);
   const { comments, ask, retry, remove, error: commentError } = useComments(slug);
-  const openComment = comments.find((c) => c.id === note) ?? null;
+
+  /**
+   * Reading order, not ask order — the panel's arrows walk you *down the
+   * article*, not back through your own afternoon. See comment-nav.ts, and note
+   * that the order comes from the block index and never from the id string
+   * (block-ids.md).
+   */
+  const ordered = useMemo(
+    () => orderComments(comments, article.blocks),
+    [comments, article.blocks],
+  );
+  const openComment = ordered.find((c) => c.id === note) ?? null;
+
+  /**
+   * How many *other* questions are still with the model. Several can be in
+   * flight at once — that is the point of firing one and reading on — so the
+   * panel has to be able to say that work is happening somewhere you can't see.
+   */
+  const othersPending = ordered.filter(
+    (c) => c.status === "pending" && c.id !== note,
+  ).length;
+
+  /**
+   * Step to another comment, bringing its passage into view *only if it isn't
+   * already*. Two comments in one paragraph are the common case, and jolting the
+   * page between them would lose the reader their place for no gain.
+   *
+   * It scrolls and writes no position state of its own — the listener in
+   * useReadingPosition notices and updates `?at=`, exactly as it does for a
+   * wheel. Same reasoning as keynav.ts.
+   */
+  const goToComment = useCallback(
+    (id: string | null) => {
+      if (id === null) return;
+      void setNote(id);
+      const target = comments.find((c) => c.id === id);
+      if (target && !isBlockOnScreen(target.blockId)) scrollToBlock(target.blockId);
+    },
+    [comments, setNote],
+  );
 
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
@@ -276,40 +356,44 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       <div className="controls">
         <span className="controls-label">Granularity</span>
         {gistDepths.map((d) => (
-          <button
+          <Toggle
             key={d}
-            className={shownGists.includes(d) ? "on" : ""}
-            onClick={() => toggle(d)}
+            className={PILL}
+            pressed={shownGists.includes(d)}
+            onPressedChange={() => toggle(d)}
             title={`Show or hide the ${columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells).toLowerCase()} column`}
           >
             L{d}
-          </button>
+          </Toggle>
         ))}
         {/* The paragraph outline, beside the prose rather than instead of it.
             Only offered in reading mode: in outline mode this column is the
             view, and turning it off would leave nothing. */}
         {showText && (
-          <button
-            className={leafOn ? "on" : ""}
-            onClick={() => toggle(geometry.leafDepth)}
+          <Toggle
+            className={PILL}
+            pressed={leafOn}
+            onPressedChange={() => toggle(geometry.leafDepth)}
             title="One line per paragraph, alongside the full text"
           >
             L{geometry.leafDepth}
-          </button>
+          </Toggle>
         )}
-        <button
-          className={showText ? "on" : ""}
-          onClick={() => setShowText((v) => !v)}
+        <Toggle
+          className={PILL}
+          pressed={showText}
+          onPressedChange={() => setShowText((v) => !v)}
           title="Hide the text to collapse the table into a whole-article outline"
         >
           Text
-        </button>
+        </Toggle>
         {cols === null ? (
           <span className="mode" title="Columns are following the window width">
             fit
           </span>
         ) : (
           <button
+            type="button"
             className="linky"
             onClick={() => setCols(null)}
             title="Let the columns follow the window width again"
@@ -361,11 +445,21 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       {openComment && (
         <CommentDialog
           comment={openComment}
+          position={positionOf(ordered, note)}
+          total={ordered.length}
+          pending={othersPending}
+          hasPrev={stepComment(ordered, note, -1) !== null}
+          hasNext={stepComment(ordered, note, 1) !== null}
+          onPrev={() => goToComment(stepComment(ordered, note, -1))}
+          onNext={() => goToComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
           onRetry={() => retry(openComment.id)}
           onDelete={() => {
+            // Step to the neighbour rather than closing outright: deleting one
+            // of five is a tidy-up, not a reason to lose the panel.
+            const next = stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1);
             remove(openComment.id);
-            void setNote(null);
+            void setNote(next);
           }}
         />
       )}
