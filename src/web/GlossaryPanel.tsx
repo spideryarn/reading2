@@ -53,8 +53,11 @@
  * - the divider **names the rule** that promoted the group above it;
  * - **both numbers are on every row**, and never the product, which is our
  *   arithmetic rather than the model's judgment;
- * - when the gate does not actually divide the list, all of this **falls back
- *   to first use** and the control is not offered.
+ * - **the one number in the rule is the reader's**, on a slider in the panel
+ *   with its value and its effect beside it — the last thing here that was a
+ *   judgment made on the reader's behalf, and now the thing they set;
+ * - when there is nothing to gate at all, the whole of it **falls back to first
+ *   use** and the control is not offered.
  *
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/glossary-prioritised-order.md.
@@ -80,6 +83,13 @@ interface Props extends UseGlossary {
   onTerm(id: string | null): void;
   sort: TermSort;
   onSort(sort: TermSort): void;
+  /**
+   * Where the reader has put the threshold, or null for "hasn't touched it" —
+   * which is `PRIORITY_GATE`. The distinction is kept all the way from the URL
+   * (`gateParam` in params.ts) so that the default stays one number in one file.
+   */
+  gate: number | null;
+  onGate(gate: number | null): void;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
 }
@@ -99,6 +109,8 @@ export function GlossaryPanel({
   onTerm,
   sort,
   onSort,
+  gate: chosenGate,
+  onGate,
   onJump,
 }: Props) {
   /* `effectiveSort` and not `sort`: `prioritised` is the default, so it arrives
@@ -107,8 +119,9 @@ export function GlossaryPanel({
      about what order the list is actually in. One call, one answer, passed
      down. */
   const all = glossary?.entries ?? [];
+  const gate = chosenGate ?? PRIORITY_GATE;
   const order = effectiveSort(all, sort);
-  const groups = glossary ? groupEntries(all, order) : [];
+  const groups = glossary ? groupEntries(all, order, gate) : [];
 
   return (
     <aside className="mode-band gloss" aria-label="Glossary">
@@ -129,6 +142,13 @@ export function GlossaryPanel({
           nothing when fewer than two survive that. */}
       {glossary && glossary.entries.length > 1 && (
         <SortBar entries={all} sort={order} onSort={onSort} />
+      )}
+
+      {/* Only in the order it belongs to. It is the one control here that sets
+          a number rather than picking from a list, and a number that means
+          nothing in the other three orders would just be furniture. */}
+      {glossary && order === "prioritised" && (
+        <GateSlider entries={all} gate={gate} moved={chosenGate !== null} onGate={onGate} />
       )}
 
       {error && <p className="gloss-error">{error}</p>}
@@ -246,9 +266,13 @@ export function GlossaryPanel({
  * Pure and exported, because it is the only part of this file with a right
  * answer — see the `sortEntries` block of tests/glossary.test.ts.
  */
-export function sortEntries(entries: GlossaryEntry[], sort: TermSort): GlossaryEntry[] {
+export function sortEntries(
+  entries: GlossaryEntry[],
+  sort: TermSort,
+  gate = PRIORITY_GATE,
+): GlossaryEntry[] {
   if (sort === "document") return entries;
-  if (sort === "prioritised") return groupEntries(entries, sort).flatMap((g) => g.entries);
+  if (sort === "prioritised") return groupEntries(entries, sort, gate).flatMap((g) => g.entries);
   const value = (entry: GlossaryEntry): number | undefined =>
     sort === "difficulty" ? entry.difficulty : entry.centrality;
   return [...entries]
@@ -270,7 +294,11 @@ export function sortEntries(entries: GlossaryEntry[], sort: TermSort): GlossaryE
    > let's add a "Prioritised" order (that should be the default) that somehow
    > takes into account importance, centrality, and order.
 
-   The whole design is in docs/plans/glossary-prioritised-order.md. The three
+   and given a bar the reader can move, later the same day:
+
+   > Add a small threshold-slider to the Glossary UI (set to a sensible default)
+
+   The whole design is in docs/plans/glossary-prioritised-order.md. The four
    things worth having in front of you while reading this code:
 
    1. **The two scores multiply, they do not add.** What the reader wants
@@ -287,26 +315,47 @@ export function sortEntries(entries: GlossaryEntry[], sort: TermSort): GlossaryE
       and inside a group the order is first use, which is the reader's own order
       and not a judgment at all.
 
-   3. **It is self-cancelling.** When the gate does not actually divide the list
-      it falls back to document order and the control is not offered, so an old
-      glossary with no scores behaves exactly as it did before. */
+   3. **The one number in it is the reader's to set.** `PRIORITY_GATE` was
+      always described in this file as a guess with no feedback loop behind it.
+      The slider is the feedback loop: the guess is now a starting position
+      rather than a verdict, it is on screen with its own value beside it, and
+      moving it is one drag.
+
+   4. **It is self-cancelling, and the slider narrowed where.** When the gate
+      does not divide the list, no divider is drawn and no group is labelled —
+      the list is plainly in first-use order. What it no longer does is drop out
+      of prioritised order altogether; see `effectiveSort` for why the slider
+      reverses that argument. */
 
 /**
- * The gate: `difficulty × centrality`, both required.
+ * The gate's **starting** position: `difficulty × centrality`, both required.
  *
  * `0.30` is about `0.6 × 0.5` — the model called it more than half load-bearing
- * *and* more than half likely to stop you. It is a guess with no feedback loop
- * behind it, and it is one exported constant so it can be moved once we have
- * looked at real glossaries.
+ * *and* more than half likely to stop you. On the one real glossary we have it
+ * promotes two terms of eight, which is the size of top group this is aiming at.
  *
- * An **absolute** gate rather than a relative "top third", deliberately, and
- * the reason is what each does when it is wrong. If the model's scores run hot
- * or cold, the absolute gate degenerates to one group — that is, to plain
- * first-use order, which is what this list did yesterday. A relative gate would
- * promote exactly a third whatever the scores said, which is inventing a
- * ranking that is not in the data and putting a label over it.
+ * An **absolute** starting point rather than a relative "top third",
+ * deliberately, and the reason is what each does when it is wrong. If the
+ * model's scores run hot or cold, an absolute gate degenerates to one group —
+ * that is, to plain first-use order, which is what this list did before. A
+ * relative gate would promote exactly a third whatever the scores said, which is
+ * inventing a ranking that is not in the data and putting a label over it.
+ *
+ * It is a default rather than a constant now: `?gate=` overrides it, and the
+ * parameter deliberately has no default of its own so that "absent" keeps
+ * meaning *nobody has touched this*. See `gateParam` in params.ts.
  */
 export const PRIORITY_GATE = 0.3;
+
+/**
+ * How far the slider moves in one step, and therefore how precise `?gate=` gets.
+ *
+ * `0.01` because the whole usable range is short — a product of two scores the
+ * model rarely puts above 0.8 apiece lands under 0.7 — so a coarser step would
+ * skip past the boundary the reader is hunting for. Two decimal places is also
+ * exactly what `gateParam` serializes, so what you drag to is what the URL says.
+ */
+export const GATE_STEP = 0.01;
 
 /** `difficulty × centrality`, or nothing at all if either is missing. */
 export function priorityOf(entry: GlossaryEntry): number | undefined {
@@ -314,38 +363,111 @@ export function priorityOf(entry: GlossaryEntry): number | undefined {
   return entry.difficulty * entry.centrality;
 }
 
+/** How many entries clear a given bar. The number under the reader's hand. */
+export function countAbove(entries: GlossaryEntry[], gate: number): number {
+  let n = 0;
+  for (const entry of entries) {
+    const p = priorityOf(entry);
+    if (p !== undefined && p >= gate) n += 1;
+  }
+  return n;
+}
+
+/**
+ * Can this glossary be prioritised **at all** — is there anything to gate?
+ *
+ * One entry with both scores and something to compare it against. Note what
+ * this is *not*: it is not "does the current gate divide the list", which is
+ * `splitsOnPriority` and is a question about one position of the bar rather
+ * than about the glossary. Offering the order is the first question; drawing a
+ * divider is the second.
+ */
+export function canPrioritise(entries: GlossaryEntry[]): boolean {
+  return entries.length > 1 && entries.some((e) => priorityOf(e) !== undefined);
+}
+
+/**
+ * The right-hand end of the slider: the largest product this glossary actually
+ * contains.
+ *
+ * Derived from the data rather than fixed at 1.00, because a fixed track would
+ * be mostly dead. Real products cluster low — two scores of 0.7 make 0.49 — so
+ * on a 0–1 track the top two thirds would promote nothing and every glossary
+ * would be adjusted in the same narrow strip at the left. Ending the track at
+ * the top term's own score means both ends mean something: hard left promotes
+ * everything, hard right promotes exactly the costliest term.
+ *
+ * Rounded **down** to the step, not up. Floating-point products overshoot —
+ * `0.8 × 0.8` is `0.6400000000000001` — and a maximum a whisker above the top
+ * term's score is a right-hand end that promotes nothing, which is the one
+ * value that end must not have.
+ *
+ * `gate` is folded in so that a `?gate=` beyond this glossary's range still has
+ * somewhere to sit on the track rather than pinning the thumb at a number it
+ * does not hold.
+ */
+export function gateMax(entries: GlossaryEntry[], gate: number): number {
+  let top = 0;
+  for (const entry of entries) {
+    const p = priorityOf(entry);
+    if (p !== undefined && p > top) top = p;
+  }
+  return Math.max(Math.floor(top / GATE_STEP) * GATE_STEP, gate, GATE_STEP);
+}
+
 /**
  * Does the gate actually divide this glossary in two?
  *
- * Not "are there scores" — **are there entries on both sides**. SortBar already
- * refuses to offer a sort that would silently do nothing, and this is that rule
- * one step further on: a "prioritised" order over a list where everything (or
- * nothing) clears the gate is first-use order wearing a label that claims a
- * judgment was made.
+ * Not "are there scores" — **are there entries on both sides**. A two-group
+ * list where every entry is in one of the groups is first-use order wearing a
+ * label that claims a judgment was made, so when this is false the panel draws
+ * one unheaded group and says so in words (`gateNote`).
  */
-export function splitsOnPriority(entries: GlossaryEntry[]): boolean {
-  let above = false;
-  let below = false;
-  for (const entry of entries) {
-    const p = priorityOf(entry);
-    if (p !== undefined && p >= PRIORITY_GATE) above = true;
-    else below = true;
-    if (above && below) return true;
-  }
-  return false;
+export function splitsOnPriority(entries: GlossaryEntry[], gate = PRIORITY_GATE): boolean {
+  const above = countAbove(entries, gate);
+  return above > 0 && above < entries.length;
 }
 
 /**
  * The order actually in force, which is not always the one in the URL.
  *
- * `?sort=prioritised` is the default and therefore arrives on lists that cannot
- * support it. Rather than let the panel show a selected control that does
- * nothing, everything downstream — the list, the SortBar's pressed state, the
- * numbers on each row — is driven by this instead of by the raw parameter.
+ * `?sort=prioritised` is the default, so it arrives on glossaries with no
+ * scores at all — nothing to gate, no slider worth showing, and a label that
+ * would claim a judgment nothing supports. Those fall back to `document`, and
+ * `SortBar` does not offer the control. An old glossary behaves exactly as it
+ * did before this order existed.
+ *
+ * **What no longer falls back, as of the slider (2026-08-26):** a glossary that
+ * has scores but whose *current* gate does not divide it. That used to collapse
+ * to `document` too. The slider reverses the argument, in both directions:
+ *
+ * - it would strand the reader. Drag the bar past the top term and the mode
+ *   would cancel itself, taking the slider with it, and there would be no way
+ *   back to the thing you were adjusting.
+ * - it would hide the mechanism at the one moment the mechanism is the answer.
+ *   An undivided list here is not silent: the bar is on screen with its number
+ *   and its count, `gateNote` says in words that nothing (or everything)
+ *   cleared it, and no divider claims otherwise. That is the opposite of the
+ *   thing the condition on these scores was written against.
  */
 export function effectiveSort(entries: GlossaryEntry[], sort: TermSort): TermSort {
   if (sort !== "prioritised") return sort;
-  return splitsOnPriority(entries) ? "prioritised" : "document";
+  return canPrioritise(entries) ? "prioritised" : "document";
+}
+
+/**
+ * What to say when the bar divides nothing, and nothing when it does.
+ *
+ * A control that visibly does nothing is the failure this codebase keeps
+ * writing down (docs/reusable/silent-success.md). Drag the bar to the floor and
+ * the two groups merge into one, which looks exactly like a broken slider
+ * unless something says otherwise. This is that something.
+ */
+export function gateNote(entries: GlossaryEntry[], gate = PRIORITY_GATE): string | null {
+  if (entries.length === 0 || splitsOnPriority(entries, gate)) return null;
+  return countAbove(entries, gate) > 0
+    ? "Every term clears this bar, so they are all in first-use order."
+    : "No term clears this bar, so they are all in first-use order.";
 }
 
 /** A run of terms under one heading. `label: null` is the whole list, unheaded. */
@@ -370,24 +492,28 @@ export interface TermGroup {
  * — it is the same rule the other sorts follow, which is that an entry the
  * model declined to score is not one it scored as trivial.
  */
-export function groupEntries(entries: GlossaryEntry[], sort: TermSort): TermGroup[] {
+export function groupEntries(
+  entries: GlossaryEntry[],
+  sort: TermSort,
+  gate = PRIORITY_GATE,
+): TermGroup[] {
   const one = (list: GlossaryEntry[]): TermGroup[] => [
     { key: "all", label: null, entries: list },
   ];
   if (sort !== "prioritised") return one(sortEntries(entries, sort));
-  if (!splitsOnPriority(entries)) return one(entries);
+  if (!splitsOnPriority(entries, gate)) return one(entries);
 
   const top: GlossaryEntry[] = [];
   const rest: GlossaryEntry[] = [];
   for (const entry of entries) {
     const p = priorityOf(entry);
-    (p !== undefined && p >= PRIORITY_GATE ? top : rest).push(entry);
+    (p !== undefined && p >= gate ? top : rest).push(entry);
   }
   return [
     {
       key: "top",
       label: "worth knowing first",
-      title: `The model called these both load-bearing and not obvious — centrality × difficulty of ${PRIORITY_GATE.toFixed(2)} or more. In first-use order, like the rest.`,
+      title: `The model called these both load-bearing and not obvious — centrality × difficulty of ${gate.toFixed(2)} or more, which is where the threshold above is set. In first-use order, like the rest.`,
       entries: top,
     },
     {
@@ -453,12 +579,17 @@ function SortBar({
   onSort(sort: TermSort): void;
 }) {
   const options: { key: TermSort; label: string; title: string }[] = [
-    /* Offered only when the gate actually divides this list. Same rule the two
-       score sorts below follow — a control that would visibly do nothing is
-       worse than one that isn't there — and here it does a second job: it is
-       what stops the *default* claiming a judgment was made about a glossary
-       whose scores could not support one. */
-    ...(splitsOnPriority(entries)
+    /* Offered when this glossary has anything to gate — the same rule the two
+       score sorts below follow, which is that a control that would visibly do
+       nothing is worse than one that isn't there.
+
+       It used to be the stricter `splitsOnPriority`, i.e. offered only when the
+       *default* bar happened to divide this particular list. The slider made
+       that wrong twice over: a list the default does not divide is now one drag
+       away from being divided, so refusing to offer the order would be hiding
+       the fix along with the problem — and the option would appear and vanish
+       under the reader's hand as they dragged. See `effectiveSort`. */
+    ...(canPrioritise(entries)
       ? [
           {
             key: "prioritised" as const,
@@ -513,6 +644,86 @@ function SortBar({
           {option.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The bar itself, with the reader's hand on it.
+ *
+ * Greg, 2026-08-26: *"Add a small threshold-slider to the Glossary UI (set to a
+ * sensible default)"*. The sensible default is `PRIORITY_GATE`, and everything
+ * else here is about the slider not being a mystery dial:
+ *
+ * - **the number is on screen**, because `0.42` is meaningless as a thumb
+ *   position and meaningful as a product of two scores the rows also show;
+ * - **the count is on screen**, `2 of 8`, which is the thing the reader
+ *   actually cares about and the only feedback that survives a drag that does
+ *   not happen to move anybody;
+ * - **the track ends where the data does** (`gateMax`), so no part of it is
+ *   dead and both ends mean something;
+ * - **it says when it has divided nothing** (`gateNote`), which is the
+ *   silent-success failure this codebase keeps catching itself in;
+ * - **it can be put back**, without the reader having to remember 0.30.
+ *
+ * A native `<input type="range">` rather than anything built: it is draggable,
+ * arrow-key steppable, announced by screen readers and touch-friendly for free,
+ * and `accent-color` is the whole of the styling it needs.
+ */
+function GateSlider({
+  entries,
+  gate,
+  moved,
+  onGate,
+}: {
+  entries: GlossaryEntry[];
+  gate: number;
+  moved: boolean;
+  onGate(gate: number | null): void;
+}) {
+  const promoted = countAbove(entries, gate);
+  const note = gateNote(entries, gate);
+  const count = `${promoted} of ${entries.length}`;
+
+  return (
+    <div className="gloss-gate">
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor="gloss-gate">
+          threshold
+        </label>
+        <span className="gloss-gate-value">
+          {gate.toFixed(2)} · {count}
+        </span>
+        {/* Only once there is something to undo. A reset that is always there
+            is a permanent invitation to a state you are already in. */}
+        {moved && (
+          <button
+            type="button"
+            className="gloss-gate-reset"
+            title={`Back to ${PRIORITY_GATE.toFixed(2)}`}
+            aria-label={`Reset the threshold to ${PRIORITY_GATE.toFixed(2)}`}
+            onClick={() => onGate(null)}
+          >
+            <RotateCcw size={11} />
+          </button>
+        )}
+      </div>
+      <input
+        id="gloss-gate"
+        className="gloss-gate-range"
+        type="range"
+        min={0}
+        max={gateMax(entries, gate)}
+        step={GATE_STEP}
+        value={gate}
+        title="How high the bar is for the top group: the model's difficulty × its centrality. Left promotes more terms, right fewer."
+        /* The thumb's position is a number nobody can hear. This is what makes
+           it audible, and it is the count rather than the product because the
+           count is what the reader is aiming at. */
+        aria-valuetext={`${gate.toFixed(2)}, promoting ${count} terms`}
+        onChange={(e) => onGate(Number.parseFloat(e.target.value))}
+      />
+      {note && <p className="gloss-gate-note">{note}</p>}
     </div>
   );
 }

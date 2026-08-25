@@ -33,6 +33,9 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
 | `mode` | which **mode** owns the band between the spine and the prose, absent for the table-of-contents columns that are the default — [chat-mode.md](../plans/chat-mode.md) | push | `?mode=chat` |
 | `thread` | which conversation is open in chat mode, absent for the list of them | **replace** | `?thread=spya-k3m9qt` |
+| `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
+| `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
+| `gate` | how high the prioritised order's bar is — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `0.30` | **replace**, debounced | `?gate=0.45` |
 | `match` | which matcher search mode is using: the letters you typed, or what they mean — [search.md](search.md) | push | `?match=meaning` |
 | `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
@@ -84,6 +87,17 @@ glossary mode is the two-group order, and `?sort=document` is the one you now ha
 links are unaffected — they all say what they want — and a glossary whose scores cannot support
 prioritising falls back to `document` in the panel without touching the URL. See
 [glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
+
+**`?gate=` is the one parameter deliberately left without a default**, which is the same call `?cols=`
+makes and for a related reason. It carries the threshold that order gates on, and the panel resolves
+an absent one to `PRIORITY_GATE`. Giving it a default here would put that constant in two files and,
+worse, make *the reader set it to 0.30* indistinguishable from *the reader set nothing* — a
+distinction that matters because the whole condition on the glossary's scores is about the difference
+between a judgment somebody asked for and one that simply arrived
+([glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is)). It
+replaces rather than pushes, and is debounced, for the reason `?at=` and `?find=` are: a range input
+writes on every pixel of a drag, and Back should undo the decision that got you here rather than the
+drag.
 
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
 occurrences in the prose**, so "the article as I am currently looking at it" is not fully described

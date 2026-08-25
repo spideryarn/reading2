@@ -48,6 +48,7 @@ import {
   panelParam,
   rungParam,
   sortParam,
+  gateParam,
   termParam,
   findParam,
   matchParam,
@@ -834,6 +835,10 @@ function GlossaryBand({
   const glossary = useGlossary(slug);
   const [termId, setTermId] = useQueryState("term", termParam);
   const [sort, setSort] = useQueryState("sort", sortParam);
+  /* Null is "nobody has touched the threshold", which the panel resolves to
+     `PRIORITY_GATE`. Kept as null rather than defaulted here so the default
+     stays one number in one file — see `gateParam` in params.ts. */
+  const [gate, setGate] = useQueryState("gate", gateParam);
 
   /* `find` returns the entry object out of `glossary.entries`, so its identity
      is stable across renders until the list itself is refetched — which is what
@@ -860,6 +865,8 @@ function GlossaryBand({
       onTerm={(id) => void setTermId(id)}
       sort={sort}
       onSort={(next) => void setSort(next)}
+      gate={gate}
+      onGate={(next) => void setGate(next)}
       onJump={onJump}
     />
   );

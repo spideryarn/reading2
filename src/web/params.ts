@@ -290,6 +290,38 @@ export const sortParam = createParser<TermSort>({
   .withDefault("prioritised")
   .withOptions({ history: "push" });
 
+/**
+ * How high the bar is for the prioritised order's top group — the reader's own
+ * hand on the threshold, added 2026-08-26 at Greg's request for "a small
+ * threshold-slider ... set to a sensible default".
+ *
+ * The number is `difficulty × centrality`, the same product `priorityOf` in
+ * GlossaryPanel.tsx computes, so `?gate=0.45` says *promote the terms the model
+ * called at least 0.45 hard-and-load-bearing*. Two decimal places on the way
+ * out, and anything outside 0–1 parses to null rather than throwing, which is
+ * the same rule every other parser in this file follows.
+ *
+ * **No default, deliberately** — the same call `colsParam` makes above, for the
+ * same reason. Absent means *nobody has touched this*, and the panel resolves it
+ * to `PRIORITY_GATE`. Giving it a default here would put the constant in two
+ * files and make "the reader chose 0.30" indistinguishable from "the reader
+ * chose nothing", which matters because the second is the one the condition on
+ * these scores is about.
+ *
+ * `replace` and debounced, for exactly the reason `?at=` and `?find=` are: a
+ * range input fires on every pixel of a drag, browsers rate-limit history
+ * writes, and a Back button that walked back through a drag one step at a time
+ * would be useless. Back should undo the *decision*, which is the `?sort=` push
+ * that got you here.
+ */
+export const gateParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+  },
+  serialize: (v) => v.toFixed(2),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
 
 /* ------------------------------------------------------------- search mode --
    Four parameters, which is more than any other mode needs, and the reason is

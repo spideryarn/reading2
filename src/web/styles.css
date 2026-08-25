@@ -2571,6 +2571,66 @@ td.text.has-hit {
 }
 .gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 
+/* The threshold slider — the one control in this panel that sets a number
+   rather than picking from a list. Shown only in `prioritised` order.
+
+   A native `<input type="range">`, styled with `accent-color` and nothing else:
+   the moment you reach for `::-webkit-slider-thumb` you own the track, the
+   thumb, the focus ring and the dark-mode colours of all three in two vendor
+   dialects. `accent-color` is one line, is honoured by every current browser,
+   and takes the token so the thumb matches the pressed sort button beside it. */
+.gloss-gate {
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.gloss-gate-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.gloss-gate-label {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+/* Monospaced and pushed right, like the scores on the rows it governs — this
+   number and those numbers are the same quantity, and lining them up is the
+   cheapest way to say so. */
+.gloss-gate-value {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.gloss-gate-reset {
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.gloss-gate-reset:hover { color: var(--ink); }
+.gloss-gate-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.gloss-gate-range {
+  display: block;
+  width: 100%;
+  margin: 0.3rem 0 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.gloss-gate-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Said in words, because a slider that has stopped dividing the list looks
+   exactly like a slider that has stopped working. */
+.gloss-gate-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
 .gloss-quiet { padding: 1rem 0.9rem; margin: 0; color: var(--ink-faint); }
 .gloss-error {
   margin: 0.4rem 0.7rem 0;

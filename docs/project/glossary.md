@@ -25,7 +25,10 @@ until you know what they are for.
  │  ▇▇▇        │ order [prioritised] │   explanation of what it│
  │  ▇▇▇▇▇▇▇    │   first use hardest │   ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈   │
  │  ▇▇         ├─────────────────────┤   is like to be an      │
- │  ▇▇▇▇       │ WORTH KNOWING FIRST 6│  organism …            │
+ │  ▇▇▇▇       │ threshold 0·30 · 6 of 24  organism …          │
+ │             │ ──────●────────────  ← the bar, and the       │
+ │             ├─────────────────────┤   reader's hand on it   │
+ │             │ WORTH KNOWING FIRST 6│                        │
  │             ├─────────────────────┤                         │
  │             │ nonreductive  d·72   │ … the nonreductive case│
  │             │ explanation   c·85   │   ┈┈┈┈┈┈┈┈┈┈┈┈          │
@@ -51,6 +54,11 @@ until you know what they are for.
  each group the order is first use — the reader's own order through the
  piece — so within a group the model has chosen nothing. Both numbers are
  on every row; the product they were gated on never is.
+
+ The threshold row is where that product's one free number lives. Drag it
+ left and the top group swallows the list; drag it right and it narrows to
+ the single costliest term. It reads out both what it is set to and how
+ many terms that promotes, because the second is what you are aiming at.
 ```
 
 Code: [`src/glossary.ts`](../../src/glossary.ts) (stage 5d — the model call, the dedup, the
@@ -288,18 +296,47 @@ which means the model has chosen nothing there. Both raw numbers are on every ro
 is, because that is our arithmetic dressed as the model's judgment and a number the reader can
 neither interpret nor check.
 
-**It cancels itself when it cannot help.** If nothing clears the gate, or everything does, or the
-scores are not there at all, the list is one unheaded group in first-use order — exactly what it did
-before — and the control is not offered. That is the same rule the score sorts already followed, one
-step on: *do not offer an order that would visibly do nothing.* Old glossaries with no scores see no
-change whatsoever.
+**It cancels itself when it cannot help.** If nothing clears the gate, or everything does, no
+divider is drawn and no group is labelled: the list is one unheaded group in first-use order, exactly
+what it did before. If the scores are not there **at all**, the order falls back to first use and the
+control is not offered — the same rule the score sorts already followed, one step on: *do not offer
+an order that would visibly do nothing.* Old glossaries with no scores see no change whatsoever.
 
 `PRIORITY_GATE` is an **absolute** threshold rather than a relative "top third", and the reason is
 what each does when it is wrong. An absolute gate that misfires degenerates to plain first-use order.
 A relative one would promote exactly a third whatever the scores said — inventing a ranking that is
 not in the data and putting a confident label over it, which is the failure this whole feature has
-been shaped to avoid. `0.30` is a guess and is meant to be moved once we have looked at more real
-glossaries; on `data/writes` it promotes two of eight.
+been shaped to avoid. `0.30` is a guess; on `data/writes` it promotes two terms of eleven.
+
+### The threshold, and whose it is
+
+That guess had no feedback loop, which the plan named as the first of two bets. Later the same day
+Greg turned it into a control:
+
+> Add a small threshold-slider to the Glossary UI (set to a sensible default)
+>
+> — Greg, 2026-08-26
+
+So `0.30` is now a **starting position rather than a verdict**, `?gate=` carries wherever the reader
+moved it, and the last number this feature decided on the reader's behalf is theirs. Four things
+about it are decisions rather than details:
+
+- **The track ends where the data does**, not at 1.00. Real products cluster low — two scores of 0.7
+  make 0.49 — so a fixed 0–1 track would be two thirds dead and every glossary would be adjusted in
+  the same narrow strip at the left. Ending it at the top term's own score makes both ends mean
+  something: hard left promotes everything, hard right promotes exactly the costliest term.
+- **It says when it has divided nothing.** Drag the bar to the floor and the two groups merge, which
+  looks exactly like a slider that has stopped working — the
+  [silent-success](../reusable/silent-success.md) failure this codebase keeps catching itself in. So
+  a sentence appears saying every term (or no term) cleared the bar.
+- **The order no longer cancels itself just because the bar divides nothing.** It used to. The slider
+  reverses that argument twice over: cancelling would take the slider away with it and strand the
+  reader mid-adjustment, and an undivided list here is not silent — the bar is on screen with its
+  number and its count, and nothing claims a judgment was made. What still falls back is a glossary
+  with no scores at all, which has nothing to gate under any setting.
+- **The default stays absent from the URL.** `?gate=` has no default of its own, so "absent" keeps
+  meaning *nobody has touched this* — which matters, because the whole condition on these scores is
+  about the difference between a number the reader chose and one that simply arrived.
 
 This is an **override of the condition above, not an exception it allows for** — a default ranking is
 in the letter the model's prioritising arriving unasked. What survives is the half that was actually
@@ -390,6 +427,6 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   slot
 - [comments.md](comments.md) — the other way to ask what something means, rooted in a selection
 - [block-ids.md](block-ids.md) — why an occurrence is a block id and never an offset
-- [url-state.md](url-state.md) — `?mode=glossary`, `?term=`, `?sort=`
+- [url-state.md](url-state.md) — `?mode=glossary`, `?term=`, `?sort=`, `?gate=`
 - [security.md](security.md) — the sanitiser, and the two forged-mark classes it strips
 - [architecture.md](architecture.md#pipeline) — where stage 5d sits
