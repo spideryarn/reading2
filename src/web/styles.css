@@ -5,7 +5,7 @@
  * lifted from the original Spideryarn app. Spideryarn orange, and — since
  * 2026-08-24, Greg's call — dark only: an all-but-black page, off-white text,
  * the orange untouched. No toggle. See
- * docs/project/original-version.md § "Decision: the palette" and
+ * docs/project/original-version/overview.md § "Decision: the palette" and
  * docs/project/web-client.md § "Dark mode".
  *
  * This file previously carried an independently-grown warm-brown palette with a
@@ -276,10 +276,16 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   font-size: 0.75rem;
   padding: 0.22rem 0.3rem;
   /* Transparent, not absent. The border is 2px of box, and the pills beside it
-     have one — drop it and this control alone shrinks from 27.6px to 25.6px
-     and its underline lifts off the line the others sit on. The radius is not
-     dead either, despite there being nothing to round: a focus ring follows
-     `border-radius`, so it is what keeps the keyboard outline a lozenge. */
+     have one — drop it and this control alone shrinks from 27.6px to 25.6px.
+     The text does NOT move: `.controls` centres its items, so a symmetric
+     border shrinks and re-centres. What moves is everything else — the outer
+     rect, so every item after it slides 2px left; the hit area; and the bounds
+     the focus ring is drawn around.
+
+     The radius is not dead either, despite there being nothing to round. An
+     outline follows `border-radius` (Chrome always, Safari since 16.4), and it
+     does so independently of the transparent border — so this line is the one
+     that keeps the keyboard focus ring a lozenge instead of a rectangle. */
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
@@ -1128,7 +1134,6 @@ mark.cmt[data-mark-end]::after {
   color: var(--ink-faint);
 }
 .cmt-delete { margin-left: auto; }
-.cmt-delete:hover { color: var(--destructive); }
 
 .cmt-transport-error {
   font-family: var(--font-mono);
@@ -1155,6 +1160,25 @@ mark.cmt[data-mark-end]::after {
   cursor: pointer;
 }
 .cmt-dialog button.linky:hover { color: var(--highlight); }
+
+/* Delete is the one button here that destroys something, so it hovers red.
+   This used to be written as `.cmt-delete:hover` next to the rule that puts it
+   at the end of the footer, and it never worked: that selector scores 0-2-0,
+   the general link hover just above scores 0-3-1, and the more specific one
+   wins no matter which is written first. So the only button in the panel that
+   should have warned you hovered the same friendly orange as the rest.
+   Spelled out at 0-4-1 here, next to the rule it has to beat. */
+.cmt-dialog button.linky.cmt-delete:hover { color: var(--destructive); }
+
+/* Focus, for the buttons in this panel. They keep the browser's own ring —
+   nothing sets `outline: none` on them, and preflight is not imported — but
+   the app has its own focus convention in two other places (.spine-hit above,
+   .cmt-search below), and a third, browser-blue one inside the panel is a
+   split rather than an addition. Covers close, both arrows, retry and delete. */
+.cmt-dialog button:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+}
 
 /* Stepping between comments, and the web-search badge — comments.md.
    Several questions can be in flight at once, so the panel is a way of moving

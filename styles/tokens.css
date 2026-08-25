@@ -4,7 +4,7 @@
  * Source: /Users/greg/dev/spideryarn/reading — `app/globals.css` (colours),
  * `docs/reference/DESIGN_COLORS_FONTS.md` (rationale),
  * `docs/reference/RESEARCH_ON_OPTIMAL_TEXT_FORMATTING.md` (the reading measure/typography numbers).
- * See docs/project/original-version.md for what was and wasn't carried over, and why.
+ * See docs/project/original-version/overview.md for what was and wasn't carried over, and why.
  *
  * DARK ONLY, unconditionally — no toggle, no `prefers-color-scheme`, no light fallback.
  * Greg, 2026-08-24: "I'm happy to go with the dumb version where we just switched to always being
@@ -71,7 +71,28 @@
 
     --border: oklch(0.27 0 0);
     --input: oklch(0.3 0 0);
-    --ring: oklch(0.55 0 0);
+    /* The focus ring, and it is the app's orange rather than shadcn's grey on
+       purpose. Two reasons, and the second is the real one.
+
+       First, consistency: this app already had a focus convention before any
+       shadcn arrived — `outline: 1px solid var(--highlight)`, on .spine-hit and
+       on .cmt-search in styles.css. A second, greyer convention arriving with
+       the components would have been a split, not an addition.
+
+       Second, contrast. shadcn's stock dark value here is oklch(0.55 0 0), and
+       its components draw the ring at half opacity (`ring-ring/50`). Composited
+       over this page that measures 1.84:1 — under the 3:1 that WCAG 2.2 asks of
+       a focus indicator, and well under the 11.4:1 of the browser's own ring,
+       which the components suppress with `outline-none` in order to draw it.
+       So the migration's first effect on keyboard users was to replace a highly
+       visible focus ring with a nearly invisible one. Nothing reported it: the
+       ring is real, it is the colour it was asked to be, and you only ever see
+       it if you press Tab.
+
+       This value is 7.3:1. The components also had their `/50` removed, because
+       the token alone cannot fix it — at half opacity even this orange is only
+       2.6:1. See toggle.tsx and button.tsx, and web-client.md. */
+    --ring: var(--spideryarn-orange);
 
     /* ---- sidebar / left rail ----------------------------------------- */
     /* Slightly *lighter* than --background, not darker: on a dark page a panel lifts forward. */
