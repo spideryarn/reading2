@@ -7,7 +7,9 @@ Neighbours, and Panel."* What survives, and what the three dropped modes taught,
 before the code, kept so the *why* survives. Two things the build changed: continuation cells are
 not items (GPT's code review — they broke the sibling-run assumption on an unbalanced tree), and the
 in-cell modes do not keep the current title at its cell's top edge, as claimed below — the earlier
-siblings, or the previous title, sit above it.
+siblings, or the previous title, sit above it. A second GPT review, of the finished thing rather
+than the plan, found three more edges; they are listed in
+[column-context.md § Three edges GPT's review found](../project/column-context.md#three-edges-gpts-review-found).
 
 ## The problem
 

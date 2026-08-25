@@ -147,7 +147,9 @@ export function TableView({
     if (parent && parent.depth >= 1) return parent.title;
     if (item.step) return "The argument";
     const level = levels.get(item.node.depth);
-    const n = level ? level.items.indexOf(item) + 1 : 0;
+    // By node, not by identity: a group heading's item is built fresh in
+    // levelList and is never the same object as the one in `levels`.
+    const n = level ? level.items.findIndex((i) => i.node.id === item.node.id) + 1 : 0;
     return n ? `Part ${n} of ${level!.items.length}` : null;
   };
 
@@ -380,6 +382,8 @@ export function TableView({
           entries={entries}
           rect={live.rects.get(d) ?? null}
           viewportH={live.viewportH}
+          clipLeft={live.clipLeft}
+          pinned={d === pinLeft}
           activeChain={activeChain}
           crumbFor={crumbFor}
           onJump={onJump}

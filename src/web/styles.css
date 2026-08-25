@@ -1320,9 +1320,50 @@ mark.cmt[data-mark-end]::after {
   color: var(--ink);
   margin-bottom: 0.3rem;
 }
-.ctx-item.tier-cur .gist-text { margin: 0; }
-.ctx-title .own { margin-left: 0.35em; color: var(--ink-faint); font-weight: 400; }
+/* Explicitly the cell's type, not whatever .ctx-item happens to set: the gist
+   is prose and belongs in the reading face at reading size, and inheriting the
+   list's UI font left it a whole step LARGER than the title above it. */
+.ctx-item.tier-cur .gist-text {
+  margin: 0;
+  font-family: var(--font-reading);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.ctx-title .own { margin-left: 0.35em; color: var(--highlight); font-weight: 400; }
 .ctx-item.tier-cur .range { margin-top: 0.35rem; }
+
+/* The arc's step marker, as it was in the cell (see .arc-step): mono and
+   tinted, so it reads as a position and not as a title. The column has no
+   titles — that is the point of it.
+
+   Written `.ctx-title.ctx-step`, both classes, because they land on the SAME
+   div and the plainer selector loses. `.ctx-item.tier-cur .ctx-title` is three
+   classes and beat `.ctx-item .ctx-step` at two, so the marker took the title's
+   face and colour while a *later* rule at equal weight still set its size — a
+   step marker in the UI font at 0.72rem, with the gist below it rendering
+   LARGER than it. Verified in the browser by computed style, not by reading
+   the cascade, 2026-08-25. */
+.ctx-item .ctx-title.ctx-step {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--depth-0);
+}
+.ctx-item.tier-cur .ctx-title.ctx-step {
+  font-size: 0.88rem;
+  line-height: 1;
+  margin-bottom: 0.45rem;
+}
+/* The arc's sentence stays smaller and lighter than a gist, as it was in the
+   cell: the arc shares the parts' boundaries exactly, so it has to read as a
+   different KIND of thing rather than as a second opinion about the same one
+   (tree.ts § the arc). Keyed off the step marker rather than off depth-0,
+   because depth 0 is the parts column when there is no arc. */
+.ctx-item.tier-cur:has(.ctx-step) .gist-text {
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
 
 /* The row-hover wash, carried over from the cells: an entry on the hovered
    row's ancestor path lights the way `td.gist.active` did. */
@@ -1333,6 +1374,10 @@ mark.cmt[data-mark-end]::after {
    clamped to one line. A landmark, not a thing to read. */
 .ctx-clamp {
   display: block;
+  font-family: var(--font-reading);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  margin-top: 0.15rem;
   font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
@@ -1352,13 +1397,24 @@ mark.cmt[data-mark-end]::after {
    merely following a label. The part you are in is at full strength; the
    others recede with their sections. */
 .ctx-group {
+  /* Pinned to the top of the panel while its own run of sections scrolls under
+     it. Without this the heading was only visible for the first section of a
+     part: centre the fourth section and its part's heading is far above the
+     panel's top edge, so the column named no part at all — which is exactly
+     the question this heading exists to answer. (It is why the panel scrolls
+     rather than translating its list: sticky reacts to scrolling, and would
+     have slid away with a transform. See ContextPanel.tsx.) Opaque, so the
+     items pass behind it rather than through it. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   font-family: var(--font-ui);
   font-size: 0.64rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ctx-parent-tint, var(--ink-faint));
-  background: color-mix(in oklab, var(--ctx-parent-tint, var(--rule-strong)) 18%, transparent);
+  background: color-mix(in oklab, var(--ctx-parent-tint, var(--rule-strong)) 18%, var(--panel));
   border-radius: 3px 3px 0 0;
   opacity: 0.7;
   margin-top: 0.8rem;
@@ -1386,9 +1442,17 @@ mark.cmt[data-mark-end]::after {
    alignment invariant's trace at these levels. Opaque, with no fade at the
    top: an earlier fade let the cell's own title show through the top edge,
    which read as two things fighting for the same space. z-index sits under
-   the header row (25) and over pinned cells. */
+   the header row (25) and over pinned cells — except the pinned column's own
+   panel, which sits over the others for the same reason its cells do.
+
+   `overflow: hidden` is the whole scrolling mechanism: no wheel or trackpad
+   can move it, so the wheel always moves the article, but ContextPanel.tsx can
+   set `scrollTop` — which is what makes the group headings' `position: sticky`
+   work. `scroll-behavior` gives that the glide the list used to get from a
+   transform transition. */
 .ctx-panel {
   position: fixed;
+  scroll-behavior: smooth;
   /* `top` is set inline from the header row's measured bottom edge — see
      ColumnRect.top in useColumnContext.ts for why it cannot be a constant. */
   bottom: 0;
@@ -1398,10 +1462,16 @@ mark.cmt[data-mark-end]::after {
   overflow: hidden;
   mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);
 }
-.ctx-panel-list {
-  padding-top: 0.85rem;
-  transition: transform 220ms ease-out;
-}
+.ctx-panel.pinned { z-index: 26; }
+/* The lead and the tail are what let the FIRST and LAST items reach the focus
+   line. `scrollTop` cannot go below zero or past the end, so without room
+   either side a short level would sit jammed at the top of its panel while the
+   longer level beside it held its current item at 40% — and the two columns
+   would stop lining up, which is the one thing this view is for. The transform
+   this replaced could slide past both ends freely; padding is the price of
+   scrolling for real. 40vh clears the focus line, 60vh clears what is below
+   it. */
+.ctx-panel-list { padding: calc(0.85rem + 40vh) 0 60vh; }
 .ctx-panel.depth-0 { --tint: var(--depth-0); }
 .ctx-panel.depth-1 { --tint: var(--depth-1); --ctx-parent-tint: var(--depth-0); }
 .ctx-panel.depth-2 { --tint: var(--depth-2); --ctx-parent-tint: var(--depth-1); }
@@ -1420,7 +1490,7 @@ mark.cmt[data-mark-end]::after {
 .reading td.gist.continuation::before { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .ctx-panel-list { transition: none; }
+  .ctx-panel { scroll-behavior: auto; }
 }
 
 /* ---- Tooltips ----------------------------------------------------------

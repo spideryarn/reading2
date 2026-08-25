@@ -16,8 +16,17 @@
  * is what the cells did.
  *
  * Every other entry carries a tooltip with the same content, so a landmark
- * can be read without jumping to it. The group's delay is short — see
- * ContextPanel.tsx — so sweeping the list neither strobes nor waits.
+ * can be read without jumping to it — the group headings too, where the card
+ * is the part's own gist and is the only place it can be read from a column
+ * that isn't showing parts. The group's delay is short — see ContextPanel.tsx
+ * — so sweeping the list neither strobes nor waits.
+ *
+ * The entries are clickable `<li>`s and not buttons, deliberately. Making them
+ * focusable would put every item of every level in the tab order — three
+ * columns of forty sections is a hundred and twenty tab stops in front of the
+ * prose — and ↑ / ↓ already step this article by level (keyboard.md). It is
+ * the same trade the clickable `<td>`s in TableView.tsx make, and Biome flags
+ * it there too.
  */
 import type { BlockId, NodeId } from "../types.js";
 import type { ContextEntry, ContextItem } from "./context.js";
@@ -60,20 +69,29 @@ export function ContextList({ entries, onJump, activeChain, crumbFor }: Props) {
         };
         if (e.kind === "group") {
           // The parent a run of items belongs to: where one part's sections
-          // stop and the next part's begin. Clickable, like everything here.
+          // stop and the next part's begin. Clickable, like everything here,
+          // and it sticks to the top of the panel while its own run scrolls
+          // under it, so the part you are in is named even when its heading
+          // is a long way above the current section (styles.css § .ctx-group).
           return (
-            <li
+            <Tooltip
               key={`g:${node.id}:${e.index}`}
-              className={[
-                "ctx-group",
-                e.before ? "before" : "",
-                e.holdsCurrent ? "holds-current" : "",
-                activeChain.has(node.id) ? "active" : "",
-              ].filter(Boolean).join(" ")}
-              onClick={jump}
+              placement="right"
+              className="tip-entry-panel"
+              content={<EntryCard item={e.item} crumb={crumbFor(e.item)} />}
             >
-              <span className="ctx-group-title">{node.title}</span>
-            </li>
+              <li
+                className={[
+                  "ctx-group",
+                  e.before ? "before" : "",
+                  e.holdsCurrent ? "holds-current" : "",
+                  activeChain.has(node.id) ? "active" : "",
+                ].filter(Boolean).join(" ")}
+                onClick={jump}
+              >
+                <span className="ctx-group-title">{node.title}</span>
+              </li>
+            </Tooltip>
           );
         }
         const cur = e.tier === "cur";
@@ -85,10 +103,13 @@ export function ContextList({ entries, onJump, activeChain, crumbFor }: Props) {
           e.before ? "before" : "",
           activeChain.has(node.id) ? "active" : "",
         ].filter(Boolean).join(" ");
+        // The arc's step marker is not a title and must not read as one — it
+        // kept its own mono, tinted treatment in the cell and keeps it here.
+        const titleClass = e.item.step ? "ctx-title ctx-step" : "ctx-title";
         if (cur) {
           return (
             <li key={node.id} className={className} onClick={jump}>
-              <div className="ctx-title">
+              <div className={titleClass}>
                 {heading}
                 {node.sourceHeading && (
                   <span className="own" title="the author's own heading">§</span>
@@ -112,7 +133,7 @@ export function ContextList({ entries, onJump, activeChain, crumbFor }: Props) {
             content={<EntryCard item={e.item} crumb={crumbFor(e.item)} />}
           >
             <li className={className} onClick={jump}>
-              <div className="ctx-title">
+              <div className={titleClass}>
                 {heading}
                 {/* The arc column has no titles: its sentence, clamped to a
                     line, is the landmark. */}

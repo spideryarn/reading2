@@ -101,13 +101,19 @@ export function itemsFromCells(
 }
 
 /**
- * Which item contains `row`: the last one starting at or before it.
+ * Which item contains `row`: the last one starting at or before it, or **-1
+ * when the row is above all of them**.
  *
- * Clamps to 0 above the first start, for the same reason activeSectionIndex
- * does — there is always an item you are in.
+ * That last case is not as pedantic as it looks. Continuation cells are not
+ * items, so a column whose first branch bottomed out above it — part 1 has no
+ * sections of its own, part 2 does — genuinely has no item at the top of the
+ * article. Clamping to 0 there, as this used to, made the sections column say
+ * "you are in the first section of part 2" while the reader was still in part
+ * 1. There is always a section you are in; there is not always a *sub*section.
+ * Callers show the top of the list with nothing marked current.
  */
 export function currentIndex(starts: number[], row: number): number {
-  let cur = 0;
+  let cur = -1;
   for (const [i, start] of starts.entries()) {
     if (start > row) break;
     cur = i;
@@ -138,6 +144,10 @@ function groupParent(item: ContextItem, nodes: Record<NodeId, TreeNode>): TreeNo
  * with plain distance along the level, because the list shows everything and
  * needs the eye led to the middle of it — the tree's boundaries are carried
  * by the headings instead.
+ *
+ * `cur` of -1 (see currentIndex) means the reader is above the level's first
+ * item: no entry takes the `cur` tier, nothing is marked read, and the tiers
+ * count outwards from the top of the list.
  */
 export function levelList(
   items: ContextItem[],

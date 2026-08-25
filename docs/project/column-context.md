@@ -1,9 +1,9 @@
 # Column context: what a gist column shows around where you are
 
-Four experiments, side by side, in making the coarse columns scannable. Toggled from the
-**Context** pills in the controls bar; each pill's tooltip carries the same explanation as this
-doc, with the research links. The plan they were built from, and GPT's review of it, is
-[docs/plans/column-context.md](../plans/column-context.md).
+How the coarse columns became scannable. Four treatments were built side by side as pills you could
+toggle, compared, and cut down to the one described here — there is no control and no URL state
+left, and the pills and their tooltips are gone with them. The plan they were built from, and GPT's
+review of it, is [docs/plans/column-context.md](../plans/column-context.md).
 
 ## The problem
 
@@ -72,9 +72,23 @@ In reading mode every gist column — the arc, the parts, the sections — is dr
 laid over it, listing the **whole level** with the **current item held on the focus line**, 40%
 down the window, and the rest as landmarks in fixed tiers above and below. Focus follows the scroll,
 never the pointer. The panel is clipped, never scrollable, so the wheel always moves the article.
-Hovering any landmark shows its title and gist; the group's open delay is 150ms — enough that
-crossing the list fires nothing, short enough not to feel like a wait — and once one is open its
-neighbours are instant. In outline mode there is no panel: the table is itself the list.
+Hovering any entry that isn't the current one — a landmark or a part heading — shows a card with its
+crumb, title and gist; the group's open delay is 150ms, enough that crossing the list fires nothing
+and short enough not to feel like a wait, and once one is open its neighbours are instant. In
+outline mode there is no panel: the table is itself the list.
+
+**The part heading sticks.** A heading marks each run of sections, and it pins to the top of its
+panel while its own run scrolls under it, so the column always names the part you are in — not only
+while you are in that part's first section. That is why the panel *scrolls* its list rather than
+sliding it with a transform: `position: sticky` reacts to scrolling and not to transforms, so under
+the `translateY` this used to use a sticky heading slid away with everything else. The panel is
+`overflow: hidden`, which no wheel or trackpad can move but `scrollTop` can, so "focus follows
+scroll" is untouched — the wheel still only ever moves the article.
+
+The entries are clickable `<li>`s, not buttons, and cannot be tabbed to. Making them focusable would
+put every item of every level in the tab order — three columns of forty sections is a hundred and
+twenty tab stops in front of the prose — and ↑ / ↓ already step the article by level
+([keyboard.md](keyboard.md)). It is the same trade the clickable `<td>`s make, and Biome flags both.
 
 There is no control. Every toggle this work added has gone: the four modes, and then the progress
 hairline — a line under the current item filling as you read through it, which survived the first
@@ -90,7 +104,7 @@ corner of the eye is a cost even when it is two pixels tall.
 Where things live: [`context.ts`](../../src/web/context.ts) decides what the level lists and is
 tested in [`tests/context.test.ts`](../../tests/context.test.ts);
 [`useColumnContext.ts`](../../src/web/useColumnContext.ts) is the live half — which item is under
-the focus line, where the columns are, how far through; [`ContextList.tsx`](../../src/web/ContextList.tsx)
+the focus line and where the columns are; [`ContextList.tsx`](../../src/web/ContextList.tsx)
 draws the list and the landmarks' tooltips; [`ContextPanel.tsx`](../../src/web/ContextPanel.tsx) is
 the panel; the cells under the panel are in [`TableView.tsx`](../../src/web/TableView.tsx); the styles are the
 `column context` section of [`styles.css`](../../src/web/styles.css).
@@ -108,9 +122,16 @@ path. A fade at the panel's top edge let the cell's title show through, which is
 one by one:
 
 - **The content** — title, `§`, gist, range, the arc's step marker — is now drawn by the panel's
-  current entry, in the same sizes, and the cell draws none of it. Nothing is shown twice.
+  current entry and the cell draws none of it. Nothing is shown twice. The type is the cell's type,
+  and it is set explicitly rather than inherited: the gist is prose and stays in the reading face at
+  reading size, the arc's step marker keeps the mono tint that stops it reading as a title, and the
+  `§` keeps its highlight. Inheriting the list's UI font instead had left the gist a step *larger*
+  than the title above it — GPT's review, 2026-08-25, caught it in the stylesheet before anyone
+  noticed it on screen.
 - **The hover wash** carries over: entries on the hovered row's ancestor path light up the way the
-  cells did, at every level at once.
+  cells did, at every level at once. With one loss, named because it is real: the wash follows the
+  hovered table *row*, so moving the pointer off the table and onto a panel clears it. Hovering a
+  panel entry lights that entry, not its chain.
 - **Clicking to jump** works on every entry and on the cells' remaining strip.
 - **The boundaries beside the prose** — the one thing a fixed panel genuinely cannot carry, because
   its rows are not the table's rows — are kept by leaving a 10px gutter down the left of the column
@@ -122,6 +143,42 @@ one by one:
 What is still lost, stated plainly: the current title no longer *starts* on the row its text starts
 on. It sits on the focus line instead. That is the trade Centred makes by definition, and Greg chose
 it.
+
+A panel is `position: fixed` at its column's measured x, which is a lie the moment the page scrolls
+sideways: the column slides under the pinned left column, and a fixed panel would keep painting on
+top of it — cells go under the pinned column, panels did not. So each panel clips itself to the
+right of the pinned column's measured edge, which is a no-op in every unscrolled view.
+
+### Three edges GPT's review found
+
+A cross-family review of the finished thing ([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md),
+gpt-5.6-sol, 2026-08-25) turned up three cases the code got wrong quietly, each worth keeping
+because none of them announces itself:
+
+- **A part heading only visible for its first section.** The clamp that kept the current item whole
+  looked at its previous sibling, which is the part heading only for the first section of a part.
+  Fixed by making the headings sticky, which is a better answer than a clamp: the heading is *always*
+  there now, not merely often.
+- **A level with no current item.** Continuation cells are not items, so a column whose first branch
+  bottoms out above it — part 1 has no sections of its own, part 2 does — has nothing to be *in* at
+  the top of the article. `currentIndex` used to clamp to zero and the column would say "you are in
+  the first section of part 2" while the reader was still in part 1. It now returns -1 and the panel
+  shows the top of its list with nothing marked. There is always a section you are in; there is not
+  always a subsection.
+- **Reflow with no scroll.** The sampler listened for `scroll` and `resize`. A late image or a font
+  swap moves the focus line into another section under a page that never moved, and the panels would
+  keep naming the old one until the reader happened to scroll. A `ResizeObserver` on the table
+  catches it, and catches a column-width change too.
+
+A fourth was found by checking the fixes in a browser rather than by reading them: the arc's step
+marker had lost its mono face and its tint to a **specificity collision** — `.ctx-title.ctx-step`
+land on the same element, and `.ctx-item.tier-cur .ctx-title` at three classes beat
+`.ctx-item .ctx-step` at two, while a later rule of equal weight still won the *size*. The marker
+came out in the UI font, smaller than the gist underneath it. Nothing about the DOM or the
+stylesheet looked wrong; only `getComputedStyle` said so. That is the
+[silent-success](../reusable/silent-success.md) pattern again — the natural check agrees with the
+bug — and it is why the panels were measured in a real browser
+([browser-testing.md](browser-testing.md)) rather than declared done.
 
 ### Boundaries in the finer columns
 
@@ -179,8 +236,9 @@ read. If none does, the answer is the spine's tooltips, which already exist.
 
 - [granularity-zoom.md](granularity-zoom.md) — the tabular view whose columns these modes annotate,
   the spine, and the fisheye sketch this descends from
-- [url-state.md](url-state.md) — `ctx` and `prog`
+- [url-state.md](url-state.md) — nothing here is URL state any more; `ctx` and `prog` were removed
+  with the pills
 - [keyboard.md](keyboard.md) — the panels carry `data-nav-depth`, so ↑ / ↓ still step by level over them
-- [tooltips.md](tooltips.md) — the pills' tooltips are the spine's, made interactive so the links work
+- [tooltips.md](tooltips.md) — the landmark cards are the spine's tooltip, with a shorter delay
 - [browser-testing.md](browser-testing.md) — a hidden tab runs no rAF, so the live half cannot be
   checked there; the sampler was verified by shimming `requestAnimationFrame` and dispatching `scroll`

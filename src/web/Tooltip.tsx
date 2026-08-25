@@ -33,7 +33,6 @@ import {
   autoUpdate,
   flip,
   offset,
-  safePolygon,
   shift,
   useDelayGroup,
   useDismiss,
@@ -73,22 +72,9 @@ interface Props {
   placement?: Placement;
   /** Extra class on the panel, for per-use sizing or accents. */
   className?: string;
-  /**
-   * Let the pointer travel into the panel without closing it — for a tooltip
-   * that carries links. Off by default: the spine's cards are read, not
-   * clicked, and a panel that lingers while the pointer crosses it would get
-   * in the way of the band underneath.
-   */
-  interactive?: boolean;
 }
 
-export function Tooltip({
-  content,
-  children,
-  placement = "right",
-  className,
-  interactive = false,
-}: Props) {
+export function Tooltip({ content, children, placement = "right", className }: Props) {
   const [open, setOpen] = useState(false);
   const arrowRef = useRef<SVGSVGElement>(null);
 
@@ -118,9 +104,12 @@ export function Tooltip({
     useHover(context, {
       delay: groupDelay || DELAY,
       move: false,
-      // safePolygon keeps the panel open while the pointer crosses the gap
-      // to it — the corridor Floating UI draws between trigger and panel.
-      handleClose: interactive ? safePolygon() : null,
+      // Every card here is read, not clicked: the pointer never needs to
+      // travel into one, and a panel that lingered while the pointer crossed
+      // it would sit on top of the thing being pointed at. (A `safePolygon()`
+      // corridor lived here for the context pills, whose tooltips carried
+      // links; the pills are gone — docs/project/column-context.md.)
+      handleClose: null,
     }),
     // Keyboard parity: the spine's bands are real buttons, so tabbing through
     // them should show the same detail hovering does.

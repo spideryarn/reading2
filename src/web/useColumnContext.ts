@@ -42,6 +42,14 @@ export interface LiveContext {
   /** Screen position of each gist column's header, keyed by depth. */
   rects: Map<number, ColumnRect>;
   /**
+   * The right edge of the pinned left column. A panel is `position: fixed` at
+   * its column's measured x, so when the page is scrolled right and a middle
+   * column slides *under* the pinned one, its panel would keep painting on top
+   * of it — the cells go under, the panel does not. Panels clip themselves to
+   * the right of this, which is what the cells underneath already do.
+   */
+  clipLeft: number;
+  /**
    * The viewport height, so a height-only resize reaches React: the panels
    * centre and clamp against it, and without it here a taller window left
    * them holding the old 40% line until the next section boundary.
@@ -49,7 +57,7 @@ export interface LiveContext {
   viewportH: number;
 }
 
-const EMPTY: LiveContext = { focusRow: 0, rects: new Map(), viewportH: 0 };
+const EMPTY: LiveContext = { focusRow: 0, rects: new Map(), viewportH: 0, clipLeft: 0 };
 
 interface Options {
   sections: Section[];
@@ -80,6 +88,8 @@ export function useColumnContext({
     const heads = new Map(
       depths.map((d) => [d, document.querySelector<HTMLElement>(`thead th[data-col="${d}"]`)]),
     );
+    const pin = document.querySelector<HTMLElement>("thead th.pin-left");
+    const table = document.querySelector<HTMLElement>("table.zoom");
     let last: LiveContext = EMPTY;
     let frame = 0;
 
@@ -98,17 +108,19 @@ export function useColumnContext({
         rects.set(d, { left: r.left, width: r.width, top: r.bottom });
       }
       const viewportH = window.innerHeight;
+      const clipLeft = pin?.getBoundingClientRect().right ?? 0;
 
       const same =
         focusRow === last.focusRow &&
         viewportH === last.viewportH &&
+        clipLeft === last.clipLeft &&
         rects.size === last.rects.size &&
         [...rects].every(([d, r]) => {
           const o = last.rects.get(d);
           return o && o.left === r.left && o.width === r.width && o.top === r.top;
         });
       if (same) return;
-      last = { focusRow, rects, viewportH };
+      last = { focusRow, rects, viewportH, clipLeft };
       setLive(last);
     };
     const schedule = () => {
@@ -116,10 +128,19 @@ export function useColumnContext({
     };
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
+    // Scroll and resize are not the only ways the answer changes. A late image
+    // or a font swap reflows the table under a still page: the focus line then
+    // sits in a different section and nothing tells us, so the panels keep
+    // naming the old one until the reader happens to scroll. Watching the table
+    // itself catches that, and catches a column width change too — which moves
+    // every panel and used to need a window resize to be noticed.
+    const ro = table ? new ResizeObserver(schedule) : null;
+    if (table && ro) ro.observe(table);
     measure();
     return () => {
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
+      ro?.disconnect();
       if (frame) cancelAnimationFrame(frame);
     };
   }, [sections, depths, enabled, layoutKey]);

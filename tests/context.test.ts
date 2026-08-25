@@ -41,6 +41,12 @@ describe("currentIndex", () => {
     expect(currentIndex(starts, 15)).toBe(3);
     expect(currentIndex(starts, 999)).toBe(3);
   });
+
+  it("is -1 above the level's first item, rather than claiming the first one", () => {
+    expect(currentIndex([4, 9], 0)).toBe(-1);
+    expect(currentIndex([4, 9], 3)).toBe(-1);
+    expect(currentIndex([], 0)).toBe(-1);
+  });
 });
 
 describe("levelList", () => {
@@ -115,5 +121,23 @@ describe("continuation cells", () => {
   it("and a row inside one counts as the last real item before it", () => {
     expect(starts.includes(3)).toBe(false);
     expect(currentIndex(starts, 3)).toBe(0);
+  });
+
+  it("and a leading one leaves the level with no current item at all", () => {
+    // The mirror image of the fixture above: the first branch bottoms out
+    // above this column, so at row 0 there is no item here yet. Marking the
+    // first one current would say "you are in section 1 of part 2" while the
+    // reader is still in part 1.
+    const leading: Cell[] = [
+      { node: node("A", 1, "root"), rowSpan: 2, continuation: true },
+      { node: node("b1", 2, "P"), rowSpan: 2, continuation: false },
+    ];
+    const { starts: st, items: it2 } = itemsFromCells(leading, (row) => ids[row]);
+    expect(st).toEqual([2]);
+    const cur = currentIndex(st, 0);
+    expect(cur).toBe(-1);
+    const list = levelList(it2, cur, { P } as never);
+    expect(list.some((e) => e.tier === "cur")).toBe(false);
+    expect(list.some((e) => e.before)).toBe(false);
   });
 });

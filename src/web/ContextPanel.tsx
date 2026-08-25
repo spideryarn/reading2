@@ -17,17 +17,20 @@
  * it was the thing most worth keeping.
  *
  * **It is a bounded window, not a scrollable outline.** A level can hold
- * dozens of sections, and if the panel scrolled, the wheel would move the
- * panel instead of the article and "focus follows scroll" would stop being
- * true. So the panel clips. The list slides so the current item sits on the
- * focus line — 40% down the viewport, where the eye is — and whatever falls
- * outside is not shown; the group headings are the landmarks for what lies
- * beyond, and the spine remains the view of the whole article.
+ * dozens of sections, and if the reader could scroll the panel, the wheel
+ * would move the panel instead of the article and "focus follows scroll"
+ * would stop being true. So it is `overflow: hidden`, which no wheel or
+ * trackpad can move — but which this file *can* move by setting `scrollTop`.
+ * The list is scrolled, not translated, and that distinction is load-bearing:
+ * `position: sticky` reacts to scrolling and not to transforms, so under the
+ * `translateY` this used to use, a sticky group heading would simply slide
+ * away with everything else. Scrolling it for real is what lets the part
+ * heading pin at the top of the panel while its sections run under it.
  *
  * The panel is only ever built in reading mode. In outline mode the table is
  * itself a compact whole-article list and the column is the thing to read.
  */
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { BlockId, NodeId } from "../types.js";
 import type { ContextEntry, ContextItem } from "./context.js";
 import { ContextList } from "./ContextList.js";
@@ -47,6 +50,13 @@ const DELAY = { open: 150, close: 60 } as const;
 /** The strip of the column left uncovered, so the cells' boundaries show. */
 export const GUTTER_PX = 10;
 
+/**
+ * The height of the fade at the panel's bottom edge — `mask-image` in
+ * styles.css, and it must match. Anything inside it is half-there, so the
+ * bottom clamp treats the panel as ending here.
+ */
+const FADE_PX = 40;
+
 interface Props {
   depth: number;
   /** What ↑ / ↓ step by over this panel — the arc column says 1, not 0. */
@@ -55,6 +65,10 @@ interface Props {
   rect: ColumnRect | null;
   /** Re-centre on a height-only resize, which changes no entry and no rect. */
   viewportH: number;
+  /** The pinned column's right edge — see LiveContext.clipLeft. */
+  clipLeft: number;
+  /** This column is the pinned one, so nothing clips it and it paints on top. */
+  pinned: boolean;
   activeChain: Set<NodeId>;
   crumbFor(item: ContextItem): string | null;
   onJump(blockId: BlockId): void;
@@ -66,15 +80,16 @@ export function ContextPanel({
   entries,
   rect,
   viewportH,
+  clipLeft,
+  pinned,
   activeChain,
   crumbFor,
   onJump,
 }: Props) {
   const panel = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const [offset, setOffset] = useState(0);
 
-  // Slide the list so the current item's middle sits on the focus line.
+  // Scroll the list so the current item's middle sits on the focus line.
   // Measured, not computed from entry counts: tiers have different heights and
   // the gist wraps. `entries`, the column width and the viewport height are
   // re-run triggers, not values the effect reads — the list changed, or
@@ -82,36 +97,53 @@ export function ContextPanel({
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers
   useLayoutEffect(() => {
     const p = panel.current;
+    if (!p) return;
     const cur = list.current?.querySelector<HTMLElement>("li.tier-cur");
-    if (!p || !cur) return;
+    // No current item means the reader is above everything this level has —
+    // a column whose first cells are continuations, before its first real
+    // item begins (context.ts § currentIndex). The honest view is the top of
+    // the list, not the last place the panel happened to be left.
+    if (!cur) {
+      p.scrollTop = 0;
+      return;
+    }
     const focusY = window.innerHeight * FOCUS_LINE - p.getBoundingClientRect().top;
-    // Centred, but never off the top. Near the top of the page the header row
-    // sits low (the bars are sticky, under the masthead), so the focus line
-    // can be closer to the panel's top than the current item is tall; holding
-    // the item's middle there would push its title above the panel. The
-    // current item is the one thing that must always be whole.
-    const centred = focusY - (cur.offsetTop + cur.offsetHeight / 2);
-    // …and if a heading names the part the current item is in, keep that
-    // too: the heading is the answer to "which part is this", and at the top
-    // of the article it is the first thing in the list.
-    const prev = cur.previousElementSibling as HTMLElement | null;
-    const keepFrom = prev?.classList.contains("ctx-group") ? prev.offsetTop : cur.offsetTop;
-    setOffset(Math.max(centred, -keepFrom));
+    const wanted = cur.offsetTop + cur.offsetHeight / 2 - focusY;
+    // Two clamps, and the current item wins both. It is the one thing that
+    // must always be whole, and the panel does not scroll for the reader, so
+    // anything pushed out of it is simply gone.
+    //
+    //  - Never under the pinned group heading. Near the top of the page the
+    //    header row sits low (the bars are sticky, under the masthead), so the
+    //    focus line can be closer to the panel's top than the item is tall.
+    //  - Never off the bottom, which a long gist in a narrow column can do.
+    //
+    // If the item is taller than the panel can hold, the top wins: the title
+    // is worth more than the tail of the gist.
+    const head = list.current?.querySelector<HTMLElement>("li.ctx-group");
+    const top = cur.offsetTop - (head?.offsetHeight ?? 0);
+    const bottom = cur.offsetTop + cur.offsetHeight - (p.clientHeight - FADE_PX);
+    p.scrollTop = Math.max(0, Math.min(top, Math.max(bottom, wanted)));
   }, [entries, rect?.width, rect?.top, viewportH]);
 
   if (!rect) return null;
+  const left = rect.left + GUTTER_PX;
   return (
     <div
       ref={panel}
-      className={`ctx-panel depth-${depth}`}
-      style={{ top: rect.top, left: rect.left + GUTTER_PX, width: rect.width - GUTTER_PX }}
+      className={`ctx-panel depth-${depth}${pinned ? " pinned" : ""}`}
+      style={{
+        top: rect.top,
+        left,
+        width: rect.width - GUTTER_PX,
+        // Scrolled right, a middle column slides under the pinned one; its
+        // panel must go under it too. Zero when nothing overlaps, which is
+        // every unscrolled view — see LiveContext.clipLeft.
+        clipPath: pinned ? undefined : `inset(0 0 0 ${Math.max(0, clipLeft - left)}px)`,
+      }}
       {...{ [NAV_DEPTH_ATTR]: navDepth }}
     >
-      <div
-        ref={list}
-        className="ctx-panel-list"
-        style={{ transform: `translateY(${Math.round(offset)}px)` }}
-      >
+      <div ref={list} className="ctx-panel-list">
         <TooltipGroup delay={DELAY}>
           <ContextList
             entries={entries}
