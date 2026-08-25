@@ -7,8 +7,9 @@
 > here; treat those two steps as "talk it over with Greg, then write the decision down under
 > `docs/project/`".
 >
-> Followed for the test runner — see [docs/project/testing.md](../project/testing.md) — and for
-> tooltips, see [docs/project/tooltips.md](../project/tooltips.md).
+> Followed for the test runner — see [docs/project/testing.md](../project/testing.md) — for
+> tooltips, see [docs/project/tooltips.md](../project/tooltips.md) — and for the auth provider, see
+> [docs/research/auth-options.md](../research/auth-options.md).
 
 ## Selection Criteria
 

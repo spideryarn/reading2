@@ -178,6 +178,9 @@ the date to the mtime of `blocks.json`. It just has no byline and no source link
 
 ## When this becomes Postgres
 
+See [database.md](database.md) for the store as a whole, and
+[postgres-migration.md](../plans/postgres-migration.md) for the schema and the risks.
+
 [`src/api.ts`](../../src/api.ts) is the seam, and it is the only file that knows there are
 directories. Above it the client sees two types, both already shaped as rows:
 

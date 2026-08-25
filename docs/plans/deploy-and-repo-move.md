@@ -253,6 +253,11 @@ Greg's answer, 2026-08-25:
 
 That is the right size of answer. Four things it has to do:
 
+**Which provider, and why it is not really a free choice:** see
+[auth.md](../project/auth.md), and [auth-options.md](../research/auth-options.md) for the survey
+behind it. The short version is that `owner_id uuid references auth.users(id)` already decided it,
+and that Supabase's RLS only accepts externally-issued JWTs from five named providers.
+
 **One allowlist, checked on the server.** A small `src/auth.ts` resolves the Supabase session to an
 email and compares it against a hard-coded array holding `greg@gregdetre.com`. `handleApi` checks it
 once, at the top, rather than each route remembering to. Hiding the Add button in the client is not
@@ -431,6 +436,9 @@ opportunistic thirty seconds.
 - [library.md](../project/library.md) — `/read/<slug>`, and the SPA-fallback warning step 2 satisfies
 - [block-ids.md](../project/block-ids.md) — why the Supabase migration must preserve ids, and how
   that fails silently
+- [auth.md](../project/auth.md) — the gate's own doc, and
+  [auth-options.md](../research/auth-options.md) for why the provider is Supabase Auth
+- [database.md](../project/database.md) — where the data lives now and where it is going
 - [security.md](../project/security.md) — the sanitiser, and why fetching arbitrary URLs on a public
   server is a different problem from fetching them on a laptop
 - [original-version/overview.md](../project/original-version/overview.md) — what the old app is, what

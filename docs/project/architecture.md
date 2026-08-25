@@ -120,6 +120,9 @@ edit to each of the four stage files necessary: see
 
 ## Storage
 
+[database.md](database.md) covers this layout as a whole, and what changes when it becomes Supabase
+Postgres.
+
 Filesystem, one directory per article, no database:
 
 ```

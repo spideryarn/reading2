@@ -416,7 +416,9 @@ Read [`src/sanitize.ts`](../../src/sanitize.ts) top to bottom first — it is on
 four screens of why. Then run `npm test`. The tests are the specification: every payload in
 `tests/sanitize.test.ts` was verified to survive Readability first, so none of them is hypothetical.
 
-Related: [architecture.md](architecture.md) for where stage 3 sits,
+Related: [auth.md](auth.md) for the beta gate — the third untrusted party this doc does not cover,
+which is a stranger with your API keys,
+[architecture.md](architecture.md) for where stage 3 sits,
 [block-ids.md](block-ids.md) for the contract the `id` attribute carries,
 [content-extraction.md](content-extraction.md) for what stage 2 does and does not promise,
 [web-client.md](web-client.md) for the render path.

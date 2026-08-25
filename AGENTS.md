@@ -28,6 +28,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [block-ids.md](docs/project/block-ids.md) | **the spine** — the id format, and why ids are random rather than sequential |
 | [table-of-contents.md](docs/project/table-of-contents.md) | the deeply-nested ToC: schema, granularity, the generation prompt |
 | [architecture.md](docs/project/architecture.md) | pipeline stages, what a block is, storage layout, server, stage ownership |
+| [database.md](docs/project/database.md) | **where the data lives** (stub): one directory per article today, one file per stage, all of it behind `src/api.ts` — and what changes when that becomes Supabase Postgres |
 | [fetching.md](docs/project/fetching.md) | **stage 1**: the size cap that counts the right bytes, the charset sniff, why Node's own text decoder is wrong about curly quotes, and the certificate failure that works fine in your browser |
 | [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
@@ -40,6 +41,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [library.md](docs/project/library.md) | the homepage: browsing past articles, `/read/<slug>`, what a card says and why the blurb is the root gist, and the one file a move to Postgres goes behind |
 | [design-css-overview.md](docs/project/design-css-overview.md) | **the map for anything visual** (stub): the four stylesheets and the order they load in, which of the three mechanisms owns a given rule, the colour and type tokens, and an honest list of what isn't decided |
 | [icons.md](docs/project/icons.md) | Lucide, not Phosphor: why, the one stroke weight everything uses, the loading spinner recipe, and the two ways swapping a glyph for an SVG breaks a layout quietly |
+| [auth.md](docs/project/auth.md) | **the one-email beta gate** (stub): why auth here is about an open proxy and an open wallet rather than user accounts, why Supabase Auth won, the list of five providers that RLS restricts you to, and the one test that has to exist |
 | [security.md](docs/project/security.md) | **two untrusted parties, and neither is another user** — the content, and the URL: why Readability let `<img onerror>` reach the reading view, where the sanitiser sits and why it's stage 3, the video-embed allowlist, the confirmed path traversal in the read API and the fixture fallback that disguised it as a refusal, the four ways to break it silently, and an honest list of what's still open |
 | [linting.md](docs/project/linting.md) | `npm run lint`: why Biome rather than ESLint (TypeScript 7 removed the API ESLint needs), the config-file extension that silently discards your settings, and which rules are off on purpose |
 | [typechecking.md](docs/project/typechecking.md) | `npm run typecheck`: the three tsconfigs, the strict flags we turned on and the one we didn't, and the guard that stops a typecheck checking nothing |
@@ -60,6 +62,14 @@ evidence behind a change, written before it landed and kept afterwards so the *w
 | [postgres-migration.md](docs/plans/postgres-migration.md) | **moving storage from JSON files to Supabase Postgres**, planned 2026-08-25: why a block id is an *identity* and its text is a *revision* (and why foreign-keying comments to the current blocks would have broken a documented behaviour), why the tree stays JSONB while the blocks become rows, the 1,000-row default that truncates a long article silently, the cross-article id collision that arrives at ~100 articles, and the shared migration ledger that a custom schema does *not* isolate |
 | [metadata-page.md](docs/plans/metadata-page.md) | **everything we know about an article, on a page of its own** at `/read/<slug>/metadata`, planned 2026-08-25: borrowed from the original version's Metadata tab, which was a tab and should not have been; what we take and the difficulty verdict we deliberately don't; the routing change both new pages need; the section that says whether what you're reading is stale; and the two copies of `WPM = 230` found while writing it |
 | [tweet-thread-page.md](docs/plans/tweet-thread-page.md) | **the article as a numbered thread**, at `/read/<slug>/tweets`, planned 2026-08-25: their prompt quoted in full and the three things wrong with it, the fact that they built this and then deleted it, why generation goes through the ingest queue rather than a thirty-second request, the `STEP_ORDER` split that stops every ingest writing a thread, and the anti-goals this feature has to answer to |
+
+`docs/research/` holds the working behind a decision — the options weighed, the sources, and the
+dead ends — kept so nobody has to run the search again. A plan says what we're doing; a research doc
+says what else we could have done and why we didn't.
+
+| Research | What's in it |
+|---|---|
+| [auth-options.md](docs/research/auth-options.md) | **how we chose an auth provider**, 2026-08-25: the one line of schema that decided it, the five providers Supabase's RLS restricts you to and the irony that the proprietary ones qualify while the open-source ones don't, an honest account of Better Auth (which Auth.js merged into) and why it still loses here, why self-hosting an identity provider for one user is absurd, and three dead ends — Lucia, Vercel's $150 password protection, and FusionAuth's licence |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
 

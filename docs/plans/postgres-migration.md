@@ -402,7 +402,10 @@ Public site + ingest online + no login is an open proxy and an open wallet, and 
 `POST /api/jobs` — `POST /api/comments/:slug` spends the OpenRouter key, `POST /api/jobs/:id/retry`
 spends the Anthropic key, and cancel/forget/delete let a stranger interfere with Greg's work.
 
-**This is already settled, and not here.** Greg's answer, and the design, are in
+**This is already settled, and not here.** The provider choice is in
+[auth.md](../project/auth.md) — and note that `owner_id` below is *why* it was not a free choice, since
+Supabase's RLS only accepts externally-issued JWTs from five named providers
+([auth-options.md](../research/auth-options.md)). Greg's answer, and the design, are in
 [deploy-and-repo-move.md § The beta gate](deploy-and-repo-move.md#the-beta-gate): a hard-coded
 one-email allowlist resolved from the Supabase session in `src/auth.ts`, checked once at the top of
 `handleApi`, failing closed, returning 403 and a beta notice rather than an empty shelf. That is the
