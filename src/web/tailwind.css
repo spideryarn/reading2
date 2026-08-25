@@ -54,6 +54,28 @@
    back on for exactly one directory. Widen this when client code moves — and
    never to a directory containing prose. */
 @source "../../src/web";
+
+/* This app is dark. Not "dark by default" — dark, full stop: tokens.css sets
+   `color-scheme: dark` with no toggle and no prefers-color-scheme, and
+   index.html says the same in a <meta> so the browser paints dark before CSS
+   loads. Greg's call; see docs/project/web-client.md § Dark mode.
+
+   Tailwind does not know that. Its `dark:` variant compiles to
+   `@media (prefers-color-scheme: dark)`, and shadcn's components lean on it —
+   Button alone has `dark:bg-input/30`, `dark:border-input`,
+   `dark:hover:bg-accent/50`. On a machine whose OS is in LIGHT mode, none of
+   those would apply, and the components would render their light-mode branch
+   on our permanently dark page.
+
+   That failure is invisible to whoever writes the code, because it depends on
+   the OS setting of whoever VIEWS it. It looks perfect on a dark-mode Mac and
+   subtly wrong on a light-mode one, and no test can see either.
+
+   Redefining the variant as always-matching makes `dark:x` mean exactly `x`,
+   which is the truth here. If light mode ever returns, this line is the first
+   thing to change — and the shape it should take is `[data-theme]`, not
+   prefers-color-scheme. */
+@custom-variant dark (&);
 @import "./styles.css" layer(app);
 
 /* ------------------------------------------------------------ the bridge --
@@ -102,4 +124,30 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
+}
+
+/* ------------------------------------------- the bit of preflight we need --
+   We do not import preflight (see the header). shadcn's components are written
+   assuming it, so this puts back the two rules they actually depend on —
+   scoped to `[data-slot]`, which shadcn stamps on every element it generates,
+   so nothing else on the page is touched.
+
+   Reading the generated sources, the gap is small: button, toggle and
+   collapsible all set their own radius, background, font-size, font-weight and
+   outline in the cva base string. What they assume and do not state is
+   `button { background-color: transparent }` — without it a UA gives buttons a
+   grey face that the `ghost` and `outline` variants never override, so they
+   arrive with a background they are specifically supposed to lack — and the
+   universal `border: 0 solid`, without which `tw:border` produces nothing
+   visible because the border-style is still `none`.
+
+   `box-sizing: border-box`, the one part of preflight worth having globally,
+   styles.css already sets on `*`.  */
+@layer components {
+  [data-slot] {
+    border: 0 solid;
+  }
+  button[data-slot] {
+    background-color: transparent;
+  }
 }
