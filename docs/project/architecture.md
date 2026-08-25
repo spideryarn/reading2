@@ -90,13 +90,13 @@ artefacts on disk, not by reaching into another stage's code.
 
 | # | Stage | Owner | Artefact |
 |---|-------|-------|----------|
-| 1 | fetch | **granularity zoom** (a step of the ingest queue — [ingest-queue.md](ingest-queue.md)) | `raw.html` |
+| 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` |
 | 2 | extract / Readability — see [content-extraction.md](content-extraction.md) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
 | 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
 | 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
-| 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view) | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
+| 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view). **Sanitises again at ingress** ([security.md](security.md#sanitised-twice-on-purpose)) — stage 3 used jsdom's parser, this one uses the browser's | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
 | 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | `data/_jobs/`, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
 

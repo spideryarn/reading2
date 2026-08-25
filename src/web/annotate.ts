@@ -106,6 +106,18 @@ export function annotateHtml(html: string, marks: Mark[]): string {
     offset += value.length;
     const touching = live.filter((m) => m.start < offset && m.end > nodeStart);
     if (touching.length === 0) continue;
+    // Text inside an `<svg>` or `<math>` is counted but never wrapped. `<mark>`
+    // is an HTML element, and putting one inside foreign content produces a
+    // subtree whose serialisation and re-parse are governed by different rules
+    // than the tree we just built — the parser differential this whole file is
+    // downstream of (docs/project/security.md). Inline SVG survives sanitising
+    // by choice, so this is reachable.
+    //
+    // Note the order: `offset` has already advanced. Skipping the *count* as
+    // well would shift every offset after a diagram, and marks would land a few
+    // characters off — the offset space is defined by `renderedText`, which
+    // counts these nodes. Flagged by GPT-5's review, 2026-08-25.
+    if (!isHtmlElement(node.parentNode)) continue;
 
     // Cut the node wherever any mark begins or ends, then label each piece with
     // whichever marks cover it. Sorting the cuts is what makes overlaps fall out
@@ -146,6 +158,18 @@ export function annotateHtml(html: string, marks: Mark[]): string {
     node.parentNode?.replaceChild(fragment, node);
   }
   return root.innerHTML;
+}
+
+/**
+ * True for an element the browser parses by HTML rules. Foreign content —
+ * anything inside `<svg>` or `<math>` — is namespaced differently, and an HTML
+ * element grafted into it does not round-trip the way the surrounding tree does.
+ */
+function isHtmlElement(node: Node | null): boolean {
+  return (
+    node?.nodeType === 1 &&
+    (node as Element).namespaceURI === "http://www.w3.org/1999/xhtml"
+  );
 }
 
 function host(html: string): HTMLElement {

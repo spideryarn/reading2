@@ -42,6 +42,8 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/ids.test.ts`](../../tests/ids.test.ts) | the id format and uniqueness — [block-ids.md](block-ids.md) |
 | [`tests/blocks.test.ts`](../../tests/blocks.test.ts) | what counts as a block, and **id survival across re-extraction** |
 | [`tests/sanitize.test.ts`](../../tests/sanitize.test.ts) | what a hostile article may not do to the reading view — every payload verified to survive Readability first, so none is hypothetical ([security.md](security.md)) |
+| [`tests/sanitize-client.test.ts`](../../tests/sanitize-client.test.ts) | the browser sanitiser, and that **both bindings are one policy** — a shared corpus must come out byte-identical from server and client, because two passes that disagree are worse than one |
+| [`tests/fetch.test.ts`](../../tests/fetch.test.ts) | stage 1 with no network: the lying `Content-Length`, the Shift_JIS page, Node's wrong windows-1252, redirect loops, and every TLS failure that arrives as the same `TypeError` — [fetching.md](fetching.md) |
 | [`tests/toc-flatten.test.ts`](../../tests/toc-flatten.test.ts) | tree → sidebar rows — [table-of-contents.md](table-of-contents.md) |
 | [`tests/validate-tree.test.ts`](../../tests/validate-tree.test.ts) | the validator catches each **structural** way a tree can go wrong |
 | [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |
@@ -54,6 +56,8 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/selection.test.ts`](../../tests/selection.test.ts) | mouse selection → a storable anchor: the minimum length, and clamping to one block |
 | [`tests/comments.test.ts`](../../tests/comments.test.ts) | comment storage, and that two comments made at once don't eat each other |
 | [`tests/comment-nav.test.ts`](../../tests/comment-nav.test.ts) | comments in reading order and stepping between them — including that the order comes from the block **index**, never the id string |
+| [`tests/jobs.test.ts`](../../tests/jobs.test.ts) | the ingest queue's decisions — step ordering, the restart sweep, and the request parsing that stands between a POST body and `path.join("data", slug)` ([ingest-queue.md](ingest-queue.md)). **Nothing here runs a job**: queuing one fetches somebody's website and spends money at two model endpoints |
+| [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | what an article gets called, and whether that name is safe to make a path out of |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken
@@ -93,8 +97,20 @@ disagree with Chrome. See [comments.md § The offset space](comments.md#offset-s
   about its ceiling: it would have caught the class names, not the cascade. Anything that depends on
   the *resolved* value has to be checked in a real browser
   ([browser-testing.md](browser-testing.md#do-not-judge-colour-from-a-screenshot)).
-- **Fetching and Readability** ([content-extraction.md](content-extraction.md)). Needs the network,
-  or a large fixture corpus. Worth doing when extraction bugs start costing time.
+- **Readability itself** ([content-extraction.md](content-extraction.md)). Needs a large fixture
+  corpus. Worth doing when extraction bugs start costing time.
+
+  **Fetching used to be on this list, and the reason it came off is worth copying.** It looked
+  untestable for the same reason — "it needs the network" — and it wasn't: `fetchDocument` takes its
+  fetch, clock, sleep, DNS lookup and jitter as arguments, so a redirect loop, a certificate with a
+  missing intermediate and a body three times its declared size are all ordinary unit tests
+  ([fetching.md](fetching.md)). What genuinely needs the network is finding out *what servers
+  actually do*, and that is a research task whose output is fixtures, run once, not a test.
+
+  The evidence that it was worth doing: running the finished module against real URLs still found a
+  bug that 65 passing tests had missed — `dns.lookup` hangs its error code somewhere different from
+  `fetch`, so every unresolvable domain was being reported as a generic connection failure.
+  **Offline tests and one real run catch different things**, and neither replaces the other.
 
 ## Why the docs have a test
 

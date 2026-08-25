@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
+import { Library } from "./Library.js";
+import { useRoute } from "./router.js";
+import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
 import { Spine } from "./Spine.js";
 import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
+import { Dock } from "./Dock.js";
 import { Toggle } from "@/components/ui/toggle";
 import { buildArcColumn, buildGeometry, buildOutline, columnLabel } from "./tree.js";
-import { aboutParam, atParam, colsParam, noteParam, slugParam, textParam } from "./params.js";
+import { atParam, colsParam, noteParam, panelParam, textParam } from "./params.js";
 import { isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
@@ -20,12 +24,6 @@ import { fitView } from "./layout.js";
 import { useArrowNav } from "./keynav.js";
 import { useComments } from "./useComments.js";
 
-/**
- * Nothing here is `useState` any more except the fetched article itself, which
- * is derived from the URL rather than part of it. Everything the reader can
- * change lives in the query string — see params.js for why, and for which of
- * these changes push a history entry and which quietly replace one.
- */
 /**
  * The granularity pills, restated over shadcn's Toggle.
  *
@@ -74,15 +72,35 @@ const PILL =
   "tw:data-[state=on]:bg-highlight-wash tw:data-[state=on]:border-highlight " +
   "tw:data-[state=on]:text-highlight-ink tw:data-[state=on]:font-semibold";
 
+/**
+ * Which page you are on, and nothing else.
+ *
+ * The path says which article (`/read/<slug>`) or that you want the shelf
+ * (`/`); the query string says how you are looking at it. See router.ts for
+ * that division, and params.js for the parameters themselves.
+ */
 export function App() {
-  const [slug] = useQueryState("slug", slugParam);
+  const route = useRoute();
+  if (route.kind === "library") return <Library />;
+  return <ArticlePage slug={route.slug} />;
+}
+
+/**
+ * One article, fetched.
+ *
+ * Nothing here is `useState` except the article itself, which is derived from
+ * the URL rather than part of it. Everything the reader can change lives in the
+ * path or the query string — see params.js for why, and for which of these
+ * changes push a history entry and which quietly replace one.
+ */
+function ArticlePage({ slug }: { slug: string }) {
   const [article, setArticle] = useState<Article | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Slug is URL state now, so it can change under us — via back/forward, or a
-    // pasted link. Guard the response so a slow first fetch can't overwrite a
-    // fast second one.
+    // The slug is in the path now, so it can change under us — via back/forward,
+    // or a pasted link. Guard the response so a slow first fetch can't overwrite
+    // a fast second one.
     let live = true;
     setArticle(null);
     setError(null);
@@ -92,7 +110,12 @@ export function App() {
         if (!r.ok) throw new Error(body.error ?? r.statusText);
         return body as Article;
       })
-      .then((a) => live && setArticle(a))
+      // Sanitised here, at the doorway, and nowhere later. This is the pass that
+      // guards the render: stage 3 cleaned this HTML under *jsdom's* parser and
+      // we are about to hand it to *Chrome's*. It must happen before anything
+      // reads `block.html` — both renderedText and annotateHtml parse it with
+      // innerHTML ahead of React. See src/web/sanitize.ts.
+      .then((a) => live && setArticle(sanitizeArticle(a)))
       .catch((e: Error) => live && setError(e.message));
     return () => {
       live = false;
@@ -252,15 +275,6 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   const jumpTo = useReadingPosition(sections, layoutKey);
 
   /**
-   * ↑ / ↓ step through one level of the tree, and *which* level is whichever
-   * column the pointer is sitting in — see keynav.ts. It writes no state of its
-   * own: it scrolls, and the listener above notices, exactly as it would for a
-   * wheel. Off any tagged column the stride falls back to the section, which is
-   * the unit `?at=` already stores.
-   */
-  const navDepth = useArrowNav(geometry, article.blocks, sectionDepth(geometry));
-
-  /**
    * Comments: selecting prose asks a question of the model, and the answer
    * arrives in a floating dialog. See docs/project/comments.md.
    *
@@ -269,6 +283,37 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    */
   const [note, setNote] = useQueryState("note", noteParam);
   const { comments, ask, retry, remove, error: commentError } = useComments(slug);
+
+  /**
+   * The bottom drawer — see Dock.tsx, and docs/plans/bottom-bar.md for why the
+   * bottom rather than the left.
+   *
+   * Note what is *not* here, for the same reason the comment dialog isn't:
+   * nothing threaded through `fit`, no term added to the layout arithmetic. The
+   * drawer is an overlay and the bar takes height, and height is the axis where
+   * this view has nothing to ration.
+   */
+  const [panel, setPanel] = useQueryState("panel", panelParam);
+  const drawerOpen = panel !== null;
+
+  /**
+   * ↑ / ↓ step through one level of the tree, and *which* level is whichever
+   * column the pointer is sitting in — see keynav.ts. It writes no state of its
+   * own: it scrolls, and the listener above notices, exactly as it would for a
+   * wheel. Off any tagged column the stride falls back to the section, which is
+   * the unit `?at=` already stores.
+   *
+   * Suspended while the drawer is open. A reader looking at their questions is
+   * not reading, and the article scrolling away underneath the dim — silently,
+   * because they cannot see it move — is the kind of thing you only notice
+   * afterwards, when you have lost your place.
+   */
+  const navDepth = useArrowNav(
+    geometry,
+    article.blocks,
+    sectionDepth(geometry),
+    !drawerOpen,
+  );
 
   /**
    * Reading order, not ask order — the panel's arrows walk you *down the
@@ -339,8 +384,6 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
     [geometry, article.arc],
   );
 
-  const [about, setAbout] = useQueryState("about", aboutParam);
-
   return (
     <div
       className={`reader spine-${fit.spine}`}
@@ -363,11 +406,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead
-        article={article}
-        expanded={about}
-        onToggle={() => void setAbout(about ? null : true)}
-      />
+      <Masthead article={article} />
       <div className="controls">
         <span className="controls-label">Granularity</span>
         {gistDepths.map((d) => (
@@ -480,6 +519,23 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           }}
         />
       )}
+      {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
+          are drawn over everything, and matching source order to paint order is
+          one less thing to reason about when something appears underneath
+          something else. */}
+      <Dock
+        article={article}
+        comments={ordered}
+        panel={panel}
+        onPanel={(next) => void setPanel(next)}
+        onOpenComment={(id) => {
+          // Close the drawer on the way through: the dialog it opens would
+          // otherwise be underneath the dim, which looks exactly like nothing
+          // happening.
+          void setPanel(null);
+          goToComment(id);
+        }}
+      />
     </div>
   );
 }

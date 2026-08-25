@@ -131,3 +131,55 @@ describe("resolveMark refuses nonsense offsets", () => {
     expect(resolveMark("alpha beta", { quote: "gamma", start: 0 })).toBeNull();
   });
 });
+
+/**
+ * Inline SVG survives sanitising by choice (docs/project/security.md), so a
+ * comment's range can reach text inside a diagram. Wrapping an HTML <mark>
+ * inside foreign content builds a tree whose re-parse is governed by different
+ * rules than the one we built — so that text is counted and not wrapped.
+ */
+describe("foreign content", () => {
+  const HTML = `<p>Before <svg><text>LABEL</text></svg> after the diagram.</p>`;
+
+  it("counts svg text in the offset space, like renderedText does", () => {
+    // If these two disagree, every mark after a diagram lands in the wrong place.
+    expect(renderedText(HTML)).toContain("LABEL");
+  });
+
+  it("never puts a mark inside the svg", () => {
+    // A mark spanning the whole block, diagram included.
+    const out = annotateHtml(HTML, [
+      { id: "c1", start: 0, end: renderedText(HTML).length },
+    ]);
+    const svg = out.slice(out.indexOf("<svg"), out.indexOf("</svg>"));
+    expect(svg).not.toContain("<mark");
+    // …but the ordinary prose on both sides is still marked.
+    expect(out).toContain("<mark");
+    expect(out.slice(0, out.indexOf("<svg"))).toContain("<mark");
+  });
+
+  /**
+   * The one that actually pins the arithmetic. The test above passes either way,
+   * because a mark spanning everything cannot show whether the skipped node was
+   * still *counted* — so it would stay green if `offset += value.length` were
+   * moved below the namespace guard, which would shift every mark after a
+   * diagram by the length of its labels. Caught by GPT-5's review, 2026-08-25.
+   */
+  it("still counts the svg's text, so prose after a diagram marks exactly", () => {
+    const text = renderedText(HTML);
+    const start = text.indexOf("after");
+    expect(start).toBeGreaterThan(text.indexOf("LABEL")); // the word is past the svg
+    const out = annotateHtml(HTML, [{ id: "c1", start, end: start + "after".length }]);
+    expect(out).toContain(">after<");
+    expect(out).toMatch(/<mark[^>]*>after<\/mark>/);
+  });
+
+  it("treats mathml the same way", () => {
+    const math = `<p>Before <math><mi>XY</mi></math> after the formula.</p>`;
+    const text = renderedText(math);
+    const start = text.indexOf("after");
+    const out = annotateHtml(math, [{ id: "c1", start, end: start + "after".length }]);
+    expect(out.slice(out.indexOf("<math"), out.indexOf("</math>"))).not.toContain("<mark");
+    expect(out).toMatch(/<mark[^>]*>after<\/mark>/);
+  });
+});

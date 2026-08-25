@@ -83,6 +83,56 @@ claimed for months that stage 2 owed stage 3 "sanitized HTML". It didn't, and no
 asserting the problem was handled is how this survived unexamined — a reader checking whether
 extraction was safe would have found that line and stopped looking.
 
+### Sanitised twice, on purpose <a id="sanitised-twice-on-purpose"></a>
+
+Stage 3 is not the last line of defence, and treating it as one was the original mistake. The
+article is sanitised **twice**, and the two passes have different jobs:
+
+| | where | job |
+|---|---|---|
+| server | [`src/sanitize.ts`](../../src/sanitize.ts), stage 3 | make the *stored artefact* clean, so `blocks.json` on disk isn't a loaded gun and every later consumer inherits a sane starting point |
+| browser | [`src/web/sanitize.ts`](../../src/web/sanitize.ts), at article ingress | **guard the actual render** |
+
+The reason is the parser. The server pass runs under **jsdom's** HTML parser; the page runs
+**Chrome's**. Two parsers disagreeing about the same bytes is the entire mechanism of mutation XSS,
+and the disagreements are documented rather than hypothetical — DOMPurify's own README names attack
+vectors in specific jsdom versions and treats the server DOM as part of your trusted computing base.
+Sanitising in the engine that will render the result removes the differential instead of hoping
+about it. It also means an article stored *before* the sanitiser existed renders safely, since old
+`blocks.json` files are never retroactively cleaned on disk.
+
+**One policy, two bindings.** The config, the embed allowlist and the hook live in
+[`src/sanitize-policy.ts`](../../src/sanitize-policy.ts), which imports nothing Node-specific — it is
+in the browser bundle's module graph. Two passes that disagree would be *worse* than one, because
+the arrangement looks like defence in depth and is really two half-policies; `tests/sanitize-client.test.ts`
+runs a shared corpus through both bindings and asserts the outputs are byte-identical.
+
+**Why ingress and not the render sink.** React is not the first browser parser to see the string.
+[`annotate.ts`](../../src/web/annotate.ts) gets there first, twice: `renderedText` does
+`div.innerHTML = html` on every block to measure the offset space comments are anchored in, and
+`annotateHtml` does it again to draw the marks — and `annotateHtml` has a fast path that returns the
+string **unparsed** when a block has no comments, so a sanitiser bolted onto its tail would skip
+almost every block. Sanitising at the doorway covers all three parses.
+
+Sanitising *before* annotation also keeps the policy single. Annotation legitimately adds the
+`data-comment` / `data-mark-end` / `data-open` attributes and the `cmt` class that the policy forbids
+in source markup; a pass placed after it would need a second, laxer config, and drift between two
+configs would be a worse bug than the one it fixed. Verified in Chrome: with the payload below
+neutralised, all ten of the sample article's real comment marks still render.
+
+Both the ordering and the ingress placement came from GPT-5's design review, 2026-08-25. The first
+draft of this document recommended sanitising at the sink, which would have missed both earlier
+parses.
+
+**Verified in a browser, with a positive control.** A hostile payload was written into a stored
+`blocks.json` — the realistic "artefact from before the fix" case — and the page opened in Chrome.
+Every handler was gone from the rendered DOM, the lookalike embed was removed, and the forged
+`<mark class="cmt" data-comment>` came out as a plain `<mark>`. The control is what makes that
+meaningful: the surviving `<img>` really did fail to load (`naturalWidth === 0`), and an `onerror`
+handler attached to an identical failing src on the same page *did* fire — so the handler was
+**removed**, not merely never triggered. Without that control the test would have shared an
+assumption with the code, which is the [silent-success](../reusable/silent-success.md) shape.
+
 ### The library: DOMPurify
 
 Chosen against [third-party-library-selection.md](../reusable/third-party-library-selection.md),
@@ -242,31 +292,21 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
   ([architecture.md § Stage ownership](architecture.md#stage-ownership)) and the file had another
   agent's edits in it. The fix is two lines — import `sanitizeInPlace` and call it on the document
   before writing. **Worth doing.**
-- **We sanitise with jsdom's parser and render with Chrome's — and only sanitise once.** This is the
-  biggest open item, and it is a design gap rather than a missing test.
-  [`annotateHtml`](../../src/web/annotate.ts) takes the stored string, re-parses it in the browser
-  with `div.innerHTML`, walks it, and serialises it back, and React parses it once more. So the
-  string crosses between two different HTML parsers, which is precisely the mechanism mutation-XSS
-  exploits — and it is *not* hypothetical that jsdom and browsers disagree: DOMPurify's own README
-  names known attack vectors in specific jsdom versions and treats the server DOM as part of your
-  trusted computing base.
+- ~~**We sanitise with jsdom's parser and render with Chrome's.**~~ **Closed 2026-08-25** — see
+  [Sanitised twice, on purpose](#sanitised-twice-on-purpose) above. What remains is that the client
+  test runs under vitest's jsdom environment, so it pins that the policy is wired up and identical,
+  not that the two engines agree. A real Chromium mXSS corpus still belongs with
+  [browser-testing.md](browser-testing.md). The end-to-end check described above *was* run in Chrome,
+  with a positive control, but by hand rather than in CI.
 
-  Sonar's [mXSS cheatsheet](https://sonarsource.github.io/mxss-cheatsheet/remediation/) is blunt
-  that client-side sanitisation is the one that avoids parser differentials, and that server-side
-  HTML parsers introduce them. **The recommended fix is a second DOMPurify pass in the browser,
-  immediately before `dangerouslySetInnerHTML`** — belt and braces, not a replacement: sanitising at
-  stage 3 is what keeps `blocks.json` itself clean, and a stored artefact full of live handlers
-  would be its own problem. Two things to get right if we do it: it must run *after* the
-  `<mark>`-wrapping (so it also covers bugs in our own annotation code), which means the client
-  config has to **allow** `data-comment` / `data-mark-end` / `data-open` and the `cmt` class that
-  the server config forbids — the two policies are deliberately not the same. Touching
-  [`src/web/TableView.tsx`](../../src/web/TableView.tsx) is stage 6's call.
-
-  Keeping inline SVG (Greg, 2026-08-25) is what makes this matter most: foreign content is where
-  namespace confusion lives, and an HTML-only profile would close that class outright. The
-  annotation code itself is sound — constants, `setAttribute`, `textContent`, no string
-  interpolation — and a same-engine mXSS corpus round-trips cleanly. A real Chromium test belongs
-  with [browser-testing.md](browser-testing.md).
+- **The ingress call is guarded by reading source, not by mounting the app.** Deleting
+  `sanitizeArticle(...)` from [`App.tsx`](../../src/web/App.tsx) would otherwise leave every
+  sanitiser test green while reopening the original hole, so `tests/sanitize-client.test.ts` asserts
+  that every `setArticle` argument is either `null` or wrapped — and that no client file imports the
+  jsdom-bound module. Both were mutation-tested. A mount test driving the real fetch → state →
+  annotate → render chain would be stronger; it needs a React testing library this project doesn't
+  have, and picking one is its own decision
+  ([third-party-library-selection.md](../reusable/third-party-library-selection.md)).
 
 - **No Trusted Types.** Newly practical: it reached all major browsers during 2025–26 (Safari 26,
   Firefox Feb 2026). `require-trusted-types-for 'script'` plus one policy whose `createHTML` calls
