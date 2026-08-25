@@ -91,14 +91,22 @@ Chosen against [third-party-library-selection.md](../reusable/third-party-librar
 | | DOMPurify | sanitize-html | xss (js-xss) |
 |---|---|---|---|
 | weekly npm downloads | **~62M** | ~10.6M | ~5.7M |
-| TypeScript types | bundled | bundled | bundled |
-| maintainer | Cure53 (a browser-security firm) | Apostrophe | leizongmin |
+| TypeScript types | bundled | `@types/…` (DefinitelyTyped) | bundled |
+| maintainer | Cure53 (a browser-security firm) | **repo archived 2026-02-27** | leizongmin |
+| approach | real DOM traversal | htmlparser2 | regex / string |
 
 DOMPurify wins on the criterion this repo cares most about — *long-lived, heavily documented, lots
-of pretraining data* — by roughly six to one, and it is what Mozilla's own SECURITY.md points at. It
-is the reference implementation, which cuts both ways and is discussed below. It needs a DOM, which
-under Node means jsdom; we already depend on jsdom, so that costs nothing, and
-`isomorphic-dompurify` would be a dependency for a problem we don't have.
+of pretraining data* — by roughly six to one, and it is what Mozilla's own security policy points at.
+
+The other two disqualify themselves on closer look. **`sanitize-html`'s upstream repo was archived
+(read-only) on 2026-02-27**; development moved inside the ApostropheCMS monorepo and the standalone
+package has no clear owner for the next bypass. `xss` is maintained but is string- and regex-based
+rather than DOM-based, so it cannot see the mutation-XSS class of bug at all — the class this
+document is most worried about.
+
+DOMPurify needs a DOM, which under Node means jsdom; we already depend on jsdom, so that costs
+nothing, and `isomorphic-dompurify` would be a dependency for a problem we don't have (it bundles
+its own jsdom and pins the version, which is a footgun, not a feature, when you already have one).
 
 ### What survives, and what doesn't
 
@@ -192,6 +200,36 @@ The cost is one extra parse of a 78KB document, which is nothing.
 Because sanitising `innerHTML` says nothing about the node it was read from, `sanitizeInPlace` also
 strips risky attributes from the root element itself — `<body onload>` is the obvious gap otherwise.
 
+### Never wrap sanitised output in a raw-text element
+
+[CVE-2026-65914](https://github.com/cure53/DOMPurify/security/advisories/GHSA-h8r8-wccr-v5f2)
+("mXSS via re-contextualization", affected 3.1.3–3.3.1, fixed 3.3.2) is worth knowing even though our
+3.4.14 is past it, because the *shape* of it is a rule about how callers use the output:
+
+```js
+wrapper.innerHTML = "<xmp>" + DOMPurify.sanitize(x) + "</xmp>";   // ← the bug
+```
+
+Concatenating sanitised HTML into a **raw-text or RCDATA element** — `<xmp>`, `<script>`, `<iframe>`,
+`<noembed>`, `<noframes>`, `<noscript>` — and re-parsing lets a `</xmp>` sequence inside a sanitised
+attribute regain structural meaning on the second parse and break out. We are safe because
+[`annotateHtml`](../../src/web/annotate.ts) parses into a plain `<div>` and React renders into a
+normal element, and that is a property to preserve deliberately, not a coincidence. Plain
+`dangerouslySetInnerHTML` of an already-sanitised fragment is not the vulnerable pattern.
+
+### The cost
+
+Sanitising adds one HTML parse per article. Worth knowing precisely, because the
+[ingest queue](ingest-queue.md) runs stage 3 inside the long-lived server process: measured on the
+78KB Noema article, each `sanitizeHtml` call retains about **1.7MB** that survives a forced GC.
+
+That is not a sanitiser bug, and re-architecting this module will not fix it — **plain jsdom retains
+about 4.5MB per parse on its own**, with no DOMPurify involved, and `window.close()` does not release
+it. Stage 3 already parsed a JSDOM per article before this change, and so does stage 2. Sanitising
+makes an existing cost roughly a third worse; it does not introduce it. If the server process ever
+needs to ingest many articles without restarting, the fix belongs to the queue — see
+[ingest-queue.md](ingest-queue.md) — not here.
+
 ## Known gaps
 
 Honest list. None is a reason to delay the fix above; all are worth knowing.
@@ -204,18 +242,44 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
   ([architecture.md § Stage ownership](architecture.md#stage-ownership)) and the file had another
   agent's edits in it. The fix is two lines — import `sanitizeInPlace` and call it on the document
   before writing. **Worth doing.**
-- **The jsdom → Chrome round trip is not tested in a real browser.**
+- **We sanitise with jsdom's parser and render with Chrome's — and only sanitise once.** This is the
+  biggest open item, and it is a design gap rather than a missing test.
   [`annotateHtml`](../../src/web/annotate.ts) takes the stored string, re-parses it in the browser
-  with `div.innerHTML`, walks it, and serialises it back. So HTML sanitised by *jsdom's* parser is
-  re-parsed by *Chrome's* — the shape mutation-XSS exploits, and the reason foreign content
-  (`<svg>`, `<math>`) is where most historical bypasses live. Keeping inline SVG is a deliberate
-  choice (Greg, 2026-08-25) and it is the riskier half of this document. The annotation code itself
-  is sound — constants, `setAttribute`, `textContent`, no string interpolation — and a same-engine
-  mXSS corpus round-trips cleanly. A real Chromium test belongs with
-  [browser-testing.md](browser-testing.md).
-- **No Content-Security-Policy.** A CSP would be the obvious second layer, but the Vite dev server
-  needs `unsafe-inline` and `unsafe-eval` for HMR, so the version we could actually ship in dev
-  would block little of what matters. Worth revisiting when there is a real server.
+  with `div.innerHTML`, walks it, and serialises it back, and React parses it once more. So the
+  string crosses between two different HTML parsers, which is precisely the mechanism mutation-XSS
+  exploits — and it is *not* hypothetical that jsdom and browsers disagree: DOMPurify's own README
+  names known attack vectors in specific jsdom versions and treats the server DOM as part of your
+  trusted computing base.
+
+  Sonar's [mXSS cheatsheet](https://sonarsource.github.io/mxss-cheatsheet/remediation/) is blunt
+  that client-side sanitisation is the one that avoids parser differentials, and that server-side
+  HTML parsers introduce them. **The recommended fix is a second DOMPurify pass in the browser,
+  immediately before `dangerouslySetInnerHTML`** — belt and braces, not a replacement: sanitising at
+  stage 3 is what keeps `blocks.json` itself clean, and a stored artefact full of live handlers
+  would be its own problem. Two things to get right if we do it: it must run *after* the
+  `<mark>`-wrapping (so it also covers bugs in our own annotation code), which means the client
+  config has to **allow** `data-comment` / `data-mark-end` / `data-open` and the `cmt` class that
+  the server config forbids — the two policies are deliberately not the same. Touching
+  [`src/web/TableView.tsx`](../../src/web/TableView.tsx) is stage 6's call.
+
+  Keeping inline SVG (Greg, 2026-08-25) is what makes this matter most: foreign content is where
+  namespace confusion lives, and an HTML-only profile would close that class outright. The
+  annotation code itself is sound — constants, `setAttribute`, `textContent`, no string
+  interpolation — and a same-engine mXSS corpus round-trips cleanly. A real Chromium test belongs
+  with [browser-testing.md](browser-testing.md).
+
+- **No Trusted Types.** Newly practical: it reached all major browsers during 2025–26 (Safari 26,
+  Firefox Feb 2026). `require-trusted-types-for 'script'` plus one policy whose `createHTML` calls
+  `DOMPurify.sanitize(…, { RETURN_TRUSTED_TYPE: true })` would make it structurally impossible to
+  write a raw string into the DOM *anywhere in the app, including code nobody has written yet*. That
+  is a stronger guarantee than any amount of care at the call site, and it pairs with the client-side
+  pass above.
+- **No Content-Security-Policy.** Worth more than first assumed: most mXSS payloads execute through
+  inline event handlers (`onerror=`, `onload=`) rather than `<script>` tags, and a `script-src`
+  without `unsafe-inline` blocks inline handlers too — so it bites the actual payload shape. The
+  friction is real though: Vite's dev client and React Fast Refresh inject inline scripts, so a
+  strict policy breaks HMR unless it goes through Vite's `html.cspNonce` plumbing. Lower priority
+  than the two items above, which protect the specific sink rather than execution in general.
 - **Old artefacts are not re-sanitised on read.** `blocks.json` files written before this change are
   trusted as-is. Re-run stage 3 to clean them. The one checked-out article was already clean.
 - **Remote content still loads.** Images, and an allowlisted embed, fetch from third parties on
