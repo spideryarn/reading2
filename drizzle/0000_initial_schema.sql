@@ -26,6 +26,7 @@ CREATE TABLE "spideryarn"."article_revisions" (
 	"site_name" text,
 	"lang" text,
 	"excerpt" text,
+	"note" text,
 	"requested_url" text,
 	"final_url" text,
 	"fetched_at" timestamp with time zone,
@@ -61,7 +62,7 @@ CREATE TABLE "spideryarn"."block_identities" (
 	"block_id" text NOT NULL,
 	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "block_identities_article_id_block_id_pk" PRIMARY KEY("article_id","block_id"),
-	CONSTRAINT "block_identities_id_format" CHECK ("spideryarn"."block_identities"."block_id" ~ '^spya-[a-hj-km-np-z2-9][a-hj-km-np-z0-9]{5}$')
+	CONSTRAINT "block_identities_id_format" CHECK ("spideryarn"."block_identities"."block_id" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$')
 );
 --> statement-breakpoint
 CREATE TABLE "spideryarn"."comments" (
@@ -101,7 +102,8 @@ CREATE TABLE "spideryarn"."jobs" (
 	"started_at" timestamp with time zone,
 	"finished_at" timestamp with time zone,
 	CONSTRAINT "jobs_status" CHECK ("spideryarn"."jobs"."status" in ('queued','running','done','error','cancelled')),
-	CONSTRAINT "jobs_id_format" CHECK ("spideryarn"."jobs"."id" ~ '^spya-[a-hj-km-np-z2-9][a-hj-km-np-z0-9]{5}$')
+	CONSTRAINT "jobs_id_format" CHECK ("spideryarn"."jobs"."id" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'),
+	CONSTRAINT "jobs_running_is_fenced" CHECK ("spideryarn"."jobs"."status" <> 'running' or ("spideryarn"."jobs"."attempt_id" is not null and "spideryarn"."jobs"."lease_expires_at" is not null))
 );
 --> statement-breakpoint
 CREATE TABLE "spideryarn"."queue_state" (
@@ -153,4 +155,5 @@ ALTER TABLE "spideryarn"."comments" ADD CONSTRAINT "comments_identity_fk" FOREIG
 ALTER TABLE "spideryarn"."queue_state" ADD CONSTRAINT "queue_state_running_job_id_jobs_id_fk" FOREIGN KEY ("running_job_id") REFERENCES "spideryarn"."jobs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "spideryarn"."revision_blocks" ADD CONSTRAINT "revision_blocks_revision_fk" FOREIGN KEY ("article_id","revision_id") REFERENCES "spideryarn"."article_revisions"("article_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "spideryarn"."revision_blocks" ADD CONSTRAINT "revision_blocks_identity_fk" FOREIGN KEY ("article_id","block_id") REFERENCES "spideryarn"."block_identities"("article_id","block_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "spideryarn"."revision_step_runs" ADD CONSTRAINT "revision_step_runs_revision_id_article_revisions_id_fk" FOREIGN KEY ("revision_id") REFERENCES "spideryarn"."article_revisions"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "spideryarn"."revision_step_runs" ADD CONSTRAINT "revision_step_runs_revision_id_article_revisions_id_fk" FOREIGN KEY ("revision_id") REFERENCES "spideryarn"."article_revisions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "jobs_only_one_running" ON "spideryarn"."jobs" USING btree ((true)) WHERE "spideryarn"."jobs"."status" = 'running';

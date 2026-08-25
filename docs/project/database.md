@@ -51,7 +51,7 @@ it; the app is still entirely on files. What is built:
 |---|---|
 | [`src/db/schema.ts`](../../src/db/schema.ts) | the nine tables, in TypeScript. The source of truth |
 | [`drizzle/0000_initial_schema.sql`](../../drizzle/0000_initial_schema.sql) | generated from it by `npm run db:generate` |
-| [`drizzle/0001_auth_fks_and_roles.sql`](../../drizzle/0001_auth_fks_and_roles.sql) | hand-written: the `auth.users` FKs, the current-revision pointer, the indexes, the singleton queue row |
+| [`drizzle/0001_auth_fks_and_guards.sql`](../../drizzle/0001_auth_fks_and_guards.sql) | hand-written: the `auth.users` FKs, the current-revision pointer, the indexes, and the two guards that make global concurrency 1 a database fact rather than a convention |
 | [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) | nine assertions that the schema *enforces* what the plan promises |
 | [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) | `npm run db:migrate` |
 

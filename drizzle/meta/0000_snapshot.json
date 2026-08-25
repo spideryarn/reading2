@@ -1,5 +1,5 @@
 {
-  "id": "b5f3a076-7603-4c37-959b-a295ce6c4f3e",
+  "id": "23f904f4-ee15-4bda-bb43-96844d9a261a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -181,6 +181,12 @@
         },
         "excerpt": {
           "name": "excerpt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -434,7 +440,7 @@
       "checkConstraints": {
         "block_identities_id_format": {
           "name": "block_identities_id_format",
-          "value": "\"spideryarn\".\"block_identities\".\"block_id\" ~ '^spya-[a-hj-km-np-z2-9][a-hj-km-np-z0-9]{5}$'"
+          "value": "\"spideryarn\".\"block_identities\".\"block_id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
         }
       },
       "isRLSEnabled": false
@@ -682,7 +688,24 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "jobs_only_one_running": {
+          "name": "jobs_only_one_running",
+          "columns": [
+            {
+              "expression": "(true)",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"spideryarn\".\"jobs\".\"status\" = 'running'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -694,7 +717,11 @@
         },
         "jobs_id_format": {
           "name": "jobs_id_format",
-          "value": "\"spideryarn\".\"jobs\".\"id\" ~ '^spya-[a-hj-km-np-z2-9][a-hj-km-np-z0-9]{5}$'"
+          "value": "\"spideryarn\".\"jobs\".\"id\" ~ '^spya-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
+        },
+        "jobs_running_is_fenced": {
+          "name": "jobs_running_is_fenced",
+          "value": "\"spideryarn\".\"jobs\".\"status\" <> 'running' or (\"spideryarn\".\"jobs\".\"attempt_id\" is not null and \"spideryarn\".\"jobs\".\"lease_expires_at\" is not null)"
         }
       },
       "isRLSEnabled": false

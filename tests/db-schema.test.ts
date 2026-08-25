@@ -75,6 +75,25 @@ async function inRollback(body: (c: PoolClient) => Promise<void>): Promise<void>
   }
 }
 
+/**
+ * Run one statement expected to fail, without poisoning the transaction.
+ *
+ * Postgres aborts the whole transaction on any error, so a second expected
+ * failure in the same transaction reports "current transaction is aborted"
+ * rather than the constraint you were testing — and the assertion fails for a
+ * reason that has nothing to do with what it was checking. A savepoint per
+ * attempt keeps each one independent.
+ */
+async function expectViolation(
+  c: PoolClient,
+  constraint: RegExp,
+  run: () => Promise<unknown>,
+): Promise<void> {
+  await c.query("savepoint attempt");
+  await expect(run()).rejects.toThrow(constraint);
+  await c.query("rollback to savepoint attempt");
+}
+
 const OWNER = "11111111-1111-1111-1111-111111111111";
 const ART_1 = "aaaaaaaa-0000-0000-0000-000000000001";
 const ART_2 = "aaaaaaaa-0000-0000-0000-000000000002";
@@ -249,6 +268,72 @@ describe("the schema keeps the promises the plan makes", () => {
       // proceeding, with nothing anywhere reporting a problem.
       await expect(c.query("insert into spideryarn.queue_state (id) values (2)")).rejects.toThrow(
         /queue_state_singleton/,
+      );
+    });
+  });
+
+  dbIt("the queue_state row cannot be deleted", async () => {
+    await inRollback(async (c) => {
+      // The CHECK stops a SECOND row. Nothing in SQL can stop the row going
+      // missing — and that is the dangerous direction: claiming locks
+      // queue_state FOR UPDATE, and locking zero rows succeeds silently, so
+      // every worker would believe it held the queue. Hence a trigger.
+      await expect(c.query("delete from spideryarn.queue_state")).rejects.toThrow(/permanent/);
+    });
+  });
+
+  dbIt("two jobs cannot be running at once", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const running = (id: string) =>
+        c.query(
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, attempt_id, lease_expires_at)
+           values ($1,$2,'s','[]'::jsonb,'running',gen_random_uuid(), now() + interval '1 minute')`,
+          [id, OWNER],
+        );
+      await running("spya-aaaaaa");
+      // queue_state gives concurrency 1 only while every claimant follows the
+      // locking convention. This is the backstop for when one does not.
+      await expect(running("spya-bbbbbb")).rejects.toThrow(/jobs_only_one_running/);
+    });
+  });
+
+  dbIt("a running job must carry its fencing token", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      // A NULL attempt_id fences nothing while looking exactly like one that
+      // does: every `where attempt_id = $1` matches no rows, which reads as
+      // "someone else got there first" rather than as a bug.
+      await expect(
+        c.query(
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status)
+           values ('spya-cccccc',$1,'s','[]'::jsonb,'running')`,
+          [OWNER],
+        ),
+      ).rejects.toThrow(/jobs_running_is_fenced/);
+    });
+  });
+
+  dbIt("the id CHECK accepts exactly what mintId can produce", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      // The regex is ID_PATTERN.source, not a hand-copy. The hand-copied
+      // version accepted a leading digit and accepted `1` — three shapes the
+      // minter can never emit. A CHECK that is too permissive passes every test
+      // written against real ids and admits garbage from everywhere else.
+      const rejected = ["spya-2aaaaa", "spya-a1aaaa", "spya-aaaaa1"];
+      for (const bad of rejected) {
+        await expectViolation(c, /block_identities_id_format/, () =>
+          c.query("insert into spideryarn.block_identities (article_id, block_id) values ($1,$2)", [
+            ART_1,
+            bad,
+          ]),
+        );
+      }
+      // `0` IS in the alphabet — dropping `o` is what makes keeping `0` safe.
+      await c.query(
+        "insert into spideryarn.block_identities (article_id, block_id) values ($1,'spya-a0aaaa')",
+        [ART_1],
       );
     });
   });

@@ -76,7 +76,10 @@ Two things to look at before building on it:
 - The dashboard shows a **"Grace period is over"** billing banner. The project reports Healthy, but
   if it is ever restricted the new app goes down *with* the old one, for reasons that have nothing
   to do with either app's code. **This is worth resolving before the new app depends on it.**
-- Postgres 15.8 means `UNIQUE NULLS NOT DISTINCT` is available. The schema below needs it.
+- Postgres 15+ means `UNIQUE NULLS NOT DISTINCT` is available **if** the job de-duplication key
+  ends up needing it. An earlier draft asserted three times that the schema uses it; it does not,
+  and the claim was removed rather than the feature invented to match. See
+  [§ Job de-duplication](#job-de-duplication-still-unsolved).
 
 ### This codebase
 
@@ -452,12 +455,15 @@ design needs. That is the trade, stated in the direction that makes it a trade.
 alongside the generated ones: foreign keys into `auth.users` (declaring an Auth-owned table in the
 Drizzle schema risks migration generation treating it as ours to manage), and the roles and grants
 above. Everything else — composite primary and foreign keys, raw SQL `CHECK` including the block-id
-regex, `UNIQUE NULLS NOT DISTINCT`, `bytea`, JSONB — is supported directly.
+regex, `UNIQUE NULLS NOT DISTINCT`, JSONB — is supported directly. **Not `bytea`**: Drizzle 0.45
+has no native `bytea` column, despite a review saying it did. It is four lines of `customType`, and
+the correction is here because "the review said so" is exactly how an unchecked claim becomes a
+build error.
 
 The drift this creates is real: Drizzle's snapshot doesn't know about the custom migration, so a
 future generated migration that drops and recreates one of those tables can lose the `auth.users` FK
 silently. **The check is a catalog assertion in the integration tests** — query `pg_constraint` and
-assert the Auth FKs exist, the `NULLS NOT DISTINCT` constraint exists, the app tables are in
+assert the Auth FKs exist, the app tables are in
 `spideryarn`, and the runtime role cannot read `public.documents`. A custom companion migration makes
 the divergence visible; hand-editing a generated file hides it.
 
@@ -710,6 +716,62 @@ gate authenticating against the old app's project would have been authenticating
 existing users, on an email provider already enabled, with only the allowlist making that safe. A new
 project starts with no users at all. The allowlist still must not quietly become "any authenticated
 user" — but it is now a second lock rather than the only one.
+
+### Job de-duplication: still unsolved
+
+`src/jobs.ts` de-duplicates on owner + slug + ordered steps + forced steps, because an arc-only job
+and a full refresh of the same slug are *different work* and a blunt "one active job per slug" index
+would swallow one of them.
+
+**The schema does not carry that yet, and `steps` cannot be the key.** It is a JSONB column that
+mutates as statuses and timestamps change, so any constraint over it stops matching the moment the
+job starts running. What is needed is an immutable `work_key` — a canonical string derived from the
+ordered step names and force flags, written once at enqueue — with a partial unique index on
+`(owner_id, slug, work_key)` restricted to `queued` and `running` rows. That is where
+`UNIQUE NULLS NOT DISTINCT` may earn its place.
+
+Not built, because the queue is step 9 and building the key without the claim protocol beside it
+would be guessing. Recorded here so it is not rediscovered as a bug.
+
+Related and also unsolved: `freeSlug`. `articles.slug UNIQUE` *detects* the race but does not
+allocate the loser a safe suffix, and if the article row is not inserted until publication, two jobs
+can still pick the same free slug and both work on it. Enqueue has to reserve the row under the
+unique constraint **before** the expensive work, reuse it when the URL matches, and retry the next
+candidate when it does not.
+
+### What the third review caught
+
+The schema was reviewed by GPT-5.6 after being written, and returned **NO-SHIP** with six real
+defects. All were either fixed or written down; the ones fixed:
+
+| Found | Status |
+|---|---|
+| `queue_state` can be **deleted**, and then every claimant locks nothing and believes it holds the queue | Fixed — seeded in `0001`, and a `BEFORE DELETE` trigger refuses |
+| Nothing stopped **two `running` jobs** | Fixed — unique partial index on a constant where `status = 'running'` |
+| A `running` job could have a NULL `attempt_id`, fencing nothing while looking fenced | Fixed — CHECK requires token and lease |
+| `tweets` stored as `Tweet[]` loses `sourceHash` — **the staleness feature breaks** | Fixed — stores the whole `TweetThread`. `arc` likewise |
+| `Meta.note` had no column, and a real article carries one | Fixed |
+| `revision_blocks (revision_id, ordinal)` index duplicated the one `UNIQUE` already creates | Fixed — removed, after checking `pg_indexes` rather than believing it |
+
+And one it missed, found while checking its report: **the block-id CHECK was hand-copied and
+wrong.** It accepted a leading digit and accepted `1`, neither of which `mintId()` can produce. A
+CHECK that is too permissive passes every test written against real ids and admits garbage from
+everywhere else. It is now `ID_PATTERN.source` — the same regex the minter uses, not a second copy
+of it.
+
+Still open, deliberately, because they belong to steps not yet started:
+
+- **Publication is not enforced by the schema and cannot be.** A foreign key cannot see the other
+  row's `status`, so nothing stops `current_revision_id` pointing at a *draft*. The check has to
+  live in `publishRevision`, in the same transaction that moves the pointer.
+- **Reading blocks needs an explicit `ORDER BY ordinal`.** An index is not an ordering guarantee. A
+  loader that omits it will look correct until a query plan changes.
+- **`comments.owner_id` and `jobs.owner_id` are independent of the article's owner**, so with a
+  second user the schema permits one person's comment on another's article. Fine while there is one
+  user; it must become a composite key or an explicit adapter invariant before there are two.
+- **A `done` step run can coexist with a missing artefact.** The row and the output have to be
+  committed together, and the adapter has to compare every field — null-safely, since `prompt_version`
+  and `model` are nullable.
 
 ---
 

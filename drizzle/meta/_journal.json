@@ -5,15 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1787671882749,
+      "when": 1787672809494,
       "tag": "0000_initial_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1787671891590,
-      "tag": "0001_auth_fks_and_roles",
+      "when": 1787672856050,
+      "tag": "0001_auth_fks_and_guards",
       "breakpoints": true
     }
   ]

@@ -49,12 +49,14 @@ import {
   primaryKey,
   smallint,
   text,
+  uniqueIndex,
   timestamp,
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
-import type { ArcEntry, Citation, JobStep, Tree, Tweet } from "../types.js";
+import { ID_PATTERN } from "../ids.js";
+import type { Arc, Citation, JobStep, Tree, TweetThread } from "../types.js";
 
 export const spideryarn = pgSchema("spideryarn");
 
@@ -69,11 +71,25 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
 /**
- * The id format, as a database constraint: `spya-` then six characters, the
- * first a letter, from an alphabet with `i`, `l`, `o`, `1` and `0` removed.
- * Kept in step with ID_PREFIX and the alphabet in src/ids.ts.
+ * The id format, as a database constraint — **taken from `ID_PATTERN` rather
+ * than written out again.**
+ *
+ * The first version of this file hand-copied the regex and got it wrong in
+ * three ways: it accepted a digit as the first character, and it accepted `1`
+ * anywhere. Both are ids `mintId()` can never produce (`1` is not in the
+ * alphabet, and the first character is always a letter so the id is a valid CSS
+ * selector without escaping). A CHECK that is too permissive is the worst kind
+ * — it passes every test written against real ids and silently admits garbage
+ * from anywhere else.
+ *
+ * Postgres's `~` is POSIX, and `ID_PATTERN` uses only literal character lists
+ * and a bounded repeat, which mean the same thing in both flavours.
+ *
+ * Named for Spideryarn ids in general, not blocks: `src/jobs.ts` mints job ids
+ * with the same `mintId()`, so the same constraint applies to them. Two tables
+ * sharing one constant is correct here precisely because they share one minter.
  */
-const BLOCK_ID_REGEX = "^spya-[a-hj-km-np-z2-9][a-hj-km-np-z0-9]{5}$";
+const SPIDERYARN_ID_REGEX = ID_PATTERN.source;
 
 /* ------------------------------------------------------------- articles -- */
 
@@ -118,6 +134,8 @@ export const articleRevisions = spideryarn.table(
     siteName: text("site_name"),
     lang: text("lang"),
     excerpt: text("excerpt"),
+    /** `Meta.note`. Real articles carry one — the noema article's meta.json does. */
+    note: text("note"),
 
     /**
      * Stage 1's real output. `requestedUrl` and `finalUrl` differ whenever a
@@ -149,10 +167,20 @@ export const articleRevisions = spideryarn.table(
      * Drizzle does not validate JSONB at runtime: parse at the boundary.
      */
     tree: jsonb("tree").$type<Tree>(),
-    /** Separately generated, and joins by block range rather than node id. */
-    arc: jsonb("arc").$type<ArcEntry[]>(),
-    /** The thread, when it has been asked for. Not part of a default ingest. */
-    tweets: jsonb("tweets").$type<Tweet[]>(),
+    /**
+     * The WHOLE `Arc`, not just its entries — `version`, `generator` and `slug`
+     * travel with it. Storing the entries alone loses the provenance that says
+     * which generator wrote them.
+     */
+    arc: jsonb("arc").$type<Arc>(),
+    /**
+     * The WHOLE `TweetThread`. Storing `Tweet[]` alone would drop `sourceHash`,
+     * and `sourceHash` is the entire reason this feature can say a thread
+     * describes an older version of the article — the thing the original
+     * version could never answer. It would also drop `limit`, which is what
+     * `chars` was counted against. Not a tidy-up: a functional break.
+     */
+    tweets: jsonb("tweets").$type<TweetThread>(),
 
     /**
      * The library's scalars, computed once here instead of by a directory walk
@@ -194,7 +222,7 @@ export const blockIdentities = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.blockId] }),
-    check("block_identities_id_format", sql`${t.blockId} ~ ${sql.raw(`'${BLOCK_ID_REGEX}'`)}`),
+    check("block_identities_id_format", sql`${t.blockId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
   ],
 );
 
@@ -355,7 +383,25 @@ export const jobs = spideryarn.table(
       "jobs_status",
       sql`${t.status} in ('queued','running','done','error','cancelled')`,
     ),
-    check("jobs_id_format", sql`${t.id} ~ ${sql.raw(`'${BLOCK_ID_REGEX}'`)}`),
+    check("jobs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /**
+     * A running job must carry the fencing token and lease that make it safe to
+     * write. Without this the token is optional — and an attempt with a NULL
+     * `attempt_id` fences nothing while looking exactly like one that does,
+     * because every `where attempt_id = $1` then matches no rows. That reads as
+     * "somebody else got there first" rather than as a bug.
+     */
+    check(
+      "jobs_running_is_fenced",
+      sql`${t.status} <> 'running' or (${t.attemptId} is not null and ${t.leaseExpiresAt} is not null)`,
+    ),
+    /**
+     * At most one running job, enforced by the database rather than by every
+     * claimant following the locking convention correctly. `queue_state` gives
+     * concurrency 1 only while they do; this is the backstop for when one does
+     * not. A unique index on a constant, restricted to running rows.
+     */
+    uniqueIndex("jobs_only_one_running").on(sql`(true)`).where(sql`${t.status} = 'running'`),
   ],
 );
 
@@ -377,6 +423,11 @@ export const queueState = spideryarn.table(
   },
   (t) => [check("queue_state_singleton", sql`${t.id} = 1`)],
 );
+// The CHECK above says "no more than one row", NOT "exactly one row", and the
+// dangerous case is the missing one: every claimant then locks nothing and
+// believes it holds the queue. Postgres cannot express "this table always has a
+// row" as a constraint, so the guard is a delete trigger in
+// drizzle/0001_auth_fks_and_guards.sql, alongside the row being seeded there.
 
 /* ------------------------------------------------------- step currency -- */
 
