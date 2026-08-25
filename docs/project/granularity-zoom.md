@@ -561,7 +561,9 @@ stays put while the text breathes around it.
   and `?cols=` ([url-state.md](url-state.md#the-parameters)). The keys went instead to **stepping
   through the article one item at a time, at whichever level the pointer is hovering** — and ended up
   on ↑ / ↓ rather than ← / →, because up-down is the axis that means "further through the piece" at
-  every level of this view. See [keyboard.md](keyboard.md).
+  every level of this view. ← / → then came back to granularity after all: they move that *aim*
+  sideways across the columns, so the level can be chosen without a mouse. See
+  [keyboard.md](keyboard.md#choosing-the-level-without-a-mouse).
 - **Discrete levels, animated between.** v1 snaps to integer depths; continuous zoom is a later
   question ([Q4](open-questions.md#q4)).
 - **Click a gist to descend into just that node**, leaving the rest of the article coarse. This is

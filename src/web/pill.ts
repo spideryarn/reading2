@@ -15,10 +15,10 @@
  * Individual `Toggle`s rather than a `ToggleGroup`, which is what you would
  * normally reach for and what the migration plan called for. The reason is
  * this app's keyboard design: a ToggleGroup wraps its items in Radix's roving
- * focus, which binds ArrowLeft, ArrowRight, ArrowUp AND ArrowDown. Here ↑/↓
- * step through the article and ←/→ are deliberately handed back to the browser
- * to pan a table wider than the window (see keynav.ts and
- * docs/project/keyboard.md). A group would swallow all four whenever focus sat
+ * focus, which binds ArrowLeft, ArrowRight, ArrowUp AND ArrowDown. All four
+ * are ours: ↑/↓ step through the article and ←/→ choose the level they step by
+ * (see keynav.ts and docs/project/keyboard.md). A group would swallow all four
+ * whenever focus sat
  * inside the bar — which is precisely where focus lands after you click a
  * pill. Separate toggles give the same `aria-pressed` and `data-state` and
  * leave the arrow keys alone.

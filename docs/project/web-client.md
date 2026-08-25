@@ -149,9 +149,9 @@ name, `--color-highlight`, so nobody can reach for `tw:bg-accent` expecting it.
 
 The plan called for `ToggleGroup type="multiple"` for the granularity pills. **We used separate
 `Toggle`s instead, and the reason is the keyboard.** A ToggleGroup wraps its items in Radix's roving
-focus, which binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown. In this app ↑/↓ step through the
-article and ←/→ are deliberately handed back to the browser to pan a table wider than the window
-([keyboard.md](keyboard.md#what-we-gave-up)). A group would swallow all four whenever focus sat in
+focus, which binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown. In this app all four are spoken
+for: ↑/↓ step through the article and ←/→ choose the level they step by
+([keyboard.md](keyboard.md#choosing-the-level-without-a-mouse)). A group would swallow all four whenever focus sat in
 the controls bar — which is exactly where focus lands after you click a pill.
 
 Separate toggles give the same `aria-pressed` and `data-state` and leave the arrow keys alone. **This

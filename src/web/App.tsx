@@ -65,7 +65,7 @@ import {
   type Section,
 } from "./position.js";
 import { fitView, proseVisible } from "./layout.js";
-import { useArrowNav } from "./keynav.js";
+import { aimLadder, useArrowNav } from "./keynav.js";
 import { useComments } from "./useComments.js";
 import { PILL } from "./pill.js";
 
@@ -309,6 +309,17 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
     [windowWidth, gistDepths, geometry.leafDepth, proseOn, cols, inMode],
   );
 
+  /**
+   * What the L0 column renders — one sentence per part on where the argument
+   * stands there, rather than the root node repeated down the whole page.
+   * Null until `npm run arc` has been run for this article, and then the column
+   * falls back to the root exactly as it used to. See tree.js § the arc.
+   */
+  const arcCells = useMemo(
+    () => buildArcColumn(geometry, article.arc),
+    [geometry, article.arc],
+  );
+
   // A string, not the array: a fresh array every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
   // row on the page sideways, and the `?at=` tracker holds row elements it
@@ -388,15 +399,26 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * wheel. Off any tagged column the stride falls back to the section, which is
    * the unit `?at=` already stores.
    *
+   * ← / → move that aim across the columns, so the level can be chosen without
+   * touching the mouse — Greg, 2026-08-26: "so that I can choose the level of
+   * granularity with keyboard when jumping up/down". The rungs they step
+   * between are the columns actually on screen, which is why the ladder is
+   * built here, beside `fit`, rather than inside the hook.
+   *
    * Suspended while the drawer is open. A reader looking at their questions is
    * not reading, and the article scrolling away underneath the dim — silently,
    * because they cannot see it move — is the kind of thing you only notice
    * afterwards, when you have lost your place.
    */
+  const navLadder = useMemo(
+    () => aimLadder(geometry.cells, fit.columns, geometry.leafDepth, proseOn, !!arcCells),
+    [geometry, fit.columns, proseOn, arcCells],
+  );
   const navDepth = useArrowNav(
     geometry,
     article.blocks,
     sectionDepth(geometry),
+    navLadder,
     !drawerOpen,
   );
 
@@ -465,17 +487,6 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
     next.has(d) ? next.delete(d) : next.add(d);
     setCols([...next].sort((a, b) => a - b));
   };
-
-  /**
-   * What the L0 column renders — one sentence per part on where the argument
-   * stands there, rather than the root node repeated down the whole page.
-   * Null until `npm run arc` has been run for this article, and then the column
-   * falls back to the root exactly as it used to. See tree.js § the arc.
-   */
-  const arcCells = useMemo(
-    () => buildArcColumn(geometry, article.arc),
-    [geometry, article.arc],
-  );
 
   return (
     <div
@@ -576,7 +587,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
             you cannot tell what they are pointing at before you press one. */}
         <span
           className="keynav"
-          title="Up and down arrows step through this level — move the pointer to another column to change it"
+          title="Up and down arrows step through this level — left and right arrows, or the pointer, change which level that is"
         >
           ↑↓ {columnLabel(navDepth, geometry.leafDepth)}
         </span>

@@ -1,5 +1,6 @@
 /**
- * Arrow-key navigation, aimed by the pointer.
+ * Arrow-key navigation: ↑ / ↓ step through the article, ← / → pick the level
+ * they step by, and the pointer picks it too.
  *
  * Greg, 2026-08-25:
  *
@@ -15,16 +16,25 @@
  * you happen to be pointing, and you can see it before you press anything
  * (App.tsx puts the level in the controls bar, TableView lights the header).
  *
- * **The keys are ↑ / ↓, not ← / →** — Greg, same day: "let's switch to using
- * up/down instead of left/right". Left and right were the first try and were
- * the wrong axis: this view spends left-right on granularity, and moving
- * through the piece is a downward motion at every level
- * (granularity-zoom.md#the-tabular-view). Pointing sideways to say *how far* and
- * pressing downwards to say *go* now agree with what the screen shows. It also
- * hands ← / → back to the browser, which needs them to pan a table wider than
- * the window.
+ * **↑ / ↓ take the step, ← / → choose the stride.** Left and right were the
+ * step keys on the first try and were the wrong axis: this view spends
+ * left-right on granularity, and moving through the piece is a downward motion
+ * at every level (granularity-zoom.md#the-tabular-view) — Greg, same day,
+ * "let's switch to using up/down instead of left/right". Which left the
+ * sideways axis free for the sideways meaning it already had on screen, and
+ * that is what ← / → now do, Greg 2026-08-26:
  *
- * The table is deliberately not the source of that aim. Every zone that means
+ * > Let's use left/right to move the ToC-column-selection, so that I can choose
+ * > the level of granularity with keyboard when jumping up/down.
+ *
+ * So the aim has two ways in and they are not two modes. The pointer aims
+ * whenever it moves; ← / → aim when the mouse is not moving, and the next
+ * mousemove hands it straight back. Off the ends of the ladder the keys are
+ * handed back to the browser, which uses them to pan a table wider than the
+ * window.
+ *
+ * The table is deliberately not the source of the pointer's aim. Every zone
+ * that means
  * a granularity level tags itself with `data-nav-depth`, and this file reads
  * whatever is under the pointer — so the spine, which is not part of the table
  * at all, joins in by adding one attribute. See NAV_DEPTH_ATTR below.
@@ -107,6 +117,61 @@ export function stepTarget(
   return starts[i - 1] ?? null;
 }
 
+/**
+ * The rungs ← / → step between: the granularity levels actually on screen.
+ *
+ * Built from the columns the layout chose rather than from the whole tree, so
+ * the keyboard can only aim at something the reader can see — a stride whose
+ * column has been dropped by auto-fit would light no header and change nothing
+ * visible, which is indistinguishable from the key not working.
+ *
+ * Two adjustments, both for the same reason (nothing to step through is not a
+ * rung): the L0 column aims at depth 1 when the arc is on, because the arc's
+ * cells are the parts' cells exactly (tree.ts § the arc), and any depth with
+ * fewer than two items is dropped — that is the root column without an arc,
+ * one cell spanning the article, where both arrows are already dead ends.
+ */
+export function aimLadder(
+  cells: Cell[][],
+  columns: number[],
+  leafDepth: number,
+  showText: boolean,
+  hasArc: boolean,
+): number[] {
+  const depths = new Set(columns.map((d) => (d === 0 && hasArc ? 1 : d)));
+  // The prose column is the finest granularity there is, and it means the same
+  // stride as the leaf column: one paragraph. Same rung, not a second one.
+  if (showText) depths.add(leafDepth);
+  return [...depths]
+    .filter((d) => (cells[d]?.length ?? 0) > 1)
+    .sort((a, b) => a - b);
+}
+
+/**
+ * Where ← / → move the aim, or null if there is no rung that way.
+ *
+ * `current` need not be on the ladder — the pointer can aim at the spine (L1)
+ * while the Parts column is hidden — so an absent one is treated as sitting
+ * *between* rungs and the key moves to the neighbour on that side. Null at the
+ * ends rather than wrapping: the same choice ↑ / ↓ make, and for the same
+ * reason — a stride you can run off the end of is one you can feel the shape
+ * of, and wrapping from Paragraphs to Parts is a jump nobody asked for.
+ */
+export function nextAim(
+  ladder: number[],
+  current: number,
+  dir: -1 | 1,
+): number | null {
+  if (ladder.length === 0) return null;
+  const at = ladder.indexOf(current);
+  // Not on the ladder: `below` is how many rungs are coarser than the aim, so
+  // it is also the index of the first finer one — which is where → goes, and
+  // one before it is where ← goes.
+  const below = ladder.filter((d) => d < current).length;
+  const i = at === -1 ? (dir === 1 ? below : below - 1) : at + dir;
+  return ladder[i] ?? null;
+}
+
 /* ------------------------------------------------------------------ DOM -- */
 
 /** The row under the line we treat as "where you are reading". */
@@ -143,6 +208,11 @@ export function useArrowNav(
   blocks: Block[],
   fallbackDepth: number,
   /**
+   * The rungs ← / → step between — see aimLadder. Memoise it: a fresh array
+   * every render would tear down and rebuild every listener every render.
+   */
+  ladder: number[],
+  /**
    * Whether the keys are live. False while the bottom drawer is open (App.tsx):
    * the reader is looking at a panel, not at the article, and scrolling the
    * page underneath a dim they cannot see through loses them their place
@@ -159,6 +229,15 @@ export function useArrowNav(
   const pointer = useRef<{ x: number; y: number } | null>(null);
   /** The aimed depth, mirrored out of state so the key handler can't go stale. */
   const aim = useRef(fallbackDepth);
+  /**
+   * The depth ← / → last chose, or null while the pointer is in charge.
+   *
+   * This is the piece of state the pointer-aimed design was built to avoid, so
+   * it is deliberately the weakest kind: the very next mousemove drops it. You
+   * can hold a level without holding the mouse still, and you take it back by
+   * doing the thing you would have done anyway.
+   */
+  const locked = useRef<number | null>(null);
   /** The row our own last jump was headed for. See CHAIN_MS. */
   const chain = useRef<number | null>(null);
 
@@ -184,6 +263,11 @@ export function useArrowNav(
     // because the page can scroll sideways under a pointer that never moved.
     const onMove = (e: MouseEvent) => {
       pointer.current = { x: e.clientX, y: e.clientY };
+      // Moving the mouse is how you take the aim back off the keyboard. No
+      // threshold and no timeout: the reader's hand is the only thing that
+      // decides, and a lock that expired on its own would change what ↓ means
+      // while they were looking at the page rather than at the pointer.
+      locked.current = null;
       setAim(resolve(e.target as Element | null));
     };
 
@@ -193,20 +277,52 @@ export function useArrowNav(
       chain.current = null;
     };
 
+    /** Where the aim is right now: the keyboard's choice, else the pointer's. */
+    const currentAim = (): number => {
+      // The lock is dropped rather than clamped when its rung goes away — a
+      // resize that drops the Sections column should hand the aim back to the
+      // pointer, not silently move it to a level nobody chose.
+      if (locked.current !== null && ladder.includes(locked.current)) {
+        return locked.current;
+      }
+      locked.current = null;
+      const p = pointer.current;
+      // A fresh hit-test rather than the last mousemove's target: the page can
+      // scroll sideways under a pointer that never moved.
+      return p ? resolve(document.elementFromPoint(p.x, p.y)) : aim.current;
+    };
+
     const onKey = (e: KeyboardEvent) => {
       if (!enabled) return;
-      const dir = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
-      if (dir === 0) return;
-      // Cmd+↓ jumps to the end of the document, Alt+↓ and Shift+↓ have their own
-      // meanings, and none of them is ours.
+      const across = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      const steps = e.key === "ArrowUp" || e.key === "ArrowDown";
+      if (across === 0 && !steps) return;
+      // Cmd+↓ jumps to the end of the document, Cmd+← is Back, Alt+↓ and
+      // Shift+↓ have their own meanings, and none of them is ours.
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       // Auto-repeat is deliberately ignored: thirty smooth scrolls a second is
       // a blur you cannot read, and you would arrive somewhere you never saw.
+      // ← / → hold the line for a different reason — the ladder is three or four
+      // rungs long, so a held key would arrive at the end before you saw it move.
       if (e.repeat) return;
       if (isTyping(e.target)) return;
 
-      const p = pointer.current;
-      const d = p ? resolve(document.elementFromPoint(p.x, p.y)) : aim.current;
+      // ← / → change the stride rather than taking one: they move the aim
+      // across the columns, which is what the pointer does when you slide it
+      // sideways (docs/project/keyboard.md § choosing the level without a mouse).
+      if (across !== 0) {
+        const next = nextAim(ladder, currentAim(), across);
+        // Off the end of the ladder we hand the key back, so ← / → still pan a
+        // table wider than the window once there is no column left that way.
+        if (next === null) return;
+        e.preventDefault();
+        locked.current = next;
+        setAim(next);
+        return;
+      }
+
+      const dir = e.key === "ArrowUp" ? -1 : 1;
+      const d = currentAim();
       setAim(d);
 
       const starts = itemStarts(geometry.cells[d] ?? []);
@@ -235,7 +351,7 @@ export function useArrowNav(
       window.removeEventListener("pointerdown", drop);
       window.clearTimeout(timer);
     };
-  }, [geometry, blocks, fallbackDepth, enabled]);
+  }, [geometry, blocks, fallbackDepth, ladder, enabled]);
 
   return depth;
 }

@@ -1,4 +1,4 @@
-# Keyboard: arrows aimed by the pointer
+# Keyboard: ↑ / ↓ take the step, ← / → choose the stride
 
 > Ok, let's add keyboard shortcuts. As an experiment, I want to use left and right arrows, and what
 > they do should depend on where my mouse is. If it's in the L2 column, say, left/right should jump
@@ -8,6 +8,14 @@
 
 **↑ and ↓ move you through the article one item at a time, and the pointer decides how big an item
 is.** The keys carry the direction; the mouse carries the stride.
+
+**← and → move the stride itself**, one column at a time across the levels on screen, so the mouse
+is not the only way to say how far. Greg, 2026-08-26:
+
+> Let's use left/right to move the ToC-column-selection, so that I can choose the level of
+> granularity with keyboard when jumping up/down.
+
+The two ways of aiming are not two modes — see [§ choosing the level without a mouse](#choosing-the-level-without-a-mouse).
 
 ### Why ↑ / ↓ and not ← / →
 
@@ -21,8 +29,10 @@ the article is a downward motion at every level, so a key that moves you through
 down. Pointing sideways to say *how far* and pressing downwards to say *go* now agree with what is on
 the screen instead of cutting across it.
 
-It also hands ← / → back, and the browser needs them: with a deep tree the table is wider than the
-window, and left-right is how you pan it.
+It also freed ← / →, which is what the *stride* now uses. That is the same axis reasoning read the
+other way round: left-right means granularity on this screen, so a key that changes granularity
+should point sideways. (It cost the browser its horizontal pan, mostly — see
+[§ what we gave up](#what-we-gave-up).)
 
 The code is [`src/web/keynav.ts`](../../src/web/keynav.ts) — the step arithmetic is pure and tested
 ([`tests/keynav.test.ts`](../../tests/keynav.test.ts)), the rest is three event listeners.
@@ -40,7 +50,17 @@ The alternative — a "current level" you set with a key and then have to rememb
 piece of state, and a way to be wrong about where you are. Hover costs nothing, because it is already
 what your hand is doing.
 
+**We have since bought a small piece of exactly that**, and it is worth being clear about the price.
+← / → set a level and it stays set, which is a state you can be wrong about. Three things keep it
+cheap: any mouse movement clears it, so it cannot outlive the moment you stop thinking about it; the
+controls bar and the lit column header say what it is, the same two indicators the pointer already
+had; and it can only ever hold a level that is on screen. It is a mode you leave by accident rather
+than one you have to remember to leave, which is the only kind this view can afford.
+
 ## What each zone means
+
+This is what the *pointer* means where it lands. ← / → then move that aim off the pointer and onto
+whichever column you walk it to.
 
 | Where the pointer is | ↑ / ↓ step by |
 |---|---|
@@ -54,6 +74,31 @@ The spine is one zone rather than two. It draws parts as bands and names the cur
 header strip, so L1 is what it is *about*; its click targets are L2 only because a 1px tick is
 unhittable, which is a pointing concession rather than a statement about the rail
 ([`Spine.tsx`](../../src/web/Spine.tsx)).
+
+## Choosing the level without a mouse
+
+← and → walk the aim across the columns: coarser to the left, finer to the right, exactly the order
+they sit in on screen. **The rungs are the columns actually on screen**, not every level in the tree
+— a stride whose column auto-fit has dropped would light no header and change nothing you can see,
+which is indistinguishable from a broken key. Two adjustments fall out of the same rule: the arc
+column (L0) aims at parts, because its cells *are* the parts' cells, and a level with only one item
+is not a rung, which is what drops the root column when there is no arc. `aimLadder` in
+[`keynav.ts`](../../src/web/keynav.ts) is that list, and it is tested.
+
+**Pressing ← or → holds the level until you move the mouse.** This is the one piece of modal state
+the pointer design was built to avoid, so it is deliberately the weakest kind available: no
+threshold, no timeout, no key to release it — the very next `mousemove` hands the aim straight back
+to whatever is under the pointer. You can hold a level without holding your hand still, and you take
+it back by doing the thing you were going to do anyway. Nothing to get stuck in, because the way out
+is the way you already navigate.
+
+Both indicators already exist and both keep working: the aimed column header lights up, and the
+controls bar names the level. That matters more for the keys than it did for the pointer — with the
+pointer, where you are aiming is where your hand is.
+
+At the ends of the ladder the key is handed back to the browser rather than swallowed, the same
+concession ↑ / ↓ make at the ends of the article. So → at the finest column still pans an
+overflowing table rightwards, which is the half of the panning that survives.
 
 A zone declares itself with a `data-nav-depth` attribute and nothing else — `keynav.ts` resolves it
 with `closest()` from whatever is under the pointer. That is why the spine can join in from outside
@@ -134,14 +179,21 @@ the top of that section ([url-state.md](url-state.md#the-unit-is-a-section-not-a
 - **Modified arrows are left alone** — Cmd+↓ is "end of document", Alt+↓ and Shift+↓ have their own
   meanings — and so are arrows pressed while focus is in an input, a textarea, a select, or anything
   contenteditable.
-- **← / → are untouched, deliberately.** They pan the table when it is wider than the window
-  ([§ fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)), which is
-  the only thing on that axis the reader cannot already do another way.
+- **Arrow-key panning of a too-wide table.** With a deep tree the table outruns the window
+  ([§ fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)), and ← / →
+  used to scroll it sideways. Now they mostly change the stride instead. Traded knowingly: the
+  reader can still pan with a trackpad swipe, Shift+wheel, the scrollbar, or by choosing fewer
+  columns — and the pan is *partly* still there, because at either end of the ladder we don't call
+  `preventDefault` and the key goes back to the browser. What is really gone is panning from the
+  middle of the ladder.
+- **Auto-repeat on ← / → too.** Holding → would cross a three-rung ladder before you saw it move,
+  and land you on a level you never chose. One press, one column.
 
 ## This constrains which components we may use
 
-All four arrow keys are spoken for: ↑/↓ by this file, ←/→ by the browser panning the table. So a
-component that captures arrow keys takes something real away, and several of the obvious ones do.
+All four arrow keys are spoken for, and now all four by this file: ↑/↓ take the step, ←/→ choose the
+stride. So a component that captures arrow keys takes something real away — more than it did when
+←/→ were only the browser's — and several of the obvious ones do.
 
 **Radix's roving focus binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown.** That is why the
 granularity pills are individual shadcn `Toggle`s and not a `ToggleGroup`, which is what the
@@ -161,8 +213,13 @@ buys focus management we do not need.
 out* and *zoom in* — one level at a time, in a view that showed a single level at a time. The table
 view superseded that by showing every level at once, which left "zoom" without an axis to move
 along; choosing levels is the `L0 / L1 / L2` buttons and `?cols=`
-([url-state.md](url-state.md#the-parameters)). So ← / → were free — and in the end were not what we
-wanted anyway, which is how they came to be free again.
+([url-state.md](url-state.md#the-parameters)). So ← / → were free.
+
+They have now come back round to something close to that original intent — ← / → *do* choose the
+level again — but on a view that shows every level at once, so the key moves your **aim** across the
+columns rather than replacing what is drawn in them. The zoom is still the `L0 / L1 / L2` buttons
+and `?cols=`. What the old sketch had right was the axis; what it could not have known was that the
+levels would stop being a thing you switch between and start being a thing you point at.
 
 ## See also
 

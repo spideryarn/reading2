@@ -2,7 +2,8 @@
  * Arrow-key navigation — the pure half: which row a keypress lands on, given
  * where the reader is and which level the pointer has aimed at.
  *
- * The keys are ↑ / ↓; `dir` here is -1 for up and 1 for down. The arithmetic is
+ * The stepping keys are ↑ / ↓; `dir` here is -1 for up and 1 for down. ← / →
+ * choose which level they step by, which is the ladder arithmetic at the bottom. The arithmetic is
  * about document order, not about the keyboard, which is why switching the keys
  * from ← / → to ↑ / ↓ changed nothing below.
  *
@@ -16,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Block, Tree } from "../src/types.js";
 import { buildGeometry } from "../src/web/tree.js";
-import { itemStarts, stepTarget } from "../src/web/keynav.js";
+import { aimLadder, itemStarts, nextAim, stepTarget } from "../src/web/keynav.js";
 
 const blocks: Block[] = JSON.parse(
   readFileSync("example/blocks.json", "utf8"),
@@ -105,5 +106,78 @@ describe("stepTarget", () => {
       visited.push(row);
     }
     expect(visited).toEqual(s);
+  });
+});
+
+/* ------------------------------------------------------- ← / →: the aim -- */
+
+describe("aimLadder", () => {
+  const leaf = geometry.leafDepth;
+
+  it("is the columns on screen, coarsest first", () => {
+    expect(aimLadder(geometry.cells, [1, 2], leaf, true, false)).toEqual([1, 2, leaf]);
+  });
+
+  // Depth 0 without the arc is one cell spanning the article: both arrows are
+  // dead ends there, so it is a column but not a rung.
+  it("drops a column with nothing to step through", () => {
+    expect(aimLadder(geometry.cells, [0, 1, 2], leaf, false, false)).toEqual([1, 2]);
+  });
+
+  // The arc's cells are the parts' cells, so the L0 column steps by part — and
+  // must not add a second rung meaning exactly what Parts already means.
+  it("folds the arc column onto the parts it is drawn against", () => {
+    expect(aimLadder(geometry.cells, [0, 1], leaf, false, true)).toEqual([1]);
+  });
+
+  // Outline mode: the leaf column is in `columns` already, and the prose is off.
+  it("does not invent a prose rung when the prose is hidden", () => {
+    expect(aimLadder(geometry.cells, [2, leaf], leaf, false, false)).toEqual([2, leaf]);
+  });
+
+  // A mode owns the middle band, so there are no gist columns at all.
+  it("is the prose alone when a mode has taken the band", () => {
+    expect(aimLadder(geometry.cells, [], leaf, true, false)).toEqual([leaf]);
+  });
+});
+
+describe("nextAim", () => {
+  const ladder = [1, 2, 5];
+
+  it("moves one column at a time", () => {
+    expect(nextAim(ladder, 1, 1)).toBe(2);
+    expect(nextAim(ladder, 2, 1)).toBe(5);
+    expect(nextAim(ladder, 5, -1)).toBe(2);
+  });
+
+  // Null rather than wrapping, so the caller can hand the key back to the
+  // browser and ← / → still pan a table wider than the window.
+  it("returns null at the ends rather than wrapping", () => {
+    expect(nextAim(ladder, 1, -1)).toBeNull();
+    expect(nextAim(ladder, 5, 1)).toBeNull();
+    expect(nextAim([], 2, 1)).toBeNull();
+    expect(nextAim([2], 2, 1)).toBeNull();
+  });
+
+  // The pointer can be aiming at a level with no column — the spine is L1 even
+  // when the Parts column has been dropped — so an off-ladder aim sits between
+  // rungs and the key takes the one on its side.
+  it("steps to the neighbour when the aim is not on the ladder", () => {
+    expect(nextAim(ladder, 3, 1)).toBe(5);
+    expect(nextAim(ladder, 3, -1)).toBe(2);
+    expect(nextAim(ladder, 0, 1)).toBe(1);
+    expect(nextAim(ladder, 0, -1)).toBeNull();
+    expect(nextAim(ladder, 9, -1)).toBe(5);
+    expect(nextAim(ladder, 9, 1)).toBeNull();
+  });
+
+  it("walks the ladder end to end and stops exactly once", () => {
+    const seen = [ladder[0]!];
+    for (;;) {
+      const next = nextAim(ladder, seen[seen.length - 1]!, 1);
+      if (next === null) break;
+      seen.push(next);
+    }
+    expect(seen).toEqual(ladder);
   });
 });
