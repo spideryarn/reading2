@@ -182,6 +182,15 @@ two static lists rebuilt whole with no child state; and a `tabIndex={0}` on a `r
 `noNoninteractiveTabindex` wants removed, when it is what makes the tooltip reachable without a mouse
 ([Tooltip.tsx](../../src/web/Tooltip.tsx) opens on focus). Removing it would take accessibility away.
 
+On that last one there is a tidier-looking fix we deliberately didn't take: change `role="img"` to
+`role="button"`, which satisfies the rule with no suppression at all, because a tabIndex on an
+interactive role is expected. It was declined because the element is not a button. Nothing happens
+when you press Enter on it — there is no click handler; focus reveals a tooltip and that is all. A
+screen reader would announce "button" and promise an action that does not exist, to a user who
+already has the whole message from the `aria-label`. That trades an accurate role for a quiet
+linter, which is the wrong way round. The suppression is the honest answer: the rule is right in
+general, and wrong here, and the comment says why.
+
 **Left alone, on purpose (2 + 1).** Two `useKeyWithClickEvents` on gist cells in
 [`TableView.tsx`](../../src/web/TableView.tsx): real, but making cells focusable and Enter-activated
 is a design decision about [keyboard.md](keyboard.md), not a lint fix. And the one that matters —

@@ -23,7 +23,16 @@ id assignment belongs to **stage 3**, not extraction, and ids are random so they
 re-extraction ([block-ids.md](block-ids.md)); a block is the *finest* unit a reader takes in as one
 thing ([architecture.md § What a block is](architecture.md#what-a-block-is)).
 
-What this stage still owes stage 3: sanitized HTML whose element structure is stable run-to-run.
+What this stage still owes stage 3: HTML whose element structure is stable run-to-run.
+
+> **It does *not* owe sanitized HTML today, and for a while this file said it did.** That sentence
+> used to read "sanitized HTML whose element structure is stable run-to-run", which was a promise
+> nothing in the pipeline kept — Readability is not a sanitiser and
+> [says so in its own SECURITY.md](https://github.com/mozilla/readability/blob/main/SECURITY.md).
+> `<img onerror>` and `<svg onload>` come through and execute in the reading view. The wrong claim
+> was the dangerous part: a reader checking whether extraction was safe would have found this line
+> and stopped looking. Tracked as [open-questions.md § Q9](open-questions.md#q9), where sanitising
+> **here**, at this stage, is the recommendation — at which point this sentence gets its word back.
 Ids are preserved by matching on the `spya-` attribute already in the document, so extraction must
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 
