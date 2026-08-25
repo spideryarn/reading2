@@ -119,7 +119,14 @@ otherwise get wrong:
   `spideryarn` to the exposed list "just to look at it in the table editor" and quietly publishes
   every article to the anon key.
 - **SSL is now enforced on incoming connections.** It is off by default; Greg asked for it on,
-  2026-08-25, and now is the cheap moment because nothing connects to the remote yet.
+  2026-08-25, and now was the cheap moment because nothing connects to the remote yet.
+
+  **Cheap specifically because of when.** Toggling it *restarts the database* — the dashboard says
+  so plainly: *"A database restart is required for SSL enforcement changes to take place, and this
+  involves a few minutes of downtime."* With nothing connected that cost nothing. Left until after
+  the app is live, the same click is an outage. Worth knowing for the other settings on that page
+  too: some of them are free now and expensive later, and which is which is not obvious from the
+  toggle.
 
   It has a consequence in code, which is why it is here rather than only in a settings list:
   **`pg` does not use SSL by default**, so an enforced-SSL server refuses it with an error that
