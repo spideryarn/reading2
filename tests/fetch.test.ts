@@ -341,22 +341,33 @@ describe("decodeHtml", () => {
     expect(text).toContain("“”");
   });
 
-  it("does not use Node's decoder, which gets windows-1252 wrong", () => {
-    /* The reason src/fetch.ts imports a decoder instead of using the global.
-       Node maps the whole C1 range to control characters — the euro sign, both
-       pairs of curly quotes and both dashes, which is the punctuation of
-       ordinary prose. Nothing throws; the characters just stop being there.
-       If this test ever goes red, Node has been fixed and the dependency can go. */
+  it("decodes the windows-1252 C1 range as punctuation, not control characters", () => {
+    /* Byte 0x80 and 0x91–0x97 are the euro sign, both pairs of curly quotes and
+       the en- and em-dash — the punctuation of ordinary English prose. Decode
+       them as ISO-8859-1 and they become invisible C1 control characters:
+       nothing throws, the text just quietly stops having quotation marks in it. */
     const punctuation = new Uint8Array([0x80, 0x91, 0x92, 0x93, 0x94, 0x96, 0x97]);
-    const viaNode = new TextDecoder("windows-1252").decode(punctuation);
-    const viaUs = decodeHtml(punctuation, "text/plain; charset=windows-1252").text;
+    expect(decodeHtml(punctuation, "text/plain; charset=windows-1252").text).toBe("€‘’“”–—");
+  });
 
-    expect(viaUs).toBe("€‘’“”–—");
-    expect(viaNode).not.toBe(viaUs);
-    // Every one of them silently became a C1 control character.
-    expect(Array.from(viaNode).map((c) => c.codePointAt(0))).toEqual([
-      0x80, 0x91, 0x92, 0x93, 0x94, 0x96, 0x97,
-    ]);
+  it("decodes the Shift_JIS bytes Node's own decoder still gets wrong", () => {
+    /* This is the test that catches src/fetch.ts being switched to the global
+       TextDecoder, and it deliberately asserts nothing about Node.
+
+       The test that used to do that job asserted Node decoded windows-1252
+       *wrongly*. Node fixed that in 24.13.1, so the assertion went red without
+       anything here having changed, and the red looked like our bug. Never pin
+       somebody else's defect: docs/postmortems/windows-1252-node-caught-up.md.
+
+       Node's single-byte decoders are conformant now, but its multi-byte legacy
+       ones still go through ICU and are not. The spec says a Shift_JIS byte of
+       0x80 or below decodes to its own code point; ICU rotates 0x1A/0x1C/0x7F
+       and rejects 0x80. So this fails today if the import is swapped, and it
+       goes on passing — rather than going red — if Node ever agrees. */
+    const controls = new Uint8Array([0x1a, 0x1c, 0x7f, 0x80]);
+    const { text, encoding } = decodeHtml(controls, "text/plain; charset=shift_jis");
+    expect(encoding).toBe("Shift_JIS");
+    expect(text).toBe("\u001a\u001c\u007f\u0080");
   });
 
   it("lets a BOM overrule the header", () => {

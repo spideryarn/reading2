@@ -618,18 +618,26 @@ function latin1(bytes: Uint8Array): string {
  * and every browser do for `text/html` with nothing declared. It costs nothing
  * on an ASCII page, which is what pages that declare nothing almost always are.
  *
- * **The decoder is not Node's.** `new TextDecoder("windows-1252")` in Node
- * reports its encoding as `windows-1252` and then decodes the C1 range the way
- * ISO-8859-1 does: byte 0x93 becomes U+0093, an invisible control character,
- * where every browser gives U+201C, a left curly quote. Bytes 0x80 and
- * 0x91–0x97 — the euro sign, both pairs of curly quotes, the en- and em-dash —
- * are all wrong the same way, and those are the punctuation of ordinary English
- * prose. A legacy page would arrive with holes where its quotation marks are,
- * with nothing raised and nothing logged: docs/reusable/silent-success.md, in
- * its purest form. `@exodus/bytes` implements the WHATWG index properly, is
- * already in the tree as html-encoding-sniffer's own dependency, and is what
- * that package's README tells you to pair it with. Verified: it agrees with the
- * spec on all seven bytes, and Node disagrees on all seven.
+ * **The decoder is not Node's**, and the reason has moved since it was written.
+ * Originally: `new TextDecoder("windows-1252")` reported its encoding as
+ * `windows-1252` and then decoded the C1 range the way ISO-8859-1 does, so byte
+ * 0x93 became U+0093, an invisible control character, where every browser gives
+ * U+201C. That is the punctuation of ordinary English prose going missing with
+ * nothing raised and nothing logged — docs/reusable/silent-success.md in its
+ * purest form. **Node fixed the single-byte encodings in 24.13.1**, and this
+ * paragraph no longer describes any Node we would run on.
+ *
+ * What it still describes is the multi-byte legacy encodings. Those go through
+ * ICU, and ICU is not the WHATWG index: Shift_JIS 0x1A/0x1C/0x7F come back
+ * rotated and 0x80 is refused, Big5 accepts 0x80 and 0xFF that the spec calls
+ * errors, EUC-JP and EUC-KR pass the whole C1 range through. Same failure
+ * shape, different alphabet. So `@exodus/bytes` stays. It implements the WHATWG
+ * indexes properly, is already in the tree as html-encoding-sniffer's own
+ * dependency, and is what that package's README tells you to pair it with.
+ *
+ * docs/project/fetching.md#the-decoder-is-not-nodes has the measurements and
+ * the command to re-run them; the postmortem is
+ * docs/postmortems/windows-1252-node-caught-up.md.
  */
 export function decodeHtml(bytes: Uint8Array, contentType: string | null): { text: string; encoding: string } {
   const label = charsetFromContentType(contentType);

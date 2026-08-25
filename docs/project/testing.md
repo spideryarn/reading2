@@ -43,7 +43,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/blocks.test.ts`](../../tests/blocks.test.ts) | what counts as a block, and **id survival across re-extraction** |
 | [`tests/sanitize.test.ts`](../../tests/sanitize.test.ts) | what a hostile article may not do to the reading view — every payload verified to survive Readability first, so none is hypothetical ([security.md](security.md)) |
 | [`tests/sanitize-client.test.ts`](../../tests/sanitize-client.test.ts) | the browser sanitiser, and that **both bindings are one policy** — a shared corpus must come out byte-identical from server and client, because two passes that disagree are worse than one |
-| [`tests/fetch.test.ts`](../../tests/fetch.test.ts) | stage 1 with no network: the lying `Content-Length`, the Shift_JIS page, Node's wrong windows-1252, redirect loops, and every TLS failure that arrives as the same `TypeError` — [fetching.md](fetching.md) |
+| [`tests/fetch.test.ts`](../../tests/fetch.test.ts) | stage 1 with no network: the lying `Content-Length`, the Shift_JIS page, the legacy encodings Node's own decoder still gets wrong, redirect loops, and every TLS failure that arrives as the same `TypeError` — [fetching.md](fetching.md) |
 | [`tests/toc-flatten.test.ts`](../../tests/toc-flatten.test.ts) | tree → sidebar rows — [table-of-contents.md](table-of-contents.md) |
 | [`tests/validate-tree.test.ts`](../../tests/validate-tree.test.ts) | the validator catches each **structural** way a tree can go wrong |
 | [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |

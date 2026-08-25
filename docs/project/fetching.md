@@ -27,7 +27,7 @@ Five things, each of which was an observed bug rather than a precaution. The evi
 |---|---|
 | Counts bytes **as they arrive** | `Content-Length` describes the *compressed* size, and often isn't sent at all |
 | Decodes with **the page's own encoding** | `res.text()` always assumes UTF-8, and is silently wrong on a Shift_JIS page |
-| Uses a **spec-conformant decoder**, not Node's | Node gets windows-1252 wrong, invisibly, on ordinary English punctuation |
+| Uses a **spec-conformant decoder**, not Node's | Node's legacy multi-byte decoders are ICU's, and ICU is not the WHATWG index |
 | Checks the **bytes** before believing a content type | Publishers serve PDFs as `application/octet-stream`, and bot walls serve HTML as `application/pdf` |
 | Reads `err.cause.code` | Every network and TLS failure in Node is the same `TypeError: fetch failed` |
 
@@ -116,9 +116,13 @@ windows-1252 decodes *any* byte sequence and so can never fail loudly.
 One small thing worth knowing: Instagram serves `charset="utf-8"` with the quotes *inside* the
 header value. A regex that doesn't strip them hands the decoder a charset name that doesn't exist.
 
-### Node's decoder gets windows-1252 wrong
+### The decoder is not Node's
 
-**The most surprising thing found on this task, and the reason there is a second dependency.**
+**The most surprising thing found on this task, and the reason there is a second dependency.** The
+finding has since half-expired, and how it expired is the more useful half of the story.
+
+**What was found, 2026-08-25.** `new TextDecoder("windows-1252")` in Node reported
+`.encoding === "windows-1252"` and then decoded the C1 range the way ISO-8859-1 does:
 
 ```
 byte          0x80  0x91  0x92  0x93  0x94  0x96  0x97
@@ -126,18 +130,63 @@ Node          0080  0091  0092  0093  0094  0096  0097   ← C1 control characte
 WHATWG        20AC  2018  2019  201C  201D  2013  2014   ← € ‘ ’ “ ” – —
 ```
 
-`new TextDecoder("windows-1252")` in Node reports `.encoding === "windows-1252"` and then decodes
-the C1 range the way ISO-8859-1 does. Those seven bytes are the euro sign, both pairs of curly
-quotes, and the en- and em-dash — **the punctuation of ordinary English prose**. A legacy page would
-arrive with invisible control characters where its quotation marks should be. Nothing throws,
-nothing is logged, and the text looks nearly right. That is
-[silent success](../reusable/silent-success.md) in its purest form.
+Those seven bytes are the euro sign, both pairs of curly quotes, and the en- and em-dash — **the
+punctuation of ordinary English prose**. A legacy page would arrive with invisible control characters
+where its quotation marks should be. Nothing throws, nothing is logged, and the text looks nearly
+right. That is [silent success](../reusable/silent-success.md) in its purest form. So the decoder
+became [`@exodus/bytes`](https://www.npmjs.com/package/@exodus/bytes), which implements the WHATWG
+indexes properly and is what `html-encoding-sniffer`'s README tells you to pair it with.
 
-The fix is [`@exodus/bytes`](https://www.npmjs.com/package/@exodus/bytes), which implements the
-WHATWG index properly, is already in the tree as `html-encoding-sniffer`'s own dependency, and is
-what that package's README tells you to pair it with. Verified: it agrees with the spec on all seven
-bytes, and Node disagrees on all seven. A test pins this, and **if it ever goes red, Node has been
-fixed and the dependency can go**.
+**Node has since fixed that.** [#60893](https://github.com/nodejs/node/pull/60893) added a real
+windows-1252 decoder and [#61093](https://github.com/nodejs/node/pull/61093) reimplemented *all* the
+single-byte encodings in JavaScript against the WHATWG index tables, dropping ICU from that path
+entirely. They shipped in **24.13.1** and **25.4.0**, in January 2026, and were backported down the
+LTS lines. Measured here on Node 26.7.0: Node and `@exodus/bytes` now agree byte for byte on every
+single-byte encoding, on UTF-8, UTF-16 and GBK/GB18030, and on `iso-2022-jp`.
+
+**The dependency stays anyway, and the reason is the multi-byte encodings.** They still reach ICU,
+and ICU is not the WHATWG index. Measured on Node 26.7.0, over every one- and two-byte sequence:
+
+| Encoding | Where they differ | Who is right |
+|---|---|---|
+| `shift_jis` | 0x1A → U+001C, 0x1C → U+007F, 0x7F → U+001A; 0x80 → U+FFFD | **Node is wrong.** The spec says an ASCII byte or 0x80 decodes to itself. ICU carries IBM's control-code rotation |
+| `big5` | 0x80 → U+0080, 0xFF → U+F8F8 | **Node is wrong.** Both are decoder errors; U+F8F8 is an ICU private-use invention |
+| `euc-jp` | 0x80–0x9F pass through as C1 controls | **Node is wrong.** Not lead bytes; the spec says error |
+| `euc-kr` | 0x80–0x9F pass through as C1 controls | **Node is wrong.** Same |
+
+Same failure shape as the original, different alphabet — and Shift_JIS is not hypothetical here: the
+[Aozora Bunko page above](#character-encoding) is the worked example this whole section is built on.
+Its title happens to decode identically either way; a page with a stray 0x1A in it would not.
+
+To re-check whether the dependency can go, compare the two decoders directly rather than trusting
+this table — it was true on one day:
+
+```
+node -e 'import("@exodus/bytes/encoding.js").then(({TextDecoder:S})=>{
+  for (const e of ["shift_jis","big5","euc-jp","euc-kr"]) {
+    const n=new TextDecoder(e), s=new S(e); let d=0;
+    for (let a=0;a<256;a++) for (let b=0;b<256;b++) {
+      const u=new Uint8Array([a,b]); if (n.decode(u)!==s.decode(u)) d++;
+    }
+    console.log(e, d ? d+" sequences differ" : "agrees");
+  }})'
+```
+
+**And there is no `engines` pin.** [Vercel](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions)
+offers 20.x, 22.x and 24.x, defaulting to 24.x, and picks the version from project settings when
+`package.json` says nothing — so the deployed runtime is not something this repo currently decides.
+The 20.19.5 on this laptop still has the original windows-1252 bug. That does not change the answer
+above, but it is why "Node fixed it" is not on its own a reason to drop anything.
+
+**The test that pinned this was itself the bug.** It asserted that Node decoded windows-1252
+*wrongly*, so Node getting better turned it red — a green suite went red with nothing in this repo
+having changed, and the red looked like our defect. Worse, the obvious reading of it ("Node is fixed,
+the dependency can go") would have deleted a decoder that is still load-bearing for four encodings
+the test never mentioned. **Assert what you require, never somebody else's defect.** The replacement
+tests assert only that `decodeHtml` is right — including on the four Shift_JIS bytes Node currently
+gets wrong, which still catches the import being swapped for the global, and which will keep passing
+rather than going red if Node ever catches up there too.
+[docs/postmortems/windows-1252-node-caught-up.md](../postmortems/windows-1252-node-caught-up.md).
 
 ### What kind of document it is
 
@@ -291,7 +340,10 @@ Two were added, both already present in the tree as jsdom's transitive dependenc
 an install:
 
 - **`html-encoding-sniffer`** — the spec's charset sniffing, as jsdom implements it.
-- **`@exodus/bytes`** — a WHATWG-conformant `TextDecoder`, because Node's isn't.
+- **`@exodus/bytes`** — a WHATWG-conformant `TextDecoder`. Taken because Node's got windows-1252
+  wrong; kept because Node's Shift_JIS, Big5, EUC-JP and EUC-KR are still ICU's. See
+  [the decoder is not Node's](#the-decoder-is-not-nodes) for the measurements and for the check to
+  re-run before dropping it.
 
 Deliberately not taken, each considered and rejected:
 
@@ -335,6 +387,12 @@ Honest list, none of it blocking:
    with no post text in it. Detecting this needs the two-sided extraction ratio check, which belongs
    to stage 2 and is [on the borrow list](original-version/borrow-list.md).
 5. **No AIA certificate repair**, by choice. Above.
+6. **Nothing pins the Node version.** No `engines` field, no `.nvmrc`, no CI. Which Node this runs on
+   is whatever Homebrew installed locally and whatever the Vercel project settings say remotely, and
+   the two have already diverged by six major versions. It has cost one confusing red build so far
+   ([the postmortem](../postmortems/windows-1252-node-caught-up.md)) and nothing worse, because the
+   decoder is a dependency rather than a built-in. Pinning it belongs with the deploy work
+   ([deploy-and-repo-move.md](../plans/deploy-and-repo-move.md)) rather than with stage 1.
 
 ## See also
 
@@ -346,3 +404,6 @@ Honest list, none of it blocking:
   here, what it got right, and the fix of theirs that has since rotted
 - [../reusable/silent-success.md](../reusable/silent-success.md) — the failure family the decoder
   bug belongs to
+- [../postmortems/windows-1252-node-caught-up.md](../postmortems/windows-1252-node-caught-up.md) —
+  Node fixed the bug this stage's decoder was chosen over, the test that pinned it went red, and why
+  believing the test would have deleted something still load-bearing
