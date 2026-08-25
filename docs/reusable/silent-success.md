@@ -11,7 +11,7 @@ correct, the tests are green. The defect lives in the gap between *what you aske
 meant*, and the natural check is on the wrong side of that gap — usually because it shares an
 assumption with the code. That is why it agrees with it.
 
-## The eleven
+## The twelve
 
 | The bug | What the natural check said | What you had to measure instead |
 |---|---|---|
@@ -26,6 +26,7 @@ assumption with the code. That is why it agrees with it.
 | Unlayered CSS silently outranking layered utilities | The class is in the DOM, the rule is in the stylesheet, and both are valid | `getComputedStyle` on the element for the property in dispute — or which `@layer` each rule actually landed in |
 | A rule whose condition depends on the *viewer's* machine, not yours | The page looks right — on your machine, with your OS settings | Force the condition off (or read the compiled rule) and check the styling still arrives |
 | A focus ring that fails contrast, drawn over the browser's own | The ring is there, it is the colour it was asked to be, the class is on the element, and the page looks right | The **contrast ratio** of the composited ring against its background — and whether the component suppressed the native indicator in order to draw it |
+| The browser quietly correcting a scroll position you set yourself | The maths is right, the CSS is right, and reading `scrollTop` back gives a plausible number — the browser's *adjusted* one | Where the element actually is on screen, measured after a **content change above it**, not the number you wrote |
 
 ## Why the natural check agrees with the bug
 

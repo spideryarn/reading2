@@ -70,7 +70,12 @@ Two web searches (Sonnet, 2026-08-25) and a design review by GPT via
 
 In reading mode every gist column — the arc, the parts, the sections — is drawn by a fixed panel
 laid over it, listing the **whole level** with the **current item held on the focus line**, 40%
-down the window, and the rest as landmarks in fixed tiers above and below. Focus follows the scroll,
+down the window, and the rest as landmarks in fixed tiers above and below. Held there except when
+holding it there would cost more than it is worth: at the very top of the article the focus line can
+be nearer the panel's top edge than the item is tall, and a long gist in a narrow column can reach
+past the panel's foot. In both cases the item is moved off the line rather than cut, because a whole
+item matters more than an exact position. Crossing a boundary glides rather than jumps, so for a
+moment the list is chasing the line rather than sitting on it. Focus follows the scroll,
 never the pointer. The panel is clipped, never scrollable, so the wheel always moves the article.
 Hovering any entry that isn't the current one — a landmark or a part heading — shows a card with its
 crumb, title and gist; the group's open delay is 150ms, enough that crossing the list fires nothing
@@ -128,10 +133,12 @@ one by one:
   `§` keeps its highlight. Inheriting the list's UI font instead had left the gist a step *larger*
   than the title above it — GPT's review, 2026-08-25, caught it in the stylesheet before anyone
   noticed it on screen.
-- **The hover wash** carries over: entries on the hovered row's ancestor path light up the way the
-  cells did, at every level at once. With one loss, named because it is real: the wash follows the
-  hovered table *row*, so moving the pointer off the table and onto a panel clears it. Hovering a
-  panel entry lights that entry, not its chain.
+- **The hover wash** carries over, and now works in both directions. Pointing at a row lights its
+  ancestor path across every level, as the cells did. Pointing at a panel *entry* lights the same
+  path — the part a section belongs to, and the arc above that. It had to: the wash follows the
+  hovered table row, so moving onto a panel used to end it at exactly the moment you pointed at the
+  thing you wanted to place. An entry lights its ancestors and not its children; a part holds many
+  sections, and lighting all of them is a different gesture from following one thread up.
 - **Clicking to jump** works on every entry and on the cells' remaining strip.
 - **The boundaries beside the prose** — the one thing a fixed panel genuinely cannot carry, because
   its rows are not the table's rows — are kept by leaving a 10px gutter down the left of the column
@@ -163,14 +170,48 @@ because none of them announces itself:
   bottoms out above it — part 1 has no sections of its own, part 2 does — has nothing to be *in* at
   the top of the article. `currentIndex` used to clamp to zero and the column would say "you are in
   the first section of part 2" while the reader was still in part 1. It now returns -1 and the panel
-  shows the top of its list with nothing marked. There is always a section you are in; there is not
-  always a subsection.
+  shows its list flush at the top, nothing marked — the room kept above the list for centring is
+  dropped rather than scrolled past, because a short list has no scroll range to get past it and most
+  of the panel would have stayed blank. There is always a section you are in; there is not always a
+  subsection.
 - **Reflow with no scroll.** The sampler listened for `scroll` and `resize`. A late image or a font
   swap moves the focus line into another section under a page that never moved, and the panels would
-  keep naming the old one until the reader happened to scroll. A `ResizeObserver` on the table
-  catches it, and catches a column-width change too.
+  keep naming the old one until the reader happened to scroll. Two `ResizeObserver`s answer it, and
+  it takes both: one on the **table**, which changes which item is current, and one on each panel's
+  own **list**, because a font swap or a rewrapped gist moves every entry below it without changing
+  anything the first observer or any prop reports — the current item would slide off the focus line
+  and stay there. What still gets past both: a reflow that redistributes rows inside a table whose
+  box is unchanged and leaves the list's height identical. Rare, and stated rather than claimed away.
 
-A fourth was found by checking the fixes in a browser rather than by reading them: the arc's step
+  **And one measurement that is still unexplained.** In a later browser session the sections panel
+  settled 31px off the line, at a `scrollTop` matching neither the centred value nor either clamp —
+  the arithmetic says it should have been centred. That session was also a bad witness: the tab
+  reported itself hidden throughout, the dev server was reconnecting, and the *page's* own scroll
+  position jumped 626px between two read-only measurements with no scroll event fired. The dedicated
+  run before it, on a healthy page, was sub-pixel at four positions in both directions. So: probably
+  the session, possibly not — worth re-measuring on a page nobody else is hot-reloading before
+  anyone concludes the placement is sound. A silently adjusted *page* scroll would leave the sampler
+  blind in exactly this way, which is the same family as the gap above.
+
+Two of those fixes needed numbers to agree across files — the room above and below the list that
+lets its ends reach the focus line, and the height of the fade at the panel's foot, which the bottom
+clamp has to know about. Both are now handed to the stylesheet as custom properties from
+[`ContextPanel.tsx`](../../src/web/ContextPanel.tsx). Written out in the CSS as `40vh`, `60vh` and
+`2.5rem` they were correct only while the focus line sat at 0.4: move the line and the first item
+would quietly stop short of it, with nothing to error and nothing to see.
+
+A fifth was the browser undoing the work. The current item was landing tens of pixels above the
+focus line mid-article — 75px in the sections column — while sitting exactly on it at the article's
+start and end. Nothing in the code or the stylesheet was wrong. **Scroll anchoring** was: the
+browser adjusts a scroll container's position to keep visible content still when content *above* it
+changes size, and content above it changes size here at every section boundary, because the outgoing
+current entry drops its gist and collapses to a title. The browser was helpfully undoing most of the
+centring the layout effect had just done. `overflow-anchor: none` on the panel, and the drift is
+gone in both directions at every position measured. Added to
+[silent-success.md](../reusable/silent-success.md) as its own row: a scroll position you set and the
+browser quietly corrects reads back as a plausible number.
+
+A fourth edge was found by checking the fixes in a browser rather than by reading them: the arc's step
 marker had lost its mono face and its tint to a **specificity collision** — `.ctx-title.ctx-step`
 land on the same element, and `.ctx-item.tier-cur .ctx-title` at three classes beat
 `.ctx-item .ctx-step` at two, while a later rule of equal weight still won the *size*. The marker

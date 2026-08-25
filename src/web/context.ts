@@ -49,8 +49,13 @@ export interface ContextItem {
   blockId: BlockId;
   /** The arc sentence, when this is the arc column. Otherwise the gist is used. */
   text?: string;
-  /** The arc column's step marker, in place of a title. */
-  step?: string;
+  /**
+   * The arc column's step marker, in place of a title — `3` of `9`. Kept as
+   * two numbers rather than a formatted string because the marker is set like
+   * the cell's: the position in the tint, the `/ total` after it faded and
+   * unbolded (`.arc-step .of` in styles.css).
+   */
+  step?: { index: number; total: number };
 }
 
 export interface ContextEntry {

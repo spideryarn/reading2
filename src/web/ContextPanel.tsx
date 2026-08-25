@@ -30,7 +30,7 @@
  * The panel is only ever built in reading mode. In outline mode the table is
  * itself a compact whole-article list and the column is the thing to read.
  */
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { BlockId, NodeId } from "../types.js";
 import type { ContextEntry, ContextItem } from "./context.js";
 import { ContextList } from "./ContextList.js";
@@ -51,11 +51,32 @@ const DELAY = { open: 150, close: 60 } as const;
 export const GUTTER_PX = 10;
 
 /**
- * The height of the fade at the panel's bottom edge — `mask-image` in
- * styles.css, and it must match. Anything inside it is half-there, so the
- * bottom clamp treats the panel as ending here.
+ * The height of the fade at the panel's bottom edge. Anything inside it is
+ * half-there, so the bottom clamp treats the panel as ending here — and the
+ * stylesheet draws the mask from this same number, handed over as a custom
+ * property below rather than written out again in CSS.
  */
 const FADE_PX = 40;
+
+/**
+ * The room above the first item and below the last one, as a share of the
+ * viewport, so that either end can still reach the focus line: `scrollTop`
+ * cannot go below zero or past the end, and without this a short level would
+ * sit jammed at the top of its panel while the longer level beside it held its
+ * current item at 40% — the columns would stop lining up, which is the one
+ * thing this view is for.
+ *
+ * **Derived from FOCUS_LINE, never written down as a number.** These were
+ * `40vh` and `60vh` in the stylesheet for an afternoon, which is correct only
+ * while the focus line is at 0.4. Moving the line would have left the padding
+ * quietly too small at one end, and nothing would have errored: the first item
+ * would simply have stopped short of the line. Exactly the kind of agreement
+ * between two files that no check catches — docs/reusable/silent-success.md.
+ */
+const LEAD = `${FOCUS_LINE * 100}vh`;
+const TAIL = `${(1 - FOCUS_LINE) * 100}vh`;
+
+
 
 interface Props {
   depth: number;
@@ -72,6 +93,8 @@ interface Props {
   activeChain: Set<NodeId>;
   crumbFor(item: ContextItem): string | null;
   onJump(blockId: BlockId): void;
+  /** Hovering an entry lights its ancestors in the coarser columns — see TableView. */
+  onHoverNode(id: NodeId | null): void;
 }
 
 export function ContextPanel({
@@ -85,24 +108,27 @@ export function ContextPanel({
   activeChain,
   crumbFor,
   onJump,
+  onHoverNode,
 }: Props) {
   const panel = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
 
+  // Whether this level has an item under the focus line at all. It may not:
+  // see context.ts § currentIndex. The list then sits flush at the top of the
+  // panel, and the lead padding is dropped with `.no-current` — dropped rather
+  // than scrolled past, because a short list does not have the scroll range to
+  // get past it. `scrollTop` is clamped to the content, so with three entries
+  // and a viewport of lead above them, most of the panel would have stayed
+  // blank however far we asked it to scroll.
+  const hasCurrent = entries.some((e) => e.kind === "item" && e.tier === "cur");
+
   // Scroll the list so the current item's middle sits on the focus line.
   // Measured, not computed from entry counts: tiers have different heights and
-  // the gist wraps. `entries`, the column width and the viewport height are
-  // re-run triggers, not values the effect reads — the list changed, or
-  // reflowed, so re-measure it.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers
-  useLayoutEffect(() => {
+  // the gist wraps.
+  const place = useCallback(() => {
     const p = panel.current;
     if (!p) return;
     const cur = list.current?.querySelector<HTMLElement>("li.tier-cur");
-    // No current item means the reader is above everything this level has —
-    // a column whose first cells are continuations, before its first real
-    // item begins (context.ts § currentIndex). The honest view is the top of
-    // the list, not the last place the panel happened to be left.
     if (!cur) {
       p.scrollTop = 0;
       return;
@@ -120,27 +146,65 @@ export function ContextPanel({
     //
     // If the item is taller than the panel can hold, the top wins: the title
     // is worth more than the tail of the gist.
-    const head = list.current?.querySelector<HTMLElement>("li.ctx-group");
+    //
+    // The heading measured is the current item's own — `.holds-current`, the
+    // one that will be pinned when the item is near the top — and not simply
+    // the first in the list. A part title can wrap to two lines, so the
+    // headings are not interchangeable: measure the wrong one and a tall
+    // heading hides the very item this clamp exists to keep whole. A level
+    // with no headings at all (the parts, whose parent is the root) correctly
+    // measures nothing.
+    const head = list.current?.querySelector<HTMLElement>("li.ctx-group.holds-current");
     const top = cur.offsetTop - (head?.offsetHeight ?? 0);
     const bottom = cur.offsetTop + cur.offsetHeight - (p.clientHeight - FADE_PX);
     p.scrollTop = Math.max(0, Math.min(top, Math.max(bottom, wanted)));
-  }, [entries, rect?.width, rect?.top, viewportH]);
+  }, []);
+
+  // `entries`, the column width and the viewport height are re-run triggers,
+  // not values read here — the list changed, or moved, so place it again.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers
+  useLayoutEffect(place, [place, entries, rect?.width, rect?.top, viewportH]);
+
+  // And place it again whenever the list itself changes size, which no prop
+  // reports: a font swapping in or a gist rewrapping moves every entry below
+  // it, and the current one would slide off the focus line and stay there. The
+  // sampler's observer watches the *table*; this one watches what is actually
+  // being positioned. Writing `scrollTop` cannot change the list's size, so
+  // this cannot feed itself.
+  useEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [place]);
 
   if (!rect) return null;
   const left = rect.left + GUTTER_PX;
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: onMouseLeave ends a hover, it starts nothing
     <div
       ref={panel}
-      className={`ctx-panel depth-${depth}${pinned ? " pinned" : ""}`}
-      style={{
-        top: rect.top,
-        left,
-        width: rect.width - GUTTER_PX,
-        // Scrolled right, a middle column slides under the pinned one; its
-        // panel must go under it too. Zero when nothing overlaps, which is
-        // every unscrolled view — see LiveContext.clipLeft.
-        clipPath: pinned ? undefined : `inset(0 0 0 ${Math.max(0, clipLeft - left)}px)`,
-      }}
+      className={`ctx-panel depth-${depth}${pinned ? " pinned" : ""}${
+        hasCurrent ? "" : " no-current"
+      }`}
+      style={
+        {
+          top: rect.top,
+          left,
+          width: rect.width - GUTTER_PX,
+          // Scrolled right, a middle column slides under the pinned one; its
+          // panel must go under it too. Zero when nothing overlaps, which is
+          // every unscrolled view — see LiveContext.clipLeft.
+          clipPath: pinned ? undefined : `inset(0 0 0 ${Math.max(0, clipLeft - left)}px)`,
+          // The three numbers the stylesheet would otherwise have to keep in
+          // step with this file by hand.
+          "--ctx-lead": LEAD,
+          "--ctx-tail": TAIL,
+          "--ctx-fade": `${FADE_PX}px`,
+        } as React.CSSProperties
+      }
+      onMouseLeave={() => onHoverNode(null)}
       {...{ [NAV_DEPTH_ATTR]: navDepth }}
     >
       <div ref={list} className="ctx-panel-list">
@@ -148,6 +212,7 @@ export function ContextPanel({
           <ContextList
             entries={entries}
             onJump={onJump}
+            onHoverNode={onHoverNode}
             activeChain={activeChain}
             crumbFor={crumbFor}
           />
