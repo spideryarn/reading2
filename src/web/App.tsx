@@ -66,7 +66,7 @@ import {
   type Section,
 } from "./position.js";
 import { fitView, proseVisible } from "./layout.js";
-import { aimLadder, useArrowNav } from "./keynav.js";
+import { navPlan, useArrowNav } from "./keynav.js";
 import { useComments } from "./useComments.js";
 import { PILL } from "./pill.js";
 
@@ -411,15 +411,14 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * because they cannot see it move — is the kind of thing you only notice
    * afterwards, when you have lost your place.
    */
-  const navLadder = useMemo(
-    () => aimLadder(geometry.cells, fit.columns, geometry.leafDepth, proseOn, !!arcCells),
+  const nav = useMemo(
+    () => navPlan(geometry.cells, fit.columns, geometry.leafDepth, proseOn, !!arcCells),
     [geometry, fit.columns, proseOn, arcCells],
   );
   const navDepth = useArrowNav(
-    geometry,
+    nav,
     article.blocks,
     sectionDepth(geometry),
-    navLadder,
     !drawerOpen,
   );
 
@@ -596,7 +595,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           className="keynav"
           title="Up and down arrows step through this level — left and right arrows, or the pointer, change which level that is"
         >
-          ↑↓ {columnLabel(navDepth, geometry.leafDepth)}
+          ↑↓ {columnLabel(navDepth, geometry.leafDepth, navDepth === 0 && !!arcCells)}
         </span>
         {/* Failures of the comment transport belong here rather than in the
             dialog: if the fetch never landed there is no dialog to put them in. */}

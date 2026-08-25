@@ -65,6 +65,7 @@ whichever column you walk it to.
 | Where the pointer is | ↑ / ↓ step by |
 |---|---|
 | A gist column at depth *d* | that level's items — L1 parts, L2 sections, … |
+| The arc column (L0) | **parts** — its cells are the parts' cells, but it is its own rung |
 | The `Text` column (the prose) | one paragraph — the leaf level, which is 1:1 with blocks |
 | The leaf column beside the prose | the same: one paragraph |
 | The spine, anywhere on it | **parts (L1)** |
@@ -80,10 +81,24 @@ unhittable, which is a pointing concession rather than a statement about the rai
 ← and → walk the aim across the columns: coarser to the left, finer to the right, exactly the order
 they sit in on screen. **The rungs are the columns actually on screen**, not every level in the tree
 — a stride whose column auto-fit has dropped would light no header and change nothing you can see,
-which is indistinguishable from a broken key. Two adjustments fall out of the same rule: the arc
-column (L0) aims at parts, because its cells *are* the parts' cells, and a level with only one item
-is not a rung, which is what drops the root column when there is no arc. `aimLadder` in
-[`keynav.ts`](../../src/web/keynav.ts) is that list, and it is tested.
+which is indistinguishable from a broken key. `navPlan` in
+[`keynav.ts`](../../src/web/keynav.ts) builds that list, and it is tested.
+
+**Both ends are reachable, and that is the point.** Greg, 2026-08-26:
+
+> I need to be able to hit left all the way to be able to select L0 (the Argument), and to be able
+> to hit right all the way to select the Text.
+
+So the argument column is a rung of its own rather than an alias for Parts, which is what it was for
+a few hours. It still *steps* by part, because the arc's cells are the parts' cells
+([tree.ts § the arc](granularity-zoom.md#the-arc)) — the borrowing happens once, in `navPlan`, and
+nowhere in the view. The far right is the prose, which shares its rung with the leaf column beside
+it: both mean one paragraph, so making them two rungs would cost a press to cross a distinction that
+does not exist.
+
+The one level that is a column but not a rung is **L0 without the arc**, which is the root repeated
+down the page: one item, so both arrows are already dead ends there. A rung you cannot step on is a
+key that does nothing, so it is left off.
 
 **Pressing ← or → holds the level until you move the mouse.** This is the one piece of modal state
 the pointer design was built to avoid, so it is deliberately the weakest kind available: no
@@ -92,8 +107,23 @@ to whatever is under the pointer. You can hold a level without holding your hand
 it back by doing the thing you were going to do anyway. Nothing to get stuck in, because the way out
 is the way you already navigate.
 
-Both indicators already exist and both keep working: the aimed column header lights up, and the
-controls bar names the level. That matters more for the keys than it did for the pointer — with the
+**Clicking a bar button must not take the keys.** Greg, same day:
+
+> I noticed that if I'd just clicked the bottom-bar "Contents" button, say, then left/right changed
+> within that radio group, rather than the Contents columns (which should be the priority for those
+> keys).
+
+The bottom bar's mode switch is a `role="radiogroup"`, and that role is a promise about the arrow
+keys, so it takes them whenever focus is inside it. Which is right when the reader *tabbed* there,
+and wrong when they clicked — clicking Contents is how you get to the contents, so the next arrow
+you press is meant for the contents, and nobody thinks the button they let go of is still listening.
+So a pointer-driven click blurs the button afterwards and a keyboard-driven one does not
+(`e.detail > 0` tells them apart — Enter and Space report 0). The role keeps every promise it made
+to anyone who arrived by keyboard. See [`Dock.tsx`](../../src/web/Dock.tsx) § The one collision.
+
+Both indicators already exist and both keep working: the aimed column header lights up — exactly
+one column, even where the arc and Parts share a stride, because the reader has to be able to see
+which of the two another → would leave — and the controls bar names the level. That matters more for the keys than it did for the pointer — with the
 pointer, where you are aiming is where your hand is.
 
 At the ends of the ladder the key is handed back to the browser rather than swallowed, the same

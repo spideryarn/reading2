@@ -522,13 +522,26 @@ function withMode(search: string, mode: Mode): string {
  *
  * ## The one collision, and which way it was settled
  *
- * ↑ / ↓ step through the article (keynav.ts), listening on `window`. Its guard
- * ignores keys typed into an INPUT or TEXTAREA, and a `<button>` is neither —
- * so without `stopPropagation` here, pressing Down inside this group would
- * change the mode *and* scroll the article. Focus wins: while the reader is
- * inside a radiogroup the arrows belong to it, which is the whole reason the
- * pattern promises them. The pointer-aimed ↑/↓ is unaffected everywhere else,
- * because it is aimed by the pointer and this is about focus.
+ * All four arrows are the article's (keynav.ts, listening on `window`): ↑ / ↓
+ * step through it and ← / → choose the level they step by. That guard ignores
+ * keys typed into an INPUT or TEXTAREA, and a `<button>` is neither — so
+ * without `stopPropagation` here, pressing Down inside this group would change
+ * the mode *and* scroll the article. **While focus is genuinely inside the
+ * group, focus wins**, which is the whole reason the pattern promises the keys.
+ *
+ * **But a mouse click must not put focus here.** Greg, 2026-08-26:
+ *
+ * > if I'd just clicked the bottom-bar "Contents" button, say, then left/right
+ * > changed within that radio group, rather than the Contents columns (which
+ * > should be the priority for those keys)
+ *
+ * Clicking a bar button is how you *get to* the contents, so the arrows you
+ * press next are meant for the contents — and the reader has no reason to think
+ * the button they let go of is still listening. So a pointer-driven click blurs
+ * the button afterwards (`e.detail > 0`, which is 0 for a click synthesised by
+ * Enter or Space) and the arrows go back to the article. Tab into the group and
+ * everything the role promises is still there: this takes the keys away from
+ * nobody who asked for them.
  */
 /**
  * Which mode a key press moves to, or `null` if the key is not ours.
@@ -611,7 +624,13 @@ function DockModes({ mode, onMode }: { mode: Mode; onMode(next: Mode): void }) {
               aria-checked={m.mode === mode}
               // The roving tabindex: one tab stop for the whole group.
               tabIndex={m.mode === mode ? 0 : -1}
-              onClick={() => onMode(m.mode)}
+              onClick={(e) => {
+                onMode(m.mode);
+                // A real click leaves the keyboard to the article; Enter and
+                // Space (detail 0) leave focus where the reader put it. See the
+                // header — this is Greg's ← / → complaint, 2026-08-26.
+                if (e.detail > 0) e.currentTarget.blur();
+              }}
             >
               <m.icon size={15} />
               <span>{m.label}</span>

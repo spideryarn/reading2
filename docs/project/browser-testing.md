@@ -80,6 +80,22 @@ call rather than by the rendering step — a fresh page load, a reload, `history
 control. That is enough to cover URL→page restore, the legacy-hash rewrite, and the history
 semantics. Continuous scroll→URL needs a genuinely visible tab.
 
+**Keyboard events are a fourth thing, and they are worse than useless — they are *intermittent*.**
+Driving `ArrowDown` / `ArrowLeft` through the extension's `computer` tool into a hidden tab on
+2026-08-26: a bare `window.addEventListener('keydown', …)` planted in the page logged **zero** events
+across ten presses, while the app's aim label moved twice over five presses in the same session —
+fewer transitions than presses sent, and then nothing at all. Mouse and pointer events got through
+the whole time. So a key-driven check in a hidden tab can produce a result that is neither right nor
+wrong but *partly delivered*, which is the one outcome you cannot tell from a genuine failure.
+
+Before trusting any negative from a keypress, count the keydowns:
+
+```js
+window.__keys = 0; addEventListener('keydown', () => window.__keys++);   // then press, then read
+```
+
+If that counter does not match the number of presses you sent, you have measured the tooling.
+
 **A real wheel event is a third thing, and it works.** Driving the mouse wheel through the extension's
 `computer` tool scrolled the page and fired the app's scroll listener — `?at=` updated — in a session
 where `window.scrollTo()` and `scrollIntoView()` both silently did nothing. So when you need the page
@@ -123,12 +139,23 @@ at `Spine.tsx`.
 
 ## The arrow keys, and the thing that makes them hard to check
 
-↑ / ↓ step through the article at whichever level the pointer is hovering
-([keyboard.md](keyboard.md)). The awkward part for testing is that **the input is two-handed**: a
-keypress alone proves nothing, because the aim comes from the mouse. Set the pointer first, then
-press.
+↑ / ↓ step through the article at whichever level is aimed, and ← / → move that aim across the
+columns ([keyboard.md](keyboard.md)). The awkward part for testing is that **the input is
+two-handed**: a ↑ / ↓ keypress alone proves nothing, because the aim usually comes from the mouse.
+Set the pointer first, then press — and remember that a ← or → *locks* the aim until the pointer
+moves again, so a stray `mousemove` between two presses silently changes what the second one means.
 
-Five checks that between them catch every wiring mistake:
+Seven checks that between them catch every wiring mistake — and note that **checks 2, 3 and 4 cannot
+be done in a hidden tab at all**, because they go through `scrollToBlock` and its glide is rAF-driven
+(§ A background tab will lie to you). The aim checks — 1, 6, 7 — need no scrolling and so work
+anywhere; if ← / → move the label but ↑ / ↓ move nothing, that is the tab, not the code. Confirm it
+with a frame count before believing otherwise:
+
+```js
+(() => { let n = 0; const t = () => { n++; requestAnimationFrame(t); }; requestAnimationFrame(t);
+  return new Promise(r => setTimeout(() => r(n), 500)); })()   // 0 means the rendering step is asleep
+```
+
 
 1. **Slide the pointer across the columns without pressing anything.** The header underline and the
    `↑↓ …` label in the controls bar should follow it, and they should agree. Over the spine both
@@ -142,11 +169,20 @@ Five checks that between them catch every wiring mistake:
    `keynav.ts` is measuring mid-flight instead of stepping from its own last target.
 5. **Press Back.** As with scrolling, it must leave the page — arrow keys write `?at=` through the
    ordinary position listener and must never push a history entry.
+6. **Walk ← to the far left and → to the far right.** The label must reach *The argument* at one end
+   and *Paragraphs* (with the `Text` header lit) at the other, and stop rather than wrap. Exactly one
+   header lights at a time. This is the check that catches a rung being folded into its neighbour,
+   which is what the arc column was doing until 2026-08-26.
+7. **Click a bottom-bar mode button with the mouse, then press ← / →.** The *columns* must move and
+   the mode must not. Then Tab into that group and press ← / →: now the *mode* must move. One
+   behaviour is the article's and the other is the radiogroup's, and the only thing that tells them
+   apart is how focus got there ([`Dock.tsx`](../../src/web/Dock.tsx)).
 
-And three negatives worth confirming, because all are silent when wrong: Cmd+↓ should still jump to
-the end of the document, holding ↓ down should do nothing after the first step (auto-repeat is
-dropped), and **← / → must still pan the table sideways** when it is wider than the window — that is
-the axis we deliberately did *not* take.
+And two negatives worth confirming, because both are silent when wrong: Cmd+↓ should still jump to
+the end of the document, and holding a key down should do nothing after the first step (auto-repeat
+is dropped on all four arrows). Note that **← / → no longer pan the table** except at the ends of
+the ladder, where the key is handed back to the browser
+([keyboard.md § what we gave up](keyboard.md#what-we-gave-up)).
 
 ## Do not judge colour from a screenshot
 

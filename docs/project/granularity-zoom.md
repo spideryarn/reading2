@@ -389,8 +389,10 @@ the argument said directly. Relational is still required; it just has to be carr
 
 **Its cells are the parts' cells.** The arc is built from the L1 column's own geometry
 ([`tree.ts` § the arc](../../src/web/tree.ts)), so the two share boundaries by construction rather
-than by two walks of the tree happening to agree. That also settles the arrow keys: the arc column
-tags itself `data-nav-depth="1"`, because part-to-part is what its boundaries actually mean.
+than by two walks of the tree happening to agree. That also settles the arrow keys: ↑ / ↓ over the
+arc step part to part, because part-to-part is what its boundaries actually mean. It tags itself
+`data-nav-depth="0"` all the same — it is its own rung on the ← / → ladder, and the borrowing of the
+parts' boundaries happens once, in `navPlan` ([keyboard.md](keyboard.md#choosing-the-level-without-a-mouse)).
 
 Three decisions worth keeping:
 

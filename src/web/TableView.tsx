@@ -265,14 +265,12 @@ export function TableView({
               className={[
                 d === pinLeft ? "pin-left" : "",
                 d === pinRight ? "pin-right" : "",
-                /* The arc column steps by part, so at depth 1 BOTH headers
-                   light. Lighting only Parts would put the aim indicator on the
-                   column next to the one the pointer is in, which reads as a
-                   bug; lighting only the arc would hide that the two share a
-                   stride. They do, by construction — tree.ts § the arc. */
-                d === navDepth || (d === 0 && !!arcCells && navDepth === 1)
-                  ? "nav-aim"
-                  : "",
+                /* One column lights, and it is the one the aim names. The arc
+                   and Parts share a stride — the arc's cells are the parts'
+                   cells, tree.ts § the arc — but they are separate rungs on the
+                   ← / → ladder, so lighting both would leave the reader unable
+                   to see which of the two another → would leave. */
+                d === navDepth ? "nav-aim" : "",
               ].filter(Boolean).join(" ")}
             >
               {columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells)}
@@ -318,9 +316,11 @@ export function TableView({
             className={hoveredRow === row ? "row-active" : undefined}
           >
             {columns.map((depth) => {
-              /* The arc column. Its cells are the parts', so it is tagged
-                 `data-nav-depth={1}` — the arrows over it step part to part,
-                 which is what its boundaries actually mean. */
+              /* The arc column. It is tagged with its own depth, not with the
+                 parts' — Greg wants ← to run all the way out to the argument
+                 (2026-08-26), so L0 is a rung of its own. It still *steps* by
+                 part, because its cells are the parts' cells; that borrowing
+                 happens once, in navPlan (keynav.ts). */
               if (depth === 0 && arcCells) {
                 const arc = arcCells.get(row);
                 if (!arc) return null; // covered by a rowSpan above
@@ -328,7 +328,7 @@ export function TableView({
                   <td
                     key={depth}
                     rowSpan={arc.rowSpan}
-                    data-nav-depth={1}
+                    data-nav-depth={depth}
                     className={[
                       "gist arc depth-0",
                       activeChain.has(arc.node.id) ? "active" : "",
@@ -444,7 +444,7 @@ export function TableView({
         <ContextPanel
           key={d}
           depth={d}
-          navDepth={d === 0 && arcCells ? 1 : d}
+          navDepth={d}
           entries={entries}
           rect={live.rects.get(d) ?? null}
           viewportH={live.viewportH}

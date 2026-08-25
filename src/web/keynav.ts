@@ -29,15 +29,18 @@
  *
  * So the aim has two ways in and they are not two modes. The pointer aims
  * whenever it moves; ← / → aim when the mouse is not moving, and the next
- * mousemove hands it straight back. Off the ends of the ladder the keys are
- * handed back to the browser, which uses them to pan a table wider than the
- * window.
+ * mousemove hands it straight back. Both ends of the ladder are reachable —
+ * Greg, 2026-08-26: "I need to be able to hit left all the way to be able to
+ * select L0 (the Argument), and to be able to hit right all the way to select
+ * the Text" — which is why the arc column is a rung of its own rather than an
+ * alias for Parts, and why the prose and the leaf column beside it share one.
+ * See navPlan. Off the ends the keys go back to the browser, which uses them to
+ * pan a table wider than the window.
  *
  * The table is deliberately not the source of the pointer's aim. Every zone
- * that means
- * a granularity level tags itself with `data-nav-depth`, and this file reads
- * whatever is under the pointer — so the spine, which is not part of the table
- * at all, joins in by adding one attribute. See NAV_DEPTH_ATTR below.
+ * that means a granularity level tags itself with `data-nav-depth`, and this
+ * file reads whatever is under the pointer — so the spine, which is not part of
+ * the table at all, joins in by adding one attribute. See NAV_DEPTH_ATTR below.
  *
  * Related: docs/project/keyboard.md (the intent and the trade-offs),
  * position.ts (the same "which item am I in" arithmetic, for `?at=`),
@@ -47,7 +50,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Block } from "../types.js";
 import { activeSectionIndex } from "./position.js";
 import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
-import type { Cell, Geometry } from "./tree.js";
+import type { Cell } from "./tree.js";
 
 /**
  * The attribute a zone wears to say "arrows here mean this level".
@@ -118,33 +121,54 @@ export function stepTarget(
 }
 
 /**
- * The rungs ← / → step between: the granularity levels actually on screen.
+ * The rungs ← / → step between, and the row starts each level steps by.
  *
- * Built from the columns the layout chose rather than from the whole tree, so
- * the keyboard can only aim at something the reader can see — a stride whose
- * column has been dropped by auto-fit would light no header and change nothing
- * visible, which is indistinguishable from the key not working.
+ * One object rather than two lookups because the two have to agree: a rung the
+ * arrows can select but cannot step through is a key that does nothing, and a
+ * level with rows but no rung is a stride only the mouse can reach.
  *
- * Two adjustments, both for the same reason (nothing to step through is not a
- * rung): the L0 column aims at depth 1 when the arc is on, because the arc's
- * cells are the parts' cells exactly (tree.ts § the arc), and any depth with
- * fewer than two items is dropped — that is the root column without an arc,
- * one cell spanning the article, where both arrows are already dead ends.
+ * **The ladder is the columns actually on screen**, not every level in the
+ * tree. A stride whose column auto-fit has dropped would light no header and
+ * change nothing visible, which is indistinguishable from a broken key.
+ *
+ * **`starts` is every level**, on screen or not, because the pointer can aim at
+ * one the ladder does not carry — the spine means L1 whether or not the Parts
+ * column survived the fit.
+ *
+ * The one substitution is the arc. When stage 5b has run, the L0 column draws
+ * one cell per part rather than one cell for the article
+ * (tree.ts § the arc), so L0 steps by part — the same stride as Parts, which is
+ * exactly what "left all the way" is asking for: the argument's own column, not
+ * a rung that dead-ends because the root is a single cell. Without the arc that
+ * is what L0 is, and it is left off the ladder for having nowhere to go.
  */
-export function aimLadder(
+export interface NavPlan {
+  /** The rungs ← / → step between, coarsest first. */
+  ladder: number[];
+  /** starts[depth] → the row each item at that depth begins on. Sparse. */
+  starts: number[][];
+}
+
+export function navPlan(
   cells: Cell[][],
   columns: number[],
   leafDepth: number,
   showText: boolean,
   hasArc: boolean,
-): number[] {
-  const depths = new Set(columns.map((d) => (d === 0 && hasArc ? 1 : d)));
+): NavPlan {
+  // The arc's cells are the parts' cells, by construction — so borrow the row
+  // starts rather than recomputing them, and the two columns cannot drift.
+  const starts: number[][] = cells.map((column, d) =>
+    itemStarts(d === 0 && hasArc ? (cells[1] ?? column) : column),
+  );
+  const visible = new Set(columns);
   // The prose column is the finest granularity there is, and it means the same
-  // stride as the leaf column: one paragraph. Same rung, not a second one.
-  if (showText) depths.add(leafDepth);
-  return [...depths]
-    .filter((d) => (cells[d]?.length ?? 0) > 1)
+  // stride as the leaf column beside it: one paragraph. Same rung, not a second.
+  if (showText) visible.add(leafDepth);
+  const ladder = [...visible]
+    .filter((d) => (starts[d]?.length ?? 0) > 1)
     .sort((a, b) => a - b);
+  return { ladder, starts };
 }
 
 /**
@@ -155,7 +179,7 @@ export function aimLadder(
  * *between* rungs and the key moves to the neighbour on that side. Null at the
  * ends rather than wrapping: the same choice ↑ / ↓ make, and for the same
  * reason — a stride you can run off the end of is one you can feel the shape
- * of, and wrapping from Paragraphs to Parts is a jump nobody asked for.
+ * of, and wrapping from Paragraphs to the argument is a jump nobody asked for.
  */
 export function nextAim(
   ladder: number[],
@@ -204,14 +228,13 @@ function isTyping(target: EventTarget | null): boolean {
  * (docs/project/url-state.md#position-replaces-history-deliberate-acts-push).
  */
 export function useArrowNav(
-  geometry: Geometry,
-  blocks: Block[],
-  fallbackDepth: number,
   /**
-   * The rungs ← / → step between — see aimLadder. Memoise it: a fresh array
+   * The ladder and the row starts — see navPlan. Memoise it: a fresh object
    * every render would tear down and rebuild every listener every render.
    */
-  ladder: number[],
+  plan: NavPlan,
+  blocks: Block[],
+  fallbackDepth: number,
   /**
    * Whether the keys are live. False while the bottom drawer is open (App.tsx):
    * the reader is looking at a panel, not at the article, and scrolling the
@@ -247,9 +270,9 @@ export function useArrowNav(
     const resolve = (el: Element | null | undefined): number => {
       const zone = el?.closest?.(`[${NAV_DEPTH_ATTR}]`);
       const d = Number(zone?.getAttribute(NAV_DEPTH_ATTR));
-      // A depth with no column in the geometry has no items to step through,
-      // so it is not an aim — fall back rather than swallow the keypress.
-      return Number.isInteger(d) && geometry.cells[d] ? d : fallbackDepth;
+      // A depth the plan has no rows for has nothing to step through, so it is
+      // not an aim — fall back rather than swallow the keypress.
+      return Number.isInteger(d) && plan.starts[d] ? d : fallbackDepth;
     };
 
     const setAim = (d: number) => {
@@ -282,7 +305,7 @@ export function useArrowNav(
       // The lock is dropped rather than clamped when its rung goes away — a
       // resize that drops the Sections column should hand the aim back to the
       // pointer, not silently move it to a level nobody chose.
-      if (locked.current !== null && ladder.includes(locked.current)) {
+      if (locked.current !== null && plan.ladder.includes(locked.current)) {
         return locked.current;
       }
       locked.current = null;
@@ -311,7 +334,7 @@ export function useArrowNav(
       // across the columns, which is what the pointer does when you slide it
       // sideways (docs/project/keyboard.md § choosing the level without a mouse).
       if (across !== 0) {
-        const next = nextAim(ladder, currentAim(), across);
+        const next = nextAim(plan.ladder, currentAim(), across);
         // Off the end of the ladder we hand the key back, so ← / → still pan a
         // table wider than the window once there is no column left that way.
         if (next === null) return;
@@ -325,8 +348,11 @@ export function useArrowNav(
       const d = currentAim();
       setAim(d);
 
-      const starts = itemStarts(geometry.cells[d] ?? []);
-      const target = stepTarget(starts, chain.current ?? measureRow(), dir);
+      const target = stepTarget(
+        plan.starts[d] ?? [],
+        chain.current ?? measureRow(),
+        dir,
+      );
       const block = target === null ? undefined : blocks[target];
       // No preventDefault when we do nothing: at the ends of the article the
       // keypress goes back to the browser, so ↓ on the last paragraph still
@@ -351,7 +377,7 @@ export function useArrowNav(
       window.removeEventListener("pointerdown", drop);
       window.clearTimeout(timer);
     };
-  }, [geometry, blocks, fallbackDepth, ladder, enabled]);
+  }, [plan, blocks, fallbackDepth, enabled]);
 
   return depth;
 }

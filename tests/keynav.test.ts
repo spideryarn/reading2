@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Block, Tree } from "../src/types.js";
 import { buildGeometry } from "../src/web/tree.js";
-import { aimLadder, itemStarts, nextAim, stepTarget } from "../src/web/keynav.js";
+import { itemStarts, navPlan, nextAim, stepTarget } from "../src/web/keynav.js";
 
 const blocks: Block[] = JSON.parse(
   readFileSync("example/blocks.json", "utf8"),
@@ -111,33 +111,60 @@ describe("stepTarget", () => {
 
 /* ------------------------------------------------------- ← / →: the aim -- */
 
-describe("aimLadder", () => {
+describe("navPlan", () => {
   const leaf = geometry.leafDepth;
+  const ladder = (columns: number[], showText: boolean, hasArc = false) =>
+    navPlan(geometry.cells, columns, leaf, showText, hasArc).ladder;
 
   it("is the columns on screen, coarsest first", () => {
-    expect(aimLadder(geometry.cells, [1, 2], leaf, true, false)).toEqual([1, 2, leaf]);
+    expect(ladder([1, 2], true)).toEqual([1, 2, leaf]);
+  });
+
+  // Greg, 2026-08-26: "I need to be able to hit left all the way to be able to
+  // select L0 (the Argument), and to be able to hit right all the way to select
+  // the Text." Both ends, in one assertion.
+  it("runs from the argument to the prose when both are on screen", () => {
+    expect(ladder([0, 1, 2], true, true)).toEqual([0, 1, 2, leaf]);
   });
 
   // Depth 0 without the arc is one cell spanning the article: both arrows are
   // dead ends there, so it is a column but not a rung.
   it("drops a column with nothing to step through", () => {
-    expect(aimLadder(geometry.cells, [0, 1, 2], leaf, false, false)).toEqual([1, 2]);
+    expect(ladder([0, 1, 2], false)).toEqual([1, 2]);
   });
 
-  // The arc's cells are the parts' cells, so the L0 column steps by part — and
-  // must not add a second rung meaning exactly what Parts already means.
-  it("folds the arc column onto the parts it is drawn against", () => {
-    expect(aimLadder(geometry.cells, [0, 1], leaf, false, true)).toEqual([1]);
+  // What makes L0 a rung at all: it borrows the parts' boundaries, so ↑ / ↓
+  // over the argument step part to part rather than doing nothing.
+  it("steps the arc column by its parts", () => {
+    const plan = navPlan(geometry.cells, [0, 1], leaf, false, true);
+    expect(plan.starts[0]).toEqual(itemStarts(geometry.cells[1] ?? []));
+    // And without the arc it is the root: one item, nowhere to go.
+    expect(navPlan(geometry.cells, [0], leaf, false, false).starts[0]).toEqual([0]);
   });
 
   // Outline mode: the leaf column is in `columns` already, and the prose is off.
   it("does not invent a prose rung when the prose is hidden", () => {
-    expect(aimLadder(geometry.cells, [2, leaf], leaf, false, false)).toEqual([2, leaf]);
+    expect(ladder([2, leaf], false)).toEqual([2, leaf]);
+  });
+
+  // The prose and the leaf column beside it are one paragraph either way, so
+  // they are one rung — → must not need two presses to leave them.
+  it("gives the prose and the leaf column the same rung", () => {
+    expect(ladder([1, leaf], true)).toEqual([1, leaf]);
   });
 
   // A mode owns the middle band, so there are no gist columns at all.
   it("is the prose alone when a mode has taken the band", () => {
-    expect(aimLadder(geometry.cells, [], leaf, true, false)).toEqual([leaf]);
+    expect(ladder([], true)).toEqual([leaf]);
+  });
+
+  // The pointer can aim at a level the ladder does not carry — the spine is L1
+  // whether or not the Parts column survived the fit — so the rows are kept for
+  // every level, not just the rungs.
+  it("keeps rows for levels that are off the ladder", () => {
+    const plan = navPlan(geometry.cells, [], leaf, true, false);
+    expect(plan.ladder).toEqual([leaf]);
+    expect(plan.starts[1]).toEqual(itemStarts(geometry.cells[1] ?? []));
   });
 });
 
