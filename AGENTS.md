@@ -29,6 +29,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [table-of-contents.md](docs/project/table-of-contents.md) | the deeply-nested ToC: schema, granularity, the generation prompt |
 | [architecture.md](docs/project/architecture.md) | pipeline stages, what a block is, storage layout, server, stage ownership |
 | [database.md](docs/project/database.md) | **where the data lives** (stub): one directory per article today, one file per stage, all of it behind `src/api.ts` — and what changes when that becomes Supabase Postgres |
+| [supabase-local.md](docs/project/supabase-local.md) | **the whole Supabase stack in Docker on this laptop**: `npm run db:start`, the two settings that are not the default (a `5436x` port block so it can run beside the old app's, and Postgres 15 to match the remote), why the local keys are not secrets, and the five ways it goes wrong quietly — a stale socket that looks like a running daemon among them |
 | [fetching.md](docs/project/fetching.md) | **stage 1**: the size cap that counts the right bytes, the charset sniff, why Node's own text decoder is wrong about curly quotes, and the certificate failure that works fine in your browser |
 | [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
@@ -53,6 +54,10 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 
 `docs/plans/` holds plans for work that is being done or has just been done — the reasoning and the
 evidence behind a change, written before it landed and kept afterwards so the *why* survives.
+
+`docs/postmortems/` holds one file per bug worth understanding — what the root cause actually was,
+which commit introduced it, the fix that's right for the long term, and what would have caught the
+whole class of it earlier. Not listed here either; list the folder.
 
 `docs/research/` holds the working behind a decision — the options weighed, the sources, and the
 dead ends — kept so nobody has to run the search again. A plan says what we're doing; a research doc
@@ -177,6 +182,12 @@ Not descriptions of code, which the code already provides.
   [linting.md](docs/project/linting.md). What the tests cover, and what they don't, is in
   [testing.md](docs/project/testing.md); why the typecheck needs a script of its own rather than a
   bare `tsc` is in [typechecking.md](docs/project/typechecking.md).
+- **Root-cause every bug in a subagent, and write it up.** When you're fixing a bug, hand the
+  investigation to a subagent and tell it to keep going until it really understands the cause — not
+  the line that broke, but why that line was written. It should come back with: the root cause, which
+  commit(s) introduced it and when, the fix that's best for the long term rather than the quickest,
+  what we can learn from it, how we'd avoid this whole class of problem in future, and whether
+  anything should be rearchitected. Then write that up as a new `.md` under `docs/postmortems/`.
 - **Do browser work in a Sonnet subagent.** Anything driving Claude-in-Chrome — browser automation,
   checking the reading view in a real browser, screenshots — should be delegated to a subagent with
   `model: "sonnet"` rather than run in the main thread. It's mostly click-look-click, the screenshots
