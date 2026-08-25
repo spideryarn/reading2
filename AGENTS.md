@@ -34,6 +34,8 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [keyboard.md](docs/project/keyboard.md) | ↑ / ↓ step through the article, and the level they step by is whichever column the pointer is in |
 | [comments.md](docs/project/comments.md) | select a sentence and the model explains it: the dialog (not a column), when it searches the web, and why the anchor is the quote rather than an offset |
 | [url-state.md](docs/project/url-state.md) | every bit of view state lives in the URL: the parameters, which ones push history and which replace, and why position is a *section* |
+| [column-context.md](docs/project/column-context.md) | four toggleable experiments in making the gist columns scannable — siblings, neighbours, a panel, and Greg's centred fisheye — the research behind them, GPT's review, and how to decide between them |
+| [library.md](docs/project/library.md) | the homepage: browsing past articles, `/read/<slug>`, what a card says and why the blurb is the root gist, and the one file a move to Postgres goes behind |
 | [design-css-overview.md](docs/project/design-css-overview.md) | **the map for anything visual** (stub): the four stylesheets and the order they load in, which of the three mechanisms owns a given rule, the colour and type tokens, and an honest list of what isn't decided |
 | [icons.md](docs/project/icons.md) | Lucide, not Phosphor: why, the one stroke weight everything uses, the loading spinner recipe, and the two ways swapping a glyph for an SVG breaks a layout quietly |
 | [linting.md](docs/project/linting.md) | `npm run lint`: why Biome rather than ESLint (TypeScript 7 removed the API ESLint needs), the config-file extension that silently discards your settings, and which rules are off on purpose |
@@ -153,6 +155,12 @@ Not descriptions of code, which the code already provides.
   [linting.md](docs/project/linting.md). What the tests cover, and what they don't, is in
   [testing.md](docs/project/testing.md); why the typecheck needs a script of its own rather than a
   bare `tsc` is in [typechecking.md](docs/project/typechecking.md).
+- **Do browser work in a Sonnet subagent.** Anything driving Claude-in-Chrome — browser automation,
+  checking the reading view in a real browser, screenshots — should be delegated to a subagent with
+  `model: "sonnet"` rather than run in the main thread. It's mostly click-look-click, the screenshots
+  are large, and keeping them out of the main context is worth more than the extra reasoning. Tell
+  the subagent to read [browser-testing.md](docs/project/browser-testing.md) first, and ask it back
+  for the conclusion, not the page dumps.
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.
 - **Never run a git command that throws work away.** Other agents' unsaved edits are sitting in
