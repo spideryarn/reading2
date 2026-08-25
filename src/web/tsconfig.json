@@ -8,5 +8,12 @@
     "outDir": null,
     "types": ["vite/client"]
   },
+  /* The root config excludes "src/web" so that `tsc -p tsconfig.json` builds the
+     node side alone. `exclude` is inherited through `extends`, so without this
+     line that exclusion also applies here — and this config then excluded
+     exactly what it includes, checked zero files, and exited 0 every time.
+     A verification step that always passes is worse than none, because it is
+     quoted as evidence. See docs/reusable/silent-success.md. */
+  "exclude": [],
   "include": [".", "../types.ts"]
 }
