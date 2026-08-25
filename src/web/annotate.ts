@@ -67,8 +67,11 @@ export function renderedText(html: string): string {
  */
 export function resolveMark(text: string, anchor: Anchor): { start: number; end: number } | null {
   if (anchor.quote.length === 0) return null;
-  // The overwhelmingly common case: nothing moved.
-  if (text.startsWith(anchor.quote, anchor.start)) {
+  // The overwhelmingly common case: nothing moved. The bounds check is not
+  // paranoia: `startsWith` clamps a negative position to 0 and happily matches,
+  // and we would then return the *unclamped* start — a mark drawn a few
+  // characters left of its own words, looking like a CSS bug.
+  if (anchor.start >= 0 && text.startsWith(anchor.quote, anchor.start)) {
     return { start: anchor.start, end: anchor.start + anchor.quote.length };
   }
   let best = -1;
@@ -116,7 +119,11 @@ export function annotateHtml(html: string, marks: Mark[]): string {
 
     const fragment = doc.createDocumentFragment();
     for (let i = 0; i < points.length - 1; i++) {
-      const [from, to] = [points[i], points[i + 1]];
+      // `?? 0` only to satisfy noUncheckedIndexedAccess — the loop bound and
+      // the fact that `cuts` always holds 0 and value.length mean both indices
+      // are in range.
+      const from = points[i] ?? 0;
+      const to = points[i + 1] ?? 0;
       if (from === to) continue;
       const piece = value.slice(from, to);
       const covering = touching.filter(

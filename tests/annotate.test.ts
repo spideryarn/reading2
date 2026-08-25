@@ -113,3 +113,21 @@ describe("resolveMark", () => {
     expect(resolveMark(text, { quote: "easy problem", start: 30 })).toBeNull();
   });
 });
+
+describe("resolveMark refuses nonsense offsets", () => {
+  // `startsWith` clamps a negative position to 0 and matches happily, and the
+  // fast path used to return the negative start unchanged — a mark drawn to the
+  // left of its own words, which reads as a CSS bug rather than bad data.
+  it("does not return a negative range for a negative start", () => {
+    const found = resolveMark("alpha beta", { quote: "alpha", start: -2 });
+    expect(found).toEqual({ start: 0, end: 5 });
+  });
+
+  it("still finds the quote when the stored start is past the end", () => {
+    expect(resolveMark("alpha beta", { quote: "beta", start: 999 })).toEqual({ start: 6, end: 10 });
+  });
+
+  it("returns null when the quote is gone, rather than marking the wrong words", () => {
+    expect(resolveMark("alpha beta", { quote: "gamma", start: 0 })).toBeNull();
+  });
+});

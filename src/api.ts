@@ -56,8 +56,14 @@ export async function loadArticle(slug: string): Promise<Article> {
 
     return { meta, blocks: blocksFile.blocks, tree, ...(arc ? { arc } : {}) };
   }
-  throw new Error(
-    `No article artefacts for "${slug}". Looked in:\n  ${candidateDirs(slug).join("\n  ")}\n` +
-      `Each needs blocks.json + tree.json.`,
+  // Tagged 404 rather than left for routes.ts to infer. Inferring it meant
+  // every unclassified fault — a corrupt tree.json, a permissions problem —
+  // also came back "no such article", which is the wrong thing to investigate.
+  throw Object.assign(
+    new Error(
+      `No article artefacts for "${slug}". Looked in:\n  ${candidateDirs(slug).join("\n  ")}\n` +
+        `Each needs blocks.json + tree.json.`,
+    ),
+    { status: 404 },
   );
 }

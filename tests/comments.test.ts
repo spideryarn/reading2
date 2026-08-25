@@ -7,7 +7,7 @@
  *
  * Writes under `data/<throwaway slug>/`, which is gitignored, and removes it.
  */
-import { rm } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -77,7 +77,7 @@ describe("comment storage", () => {
     expect(again.citations).toBeUndefined();
     expect(again.searches).toBeUndefined();
     expect(again.error).toBeUndefined();
-    expect((await loadComments(SLUG))[0].answer).toBeUndefined();
+    expect((await loadComments(SLUG))[0]!.answer).toBeUndefined();
   });
 
   it("patches one comment without disturbing the others", async () => {
@@ -96,7 +96,7 @@ describe("comment storage", () => {
   it("never lets a patch rewrite an id", async () => {
     const a = await createComment(SLUG, anchor);
     await patchComment(SLUG, a.id, { id: "spya-zzzzzz" } as never);
-    expect((await loadComments(SLUG))[0].id).toBe(a.id);
+    expect((await loadComments(SLUG))[0]!.id).toBe(a.id);
   });
 
   it("keeps every comment when several are created at once", async () => {
@@ -141,5 +141,32 @@ describe("describeFetchFailure", () => {
     expect(describeFetchFailure(new Error("OpenRouter 402: Insufficient credits"))).toBe(
       "OpenRouter 402: Insufficient credits",
     );
+  });
+});
+
+describe("the file is swapped, not truncated", () => {
+  it("leaves no temp file behind, and always parses", async () => {
+    // `writeFile` truncates before it writes, so a crash inside that window
+    // leaves a half-written comments.json and every later read throws — losing
+    // *all* the comments for the article, not just the one being written. The
+    // write goes to a neighbour and renames over the top instead.
+    for (let i = 0; i < 5; i++) {
+      await createComment(SLUG, { ...anchor, quote: `question ${i}` });
+    }
+    const names = await readdir(DIR);
+    expect(names).toEqual(["comments.json"]);
+
+    const raw = await readFile(path.join(DIR, "comments.json"), "utf8");
+    expect(() => JSON.parse(raw)).not.toThrow();
+    expect(JSON.parse(raw).comments).toHaveLength(5);
+  });
+
+  it("survives writes issued together, because they are serialised", async () => {
+    // Two selections in quick succession is the normal way to use this.
+    await Promise.all(
+      [0, 1, 2, 3].map((i) => createComment(SLUG, { ...anchor, quote: `at once ${i}` })),
+    );
+    expect(await loadComments(SLUG)).toHaveLength(4);
+    expect(await readdir(DIR)).toEqual(["comments.json"]);
   });
 });

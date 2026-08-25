@@ -11,7 +11,7 @@
  * The POST is therefore also the answer: it returns the finished comment, so
  * there is nothing to poll.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Comment } from "../types.js";
 import { mintId } from "../ids.js";
 import type { SelectionAnchor } from "./selection.js";
@@ -52,6 +52,26 @@ export function useComments(slug: string): CommentsApi {
   const [comments, setComments] = useState<Comment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Ids the reader has deleted while their answer was still in the air.
+   *
+   * A POST takes 15-25 seconds and the reader is free to do anything at all
+   * while it is out. Deleting during that window used to bring the comment
+   * *back* when the answer landed: the response is the whole comment, and
+   * storing it re-added a row the reader had already removed, mark and all.
+   * This tombstone is what makes the delete win.
+   *
+   * A ref, not state: nothing renders from it, and a stale closure here would
+   * defeat the entire point.
+   */
+  const deleted = useRef(new Set<string>());
+
+  // Switching article throws the tombstones away with the comments they name.
+  useEffect(() => {
+    const gone = deleted.current;
+    return () => gone.clear();
+  }, [slug]);
+
   useEffect(() => {
     let live = true;
     setComments([]);
@@ -77,6 +97,27 @@ export function useComments(slug: string): CommentsApi {
     );
   }, []);
 
+  /** The DELETE itself, checked. Also used to re-delete after a late answer. */
+  const forget = useCallback(
+    async (id: string) => {
+      try {
+        const r = await fetch(
+          `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+          { method: "DELETE" },
+        );
+        // A DELETE that 500s used to remove the comment from the screen and say
+        // nothing, so the reader saw it gone and found it back after a reload.
+        if (!r.ok) {
+          const body = (await r.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error ?? r.statusText);
+        }
+      } catch (e) {
+        setError(describeFetchFailure(e as Error));
+      }
+    },
+    [slug],
+  );
+
   const send = useCallback(
     (input: Comment) => {
       // Drop whatever the previous attempt left behind, so a retry shows a
@@ -91,6 +132,9 @@ export function useComments(slug: string): CommentsApi {
       };
       put(pending);
       setError(null);
+      // Asking again un-deletes: the reader is plainly no longer finished with
+      // it, whatever they clicked a moment ago.
+      deleted.current.delete(pending.id);
       fetch(`/api/comments/${encodeURIComponent(slug)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,14 +153,24 @@ export function useComments(slug: string): CommentsApi {
         // The server always answers with the whole comment, `status: "error"`
         // included, so there is one code path for "the model failed" and it is
         // the same one as for success.
-        .then(put)
+        .then((answered) => {
+          if (deleted.current.has(pending.id)) {
+            // Deleted while the answer was in the air. The DELETE we sent may
+            // have run *before* the POST finished writing, so the row can be
+            // back on disk; send it again now that nothing else will write it.
+            void forget(pending.id);
+            return;
+          }
+          put(answered);
+        })
         .catch((e: Error) => {
+          if (deleted.current.has(pending.id)) return;
           const message = describeFetchFailure(e);
           setError(message);
           put({ ...pending, status: "error", error: message });
         });
     },
-    [slug, put],
+    [slug, put, forget],
   );
 
   const ask = useCallback(
@@ -155,12 +209,14 @@ export function useComments(slug: string): CommentsApi {
 
   const remove = useCallback(
     (id: string) => {
+      deleted.current.add(id);
       setComments((prev) => prev.filter((c) => c.id !== id));
-      fetch(`/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      }).catch((e: Error) => setError(describeFetchFailure(e)));
+      // If a POST is still out, its `.then` re-sends the DELETE once the write
+      // it is racing has definitely landed. Doing it only here would let the
+      // POST write the row back after we deleted it.
+      void forget(id);
     },
-    [slug],
+    [forget],
   );
 
   return { comments, ask, retry, remove, error };

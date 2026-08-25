@@ -14,7 +14,7 @@
  *
  * See docs/project/comments.md.
  */
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Comment } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
@@ -59,10 +59,30 @@ export async function loadComments(slug: string): Promise<Comment[]> {
   }
 }
 
+/**
+ * Write the file so a reader never sees a half-written one.
+ *
+ * `writeFile` truncates first and then writes, so there is a window in which
+ * `comments.json` is empty or cut off mid-object. Land in it — the process is
+ * killed, `npm run dev` restarts mid-write — and every later read throws on the
+ * JSON, which wedges every comment for that article rather than losing the one
+ * that was being written. Writing a neighbour and renaming over the top makes
+ * the swap atomic: a reader gets the whole old file or the whole new one.
+ *
+ * The temp file goes in the same directory on purpose. `rename` is only atomic
+ * within a filesystem, and /tmp is routinely a different one.
+ */
 async function save(slug: string, comments: Comment[]): Promise<void> {
   const file = fileFor(slug);
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify({ comments }, null, 2), "utf8");
+  const temp = `${file}.${process.pid}.tmp`;
+  try {
+    await writeFile(temp, JSON.stringify({ comments }, null, 2), "utf8");
+    await rename(temp, file);
+  } catch (err) {
+    await rm(temp, { force: true });
+    throw err;
+  }
 }
 
 /** Apply `mutate` to the stored list and write the result back. */

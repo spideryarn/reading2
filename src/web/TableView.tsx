@@ -165,12 +165,16 @@ export function TableView({
         /* Delegated, not per-block: the prose is injected HTML, so the <mark>
            elements are not React's and cannot carry React handlers. */
         onMouseUp={(e) => {
+          // A real selection wins over the mark it happens to end in. Checking
+          // the mark first meant that selecting a phrase *inside* an existing
+          // comment's words silently reopened that comment instead of asking a
+          // new question — and asking about a narrower part of something you
+          // already asked about is a completely ordinary thing to want.
+          const anchor = readSelection(window.getSelection());
+          if (anchor) return onSelect(anchor);
           const mark = (e.target as Element).closest?.("mark.cmt");
-          if (mark) {
-            const first = mark.getAttribute("data-comment")?.split(" ")[0];
-            if (first) return onOpenComment(first);
-          }
-          onSelect(readSelection(window.getSelection()));
+          const first = mark?.getAttribute("data-comment")?.split(" ")[0];
+          if (first) onOpenComment(first);
         }}
       >
         {blocks.map((block, row) => (
