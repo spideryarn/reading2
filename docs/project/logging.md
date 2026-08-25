@@ -536,6 +536,29 @@ actually hold.
 7. **Vercel filing a `warn` as an `error`**, and structured fields that may not be indexed. Both
    above; both make the dashboard quietly disagree with what the code did.
 
+8. **An error message that was safe when it was written.** `httpError(400, ...)` messages are logged
+   as `reason` by `logRequest`, so they are published rather than merely said. One of them
+   interpolated the source URL — `` `Could not make a slug from ${url}` `` — which put credentials
+   and a query string into a `warn` line, undoing the query strip forty lines away in the same file.
+   The code that stripped and the code that leaked were both correct in isolation; only the pair was
+   wrong. Pinned by `tests/jobs.test.ts`, and the invariant is now stated at `logRequest` itself,
+   which is the place someone editing a `throw` two hundred lines away will never look — so treat
+   the test as the real guard.
+
+### Two we know about and have not changed
+
+Written down because a known gap is cheaper than a rediscovered one.
+
+- **`JSON.stringify(message.stop_details)`** in the four Anthropic stages (`toc.ts`, `arc.ts`,
+  `tweets.ts`, `glossary.ts`), on a message that a failed step logs with `errorFields`. Checked
+  against the SDK: `RefusalStopDetails` currently holds a policy category and nothing else, so this
+  leaks nothing today. It is listed because the shape is the risky one — a whole provider object
+  stringified into a logged message — and it becomes a leak the day the SDK adds a field, with no
+  test failing and no code changing here. The fix is `stop_details?.type`, one line in four files,
+  and it costs whatever a future field would have told us. Not done: four stage files, and a
+  speculative harm.
+- **The `${detail.slice(0, 400)}` throws**, described above. The real fix, and the bigger one.
+
 ## Related docs
 
 - [architecture.md § Stage ownership](architecture.md#stage-ownership) — why the pipeline logs from

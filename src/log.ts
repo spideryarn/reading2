@@ -208,8 +208,8 @@ export type Component =
   | "http" // src/routes.ts — one line per API request
   | "jobs" // src/jobs.ts — the queue and job lifecycle
   | "pipeline" // src/pipeline.ts — one line per step, with what it cost
-  | "store" // src/api.ts, src/comments.ts — reads and writes of artefacts
-  | "model"; // src/explain.ts — the one model call with a reader waiting
+  | "store" // src/api.ts, src/comments.ts, src/chat.ts, src/searches.ts
+  | "model"; // src/explain.ts, src/converse.ts, src/search.ts — a reader waiting
 
 /**
  * What a caller gets. Deliberately smaller than `pino.Logger`.

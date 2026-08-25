@@ -355,6 +355,41 @@ describe("parseJobRequest", () => {
     expect(parsed.steps).toBeUndefined(); // absent means "all of them"
   });
 
+  it("refuses an unusable url without repeating it back", () => {
+    /* The refusal message is LOGGED, which is the whole point of this test.
+       `logRequest` in src/routes.ts writes `reason: err.message` for any error
+       that named its own status — an `httpError` is a decision this file made,
+       so its message is treated as ours and written down. That makes every
+       `httpError` string a thing we publish, not just a thing we say.
+
+       This one used to interpolate the URL, which defeated the query-string
+       strip forty lines above it in the same file: `path` was cleaned and then
+       the whole raw URL came back in as `reason`, credentials and all, at warn.
+       A source URL is untrusted input and can carry a token or basic-auth
+       credentials — docs/project/logging.md, and it is the same shape as the
+       toc.ts title and the chat.ts `reason` field.
+
+       Nothing is lost by dropping it: the caller sent the URL, so quoting it
+       back tells them nothing they do not have.
+
+       The trigger is a URL that will not parse — `slugFromUrl` returns "" for
+       one, and "" is not a slug. Pasting a bare domain with no scheme is the
+       ordinary way to get here, and forgetting the `https://` does not remove
+       the query string, so the realistic failing request is exactly this shape.
+       (A mistyped scheme is not: `new URL` accepts `htp://…` quite happily and
+       derives a perfectly good slug from it.) */
+    const secret = "example.com/private/a?token=SECRET-8888&key=pw-7777";
+    expect(() => parseJobRequest({ url: secret })).toThrow();
+    try {
+      parseJobRequest({ url: secret });
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).not.toContain("SECRET-8888");
+      expect(message).not.toContain("pw-7777");
+      expect(message).not.toContain(secret);
+    }
+  });
+
   it("refuses a slug that could climb out of data/", () => {
     // The slug is joined onto data/ and output/. This is the check that stands
     // between a POST body and the filesystem — see

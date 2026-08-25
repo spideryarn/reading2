@@ -13,6 +13,7 @@
  *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
+ *   GET    /api/summary/:slug    the piece at more than one length, and whether it is stale
  *   GET    /api/comments/:slug   every stored comment for the article
  *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
  *   DELETE /api/comments/:slug/:id
@@ -20,6 +21,9 @@
  *   POST   /api/chat/:slug       { threadId, question, at? } → **a stream**, see `streamChat`
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
+ *   GET    /api/search/:slug     every saved meaning-search for the article
+ *   POST   /api/search/:slug     { id?, criterion } → the finished run
+ *   DELETE /api/search/:slug/:id
  *   GET    /api/jobs             every ingest job this server knows about
  *   POST   /api/jobs             { url } | { slug, steps?, force? } → the queued job
  *   GET    /api/jobs/:id         one job, for the progress indicator to poll
@@ -38,6 +42,7 @@ import {
   listArticles,
   loadArticle,
   loadGlossary,
+  loadSummaries,
   loadTweets,
 } from "./api.js";
 import {
@@ -48,6 +53,8 @@ import {
   renameThread,
   update as updateThreads,
 } from "./chat.js";
+import { beginRun, deleteRun, finishRun, loadRuns, update as updateRuns } from "./searches.js";
+import { findPassages } from "./search.js";
 import { createComment, deleteComment, loadComments, patchComment } from "./comments.js";
 import { converse } from "./converse.js";
 import { explain } from "./explain.js";
@@ -55,7 +62,7 @@ import { isSlug, slugFromUrl } from "./ingest.js";
 import { cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
-import type { ChatThread, Comment } from "./types.js";
+import type { ChatThread, Comment, SearchRun } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -287,14 +294,26 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
 
   const { thread, reply } = await beginTurn(slug, { threadId, question: question.trim() });
   const key = `${slug}/${thread.id}/${reply.id}`;
-  streaming.add(key);
 
-  res.statusCode = 200;
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders?.();
+  /* Everything from here is inside one try/finally, and the `streaming` key is
+     added on the first line of it rather than just before it.
+
+     The key used to be added ahead of the try, with the header flush and the
+     `begin` frame outside too. A throw from either — a socket that died between
+     `beginTurn` and the first write — leaked the key for the life of the
+     process, and a leaked key is not inert: `sweepChat` reads it as "this
+     process is still answering", so that message stayed `pending` on disk for
+     ever and no sweep would ever release it. Found by a GPT-5.6 review,
+     2026-08-26. */
+  let text = "";
+  try {
+    streaming.add(key);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
 
   /* Has the reader gone?
 
@@ -365,6 +384,96 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
 /** Long enough for a paragraph of context, short enough that nothing runs away. */
 const MAX_QUESTION_CHARS = 4000;
 
+/* --------------------------------------------------------------- search --
+   Finding a passage by what it says. See docs/project/search.md.
+
+   Shaped on the *comment* endpoints above rather than on the chat one, and the
+   choice is worth a sentence: a search result is a list, not prose, so there is
+   nothing to watch arrive and streaming would buy the reader a progress bar
+   they cannot read. One POST, one answer, the same three writes — `pending`
+   before the model call so a crash leaves evidence, the terminal state written
+   before the reply so the disk and the response can never disagree. */
+
+/**
+ * The searches this process is running right now, as `slug/runId`.
+ *
+ * The same job `answering` and `streaming` do above, for the same reason:
+ * `pending` on disk does not mean "an answer is coming", because it is written
+ * *before* the model call precisely so a crash leaves evidence. Only the
+ * running process can tell a search in flight from one that died with the
+ * process that was writing it.
+ */
+const searching = new Set<string>();
+
+/** Turn abandoned `pending` searches into `error`, so they can be run again. */
+async function sweepSearches(slug: string, runs: SearchRun[]): Promise<SearchRun[]> {
+  const orphaned = (r: SearchRun) => r.status === "pending" && !searching.has(`${slug}/${r.id}`);
+  if (!runs.some(orphaned)) return runs;
+  const swept = await updateRuns(slug, (current) =>
+    current.map((r) =>
+      orphaned(r)
+        ? { ...r, status: "error" as const, error: "The server stopped before this search finished." }
+        : r,
+    ),
+  );
+  // One line for the batch, not one per run: they all get the same patch for
+  // the same reason, and the count is the only part that varies.
+  log("store").warn(
+    { slug, orphans: swept.filter((r) => r.status === "error").length },
+    `swept abandoned search(es) for ${slug}`,
+  );
+  return swept;
+}
+
+/**
+ * Run a search, store the result, and answer with it.
+ *
+ * A model failure comes back as HTTP **200** carrying a run whose status is
+ * `error`, exactly as `answer` does for comments: the request succeeded at what
+ * it was for, which was recording what the reader asked for. The panel shows
+ * the failure and offers to try again.
+ *
+ * The one case that is not shared with comments is the last `if`: the reader
+ * can delete a search while the model is still thinking, and `finishRun`
+ * deliberately does not resurrect a run that is no longer there. Answering with
+ * the run anyway would put it back on screen, so a delete that happened mid
+ * search is reported as a 404 and the client — which already removed it — does
+ * nothing.
+ */
+async function search(slug: string, body: unknown): Promise<SearchRun> {
+  const { id, criterion } = (body ?? {}) as Record<string, unknown>;
+  if (typeof criterion !== "string" || criterion.trim() === "") {
+    throw httpError(400, "Expected { criterion }");
+  }
+  // The whole article goes in the prompt, so a criterion is not the expensive
+  // part — but an unbounded one is still a way to push the article out of the
+  // context window from the outside.
+  if (criterion.length > 500) {
+    throw httpError(400, "A criterion must be 500 characters or fewer");
+  }
+
+  const run = await beginRun(slug, criterion.trim(), typeof id === "string" ? id : undefined);
+  const key = `${slug}/${run.id}`;
+  searching.add(key);
+  let patch: Partial<SearchRun>;
+  try {
+    const article = await loadArticle(slug);
+    const result = await findPassages({
+      meta: article.meta,
+      blocks: article.blocks,
+      criterion: run.criterion,
+    });
+    patch = { status: "done", hits: result.hits, model: result.model };
+  } catch (err) {
+    patch = { status: "error", error: (err as Error).message };
+  } finally {
+    searching.delete(key);
+  }
+  const stored = (await finishRun(slug, run.id, patch)).find((r) => r.id === run.id);
+  if (!stored) throw httpError(404, "That search was deleted while it was running");
+  return stored;
+}
+
 /* ------------------------------------------------ reading the path apart --
    TWO functions, and picking the wrong one is a path traversal.
 
@@ -372,8 +481,8 @@ const MAX_QUESTION_CHARS = 4000;
    id. Those are looked up in a list or a map; nothing joins them onto a path.
 
    `slugPart` for every capture that becomes a **directory name**. That is
-   `:slug` on /api/article, /api/metadata, /api/tweets, /api/glossary and
-   /api/comments.
+   `:slug` on /api/article, /api/metadata, /api/tweets, /api/glossary,
+   /api/summary and /api/comments.
 
    The next person to add a route will copy whichever line they happen to read
    first, so the rule is written here rather than left to be inferred: **if the
@@ -468,7 +577,15 @@ export function parseJobRequest(body: unknown): {
     }
     const derived = slugFromUrl(url);
     if (!isSlug(derived)) {
-      throw httpError(400, `Could not make a slug from ${url}`);
+      // **Not the URL.** This message is logged — `logRequest` writes an
+      // `httpError`'s message as `reason`, because an error that named its own
+      // status is one this file chose to raise. So it is published, not just
+      // said, and a source URL is untrusted input: it can carry basic-auth
+      // credentials or a `?token=`. Interpolating it here would have undone the
+      // query-string strip in `handleApi` below — `path` cleaned, and then the
+      // whole raw URL back in through the side door. Nothing is lost by leaving
+      // it out, because the caller is the one who sent it.
+      throw httpError(400, "Could not make a slug from that url");
     }
     return {
       slug: derived,
@@ -524,7 +641,15 @@ function logRequest(
    *
    * So the test is not the status code but whether the error *named* one. A
    * `throw new Error(…)` that happens to be mapped to 400 still keeps its
-   * stack, because nobody chose that 400 on purpose. */
+   * stack, because nobody chose that 400 on purpose.
+   *
+   * **The invariant this rests on, stated because it is easy to break from far
+   * away:** every `httpError` message in this file is written to a log, so it
+   * must contain nothing but words we chose. Not the URL, not the body, not the
+   * offending value. One of them interpolated the source URL and put
+   * credentials and a query string into `reason` at warn — cleanly defeating
+   * the query strip in `handleApi`, forty lines from the code that did it.
+   * `tests/jobs.test.ts` pins that one. See docs/project/logging.md. */
   const expected = err !== undefined && typeof (err as { status?: number }).status === "number";
   const fields = {
     method,
@@ -593,10 +718,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
      model call that takes tens of seconds, which is a job, not a request.
      POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */
   const glossary = /^\/api\/glossary\/([\w.%-]+)$/.exec(url);
+  const summary = /^\/api\/summary\/([\w.%-]+)$/.exec(url);
   const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(url);
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
   const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  const searches = /^\/api\/search\/([\w.%-]+)$/.exec(url);
+  const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const allJobs = url === "/api/jobs";
   const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(url);
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(url);
@@ -630,6 +758,16 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     }
     if (glossary && req.method === "DELETE") {
       send(res, 200, await deleteGlossary(slugPart(glossary, 1)));
+      return true;
+    }
+    /* Read only. There is no DELETE beside this one, unlike the glossary's:
+       running the step again replaces the artefact rather than appending to it,
+       so "start over" already has a spelling and a second one would only be a
+       way to lose the summaries without getting new ones. See `loadSummaries`
+       in src/api.ts. Asking for them is
+       POST /api/jobs { slug, steps: ["summary"] }. */
+    if (summary && req.method === "GET") {
+      send(res, 200, await loadSummaries(slugPart(summary, 1)));
       return true;
     }
     if (comments && req.method === "GET") {
@@ -673,6 +811,21 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     if (oneThread && req.method === "DELETE") {
       const [slug, id] = [slugPart(oneThread, 1), part(oneThread, 2)];
       send(res, 200, { threads: await deleteThread(slug, id) });
+      return true;
+    }
+    if (searches && req.method === "GET") {
+      const slug = slugPart(searches, 1);
+      send(res, 200, { runs: await sweepSearches(slug, await loadRuns(slug)) });
+      return true;
+    }
+    if (searches && req.method === "POST") {
+      send(res, 200, await search(slugPart(searches, 1), await readBody(req)));
+      return true;
+    }
+    if (oneRun && req.method === "DELETE") {
+      // The slug becomes a directory; the id is only ever matched against a list.
+      const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
+      send(res, 200, { runs: await deleteRun(slug, id) });
       return true;
     }
     if (allJobs && req.method === "GET") {
