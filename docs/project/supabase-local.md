@@ -74,7 +74,7 @@ wholesale rather than in the two spots that clash today.
 equal the CLI's default today, which is exactly why it is worth writing down: nobody should read
 this line as "we left it alone". It was **15** for the first few hours of this stack's life, pinned
 to the old app's project (**15.8**) back when we expected to reuse it
-([§ The live project](../plans/postgres-migration.md#the-live-project)). Greg then chose a **new**
+([§ The old project](../plans/postgres-migration.md#the-old-project-we-inspected-and-did-not-use)). Greg then chose a **new**
 project ([§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes)),
 which Supabase creates on 17, so local moved to 17 — **17.6** as of 2026-08-25.
 

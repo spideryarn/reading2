@@ -54,7 +54,10 @@ finish reason and the raw response. [llm-plumbing.md](../project/original-versio
 already says the field list is the part that transfers even though their table was overkill. It is
 not overkill once there is a database anyway.
 
-### The live project
+### The old project we inspected and did not use
+
+**This is the project we decided against.** Kept because the inspection is what made the decision
+informed, and because the old app still runs on it.
 
 `blsgjlrezruxcfdyrqpk` — "Spideryarn Reading", eu-west-2, **Postgres 15.8**, Micro compute, Healthy.
 
@@ -80,6 +83,31 @@ Two things to look at before building on it:
   ends up needing it. An earlier draft asserted three times that the schema uses it; it does not,
   and the claim was removed rather than the feature invented to match. See
   [§ Job de-duplication](#job-de-duplication-still-unsolved).
+
+Both of those bullets are now moot for us, and that is the point:
+[§ A new project](#a-new-project-and-what-that-deletes).
+
+### The project we are actually using
+
+**`alschkahzfagtppxspfq`**, created by Greg on 2026-08-25.
+
+Empty, ours, and sharing nothing with the old app — no inherited users, no `public` tables, no
+trigger on `auth.users`, no billing banner belonging to another project. **Postgres 17**, which is
+what Supabase creates new projects on today.
+
+Nothing has been applied to it yet. The schema has only ever been run against
+[the local stack](../project/supabase-local.md), and the first thing to happen against the remote is
+[step 1](#the-order-of-work): the roles, and confirming `spideryarn` is not in the exposed schemas.
+
+**Local tracks this project's major version, not the CLI's default.** Local was 15 while we expected
+to reuse the old project and moved to 17 when this one was created — see
+[supabase-local.md § The ports, and the Postgres version](../project/supabase-local.md#the-ports-and-the-postgres-version)
+for why a *lower* local version is the quieter of the two failure directions, and for the fact that
+changing it is a wipe.
+
+The migrations have been verified against **both** 15.8 and 17.6, so nothing in them depends on the
+version. That was luck rather than design, and it stops being true the moment anything uses a
+17-only feature.
 
 ### This codebase
 
