@@ -10,6 +10,19 @@
  *
  * This file previously carried an independently-grown warm-brown palette with a
  * dark mode of its own. Both are gone: one palette, one source, one theme.
+ *
+ * WHERE THIS FILE SITS IN THE CASCADE. It is not imported by main.tsx. It is
+ * imported by tailwind.css, as `@import "./styles.css" layer(app)`, so every
+ * rule below lands inside `@layer app` — which is declared BELOW `utilities`.
+ * Two consequences worth knowing before you edit anything here:
+ *
+ *   - A Tailwind utility beats a rule in this file, whatever the selectors say.
+ *     That is the point: it is what lets a `tw:` class on a component override
+ *     the semantic CSS around it without an `!important` fight.
+ *   - Import this file anywhere else and it arrives UNLAYERED, and unlayered
+ *     declarations beat every layer. Nothing would error; the utilities would
+ *     simply stop working. See docs/project/web-client.md § Tailwind and
+ *     shadcn, and the layer statement at the top of tailwind.css.
  */
 @import "../../styles/tokens.css";
 

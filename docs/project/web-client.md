@@ -96,7 +96,7 @@ never point it at a directory containing prose.
 One thing that went right by design: `twMerge` correctly drops shadcn's
 `data-[state=on]:bg-accent`, so the orange on-state we override survives. `--accent` in this palette
 is a raised dark **surface**, not the brand orange — the trap
-[original-version.md § Brand facts](original-version.md#brand-facts-now-load-bearing) records,
+[original-version.md § Brand facts](original-version/overview.md#brand-facts-now-load-bearing) records,
 arriving through the front door in the first component we adopted. The orange has its own Tailwind
 name, `--color-highlight`, so nobody can reach for `tw:bg-accent` expecting it.
 
@@ -122,33 +122,77 @@ keep `className="controls tw:flex …"`. Losing `.controls` makes `stickyOffset(
 every deep link and arrow jump lands *under* the sticky bar while `scrollY` confirms the scroll
 happened.
 
-### Still outstanding
+### How the migration finished
 
-Two steps of the plan were **not** done, because several agents had edits in flight in the files
-they touch:
+Both of the plan's remaining steps are resolved. One was done; one was dropped on purpose.
 
-- **Step 7 — the comment dialog chrome.** `.cmt-close`, `.cmt-nav button` and
-  `.cmt-dialog button.linky` are still hand-written; `Button` is generated and unused. Keep the
-  `<aside>`, `.cmt-dialog` and `z-index: 70` when it happens — [comments.md](comments.md).
-- **Step 8 — deleting the dead CSS.** `.controls button` and friends are superseded but still in
-  `styles.css`, and they are **not** simply harmless — a first draft of this note said they were,
-  on the reasoning that `@layer app` lets the utilities win. That only holds where the two
-  *conflict*. Where the old rule declares something no utility mentions, it is still the thing
-  painting. Two cases, both found by review rather than by looking:
-  - `.controls button` supplied `font-family` (via `font: inherit`) and `cursor: pointer` to the
-    new pills. Both are now stated in `PILL` in [`App.tsx`](../../src/web/App.tsx), so the
-    deletion cannot change them — but that had to be done first.
-  - `.controls button.linky`, which styles the `auto` control, only overrides border-colour,
-    underline and inline padding. It leans on the base rule for everything else, so deleting
-    `.controls button` would drop it back towards UA button styling. **Give `.linky` a complete
-    standalone rule before removing the base**, or the cleanup lands as a visible regression in
-    the one control that was not migrated.
+**Step 8 — deleting the superseded controls CSS — is done.** `.controls button`, its `:hover` and
+`.on` are gone. An earlier draft of this note called them harmless, on the reasoning that
+`@layer app` lets the utilities win. That only holds where the two *conflict*: where the old rule
+declared something no utility mentioned, it was still the thing painting. Two cases, and the
+second is the one that mattered:
 
-  `.controls button.on` *is* genuinely dead: Radix marks state with `data-state="on"`, never a
-  class.
+- `.controls button` supplied `font-family` (via `font: inherit`) and `cursor: pointer` to the new
+  pills. `PILL` in [`App.tsx`](../../src/web/App.tsx) states both now, so the deletion could not
+  change them — but that had to happen first.
+- `.controls button.linky` — the `auto` control, the one thing in that bar that never became a
+  `Toggle` — only ever overrode border-colour, underline and inline padding, and leaned on the base
+  rule for the rest. It now states its box in full. Two of its declarations look like dead weight
+  and are not: the `1px solid transparent` border is 2px of box and is what keeps it the same
+  height as the pills beside it, and the `border-radius` has nothing to round but is what keeps the
+  focus ring a lozenge, because an outline follows `border-radius` whether or not a border shows.
 
-Also deferred: `styles.css`'s header comment does not yet say the file is imported into `@layer app`
-by `tailwind.css`. It should, or the next person adds a utility and watches it do nothing.
+`.controls button.on` was genuinely dead before it was deleted: Radix marks state with
+`data-state="on"`, never a class.
+
+**Step 7 — the comment dialog chrome — was dropped, and should stay dropped.** The plan said to
+convert `.cmt-close`, `.cmt-nav button` and the dialog's `.linky` buttons to shadcn `Button`. Both
+Greg's reviewer and this analysis landed in the same place: it is negative value.
+
+- `Button` is not Radix. It is a `<button>` with a cva class string and a `Slot` for `asChild`.
+  Unlike `Toggle`, which brought a real `aria-pressed` state machine, there is no behaviour and no
+  ARIA to inherit here.
+- Every variant that fits is wrong in the details. `ghost` hover paints `bg-accent`, which in this
+  palette is a raised dark **surface**, not the brand orange — the same trap the pills hit. Every
+  size variant is a fixed `h-*`; none of them is "inline, line-height 1", which is what a 15px
+  chevron in a baseline-aligned header needs. `link` has the wrong colour, offset, and underlines
+  only on hover where ours is always underlined.
+- So the conversion is: adopt a component, then write a longer class string undoing
+  `h-9 w-9 rounded-md gap-2 text-sm font-medium shadow-xs hover:bg-accent` to arrive back at what
+  nine lines of CSS already say plainly.
+
+The one argument for it is target size — `icon-xs` would give those buttons a deliberate 24px
+target where they are currently about 20×15px. That is worth doing, but it is an accessibility
+change, not a component migration, and three lines of CSS buy the same thing.
+
+### The focus ring, which the migration quietly broke
+
+Worth its own heading, because it is the clearest example in this whole exercise of a regression
+that no test and no screenshot could see.
+
+shadcn's components suppress the browser's focus ring with `outline-none` so they can draw their
+own, at `focus-visible:ring-ring/50`. With shadcn's stock dark `--ring` that ring measures
+**1.84:1** against this page — under the **3:1** WCAG 2.2 asks of a focus indicator, and against
+the **11.4:1** of the browser ring it replaced. The first thing the migration did for keyboard
+users was take away their focus indicator and hand back something they could barely see.
+
+Nothing reported it. The ring was real, it was the colour it had been asked to be, the class was on
+the element, and it only exists while Tab is held. It is also not a misconfiguration here —
+`--ring: oklch(0.55 0 0)` on `--background: oklch(0.145 0 0)` is what shadcn ships.
+
+Two fixes, both in [tokens.css](../../styles/tokens.css) and
+[`toggle.tsx`](../../src/web/components/ui/toggle.tsx):
+
+- `--ring` is the app's orange, 7.3:1, matching the focus convention `styles.css` already had in
+  `.spine-hit` and `.cmt-search`. The token alone could not fix it — halved, even the orange is
+  2.6:1 — so the `/50` came off.
+- `focus-visible:border-ring` is gone from `Toggle`. Upstream has focus repaint the border to match
+  the ring, which is right where a border is decoration. On these pills the border colour **is** the
+  on/off signal, so every pill you tabbed past lit orange: a keyboard user watched the columns
+  appear to switch themselves on as focus went by. The halo says focused; the border says on.
+
+Those are hand edits to generated files, which is the shadcn model rather than a workaround — but
+`shadcn add` would silently undo them, so both files carry a header saying so.
 
 ## Dark mode
 
@@ -162,7 +206,7 @@ unchanged. There is no toggle, no `prefers-color-scheme` branch and no light fal
 > possible.
 
 This reverses the "light mode only" inherited from the original app — see
-[original-version.md § Decision: the palette](original-version.md#decision-the-palette), which now
+[original-version.md § Decision: the palette](original-version/overview.md#decision-the-palette), which now
 records the reversal. What made it cheap: the palette had already been collapsed into one source, so
 switching themes meant changing values, not chasing colours through the stylesheet.
 
@@ -185,7 +229,7 @@ How it's put together, and what to know before touching it:
 - **Panels are lighter than the page, not darker.** `--sidebar` sits above `--background`; on a dark
   ground a raised surface reads as forward. The same inversion catches `--accent`, which is still
   shadcn's "hover surface" meaning and is now a dark grey — the trap described in
-  [original-version.md](original-version.md#brand-facts-now-load-bearing) is unchanged in kind, only
+  [original-version.md](original-version/overview.md#brand-facts-now-load-bearing) is unchanged in kind, only
   the failure mode flipped: a highlight that goes near-white becomes one that vanishes into the page.
 - **`color-scheme: dark` is declared twice on purpose** — on `:root` in `tokens.css` for scrollbars
   and form controls, and again as a `<meta>` in [`index.html`](../../index.html) so the browser

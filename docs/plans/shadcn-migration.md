@@ -846,9 +846,20 @@ which suits a repo that is deliberately one Vite process and no build cleverness
 *Added 2026-08-25, after the work landed. The plan above is left as written; this section says
 where it was wrong, because that is the part worth reading twice.*
 
-**Steps 1–6 landed. Steps 7 and 8 did not**, and not for technical reasons: `CommentDialog.tsx` had
-~150 uncommitted lines and `styles.css` ~94 from other agents working this tree, and a second
-clobber in one day was not worth it. Both remain outstanding, and § 11's ordering still holds.
+**Steps 1–6 landed first.** Steps 7 and 8 were deferred that day — not for technical reasons, but
+because `CommentDialog.tsx` had ~150 uncommitted lines and `styles.css` ~94 from other agents
+working this tree, and a second clobber in one day was not worth it. Both were resolved once those
+agents committed:
+
+- **Step 8 was done.** `.controls button`, `:hover` and `.on` are gone, after `.linky` was given a
+  complete standalone rule — see [web-client.md § How the migration
+  finished](../project/web-client.md#how-the-migration-finished).
+- **Step 7 was dropped on purpose, and should stay dropped.** § 11 listed it as work; it is
+  negative value. `Button` is not Radix — no state machine, no ARIA to inherit — and every variant
+  that fits is wrong in the details, so the conversion is "adopt a component, then write a longer
+  class string undoing it". This is the plan's largest single error of judgement: it assumed that
+  because `Toggle` paid off on the pills, `Button` would pay off on the dialog. `Toggle` paid off
+  because it brought `aria-pressed`. `Button` brings a class string.
 
 ### Where the plan was wrong
 
@@ -875,6 +886,32 @@ clobber in one day was not worth it. Both remain outstanding, and § 11's orderi
   The second one is the lesson of the whole exercise. Both checks run beforehand — *is the utility
   emitted?* and *does twMerge keep ours?* — **passed**, because both ask about the stylesheet and the
   bug was in the cascade. Only `getComputedStyle` on the rendered page disagreed.
+
+### A third bug, found later, and the worst of them
+
+**The migration took the focus ring away from keyboard users.** shadcn's components suppress the
+browser's own ring with `outline-none` so they can draw their own at `focus-visible:ring-ring/50`.
+With shadcn's stock dark `--ring` that ring measures **1.84:1** against this page — under the 3:1
+WCAG 2.2 asks of a focus indicator, and against the **11.4:1** of the native ring it replaced.
+
+It survived every check in "How it was verified" below, and would survive them again. The
+screenshots were byte-identical because a focus ring is not in a screenshot unless something has
+focus. The computed-style probes matched because they read colour, border and rect, none of which
+change. It is only visible if you press Tab and then measure the *contrast* of what appears.
+
+Two related things came out of the same look:
+
+- `focus-visible:border-ring` had focus repaint the pill's border — and on these pills the border
+  colour **is** the on/off signal, so tabbing across the bar made the columns appear to switch
+  themselves on.
+- `.cmt-delete:hover` (0-2-0) had been losing to `.cmt-dialog button.linky:hover` (0-3-1) since long
+  before any of this, so the one button in the comment panel that destroys something hovered the
+  same friendly orange as Retry.
+
+The fixes and the reasoning are in [web-client.md § The focus
+ring](../project/web-client.md#the-focus-ring-which-the-migration-quietly-broke) and in
+[tokens.css](../../styles/tokens.css). The general shape is
+[silent-success.md](../reusable/silent-success.md), which this is now the eleventh entry in.
 
 ### How it was verified
 
