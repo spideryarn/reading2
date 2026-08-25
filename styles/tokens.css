@@ -13,9 +13,22 @@
  * brand orange is unchanged, and reads better on black than it ever did on white (~7.8:1 vs ~2.6:1).
  * The reasoning, and what to do if light mode ever comes back: docs/project/web-client.md § Dark mode.
  *
- * Deliberately plain CSS custom properties: no Tailwind, no shadcn, no build step, so the React
- * client can use these however it likes. Names match the original where they exist there, so
- * anything copied across from that codebase keeps working.
+ * Plain CSS custom properties, and the single source of truth for colour. Since 2026-08-25 they are
+ * ALSO the shadcn palette: src/web/tailwind.css has an `@theme inline` block that points Tailwind's
+ * --color-* names at these, so `tw:bg-background` and a hand-written `var(--background)` are
+ * guaranteed to be the same colour. `inline` is the load-bearing keyword — it makes Tailwind emit
+ * `var(--background)` rather than copying the resolved value at build time, so this file stays
+ * authoritative and nothing can drift.
+ *
+ * That the names line up is not a coincidence and not our doing: these came from the original app's
+ * `app/globals.css`, which was itself a shadcn project. The migration had almost nothing to bridge.
+ *
+ * Consequences worth knowing before you edit anything here:
+ *   - This file is imported inside `@layer app` (see src/web/tailwind.css). Custom properties are
+ *     unaffected by layering, so these resolve exactly as before.
+ *   - `shadcn add` and `shadcn init` will try to write their own palette. Revert it. A generated
+ *     light `:root` loaded after this one turns the page white and the orange near-invisible.
+ *   - Names match the original app where they exist there, so anything copied across keeps working.
  */
 
 :root {
@@ -49,6 +62,13 @@
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.97 0 0);
     --destructive: oklch(0.65 0.2 27.325);
+    /* Required by every Radix overlay shadcn builds on (popover, dropdown,
+       tooltip content). The value is the raised-panel grey that styles.css
+       already calls --surface-raised: on a dark page, up is forward. */
+    --popover: oklch(0.26 0 0);
+    --popover-foreground: oklch(0.97 0 0);
+    --destructive-foreground: oklch(0.97 0 0);
+
     --border: oklch(0.27 0 0);
     --input: oklch(0.3 0 0);
     --ring: oklch(0.55 0 0);

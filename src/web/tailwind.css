@@ -55,3 +55,51 @@
    never to a directory containing prose. */
 @source "../../src/web";
 @import "./styles.css" layer(app);
+
+/* ------------------------------------------------------------ the bridge --
+   Tailwind's colour/font/radius names, pointed at the tokens in
+   styles/tokens.css. That file stays the single source of truth; this block
+   only tells Tailwind where to look.
+
+   `inline` is the load-bearing keyword. Without it Tailwind copies the
+   RESOLVED value at build time, and `tw:bg-background` would freeze whatever
+   --background happened to be when the CSS compiled — silently disagreeing
+   with a hand-written `var(--background)` the moment anyone changes the token.
+   With it, Tailwind emits `background-color: var(--background)` and the two
+   can never drift.
+
+   Note --color-highlight. The orange is deliberately NOT called `accent`:
+   in shadcn's vocabulary --accent is a raised dark hover SURFACE, and both
+   tokens.css and styles.css carry shouted comments about that collision.
+   Giving the orange its own Tailwind name means nobody can reach for
+   `tw:bg-accent` expecting orange and get near-black.  */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); /* a hover SURFACE, not the orange */
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-highlight: var(--spideryarn-orange); /* the ORANGE */
+
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-reading);
+  --font-mono: var(--font-mono);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
