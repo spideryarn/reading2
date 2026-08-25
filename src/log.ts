@@ -24,7 +24,8 @@
  *    destination already survives an immediate `process.exit(0)`. Stating it
  *    turns a guarantee that is currently incidental into one that is written
  *    down.
- * 3. **Nothing sensitive in the message string.** `redact` below matches
+ * 3. **Nothing sensitive in the message string.** `redact` — the path list is
+ *    in [log-redaction.ts](log-redaction.ts) — matches
  *    *paths in the object*, never values and never `msg`. So
  *    `log.info({ url }, "fetching")` can be redacted and
  *    `log.info(\`fetching ${url}\`)` can never be.
@@ -42,6 +43,7 @@
  *    **do not interpolate untrusted content into an error you throw.**
  */
 import pino from "pino";
+import { REDACT } from "./log-redaction.js";
 
 /**
  * Where a level is decided, and the one thing to know: **`silent` under test.**
@@ -55,47 +57,6 @@ function level(): string {
   if (process.env.NODE_ENV === "test") return "silent";
   return process.env.NODE_ENV === "production" ? "info" : "debug";
 }
-
-/**
- * Keys whose values never reach stdout.
- *
- * **Path-based, and that is the whole limitation.** `fast-redact` matches the
- * *position* of a key, so a secret that arrives somewhere not listed here goes
- * straight out — an API key inside an error message, a token in a URL's query
- * string, a bound query parameter at `params[3]` with no key name to match on.
- * The list is a floor, not a guarantee. The guarantee is the habit: put values
- * in the object, and keep the message string free of anything you would mind
- * reading in a log.
- *
- * `url` is *not* redacted, and that is a decision rather than an oversight:
- * an article URL is the single most useful field when a fetch fails, and this
- * is a one-reader beta. It is worth knowing that the log is therefore a reading
- * history — see logging.md § What a URL gives away.
- */
-const REDACT = [
-  "apiKey",
-  "api_key",
-  "authorization",
-  "cookie",
-  "password",
-  "token",
-  "access_token",
-  "refresh_token",
-  "email",
-  "user.email",
-  "headers.authorization",
-  "headers.cookie",
-  "req.headers.authorization",
-  "req.headers.cookie",
-  "OPENROUTER_API_KEY",
-  "ANTHROPIC_API_KEY",
-  "DATABASE_URL",
-  // The bound values of a database query, once Drizzle is wired up. They are
-  // article text, URLs and comment bodies, and they arrive positionally — so
-  // this redacts the array wholesale, which is the only thing a path-based
-  // redactor can do about it. docs/plans/postgres-migration.md.
-  "params",
-];
 
 /**
  * The root logger. Almost nothing should use this directly — use `log()`.

@@ -15,12 +15,20 @@
  * than the presence of `[redacted]`: a key that vanished entirely, or a
  * redaction that ran on a copy, would satisfy the second and not the first.
  *
- * One thing is read from the source rather than from the output, and it is
- * worth naming because it is the exception: `redactedPaths()` parses the
- * `REDACT` array out of `src/log.ts` to find out *which* paths to try. That is
- * a list of questions to ask, not an answer — every claim about what the logger
- * does is still measured from the bytes. The alternative was a copy of the list
- * kept in this file, which is a copy that goes stale silently.
+ * Two things are read from the source rather than from the output, and they are
+ * worth naming because they are the exceptions.
+ *
+ * `REDACT` is imported from `src/log-redaction.ts` to find out *which* paths to
+ * try. That is a list of questions to ask, not an answer — every claim about
+ * what the logger does is still measured from the bytes.
+ *
+ * `REQUIRED_PATHS` below is a second, hand-written copy of that list, and it is
+ * the only place in this repo where a duplicated constant is deliberate. A test
+ * derived entirely from the configuration can prove that every configured path
+ * works; it can never prove that the right paths are configured. Delete a line
+ * from `REDACT` and a derived test simply stops asking about it. The hand-written
+ * copy is the test's own opinion about what has to be redacted, and its whole job
+ * is to disagree with the code when the code is wrong.
  *
  * ## Why a child process
  *
@@ -38,9 +46,9 @@
  * cannot share a child with anything.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { REDACT } from "../src/log-redaction.js";
 import { errorFields, since } from "../src/log.js";
 
 const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
@@ -49,53 +57,86 @@ const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
  * The module under test, as a path because we run it rather than import it.
  *
  * Overridable so that the suite can be pointed at a deliberately broken copy —
- * `LOG_TEST_MODULE=/tmp/log-with-apiKey-removed.ts npx vitest run
- * tests/log.test.ts` must go red. That is "test the test" from
- * silent-success.md, and it is one command rather than an edit to real source.
- * It steers the child process only: the handful of in-process tests at the
- * bottom import the real module and ignore it.
+ * `LOG_TEST_MODULE=src/log-broken.ts npx vitest run tests/log.test.ts` must go
+ * red. That is "test the test" from silent-success.md, and it is one command
+ * rather than an edit to real source. It steers the child process only: the
+ * in-process tests at the bottom, and the `REDACT` import above, always use the
+ * real module — which is what you want, because the sentinels then keep being
+ * generated for paths the broken copy has stopped redacting.
+ *
+ * The copy has to live under `src/`, because `src/log.ts` imports its sibling
+ * `./log-redaction.js` and a copy in `/tmp` cannot resolve that.
  */
 const LOG_MODULE =
   process.env.LOG_TEST_MODULE ?? fileURLToPath(new URL("../src/log.ts", import.meta.url));
 
 /**
- * Every path `src/log.ts` redacts — read out of the file, not copied into here.
+ * **Every path that has to be redacted, written out here on purpose.**
  *
- * A hand-written copy of the list drifts the first day somebody adds a
- * nineteenth path: the suite still passes, because it is a test of the list it
- * was handed rather than of the list the logger uses. That is the vacuous-test
- * shape from silent-success.md — coverage measured against the wrong thing
- * agrees with the gap. Reading the array out of the source keeps the two the
- * same list, so a new path immediately gets a sentinel logged at it and has to
- * make that sentinel vanish.
+ * A second copy of a constant is normally a smell. Here it is the entire point,
+ * so do not "tidy" it into an import — the two lists exist to be compared, and a
+ * list that is derived from the thing it is checking cannot disagree with it.
  *
- * It parses text, and that is the honest cost of not exporting `REDACT`. The
- * module's public surface should not grow a member that exists only for a test,
- * and the array is a plain literal that has not moved since it was written.
- * Line comments are stripped first because there are several inside the array;
- * a double-quoted word inside one of those comments would fool this, which is
- * what "the parse found a plausible list" below exists to catch — a parse that
- * silently returns nothing is exactly a collector that matches nothing.
+ * The hole this closes, found by GPT/Codex reviewing the previous version of
+ * this file: every check here used to derive both its coverage set *and* its
+ * fixture from the logger's own `REDACT`. Delete `req.headers.authorization`
+ * from the configuration and no sentinel was generated for it, so nothing
+ * noticed; the shape checks still saw eighteen-ish plausible paths and still saw
+ * `apiKey`; the hand-picked fixture had never mentioned it. **The whole suite
+ * passed while that header leaked.** That is silent-success.md exactly — the
+ * natural check shares an assumption with the code, so it agrees with the bug.
+ *
+ * Compared as a *set*, in both directions, by "the module redacts exactly the
+ * paths this file requires" below. Both directions, because:
+ *
+ * - a path deleted from `REDACT` must go red — that is the leak above;
+ * - a path added to `REDACT` must go red too, until it is added here. That is
+ *   the annoying half, and it is what keeps this list from decaying into a stale
+ *   subset that protects the first seventeen paths and nothing since.
+ *
+ * So: adding a redaction path is a two-line change, one line in each file. If
+ * that feels like friction, it is the same friction as `EXPECTED_LINES` below,
+ * doing the same job.
  */
-function redactedPaths(): string[] {
-  const source = readFileSync(LOG_MODULE, "utf8");
-  const literal = /const REDACT = \[([\s\S]*?)\n\];/.exec(source)?.[1];
-  if (literal === undefined) {
-    throw new Error(`could not find the REDACT array in ${LOG_MODULE}`);
-  }
-  return [...literal.replace(/\/\/.*$/gm, "").matchAll(/"([^"]+)"/g)].flatMap((m) =>
-    m[1] === undefined ? [] : [m[1]],
-  );
-}
-
-const REDACT_PATHS = redactedPaths();
+const REQUIRED_PATHS = [
+  "apiKey",
+  "api_key",
+  "authorization",
+  "cookie",
+  "password",
+  "token",
+  "access_token",
+  "refresh_token",
+  "email",
+  "user.email",
+  "headers.authorization",
+  "headers.cookie",
+  "req.headers.authorization",
+  "req.headers.cookie",
+  "OPENROUTER_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "DATABASE_URL",
+  "params",
+];
 
 /**
- * One sentinel per configured path. Distinct, so that no assertion can pass on
+ * Both lists, deduplicated — every path anyone thinks should be redacted.
+ *
+ * The union rather than either one alone, so that the *bytes* keep testifying
+ * even when the configuration is wrong. Delete a path from `REDACT` and it is
+ * still in `REQUIRED_PATHS`, so a sentinel is still logged at it and still has
+ * to vanish: the leak shows up as a leak, not only as a list mismatch. Add one
+ * to `REDACT` and it gets a sentinel immediately, without waiting for anybody to
+ * remember.
+ */
+const COVERED_PATHS = [...new Set([...REQUIRED_PATHS, ...REDACT])];
+
+/**
+ * One sentinel per covered path. Distinct, so that no assertion can pass on
  * another path's value, and each one carries its own path so that a failure
  * names the leak rather than making you count commas.
  */
-const PATH_SECRETS: ReadonlyArray<readonly [string, string]> = REDACT_PATHS.map((path, i) => [
+const PATH_SECRETS: ReadonlyArray<readonly [string, string]> = COVERED_PATHS.map((path, i) => [
   path,
   `redacted-${i}-${path.replace(/\W/g, "-")}-ZZZZ`,
 ]);
@@ -104,9 +145,10 @@ const PATH_SECRETS: ReadonlyArray<readonly [string, string]> = REDACT_PATHS.map(
 function nest(into: Record<string, unknown>, path: string, value: string): void {
   const parts = path.split(".");
   const leaf = parts.pop();
-  // Only reachable from an empty path, which would mean the parse above went
-  // wrong — so it says so rather than quietly building a fixture with a hole.
-  if (leaf === undefined) throw new Error(`empty redact path in ${LOG_MODULE}`);
+  // Only reachable from an empty path, which would mean one of the two lists
+  // has a blank entry — so it says so rather than quietly building a fixture
+  // with a hole in it.
+  if (leaf === undefined) throw new Error("empty redact path in REDACT or REQUIRED_PATHS");
   let node = into;
   for (const part of parts) {
     if (typeof node[part] !== "object" || node[part] === null) node[part] = {};
@@ -115,7 +157,7 @@ function nest(into: Record<string, unknown>, path: string, value: string): void 
   node[leaf] = value;
 }
 
-/** One object carrying a sentinel at every path `REDACT` names. */
+/** One object carrying a sentinel at every path either list names. */
 const PATH_FIXTURE = ((): Record<string, unknown> => {
   const fixture: Record<string, unknown> = {};
   for (const [path, secret] of PATH_SECRETS) nest(fixture, path, secret);
@@ -162,13 +204,43 @@ const SECRET_IN_THROWN_OBJECT = "teapot-QQQQ";
  * green-for-the-wrong-reason, or red, depending on the level you happened to
  * pick. A test's environment has to be the test's, not the shell's.
  */
+/**
+ * Did that child really die on SIGKILL? **Not as simple as `signal === …`.**
+ *
+ * `node_modules/.bin/tsx` is not the process that runs the script: it is a Node
+ * CLI that spawns a second Node underneath and reports what happened to it. When
+ * that inner process is killed, the wrapper turns the signal into the shell's
+ * `128 + signum` convention and exits with **status 137** — so `spawnSync` here
+ * sees `status: 137, signal: null`, not `signal: "SIGKILL"`.
+ *
+ * Measured, 2026-08-26, tsx 4.x on macOS; the naive `child.signal === "SIGKILL"`
+ * assertion was written first and went red on a child that had died exactly as
+ * intended. Both forms are accepted because the wrapper's behaviour is an
+ * implementation detail of tsx, and either one is still a killed process rather
+ * than an orderly exit — which is the whole distinction being asserted.
+ */
+function diedOnSigkill(child: { status: number | null; signal: string | null }): boolean {
+  const SIGKILL_AS_STATUS = 128 + 9;
+  if (child.signal === "SIGKILL") return child.status === null;
+  return child.signal === null && child.status === SIGKILL_AS_STATUS;
+}
+
 function emit(
   scenario: { NODE_ENV: string; LOG_LEVEL?: string },
   body: string,
-  // For the scenarios that end the process themselves. A child that exits on a
-  // signal has no status to check, and one that calls `process.exit(0)` has an
-  // ordinary one — so this only turns the check off, it never relaxes it.
-  opts: { killsItself?: boolean } = {},
+  /**
+   * How the child is required to have died.
+   *
+   * This used to be `killsItself: true`, which switched the check *off*, and
+   * that was a hole GPT/Codex found: the only test that can tell a synchronous
+   * destination from an asynchronous one is the one whose child SIGKILLs itself,
+   * and with the check off, a child that had lost its `process.kill` line would
+   * exit normally, flush on the way out, and pass. The test would have
+   * degraded silently into the very test it was written to be distinguishable
+   * from. So this asserts the manner of death rather than excusing it — see
+   * `diedOnSigkill`, which is fussier than it looks.
+   */
+  opts: { expectKilled?: boolean } = {},
 ): string {
   const script = `import(${JSON.stringify(LOG_MODULE)}).then(({ log, errorFields }) => {\n${body}\n});`;
   const env: NodeJS.ProcessEnv = { ...process.env };
@@ -177,8 +249,17 @@ function emit(
   if (scenario.LOG_LEVEL) env.LOG_LEVEL = scenario.LOG_LEVEL;
 
   const child = spawnSync(TSX, ["-e", script], { env, encoding: "utf8" });
-  if (!opts.killsItself && child.status !== 0) {
-    throw new Error(`logger child exited ${child.status}:\n${child.stderr}`);
+  if (opts.expectKilled) {
+    if (!diedOnSigkill(child)) {
+      throw new Error(
+        `expected the child to be killed by SIGKILL, but it exited with status ` +
+          `${child.status} and signal ${child.signal}:\n${child.stderr}`,
+      );
+    }
+  } else if (child.status !== 0 || child.signal !== null) {
+    throw new Error(
+      `logger child exited ${child.status} on signal ${child.signal}:\n${child.stderr}`,
+    );
   }
   return child.stdout;
 }
@@ -290,15 +371,27 @@ describe("what reaches stdout", () => {
     expect(line.raw).toContain("Greg");
   });
 
-  it("found a plausible list of redacted paths to test against", () => {
-    /* Runs first of the derived pair, because `redactedPaths` parses text and
-       a regex that stops matching returns `[]` rather than complaining. Zero
-       paths would make the next test pass while inspecting nothing at all.
-       These are shape checks, not a second copy of the list: a count, and one
-       path that has been in `REDACT` since the file was written. */
-    expect(REDACT_PATHS.length).toBeGreaterThan(10);
-    expect(REDACT_PATHS).toContain("apiKey");
-    expect(REDACT_PATHS.every((path) => /^[\w$]+(\.[\w$]+)*$/.test(path))).toBe(true);
+  it("redacts exactly the paths this file requires — no more, and above all no fewer", () => {
+    /* **The one test in here that is allowed to duplicate the source.** Every
+       other check about redaction derives its fixture from `REDACT`, which
+       proves that each configured path works and can never prove that the right
+       paths are configured: delete one and the derived checks stop asking about
+       it, quietly. So this compares the logger's list against `REQUIRED_PATHS`,
+       which is written out by hand at the top of this file.
+
+       Sorted and compared as sets in both directions. A missing path is a leak.
+       An extra path is not a leak, but it is a decision — see the `url` test
+       below for one we made on purpose — so it goes red too, until somebody
+       writes it into `REQUIRED_PATHS` as well and thereby signs it. */
+    const sorted = (paths: readonly string[]) => [...new Set(paths)].sort();
+    expect(sorted(REDACT)).toEqual(sorted(REQUIRED_PATHS));
+
+    /* And the lists are not both empty, which would satisfy the line above
+       while testing nothing. `REQUIRED_PATHS` is the one to assert against —
+       it is the copy that does not move when the configuration does. */
+    expect(REQUIRED_PATHS.length).toBeGreaterThan(10);
+    expect(REQUIRED_PATHS).toContain("apiKey");
+    expect(REQUIRED_PATHS.every((path) => /^[\w$]+(\.[\w$]+)*$/.test(path))).toBe(true);
   });
 
   it("keeps out a secret at every path the module configures, not just the ones listed here", () => {
@@ -308,9 +401,12 @@ describe("what reaches stdout", () => {
        nested one level deeper than the `headers.*` pair, so the tests that
        passed said nothing about it.
 
-       This one builds its fixture out of the module's own `REDACT` array, so
-       "every path is covered" is true by construction rather than by somebody
-       remembering. Add a path to `REDACT` and a sentinel appears at it here. */
+       This one builds its fixture out of `COVERED_PATHS` — the module's own
+       `REDACT` plus the hand-written `REQUIRED_PATHS` — so "every path is
+       covered" is true by construction rather than by somebody remembering. Add
+       a path to `REDACT` and a sentinel appears at it here. Delete a required
+       one and this goes red as a *leak in the bytes*, alongside the list
+       mismatch above; that is what the union is for. */
     const line = lineFor(lines, "every configured redact path");
     for (const [path, secret] of PATH_SECRETS) {
       expect(line.raw, `${path} reached stdout as ${secret}`).not.toContain(secret);
@@ -501,11 +597,9 @@ describe("a line written just before the end", () => {
        is read as evidence for the setting: the check agrees with the bug,
        because a natural exit flushes both kinds of destination. The next test
        is the one that does not. */
-    const lines = parse(
-      emit({ NODE_ENV: "development" }, `${FIVE_LINES}\nprocess.exit(0);`, {
-        killsItself: true,
-      }),
-    );
+    // No `expectSignal`: `process.exit(0)` is an ordinary exit, so the default
+    // check (status 0, no signal) is the right one and stays on.
+    const lines = parse(emit({ NODE_ENV: "development" }, `${FIVE_LINES}\nprocess.exit(0);`));
     expect(lines.map((line) => line.obj.msg)).toEqual([
       "before the end 0",
       "before the end 1",
@@ -531,10 +625,25 @@ describe("a line written just before the end", () => {
 
        One rather than zero, because the first write is dispatched immediately
        and the other four are still in SonicBoom's buffer. Not a race: their
-       release callback needs a turn of the event loop that never arrives. */
+       release callback needs a turn of the event loop that never arrives.
+
+       `expectKilled` is load-bearing, not decoration. Without it, deleting the
+       `process.kill` line would leave a child that exits cleanly, flushes on the
+       way out, and passes — this test quietly becoming a duplicate of the one
+       above it, which is green with `sync: true` removed. The assertion is that
+       the child really died the way the test needs it to.
+
+       **The honest limit.** Five short lines over a pipe is not proof of
+       Vercel's freeze behaviour, and it is not proof about volume. An
+       asynchronous implementation that happened to dispatch five small writes
+       immediately would pass this while still losing larger writes, or writes
+       behind back-pressure, or writes to a slower consumer. What this pins is
+       the specific regression that is easy to cause — someone deleting
+       `sync: true` because "pino flushes on exit anyway" — not the whole
+       property. */
     const lines = parse(
       emit({ NODE_ENV: "development" }, `${FIVE_LINES}\nprocess.kill(process.pid, "SIGKILL");`, {
-        killsItself: true,
+        expectKilled: true,
       }),
     );
     expect(lines).toHaveLength(5);
