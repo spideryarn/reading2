@@ -217,18 +217,44 @@ async function answer(slug: string, body: unknown): Promise<Comment> {
  */
 const streaming = new Set<string>();
 
+/**
+ * How long a `pending` answer is left alone before a sweep calls it abandoned.
+ *
+ * **The `streaming` Set only knows about this process.** Two `npm run dev`
+ * servers on one `data/` directory is not hypothetical — it happened during
+ * this feature's own development, when a second Vite picked port 5275 — and
+ * server B's sweep cannot see that server A is mid-answer, so it marks A's live
+ * message `error` while the reader is watching the words arrive.
+ *
+ * A grace period does not make that correct, and nothing short of a lock would:
+ * see docs/plans/chat-mode.md § What is still open. What it does is make the
+ * window small enough to matter rarely and recover cleanly — an answer younger
+ * than this is assumed to be in flight *somewhere*, and if it really did die,
+ * the next read after two minutes releases it. Longer than any answer the
+ * deadline in converse.ts permits (120s), plus room for the write.
+ */
+const CHAT_ORPHAN_GRACE_MS = 150_000;
+
 /** Turn abandoned `pending` answers into `error`, so the reader can ask again. */
 async function sweepChat(slug: string, threads: ChatThread[]): Promise<ChatThread[]> {
-  const orphaned = (t: ChatThread, id: string) => !streaming.has(`${slug}/${t.id}/${id}`);
+  const now = Date.now();
+  const orphaned = (t: ChatThread, m: { id: string; createdAt: string }) => {
+    if (streaming.has(`${slug}/${t.id}/${m.id}`)) return false; // this process is on it
+    // A timestamp we cannot read is treated as old rather than as young: the
+    // alternative is a message that can never be swept, which is the state this
+    // whole function exists to prevent.
+    const started = Date.parse(m.createdAt);
+    return Number.isNaN(started) || now - started > CHAT_ORPHAN_GRACE_MS;
+  };
   const stale = threads.some((t) =>
-    t.messages.some((m) => m.status === "pending" && orphaned(t, m.id)),
+    t.messages.some((m) => m.status === "pending" && orphaned(t, m)),
   );
   if (!stale) return threads;
   return updateThreads(slug, (current) =>
     current.map((t) => ({
       ...t,
       messages: t.messages.map((m) =>
-        m.status === "pending" && orphaned(t, m.id)
+        m.status === "pending" && orphaned(t, m)
           ? {
               ...m,
               status: "error" as const,
@@ -305,16 +331,6 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      process is still answering", so that message stayed `pending` on disk for
      ever and no sweep would ever release it. Found by a GPT-5.6 review,
      2026-08-26. */
-  let text = "";
-  try {
-    streaming.add(key);
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders?.();
-
   /* Has the reader gone?
 
      `res.on("close")`, **not** `req.on("close")`, and the difference is a real
@@ -335,15 +351,23 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  /* The ids first, before a single word of the answer. The client minted the
-     thread id optimistically and beginTurn may have overruled it (a collision,
-     or an id that was not one of ours), so this frame is what the client
-     believes rather than its own guess. It also gives the panel the message id
-     to render the incoming text into. */
-  frame("begin", { threadId: thread.id, title: thread.title, messageId: reply.id });
-
   let text = "";
   try {
+    streaming.add(key);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+
+    /* The ids first, before a single word of the answer. The client minted the
+       thread id optimistically and beginTurn may have overruled it (a collision,
+       or an id that was not one of ours), so this frame is what the client
+       believes rather than its own guess. It also gives the panel the message id
+       to render the incoming text into. */
+    frame("begin", { threadId: thread.id, title: thread.title, messageId: reply.id });
+
     for await (const event of converse({
       meta: article.meta,
       blocks: article.blocks,
@@ -371,9 +395,25 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       });
     }
   } catch (err) {
+    /* **Nothing in here may throw**, and that is why it is wrapped again.
+
+       Once the headers are on the wire this function owns the response, and the
+       route's outer catch cannot help: its `send()` sets `res.statusCode` and
+       then throws from `setHeader` on an already-sent response, which both
+       mislabels the request in the log (500, when 200 went out) and leaves an
+       unhandled rejection for Vite's middleware to trip over. So a failure to
+       *record* the failure is swallowed, having been logged where it happened.
+       Found by a GPT-5.6 review, 2026-08-26. */
     const message = (err as Error).message;
-    // The partial answer is kept, not dropped — see the header note.
-    await finishTurn(slug, thread.id, reply.id, { text, status: "error", error: message });
+    try {
+      // The partial answer is kept, not dropped — see the header note.
+      await finishTurn(slug, thread.id, reply.id, { text, status: "error", error: message });
+    } catch (storeErr) {
+      log("store").error(
+        { ...errorFields(storeErr), slug, threadId: thread.id, messageId: reply.id },
+        "could not record a failed chat answer",
+      );
+    }
     frame("error", { error: message, text });
   } finally {
     streaming.delete(key);

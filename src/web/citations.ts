@@ -22,31 +22,41 @@ export interface Emphasis {
 }
 
 /**
- * A bracketed run, or a bare run of ids — **and nothing around either**.
+ * A bracketed run of **nothing but ids**, or a bare run of ids — and nothing
+ * around either.
  *
- * Two alternatives rather than one pattern with optional brackets, and the
- * reason is a bug the tests caught rather than a preference. The single-pattern
- * version wrapped the ids in `\[?\s*…[\s,;]*\]?`, so the optional whitespace
- * was free to match *outside* the brackets — which it never did for a bracketed
- * citation (the match starts at the `[`) and always did for a bare one. So
- * `see spya-k3m9qt above` came apart as `see` + chip + `above`, and rendered as
- * **seek3m9qtabove**: the words jammed against the chip with no space, in
- * exactly the case that only happens when the model forgets the punctuation.
+ * Two alternatives rather than one pattern with optional brackets, and both
+ * halves of that shape were bought with a bug.
  *
- *  - `\[[^\]\n]{0,200}\]` — any short bracketed run. Deliberately *any*, not
- *    one containing ids: `[see above]` matches, yields no usable ids, and is
- *    left as text by the caller. Bounded and newline-free so a stray `[` cannot
- *    swallow the rest of a paragraph.
- *  - the second alternative — one or more ids joined by a separator, starting
- *    and ending at an id, so no surrounding space is ever consumed.
+ * **The whitespace.** The first version wrapped the ids in
+ * `\[?\s*…[\s,;]*\]?`, so the optional whitespace could match *outside* the
+ * brackets — which it never did for a bracketed citation (the match starts at
+ * the `[`) and always did for a bare one. `see spya-k3m9qt above` came apart as
+ * `see` + chip + `above` and rendered as **seek3m9qtabove**.
  *
- * Both match on the **shape of an id** rather than on punctuation, which is
- * what makes a model that drops the brackets still get working links, and a
- * model that writes `[see above]` not get a broken one. `ID_PATTERN` does the
- * real checking afterwards: "looks like an id" and "is one of ours" are
- * different questions.
+ * **The brackets.** The second version matched *any* short bracketed run, on
+ * the reasoning that `[see above]` would simply yield no ids and be left alone.
+ * True, but a bracket containing an id **and** prose was replaced whole: from
+ * `[see spya-k3m9qt for discussion]` the reader got a bare chip, and "see" and
+ * "for discussion" were deleted from the model's answer. Silent text loss in
+ * the one parser the feature rests on. Found by a GPT-5.6 review, 2026-08-26.
+ *
+ * So alternative one now requires the brackets to hold ids and separators and
+ * nothing else. A bracket with prose in it falls through to alternative two,
+ * which lifts the id out and leaves every other character where it was.
+ *
+ *  - `\[\s*(?:spya-…[\s,;]*)+\]` — a pure citation: `[spya-k3m9qt]`,
+ *    `[spya-k3m9qt spya-p7w2dn]`, `[spya-k3m9qt, spya-p7w2dn]`.
+ *  - the bare run — one or more ids joined by a separator, starting and ending
+ *    at an id, so no surrounding character is ever consumed.
+ *
+ * Both match on the **shape of an id** rather than on punctuation, so a model
+ * that drops the brackets still gets working links and one that writes
+ * `[see above]` does not get a broken one. `ID_PATTERN` does the real checking:
+ * "looks like an id" and "is one of ours" are different questions.
  */
-const CITED = /\[[^\]\n]{0,200}\]|spya-[a-z0-9]{6}(?:[,;]?\s+spya-[a-z0-9]{6})*/g;
+const CITED =
+  /\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]|spya-[a-z0-9]{6}(?:[,;]?\s+spya-[a-z0-9]{6})*/g;
 
 /** Every id-shaped string inside one match. */
 const ID_SHAPED = /spya-[a-z0-9]{6}/g;
@@ -77,9 +87,14 @@ export function splitCitations(para: string, known: ReadonlySet<string>): Segmen
   };
 
   for (const match of para.matchAll(CITED)) {
-    const usable = (match[0].match(ID_SHAPED) ?? []).filter(
-      (id) => ID_PATTERN.test(id) && known.has(id),
-    );
+    /* Deduplicated, because a model that writes `[spya-k3m9qt spya-k3m9qt]`
+       would otherwise get two identical chips — and, since the chips are keyed
+       by id, two React children with the same key. */
+    const usable = [
+      ...new Set(
+        (match[0].match(ID_SHAPED) ?? []).filter((id) => ID_PATTERN.test(id) && known.has(id)),
+      ),
+    ];
     // Left where it is, and `last` deliberately not advanced — the run stays
     // part of whatever text segment it fell in.
     if (usable.length === 0) continue;

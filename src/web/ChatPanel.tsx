@@ -38,6 +38,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, LoaderCircle, MessageSquarePlus, Pencil, SendHorizontal, Trash2, X } from "lucide-react";
 import type { BlockId, ChatMessage, ChatThread } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
+import { isWebUrl } from "../urls.js";
 import { splitCitations, splitEmphasis } from "./citations.js";
 
 interface Props {
@@ -313,10 +314,16 @@ function Turn({
       {message.status === "error" && <p className="chat-failed">{message.error}</p>}
       {message.citations && message.citations.length > 0 && (
         <ul className="chat-sources">
-          {message.citations.map((c) => (
+          {/* Filtered again here, and the repetition is deliberate. The server
+              refuses a non-http(s) citation before storing it (converse.ts §
+              isWebUrl), but `chat.json` is a file on disk that predates this
+              check and could be edited by hand — and this is the one place in
+              chat where model output reaches an attribute rather than a text
+              node. A second cheap check at the boundary that matters. */}
+          {message.citations.filter((c) => isWebUrl(c.url)).map((c) => (
             <li key={c.url}>
               <a href={c.url} target="_blank" rel="noreferrer noopener">
-                {c.title ?? new URL(c.url).hostname}
+                {c.title ?? hostOf(c.url)}
               </a>
             </li>
           ))}
@@ -393,6 +400,24 @@ function renderCitations(
       </span>
     ),
   );
+}
+
+/**
+ * A URL's host, for a citation that arrived without a title.
+ *
+ * `new URL()` throws rather than returning null, and this runs during render —
+ * so one malformed URL used to take the whole panel down with it, replacing the
+ * conversation with a blank screen. Everything reaching here has passed
+ * `isWebUrl` and therefore parses, which makes the fallback unreachable; it is
+ * here because "unreachable" and "cannot happen" are different claims, and the
+ * cost of being wrong about the difference is the reader's whole conversation.
+ */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
 }
 
 /**

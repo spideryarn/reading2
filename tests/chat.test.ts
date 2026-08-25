@@ -64,34 +64,65 @@ describe("titleFrom — a conversation names itself", () => {
   });
 });
 
+/** A finished exchange: a question and the answer to it. */
+let seq = 0;
+const turn = (question: string, answer: string): ChatMessage[] => [
+  message({ id: `spya-q${String(seq).padStart(5, "0")}`, text: question }),
+  message({ id: `spya-a${String(seq++).padStart(5, "0")}`, role: "assistant", text: answer }),
+];
+
 describe("recentHistory — what goes back to the model", () => {
   it("keeps finished turns in order", () => {
+    expect(recentHistory(turn("one", "two")).map((m) => m.text)).toEqual(["one", "two"]);
+  });
+
+  /* **A WHOLE turn, or neither half.** This test used to drop the failed
+     assistant message and keep the question that produced it, which is what the
+     code did — so it pinned the bug rather than catching it. The model then got
+     two user turns in a row and answered the abandoned question again. */
+  it("drops both halves of a turn that never got an answer", () => {
+    const history = [
+      turn("kept", "answered"),
+      [
+        message({ id: "spya-cccccc", text: "asked but never answered" }),
+        message({ id: "spya-dddddd", role: "assistant", text: "", status: "pending" }),
+      ],
+      [
+        message({ id: "spya-eeeeee", text: "asked and failed" }),
+        message({ id: "spya-ffffff", role: "assistant", text: "half", status: "error" }),
+      ],
+    ].flat();
+    expect(recentHistory(history).map((m) => m.text)).toEqual(["kept", "answered"]);
+  });
+
+  it("never sends two questions in a row", () => {
     const history = [
       message({ id: "spya-aaaaaa", text: "one" }),
-      message({ id: "spya-bbbbbb", role: "assistant", text: "two" }),
+      message({ id: "spya-bbbbbb", role: "assistant", text: "", status: "error" }),
+      message({ id: "spya-cccccc", text: "two" }),
+      message({ id: "spya-dddddd", role: "assistant", text: "answer" }),
     ];
-    expect(recentHistory(history).map((m) => m.text)).toEqual(["one", "two"]);
+    const roles = recentHistory(history).map((m) => m.role);
+    expect(roles).toEqual(["user", "assistant"]);
+    expect(roles.some((r, i) => r === roles[i - 1])).toBe(false);
   });
 
-  /* An unfinished turn is not part of the conversation the model should be
-     continuing — and an empty `content` is rejected outright by OpenRouter, so
-     sending one would fail the *next* question because of the last one. */
-  it("drops turns that never got an answer", () => {
+  /* `turns` means turns, which is what the name always claimed — the cap used
+     to count messages, so it kept half as much history as it said. */
+  it("counts the cap in turns rather than in messages", () => {
+    const history = Array.from({ length: 10 }, (_, i) => turn(`q${i}`, `a${i}`)).flat();
+    const kept = recentHistory(history, 2);
+    expect(kept.map((m) => m.text)).toEqual(["q8", "a8", "q9", "a9"]);
+  });
+
+  /* A history that is not question-then-answer is damaged, and this function
+     builds prompts rather than repairing data. */
+  it("drops a stray assistant message with no question before it", () => {
     const history = [
-      message({ id: "spya-aaaaaa", text: "kept" }),
-      message({ id: "spya-bbbbbb", role: "assistant", text: "", status: "pending" }),
-      message({ id: "spya-cccccc", role: "assistant", text: "half", status: "error" }),
-      message({ id: "spya-dddddd", role: "assistant", text: "   " }),
+      message({ id: "spya-aaaaaa", role: "assistant", text: "orphan" }),
+      ...turn("q", "a"),
     ];
-    expect(recentHistory(history).map((m) => m.text)).toEqual(["kept"]);
-  });
-
-  it("keeps the most recent turns when there are too many", () => {
-    const history = Array.from({ length: 30 }, (_, i) =>
-      message({ id: `spya-a${String(i).padStart(5, "0")}`, text: `t${i}` }),
-    );
-    const kept = recentHistory(history, 4);
-    expect(kept.map((m) => m.text)).toEqual(["t26", "t27", "t28", "t29"]);
+    expect(recentHistory(history).map((m) => m.text)).toEqual(["q", "a"]);
   });
 });
 
@@ -376,5 +407,45 @@ describe("nextModeIndex — the mode switch's keyboard, without a browser", () =
     expect(nextModeIndex("ArrowRight", 3, 4)).toBe(0);
     expect(nextModeIndex("End", 0, 4)).toBe(3);
     expect(nextModeIndex("ArrowRight", 0, 1)).toBe(0);
+  });
+});
+
+describe("splitCitations — prose inside brackets, and duplicates", () => {
+  const known = new Set(["spya-k3m9qt", "spya-p7w2dn"]);
+  const shape = (para: string) =>
+    splitCitations(para, known).map((s) => (s.kind === "text" ? s.text : `cite:${s.ids.join(",")}`));
+
+  /* The parser used to match ANY short bracketed run and replace the whole
+     thing with chips, so a bracket holding an id and prose lost the prose:
+     "see" and "for discussion" were simply deleted from the model's answer.
+     Silent text loss in the one parser the feature rests on. */
+  it("keeps the words a bracket holds alongside an id", () => {
+    expect(shape("As [see spya-k3m9qt for discussion] shows.")).toEqual([
+      "As [see ",
+      "cite:spya-k3m9qt",
+      " for discussion] shows.",
+    ]);
+  });
+
+  it("keeps a page reference beside a cited id", () => {
+    expect(shape("[spya-k3m9qt, p. 4]")).toEqual(["[", "cite:spya-k3m9qt", ", p. 4]"]);
+  });
+
+  /* A bracket of nothing but ids and separators is still consumed whole — that
+     is the ordinary citation, and keeping its brackets would leave punctuation
+     around something that no longer reads as text. */
+  it("still swallows the brackets of an ordinary citation", () => {
+    expect(shape("Yes [spya-k3m9qt].")).toEqual(["Yes ", "cite:spya-k3m9qt", "."]);
+    expect(shape("Yes [spya-k3m9qt, spya-p7w2dn].")).toEqual([
+      "Yes ",
+      "cite:spya-k3m9qt,spya-p7w2dn",
+      ".",
+    ]);
+  });
+
+  /* Two identical chips, and — since the chips are keyed by id — two React
+     children with the same key. */
+  it("draws one chip when the model cites the same block twice", () => {
+    expect(shape("[spya-k3m9qt spya-k3m9qt]")).toEqual(["cite:spya-k3m9qt"]);
   });
 });

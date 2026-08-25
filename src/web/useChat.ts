@@ -19,8 +19,12 @@ import { describeFetchFailure } from "./useComments.js";
 
 export interface ChatApi {
   threads: ChatThread[];
-  /** True while an answer is arriving, so the composer can say so. */
-  streaming: boolean;
+  /* No `streaming` flag here, and its absence is deliberate.
+     One was exported and nothing used it — the composer takes its `busy` state
+     from the *message* it is waiting on, which is the honest source: sends can
+     overlap across threads, and a single boolean would have been set false by
+     whichever finished first while another was still arriving. A wrong answer
+     nobody was asking for. Removed after a GPT-5.6 review, 2026-08-26. */
   /**
    * Send a question. Returns the thread id it went to — minted here when the
    * reader is starting a new conversation, so `?thread=` can point at something
@@ -47,7 +51,6 @@ export interface ChatApi {
 
 export function useChat(slug: string): ChatApi {
   const [threads, setThreads] = useState<ChatThread[]>([]);
-  const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -156,7 +159,6 @@ export function useChat(slug: string): ChatApi {
           messages: t.messages.map((m) => (m.id === pendingId ? { ...m, ...patch } : m)),
         }));
 
-      setStreaming(true);
       void (async () => {
         try {
           const response = await fetch(`/api/chat/${encodeURIComponent(slug)}`, {
@@ -238,8 +240,6 @@ export function useChat(slug: string): ChatApi {
           }
         } catch (e) {
           patchReply({ status: "error", error: describeFetchFailure(e as Error) });
-        } finally {
-          setStreaming(false);
         }
       })();
 
@@ -248,30 +248,64 @@ export function useChat(slug: string): ChatApi {
     [slug, put],
   );
 
+  /**
+   * A write whose only job is to stick — checked, not assumed.
+   *
+   * `fetch` resolves for a 404 or a 500; only a transport failure rejects. So a
+   * bare `.catch()` on these calls reported success for every error the server
+   * could return: the rename or the delete happened on screen, the server said
+   * no, and the next reload put the old state back. This app has been bitten by
+   * exactly that before — see the note on `forget` in useComments.ts, where a
+   * DELETE that 500'd removed a comment from the screen and said nothing.
+   * Found again here by a GPT-5.6 review, 2026-08-26.
+   */
+  const write = useCallback(
+    async (threadId: string, init: RequestInit, what: string) => {
+      try {
+        const r = await fetch(
+          `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
+          init,
+        );
+        if (!r.ok) {
+          const body = (await r.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error ?? r.statusText);
+        }
+      } catch (e) {
+        // The optimistic change stays on screen. Reverting it would be a second
+        // surprise on top of the first, and the message says what happened —
+        // the reader can reload to see the truth.
+        setError(`Couldn't ${what}: ${describeFetchFailure(e as Error)}`);
+      }
+    },
+    [slug],
+  );
+
   const rename = useCallback(
     (threadId: string, title: string) => {
       put(threadId, (t) => ({ ...t, title }));
-      void fetch(`/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      }).catch((e: Error) => setError(describeFetchFailure(e)));
+      void write(
+        threadId,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        },
+        "rename that conversation",
+      );
     },
-    [slug, put],
+    [put, write],
   );
 
   const remove = useCallback(
     (threadId: string) => {
       gone.current.add(threadId);
       setThreads((prev) => prev.filter((t) => t.id !== threadId));
-      void fetch(`/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`, {
-        method: "DELETE",
-      }).catch((e: Error) => setError(describeFetchFailure(e)));
+      void write(threadId, { method: "DELETE" }, "delete that conversation");
     },
-    [slug],
+    [write],
   );
 
-  return { threads, streaming, send, begin, rename, remove, error };
+  return { threads, send, begin, rename, remove, error };
 }
 
 interface ServerEvent {

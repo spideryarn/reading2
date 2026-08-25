@@ -197,9 +197,12 @@ export const panelParam = createParser<Panel>({
  *
  * The Glossary that paragraph used to name as hypothetical arrived on
  * 2026-08-25 (docs/project/glossary.md), which is the first evidence that the
- * slot was the right shape: it cost this list one word.
+ * slot was the right shape: it cost this list one word. Search arrived the day
+ * after (docs/project/search.md) and cost it one more, which is now enough
+ * evidence to stop calling it evidence. Summary is the fourth
+ * (docs/project/summaries.md).
  */
-export const MODES = ["toc", "chat", "glossary"] as const;
+export const MODES = ["toc", "chat", "glossary", "search", "summary"] as const;
 export type Mode = (typeof MODES)[number];
 
 export const modeParam = createParser<Mode>({
@@ -248,25 +251,218 @@ export const termParam = parseAsBlockId.withOptions({ history: "replace" });
 /**
  * How the glossary list is ordered.
  *
- * `document` — first use in the article first — is the default and is what the
- * artefact stores. The other two are the reader asking for the model's own
- * judgment, which is the whole condition attached to keeping those scores at
- * all: Greg's call, 2026-08-25, was *keep both, but never sort by them
- * silently*. A sort the reader chose is not silent; a sort that is simply how
- * the list arrives is.
+ * `document` — first use in the article first — is what the **artefact** stores
+ * and was the default until 2026-08-26. `difficulty` and `centrality` are the
+ * reader asking for the model's own judgment, which is the whole condition
+ * attached to keeping those scores at all: Greg's call, 2026-08-25, was *keep
+ * both, but never sort by them silently*. A sort the reader chose is not
+ * silent; a sort that is simply how the list arrives is.
+ *
+ * **`prioritised` is now the default, and it is an override of that condition
+ * rather than an exception the condition allows for.** Greg, 2026-08-26, asked
+ * for an order that combines the two scores with first appearance and for it to
+ * arrive without being asked for. It is the gentlest ranked order we could
+ * build: the two scores only decide which of two groups an entry is in, and
+ * *inside* a group the order is still first use, so the model chooses nothing
+ * there. The divider names the rule and both scores are shown on every row —
+ * see docs/plans/glossary-prioritised-order.md for the four designs and
+ * `groupEntries` in GlossaryPanel.tsx for what it actually does.
+ *
+ * It is also **self-cancelling**: when the gate does not split the list (no
+ * scores, or every entry on one side of it), the panel falls back to `document`
+ * and does not offer the control. So an old glossary with no scores behaves
+ * exactly as it did before, and the default never labels an order that isn't
+ * one.
  *
  * `push`, like `cols` and `text` and unlike `term`: changing the order of a
  * list is a deliberate act on the view, and Back should undo it.
  *
- * An unknown value parses to `document`, so a link written by a version with
+ * An unknown value parses to the default, so a link written by a version with
  * more sorts still shows a list.
  */
-export const TERM_SORTS = ["document", "difficulty", "centrality"] as const;
+export const TERM_SORTS = ["prioritised", "document", "difficulty", "centrality"] as const;
 export type TermSort = (typeof TERM_SORTS)[number];
 
 export const sortParam = createParser<TermSort>({
   parse: (v) => (TERM_SORTS.includes(v as TermSort) ? (v as TermSort) : null),
   serialize: (v) => v,
 })
+  .withDefault("prioritised")
+  .withOptions({ history: "push" });
+
+
+/* ------------------------------------------------------------- search mode --
+   Four parameters, which is more than any other mode needs, and the reason is
+   that search mode has two matchers in it rather than one feature. See
+   docs/project/search.md § The URL for the table.
+
+   The division: `match` says which matcher, and then exactly one of `find` and
+   `run` is the thing being matched — the letters you typed, or the saved
+   meaning-search you re-opened. `order` is how the answers are stacked. */
+
+/**
+ * Which way the box matches: on the letters you typed, or on what they mean.
+ *
+ * These are not two settings of one search, they are two different questions —
+ * the finding the version this is borrowed from recorded and then acted on
+ * (docs/project/original-version/search-and-chat.md): *text search and
+ * meaning-based search answer different questions, and their version ran both,
+ * side by side.* One box, two matchers, and the reader says which.
+ *
+ * `words` is the default because it is the free one. A reader who opens the
+ * panel and types should get instant highlights, not a bill; choosing to spend
+ * a model call is a thing you do on purpose, and the toggle is right there.
+ *
+ * `push`, like `cols` and `text`: switching matcher changes what the article
+ * looks like, and Back should undo it.
+ */
+export const MATCHERS = ["words", "meaning"] as const;
+export type Matcher = (typeof MATCHERS)[number];
+
+export const matchParam = createParser<Matcher>({
+  parse: (v) => (MATCHERS.includes(v as Matcher) ? (v as Matcher) : null),
+  serialize: (v) => v,
+})
+  .withDefault("words")
+  .withOptions({ history: "push" });
+
+/**
+ * The literal text being matched, in `words` mode.
+ *
+ * **It is in the URL because it changes what the article looks like** — every
+ * occurrence is washed while it is set — which is the rule this whole file
+ * exists to keep (url-state.md). A pasted link to a search is a link to the
+ * highlights it draws.
+ *
+ * `replace` and debounced, for exactly the reason `?at=` is: this is written on
+ * every keystroke, browsers rate-limit history writes, and a Back button that
+ * walked backwards through a half-typed word one letter at a time would be
+ * useless. The debounce is shorter than the scroll one because a search is
+ * *finished* sooner than a scroll settles — you stop typing when you mean it.
+ *
+ * No validation beyond emptiness: any string is a legitimate thing to look for,
+ * and a matcher that refused some of them would be refusing prose the article
+ * might contain. An empty value is `null`, which is "not searching" rather than
+ * "searching for nothing" — the difference between an unmarked article and one
+ * where every gap between characters is a match.
+ */
+export const findParam = createParser<string>({
+  parse: (value) => (value.trim() === "" ? null : value),
+  serialize: (value) => value,
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
+/**
+ * Which saved meaning-search is showing, or none for the list of them.
+ *
+ * A run id is minted by `mintId`, so it is a block id by construction and the
+ * same parser validates it — the trick `?thread=` and `?term=` both use, and
+ * the same "a mangled link degrades to nothing" behaviour falls out, which here
+ * means the list of saved searches rather than an error.
+ *
+ * `replace`, not `push`. Stepping between saved searches while you read is
+ * browsing, not navigating, and `mode` already put one entry on the stack for
+ * the trip into search — which is the entry Back should use. Same call as
+ * `?thread=` and `?term=`.
+ */
+export const runParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * How the results list is ordered.
+ *
+ * `document` — where each passage sits in the article — is the default, and it
+ * is the default because it is the ordering the reader already has in their
+ * head. `confidence` is the reader asking for the model's own judgment about
+ * its own answers, which is worth offering and is never worth doing silently:
+ * the same condition Greg attached to the glossary's scores on 2026-08-25, and
+ * for the same reason.
+ *
+ * A separate parameter from `?sort=`, which belongs to the glossary, rather
+ * than one shared one with five legal values. Two modes' orderings have nothing
+ * in common but the word, and `sort=difficulty` arriving in search mode would
+ * be a value with no meaning that something would eventually have to guess at.
+ *
+ * `push`: changing the order of a list is a deliberate act on the view.
+ */
+export const HIT_ORDERS = ["document", "confidence"] as const;
+export type HitOrder = (typeof HIT_ORDERS)[number];
+
+export const orderParam = createParser<HitOrder>({
+  parse: (v) => (HIT_ORDERS.includes(v as HitOrder) ? (v as HitOrder) : null),
+  serialize: (v) => v,
+})
   .withDefault("document")
+  .withOptions({ history: "push" });
+
+/* ---------------------------------------------------------- summary mode --
+   Two controls, and they are the two axes of the same thing: how much summary
+   you want. `len` says how long each entry is, `deep` says how many entries
+   there are. See docs/project/summaries.md and SummaryPanel.tsx.
+
+   **What is NOT in the URL, and why.** The panel also lets you open and close
+   individual sections, and docs/project/original-version/structure-panel.md is
+   emphatic that their version regretted keeping that only in memory. It stays
+   in memory here anyway, and the reason is the rule that governs everything
+   else in this app: a per-node open/closed set can only be written down as a
+   list of node ids, node ids are **positional**, and a re-run of `npm run toc`
+   renumbers them (docs/project/block-ids.md#why-random-and-not-sequential). A
+   URL full of them would be long and, after any re-extraction, quietly wrong —
+   it would open a set of sections that are no longer the ones you opened. What
+   *is* stable is the depth, so the depth is what a link carries. Their point
+   still stands and this is the honest version of it. */
+
+/**
+ * Which rung of the ladder every entry in the summary panel is shown at.
+ *
+ * Named rather than numbered, all the way down to the URL, because that is the
+ * whole finding this feature is built on: *"sentence or two" is a thing a
+ * writer can aim at and a reader can recognise; "level 4" is not*
+ * (docs/project/original-version/summaries.md). `?len=long` says what it will
+ * show you; `?len=2` would not.
+ *
+ * `gist` is the default and never appears in a URL. It is the rung that costs
+ * nothing — one sentence per node, already on the tree — so an article with no
+ * `summary.json` at all still has a usable panel, and the two generated rungs
+ * are an upgrade rather than a precondition.
+ *
+ * `push`, like `cols` and `text`: changing how much summary you are reading is
+ * a deliberate act on the view, and Back should undo it.
+ */
+export const RUNGS = ["gist", "short", "long"] as const;
+export type Rung = (typeof RUNGS)[number];
+
+export const rungParam = createParser<Rung>({
+  parse: (v) => (RUNGS.includes(v as Rung) ? (v as Rung) : null),
+  serialize: (v) => v,
+})
+  .withDefault("gist")
+  .withOptions({ history: "push" });
+
+/**
+ * How far down the tree the summary panel goes — their structure panel's depth
+ * cut-off, which is the one control that view had and the one thing it proved:
+ * *one control, whole-document granularity* is usable.
+ *
+ * 1 is the parts, 2 is the sections. It stops at 2 because that is where the
+ * summaries stop being written (src/summarise.ts § MAX_DEPTH) and because below
+ * it a node is a single paragraph, which the reader should be reading rather
+ * than being told about.
+ *
+ * Note that this and a node's own open/closed state are **two different ways to
+ * be hidden**, and they compose rather than sharing a variable — their version
+ * got that right and it is the one design note worth copying verbatim from it:
+ * "too deep to show" and "I closed this" are different states.
+ *
+ * An unparseable or out-of-range value falls back to the default rather than
+ * throwing, the same rule as everything else in this file.
+ */
+export const MAX_SUMMARY_DEPTH = 2;
+
+export const deepParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isInteger(n) && n >= 0 && n <= MAX_SUMMARY_DEPTH ? n : null;
+  },
+  serialize: (v) => String(v),
+})
+  .withDefault(1)
   .withOptions({ history: "push" });

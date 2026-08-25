@@ -18,17 +18,41 @@ import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
 import { useGlossary } from "./useGlossary.js";
+import { SummaryPanel } from "./SummaryPanel.js";
+import { useSummaries } from "./useSummaries.js";
+import { SearchPanel } from "./SearchPanel.js";
+import { useSearch } from "./useSearch.js";
+import {
+  blockStrength,
+  findLiteral,
+  hitMarks as buildHitMarks,
+  orderFound,
+  resolveHits,
+  type Found,
+} from "./search-hits.js";
 import { useChat } from "./useChat.js";
 import { Toggle } from "@/components/ui/toggle";
-import { buildArcColumn, buildGeometry, buildOutline, columnLabel } from "./tree.js";
+import {
+  buildArcColumn,
+  buildGeometry,
+  buildOutline,
+  buildSummaryTree,
+  columnLabel,
+} from "./tree.js";
 import {
   atParam,
   colsParam,
+  deepParam,
   modeParam,
   noteParam,
   panelParam,
+  rungParam,
   sortParam,
   termParam,
+  findParam,
+  matchParam,
+  orderParam,
+  runParam,
   textParam,
   threadParam,
 } from "./params.js";
@@ -40,7 +64,7 @@ import {
   sectionDepth,
   type Section,
 } from "./position.js";
-import { fitView } from "./layout.js";
+import { fitView, proseVisible } from "./layout.js";
 import { useArrowNav } from "./keynav.js";
 import { useComments } from "./useComments.js";
 import { PILL } from "./pill.js";
@@ -264,24 +288,32 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * it can be tested without a DOM. An explicit `cols=` still wins outright, so a
    * pasted link shows exactly what it says.
    */
+  /**
+   * Whether the prose is on screen — see layout.ts § proseVisible. In a mode it
+   * always is, whatever `?text=` says, because outline mode is a way of reading
+   * the table of contents and a mode has none. Passed to `fitView` AND to
+   * TableView from one place: reading them apart is the bug this fixes.
+   */
+  const proseOn = proseVisible(showText, inMode);
+
   const fit = useMemo(
     () =>
       fitView({
         windowWidth,
         gistDepths,
         leafDepth: geometry.leafDepth,
-        showText,
+        showText: proseOn,
         chosen: cols,
         modeBand: inMode,
       }),
-    [windowWidth, gistDepths, geometry.leafDepth, showText, cols, inMode],
+    [windowWidth, gistDepths, geometry.leafDepth, proseOn, cols, inMode],
   );
 
   // A string, not the array: a fresh array every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
   // row on the page sideways, and the `?at=` tracker holds row elements it
   // measured before the move.
-  const layoutKey = `${fit.columns.join(",")}|${showText}|${windowWidth}|${fit.modeW}`;
+  const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}`;
   const jumpTo = useReadingPosition(sections, layoutKey);
 
   /**
@@ -310,6 +342,32 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * and it is the line that keeps the fetch where it belongs.
    */
   const [term, setTerm] = useState<TermSelection | null>(null);
+
+  /**
+   * The search results whose marks are drawn in the prose, and which of them
+   * the reader last pressed.
+   *
+   * Held here for exactly the reason `term` above is, and the comment there is
+   * the full version: `useSearch` fetches on mount, so it has to live inside a
+   * component that only exists in search mode, but the *marks* are drawn by
+   * `TableView`, which is here. So the band pushes its results up as they
+   * change and clears them on the way out.
+   *
+   * Note what is pushed: the **ordered, resolved** results, not the raw hits.
+   * The panel and the prose must be showing the same set — see the `hitMarks`
+   * prop in TableView.tsx — and the only way to guarantee that is for one of
+   * them to compute it and hand it to the other.
+   */
+  const [found, setFound] = useState<Found[]>([]);
+  const [openHit, setOpenHit] = useState<string | null>(null);
+
+  /* Two maps, memoised separately from everything else on the page. `found`
+     changes on every keystroke in words mode, and recomputing every comment's
+     anchor for an article's worth of blocks at that rate is the one thing that
+     would make typing feel slow. Same reasoning as the second map in
+     TableView.tsx. */
+  const hitMarks = useMemo(() => buildHitMarks(found, openHit), [found, openHit]);
+  const hitStrength = useMemo(() => blockStrength(found), [found]);
 
   /**
    * The bottom drawer — see Dock.tsx, and docs/plans/bottom-bar.md for why the
@@ -540,13 +598,15 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         geometry={geometry}
         columns={fit.columns}
         layout={fit}
-        showText={showText}
+        showText={proseOn}
         navDepth={navDepth}
         arcCells={arcCells}
         onJump={jumpTo}
         comments={comments}
         openComment={note}
         term={term}
+        hitMarks={hitMarks}
+        hitStrength={hitStrength}
         onSelect={(anchor) => {
           if (!anchor) return;
           void setNote(ask(anchor));
@@ -590,6 +650,19 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       )}
       {mode === "glossary" && (
         <GlossaryBand slug={slug} onJump={jumpTo} onSelected={setTerm} />
+      )}
+      {mode === "summary" && (
+        <SummaryBand slug={slug} article={article} onJump={jumpTo} />
+      )}
+      {mode === "search" && (
+        <SearchBand
+          slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setFound}
+          openHit={openHit}
+          onOpenHit={setOpenHit}
+        />
       )}
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
@@ -732,6 +805,215 @@ function GlossaryBand({
       onTerm={(id) => void setTermId(id)}
       sort={sort}
       onSort={(next) => void setSort(next)}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
+ * Search, and the fetch that belongs to it.
+ *
+ * A component of its own for the reason `ChatBand` and `GlossaryBand` above
+ * are: **`useSearch` fetches on mount**, so calling it up in `Reader` would
+ * charge every reader of every article a request for a list of saved searches
+ * almost none of them will open. Hooks cannot be called conditionally, so the
+ * condition has to be a component boundary.
+ *
+ * All four of its URL parameters live here too, for the same reason `?term=`
+ * and `?sort=` live in `GlossaryBand`: every one of them is meaningless outside
+ * search mode, and reading them in `Reader` would put four parameter
+ * subscriptions on every render of the reading view for values only this
+ * component uses.
+ *
+ * ## The two matchers meet here and nowhere else
+ *
+ * `results` below is the whole of that design: whichever matcher is selected
+ * produces a `Found[]`, and from that line onwards the panel, the marks, the
+ * bar down each paragraph and the sort control are identical. Adding a third
+ * way of matching would be a third arm of this one ternary.
+ *
+ * The literal matcher runs **in this memo**, on every keystroke, over every
+ * block — which sounds alarming and is not: it is one `indexOf` loop over a few
+ * hundred short strings, and it is what makes typing feel instant rather than
+ * like a search you have to submit. The expensive matcher is the one that
+ * already has a button.
+ */
+function SearchBand({
+  slug,
+  blocks,
+  onJump,
+  onFound,
+  openHit,
+  onOpenHit,
+}: {
+  slug: string;
+  blocks: Article["blocks"];
+  onJump(id: BlockId): void;
+  /* Out only. The results are computed here and pushed up to `Reader`, which
+     owns the prose — the seam described on `found` there. Passing them back
+     down would be a second copy of a value this component is the source of. */
+  onFound(next: Found[]): void;
+  openHit: string | null;
+  onOpenHit(next: string | null): void;
+}) {
+  const { runs, ask, retry, remove, error } = useSearch(slug);
+  const [matcher, setMatcher] = useQueryState("match", matchParam);
+  const [find, setFind] = useQueryState("find", findParam);
+  const [runId, setRunId] = useQueryState("run", runParam);
+  const [order, setOrder] = useQueryState("order", orderParam);
+
+  const run = runs.find((r) => r.id === runId) ?? null;
+
+  /* One list, two producers. Note that a `pending` or failed run resolves to
+     nothing rather than to stale results: a run that has not answered yet has
+     no hits, and showing the previous run's marks under this run's criterion
+     would be the panel and the prose saying different things. */
+  const results = useMemo(
+    () =>
+      orderFound(
+        matcher === "words"
+          ? findLiteral(blocks, find)
+          : run?.status === "done"
+            ? resolveHits(blocks, run.hits)
+            : [],
+        order,
+      ),
+    [matcher, blocks, find, run, order],
+  );
+
+  /* Push the results up to `Reader`, which owns the prose. `onFound` is a plain
+     setter and therefore stable, so this cannot loop. */
+  useEffect(() => onFound(results), [results, onFound]);
+
+  /* Leaving search mode must take the marks out of the prose with it. Its own
+     effect, with no dependency on the results, so it runs on unmount and only
+     on unmount — folding it into the cleanup above would clear the marks on
+     every keystroke and set them again immediately, which is a visible flicker
+     of every highlight on the page. Exactly the trap `GlossaryBand` documents. */
+  useEffect(
+    () => () => {
+      onFound([]);
+      onOpenHit(null);
+    },
+    [onFound, onOpenHit],
+  );
+
+  return (
+    <SearchPanel
+      matcher={matcher}
+      onMatcher={(next) => {
+        void setMatcher(next);
+        // Switching matcher clears the *other* one's selection rather than
+        // leaving it addressed in a URL nothing is reading. Without this,
+        // flipping to words and back re-opens a saved run the reader had
+        // visibly left, which looks like the toggle undoing itself.
+        onOpenHit(null);
+        if (next === "words") void setRunId(null);
+      }}
+      find={find}
+      onFind={(next) => {
+        void setFind(next);
+        onOpenHit(null);
+      }}
+      runs={runs}
+      runId={runId}
+      onRun={(id) => {
+        void setRunId(id);
+        onOpenHit(null);
+      }}
+      onAsk={(criterion) => {
+        // `ask` mints the id, so `?run=` can name the search before the model
+        // has said anything — the same trick `?note=` and `?thread=` use.
+        void setRunId(ask(criterion));
+        onOpenHit(null);
+      }}
+      onRetry={retry}
+      onDelete={(id) => {
+        remove(id);
+        // Back to the list rather than to a search that is not there.
+        if (id === runId) void setRunId(null);
+      }}
+      found={results}
+      order={order}
+      onOrder={(next) => void setOrder(next)}
+      openKey={openHit}
+      onOpen={(key, blockId) => {
+        onOpenHit(key);
+        // Always jump, even when the block is already on screen — unlike
+        // stepping between comments, which deliberately does not. A search
+        // result is a place you have not been yet, and "I pressed it and
+        // nothing moved" is the complaint that makes a results list feel
+        // broken; two comments in one paragraph are the opposite case.
+        onJump(blockId);
+      }}
+      error={error}
+    />
+  );
+}
+
+/**
+ * The summaries, and the fetch that belongs to them.
+ *
+ * A component of its own for the reason `ChatBand` and `GlossaryBand` above
+ * are: **`useSummaries` fetches on mount**, and calling it up in `Reader` would
+ * charge every reader of every article a request for a panel almost none of
+ * them will open. Hooks cannot be called conditionally, so the condition has to
+ * be a component boundary.
+ *
+ * `?len=` and `?deep=` live here too, for the same reason — they are
+ * meaningless outside summary mode, and reading them in `Reader` would put two
+ * parameter subscriptions on every render of the reading view for values only
+ * this component uses.
+ *
+ * See docs/project/summaries.md.
+ */
+function SummaryBand({
+  slug,
+  article,
+  onJump,
+}: {
+  slug: string;
+  article: Article;
+  onJump(id: BlockId): void;
+}) {
+  const summaries = useSummaries(slug);
+  const [rung, setRung] = useQueryState("len", rungParam);
+  const [deep, setDeep] = useQueryState("deep", deepParam);
+
+  /* The join: the tree, plus whatever `summary.json` has for it, matched by
+     block range and never by node id — see tree.js § the summaries. Memoised on
+     the artefact rather than on the hook, whose object identity changes on
+     every poll of the job queue. */
+  const root = useMemo(
+    () => buildSummaryTree(article.tree, article.blocks, summaries.summaries),
+    [article.tree, article.blocks, summaries.summaries],
+  );
+
+  /* Read, never written, and not a subscription: `?at=` is already tracked by
+     useReadingPosition in the parent, so this component re-renders whenever it
+     changes and `location.search` is current. Same read-at-render trick
+     ChatBand uses, and Dock.tsx for its carried query string.
+
+     Turned into a row index here rather than passed down as an id, because the
+     panel's question is "is the reader inside this range", and a range is a
+     pair of row indices — comparing ids would be comparing random strings for
+     order, which is the one thing block-ids.md forbids. */
+  const at = new URLSearchParams(location.search).get("at");
+  const atRow = useMemo(() => {
+    if (at === null) return null;
+    const i = article.blocks.findIndex((b) => b.id === at);
+    return i === -1 ? null : i;
+  }, [at, article.blocks]);
+
+  return (
+    <SummaryPanel
+      {...summaries}
+      root={root}
+      rung={rung}
+      onRung={(next) => void setRung(next)}
+      deep={deep}
+      onDeep={(next) => void setDeep(next)}
+      atRow={atRow}
       onJump={onJump}
     />
   );

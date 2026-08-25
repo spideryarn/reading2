@@ -37,13 +37,15 @@
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
  * `Home`, `Metadata` and `Thread` navigate; `Questions` opens a drawer *on the
- * reading view* and navigates everywhere else; `Chat` and `Glossary` change what
- * the middle of the page **is**. That is three real differences and the markup has to tell
- * the truth about each — a link gets `aria-current="page"`, a drawer trigger
- * gets `aria-expanded`, a mode switch gets `aria-pressed`, and using any one of
- * them for another kind announces the wrong thing to a screen reader while
- * looking identical on screen. Hence `DockLink`, `DockTab` and `DockMode` below
- * rather than one component with two flags.
+ * reading view* and navigates everywhere else; `Contents` / `Chat` / `Glossary`
+ * choose what the middle of the page **is**. That is three real differences and
+ * the markup has to tell the truth about each — a link gets
+ * `aria-current="page"`, a drawer trigger gets `aria-expanded`, and the mode
+ * switch is a `role="radiogroup"` of `aria-checked` buttons, because exactly one
+ * of the three is always true. Using any one of them for another kind announces
+ * the wrong thing to a screen reader while looking identical on screen. Hence
+ * `DockLink`, `DockTab` and `DockModes` below rather than one component with
+ * flags.
  *
  * **The bar looks the same on all three pages and is not the same component
  * twice.** What varies is whether a `drawer` was handed in. Only the reading
@@ -63,15 +65,18 @@
  * So there is no About panel here any more, and the markup it used to render
  * lives in Metadata.tsx. See docs/plans/metadata-page.md.
  */
-import { useEffect, type ReactNode } from "react";
+// `ReactKeyboardEvent`, aliased: React's KeyboardEvent and the DOM's are different
+// types, and this file uses both — the drawer's Escape listener is on `window`
+// and takes the DOM one.
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import {
   BookA,
   ChevronUp,
-  Highlighter,
   Home,
   Info,
   Layers,
   ListOrdered,
+  ListTree,
   MessageSquareText,
   MessagesSquare,
   Search,
@@ -159,36 +164,70 @@ interface Props {
  */
 const SOON: { key: string; label: string; icon: typeof Layers; blurb: string; learned: string }[] = [
   {
-    key: "summaries",
-    label: "Summaries",
-    icon: Layers,
-    blurb: "The whole piece at whichever length you want it, from a sentence to a page.",
-    learned:
-      "Built once already, and all nine lengths came out of a single model call rather than nine — the ladder was cheaper than it looked.",
-  },
-  {
-    key: "highlights",
-    label: "Highlights",
-    icon: Highlighter,
-    blurb: "Mark the passages that match something you asked for, rather than a keyword.",
-    learned:
-      "Overlapping highlights need the CSS Custom Highlight API; a library that wraps matches in tags cannot nest them.",
-  },
-  {
-    key: "search",
-    label: "Search",
-    icon: Search,
-    blurb: "Find a passage by what it says, not only by the words it uses.",
-    learned:
-      "Text search and meaning-based search answer different questions and their version ran both, side by side.",
-  },
-  {
     key: "reading-time",
     label: "Reading time",
     icon: Timer,
     blurb: "How long this will take you, and how hard it is going to be.",
     learned:
       "They dropped the standard readability formulas for a model's judgement, then adjusted the estimate by how confident it was.",
+  },
+];
+
+/**
+ * Everything the middle band can be, in the order they sit in the bar.
+ *
+ * A table rather than hand-written buttons, because a radiogroup's keyboard
+ * behaviour has to walk them: "the next mode" is only meaningful if there is a
+ * list to be next in. Adding another is a row here — which is exactly what
+ * Search and then Summary cost (docs/project/summaries.md).
+ *
+ * The order is deliberate and is not alphabetical: **contents first, because it
+ * is the default** and the one you come back to. Left-to-right in the bar is
+ * also the order the arrow keys travel, so the resting state being leftmost
+ * means every other mode is reached by going right from home.
+ */
+const MODES_UI: { mode: Mode; icon: typeof Home; label: string; blurb: string }[] = [
+  {
+    mode: "toc",
+    icon: ListTree,
+    label: "Contents",
+    blurb: "The article's own shape, one column per level of detail",
+  },
+  {
+    mode: "chat",
+    icon: MessagesSquare,
+    label: "Chat",
+    blurb: "Ask about this article — answers point back at the paragraphs they came from",
+  },
+  {
+    mode: "glossary",
+    icon: BookA,
+    label: "Glossary",
+    blurb: "The terms this piece uses in a non-obvious way, defined from the piece itself",
+  },
+  {
+    mode: "summary",
+    icon: Layers,
+    label: "Summary",
+    blurb:
+      "The article, its parts and its sections, each at whichever length you ask for — a sentence, a few, or a page",
+  },
+  /* Search was **two** dimmed placeholders in `SOON` below until 2026-08-26 —
+     `Search` and `Highlights`, side by side — and is one mode now. That is the
+     design rather than a tidy-up: highlighting is what search *does to the
+     page*, not a separate thing to press. Greg's call; see
+     docs/project/search.md.
+
+     The `Highlights` placeholder's note has not been lost. It said overlapping
+     highlights need the CSS Custom Highlight API because a library that wraps
+     matches in tags cannot nest them — which turned out to be about a wall we
+     had already gone round, and the account of that is now at the top of
+     annotate.ts where somebody adding a fifth kind of mark will meet it. */
+  {
+    mode: "search",
+    icon: Search,
+    label: "Search",
+    blurb: "Find a passage by the words it uses, or by what it says",
   },
 ];
 
@@ -355,56 +394,33 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
           title="The article as a numbered thread of short posts"
         />
 
-        {/* The third kind of button in this bar, and the one that made the
-            comment at the top of this file need a third paragraph: it neither
-            navigates nor opens a drawer, it changes what the middle of the page
-            *is*. On the pages that have no middle it degrades to a link, the
-            same way Questions does. See DockMode below for why `aria-pressed`
-            rather than `aria-expanded`. */}
-        {mode !== undefined && onMode ? (
-          <DockMode
-            on={mode === "chat"}
-            onToggle={() => onMode(mode === "chat" ? "toc" : "chat")}
-            icon={MessagesSquare}
-            label="Chat"
-            title="Ask about this article — answers point back at the paragraphs they came from"
-          />
-        ) : (
-          <DockLink
-            href={readHref(slug, withMode(search, "chat"), "article")}
-            current={false}
-            icon={MessagesSquare}
-            label="Chat"
-            title="Ask about this article, back in the article itself"
-          />
-        )}
+        {/* **The modes, as one control.** Chat and Glossary used to be two
+            independent toggles beside each other, with `toc` unrepresented —
+            you left a mode by pressing the one you were in. That worked and it
+            lied about the shape of the thing: the middle band is always in
+            exactly one of three states, and two of them had buttons.
 
-        {/* The second mode button, and the one that turned "the third kind of
-            button" from a special case into a kind. It was a dimmed idea in
-            `SOON` until 2026-08-25; it is a built button now, and the entry it
-            replaced has gone rather than being left beside it.
+            Greg, 2026-08-25: *"Yes, make them a radio group, but as buttons,
+            with nice icons and tooltips."*
 
-            Greg, 2026-08-25: *"Use a button in the bottom-bar to activate it."*
-            and *"When active, it should replace the middle sections of the UI
-            (i.e. right of the spine, left of the doc)."* — which is precisely
-            what a mode is, so it needed no new machinery here at all. See
-            docs/project/glossary.md. */}
+            Giving `toc` a button of its own is what makes the radiogroup
+            honest, and it is the trigger the previous note in this file named —
+            not the arrival of a third mode, but the third mode being *visible*.
+            See DockModes below. Off the reading view there is no band to switch,
+            so the same three degrade to links back to it. */}
         {mode !== undefined && onMode ? (
-          <DockMode
-            on={mode === "glossary"}
-            onToggle={() => onMode(mode === "glossary" ? "toc" : "glossary")}
-            icon={BookA}
-            label="Glossary"
-            title="The terms this piece uses in a non-obvious way, defined from the piece itself"
-          />
+          <DockModes mode={mode} onMode={onMode} />
         ) : (
-          <DockLink
-            href={readHref(slug, withMode(search, "glossary"), "article")}
-            current={false}
-            icon={BookA}
-            label="Glossary"
-            title="The terms this piece uses, back in the article itself"
-          />
+          MODES_UI.map((m) => (
+            <DockLink
+              key={m.mode}
+              href={readHref(slug, withMode(search, m.mode), "article")}
+              current={false}
+              icon={m.icon}
+              label={m.label}
+              title={`${m.blurb} — back in the article itself`}
+            />
+          ))
         )}
 
         <span className="dock-gap" />
@@ -472,56 +488,138 @@ function withMode(search: string, mode: Mode): string {
 }
 
 /**
- * A bar button that switches what the middle of the page is.
+ * The mode switch: one button per mode, one control, exactly one of them on.
  *
- * `aria-pressed`, and the choice is worth a sentence because the file's other
- * two buttons both make a different one. A drawer trigger says `aria-expanded`
- * because something rises out of the bar; a link says `aria-current` because it
- * takes you somewhere. This does neither: it is a two-state control that stays
- * where it is, which is exactly what `aria-pressed` describes.
+ * ## Why this is a radiogroup and was not one yesterday
  *
- * **The third mode arrived on 2026-08-25 and this stayed a toggle.** The
- * paragraph that used to be here said a radiogroup was the answer once there
- * were three of them, so the reversal is worth stating rather than quietly
- * dropping: the count was the wrong trigger.
+ * It was two independent `aria-pressed` toggles, and a note here argued — at
+ * length, and correctly for the time — that a radiogroup would be the *worse*
+ * lie: the bar showed Chat and Glossary but not `toc`, so a two-option
+ * radiogroup would have asserted that the band was one of two things while it
+ * was routinely neither. That note named the trigger for changing it, and the
+ * trigger was not a third mode arriving. It was **a Contents button existing**,
+ * which is what makes "one of these several" a true sentence.
  *
- * A radiogroup announces "one of these several", and the bar does not show
- * several. It shows **two of three** — Chat and Glossary — because `toc` is the
- * default and has no button; you leave a mode by pressing the one you are in.
- * So a radiogroup here would name two options and hide the third, which is a
- * worse lie than `aria-pressed`: "Glossary, not pressed" is true, whereas a
- * two-option radiogroup asserts that the middle band is one of two things when
- * it is currently neither.
+ * Greg asked for the group on 2026-08-25 and the button came with it, so the
+ * condition was met by the same change that needed it.
  *
- * The real trigger is therefore **a Table of contents button in the bar**, not
- * a third mode. Add one and all three become peers, "one of these several"
- * becomes true, and this should become `role="radiogroup"` with roving
- * tabindex and arrow-key traversal on the same day.
+ * ## What a radiogroup costs, which is the part that is easy to skip
+ *
+ * `role="radiogroup"` is a promise about the keyboard, not a label. A screen
+ * reader tells its user "radio group, five items" and they will then press an
+ * arrow key. Three things make that promise good, and all three are load-bearing:
+ *
+ *  - **Roving tabindex.** The group is ONE tab stop, not three. The selected
+ *    button is `tabIndex={0}` and the others are `-1`, so Tab moves past the
+ *    whole control the way it moves past a single button.
+ *  - **Arrows move and select in one gesture.** Radios activate on focus; there
+ *    is no separate "now press Space". Left/Up go back, Right/Down go forward,
+ *    Home/End jump to the ends, and all of them wrap.
+ *  - **Focus follows the selection**, which is why `refs` exists. Changing the
+ *    mode re-renders with a different button at `tabIndex={0}`, and without
+ *    moving focus there deliberately, focus would be left on a button that is
+ *    now unreachable by Tab — the reader's next arrow press would go nowhere.
+ *
+ * ## The one collision, and which way it was settled
+ *
+ * ↑ / ↓ step through the article (keynav.ts), listening on `window`. Its guard
+ * ignores keys typed into an INPUT or TEXTAREA, and a `<button>` is neither —
+ * so without `stopPropagation` here, pressing Down inside this group would
+ * change the mode *and* scroll the article. Focus wins: while the reader is
+ * inside a radiogroup the arrows belong to it, which is the whole reason the
+ * pattern promises them. The pointer-aimed ↑/↓ is unaffected everywhere else,
+ * because it is aimed by the pointer and this is about focus.
  */
-function DockMode({
-  on,
-  onToggle,
-  icon: Icon,
-  label,
-  title,
-}: {
-  on: boolean;
-  onToggle(): void;
-  icon: typeof Home;
-  label: string;
-  title: string;
-}) {
+/**
+ * Which mode a key press moves to, or `null` if the key is not ours.
+ *
+ * Pulled out of the component and exported **because it cannot be tested where
+ * it was.** The arrow keys are the promise `role="radiogroup"` makes, the
+ * wrapping arithmetic is where an off-by-one hides, and the only way to check
+ * it in place is to drive a real browser — which is exactly the check that is
+ * skipped on the day it matters. Everything here is index arithmetic; none of
+ * it needs a DOM. See tests/chat.test.ts.
+ *
+ * Both axes move the selection, and `Home`/`End` jump to the ends. Wrapping is
+ * deliberate: with a handful of items, not wrapping means the reader has to know
+ * which end they are at before they know which key to press.
+ */
+export function nextModeIndex(key: string, index: number, count: number): number | null {
+  if (count === 0) return null;
+  const step = key === "ArrowRight" || key === "ArrowDown" ? 1 : key === "ArrowLeft" || key === "ArrowUp" ? -1 : 0;
+  // `+ count` before the modulo: JavaScript's `%` keeps the sign of the left
+  // operand, so going left from the first item lands on -1 rather than on the
+  // last one — and -1 is a valid-looking array index that reads as `undefined`.
+  if (step !== 0) return (index + step + count) % count;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return null;
+}
+
+function DockModes({ mode, onMode }: { mode: Mode; onMode(next: Mode): void }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const current = MODES_UI.findIndex((m) => m.mode === mode);
+  // Never -1: an unknown mode cannot reach here (params.ts parses one), but a
+  // -1 would put focus on `refs[-1]` and silently break every arrow key.
+  const index = current === -1 ? 0 : current;
+
+  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const next = nextModeIndex(e.key, index, MODES_UI.length);
+    if (next === null) return;
+    const target = MODES_UI[next];
+    if (!target) return;
+    // Both, and both matter: `preventDefault` stops the arrow scrolling the
+    // page, `stopPropagation` stops keynav.ts *also* stepping the article — see
+    // the header for why focus wins over the pointer here.
+    e.preventDefault();
+    e.stopPropagation();
+    onMode(target.mode);
+    // Focus follows the selection. Without this the reader is left on a button
+    // that is about to become `tabIndex={-1}`, so their next arrow press goes
+    // nowhere — see the header.
+    refs.current[next]?.focus();
+  };
+
   return (
-    <button
-      type="button"
-      className={`dock-btn${on ? " on" : ""}`}
-      aria-pressed={on}
-      title={title}
-      onClick={onToggle}
+    <div
+      className="dock-modes"
+      role="radiogroup"
+      aria-label="What the middle column shows"
+      onKeyDown={onKey}
     >
-      <Icon size={15} />
-      <span>{label}</span>
-    </button>
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {MODES_UI.map((m, i) => (
+          <Tooltip
+            key={m.mode}
+            placement="top"
+            className="tip-soon"
+            content={
+              <>
+                <div className="tip-soon-head">{m.label}</div>
+                <p>{m.blurb}</p>
+              </>
+            }
+          >
+            {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — a real <input type="radio"> cannot carry an icon beside a label, and styling one as a bar button means hiding the input and faking every state it already had */}
+            <button
+              type="button"
+              role="radio"
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
+              className={`dock-btn${m.mode === mode ? " on" : ""}`}
+              aria-checked={m.mode === mode}
+              // The roving tabindex: one tab stop for the whole group.
+              tabIndex={m.mode === mode ? 0 : -1}
+              onClick={() => onMode(m.mode)}
+            >
+              <m.icon size={15} />
+              <span>{m.label}</span>
+            </button>
+          </Tooltip>
+        ))}
+      </TooltipGroup>
+    </div>
   );
 }
 

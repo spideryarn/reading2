@@ -50,6 +50,7 @@ import { loadEnvLocal } from "./env.js";
 import { ID_PATTERN } from "./ids.js";
 import { errorFields, log, since } from "./log.js";
 import { OPENROUTER_MODEL } from "./models.js";
+import { isWebUrl } from "./urls.js";
 
 /** Overridable with `SPIDERYARN_CHAT_MODEL`; the default is app-wide. */
 export const DEFAULT_MODEL = OPENROUTER_MODEL;
@@ -193,19 +194,54 @@ function renderArticle(meta: Meta, blocks: Block[], at?: string): string {
 }
 
 /**
- * The turns worth sending back, oldest first.
+ * The turns worth sending back, oldest first — **in whole turns**.
  *
- * A cap, because the article is already the expensive part of this prompt and a
- * long afternoon's conversation would eventually double it. Failed and
- * unfinished turns are dropped rather than sent as empty assistant messages:
- * OpenRouter rejects an empty `content`, and a turn that never got an answer is
- * not part of the conversation the model should be continuing.
+ * The first version filtered messages one at a time: any message that was
+ * `done` and non-empty was kept. A user message is `done` the moment it is
+ * stored, so a question whose answer failed had its *question* kept and its
+ * failed answer dropped. The model then received two user turns in a row, the
+ * older of them a question nobody had answered — and cheerfully answered both,
+ * so a failed turn came back to haunt the next one. The test that claimed to
+ * cover this pinned the broken behaviour. Found by a GPT-5.6 review, 2026-08-26.
+ *
+ * So the unit is the turn: a user message and the assistant message that
+ * answers it, kept only if **both** are `done` and non-empty. An unanswered
+ * question is not part of the conversation the model should be continuing.
+ *
+ * `turns` counts turns, not messages, which is what the name always claimed.
+ *
+ * A stray message that does not fit the pattern — an assistant reply with no
+ * question before it, two questions in a row already on disk — is dropped
+ * rather than repaired. This function's job is to build a prompt, and guessing
+ * at the shape of a damaged history is how you send the model something worse
+ * than nothing.
  */
 export function recentHistory(history: ChatMessage[], turns = HISTORY_TURNS): ChatMessage[] {
-  return history.filter((m) => m.status === "done" && m.text.trim() !== "").slice(-turns);
+  const usable = (m: ChatMessage | undefined): m is ChatMessage =>
+    m !== undefined && m.status === "done" && m.text.trim() !== "";
+
+  const pairs: ChatMessage[][] = [];
+  for (let i = 0; i < history.length; i++) {
+    const question = history[i];
+    if (question?.role !== "user") continue;
+    const answer = history[i + 1];
+    if (answer?.role !== "assistant") continue;
+    i++; // the answer belongs to this turn either way
+    if (usable(question) && usable(answer)) pairs.push([question, answer]);
+  }
+  return pairs.slice(-turns).flat();
 }
 
-/** Every id in the article, for checking what the model cited. */
+/** The block ids an answer cites that this article really has. */
+export function citedBlockIds(text: string, known: Set<string>): string[] {
+  const good = new Set<string>();
+  for (const id of text.match(/spya-[a-z0-9]{6}/g) ?? []) {
+    if (ID_PATTERN.test(id) && known.has(id)) good.add(id);
+  }
+  return [...good];
+}
+
+/** Every id in the article, for checking what the model cited. *//** Every id in the article, for checking what the model cited. */
 function idsOf(blocks: Block[]): Set<string> {
   return new Set(blocks.map((b) => b.id));
 }
@@ -361,9 +397,9 @@ ${renderArticle(meta, blocks, at)}`,
      same reason. */
   let usage: Usage | undefined;
 
+  const end: StreamEnd = { terminated: false };
   try {
-    for await (const chunk of sseChunks(response.body, composite)) {
-      touch();
+    for await (const chunk of sseChunks(response.body, composite, touch, end)) {
       if (chunk.model) used = chunk.model;
       // A 200 that carries an error in the stream — a mid-generation provider
       // failure. It arrives as data, not as a broken connection, so nothing
@@ -373,9 +409,14 @@ ${renderArticle(meta, blocks, at)}`,
       if (choice?.finish_reason) finishReason = choice.finish_reason;
       for (const a of choice?.delta?.annotations ?? []) {
         const c = a.url_citation;
-        if (a.type === "url_citation" && c?.url && !citations.has(c.url)) {
-          citations.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
+        if (a.type !== "url_citation" || !c?.url || citations.has(c.url)) continue;
+        // Refused here rather than guarded at the point of render, because this
+        // is where model output stops being a string and starts being stored.
+        if (!isWebUrl(c.url)) {
+          line.warn({ model: used }, "dropped a citation whose URL was not http(s)");
+          continue;
         }
+        citations.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
       }
       const piece = choice?.delta?.content;
       if (typeof piece === "string" && piece.length > 0) {
@@ -409,6 +450,27 @@ ${renderArticle(meta, blocks, at)}`,
     clearTimeout(stallTimer);
   }
 
+  /* **The stream stopped; did it finish?**
+
+     `[DONE]` is the only clean end an SSE response has, and without this check
+     an ordinary EOF looked exactly like one: a connection cut two paragraphs in
+     was committed as a complete answer, `status: "done"`, with no error
+     anywhere. The reader gets half an explanation that never says it is half.
+     Found by a GPT-5.6 review, 2026-08-26.
+
+     `finish_reason` is accepted as a second witness because it is the model
+     saying it stopped on purpose — a provider that omits the terminator but
+     reports a reason has still told us the answer is whole. Requiring both
+     would turn a working provider into a permanent failure; requiring neither
+     is what produced the bug. */
+  if (!end.terminated && finishReason === null) {
+    line.error(
+      { model: used, ms: since(started), chars: text.length },
+      `stream from ${used} ended without finishing`,
+    );
+    throw new Error("The answer stopped arriving before it was finished. Try again.");
+  }
+
   const answer = text.trim();
   if (answer === "") {
     // The silent-success shape: a 200, a clean stream, and nothing in it. Fail
@@ -417,7 +479,9 @@ ${renderArticle(meta, blocks, at)}`,
     throw new Error(`The model returned no text (finish_reason: ${finishReason ?? "?"}).`);
   }
 
-  const unknownIds = unknownCitedIds(answer, idsOf(blocks));
+  const known = idsOf(blocks);
+  const unknownIds = unknownCitedIds(answer, known);
+  const citedBlocks = citedBlockIds(answer, known).length;
 
   /* One line per answered question.
      `unknownIds` is the point of it: a cited id this article does not have
@@ -436,6 +500,15 @@ ${renderArticle(meta, blocks, at)}`,
         outputTokens: usage?.completion_tokens ?? null,
         searches,
         citations: citations.size,
+        /* **The number that says the feature is still the feature.**
+           `unknownIds` was meant to expose prompt drift and does not expose the
+           most obvious kind: a model that stops citing altogether produces zero
+           invented ids and looks perfect. `citations` above counts *web* pages,
+           not blocks, which made the line read as though something had been
+           cited when nothing had. A run of answers with `citedBlocks: 0` is
+           chat quietly becoming the uncited chatbot vision.md refuses.
+           Added after a GPT-5.6 review, 2026-08-26. */
+        citedBlocks,
         answerChars: answer.length,
         historyTurns: recentHistory(history).length,
         unknownIds: unknownIds.length,
@@ -499,9 +572,31 @@ function explainAbort(
  *    is correct: the connection is alive.
  *  - **`data: [DONE]` is not JSON either.** It is the terminator.
  */
+/**
+ * Whether a stream ended properly, shared with the caller through an object
+ * because a generator's `return` value is not available to `for await`.
+ */
+interface StreamEnd {
+  terminated: boolean;
+}
+
 async function* sseChunks(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
+  /**
+   * Called on **every read**, parsed or not.
+   *
+   * This is what makes the stall timer measure silence rather than
+   * uninterestingness. `touch()` used to be called by the consumer, once per
+   * yielded chunk — so OpenRouter's `: OPENROUTER PROCESSING` keep-alives,
+   * which are discarded in here before anything is yielded, did not count as
+   * activity. A connection dutifully sending keep-alives through a long web
+   * search was aborted as stalled at 45 seconds, and the header comment claimed
+   * the opposite. Found by a GPT-5.6 review, 2026-08-26.
+   */
+  onActivity: () => void,
+  /** Set to `terminated: true` only when `data: [DONE]` actually arrives. */
+  end: StreamEnd,
 ): AsyncGenerator<StreamChunk> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -514,6 +609,7 @@ async function* sseChunks(
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      onActivity();
       if (signal.aborted) throw signal.reason ?? new Error("aborted");
       buffer += decoder.decode(value, { stream: true });
       // Everything up to the last newline is complete; the remainder is a
@@ -527,7 +623,13 @@ async function* sseChunks(
         if (line === "" || line.startsWith(":")) continue;
         if (!line.startsWith("data:")) continue;
         const payload = line.slice(5).trim();
-        if (payload === "[DONE]") return;
+        if (payload === "[DONE]") {
+          // The terminator, and the only clean end there is. Recording it is
+          // what lets the caller tell a finished answer from a connection that
+          // merely stopped — see the check after the loop in `converse`.
+          end.terminated = true;
+          return;
+        }
         try {
           yield JSON.parse(payload) as StreamChunk;
         } catch {
@@ -541,6 +643,15 @@ async function* sseChunks(
     }
   } finally {
     signal.removeEventListener("abort", onAbort);
+    /* Cancel, then release. A consumer that stops early — `break`, `return`, or
+       a throw from inside the `for await` — runs this `finally` with the
+       response body still open and unread, and releasing the lock alone leaves
+       the connection alive until the socket eventually times out. `cancel()`
+       on an already-finished stream is a no-op, so this is safe on the normal
+       path too. Latent rather than live today, because the one caller drains to
+       the end deliberately; noted by a GPT-5.6 review, 2026-08-26, and fixed
+       because the next caller will not know that. */
+    await reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 }

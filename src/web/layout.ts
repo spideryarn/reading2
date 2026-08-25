@@ -86,6 +86,27 @@ export interface Fit extends Layout {
   modeW: number;
 }
 
+/**
+ * Is the prose column on screen?
+ *
+ * **A named rule because it was silently two rules.** `fitMode` reserves width
+ * for the prose unconditionally and its comment said `showText` was ignored —
+ * but "ignored" was only true of the arithmetic. App went on passing the
+ * reader's own `showText` to TableView, so arriving in a mode from *outline*
+ * mode (`?text=0`) rendered no gist cells, because a mode has none, and no
+ * prose cells, because `showText` was false. The result was a chat panel beside
+ * an entirely empty table, and every doc claiming the article is permanent was
+ * false. Found by a GPT-5.6 review, 2026-08-26.
+ *
+ * So the rule gets one home and both callers read it: **in a mode the prose is
+ * always on.** Outline mode is a way of looking at the table of contents, and
+ * in a mode there is no table of contents to outline — what would be left is
+ * nothing at all.
+ */
+export function proseVisible(showText: boolean, modeBand: boolean): boolean {
+  return modeBand || showText;
+}
+
 export function spineWidth(mode: SpineMode): number {
   return mode === "full" ? SPINE_FULL : mode === "narrow" ? SPINE_NARROW : 0;
 }
@@ -131,7 +152,7 @@ export function fitView({
      Note what this does NOT do: it does not consult `chosen`. `?cols=` survives
      the trip through chat untouched and means what it always meant when the
      reader comes back. */
-  if (modeBand) return fitMode(windowWidth, showText);
+  if (modeBand) return fitMode(windowWidth);
 
   // Outline mode has no prose; the leaf column is the detail column, and it
   // holds nav labels rather than paragraphs, so it needs far less room.
@@ -238,12 +259,12 @@ export function fitView({
  *    before the reading column drops below `PROSE_MIN`, and past that the page
  *    overflows and scrolls rather than either of them getting narrower. Same
  *    order of preference the ToC layout has: the article is what is being read.
- *  - **`showText` is ignored** and the text column is always on. Outline mode
- *    with a mode band would be a chat panel and an empty page — see App.tsx,
- *    which forces the toggle off the screen rather than leaving a control that
- *    does nothing.
+ *  - **The prose is always on**, which is `proseVisible`'s job rather than this
+ *    function's. It used to be asserted here and nowhere else, and that is
+ *    exactly how the outline-mode bug got in: a comment claiming a fact the
+ *    only other caller did not know about.
  */
-function fitMode(windowWidth: number, _showText: boolean): Fit {
+function fitMode(windowWidth: number): Fit {
   const spine: SpineMode = windowWidth >= SPINE_LABELS_MIN_WINDOW ? "full" : "narrow";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
   const modeW = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);

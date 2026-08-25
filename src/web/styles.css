@@ -1149,6 +1149,63 @@ mark.cmt.term {
   border-bottom-style: solid;
 }
 
+/* A search hit. **The one mark whose intensity means something** — `--hit-a` is
+   set per run by annotate.ts from the model's confidence, so a passage the
+   model was sure about is visibly heavier than one it was hedging on. A binary
+   highlight would hide the model's uncertainty, which is the opposite of what
+   vision.md § Principles asks for.
+
+   A fill rather than an underline, and a *different hue* from everything else
+   on this page. Both are deliberate and both come from
+   docs/project/original-version/highlighting.md: a fill because the extent is
+   the information here (a comment says "there is a note", a hit says "this much
+   of it matches"), and a different hue because a comment, a glossary term and a
+   hit can all cover the same sentence, at which point three meanings separated
+   only by opacity is one hue too few.
+
+   The words themselves still do not change colour. Same rule as `mark.cmt` and
+   `mark.term`: this is the verbatim column, and recolouring the author's prose
+   to advertise our annotation is the small version of the thing vision.md
+   refuses. */
+mark.hit {
+  /* The default, overridden per mark by the inline `--hit-a` annotate.ts sets.
+     Declared here so a mark with no strength is a *full* one rather than an
+     invisible one — the failure of a missing custom property should be a mark
+     you can see, not a mark you cannot. */
+  --hit-a: 1;
+  background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.3));
+  color: inherit;
+  border-radius: 2px;
+}
+/* The one the reader pressed in the panel, so the list and the passage are
+   visibly the same thing after a jump. Same job `mark.cmt[data-open]` does. */
+mark.hit[data-open] {
+  background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.55));
+  box-shadow: 0 0 0 1px rgb(var(--hit-rgb) / 0.8);
+}
+/* A comment over a hit keeps its underline: it is the one you can click, and
+   losing the affordance to a wash would make it look inert. Same call
+   `mark.cmt.term` makes, for the same reason. */
+mark.cmt.hit {
+  border-bottom-color: var(--highlight);
+}
+
+/* The bar down the left of a matched paragraph — findable while scrolling past
+   at speed, which a wash behind one phrase is not.
+
+   **Scaled harder than the fill** (×1.5, clamped), which is the one piece of
+   the borrowed implementation worth copying verbatim: *a wash faint enough to
+   keep text readable is too faint to notice; the border carries the signal, the
+   fill carries the extent.*
+
+   An inset shadow rather than a `border-left`, because a border changes the
+   cell's width and every marked paragraph would then jump sideways as you type
+   in words mode. A shadow paints inside the box the layout already has. */
+td.text.has-hit {
+  --hit-a: 1;
+  box-shadow: inset 3px 0 0 rgb(var(--hit-rgb) / calc(min(1, var(--hit-a) * 1.5)));
+}
+
 .cmt-dialog {
   position: fixed;
   right: 1.25rem;
@@ -2545,15 +2602,52 @@ mark.cmt.term {
 
 /* ---- the list ---- */
 
+/* The scroller. A `div` rather than the `ol` it was until 2026-08-26, because
+   `prioritised` order splits the terms into two headed groups and a heading is
+   not a list item. Each group keeps its own `ol` inside this. */
 .gloss-list {
   flex: 1;
   margin: 0;
   padding: 0.25rem 0;
-  list-style: none;
   overflow-y: auto;
   /* Or the scroller refuses to shrink and pushes the footer off the band. The
      same `min-height: 0` the chat scroller needs, and for the same reason. */
   min-height: 0;
+}
+.gloss-group-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The divider that says what promoted the group under it. Sticky, because the
+   whole point of a two-group list is knowing which group you are looking at,
+   and in a band this narrow the first group can be a screenful on its own.
+   `top: 0` against `.gloss-list` as the scroll container — see
+   docs/reusable/css-sticky-containing-block.md for the way that goes wrong. */
+.gloss-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.45rem 0.7rem 0.3rem;
+  border-bottom: 1px solid var(--rule);
+  /* `--panel`, which is what `.mode-band` itself paints. A sticky heading with
+     no background of its own is transparent, and the terms scroll through it. */
+  background: var(--panel);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+}
+.gloss-group-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 400;
 }
 
 .gloss-term { border-bottom: 1px solid var(--rule); }
@@ -2593,13 +2687,23 @@ mark.cmt.term {
   text-transform: lowercase;
   letter-spacing: 0.02em;
 }
-/* Pushed right, and monospaced, because a column of numbers you are sorting by
-   should line up. Only present when the list IS sorted by it. */
+/* Pushed right, and monospaced, because a column of numbers you are ordered by
+   should line up. Only present when the list IS ordered by them — one number
+   under `hardest` or `most central`, two under `prioritised`, none under `first
+   use`. The single letter in front of each is which score it is; the full words
+   are in the cell's `title`. */
 .gloss-score {
+  display: flex;
+  gap: 0.3rem;
   margin-left: auto;
   color: var(--ink-faint);
   font-family: var(--font-mono);
   font-size: 0.68rem;
+  white-space: nowrap;
+}
+.gloss-score-key {
+  margin-right: 0.1rem;
+  opacity: 0.6;
 }
 .gloss-gloss {
   display: block;
@@ -2702,4 +2806,623 @@ mark.cmt.term {
   margin: 0.45rem 0 0;
   color: var(--ink-faint);
   font-size: 0.7rem;
+}
+
+/* ------------------------------------------------------- the mode switch --
+   The three things the middle band can be — Contents, Chat, Glossary — drawn
+   as one control rather than three buttons that happen to be adjacent. See
+   DockModes in Dock.tsx, and docs/plans/chat-mode.md for what a mode is.
+
+   The grouping is the entire visual job here. Exactly one of these is on at any
+   moment, and three separate-looking buttons where only one ever lights up
+   reads as three toggles you could turn on together. A hairline box around them
+   says "one of these", which is what the markup already promises a screen
+   reader via `role="radiogroup"` — this is the sighted half of the same claim. */
+.dock-modes {
+  display: inline-flex;
+  align-items: stretch;
+  /* Sits inside a bar of --dock-h with no vertical room to spare, so the frame
+     is inset rather than added: margin, not padding, or the buttons would grow
+     the bar. */
+  margin: 0.3rem 0.25rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  /* Clips the selected button's own background to the rounded corners, so the
+     highlight cannot square off the end of the frame. */
+  overflow: hidden;
+}
+
+/* Hairlines BETWEEN the buttons, never on the ends — `+` puts a left border on
+   every button after the first, which is exactly the n-1 rules a segmented
+   control needs and stays right when a fourth mode is added. */
+.dock-modes .dock-btn + .dock-btn { border-left: 1px solid var(--rule); }
+
+.dock-modes .dock-btn {
+  /* The inset top-border marker belongs to the bar's *other* buttons, where it
+     means "this is the page you are on". Inside the frame the selected state is
+     the fill, and keeping both would draw a stray 2px cap across one segment. */
+  box-shadow: none;
+  border-radius: 0;
+}
+.dock-modes .dock-btn.on { box-shadow: none; }
+
+/* The focus ring goes on the segment, inset, so it is not clipped by the
+   frame's `overflow: hidden`. This matters more here than on a normal button:
+   the group is a single tab stop, so the ring is the only thing telling a
+   keyboard user which of the three the arrow keys will move from. */
+.dock-modes .dock-btn:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
+
+
+/* --------------------------------------------------------- § search mode ----
+   Finding a passage by the words it uses, or by what it says. The shell is
+   `.mode-band` above; everything here is what goes inside it.
+
+   Read SearchPanel.tsx before changing what is on screen. The arrangement is
+   one box with two matchers behind it, and several things this panel does not
+   do were decided rather than skipped: no submit button in words mode (there is
+   nothing to submit), no confidence sort in words mode (there are no
+   confidences to sort by), and no single "no results" state (there are five
+   different ways to have nothing to show, and they want different sentences).
+
+   The marks these produce in the prose are `mark.hit` and `td.text.has-hit`,
+   further up this file — and the hue is deliberately not the orange. */
+
+.srch-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.srch-head-icon { color: var(--ink-faint); flex: none; }
+.srch-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.srch-box {
+  padding: 0.5rem 0.6rem 0.55rem;
+  border-bottom: 1px solid var(--rule);
+}
+.srch-field { position: relative; display: flex; align-items: center; }
+.srch-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.srch-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.srch-input::placeholder { color: var(--ink-faint); }
+/* The browser's own clear button on `type="search"`, which on a dark page is a
+   dark X on a dark field. Ours is Escape, and it is in the keydown handler. */
+.srch-input::-webkit-search-cancel-button { display: none; }
+/* The same arc, the same keyframe, and the same reduced-motion pulse as
+   `.cmt-spinner` — see docs/project/icons.md#the-loading-spinner. Only the
+   colour differs, because in this mode the working colour is the search hue. */
+.srch-spin {
+  flex: none;
+  color: var(--hit);
+  animation: cmt-spin 0.7s linear infinite;
+}
+.srch-field .srch-spin { position: absolute; right: 0.5rem; }
+@media (prefers-reduced-motion: reduce) {
+  .srch-spin { animation: cmt-pulse 1.4s ease-in-out infinite; }
+}
+
+.srch-modes {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+}
+.srch-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.srch-mode:hover { color: var(--ink); }
+/* The selected matcher, in the search hue rather than the brand orange — so the
+   control that says which colour the page is about to go is that colour. */
+.srch-mode.on {
+  border-color: rgb(var(--hit-rgb) / 0.5);
+  background: rgb(var(--hit-rgb) / 0.14);
+  color: var(--ink);
+}
+.srch-go {
+  margin-left: auto;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.srch-go:disabled { opacity: 0.4; cursor: default; }
+.srch-go:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
+
+.srch-error {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  color: var(--destructive, oklch(0.65 0.2 25));
+  font-size: 0.78rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ---- the saved searches ---- */
+
+.srch-saved { flex: 1; margin: 0; padding: 0.35rem; list-style: none; overflow-y: auto; }
+.srch-saved-row { display: flex; align-items: stretch; gap: 0.15rem; border-radius: var(--radius); }
+.srch-saved-row:hover { background: var(--surface-raised); }
+.srch-saved-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem 0.45rem;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.srch-saved-open:hover { color: var(--ink); }
+.srch-saved-criterion {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.srch-saved-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+.srch-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.srch-icon:hover { background: var(--surface-raised); color: var(--ink); }
+.srch-icon.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+
+/* ---- nothing to show, in its five flavours ---- */
+
+.srch-empty { padding: 0.85rem 0.9rem; color: var(--ink-faint); }
+.srch-empty p { margin: 0 0 0.5rem; }
+.srch-empty-hint { font-size: 0.8rem; line-height: 1.5; }
+.srch-empty-hint em { color: var(--ink-soft); font-style: italic; }
+.srch-working, .srch-failed {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+.srch-failed { color: var(--destructive, oklch(0.65 0.2 25)); }
+.srch-retry {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.srch-retry:hover { border-color: var(--hit); }
+
+/* ---- the results ---- */
+
+.srch-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.srch-count { margin-right: auto; color: var(--ink-faint); font-size: 0.72rem; }
+.srch-sort-btn {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.srch-sort-btn:hover { color: var(--ink); }
+.srch-sort-btn.on { border-color: var(--rule-strong); background: var(--surface-raised); color: var(--ink); }
+
+.srch-hits { flex: 1; margin: 0; padding: 0.3rem; list-style: none; overflow-y: auto; }
+.srch-hit { margin: 0; }
+.srch-hit-btn {
+  display: flex;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+.srch-hit-btn:hover { background: var(--surface-raised); color: var(--ink); }
+/* The row whose passage is marked as open in the prose. */
+.srch-hit-btn.on {
+  border-color: rgb(var(--hit-rgb) / 0.45);
+  background: rgb(var(--hit-rgb) / 0.1);
+  color: var(--ink);
+}
+
+/* The confidence, printed as well as drawn — see the note in SearchPanel.tsx.
+   Their version encoded it only as opacity, and a reader cannot tell 40 from 55
+   by looking at two washes. Tabular figures so a column of them lines up. */
+.srch-conf {
+  --hit-a: 1;
+  flex: none;
+  align-self: flex-start;
+  min-width: 1.9rem;
+  padding: 0.05rem 0.2rem;
+  border-radius: 3px;
+  background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.35));
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.srch-hit-body { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.srch-hit-quote {
+  /* Three lines, then cut. Enough to recognise a passage, never enough to read
+     it here instead of in the article — the hover card is where a longer look
+     lives, and the article is where reading lives. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+.srch-hit-why { color: var(--ink-faint); font-size: 0.73rem; line-height: 1.4; }
+.srch-hit-whole { color: var(--ink-faint); font-size: 0.68rem; font-style: italic; }
+
+/* The longer snippet, on hover. Wider than the band, because the whole point of
+   it is to show more than the row could. */
+.tip-hit { max-width: 26rem; }
+.tip-hit p { margin: 0; font-size: 0.8rem; line-height: 1.5; }
+
+/* -------------------------------------------------------- § summary mode ----
+   The article at more than one length, in the mode band. The shell is
+   `.mode-band` above; everything here is what goes inside it. See
+   SummaryPanel.tsx and docs/project/summaries.md.
+
+   Two things about this layout are decisions rather than taste:
+
+   **The indentation is `padding-left` on a nested `<ol>`, not a margin on the
+   entry.** The summaries are prose and they wrap, so a wrapped line has to
+   align with the first one; a margin on the `<li>` does that and a text-indent
+   does not. It also means the depth colour bar below can run the full height of
+   a section including its children, which is what makes a part read as one
+   thing rather than as a heading followed by some unrelated paragraphs.
+
+   **The colour of the bar is `--depth-N`**, the same four tokens the gist
+   columns use. A reader who has met L1 and L2 as colours in the table meets the
+   same two colours here, so "this is the parts level" needs no legend. Change
+   them in one place or they stop meaning one thing. */
+
+.summ-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  flex: none;
+}
+.summ-head-icon { color: var(--ink-faint); flex: none; }
+.summ-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---- the two controls ---- */
+.summ-controls {
+  flex: none;
+  padding: 0.4rem 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.summ-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  /* Wraps rather than scrolling: the band is as narrow as 18rem (MODE_MIN in
+     layout.ts) and three named rungs plus a label do not always fit on one
+     line. A horizontal scroller here would hide a control behind a gesture
+     nobody would think to try on a five-item row. */
+  flex-wrap: wrap;
+}
+.summ-row + .summ-row { margin-top: 0.3rem; }
+.summ-label {
+  width: 3.4rem;
+  flex: none;
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.summ-pill {
+  padding: 0.16rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.summ-pill:not(:disabled):hover { color: var(--ink); border-color: var(--highlight); }
+.summ-pill.on {
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+  color: var(--highlight-ink);
+}
+/* Dimmed, not gone. A rung that has not been generated yet still has to be
+   visible, or there is nothing on screen to explain what the button at the
+   bottom of the panel would buy. */
+.summ-pill:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- the outline ---- */
+.summ-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 0.7rem 0.8rem;
+}
+
+.summ-list, .summ-children { margin: 0; padding: 0; list-style: none; }
+.summ-children {
+  /* The indent, and the depth bar it makes room for. */
+  margin-top: 0.35rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--rule);
+}
+
+.summ-entry + .summ-entry { margin-top: 0.7rem; }
+.summ-entry.d1 > .summ-children { border-left-color: var(--depth-2); }
+.summ-entry.d0 > .summ-children { border-left-color: var(--depth-1); }
+
+/* Where the reader actually is. Every ancestor of the current section is marked
+   too — see the note in SummaryPanel.tsx: at a shallow depth cut-off the part
+   you are inside is the honest answer to "where am I", and marking only the
+   deepest visible node would leave the panel with nothing lit at all. */
+.summ-entry.here > .summ-title-row > .summ-title { color: var(--highlight-ink); }
+.summ-entry.here > .summ-children { border-left-color: var(--highlight); }
+
+.summ-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.summ-twist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  /* Only the rotation animates, and only when the reader has not asked for
+     less. `transform` is composited, so this is free even on a long outline. */
+  transition: transform 0.15s;
+}
+.summ-twist.open { transform: rotate(90deg); }
+.summ-twist.leaf { visibility: hidden; }
+.summ-twist:not(:disabled):hover { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  .summ-twist { transition: none; }
+}
+
+.summ-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.summ-title:hover { color: var(--highlight-ink); }
+.summ-number {
+  margin-right: 0.4rem;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+/* How much is under this — the question our gist columns cannot answer, since a
+   section holding forty paragraphs and one holding three look identical in an
+   L2 cell. docs/project/original-version/structure-panel.md. */
+.summ-size {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.summ-text {
+  margin: 0.25rem 0 0 1.25rem;
+  /* The reading face, not the UI one: these are sentences somebody wrote, and
+     a summary set in the interface font reads as a system message. Same call
+     `.chat-scroll` makes for the same reason. */
+  font-family: var(--font-reading);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  /* Paragraphs in the longer rungs arrive as blank lines in one string. */
+  white-space: pre-wrap;
+}
+.summ-list > .summ-entry > .summ-text {
+  /* The root has no title row to indent under. */
+  margin-left: 0;
+  color: var(--ink);
+}
+.summ-text.missing { color: var(--ink-faint); font-style: italic; }
+
+/* Which rung this actually is, when it is not the one that was asked for. The
+   whole point is that it is visible: a silent fallback is what makes a
+   partly-written artefact read as a complete one. */
+.summ-rung-tag {
+  margin-right: 0.4rem;
+  padding: 0.02rem 0.28rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 4px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* "+4 sections". A control when the reader closed them, a fact when the depth
+   cut-off hid them — the disabled state is the difference, and pressing it in
+   that state would silently overrule the Depth buttons. */
+.summ-more {
+  margin: 0.3rem 0 0 1.25rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.summ-more:not(:disabled):hover { color: var(--ink); border-color: var(--highlight); }
+.summ-more:disabled { cursor: default; }
+
+/* ---- the offer at the bottom, and the things that go wrong ---- */
+.summ-foot {
+  flex: none;
+  padding: 0.55rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.summ-hint {
+  margin: 0 0 0.45rem;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.summ-quiet { padding: 1rem 0.2rem; color: var(--ink-faint); }
+.summ-error {
+  margin: 0.4rem 0 0;
+  color: var(--highlight-ink);
+  font-size: 0.78rem;
+}
+
+.summ-stale {
+  flex: none;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--highlight-wash);
+}
+.summ-stale p {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  color: var(--highlight-ink);
+  font-size: 0.78rem;
+}
+
+.summ-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.summ-btn:hover { border-color: var(--highlight); color: var(--highlight-ink); }
+.summ-btn:disabled { opacity: 0.5; cursor: default; }
+.summ-btn.primary { border-color: var(--highlight); }
+
+.summ-running {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+.summ-detail-live {
+  width: 100%;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+/* The spinner recipe from docs/project/icons.md — the rotation lives on the
+   class rather than on the SVG, so `prefers-reduced-motion` has one place to
+   stop it. The keyframes are named per section rather than shared, which is
+   what every other panel in this file does; a single global `spin` would be
+   nicer and is a tidy-up for whoever consolidates the four of them. */
+.summ-spin { flex: none; color: var(--highlight); animation: summ-spin 1s linear infinite; }
+@keyframes summ-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .summ-spin { animation: none; }
 }

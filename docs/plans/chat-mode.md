@@ -144,6 +144,21 @@ The prompt in [`converse.ts`](../../src/converse.ts) requires a block id in squa
 sentence that says what the article says. The panel splits the answer on the *shape* of one of our
 ids rather than on the brackets, so a model that forgets the punctuation still gets working links.
 
+**Two numbers, not one, and the first version had only the second.** `citedBlocks` counts the real
+block ids in an answer and `unknownIds` counts the invented ones. `unknownIds` alone was supposed to
+expose prompt drift, and it cannot expose the most obvious kind: a model that stops citing
+altogether invents nothing and scores perfectly. A run of answers with `citedBlocks: 0` is chat
+quietly becoming the uncited chatbot [vision.md](../project/vision.md#anti-goals) refuses — the one
+failure this whole design exists to prevent, and it was the one the logging could not see. Caught by
+a cross-family review, not by us; see below.
+
+**Read `citedBlocks: 0` in aggregate, not one line at a time.** Measured on 2026-08-26 against the
+Noema article: four substantive questions ("why does he reject substrate independence?", "what does
+he say about anthropomorphism?") each cited four or five blocks, with no invented ids. The zero came
+from *"in one sentence, what is this about?"* — a question about the whole piece, where there is no
+particular block to point at and the prompt correctly tells the model not to decorate its own
+synthesis with one. So a single zero is usually a summary question. A **run** of them is the drift.
+
 **An id this article does not have is rendered as plain text, not as a dead link.** A link that
 scrolls to nothing is the worse failure: the reader presses it, nothing moves, and there is no way
 to tell that from a scrolling bug. (Precisely: a bracketed run where *nothing* resolves is left as
@@ -191,6 +206,12 @@ Three failure modes get their own handling, because they want different sentence
 | deadline (120s) | the whole exchange ran too long | "The model did not finish within 120s." |
 | **stall (45s)** | the connection is open and nothing is coming | "The answer stopped arriving after 45s of silence." |
 | connection closed | the stream ended with no terminal frame | "The connection closed before the answer finished." |
+| **truncated** | the upstream stream ended without `[DONE]` and without a `finish_reason` | "The answer stopped arriving before it was finished." |
+
+That last row is the one that was missing, and its absence was a silent success of exactly the kind
+this repo collects: an ordinary EOF and a clean `[DONE]` were indistinguishable, so a connection cut
+two paragraphs in was committed as a **complete** answer — `status: "done"`, no error anywhere, and
+the reader left holding half an explanation that never says it is half.
 
 The stall timer is the one `explain.ts` does not need and the one worth knowing about: a streamed
 response can sit open with nothing on it, and from the inside that is indistinguishable from a model
@@ -290,6 +311,60 @@ Small, and that was the point of the band being a slot:
 - **No evidence it helps.** Which is the criticism the previous version earned, quoted at the top of
   this file, and repeating their mistake would mean never asking. [Q6](../project/open-questions.md#q6)
   is where "how would we know we are failing at this" lives.
+
+## The cross-family review, and what it found
+
+The plan above was reviewed by **GPT-5.6 (Codex CLI)** on 2026-08-26, after the code was written —
+see [codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md). Its verdict was **NO-SHIP**,
+and it was right. Ten of its thirteen findings were fixed the same day; the list is worth keeping,
+because the *shape* of what a different model family caught is the reusable part.
+
+**Four were things the tests could not have caught, because the tests agreed with the code:**
+
+- **`recentHistory` dropped half a turn.** A failed answer was filtered out and its question kept,
+  so the model received two user turns in a row and answered the abandoned question again. The test
+  named "drops turns that never got an answer" **pinned the bug** — it asserted the broken output.
+  A test written from the same misunderstanding as the code is worth less than no test, because it
+  reads as coverage.
+- **The citation parser deleted prose.** `[see spya-k3m9qt for discussion]` matched as a bracketed
+  citation and was replaced whole, so "see" and "for discussion" vanished from the model's answer.
+- **A truncated stream was committed as complete.** See the table above.
+- **`citedBlocks` did not exist**, so an answer that cited nothing at all logged as healthy.
+
+**Three were "the comment says X, the code does Y":**
+
+- `fitMode` said `showText` was ignored and the prose always on. It was ignored *in the arithmetic
+  only* — App went on passing the reader's `showText` to `TableView`, so entering chat from outline
+  mode (`?text=0`) rendered a chat panel beside an **entirely empty table**. The rule now has one
+  home, `proseVisible`, and both callers read it.
+- The stall timer's comment said keep-alives counted as activity. They were discarded inside the SSE
+  parser before the consumer could see them, so a live connection through a long web search was
+  aborted as stalled at 45 seconds.
+- The security doc said there was exactly one place model output reached an `href`. Chat had quietly
+  made it two, unvalidated — and an unparseable URL crashed the panel mid-render, because
+  `new URL()` throws rather than returning null.
+
+**And one was a bug fixed while fixing a bug.** Sharing the new URL check between the server and the
+panel by importing `src/converse.ts` from `ChatPanel.tsx` type-checked, built, and worked — and put
+the whole server module in the browser bundle, 24KB and the string `OPENROUTER_API_KEY` included.
+The key's value was never there; the system prompt and request shape were. `src/urls.ts` exists
+because of it, and [`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) now fails the
+build for the whole class.
+
+### What was deliberately not fixed
+
+- **Two servers on one `data/` directory can lose a message.** The read-modify-write queue is
+  serialised per *process* — the same property `comments.ts` has always had — so two `npm run dev`
+  instances can each read, each append a turn, and each rename a complete file over the other. Real,
+  and it happened during development when a second Vite grabbed port 5275. The honest fix is a lock
+  file, which is a bigger decision than this feature should be making alone, and the whole thing goes
+  away with [postgres-migration.md](postgres-migration.md). What *was* done is the cheap half: the
+  orphan sweep now leaves any `pending` message younger than 150s alone, so a second server no longer
+  marks a live answer as failed while the reader watches it arrive.
+- **Focus does not follow a mode change that came from outside the radio group** — browser Back, for
+  instance. Focus can be left on a button that is now `tabIndex={-1}`. Moving it on every external
+  change would be worse: it would steal focus from wherever the reader actually is. Recoverable with
+  one Tab.
 
 ## See also
 
