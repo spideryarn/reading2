@@ -335,17 +335,230 @@ Small, and that was the point of the band being a slot:
 4. **`?cols=` is untouched by the trip through chat**, so coming back finds the columns as you left
    them.
 
+## What a turn can have done to it
+
+Added 2026-08-26, after Greg asked for *"the top handful of most useful Chat UI features"*. The list
+came from a survey of Claude.ai, ChatGPT, Perplexity, Gemini, the editor chat panes and
+`assistant-ui`; the ranking that decided what went in was **value per unit of complexity for a
+400px panel, beside an article, in conversations a handful of turns long.** That last clause is
+doing most of the work — several of the affordances everyone ships are aimed at long exploratory
+chats in a full window, and they get worse, not merely unnecessary, at this size.
+
+| | What it does | Where the difficulty actually was |
+|---|---|---|
+| **Copy** | the answer to the clipboard, block ids and all | `navigator.clipboard` returns a promise that rejects, so the button has three states and a refusal says so |
+| **Retry** | answers the last question again, over the top of the answer it has | the row is *reused*, id included — see below |
+| **Edit** | rewrites one of your questions and asks again, discarding everything after it | saying how much it will discard, before it does |
+| **Stop** | ends an answer and keeps what arrived | a stop is a `done`, not an error, and a socket close is not a stop |
+| **Jump to latest** | appears when you have scrolled up | it already followed the answer down; the button is the other half |
+| **Escape** | stop → clear the draft → give the reading keys back | the composer swallows every key, so Escape had no other meaning available |
+
+### A stop is not a failure, and not a disconnect
+
+Two decisions here, and both went against the obvious implementation.
+
+**Against `status: "error"`.** Aborting the fetch makes `converse` throw, and letting that throw
+out would have stored the reader's own deliberate act as a model failure: a red row, an apology, an
+offer to try again, for a button they had just pressed. So the abort is caught in
+[`src/converse.ts`](../../src/converse.ts), told apart from the deadline and the stall by *which
+signal aborted*, and finished normally with `stopped: true` on it. A flag, not a fourth `status`,
+because everything else in the app that reads `status` is right to treat this as done.
+
+**Against reusing the disconnect.** `streamChat` deliberately does **not** cancel a model call when
+the reader closes the connection — switching thread mid-answer is ordinary, and the answer is
+already paid for. That is written down in the route's header comment as point 3, and it is why a
+stop needs a request of its own (`POST /api/chat/:slug/:threadId/stop`) rather than a socket close:
+from the server's end the two are the same event, so the deliberate one has to say so.
+
+A stopped answer stays in the history sent back to the model. It said those words; a conversation
+where the model's own half-sentence has been quietly deleted would have it contradict itself one
+turn later. The exception is a stop that lands *before the first token* — that is stored the same
+way, `done` and `stopped` with zero characters, and `recentHistory` drops it on the empty text, so
+the model is never handed a turn in which it said nothing. That case used to throw, which filed a
+fast stop as a model failure.
+
+### What a retry may touch
+
+**Only the last answer.** Regenerating one in the middle leaves every turn below it answering a
+question about words that no longer exist — the conversation reads as a non-sequitur and nothing on
+screen says why. Every product that allows it pays with a message tree and a branch pager, and the
+best writeup on the pattern calls that *"overkill for general-purpose chat"*. In a 400px band there
+is neither the room nor the conversational depth to justify it. The button is therefore not rendered
+anywhere else, rather than rendered and refused: a control that exists and always says no is worse
+than one that never existed.
+
+The row is **reused, id and all** — `retryTurn` blanks it in place. That is what keeps everything
+already pointing at the answer still pointing at it: the client's optimistic patches, the `streaming`
+key the route builds from `slug/threadId/messageId`, the stop button. And it is rebuilt field by
+field rather than spread, because a spread carries `citations`, `searches` and `model` over from the
+attempt being replaced — a retry that runs no web search would keep the old answer's sources, sitting
+under text that never mentions them.
+
+### Editing a question
+
+Everything after the edited message is discarded. **No branch is kept behind a pager**, which is the
+one place this deliberately diverges from Claude.ai. Their tiny `‹ 2/3 ›` control is the most
+complained-about thing in that UI — a conversation that is still there but not on screen is
+indistinguishable from one that was deleted — and it is a second navigation problem in a column that
+already has one.
+
+So the panel says what it is about to destroy: *"Asking again will discard the 3 messages below."*
+That sentence **is** the safety mechanism, and it is deliberately not a modal. A confirmation dialog
+in front of an edit is a tax on every typo fix, and readers learn to dismiss it without reading —
+at which point it has stopped protecting the case it was put there for.
+
+The old text is not kept. `editedAt` records only *that* it happened, which is enough to stop a
+reader wondering why the answers below no longer quite match the questions above.
+
+### The race a retry created, and the two things that fix it
+
+Reusing the row means an aborted stream and its replacement can want the same row at the same time.
+Aborting is not enough — the aborted stream's `finishTurn` can land *after* the reset and put the
+stopped half-answer back over the fresh `pending` row, where nothing would ever clear it.
+
+So `settleThread` aborts every live stream in the thread and **waits for the writer to let go**
+(`Live.done`, resolved in the route's `finally`, after the key is removed). And `withEdit` mints its
+new message id against *every* id in the file including the ones it is about to discard, because a
+discarded id handed straight back is the same bug wearing different clothes.
+
+Both are per-process, like everything else here — see [What was deliberately not
+fixed](#what-was-deliberately-not-fixed).
+
+### Streaming, and what a screen reader is told
+
+The canonical chat pattern is a polite live region around the transcript. It is wrong here: the text
+of an answer changes on every token, so the region fires a hundred times and a screen reader reads a
+growing prefix of the same paragraph over and over. Announcing the finished text once instead means
+putting the whole answer in the DOM twice.
+
+So the live region carries a **status line and nothing else** — "Answering.", "Answer ready.",
+"Answer stopped.", "The answer failed." It says when to go and read; the answer stays in one place
+to be read. `.sr-only` uses the clip-rect recipe rather than `display: none`, which would take the
+region out of the accessibility tree and make it announce nothing at all, silently.
+
+### The second review, and what it found
+
+The five affordances above were reviewed on 2026-08-26, adversarially and from a cold read of the
+code. **GPT-5.6 could not do it — the Codex workspace was out of credits, twice in one day** — so
+this was a same-family review, which is a weaker instrument: it shares the priors that produced the
+bugs. That is worth re-running when credits return, because the *first* review of this feature was
+cross-family, returned NO-SHIP, and found four things no test could have caught.
+
+Even so, three of its findings were real and one was the same mistake this file already has a
+section about.
+
+- **The copy button did nothing, silently, on any insecure origin** — and its own comment cited
+  `silent-success.md` while claiming that could not happen. `navigator.clipboard?.writeText(…)`
+  short-circuits **the whole chain**, `.catch` included: with no clipboard object the expression is
+  `undefined`, nothing throws, nothing rejects, and the state stays `idle`. And "no clipboard
+  object" is not exotic — it is every insecure context, which includes reaching this app at
+  `http://192.168.1.x:5273` from a phone. The guard is a statement now.
+- **An open edit box was destroyed mid-typing.** Withdrawing `onEdit` while an answer streamed
+  unmounted a half-written rewrite with no warning, and then remounted it by itself, with the
+  original text back, when the answer finished. The pencil is what goes away now; an editor already
+  open stays.
+- **`stick` and `away` disagreed on the one commit that mattered.** `stick` was recomputed in a
+  layout effect after every commit, which measures the DOM *after* the new content is in it — so any
+  commit adding more than the 60px slack decided the reader had scrolled away when the page had
+  merely got taller under them. The commit that does that routinely is the last one: `done` adds the
+  action row and, if the model searched, the whole source list. The reader was pinned to the bottom,
+  the answer finished, and nothing followed anything after that — with no "Latest" button either,
+  because `away` came from a different effect the same commit did not trigger. `stick` now changes
+  only when the reader scrolls, which is the only event that means what it says.
+- Two comments were overstating what their code did — `sseChunks`' abort listener is a backstop, not
+  the mechanism; `withEdit`'s id-minting buys robustness against the *second server*, not against
+  anything in this process, and only within one call. Both now say so.
+- And a stale stop wish could kill the next retry: a stop firing after a run's `finally` left its
+  entry in `stopWanted`, which the reused message id then matched on the retry's `begin` frame.
+
+**The finding this file cares about most is a test.** One of the new tests asserted that a stop
+before the first token is stored `done` and `stopped` — and built the row *by hand*, so it passed
+while the code did the opposite. That is the [`recentHistory` mistake](#the-cross-family-review-and-what-it-found)
+exactly: a test written from the same misunderstanding as the code, reading as coverage.
+[`tests/converse-stop.test.ts`](../../tests/converse-stop.test.ts) exists because of it, and it goes
+through `converse` with a stubbed `fetch` rather than constructing anything.
+
+**Writing that test immediately found a fourth bug the review had not.** Every version of the stop
+handling assumed an abort *throws*. It does under Node's own fetch — the pending `read()` rejects
+with the abort reason. But `sseChunks` also calls `reader.cancel()` on abort, and cancelling a
+reader makes a pending read resolve `{ done: true }`; where the cancel wins that race the loop exits
+**cleanly**, `stopped` stays false, and the truncation guard files the reader's own stop as *"The
+answer stopped arriving before it was finished."* There is no error to identify at that point, so
+the check there is signal-only. Two catches and a clean exit: three ways out, and the promise has to
+hold on all three.
+
+### What a browser pass found that neither review did
+
+Driven in a real Chrome tab, 2026-08-26. Nine of ten checks passed; the two things worth recording
+are the ones no amount of reading would have produced.
+
+**The first token takes about four seconds.** Measured, not guessed: the model queues, and it often
+searches the web before it says anything. So the reader spends four seconds looking at `thinking…`
+with a live stop button — which is precisely why the pre-token stop path, the one that was wrong
+twice, is the *most* likely one to be exercised rather than an edge case. That number is the
+justification for [`tests/converse-stop.test.ts`](../../tests/converse-stop.test.ts) existing.
+
+**A stranded "Latest" pill.** Editing a question to discard three turns can leave a transcript
+shorter than the panel — nothing to scroll to — with the pill still offering to take you to the
+bottom. `stick` changes only on a scroll event, by design, and a shrink fires no scroll event. The
+fix keeps the discipline rather than undoing it: the effect that follows a growing answer **only
+ever clears** `away`, never sets it. Growth still cannot claim the reader scrolled off; a shrink
+that puts the bottom back on screen now says so.
+
+One thing is unexplained. A few times, pressing Enter on the very first message of a brand-new
+conversation dropped back to the thread list — once out of chat mode altogether. The message was
+always saved, so nothing was lost. It did not reproduce cleanly, and it happened during an afternoon
+in which other agents were hot-reloading this app continuously; the shape fits a full reload landing
+before nuqs has flushed `?thread=` and `?mode=` into the URL, which would put the reader on a URL
+that genuinely does not name a conversation. Recorded rather than fixed, because a fix aimed at a
+cause we have not confirmed is how you end up with two bugs.
+
+**Copy could not be verified.** `navigator.clipboard.writeText()` never resolves inside the
+browser-automation tab — the permission reads `granted` and the promise simply hangs. That is an
+environment limit, not a finding about the code, and it means the clipboard path has been read and
+reasoned about but not once watched to work. Worth a human eyeball in an ordinary window.
+
+### What was ranked and left out
+
+- **Attachments — images and files.** The one thing on Greg's example list that did not go in, and
+  the reason is this document's own argument. Chat here is defensible *because* it is grounded in
+  one article and every claim carries a block id back into it; a panel that accepts arbitrary files
+  is a general chatbot that happens to be next to an article, which is the
+  [anti-goal](../project/vision.md#anti-goals) stated plainly. It is also not cheap — upload
+  storage, size caps, a security pass on a new untrusted input. Worth revisiting for a *specific*
+  need (a screenshot of a chart the article refers to); not worth it as a general capability.
+  OpenRouter would carry image content blocks, so the model end is not the obstacle.
+- **A message tree.** See [What a retry may touch](#what-a-retry-may-touch).
+- **Retry with a different model.** The app has one model, in one constant
+  ([`src/models.ts`](../../src/models.ts)). A picker would be a decision surface with nothing behind it.
+- **Copy-as-markdown vs copy-as-rendered.** There is no rendered form — the answers are plain
+  paragraphs by instruction. One copy, no toggle.
+- **Thumbs up/down.** Cheap to build and decoration unless somebody reads the data. When
+  [Q6](../project/open-questions.md#q6) — how would we know this is helping — gets an answer, this
+  is one of the things that answer might need. Not before.
+
 ## What is still open
 
+- **Three of the review's fixes have no regression test**, because this repo has no way to render a
+  React component in a test — no `@testing-library/react`, no jsdom render anywhere. The clipboard
+  guard, the edit box surviving a `busy` flip, and `stick`/`away` agreeing are all verified by hand
+  and by eye and by nothing else. Adding a component test runner is a dependency decision with a
+  procedure attached ([third-party-library-selection.md](../reusable/third-party-library-selection.md))
+  and is bigger than this change should be making on its own.
+- **A stop the server cannot honour says nothing.** `POST /stop` answers `{ stopped: false }` when
+  there was nothing to stop, and the panel ignores it — rightly, in the common case, which is a stop
+  pressed on an answer that finished a moment ago. In the two-server case, though, the reader presses
+  stop, gets a 200, and watches the words keep arriving with no explanation. Telling the two apart
+  needs a timer, and the underlying problem is the same one a lock file or
+  [postgres-migration.md](postgres-migration.md) closes.
 - **No keyboard shortcut** switches mode, and none opens the chat. The app has no shortcut map at
-  all yet — the same gap [bottom-bar.md](bottom-bar.md#what-is-still-open) records.
+  all yet — the same gap [bottom-bar.md](bottom-bar.md#what-is-still-open) records. Escape now does
+  three things *inside the composer*, which is not the same thing as a shortcut map.
 - **A cited id that is real but wrong** — the model points at a neighbouring paragraph — is
   undetectable from here and uncounted. Only `unknownIds` catches an id that does not exist.
 - **Markdown beyond bold is literal.** `*italics*`, `` `code` `` and links come out as the
   characters the model typed. Nothing has asked for them yet; the constraint on adding them is
   above.
-- **No retry button** on a failed turn. The comment dialog has one; here you re-ask. Cheap to add
-  and deliberately not added until somebody wants it.
 - **The band's width does not remember anything.** It is `MODE_IDEAL` clamped by what the prose can
   spare, with no reader control. A drag handle is the obvious next thing to want.
 - **Narrow windows.** Below roughly 900px the band and `PROSE_MIN` together overflow and the page

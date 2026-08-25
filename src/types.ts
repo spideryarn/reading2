@@ -360,6 +360,21 @@ export interface Glossary {
 export interface GlossaryResponse {
   glossary: Glossary;
   stale: boolean;
+  /**
+   * The list was written by an older version of the prompt — a different fact
+   * from `stale`, and it needed its own field because it needs its own
+   * sentence. `stale` means *the article moved underneath these terms*;
+   * `outdated` means *the article is the same and we would write these
+   * differently now*.
+   *
+   * **It is here because it was briefly nowhere.** `isStale` compares source
+   * hashes and nothing else, so bumping `PROMPT_VERSION` for `glossary/2` did
+   * not make one single glossary read as stale — the panel went on showing an
+   * old list with no banner and no offer to rewrite it, while the plan that
+   * bumped the version claimed the opposite. Found in review; see
+   * docs/plans/glossary-entries-worth-reading.md § What review caught.
+   */
+  outdated: boolean;
 }
 
 /* -------------------------------------------------------------- summaries --

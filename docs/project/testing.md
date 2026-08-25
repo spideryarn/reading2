@@ -49,6 +49,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |
 | [`tests/toc-build.test.ts`](../../tests/toc-build.test.ts) | `buildTree` — the model's proposal → the stored tree, and leaf growth |
 | [`tests/token-budget.test.ts`](../../tests/token-budget.test.ts) | that a model call's `max_tokens` **grows with the article**, and that the estimate clears what a real tree cost — written after a typed-in number failed a 360-block article ([postmortem](../postmortems/toc-max-tokens.md)) |
+| [`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) | that cutting the article into label calls loses no block, duplicates none, and **never splits a sibling set** — plus the wire format that makes a dropped label a hard error instead of a shifted list ([toc-scaling.md](../plans/toc-scaling.md)) |
 | [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
@@ -61,6 +62,10 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | what an article gets called, and whether that name is safe to make a path out of |
 | [`tests/glossary.test.ts`](../../tests/glossary.test.ts) | stage 5d's deterministic halves — the matching rule (including both directions in which `\b` is wrong about an accented letter), the **richness-scored dedup** that keeps the more specific phrase, the `javascript:` URL check, the occurrence pass, and `glossaryIsCurrent` ([glossary.md](glossary.md)) |
 | [`tests/tweets.test.ts`](../../tests/tweets.test.ts) | stage 5c's deterministic halves — counting a post's characters, the artefact shape, how many posts to ask for, and **`threadIsCurrent`**, the first step freshness check in the repo ([tweet-thread-page.md](../plans/tweet-thread-page.md)) |
+| [`tests/chat.test.ts`](../../tests/chat.test.ts) | chat's checkable arithmetic — what a conversation gets called, which whole turns go back to the model, which cited block ids are real, and what a **retry** and an **edit** are allowed to do to a stored conversation ([chat-mode.md](../plans/chat-mode.md)) |
+| [`tests/converse-stop.test.ts`](../../tests/converse-stop.test.ts) | that pressing **stop** ends in a `done` and never in a throw — through `converse` with a stubbed `fetch`, on all three ways the stream can end. It goes through `converse` rather than building the message row by hand because [a test that built the row by hand](../plans/chat-mode.md#the-second-review-and-what-it-found) passed while the code did the opposite |
+| [`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) | that nothing under `src/web/` can reach a server module — a rule with a bundle-size measurement behind it, not a preference |
+| [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) | that the **cached prompt prefix is the same bytes** whatever is being asked — across two questions, two selections, two reading positions and a growing conversation — and that `←READER IS HERE` never gets back into the article body, which is what made explain uncacheable for its whole life. It cannot prove anything is *cached*; only [`evals/prompt-caching.ts`](../../evals/prompt-caching.ts) can ([prompt-caching.md](prompt-caching.md)) |
 | [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts) | every reference to a doc resolves — **file and anchor**, in source comments as well as markdown |
 
 The validator has two test files on purpose. Structural failures exit non-zero because a broken
@@ -214,6 +219,33 @@ render test rather than a UI test is what keeps the difference visible.
 Worth it here because the thing being checked is a **silence**: the summary panel falls back down
 the length ladder when a rung is missing, and the mark saying so is the only difference between a
 fallback and a section the model had less to say about ([summaries.md](summaries.md)).
+
+## Evals are not tests, and live in their own folder
+
+[`evals/`](../../evals) holds things that call a model. They cost money, take minutes, and give a
+slightly different answer each time, so they are run **by hand** when a decision needs them and are
+not part of `npm run test`. Their results are committed under `evals/results/`, which is the point:
+the next change gets compared against a number rather than against somebody's memory of last week.
+
+The first one, [`evals/toc-labels.ts`](../../evals/toc-labels.ts), exists because the label split
+([toc-scaling.md](../plans/toc-scaling.md)) makes a claim no deterministic test can check — that
+labels written in separate parallel calls are as good as ones written in a single pass. It measures
+coverage, length, template repetition, vocabulary retention, and the seam test, over artefacts that
+already exist, so the eval itself calls nothing and is cheap to re-run.
+
+It earned its keep on the first run: vocabulary retention caught the batch prompt turning the
+author's "technorati" into "technologists", which every other check was happy with.
+
+Two habits it made explicit and worth carrying to the next eval:
+
+- **A verdict line is read as a conclusion, so do not print one until there is something to
+  conclude.** The first version announced "seams look worse" off eight pairs differing by half a
+  percentage point. It now says how few there are instead.
+- **Keep the incumbent.** The previous whole-pass trees were the only baseline available, and they
+  only existed because they were on disk before the change ran. Snapshot before you overwrite.
+
+`evals/` is typechecked by the root `tsconfig.json` — it runs the same way the pipeline stages do.
+The typecheck guard ([typechecking.md](typechecking.md)) is what noticed it belonged to no project.
 
 ## A known limit, pinned by a test
 

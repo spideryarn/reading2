@@ -50,6 +50,31 @@ export interface ChatApi {
      */
     onThreadId?: (id: string) => void,
   ): string;
+  /**
+   * Answer the same question again, replacing the answer in place.
+   *
+   * Only the last answer in a thread — the server refuses anything else with a
+   * 409, and the panel only offers the button there. See `retryTurn` in
+   * src/chat.ts for why a conversation with a rewritten middle is worse than
+   * one you cannot rewrite.
+   */
+  retry(threadId: string, messageId: string): void;
+  /**
+   * Rewrite one of the reader's questions and ask it again.
+   *
+   * **Discards every turn after it.** `discardedAfter` below is how the panel
+   * says so before the reader commits.
+   */
+  edit(threadId: string, messageId: string, question: string, at: string | null): void;
+  /**
+   * Stop an answer that is still arriving. What has already appeared is kept.
+   *
+   * Needs the *server's* id for the message, which arrives in the `begin`
+   * frame — so a stop pressed in the moment before that is remembered and sent
+   * as soon as there is an id to send it with, rather than posting an id the
+   * server has never heard of and quietly doing nothing.
+   */
+  stop(threadId: string, messageId: string): void;
   /** Start an empty conversation locally. Nothing is stored until you send. */
   begin(): string;
   rename(threadId: string, title: string): void;
@@ -132,14 +157,94 @@ export function useChat(slug: string): ChatApi {
     return id;
   }, []);
 
-  const send = useCallback(
+  /**
+   * Ids of assistant rows the reader pressed stop on before the server had
+   * named them.
+   *
+   * The `begin` frame is what tells the client the real message id, and it is
+   * the only id `/stop` will accept. It arrives fast — it is written before the
+   * model is called — but "fast" is not "first", and a stop that lands in that
+   * window used to post a provisional id, get `{stopped: false}`, and stop
+   * nothing while the button reported that it had. So the wish is written down
+   * here and honoured the moment there is an id for it.
+   */
+  const stopWanted = useRef(new Set<string>());
+
+  /**
+   * Ask the server to stop one answer.
+   *
+   * The reply is `{ stopped }`, and `false` is not a failure — it means the
+   * answer had already finished, or another tab got there first. Only a
+   * transport failure or a non-2xx is worth telling the reader about, and it is
+   * told rather than swallowed: a stop button that silently does nothing is the
+   * exact shape docs/reusable/silent-success.md is about.
+   */
+  const askToStop = useCallback(
+    async (threadId: string, messageId: string) => {
+      try {
+        const r = await fetch(
+          `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/stop`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messageId }),
+          },
+        );
+        if (!r.ok) {
+          const body = (await r.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error ?? r.statusText);
+        }
+      } catch (e) {
+        setError(`Couldn't stop that answer: ${describeFetchFailure(e as Error)}`);
+      }
+    },
+    [slug],
+  );
+
+  /**
+   * The reader pressed stop.
+   *
+   * The wish is recorded *before* the request goes out, so that a stop landing
+   * in the window before the `begin` frame is not lost — see `stopWanted`. The
+   * row is not touched here: the server answers the still-open stream with a
+   * `done` frame carrying whatever had arrived, and letting that frame be the
+   * one thing that ends a turn is what keeps the screen and the file agreeing.
+   */
+  const stop = useCallback(
+    (threadId: string, messageId: string) => {
+      stopWanted.current.add(messageId);
+      void askToStop(threadId, messageId);
+    },
+    [askToStop],
+  );
+
+  /**
+   * Open the stream, and keep one assistant row in step with it.
+   *
+   * All three of `send`, `retry` and `edit` end up here, because from the
+   * moment the POST leaves they are the same thing: a body, one row to write
+   * the arriving words into, and the four ways it can end. What differs is only
+   * what the caller put on screen first and what it puts in `payload`.
+   */
+  const run = useCallback(
     (
-      threadId: string | null,
-      question: string,
-      at: string | null,
+      threadId: string,
+      payload: Record<string, unknown>,
+      /** The row the words land in. Provisional until the `begin` frame. */
+      replyId: string,
       onThreadId?: (id: string) => void,
-    ): string => {
-      const id = threadId ?? mintId();
+    ): void => {
+      const id = threadId;
+      /* Cleared on the way in as well as on the way out.
+
+         A stop that fires *after* a run's `finally` — the reader clicks in the
+         frame between the last token and the row repainting as `done` — leaves
+         its wish in the set with nothing left to consume it. Harmless on its
+         own, and not harmless at all once `retryTurn` started reusing the
+         message id: the retry's `begin` frame would find the stale wish, stop
+         the new answer before its first token, and leave a retry button that
+         looks broken. Found in review, 2026-08-26. */
+      stopWanted.current.delete(replyId);
       /* The id this send is writing into, which is NOT necessarily `id`.
          `beginTurn` on the server may overrule a thread id it cannot accept, and
          every patch after that has to follow it. A `let` closed over by
@@ -147,28 +252,12 @@ export function useChat(slug: string): ChatApi {
          sites — and it must not be `id` itself, because the optimistic rows
          above were inserted under that one. */
       let current = id;
-      const now = new Date().toISOString();
-      const userId = mintId();
-      const pendingId = mintId();
-
-      /* Both rows go in optimistically, before the request leaves. The reader's
-         own words appearing the instant they press Enter is the difference
-         between a composer that feels attached to anything and one that does
-         not — and the empty assistant row beneath is what the arriving text
-         streams into.
-
-         Their ids are provisional: the server mints its own and says so in the
-         `begin` frame, and the ids are swapped there. Nothing renders from an
-         id except React's `key`, so the swap costs one re-render of two rows. */
-      setThreads((prev) => {
-        const user: ChatMessage = { id: userId, role: "user", text: question, createdAt: now, status: "done" };
-        const reply: ChatMessage = { id: pendingId, role: "assistant", text: "", createdAt: now, status: "pending" };
-        const existing = prev.find((t) => t.id === id);
-        const thread: ChatThread = existing
-          ? { ...existing, updatedAt: now, messages: [...existing.messages, user, reply] }
-          : { id, title: question.slice(0, 60), createdAt: now, updatedAt: now, messages: [user, reply] };
-        return existing ? prev.map((t) => (t.id === id ? thread : t)) : [...prev, thread];
-      });
+      /* And the same for the *message* id, which used not to be followed at all:
+         the `begin` frame carried one and the client kept its own, so the two
+         disagreed until the next reload. Nothing rendered from it, so nothing
+         showed — until `stop` needed to name the row it wanted stopped, and
+         found the only name it had was one the server had never heard of. */
+      let pendingId = replyId;
 
       /** Rewrite the assistant row this send is responsible for. */
       const patchReply = (patch: Partial<ChatMessage>) =>
@@ -182,7 +271,7 @@ export function useChat(slug: string): ChatApi {
           const response = await fetch(`/api/chat/${encodeURIComponent(slug)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ threadId: id, question, at }),
+            body: JSON.stringify({ threadId: id, ...payload }),
           });
           if (!response.ok || !response.body) {
             // A failure *before* the stream starts is ordinary JSON — a bad
@@ -209,9 +298,15 @@ export function useChat(slug: string): ChatApi {
                         ...t,
                         id: begun.threadId,
                         title: t.messages.length <= 2 ? begun.title : t.title,
+                        messages: t.messages.map((m) =>
+                          m.id === pendingId ? { ...m, id: begun.messageId } : m,
+                        ),
                       },
                 ),
               );
+              const wanted =
+                stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
+              pendingId = begun.messageId;
               if (begun.threadId !== current) {
                 current = begun.threadId;
                 // The URL is pointing at an id the server did not accept. Tell
@@ -219,6 +314,9 @@ export function useChat(slug: string): ChatApi {
                 // conversation that does not exist.
                 onThreadId?.(begun.threadId);
               }
+              // A stop pressed before this frame arrived. Now there is an id
+              // for it, so it happens rather than being dropped on the floor.
+              if (wanted) void askToStop(current, pendingId);
               continue;
             }
             if (event.name === "delta") {
@@ -227,8 +325,18 @@ export function useChat(slug: string): ChatApi {
               continue;
             }
             if (event.name === "done") {
-              const done = event.data as { text: string; citations: Citation[]; searches: number; model: string };
-              patchReply({ ...done, status: "done" });
+              const done = event.data as {
+                text: string;
+                citations: Citation[];
+                searches: number;
+                model: string;
+                stopped?: boolean;
+              };
+              /* `stopped: false` explicitly, not left off. This row may be a
+                 retry of one that *was* stopped, and a patch that omits the
+                 field leaves the old `true` sitting under new text — a complete
+                 answer wearing "Stopped" underneath it. */
+              patchReply({ stopped: false, ...done, status: "done" });
               finished = true;
               continue;
             }
@@ -258,12 +366,115 @@ export function useChat(slug: string): ChatApi {
           }
         } catch (e) {
           patchReply({ status: "error", error: describeFetchFailure(e as Error) });
+        } finally {
+          // Whatever happened, nobody is waiting to stop this any more.
+          stopWanted.current.delete(replyId);
+          stopWanted.current.delete(pendingId);
         }
       })();
+    },
+    [slug, put, askToStop],
+  );
 
+  const send = useCallback(
+    (
+      threadId: string | null,
+      question: string,
+      at: string | null,
+      onThreadId?: (id: string) => void,
+    ): string => {
+      const id = threadId ?? mintId();
+      const now = new Date().toISOString();
+      const pendingId = mintId();
+
+      /* Both rows go in optimistically, before the request leaves. The reader's
+         own words appearing the instant they press Enter is the difference
+         between a composer that feels attached to anything and one that does
+         not — and the empty assistant row beneath is what the arriving text
+         streams into.
+
+         Their ids are provisional: the server mints its own and says so in the
+         `begin` frame, and the ids are swapped there. */
+      setThreads((prev) => {
+        const user: ChatMessage = {
+          id: mintId(),
+          role: "user",
+          text: question,
+          createdAt: now,
+          status: "done",
+        };
+        const reply: ChatMessage = {
+          id: pendingId,
+          role: "assistant",
+          text: "",
+          createdAt: now,
+          status: "pending",
+        };
+        const existing = prev.find((t) => t.id === id);
+        const thread: ChatThread = existing
+          ? { ...existing, updatedAt: now, messages: [...existing.messages, user, reply] }
+          : { id, title: question.slice(0, 60), createdAt: now, updatedAt: now, messages: [user, reply] };
+        return existing ? prev.map((t) => (t.id === id ? thread : t)) : [...prev, thread];
+      });
+
+      run(id, { question, at }, pendingId, onThreadId);
       return id;
     },
-    [slug, put],
+    [run],
+  );
+
+  const retry = useCallback(
+    (threadId: string, messageId: string) => {
+      /* Blanked field by field, for the same reason `retryTurn` rebuilds the
+         stored row rather than spreading it: `citations`, `searches` and the
+         old `error` all belong to the answer being replaced, and any one of
+         them left behind sits under text that never mentioned it. */
+      put(threadId, (t) => ({
+        ...t,
+        messages: t.messages.map((m) =>
+          m.id === messageId
+            ? {
+                id: m.id,
+                role: m.role,
+                text: "",
+                createdAt: new Date().toISOString(),
+                status: "pending" as const,
+              }
+            : m,
+        ),
+      }));
+      // No `at`: a retry re-asks the stored question, and where the reader has
+      // scrolled to since is not part of it.
+      run(threadId, { retry: messageId }, messageId);
+    },
+    [put, run],
+  );
+
+  const edit = useCallback(
+    (threadId: string, messageId: string, question: string, at: string | null) => {
+      const now = new Date().toISOString();
+      const pendingId = mintId();
+      put(threadId, (t) => {
+        const index = t.messages.findIndex((m) => m.id === messageId);
+        if (index < 0) return t;
+        const target = t.messages[index];
+        if (!target) return t;
+        return {
+          ...t,
+          // The same rule the server applies in `editTurn`: the first question
+          // names the thread, so rewriting it renames the thread.
+          title: index === 0 ? question.slice(0, 60) : t.title,
+          updatedAt: now,
+          messages: [
+            ...t.messages.slice(0, index),
+            { ...target, text: question, editedAt: now },
+            { id: pendingId, role: "assistant" as const, text: "", createdAt: now, status: "pending" as const },
+          ],
+        };
+      });
+      run(threadId, { edit: messageId, question, at }, pendingId);
+    },
+    [put, run],
   );
 
   /**
@@ -323,7 +534,7 @@ export function useChat(slug: string): ChatApi {
     [write],
   );
 
-  return { threads, loaded, send, begin, rename, remove, error };
+  return { threads, loaded, send, retry, edit, stop, begin, rename, remove, error };
 }
 
 interface ServerEvent {

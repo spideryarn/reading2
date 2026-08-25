@@ -395,7 +395,19 @@ function Conversation({
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
   useEffect(() => {
     const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (stick.current) el.scrollTop = el.scrollHeight;
+    /* And this half **only ever clears**, which is the whole discipline.
+       Content growing must never decide the reader has scrolled away — that was
+       the bug the note above describes. But content *shrinking* can strand a
+       "Latest" button pointing at a bottom already on screen, and no scroll
+       event need fire to say so: an edit that discards three turns can leave a
+       transcript shorter than the panel, with nothing to scroll to and a pill
+       offering to take you there. Seen in a browser pass, 2026-08-26. */
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 60) {
+      stick.current = true;
+      setAway(false);
+    }
   }, [chars, thread.messages.length]);
 
   const toBottom = () => {

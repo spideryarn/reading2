@@ -368,6 +368,53 @@ export class ChatConflict extends Error {
  * retry may touch says why we are not buying that for a four-turn conversation
  * in a 400px panel. Retry the last one, or edit the question.
  */
+export function withRetry(
+  threads: ChatThread[],
+  threadId: string,
+  messageId: string,
+  at: string,
+): { threads: ChatThread[]; thread: ChatThread; reply: ChatMessage; question: string } {
+  const existing = threads.find((t) => t.id === threadId);
+  if (!existing) throw new ChatConflict("That conversation is not there any more.");
+  const last = existing.messages.at(-1);
+  if (!last || last.id !== messageId) {
+    throw new ChatConflict("Only the most recent answer can be retried.");
+  }
+  if (last.role !== "assistant") throw new ChatConflict("That is not an answer.");
+  if (last.status === "pending") {
+    // The route settles a live stream before it gets here, so reaching this
+    // means somebody's client is a step behind — a second tab, a double press.
+    throw new ChatConflict("That answer is still arriving.");
+  }
+  const question = existing.messages.at(-2);
+  if (question?.role !== "user") {
+    throw new ChatConflict("That answer has no question above it.");
+  }
+  /* Rebuilt field by field rather than spread-and-overwrite. A spread would
+     carry `citations`, `searches`, `model`, `error` and `stopped` from the
+     attempt being replaced, and the ones the new answer does not set would
+     survive it — a retry that runs no web search would keep the old answer's
+     sources, sitting under text that never mentions them. */
+  const reply: ChatMessage = {
+    id: last.id,
+    role: "assistant",
+    text: "",
+    createdAt: at,
+    status: "pending",
+  };
+  const thread: ChatThread = {
+    ...existing,
+    updatedAt: at,
+    messages: [...existing.messages.slice(0, -1), reply],
+  };
+  return {
+    threads: threads.map((t) => (t.id === thread.id ? thread : t)),
+    thread,
+    reply,
+    question: question.text,
+  };
+}
+
 export async function retryTurn(
   slug: string,
   threadId: string,
@@ -376,37 +423,9 @@ export async function retryTurn(
 ): Promise<{ thread: ChatThread; reply: ChatMessage; question: string }> {
   let out!: { thread: ChatThread; reply: ChatMessage; question: string };
   await update(slug, (threads) => {
-    const at = now();
-    const existing = threads.find((t) => t.id === threadId);
-    if (!existing) throw new ChatConflict("That conversation is not there any more.");
-    const last = existing.messages.at(-1);
-    if (!last || last.id !== messageId) {
-      throw new ChatConflict("Only the most recent answer can be retried.");
-    }
-    if (last.role !== "assistant") throw new ChatConflict("That is not an answer.");
-    const question = existing.messages.at(-2);
-    if (!question || question.role !== "user") {
-      throw new ChatConflict("That answer has no question above it.");
-    }
-    /* Rebuilt field by field rather than spread-and-overwrite. A spread would
-       carry `citations`, `searches`, `model`, `error` and `stopped` from the
-       attempt being replaced, and the ones the new answer does not set would
-       survive it — a retry that runs no web search would keep the old answer's
-       sources, sitting under text that never mentions them. */
-    const reply: ChatMessage = {
-      id: last.id,
-      role: "assistant",
-      text: "",
-      createdAt: at,
-      status: "pending",
-    };
-    const thread: ChatThread = {
-      ...existing,
-      updatedAt: at,
-      messages: [...existing.messages.slice(0, -1), reply],
-    };
-    out = { thread, reply, question: question.text };
-    return threads.map((t) => (t.id === thread.id ? thread : t));
+    const next = withRetry(threads, threadId, messageId, now());
+    out = { thread: next.thread, reply: next.reply, question: next.question };
+    return next.threads;
   });
   log("store").info(
     { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
@@ -437,6 +456,68 @@ export async function retryTurn(
  * which is what stops a reader reading an answer that no longer matches the
  * question above it and thinking the model wandered.
  */
+export function withEdit(
+  threads: ChatThread[],
+  threadId: string,
+  messageId: string,
+  question: string,
+  at: string,
+): {
+  threads: ChatThread[];
+  thread: ChatThread;
+  user: ChatMessage;
+  reply: ChatMessage;
+  discarded: number;
+} {
+  const existing = threads.find((t) => t.id === threadId);
+  if (!existing) throw new ChatConflict("That conversation is not there any more.");
+  const index = existing.messages.findIndex((m) => m.id === messageId);
+  if (index < 0) throw new ChatConflict("That message is not in this conversation.");
+  const target = existing.messages[index];
+  if (target?.role !== "user") throw new ChatConflict("Only your own questions can be edited.");
+  const user: ChatMessage = { ...target, text: question, editedAt: at };
+  const reply: ChatMessage = {
+    /* Minted against **every** id in the file, including the ones this edit is
+       about to discard.
+
+       Minting against only the survivors would be tidier, and the reason not to
+       is a late write landing on a reused id: `finishTurn` finds its row by id
+       and nothing else, so a stream still finishing would put a stopped
+       half-sentence under a question nobody asked.
+
+       Be exact about how much this buys, because the obvious version of the
+       claim is too strong. *In this process* the route already awaits
+       `settleThread` before it gets here, so no aborted write can be in flight
+       — that path is closed twice over. What is left is the second server on
+       the same `data/` directory, which cannot see this one's `streaming` map
+       at all; that is the unfixed problem in docs/plans/chat-mode.md § What was
+       deliberately not fixed, and this is one of the few places it is cheap to
+       be robust against. Note also that the guarantee is only within one call:
+       a discarded id leaves the file, so the *next* mint may hand it back. Ids
+       are cheap, and this is the narrow win it is rather than a rule. */
+    id: mintUniqueId(taken(threads)),
+    role: "assistant",
+    text: "",
+    createdAt: at,
+    status: "pending",
+  };
+  const thread: ChatThread = {
+    ...existing,
+    // The first question names the thread, so rewriting the first question
+    // renames it. Rewriting a later one does not — same rule as `beginTurn`.
+    title: index === 0 ? titleFrom(question) : existing.title,
+    updatedAt: at,
+    messages: [...existing.messages.slice(0, index), user, reply],
+  };
+  return {
+    threads: threads.map((t) => (t.id === thread.id ? thread : t)),
+    thread,
+    user,
+    reply,
+    discarded: existing.messages.length - index - 1,
+  };
+}
+
 export async function editTurn(
   slug: string,
   threadId: string,
@@ -446,33 +527,9 @@ export async function editTurn(
 ): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage; discarded: number }> {
   let out!: { thread: ChatThread; user: ChatMessage; reply: ChatMessage; discarded: number };
   await update(slug, (threads) => {
-    const at = now();
-    const existing = threads.find((t) => t.id === threadId);
-    if (!existing) throw new ChatConflict("That conversation is not there any more.");
-    const index = existing.messages.findIndex((m) => m.id === messageId);
-    if (index < 0) throw new ChatConflict("That message is not in this conversation.");
-    const target = existing.messages[index];
-    if (target?.role !== "user") throw new ChatConflict("Only your own questions can be edited.");
-    const user: ChatMessage = { ...target, text: question, editedAt: at };
-    const reply: ChatMessage = {
-      // Minted against the ids that SURVIVE the edit, not against the ones
-      // being discarded — an id freed by the truncation is free.
-      id: mintUniqueId(taken(threads.map((t) => (t.id === threadId ? { ...t, messages: existing.messages.slice(0, index) } : t)))),
-      role: "assistant",
-      text: "",
-      createdAt: at,
-      status: "pending",
-    };
-    const thread: ChatThread = {
-      ...existing,
-      // The first question names the thread, so rewriting the first question
-      // renames it. Rewriting a later one does not — same rule as `beginTurn`.
-      title: index === 0 ? titleFrom(question) : existing.title,
-      updatedAt: at,
-      messages: [...existing.messages.slice(0, index), user, reply],
-    };
-    out = { thread, user, reply, discarded: existing.messages.length - index - 1 };
-    return threads.map((t) => (t.id === thread.id ? thread : t));
+    const next = withEdit(threads, threadId, messageId, question, now());
+    out = { thread: next.thread, user: next.user, reply: next.reply, discarded: next.discarded };
+    return next.threads;
   });
   log("store").info(
     {

@@ -383,8 +383,27 @@ not feel like input: **strings a language model produced, rendered as markup.**
 
 Everything the model writes in this app is rendered as **text**, deliberately — chat answers, gists,
 arc sentences, tweet posts, glossary entries. No `dangerouslySetInnerHTML` anywhere near any of them,
-and the prompts say plain prose partly for that reason. There is exactly one exception, and it is the
-one to watch:
+and the prompts say plain prose partly for that reason. There are **two** exceptions, and they are
+the ones to watch.
+
+This paragraph used to say "exactly one", and it was wrong for a day: chat quietly made it two when
+the web-search citations landed, and the sentence sat here reassuring anyone who read it. That is
+the failure mode a security doc has — it does not get compared against the code unless somebody
+thinks to.
+
+**`Citation.url` becomes an `href`** — the web pages a chat answer cites, rendered as a source list
+under the answer ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)). Allowlisted by `isWebUrl` in
+[`src/urls.ts`](../../src/urls.ts), and allowlisted **twice**: once in
+[`src/converse.ts`](../../src/converse.ts) before the URL is stored, and again in the panel before it
+is rendered. The repetition is deliberate — `chat.json` is a file on disk that predates the check and
+can be hand-edited, and the render is the boundary that actually matters.
+
+`isWebUrl` also has to *parse*, not only allow, and that is the second half of its job: the panel
+calls `new URL()` again to show a hostname when a citation has no title, and `new URL()` **throws**
+rather than returning null. One malformed citation used to take the whole chat panel down mid-render.
+
+`src/urls.ts` is a module of its own with no imports at all, because both halves of the app need it
+and neither may import the other — see [`tests/client-imports.test.ts`](../../tests/client-imports.test.ts).
 
 **`GlossaryEntry.url` becomes an `href`.** A model may return `javascript:alert(1)` there — not
 maliciously, but because a page it half-remembers had one, or because the article it just read

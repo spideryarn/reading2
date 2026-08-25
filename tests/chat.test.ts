@@ -10,13 +10,13 @@
  * See docs/plans/chat-mode.md.
  */
 import { describe, expect, it } from "vitest";
-import { titleFrom } from "../src/chat.js";
+import { ChatConflict, titleFrom, withEdit, withRetry } from "../src/chat.js";
 import { nextModeIndex } from "../src/web/Dock.js";
 import { recentHistory, unknownCitedIds } from "../src/converse.js";
 import { snippet, splitCitations, splitEmphasis, unknownIds } from "../src/web/citations.js";
 import { SUGGESTIONS } from "../src/web/ChatPanel.js";
 import { fitView, MODE_IDEAL, MODE_MIN } from "../src/web/layout.js";
-import type { ChatMessage } from "../src/types.js";
+import type { ChatMessage, ChatThread } from "../src/types.js";
 
 const message = (over: Partial<ChatMessage>): ChatMessage => ({
   id: "spya-k3m9qt",
@@ -510,5 +510,192 @@ describe("the chat suggestions", () => {
       // so it has to stand on its own in the transcript.
       expect(s.ask.length).toBeGreaterThan(s.label.length);
     }
+  });
+});
+
+/* ------------------------------------------------- retrying and editing ----
+   The two things that rewrite a stored conversation rather than adding to it,
+   which is what makes them worth testing at all: everything else in this file
+   appends, and an append cannot lose anything.
+
+   `withRetry` and `withEdit` are the whole decision, extracted from the async
+   `retryTurn`/`editTurn` around them so that the rules can be checked without a
+   `data/` directory to write into. That extraction is not only for testing —
+   two tests in this repo that both wrote to `data/` passed alone and failed
+   together, because vitest runs files in parallel. */
+
+const thread = (messages: ChatMessage[]): ChatThread => ({
+  id: "spya-t7r4wz",
+  title: "why is it like that?",
+  createdAt: "2026-08-26T00:00:00.000Z",
+  updatedAt: "2026-08-26T00:00:00.000Z",
+  messages,
+});
+
+/** A finished four-message conversation: ask, answer, ask, answer. */
+const conversation = (): ChatThread =>
+  thread([
+    message({ id: "u1", role: "user", text: "why is it like that?" }),
+    message({ id: "a1", role: "assistant", text: "because [spya-k3m9qt].", model: "m" }),
+    message({ id: "u2", role: "user", text: "and the other one?" }),
+    message({
+      id: "a2",
+      role: "assistant",
+      text: "that one is different.",
+      citations: [{ url: "https://example.com" }],
+      searches: 1,
+      model: "m",
+    }),
+  ]);
+
+const NOW = "2026-08-26T12:00:00.000Z";
+
+describe("withRetry — answering the same question again", () => {
+  it("blanks the answer in place, keeping its id", () => {
+    const before = conversation();
+    const { thread: after, reply, question } = withRetry([before], before.id, "a2", NOW);
+    expect(after.messages).toHaveLength(4);
+    expect(reply.id).toBe("a2");
+    expect(reply.status).toBe("pending");
+    expect(reply.text).toBe("");
+    // The question comes off the stored row, not from the caller — a stale tab
+    // must not be able to store an answer under a question it was not asked.
+    expect(question).toBe("and the other one?");
+  });
+
+  it("drops everything the replaced answer carried", () => {
+    const before = conversation();
+    const { reply } = withRetry([before], before.id, "a2", NOW);
+    /* The bug this pins is a spread: `{...last, text: "", status: "pending"}`
+       type-checks, reads as obviously right, and leaves the old answer's web
+       sources sitting under text that never mentions them. */
+    expect(reply.citations).toBeUndefined();
+    expect(reply.searches).toBeUndefined();
+    expect(reply.model).toBeUndefined();
+  });
+
+  it("refuses anything but the last answer", () => {
+    const before = conversation();
+    expect(() => withRetry([before], before.id, "a1", NOW)).toThrow(ChatConflict);
+  });
+
+  it("refuses a question, an unknown id, and an unknown thread", () => {
+    const before = conversation();
+    expect(() => withRetry([before], before.id, "u2", NOW)).toThrow(ChatConflict);
+    expect(() => withRetry([before], before.id, "nope", NOW)).toThrow(ChatConflict);
+    expect(() => withRetry([before], "spya-zzzzzz", "a2", NOW)).toThrow(ChatConflict);
+  });
+
+  it("refuses an answer that is still arriving", () => {
+    const live = thread([
+      message({ id: "u1", role: "user" }),
+      message({ id: "a1", role: "assistant", text: "half a", status: "pending" }),
+    ]);
+    expect(() => withRetry([live], live.id, "a1", NOW)).toThrow(ChatConflict);
+  });
+
+  it("retries a failed answer, which is the case it was asked for", () => {
+    const failed = thread([
+      message({ id: "u1", role: "user" }),
+      message({ id: "a1", role: "assistant", text: "", status: "error", error: "timed out" }),
+    ]);
+    const { reply } = withRetry([failed], failed.id, "a1", NOW);
+    expect(reply.status).toBe("pending");
+    expect(reply.error).toBeUndefined();
+  });
+
+  it("leaves the other conversations alone", () => {
+    const other = { ...conversation(), id: "spya-p7w2dn" };
+    const mine = conversation();
+    const { threads } = withRetry([other, mine], mine.id, "a2", NOW);
+    expect(threads[0]).toBe(other);
+  });
+});
+
+describe("withEdit — rewriting a question", () => {
+  it("discards everything after the edited question", () => {
+    const before = conversation();
+    const { thread: after, discarded } = withEdit([before], before.id, "u1", "actually, why NOT?", NOW);
+    // ask, answer, ask, answer → the rewritten ask, and one pending answer.
+    expect(after.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(after.messages[0]?.text).toBe("actually, why NOT?");
+    expect(after.messages[1]?.status).toBe("pending");
+    // Three: the answer it had, and the whole turn that followed.
+    expect(discarded).toBe(3);
+  });
+
+  it("marks the question as edited, and does not keep the old words", () => {
+    const before = conversation();
+    const { user } = withEdit([before], before.id, "u1", "rephrased", NOW);
+    expect(user.editedAt).toBe(NOW);
+    expect(JSON.stringify(user)).not.toContain("why is it like that?");
+  });
+
+  it("renames the thread only when the FIRST question changes", () => {
+    const before = conversation();
+    expect(withEdit([before], before.id, "u1", "a whole new subject", NOW).thread.title).toBe(
+      "a whole new subject",
+    );
+    expect(withEdit([before], before.id, "u2", "a whole new subject", NOW).thread.title).toBe(
+      before.title,
+    );
+  });
+
+  it("discards nothing when the last question is the one edited", () => {
+    const before = thread([
+      message({ id: "u1", role: "user" }),
+      message({ id: "a1", role: "assistant", text: "an answer" }),
+      message({ id: "u2", role: "user", text: "one more" }),
+    ]);
+    const { discarded, thread: after } = withEdit([before], before.id, "u2", "one more, but better", NOW);
+    expect(discarded).toBe(0);
+    expect(after.messages).toHaveLength(4);
+  });
+
+  it("never reuses an id it just discarded", () => {
+    const before = conversation();
+    const { reply } = withEdit([before], before.id, "u1", "rephrased", NOW);
+    /* The tempting optimisation is to mint against the surviving ids, which
+       frees `a1`, `u2` and `a2`. A stream still finishing its write finds its
+       row by id, so handing one straight back puts a stopped half-sentence
+       under a question nobody asked. Within one process the route's
+       `settleThread` already rules that out; this covers the second server,
+       which cannot see the first one's streams. And it holds within one call
+       only — a discarded id leaves the file and the next mint may reuse it. */
+    expect(["u1", "a1", "u2", "a2"]).not.toContain(reply.id);
+  });
+
+  it("refuses to edit an answer, an unknown message, or an unknown thread", () => {
+    const before = conversation();
+    expect(() => withEdit([before], before.id, "a1", "x", NOW)).toThrow(ChatConflict);
+    expect(() => withEdit([before], before.id, "nope", "x", NOW)).toThrow(ChatConflict);
+    expect(() => withEdit([before], "spya-zzzzzz", "u1", "x", NOW)).toThrow(ChatConflict);
+  });
+});
+
+describe("a stopped answer is not a failed one", () => {
+  it("still counts as history the model should see", () => {
+    /* The check that matters: `recentHistory` keeps whole turns whose answer is
+       `done` and non-empty. A stopped answer IS done — the reader ended it, the
+       model did say those words — so pretending it never happened would have
+       the conversation contradict itself one turn later. */
+    const history = recentHistory([
+      message({ id: "u1", role: "user", text: "why?" }),
+      message({ id: "a1", role: "assistant", text: "because it was", stopped: true }),
+    ]);
+    expect(history.map((m) => m.id)).toEqual(["u1", "a1"]);
+  });
+
+  it("is dropped when it was stopped before a word arrived", () => {
+    /* A stop that lands before the first token is stored `done`, `stopped`, with
+       zero characters — not as an error, because nothing failed. Which means
+       `recentHistory` is the only thing standing between that row and a turn
+       being sent to the model in which it said nothing at all. It drops it on
+       the empty text, and this test is what keeps that true. */
+    const history = recentHistory([
+      message({ id: "u1", role: "user", text: "why?" }),
+      message({ id: "a1", role: "assistant", text: "", status: "done", stopped: true }),
+    ]);
+    expect(history).toEqual([]);
   });
 });

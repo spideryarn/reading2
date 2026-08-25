@@ -51,6 +51,12 @@ import { ID_PATTERN } from "./ids.js";
 import { errorFields, log, since } from "./log.js";
 import { OPENROUTER_MODEL } from "./models.js";
 import { isWebUrl } from "./urls.js";
+import {
+  type OpenRouterMessage,
+  articleWithIds,
+  readerPositionLine,
+  underCacheFloor,
+} from "./article-prompt.js";
 
 /** Overridable with `SPIDERYARN_CHAT_MODEL`; the default is app-wide. */
 export const DEFAULT_MODEL = OPENROUTER_MODEL;
@@ -169,28 +175,63 @@ export type ConverseEvent =
       model: string;
       /** Block ids the model cited that this article does not have. */
       unknownIds: string[];
+      /**
+       * The caller's `signal` fired, so this answer is whatever had arrived.
+       *
+       * **A stop is a `done`, not a throw**, and that is the decision this
+       * field records. Aborting the fetch does make the loop below throw, and
+       * the obvious handling — let it out, let the route store an `error` —
+       * would file the reader's own deliberate act as a failure: a red row, an
+       * apology, an offer to try again, for a button they pressed on purpose.
+       * So a stop is caught here, told apart from the deadline and the stall by
+       * which signal aborted, and finished normally with a flag on it.
+       */
+      stopped: boolean;
     };
 
 /**
- * The article as a numbered block list, with the reader's position called out.
+ * The messages a chat turn will send, as a value a test can inspect.
  *
- * Same shape as explain.ts's, deliberately — one article rendering the model
- * has to learn, not two. The marker differs because the anchor differs: there,
- * the reader had selected a passage; here, they are simply somewhere.
+ * **The article message is the same bytes for every turn and every scroll
+ * position.** It used to carry `←READER IS HERE` inside the body, so a reader
+ * who moved to a new section paid for the whole article again — on a call they
+ * were sitting and waiting for. Where the reader is now rides with the
+ * question, in the final user message.
+ *
+ * That placement is deliberate and load-bearing. `recentHistory` is a sliding
+ * window (`HISTORY_TURNS`), so once a conversation passes twenty turns the
+ * oldest pair drops off and every later message shifts — which moves the bytes
+ * after the article. The article message itself sits *before* all of that and
+ * is untouched by it, so the cached prefix survives a long conversation even
+ * though the tail does not. Putting the position line in the article message
+ * would have thrown that away for nothing.
  */
-function renderArticle(meta: Meta, blocks: Block[], at?: string): string {
-  const body = blocks
-    .map((b, i) => `[${i}]${b.id === at ? " ←READER IS HERE" : ""} ${b.id}: ${b.text}`)
-    .join("\n\n");
-  const head = [
-    `TITLE: ${meta.title}`,
-    meta.byline ? `BY: ${meta.byline}` : null,
-    meta.siteName ? `PUBLISHED IN: ${meta.siteName}` : null,
-    meta.url ? `URL: ${meta.url}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-  return `${head}\n\n---\n\n${body}`;
+export function buildConverseMessages(opts: {
+  meta: Meta;
+  blocks: Block[];
+  history: ChatMessage[];
+  question: string;
+  at?: string;
+}): OpenRouterMessage[] {
+  const position = readerPositionLine(opts.at);
+  return [
+    { role: "system", content: SYSTEM },
+    {
+      role: "user",
+      content: `Here is the whole article. Keep it in mind for everything I ask.
+
+${articleWithIds(opts.meta, opts.blocks)}`,
+    },
+    { role: "assistant", content: "Read it. What would you like to know?" },
+    ...recentHistory(opts.history).map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.text,
+    })),
+    {
+      role: "user",
+      content: position ? `${position}\n\n${opts.question}` : opts.question,
+    },
+  ];
 }
 
 /**
@@ -298,21 +339,11 @@ export async function* converse({
       - and a reader can see the whole conversation in the panel, so the
         article's own text arriving as a "user" turn is the honest description
         of what happened — the reader did put the article there. */
-  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
-    { role: "system", content: SYSTEM },
-    {
-      role: "user",
-      content: `Here is the whole article. Keep it in mind for everything I ask.
+  const messages = buildConverseMessages({ meta, blocks, history, question, ...(at && { at }) });
 
-${renderArticle(meta, blocks, at)}`,
-    },
-    { role: "assistant", content: "Read it. What would you like to know?" },
-    ...recentHistory(history).map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.text,
-    })),
-    { role: "user", content: question },
-  ];
+  /* Logged rather than thrown: a short article simply cannot be cached, and the
+     zeros that come back look exactly like a cache that has stopped working. */
+  const tooShortToCache = underCacheFloor(String(messages[1]?.content ?? ""));
 
   const deadline = AbortSignal.timeout(timeoutMs);
   /* Our own stall clock, and it has to be its own controller rather than another
@@ -346,6 +377,25 @@ ${renderArticle(meta, blocks, at)}`,
       },
       body: JSON.stringify({
         model,
+        /* The automatic form, not an explicit breakpoint — and it fits this
+           call better than the other two. OpenRouter marks the last cacheable
+           block and advances it as the conversation grows, which is exactly
+           chat's shape: a fixed article near the front, a tail that gets longer
+           every turn. The explicit form would need the messages rebuilt as
+           content arrays for no gain here.
+           docs/research/prompt-caching-openrouter.md § How OpenRouter exposes it. */
+        cache_control: { type: "ephemeral" },
+        /* Ordered, **not** `allow_fallbacks: false`. A cache lives on the
+           upstream that wrote it, so naming Anthropic first is what keeps repeat
+           calls landing where the article already is — and OpenRouter's own
+           sticky routing hashes the first user message, which varies here, so
+           the heuristic would miss exactly the case this is for.
+
+           But forbidding fallback outright would turn an Anthropic outage into a
+           hard failure on a call a reader is sitting and waiting for. A cache
+           miss costs money; an unavailable feature costs the reader the feature.
+           Preference, not a ban. */
+        provider: { order: ["anthropic"] },
         stream: true,
         // Without this the usage block never arrives on a streamed response, and
         // every token count in the log line below is silently null — which reads
@@ -365,6 +415,24 @@ ${renderArticle(meta, blocks, at)}`,
     });
   } catch (err) {
     clearTimeout(stallTimer);
+    /* Stopped before the model said anything — before it was even asked, on a
+       slow connection. Not a failure and not a model to blame, so it ends the
+       same way a stop always ends: a `done` with nothing in it and the flag on.
+       `recentHistory` drops an empty turn, so nothing is sent back to the model
+       claiming it once said nothing. */
+    if (stoppedByReader(err, signal, deadline, stall.signal)) {
+      line.info({ model, ms: since(started) }, `reader stopped before ${model} replied`);
+      yield {
+        type: "done",
+        text: "",
+        citations: [],
+        searches: 0,
+        model,
+        unknownIds: [],
+        stopped: true,
+      };
+      return;
+    }
     line.error(
       { ...errorFields(err), model, ms: since(started), timedOut: deadline.aborted },
       `no reply from ${model}${deadline.aborted ? " — deadline fired" : ""}`,
@@ -398,6 +466,9 @@ ${renderArticle(meta, blocks, at)}`,
   let usage: Usage | undefined;
 
   const end: StreamEnd = { terminated: false };
+  /* Set by the catch below when the *caller's* signal is what fired. See the
+     `stopped` field on the `done` event for why this is not simply a throw. */
+  let stopped = false;
   try {
     for await (const chunk of sseChunks(response.body, composite, touch, end)) {
       if (chunk.model) used = chunk.model;
@@ -431,6 +502,16 @@ ${renderArticle(meta, blocks, at)}`,
       if (chunk.usage) usage = chunk.usage;
     }
   } catch (err) {
+    /* Was that the reader? A stop is not an error, so it is not logged as one
+       and it does not throw — see `stoppedByReader`. */
+    if (stoppedByReader(err, signal, deadline, stall.signal)) {
+      stopped = true;
+      clearTimeout(stallTimer);
+      line.info(
+        { model: used, ms: since(started), chars: text.length },
+        `reader stopped the answer from ${used}`,
+      );
+    } else {
     line.error(
       {
         ...errorFields(err),
@@ -446,9 +527,28 @@ ${renderArticle(meta, blocks, at)}`,
       `stream from ${used} broke off`,
     );
     throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
+    }
   } finally {
     clearTimeout(stallTimer);
   }
+
+  /* **The stream can also stop by simply ending.**
+
+     Every version of this before now assumed an abort *throws*, and set
+     `stopped` only in the two catches. It does throw under Node's own fetch:
+     the pending `read()` rejects with the abort reason. But `onAbort` in
+     `sseChunks` also calls `reader.cancel()`, and cancelling a reader makes a
+     pending read resolve `{ done: true }` — so an implementation where the
+     cancel wins the race exits the loop **cleanly**, `stopped` stays false, and
+     the guard immediately below files the reader's own stop as "The answer
+     stopped arriving before it was finished."
+
+     There is no error to identify here, so this is the signal-only test: the
+     caller's signal aborted, neither of our clocks did, and however the loop
+     happened to end, the reader is why. Found by writing the test that goes
+     through `converse` rather than constructing the row by hand — which is the
+     whole reason that test exists. */
+  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
 
   /* **The stream stopped; did it finish?**
 
@@ -463,7 +563,7 @@ ${renderArticle(meta, blocks, at)}`,
      reports a reason has still told us the answer is whole. Requiring both
      would turn a working provider into a permanent failure; requiring neither
      is what produced the bug. */
-  if (!end.terminated && finishReason === null) {
+  if (!stopped && !end.terminated && finishReason === null) {
     line.error(
       { model: used, ms: since(started), chars: text.length },
       `stream from ${used} ended without finishing`,
@@ -472,9 +572,22 @@ ${renderArticle(meta, blocks, at)}`,
   }
 
   const answer = text.trim();
-  if (answer === "") {
-    // The silent-success shape: a 200, a clean stream, and nothing in it. Fail
-    // loudly rather than storing a blank turn that looks answered.
+  /* Nothing arrived. Which is two completely different events wearing one
+     condition, and the branch is what keeps them apart.
+
+     A model that streams cleanly and says nothing is the silent-success shape
+     this repo keeps a document about — a 200, a well-formed stream, an empty
+     answer — and it fails loudly rather than storing a blank turn that looks
+     answered.
+
+     A reader who presses stop before the first word is not that. Nothing is
+     wrong, there is no provider to blame, and there is nothing to try again.
+     It used to throw here, which meant a fast stop was filed as a model
+     failure: a red row and an apology for a button they had just pressed. So it
+     falls through instead, and is stored as what it is — a `done` answer, zero
+     characters long, flagged `stopped`. `recentHistory` drops it on the empty
+     text, so the model is never sent a turn where it said nothing. */
+  if (answer === "" && !stopped) {
     line.error({ model: used, ms: since(started), finishReason }, `${used} returned no text`);
     throw new Error(`The model returned no text (finish_reason: ${finishReason ?? "?"}).`);
   }
@@ -498,6 +611,14 @@ ${renderArticle(meta, blocks, at)}`,
         ms: since(started),
         inputTokens: usage?.prompt_tokens ?? null,
         outputTokens: usage?.completion_tokens ?? null,
+        /* Chat is where the article is re-sent most often — once per turn, for
+           the life of a conversation. From the second turn on, `cacheReadTokens`
+           should be close to the article's own token count; a 0 there means
+           every turn is paying full price again and the only symptom is the
+           bill. docs/reusable/silent-success.md. */
+        cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+        cacheWriteTokens: usage?.cache_write_tokens ?? null,
+        tooShortToCache,
         searches,
         citations: citations.size,
         /* **The number that says the feature is still the feature.**
@@ -513,8 +634,11 @@ ${renderArticle(meta, blocks, at)}`,
         historyTurns: recentHistory(history).length,
         unknownIds: unknownIds.length,
         finishReason,
+        stopped,
       },
-      `answered a chat question with ${used} (${searches} web search${searches === 1 ? "" : "es"})`,
+      stopped
+        ? `reader stopped an answer from ${used} after ${answer.length} characters`
+        : `answered a chat question with ${used} (${searches} web search${searches === 1 ? "" : "es"})`,
     );
   } catch {
     // Nothing to do about it, and nothing worth failing a reader's answer over.
@@ -527,7 +651,52 @@ ${renderArticle(meta, blocks, at)}`,
     searches,
     model: used,
     unknownIds,
+    stopped,
   };
+}
+
+/**
+ * Was that abort the *reader*, rather than one of our own clocks?
+ *
+ * All three signals throw the same `AbortError`, so the only way to tell them
+ * apart is to ask which one fired — and the order matters: a deadline that
+ * fires while a stop is in flight is still a deadline, and calling it a stop
+ * would tell the reader they ended an answer the model had already given up on.
+ *
+ * Two callers, and that is the whole reason it is a function. A stop can land
+ * in the initial `fetch` — before a single byte of the response exists — or
+ * inside the chunk loop, and the first of those was missed when this was
+ * written inline: an immediate stop was thrown as `AbortError: stopped by the
+ * reader` and stored as a failed answer. Found by pressing the button quickly.
+ */
+export function readerAborted(
+  signal: AbortSignal | undefined,
+  deadline: AbortSignal,
+  stalled: AbortSignal,
+): boolean {
+  return Boolean(signal?.aborted) && !deadline.aborted && !stalled.aborted;
+}
+
+export function stoppedByReader(
+  err: unknown,
+  signal: AbortSignal | undefined,
+  deadline: AbortSignal,
+  stalled: AbortSignal,
+): boolean {
+  if (!readerAborted(signal, deadline, stalled)) return false;
+  /* And the throw has to actually BE the abort.
+
+     Not every failure that happens while the signal is aborted was caused by
+     it. `OpenRouter: <provider message>` is thrown by our own code a few lines
+     up when a 200 carries an error in the stream, and a provider failing at the
+     same moment the reader presses stop is not far-fetched — a stall on the
+     provider's side is exactly what makes somebody press it. Asking only "is
+     the signal aborted" threw that message away and committed the half answer
+     as a clean stop, so the one event that could explain what went wrong was
+     the one thing not recorded. Aborting rejects with the signal's own reason,
+     so identity is the test; the name check covers a caller who aborts without
+     giving one. */
+  return err === signal?.reason || (err as Error | undefined)?.name === "AbortError";
 }
 
 /**
@@ -601,8 +770,15 @@ async function* sseChunks(
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  // A reader is not cancelled by the signal the fetch was given — the response
-  // has already arrived, so aborting is our job from here.
+  /* Belt and braces, and worth being honest about which is which.
+     Undici *does* error the body stream when the fetch's signal aborts — a
+     pending `reader.read()` rejects with the abort reason, which is what
+     actually ends this loop — so this listener is not the mechanism, it is the
+     backstop for a caller who stops iterating without an abort, and for any
+     fetch implementation that does not propagate. The comment here used to
+     claim the opposite (that the response having arrived meant the signal no
+     longer reached it), which was the sentence someone would have trusted the
+     next time this plumbing was touched. Corrected in review, 2026-08-26. */
   const onAbort = () => void reader.cancel().catch(() => {});
   signal.addEventListener("abort", onAbort, { once: true });
   try {
@@ -677,6 +853,11 @@ interface Usage {
   completion_tokens?: number;
   server_tool_use_details?: { web_search_requests?: number };
   server_tool_use?: { web_search_requests?: number };
+  /* What the cache did. On a streamed response these arrive in the same final
+     usage chunk as the token counts — the one with an empty `choices` array —
+     so nothing extra has to be subscribed to. */
+  prompt_tokens_details?: { cached_tokens?: number };
+  cache_write_tokens?: number;
 }
 
 interface Annotation {

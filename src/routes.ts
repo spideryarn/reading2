@@ -13,6 +13,7 @@
  *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
+ *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
  *   GET    /api/summary/:slug    the piece at more than one length, and whether it is stale
  *   GET    /api/comments/:slug   every stored comment for the article
  *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
@@ -46,6 +47,7 @@ import {
   listArticles,
   loadArticle,
   loadGlossary,
+  lookUpTerm,
   loadSummaries,
   loadTweets,
 } from "./api.js";
@@ -912,6 +914,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
      model call that takes tens of seconds, which is a job, not a request.
      POST /api/jobs { slug, steps: ["glossary"] } is how you ask. */
   const glossary = /^\/api\/glossary\/([\w.%-]+)$/.exec(url);
+  /* The one POST the glossary has, and the exception that proves the rule above:
+     *finding* terms is a job because it is one call over a whole article, but
+     checking **one** term is a single question with a reader sitting in front of
+     it — the same shape as a comment, and it reuses the same call. It can take
+     the better part of a minute if the model searches, so the client's fetch
+     needs a patient deadline; `explain` has its own. */
+  const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(url);
   const summary = /^\/api\/summary\/([\w.%-]+)$/.exec(url);
   const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(url);
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
@@ -953,6 +962,10 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     }
     if (glossary && req.method === "DELETE") {
       send(res, 200, await deleteGlossary(slugPart(glossary, 1)));
+      return true;
+    }
+    if (lookup && req.method === "POST") {
+      send(res, 200, await lookUpTerm(slugPart(lookup, 1), slugPart(lookup, 2)));
       return true;
     }
     /* Read only. There is no DELETE beside this one, unlike the glossary's:

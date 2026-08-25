@@ -2828,6 +2828,47 @@ td.text.has-hit {
 }
 .gloss-part-hint:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
+/* The web's answer for one term, and the button that asks for it. Set apart
+   from the two prose sections above by a filled ground rather than a rule,
+   because it is a different KIND of thing from either of them: not the article,
+   not the model's memory, but a thing that was checked on a particular day. */
+.gloss-look { margin: 0.55rem 0 0; }
+.gloss-look.on {
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.gloss-look .gloss-part-text { margin-top: 0.15rem; white-space: pre-wrap; }
+/* The globe, on or off. **The off state is drawn rather than omitted** — the
+   model chooses per call whether to search, so "it decided it already knew" is
+   a real outcome, and a missing icon could not be told apart from a broken
+   tool. Same call CommentDialog's badge makes. */
+.gloss-globe {
+  display: inline-flex;
+  color: var(--ink-faint);
+  cursor: help;
+}
+.gloss-globe.on { color: var(--highlight); }
+.gloss-globe:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Host names, one per line. The page title is the useful thing to read and the
+   wrong thing to lay out in an 18rem band, so it lives in the hover tooltip. */
+.gloss-sources {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.gloss-sources li { margin-top: 0.15rem; }
+.gloss-sources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  text-decoration: none;
+}
+.gloss-sources a:hover { color: var(--highlight-ink); text-decoration: underline; }
+.gloss-sources a:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
 .gloss-open { padding: 0 0.7rem 0.65rem; }
 .gloss-open p { margin: 0 0 0.4rem; font-size: 0.76rem; line-height: 1.45; }
 .gloss-open p:last-child { margin-bottom: 0; }
