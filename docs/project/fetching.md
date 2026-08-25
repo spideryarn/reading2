@@ -383,6 +383,8 @@ Honest list, none of it blocking:
    to handle them ahead of the viewer. What the previous version learned about PDF transcription is
    in [original-version/extraction.md](original-version/extraction.md#pdfs-out-of-scope-but-the-lesson-transfers);
    the short version is *don't parse structurally when a multimodal model will read the bytes*.
+   **Now planned**: [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md) closes this item and the
+   one above it — `raw.pdf` as bytes, and a second extractor beside Readability.
 4. **A JS-rendered page returns its shell**, and we report success. `x.com` gives 193 KB of HTML
    with no post text in it. Detecting this needs the two-sided extraction ratio check, which belongs
    to stage 2 and is [on the borrow list](original-version/borrow-list.md).

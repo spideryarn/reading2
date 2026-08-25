@@ -24,6 +24,10 @@ Stage 1 moved out of this script into [`src/fetch.ts`](../../src/fetch.ts) on 20
 character encoding rather than assumed to be UTF-8, a PDF refused by name instead of arriving as
 Readability-proof gibberish, and a typed failure rather than `Fetch failed: 403`.
 
+A PDF is about to stop being refused: [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md) adds a
+second extractor beside this one, producing the same `article.html` + `meta.json`, so that stage 3
+onwards never knows which of the two made it.
+
 One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
 relative links resolve against the wrong origin.

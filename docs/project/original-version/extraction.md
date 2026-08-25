@@ -212,6 +212,13 @@ transcription; v2 PDF → per-page PNG → vision model per page ("functional bu
 words); v3 — the current default — handing the PDF **natively** to a multimodal model with no image
 conversion step, which also yields bounding boxes.
 
+> **Checked against the code, 2026-08-26**, for [../../plans/pdf-ingestion.md](../../plans/pdf-ingestion.md).
+> Two corrections. The docs over there call Gemini the v3 default; the code's default is
+> **Mistral OCR** (`app/api/upload-pdf/route.ts`). And the page-parallel strategy and the
+> "second-stage refinement" pass their docs describe — the one meant to "deal with footnotes
+> better" — were designed and never built. The full audit is in
+> [../../research/pdf-parsing-options.md § The original version](../../research/pdf-parsing-options.md#the-original-version-checked-against-its-code).
+
 Three lessons that survive the change of subject:
 
 1. **Don't parse structurally when a multimodal model will read it.** They tried classic parsing and
