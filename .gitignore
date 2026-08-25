@@ -3,8 +3,10 @@ dist/
 data/
 output/
 .DS_Store
-# Every env file, not just the two we happen to have. .env.prod holds the remote
+# Every env file, not just the ones we happen to have. .env.prod holds the remote
 # project's keys and .env.local the local stack's; a third one arrives the moment
-# somebody tries something. If an example file is ever wanted, it needs an
-# explicit `!.env.example` below — this pattern would swallow it.
+# somebody tries something. The template is the one exception, and it is listed
+# after the pattern because order decides: a negation before its pattern does
+# nothing.
 .env*
+!.env.example

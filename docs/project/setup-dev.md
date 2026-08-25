@@ -21,9 +21,17 @@ Old `/?slug=<slug>` links still work; they are rewritten on the way in.
 
 One file, `.env.local`, gitignored, loaded by [`src/env.ts`](../../src/env.ts):
 
+```bash
+cp .env.example .env.local     # every variable, commented, with no values in it
+```
+
 ```
 OPENROUTER_API_KEY=sk-or-…
 ```
+
+[`.env.example`](../../.env.example) is the only env file in git — `.gitignore` has `.env*` and then
+`!.env.example` — so it must never gain a real value. `.env.prod` records what the remote project
+needs and is **loaded by nothing**: `src/env.ts` reads `.env.local` and only `.env.local`.
 
 It is needed by the two LLM calls that happen in a request handler rather than in the pipeline:
 the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
