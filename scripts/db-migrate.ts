@@ -90,9 +90,12 @@ if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
  *   protection while looking exactly like a secure connection, which is why it
  *   warns rather than doing it quietly.
  *
- * **Untested against the real host**, because nothing has connected to the
- * remote yet. If the first remote migration fails on TLS, this is the code to
- * look at, and the fix is the certificate rather than turning SSL off.
+ * **Verified against the real host, 2026-08-25.** A run at
+ * `db.alschkahzfagtppxspfq.supabase.co:5432` with a deliberately wrong password
+ * reached "password authentication failed" — which can only happen after the
+ * TLS handshake completes, so the certificate really does verify Supabase's
+ * server. That is the useful shape for this kind of check: an error from the
+ * layer *above* the one you are testing is proof the layer under it worked.
  */
 function sslConfig(): false | { rejectUnauthorized: boolean; ca?: string } {
   if (isLocal) return false;

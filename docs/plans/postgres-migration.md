@@ -134,11 +134,22 @@ otherwise get wrong:
   off the same is-this-local test that guards remote runs, so local (a container with no certificate)
   and remote (which now requires one) both work without a flag anyone has to remember.
 
-  Two levels, and the gap between them is the part worth knowing: with `PGSSLROOTCERT` pointing at
-  Supabase's certificate the server is **verified**; without it the traffic is still encrypted but
-  any certificate is accepted, which defeats man-in-the-middle protection *while looking exactly like
-  a secure connection*. It warns rather than doing that quietly. **Download the certificate before
-  the first real connection.**
+  Two levels, and the gap between them is the part worth knowing: with the certificate the server is
+  **verified**; without it the traffic is still encrypted but any certificate is accepted, which
+  defeats machine-in-the-middle protection *while looking exactly like a secure connection*.
+
+  **Both halves are now done.** The certificate is committed at
+  [`certs/supabase-ca.crt`](../../certs/supabase-ca.crt) — safe to commit because it is Supabase's
+  public root CA, the same file every customer downloads, carrying no project identifier
+  ([certs/README.md](../../certs/README.md) has the reasoning, and a test asserts the last part
+  rather than trusting it). `db-migrate` finds it by path, so verified connections are the default
+  rather than an option.
+
+  **And it is verified against the real server, not just wired up.** A run against
+  `db.alschkahzfagtppxspfq.supabase.co:5432` with a deliberately wrong password reached *"password
+  authentication failed"* — which is only reachable *after* TLS completes. An error from the layer
+  above is the cleanest available proof that the layer below worked. It also showed the direct IPv6
+  host resolving from Greg's laptop, which does not change the fact that it will not from Vercel.
 - **`spideryarn` does not merely fail to be exposed — it does not exist.** Only `public` and
   `graphql_public` are exposed, and `public` is empty. So the starting state is genuinely clean.
 
