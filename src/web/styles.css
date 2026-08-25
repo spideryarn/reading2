@@ -1257,3 +1257,191 @@ mark.cmt[data-mark-end]::after {
    over the prose column, which is exactly where the next sentence is. */
 .cmt-dialog { transition: opacity 0.1s; }
 .cmt-dialog.dodging { opacity: 0.1; pointer-events: none; }
+
+/* ---------------------------------------------------------- column context --
+   Four experiments in what a gist column shows around the item you are in,
+   toggled from the controls bar, plus a progress hairline. The list itself is
+   ContextList.tsx; what goes in it is context.ts; the hoisted panel is
+   ContextPanel.tsx. Design and research: docs/project/column-context.md.
+
+   Tiers are FIXED sizes, on purpose. A continuous fisheye puts prose in a
+   just-legible dead zone, and the eye-tracking says nobody reads the shrunk
+   periphery anyway — it only has to be distinguishable from the current item
+   and from its neighbours. Four steps: cur / near / mid / far. */
+.ctx-list { list-style: none; margin: 0; padding: 0; }
+
+.ctx-item {
+  font-family: var(--font-ui);
+  line-height: 1.3;
+  padding: 0.15rem 0 0.15rem 0.55rem;
+  border-left: 2px solid transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.ctx-item .ctx-title { font-size: 0.72rem; font-weight: 500; }
+.ctx-item.tier-far .ctx-title { font-size: 0.68rem; opacity: 0.7; }
+.ctx-item.tier-near .ctx-title { font-size: 0.78rem; color: var(--ink-soft); }
+/* Already read: the same words, quieter. Reading order is what fades them,
+   not distance — a far item ahead is still to come and should not look done. */
+.ctx-item.before { opacity: 0.6; }
+.ctx-item:hover .ctx-title { color: var(--highlight); }
+
+.ctx-item.tier-cur {
+  border-left-color: var(--tint, var(--highlight));
+  padding: 0.4rem 0 0.5rem 0.55rem;
+  opacity: 1;
+}
+.ctx-item.tier-cur .ctx-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+.ctx-item.tier-cur .gist-text { margin: 0; }
+
+/* The arc column has no titles, so a non-current entry is its sentence,
+   clamped to one line. A landmark, not a thing to read. */
+.ctx-clamp {
+  display: block;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The parent named at the edge of a sibling list, or heading a run in the
+   panel: where this level's neighbours stop and the next part begins. */
+.ctx-group {
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  opacity: 0.6;
+  padding: 0.55rem 0 0.2rem 0.55rem;
+  cursor: pointer;
+}
+.ctx-group.before { padding: 0.2rem 0 0.45rem 0.55rem; }
+.ctx-group:hover { color: var(--highlight); opacity: 1; }
+
+/* The hairline. Its fill reads `--ctx-progress-<depth>` off the root, which
+   useColumnContext.ts writes on every scroll frame without touching React. */
+.ctx-progress {
+  height: 2px;
+  margin-top: 0.55rem;
+  background: var(--rule-strong);
+}
+.ctx-progress-fill {
+  height: 100%;
+  background: var(--tint, var(--highlight));
+  transition: width 80ms linear;
+}
+td.gist .sticky > .ctx-progress { margin-top: 0.4rem; }
+
+/* ---- Neighbours: the item before, above; the item after, pinned below ----
+   The previous title is ordinary flow inside the sticky box. The next one is
+   NOT: a `position: sticky; bottom: 0` element only has range if its normal
+   position is at the bottom of its containing block, and a <td>'s content
+   sits at the top. So the cell gets an absolutely positioned fill the height
+   of the cell, and the next-title lives at the bottom of THAT — `margin-top:
+   auto` in a flex column — which gives the bottom-stuck element somewhere to
+   be stuck from. GPT's review predicted this would be the weakest mechanism
+   of the four; verify in a browser, never by getComputedStyle. */
+.ctx-prev {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  opacity: 0.7;
+  margin-bottom: 0.45rem;
+  cursor: pointer;
+}
+.ctx-prev:hover { color: var(--highlight); opacity: 1; }
+
+/* `sticky`, NOT `relative`. Both make the cell a containing block for the
+   absolute fill, but the pinned end columns are already `position: sticky`
+   with a `left`, and `relative` here would override that and un-pin them —
+   which it did, shifting L0 and L1 sideways. A sticky element with no insets
+   behaves exactly like a relative one. */
+td.gist.has-fill { position: sticky; }
+.cell-fill {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none; /* the cell underneath still takes the click */
+}
+.ctx-next {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  pointer-events: auto;
+  padding: 0.4rem 1rem 0.55rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  background: var(--panel);
+  border-top: 1px solid var(--rule);
+  cursor: pointer;
+}
+.ctx-next:hover { color: var(--highlight); }
+/* An active (hovered-chain) cell paints a wash; the pinned line must match or
+   it reads as a hole. */
+td.gist.active .ctx-next { background: var(--highlight-wash); }
+
+/* ---- Panel / Centred: a fixed window over the column -------------------
+   Clipped, never scrollable — the wheel must always move the article. The
+   mask fades the top and bottom so the cut looks like a horizon rather than
+   a guillotine. z-index sits under the header row (25) and over pinned cells. */
+.ctx-panel {
+  position: fixed;
+  top: calc(var(--bar-h) + var(--head-h));
+  bottom: 0;
+  z-index: 24;
+  padding: 0 1rem;
+  background: var(--panel);
+  border-right: 1px solid var(--rule-strong);
+  overflow: hidden;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 1.25rem,
+    black calc(100% - 2.5rem),
+    transparent
+  );
+}
+.ctx-panel-list {
+  padding-top: 0.85rem;
+  transition: transform 220ms ease-out;
+}
+.ctx-panel.depth-0 { --tint: var(--depth-0); }
+.ctx-panel.depth-1 { --tint: var(--depth-1); }
+.ctx-panel.depth-2 { --tint: var(--depth-2); }
+/* In the panel the tiers can afford a fourth step, since it has the height. */
+.ctx-panel .ctx-item.tier-mid .ctx-title { font-size: 0.72rem; }
+.ctx-panel .ctx-item.tier-far .ctx-title { font-size: 0.66rem; opacity: 0.55; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-panel-list, .ctx-progress-fill { transition: none; }
+}
+
+/* ---- The pills' tooltips ------------------------------------------------
+   Richer than the spine's band cards: a paragraph each for how, why, the
+   research, GPT's review and the cost. Interactive, so the links work. */
+.ctx-label { margin-left: 0.9rem; }
+.tooltip.tip-explain-panel { max-width: 27rem; }
+.tip-explain p {
+  margin: 0.4rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.tip-explain .tip-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-right: 0.2rem;
+}
+.tip-explain a { color: var(--highlight-ink); text-decoration: underline; }
+.tip-explain .tip-cost { color: var(--ink-faint); }

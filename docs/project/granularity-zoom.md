@@ -514,7 +514,9 @@ depth/parent agreement, that every block is covered by exactly one leaf, and tha
 
 ### The other view: fisheye
 
-Not built. It came out of a conversation on 2026-08-24 about what "efficient but deep" reading
+Not built as a view. Its first descendant is [column-context.md](column-context.md): four
+toggleable treatments of the gist columns, one of them the "current cell centred, neighbours
+smaller" idea in Greg's own words, built as experiments to compare rather than as a second interface. It came out of a conversation on 2026-08-24 about what "efficient but deep" reading
 actually needs — the observation being that a single global granularity cannot express the thing
 readers most want, which is to be **deep in one place and shallow everywhere else**. Greg:
 
