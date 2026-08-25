@@ -201,3 +201,10 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - Every stage is runnable on its own against a slug, so any one can be re-run without the others.
 - Test article: `output/noema-mythology-of-conscious-ai.html` (Anil Seth, ~54 min, long and largely
   *unstructured*). It's the deliberate hard case for anything that assumes headings exist.
+- **`output/` is generated and not in version control**, alongside `data/`. Both are rebuilt by
+  running the pipeline, so a fresh clone starts with neither and the test article above has to be
+  fetched again. One consequence is worth stating plainly, because it is the sort of thing nothing
+  reports: `output/<slug>.blocks.json` is where stage 3 keeps its ids, so the **only** block ids
+  under version control are the ones in [`example/`](../../example/README.md). Ids for a real
+  article live on the machine that generated them and nowhere else — see
+  [block-ids.md](block-ids.md).
