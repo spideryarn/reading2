@@ -97,6 +97,19 @@ describe("articleMetadata", () => {
     expect(m.dir).toBe("example");
   });
 
+  it("counts the questions asked, so the page never has to fetch them", async () => {
+    // The count is here rather than on the client because the metadata page
+    // must NOT call `useComments` — that hook fetches on mount, and a visit
+    // would buy a drawer nobody opened (docs/plans/metadata-page.md § The
+    // shell). This endpoint is already looking in the article's directory.
+    const m = await articleMetadata("example");
+    expect(typeof m.comments).toBe("number");
+    // A slug with no comments file reports none, rather than throwing or
+    // reporting NaN — `loadComments` owns that, and this is the check that it
+    // still does.
+    expect((await articleMetadata("no-such-article-slug")).comments).toBe(0);
+  });
+
   it("refuses a slug that is not one, before it joins any path", async () => {
     // This function enumerates files for a living, and routes.ts hands it a
     // percent-decoded path segment. `path.join` will happily walk out of data/.

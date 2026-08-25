@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import type { Tree } from "../src/types.js";
+import type { Block, Tree } from "../src/types.js";
 
 const run = promisify(execFile);
 
@@ -30,11 +30,21 @@ async function validate(dir: string): Promise<{ code: number; out: string }> {
 
 /** Copy example/ into a temp dir, with `mutate` applied to the tree. */
 async function brokenFixture(mutate: (tree: Tree) => void): Promise<string> {
+  return fixture(mutate, () => {});
+}
+
+/** The same, when a test needs to move the blocks as well as the tree. */
+async function fixture(
+  mutateTree: (tree: Tree) => void,
+  mutateBlocks: (blocks: Block[]) => void,
+): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), "spideryarn-tree-"));
   const tree: Tree = JSON.parse(await readFile("example/tree.json", "utf8"));
-  mutate(tree);
+  const parsed: { blocks: Block[] } = JSON.parse(await readFile("example/blocks.json", "utf8"));
+  mutateTree(tree);
+  mutateBlocks(parsed.blocks);
   await writeFile(path.join(dir, "tree.json"), JSON.stringify(tree));
-  await writeFile(path.join(dir, "blocks.json"), await readFile("example/blocks.json", "utf8"));
+  await writeFile(path.join(dir, "blocks.json"), JSON.stringify(parsed));
   return dir;
 }
 
@@ -82,5 +92,48 @@ describe("validate-tree", () => {
     const { code, out } = await validate(dir);
     expect(code).toBe(1);
     expect(out).toContain("not in blocks.json");
+  }, 30_000);
+
+  /**
+   * `sourceHeading` is the author's heading **quoted back by a model**, and a
+   * model quoting text reproduces the heading, not the bytes. Ask for
+   * `Claude’s Constitution` and you will often get `Claude's Constitution`.
+   *
+   * The first article to reach this check with apostrophes in its headings
+   * failed on eleven of them, every one an apostrophe and not one of them a
+   * heading the model had actually got wrong. A validator whose errors are all
+   * false teaches people to stop reading it.
+   */
+  it("accepts a heading the model quoted with a straight apostrophe", async () => {
+    const dir = await fixture(
+      (tree) => {
+        for (const node of Object.values(tree.nodes)) {
+          if (node.sourceHeading) node.sourceHeading = "Claude's Constitution";
+          if (node.title === "The Mythology Of Conscious AI") node.title = "Claude's Constitution";
+        }
+      },
+      (blocks) => {
+        // The publisher's curly U+2019, which is what a CMS emits.
+        for (const block of blocks) {
+          if (block.kind === "heading") block.text = "Claude\u2019s Constitution";
+        }
+      },
+    );
+    const { code, out } = await validate(dir);
+    expect(out).not.toContain("does not match any heading block");
+    expect(code).toBe(0);
+  }, 30_000);
+
+  it("still fails a sourceHeading that is a different heading, not a different apostrophe", async () => {
+    // The folding must not turn this check into a check of nothing. A heading
+    // the model rewrote rather than quoted is exactly what it exists to catch.
+    const dir = await brokenFixture((tree) => {
+      for (const node of Object.values(tree.nodes)) {
+        if (node.sourceHeading) node.sourceHeading = "A Heading Nobody Wrote";
+      }
+    });
+    const { code, out } = await validate(dir);
+    expect(code).toBe(1);
+    expect(out).toContain("does not match any heading block");
   }, 30_000);
 });

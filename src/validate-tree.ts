@@ -15,6 +15,48 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Block, Tree, TreeNode } from "./types.js";
 
+/**
+ * Are these two heading strings the same heading?
+ *
+ * Not `===`, and the reason is worth stating because the obvious version of
+ * this check was wrong for a year's worth of articles that simply never had the
+ * character in them.
+ *
+ * `sourceHeading` is the author's heading text **quoted back by a model**, and a
+ * model quoting text does not reproduce bytes — it reproduces the heading. Ask
+ * one to repeat `Claude’s Constitution` and a fair share of the time you get
+ * `Claude's Constitution`: same heading, straight apostrophe. Publishers emit
+ * the curly one (U+2019) because their CMS does, so the mismatch is between two
+ * spellings of the same punctuation mark and nothing else.
+ *
+ * That is not a hypothetical. The first article to reach this check with
+ * apostrophes in its headings — the Anthropic constitution, 36 headings — failed
+ * on **eleven** of them, and every one of the eleven was an apostrophe. Zero of
+ * the failures were a heading the model had got wrong, which is what this check
+ * is for. A validator whose errors are all false is worse than no validator: it
+ * teaches whoever reads it to stop reading it.
+ *
+ * So the comparison folds the characters that have a typographic and a
+ * typewriter spelling — quotes, apostrophes, the dashes, the ellipsis — and
+ * collapses runs of whitespace. It deliberately does **not** fold case or strip
+ * words: a heading rewritten rather than quoted is exactly what should still
+ * fail here, and this stays strict about every part of the text that carries
+ * meaning.
+ */
+export function sameHeading(a: string, b: string): boolean {
+  return normalisePunctuation(a) === normalisePunctuation(b);
+}
+
+function normalisePunctuation(text: string): string {
+  return text
+    .replace(/[\u2018\u2019\u201B\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201F\u2033]/g, '"')
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const dir = process.argv[2];
 if (!dir) {
   console.error("Usage: tsx src/validate-tree.ts <dir containing blocks.json + tree.json>");
@@ -142,7 +184,7 @@ for (const node of Object.values(tree.nodes)) {
     if (node.sourceHeading) {
       const inRange = blocks
         .slice(mySpan[0], mySpan[1] + 1)
-        .some((b) => b.kind === "heading" && b.text.trim() === node.sourceHeading!.trim());
+        .some((b) => b.kind === "heading" && sameHeading(b.text, node.sourceHeading!));
       if (!inRange)
         fail(
           `${node.id}: sourceHeading ${JSON.stringify(node.sourceHeading)} ` +

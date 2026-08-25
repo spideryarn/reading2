@@ -214,6 +214,27 @@ All four pass. The numeric prefixes stay: they are the author's own enumeration 
 would break the correspondence with the page. This is the expected outcome — **rewriting should be
 rare**, and a run that rewrites more than a heading or two is a bug in the rule, not a bad article.
 
+### The apostrophe that failed eleven headings
+
+`sourceHeading` is checked against the real heading blocks, and the check is
+[`sameHeading`](../../src/validate-tree.ts) rather than `===`. That matters, and the reason is easy
+to get wrong twice:
+
+**`sourceHeading` is the author's heading quoted back by a model, and a model quoting text
+reproduces the heading, not the bytes.** Publishers emit `Claude’s Constitution` with a curly U+2019
+because their CMS does; ask a model to repeat it and a fair share of the time you get
+`Claude's Constitution`. Same heading, typewriter apostrophe.
+
+The first article to reach this check with apostrophes in its headings — the Anthropic constitution,
+36 of them — failed on **eleven**, and every one of the eleven was an apostrophe. None was a heading
+the model had actually got wrong, which is the only thing the check exists to catch. A validator
+whose errors are all false teaches whoever reads it to stop reading it, which is a slower and worse
+version of having no validator at all.
+
+So the comparison folds the characters that have both a typographic and a typewriter spelling —
+quotes, apostrophes, dashes, the ellipsis — and collapses whitespace. It deliberately does **not**
+fold case or drop words: a heading *rewritten* rather than quoted is exactly what should still fail.
+
 > [!WARNING]
 > **Rewrites are not currently auditable.** An earlier draft of this design carried a
 > `titleSource: "heading" | "rewritten" | "proposed"` field so drift could be found with one grep.
@@ -265,11 +286,61 @@ levels and no zoom axis worth having.
 
 Of those 139 leaves, 116 carry a `navLabel` and 23 do not.
 
+## The budget <a id="the-budget"></a>
+
+Stage 4 is the only stage whose **answer grows with the article without a bound**. It writes one
+`navLabel` per gistable block, so a piece with three times the paragraphs asks the model for three
+times the JSON. Every other model call in the pipeline writes something roughly fixed — a sentence
+per part, a thread of a dozen posts.
+
+That is why [`estimateTocTokens`](../../src/toc.ts) exists, and why `max_tokens` here is computed
+from `blocks.json` rather than typed in. The arithmetic on top of it — and the reason most of the
+number is not the answer at all — is in [`src/token-budget.ts`](../../src/token-budget.ts):
+
+> **`max_tokens` is not an output cap. It is an output-plus-reasoning cap.**
+
+The thinking tokens come out of the same allowance as the answer, and how much thinking happens is
+not something we set — `budget_tokens` is gone, and `output_config.effort` is the only dial. So the
+budget is written as two terms that grow differently: the answer, which the stage can estimate
+exactly, and a flat reservation for reasoning, which it cannot.
+
+**And the reservation is not a fix by itself.** A 360-block article failed here on a typed-in
+`max_tokens: 32000`, of which roughly 26,000 had gone on thinking. Recomputing the budget as
+77,100 and running it again failed *too*, with about 64,000 of thinking that time: adaptive thinking
+at `effort: "high"` expands into whatever room it is given, so raising the ceiling raises the
+thinking with it and the two never converge. That is why stage 4 runs at `effort: "medium"` while
+its siblings stay at `"high"` — it is the stage whose output is mostly mechanical labelling, and the
+only one where lowering the dial is close to free.
+[docs/postmortems/toc-max-tokens.md](../postmortems/toc-max-tokens.md) has the whole account.
+
+Two failures, deliberately kept distinct, because they are not the same problem:
+
+- **Too long to attempt.** `budgetFor` throws *before* the call when the estimated answer plus the
+  reasoning reservation exceeds what one response can hold — currently around 876 blocks. Nothing is
+  spent and the message says the article needs [section-by-section
+  processing](#long-articles). Clamping to the ceiling instead would be friendlier-looking and
+  wrong: the call would run for minutes, cost money, and come back truncated anyway.
+- **The estimate was wrong.** `stop_reason: "max_tokens"` still throws, and the message now carries
+  the budget and the estimate so the constants can be re-tuned from the failure. It does **not**
+  suggest retrying, because the Retry button makes the identical call.
+
+What must never happen is the third option: keeping whatever JSON arrived and building a tree from
+it. A table of contents that silently describes two thirds of an article is exactly the failure
+[silent-success.md](../reusable/silent-success.md) is about, and it is worse than the bug.
+
 ## The generation prompt
 
 A ~10k-word article fits comfortably in one pass, so the model sees the whole document and can keep
-sibling titles consistent with each other. Longer pieces need section-by-section processing against
-a shared style contract — not yet needed, not yet built.
+sibling titles consistent with each other.
+
+### Longer pieces <a id="long-articles"></a>
+
+Longer pieces need section-by-section processing against a shared style contract — **not yet built**,
+and now the thing that stands between us and an article of a few hundred thousand words. The
+[budget](#the-budget) refuses those out loud rather than half-doing them. Whoever builds it should
+know what it has to preserve: sibling titles that are consistent with each other across a boundary
+the model never sees at once, and the [partition invariant](#the-partition-invariant), which is
+currently guaranteed by the model seeing the whole block list in one go.
 
 **The model emits nested JSON; stage 4 converts it to the flat map** and assigns `NodeId`s, `parent`
 pointers and `depth`. Asking a model to emit a self-consistent map of cross-referencing ids is
