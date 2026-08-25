@@ -16,6 +16,27 @@ import type { Comment } from "../types.js";
 import { mintId } from "../ids.js";
 import type { SelectionAnchor } from "./selection.js";
 
+/**
+ * What to say when the request never reached the server.
+ *
+ * `fetch` rejects with a bare `TypeError: Failed to fetch` for every
+ * transport-level failure — server down, connection reset, request cut off
+ * mid-flight — and that message tells a reader nothing they can act on. It is
+ * also the failure they are most likely to hit: an explain call takes 15-25
+ * seconds, and `npm run dev` restarts whenever vite.config.ts changes, so the
+ * window for a request to be orphaned is wide. Greg hit exactly this on
+ * 2026-08-25, with the dev server simply not running.
+ *
+ * The original text is kept in parentheses so the message is still searchable.
+ */
+export function describeFetchFailure(error: Error): string {
+  // A TypeError from fetch means the request never got a response at all; an
+  // Error we threw ourselves already carries a real message from the server.
+  return error instanceof TypeError
+    ? `Couldn't reach the dev server — is \`npm run dev\` still running? (${error.message})`
+    : error.message;
+}
+
 export interface CommentsApi {
   comments: Comment[];
   /** Ask about a selection. Returns the id it minted, so the caller can open it. */
@@ -41,7 +62,7 @@ export function useComments(slug: string): CommentsApi {
         if (body.error) setError(body.error);
         else setComments(body.comments ?? []);
       })
-      .catch((e: Error) => live && setError(e.message));
+      .catch((e: Error) => live && setError(describeFetchFailure(e)));
     return () => {
       live = false;
     };
@@ -90,8 +111,9 @@ export function useComments(slug: string): CommentsApi {
         // the same one as for success.
         .then(put)
         .catch((e: Error) => {
-          setError(e.message);
-          put({ ...pending, status: "error", error: e.message });
+          const message = describeFetchFailure(e);
+          setError(message);
+          put({ ...pending, status: "error", error: message });
         });
     },
     [slug, put],
@@ -136,7 +158,7 @@ export function useComments(slug: string): CommentsApi {
       setComments((prev) => prev.filter((c) => c.id !== id));
       fetch(`/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`, {
         method: "DELETE",
-      }).catch((e: Error) => setError(e.message));
+      }).catch((e: Error) => setError(describeFetchFailure(e)));
     },
     [slug],
   );

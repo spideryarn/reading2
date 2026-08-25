@@ -197,6 +197,30 @@ The last of those is the shape [silent-success.md](../reusable/silent-success.md
 exactly: it was invisible to the unit tests (both halves passed in isolation), invisible in the
 network tab (two 200s), and only visible as "the spinner never stops".
 
+## When it says "Failed to fetch" <a id="failed-to-fetch"></a>
+
+The dev server is not running. That is nearly always the whole story — an explain call is a normal
+`fetch` to `/api/comments/<slug>`, and a bare `TypeError: Failed to fetch` means the request never
+got a response at all.
+
+It is the easiest failure to hit here, for a reason worth stating: **an explain call takes 11-25
+seconds**, and `npm run dev` restarts whenever `vite.config.ts` changes. With several agents editing
+this tree at once, that is a wide window for a request to be orphaned mid-flight. So
+`describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts) rewrites the browser's
+message into one that names the cause, keeping the original in parentheses so it stays searchable:
+
+> Couldn't reach the dev server — is `npm run dev` still running? (Failed to fetch)
+
+Check the server the way [browser-testing.md](browser-testing.md) says to — don't take another
+agent's word for it, or your own from ten minutes ago:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:5273/api/article/<slug>
+```
+
+A comment whose POST never reached the server is **not** written to disk, so it disappears on
+reload rather than leaving a permanent unanswered mark. Nothing to clean up.
+
 ## Deliberate limits
 
 - **A selection under 8 characters is ignored.** Every one of these costs a model call, and a

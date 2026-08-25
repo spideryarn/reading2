@@ -16,6 +16,7 @@ import {
   loadComments,
   patchComment,
 } from "../src/comments.js";
+import { describeFetchFailure } from "../src/web/useComments.js";
 
 const SLUG = "test-comments-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -122,5 +123,23 @@ describe("comment storage", () => {
   it("refuses a slug that is not a path segment", async () => {
     await expect(loadComments("../../etc")).rejects.toThrow(/valid slug/);
     await expect(createComment("..", anchor)).rejects.toThrow(/valid slug/);
+  });
+});
+
+describe("describeFetchFailure", () => {
+  it("turns fetch's bare TypeError into something a reader can act on", () => {
+    // The failure Greg actually hit on 2026-08-25: the dev server was not
+    // running, and "Failed to fetch" said nothing about what to do next.
+    const message = describeFetchFailure(new TypeError("Failed to fetch"));
+    expect(message).toContain("npm run dev");
+    expect(message).toContain("Failed to fetch"); // still searchable
+  });
+
+  it("leaves a real server message alone", () => {
+    // Anything we threw ourselves already says something useful; wrapping it in
+    // "is the dev server running?" would be actively misleading.
+    expect(describeFetchFailure(new Error("OpenRouter 402: Insufficient credits"))).toBe(
+      "OpenRouter 402: Insufficient credits",
+    );
   });
 });
