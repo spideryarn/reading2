@@ -28,6 +28,7 @@ Start with [vision.md](docs/project/vision.md), then whichever of these you need
 | [block-ids.md](docs/project/block-ids.md) | **the spine** — the id format, and why ids are random rather than sequential |
 | [table-of-contents.md](docs/project/table-of-contents.md) | the deeply-nested ToC: schema, granularity, the generation prompt |
 | [architecture.md](docs/project/architecture.md) | pipeline stages, what a block is, storage layout, server, stage ownership |
+| [fetching.md](docs/project/fetching.md) | **stage 1**: the size cap that counts the right bytes, the charset sniff, why Node's own text decoder is wrong about curly quotes, and the certificate failure that works fine in your browser |
 | [content-extraction.md](docs/project/content-extraction.md) | the Readability extraction stage |
 | [web-client.md](docs/project/web-client.md) | the reading view (stage 6): where the client code is and the constraints it works under |
 | [tooltips.md](docs/project/tooltips.md) | the spine's hover tooltips: which library, why Floating UI over Radix and Tippy, and the four things that fail silently |
@@ -54,7 +55,10 @@ evidence behind a change, written before it landed and kept afterwards so the *w
 | Plan | What's in it |
 |---|---|
 | [shadcn-migration.md](docs/plans/shadcn-migration.md) | adopting Tailwind and shadcn components, 2026-08-25: the four guards Tailwind needs here, what shadcn covers and what it never will, and an honest account of what it buys. **Read it with [web-client.md § Tailwind and shadcn](docs/project/web-client.md#tailwind-and-shadcn-components) beside it** — several of its predictions were wrong in practice, and that section records what actually happened |
-| [left-sidebar.md](docs/plans/left-sidebar.md) | an icon rail left of the spine and a drawer over the top, designed 2026-08-25: what's in it and what's deliberately not, why the left edge rather than the right, the one parameter it adds, and the seven things that will break without an error |
+| [bottom-bar.md](docs/plans/bottom-bar.md) | the bar across the bottom and the drawer that rises out of it, 2026-08-25: why the bottom rather than the left (this view's hard problem is horizontal), what's in it and what's deliberately not, the ▾ that moved out of the masthead, and the three rules that had to move out of its way without ever looking broken |
+| [deploy-and-repo-move.md](docs/plans/deploy-and-repo-move.md) | **putting this on spideryarn.com and moving the repo**, planned 2026-08-25: the four things about one-process-with-a-disk that Vercel doesn't have and which of them Supabase removes, why we keep the API and put RLS *underneath* it rather than instead of it, the hard-coded one-email beta gate and the three ways a gate fails open, why the domain move should be a *new* Vercel project so rollback is one click, and the five things that break quietly when everything moves into `legacy/` |
+| [metadata-page.md](docs/plans/metadata-page.md) | **everything we know about an article, on a page of its own** at `/read/<slug>/metadata`, planned 2026-08-25: borrowed from the original version's Metadata tab, which was a tab and should not have been; what we take and the difficulty verdict we deliberately don't; the routing change both new pages need; the section that says whether what you're reading is stale; and the two copies of `WPM = 230` found while writing it |
+| [tweet-thread-page.md](docs/plans/tweet-thread-page.md) | **the article as a numbered thread**, at `/read/<slug>/tweets`, planned 2026-08-25: their prompt quoted in full and the three things wrong with it, the fact that they built this and then deleted it, why generation goes through the ingest queue rather than a thirty-second request, the `STEP_ORDER` split that stops every ingest writing a thread, and the anti-goals this feature has to answer to |
 
 `docs/reusable/` holds notes that aren't about this project and are meant to be carried elsewhere:
 

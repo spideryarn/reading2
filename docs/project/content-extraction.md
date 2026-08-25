@@ -3,12 +3,29 @@
 Strips a rich HTML page (article/blog post) down to the main content — drops nav, ads, sidebars, comments — using [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View algorithm).
 
 - Script: `src/extract.ts`
-- Run: `npm run extract -- <url> [outFile]` (defaults to `output/article.html`)
+- Run: `npm run extract -- <url> [outFile]` (defaults to `output/article.html`), **or paste the URL
+  into the homepage's add box** and the ingest queue runs it, along with the four stages after it —
+  [ingest-queue.md](ingest-queue.md). The CLI and the queue call the same function, so there is one
+  code path and no way for them to disagree.
+- The fetch itself is no longer here. Stage 1 is [`src/fetch.ts`](../../src/fetch.ts), which keeps
+  what it got in `data/<slug>/raw.html` — so re-extracting costs nothing and does not ask the
+  publisher again.
 - Output: a standalone, styled HTML file (not Markdown — kept as HTML to avoid losing structure/links/images)
 - Dependencies: `@mozilla/readability` + `jsdom` (parses HTML into a DOM, since Node has none natively)
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
 
 For background on why Readability was chosen over alternatives (trafilatura, defuddle, Diffbot, Jina Reader, LLM-based extraction, etc.), see the research discussion earlier in this project's chat history — no separate write-up exists yet.
+
+## The fetch above it
+
+Stage 1 moved out of this script into [`src/fetch.ts`](../../src/fetch.ts) on 2026-08-25 —
+[fetching.md](fetching.md). What that buys this stage: HTML already decoded with the page's own
+character encoding rather than assumed to be UTF-8, a PDF refused by name instead of arriving as
+Readability-proof gibberish, and a typed failure rather than `Fetch failed: 403`.
+
+One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
+after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
+relative links resolve against the wrong origin.
 
 ## Where this sits
 

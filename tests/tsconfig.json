@@ -15,6 +15,10 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["."],
+  /* The ambient declaration for html-encoding-sniffer lives beside the module
+     that uses it, and this project pulls that module in without owning the
+     directory it sits in — so name it, or `src/fetch.ts` is checked here with
+     an untyped import it does not have anywhere else. */
+  "include": [".", "../src/html-encoding-sniffer.d.ts"],
   "exclude": []
 }
