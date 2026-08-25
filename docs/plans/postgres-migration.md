@@ -25,7 +25,7 @@ cost is stated rather than buried.
 | | Decision | Standing |
 |---|---|---|
 | **Auth** | Design for it, don't build it — tables carry an owner column, RLS deferred, no login UI of our own | **Settled elsewhere, and compatibly.** Greg has since told the deploy plan that auth *is* in scope as [a one-email beta gate](deploy-and-repo-move.md#the-beta-gate). See [§ Auth](#auth-the-gate-is-someone-elses-plan) |
-| **Project** | Reuse the old app's Supabase project, new tables alongside | **Standing, with the cost now known.** The migration-ledger clash is solved ([§ Two schema authorities](#two-schema-authorities-and-the-tools-that-dont-respect-them)); the old project's `auth.users` trigger is not, and can't be ([§ The one thing reuse costs](#the-one-thing-reuse-costs-that-scoping-cannot-fix)) |
+| **Project** | ~~Reuse the old app's Supabase project~~ | **Reversed by Greg, 2026-08-25**: *"Ok, let's try a new project."* Taken once the cost of reuse was visible rather than assumed — see [§ A new project](#a-new-project-and-what-that-deletes) |
 | **Scope** | Everything in Postgres, including the HTML blobs | **Fine at these sizes.** One correction: what we store today isn't raw, so don't call it that |
 | **Client** | ~~`supabase-js`, not Drizzle/Prisma~~ | **Reversed by Greg, 2026-08-25**, once he decided [the API layer, not RLS, is the security boundary](deploy-and-repo-move.md#rls-and-realtime-not-now). Now **Drizzle for all data, Supabase for Auth alone** — see [§ The client](#the-client-drizzle-for-data-supabase-for-auth) |
 
@@ -626,64 +626,50 @@ orchestration, spend limits, publication, validation and stable wire types all s
 server code. It would also couple the UI to the schema at exactly the moment we need the
 filesystem/Postgres switch to stay *below* the API seam.
 
-### Two schema authorities, and the tools that don't respect them
+### A new project, and what that deletes
 
-The first draft said a custom schema isolates migration history. **It doesn't** — both repos share
-`supabase_migrations.schema_migrations`, and `supabase migration repair` rewrites it for everyone.
-That was the plan's worst factual error and it survived a whole review before being caught.
+Greg's first answer was to reuse the old app's project. Two costs surfaced *after* that decision,
+and once both were written down he reversed it:
 
-Drizzle removes the *specific* collision, because `drizzle-kit` keeps its own ledger table and never
-touches Supabase's. The old repo's `supabase db push` will not see Spideryarn migration ids and so
-will not refuse. Verified locally: the old workflow runs `supabase db push --linked` and
-`supabase gen types --linked` and nothing else — **no diff, no reset** — so a routine old-repo deploy
-cannot drop `spideryarn.*`.
+> Ok, let's try a new project.
+>
+> — Greg, 2026-08-25
 
-But **a separate ledger is necessary, not sufficient.** Four commands still reach across the boundary:
+**This is the single largest simplification in the plan**, and it is worth recording what it removed
+rather than quietly enjoying it. Both problems were real, and only one of them could be managed:
 
-| Command | What it does to us | Rule |
-|---|---|---|
-| `supabase db diff --linked` in the old repo | defaults to **all** schemas; can adopt our tables into the old migration history, or generate SQL to remove them | always `--schema public` (plus any other old-owned schema). The `[api].schemas` setting does **not** scope this — it only controls PostgREST exposure |
-| `supabase db reset --linked` | drops remote objects and replays only that repo's migrations. `spideryarn` would be gone and unrecoverable from the old history | never against this project. It is for throwaway environments |
-| `drizzle-kit push` | introspects the live database and computes a diff. Current Drizzle defaults to all schemas unless `schemaFilter` is set — and that default **changed** between major versions | never against production. Locally, `schemaFilter: ["spideryarn"]` |
-| `drizzle-kit generate` / `migrate` | compares TS against Drizzle's own snapshot; applies committed files. Blind to live objects, which is what makes it safe | the only two that run against production |
+- **A shared migration ledger.** An earlier draft claimed a custom schema isolates migration
+  history. It does not — both repos would have shared `supabase_migrations.schema_migrations`, and
+  `supabase migration repair` rewrites it for everyone. Drizzle's own ledger removed that specific
+  collision, but not the wider hazard: an unscoped `supabase db diff` in the old repo defaults to
+  *all* schemas and could have adopted our tables into its history, and `supabase db reset --linked`
+  would have dropped `spideryarn` with no way to recreate it. Manageable, but only by a discipline
+  kept in a repository nobody is actively working in.
+- **A trigger that scoping could not reach.** The old project has a live `SECURITY DEFINER` trigger
+  on `auth.users` that inserts into `public.profiles`. Every future Spideryarn signup would have
+  written a row into the old app — and a failure there would have failed the signup. Greg's own
+  login would not have fired it, so it would not have appeared in testing.
 
-Two more consequences:
+A new project costs nothing and deletes both, along with the old project's "Grace period is over"
+billing banner, which could have taken the new app down for reasons unrelated to either app's code.
 
-- **Name the Drizzle ledger.** Not the default generic `drizzle` schema — use something like
-  `spideryarn_migrations.__drizzle_migrations`, so a second Drizzle app can't silently share it. Keep
-  it *outside* the `spideryarn` schema filter, or a future `push` will see its own bookkeeping table
-  as an undeclared object and offer to drop it.
-- **Pin `drizzle-orm`, `drizzle-kit` and the driver to exact versions.** Drizzle has already changed
-  its default schema scope once between major lines. A `latest` range in migration CI is precisely how
-  a command that was scoped yesterday starts inspecting the whole shared project tomorrow.
+Two things still worth carrying across, because they are good practice rather than workarounds:
 
-So the condition is no longer "one repository owns `db push`". It is: **two authorities, two ledgers,
-every cross-boundary command explicitly scoped, and no `push` or `reset` against production.**
+- **The Drizzle ledger is still explicitly named** (`spideryarn_migrations.__drizzle_migrations`)
+  and still sits outside `schemaFilter`. Not because another app might share it now, but because a
+  `push` that sees its own bookkeeping table as an undeclared object will offer to drop it.
+- **`drizzle-kit push` is still banned against anything that matters**, and `schemaFilter` is still
+  pinned to `spideryarn`. A new project still contains Supabase's own `auth` and `storage` schemas,
+  and Drizzle's default scope has already changed once between major versions.
 
-### The one thing reuse costs that scoping cannot fix
+**What this does not change**: everything about the schema, the block-id rules, the queue, the
+publication protocol and the client decision is identical either way. The reuse question was always
+about blast radius, never about design.
 
-The old project has this, applied 2025-06-03 and still live:
-
-```sql
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();   -- inserts into public.profiles
-```
-
-**Every future Spideryarn signup writes a row into the old app's `profiles` table**, and because the
-function is `SECURITY DEFINER` and unguarded, a failure inside it — a constraint the old app adds
-later, a column that stops accepting `'{}'` — **fails the signup itself**. Our new user cannot log in,
-and the error surfaces from a repository nobody is looking at.
-
-Greg's existing login won't trigger it (the row already exists), so this will not show up in testing.
-With a one-email beta gate it is close to harmless today. It is listed because it is the honest
-counterweight to the reuse decision: schema scoping is a discipline we can keep, and this is a
-coupling that exists whatever we do. Together with the billing banner, it is the case for a separate
-project — which costs nothing and deletes this section and the one above it.
-
-**Greg has decided to reuse the project.** This is written down so the decision is made with the
-trigger in view rather than around it, and so that if a signup ever fails mysteriously, this is the
-first place to look.
+**What it costs**: the old project's 15 documents, 9 users and 41 storage objects stay where they
+are, so the two apps no longer share a login. That is a real consequence and nobody has asked for
+those accounts — but it means the beta gate authenticates against an empty user pool, which is
+strictly safer than the alternative it replaces.
 
 ### Auth: the gate is someone else's plan
 
@@ -711,10 +697,11 @@ Two things follow for **this** plan, and they are the whole of its auth work:
   [§ The Supabase docs' grant block](#the-supabase-docs-grant-block-opens-the-database). Grant to
   `service_role` alone.
 
-The one thing worth flagging back to that plan: a gate that authenticates against **the old app's
-Supabase project** authenticates against its **9 existing users**, on an email provider that is
-already enabled. The allowlist is what makes that safe, so it must not quietly become
-"any authenticated user".
+The one thing worth flagging back to that plan **has been fixed by the new-project decision**: a
+gate authenticating against the old app's project would have been authenticating against its 9
+existing users, on an email provider already enabled, with only the allowlist making that safe. A new
+project starts with no users at all. The allowlist still must not quietly become "any authenticated
+user" — but it is now a second lock rather than the only one.
 
 ---
 
@@ -725,7 +712,7 @@ an exporter for moving back, both temporary.
 
 | # | Step | Ends with |
 |---|---|---|
-| 1 | **Settle the tooling boundary** — scoped old-repo diffs, no linked reset, no production `push`, a named Drizzle ledger, pinned versions. Create the runtime and migration roles | Nothing built, the boundary written down where the old repo can see it |
+| 1 | **Create the new Supabase project**, then the runtime and migration roles. Confirm `spideryarn` is not in the exposed schemas | A project, three credentials, and the superuser password nowhere near Vercel |
 | 2 | **Introduce storage contracts, still filesystem-backed**: `ArticleReader`, `CommentStore`, `JobStore`, `PipelineArtifactStore` | Existing tests pass unchanged |
 | 3 | **Apply the schema additively** — Drizzle schema in TS, `drizzle-kit generate`, a `--custom` migration for the `auth.users` FKs and the roles/grants, `ai_calls` | No behaviour change. Nothing dropped. Catalog assertions pass |
 | 4 | **Build the importer and the exporter.** The exporter *is* the rollback mechanism | Both idempotent, ids and ordinals preserved exactly |
@@ -785,21 +772,21 @@ lists four requirements. Answering its explicit question — **it is storage, no
 
 ## Open questions
 
-1. **The billing banner on the Supabase project.** Resolve before the new app depends on it.
+1. ~~The billing banner on the Supabase project.~~ **Gone** with the new-project decision. The old
+   project's billing state can no longer take the new app down.
 2. ~~Mutations in production: closed, or a minimal gate?~~ **Answered** by
-   [the beta gate](deploy-and-repo-move.md#the-beta-gate) — a one-email allowlist. Kept here only to
-   note that it authenticates against a user pool that already has 9 accounts in it.
-3. ~~Which repo owns `db push`?~~ **Answered** by separate ledgers — see
-   [§ Two schema authorities](#two-schema-authorities-and-the-tools-that-dont-respect-them). What
-   replaces it is not a blocker but a discipline: the scoping rules in that table have to be written
-   into the *old* repo too, since that is where the dangerous commands would be typed.
+   [the beta gate](deploy-and-repo-move.md#the-beta-gate) — a one-email allowlist, now against an
+   empty user pool rather than 9 inherited accounts.
+3. ~~Which repo owns `db push`?~~ **Gone entirely** — the repos no longer share a database. What
+   survives is one rule that is about Supabase's own schemas rather than the old app's: never
+   `drizzle-kit push` against anything that matters, and keep `schemaFilter` pinned.
 4. **How many revisions to keep?** Recommendation: current + previous, pruned beyond that. Full
    history is an archive nobody asked for.
 5. **Does the old app's data need extracting** before that project is eventually retired? 15
-   documents, 9 users, 41 storage objects.
-6. **The `on_auth_user_created` trigger.** Leave it, guard it with an exception handler, or drop it?
-   Dropping it is the old repo's call, not ours. Recommendation: leave it and remember it exists —
-   see [§ The one thing reuse costs](#the-one-thing-reuse-costs-that-scoping-cannot-fix).
+   documents, 9 users, 41 storage objects. **Less urgent now** — the new project does not depend on
+   the old one, so retiring it is a decision on its own timetable rather than a prerequisite.
+6. ~~The `on_auth_user_created` trigger.~~ **Not our problem any more.** It stays in the old project,
+   affecting only the old app.
 7. **How many pipeline artefacts does `tweets` add to the schema?** It arrived after this plan was
    drafted, with a `tweets.json` per article and a real content hash. It should be a JSONB column on
    the revision plus a `revision_step_runs` row, like `tree` and `arc` — but confirm before writing

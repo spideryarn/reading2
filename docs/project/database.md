@@ -44,7 +44,33 @@ change when an unread field is recomputed and *don't* change when two blocks swa
 
 ## Next: Supabase Postgres
 
-Planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —
+**The schema now exists and has been applied to a real Postgres — locally.** Nothing reads or writes
+it; the app is still entirely on files. What is built:
+
+| File | What it is |
+|---|---|
+| [`src/db/schema.ts`](../../src/db/schema.ts) | the nine tables, in TypeScript. The source of truth |
+| [`drizzle/0000_initial_schema.sql`](../../drizzle/0000_initial_schema.sql) | generated from it by `npm run db:generate` |
+| [`drizzle/0001_auth_fks_and_roles.sql`](../../drizzle/0001_auth_fks_and_roles.sql) | hand-written: the `auth.users` FKs, the current-revision pointer, the indexes, the singleton queue row |
+| [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) | nine assertions that the schema *enforces* what the plan promises |
+| [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) | `npm run db:migrate` |
+
+```bash
+npm run db:start     # docs/project/supabase-local.md
+npm run db:migrate   # apply drizzle/ to DATABASE_URL
+npm test             # tests/db-schema.test.ts now runs for real
+```
+
+**`npm run db:migrate`, never `drizzle-kit push`.** `drizzle.config.ts` deliberately carries no
+connection details, so `push` — which introspects a live database and computes a diff — cannot
+connect at all. That is a guard rail rather than a rule to remember.
+
+The schema tests **skip** rather than fail when there is no database, and a skipped test protects
+nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the difference is
+visible; it was not in the first version of that file, which reported nine passes for having checked
+nothing.
+
+Everything below is still planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —
 is in [postgres-migration.md](../plans/postgres-migration.md). The parts worth knowing before you
 touch anything storage-shaped:
 
@@ -71,12 +97,14 @@ touch anything storage-shaped:
 
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
-- **A custom schema does not isolate migration history.** Both repos share
-  `supabase_migrations.schema_migrations`. **No longer a blocker**, because Drizzle keeps its own
-  migration ledger and never touches Supabase's — but a separate ledger is necessary, not sufficient:
-  an unscoped `supabase db diff`, a linked `db reset`, or a `drizzle-kit push` still reaches across
-  the boundary. The rules are in
-  [§ Two schema authorities](../plans/postgres-migration.md#two-schema-authorities-and-the-tools-that-dont-respect-them).
+- **The Supabase CLI does not know about our migrations.** Ours are Drizzle's, in
+  `spideryarn_migrations.__drizzle_migrations`; the CLI reads
+  `supabase_migrations.schema_migrations` and sees an empty history. So **`supabase db reset
+  --linked` drops `spideryarn` and cannot put it back** — it replays only the migrations it knows
+  about, and it knows about none of ours. Never run it against a project that matters. Same for
+  `drizzle-kit push`, which introspects a live database and computes a diff; only `generate` and
+  `migrate` are safe. See
+  [§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes).
 - **The grant block in the Supabase custom-schemas guide opens the database.** Granting to `anon`
   plus permissive-or-absent RLS means the public key reads everything, and nothing errors.
 - **Block ids are unique only *within* an article.** The primary key is `(article_id, block_id)`,

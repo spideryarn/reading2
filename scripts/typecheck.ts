@@ -32,12 +32,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /**
  * Kept deliberately short. Every directory listed here is one the coverage
  * check below cannot see into, so "there is no TypeScript in there" has to be
- * true by construction rather than by assumption: these three hold dependencies,
- * git internals and build output, none of which is ours. `data/`, `example/`
- * and `output/` are artefact stores and are walked anyway — they are small, and
- * a source file appearing in one is exactly the surprise worth hearing about.
+ * true by construction rather than by assumption: these hold dependencies, git
+ * internals, build output and CLI scratch, none of which is ours. `data/`,
+ * `example/` and `output/` are artefact stores and are walked anyway — they are
+ * small, and a source file appearing in one is exactly the surprise worth
+ * hearing about.
+ *
+ * `.temp` is where the Supabase CLI puts a running stack's scratch state, and
+ * `supabase start` drops a Deno edge-runtime `index.ts` in there. It is not our
+ * source, it is git-ignored, and it exists only while the local stack is up —
+ * so without this the typecheck passes or fails depending on whether somebody
+ * happens to have a database running.
  */
-const SKIP = new Set(["node_modules", ".git", "dist"]);
+const SKIP = new Set(["node_modules", ".git", "dist", ".temp"]);
 
 function walk(dir: string, hit: (file: string) => void): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

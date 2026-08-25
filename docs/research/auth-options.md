@@ -90,9 +90,10 @@ It still loses, on four counts:
    RLS-guarded call. An extra hop on every database access, unsupported by both vendors.
 2. **A third migration authority.** Better Auth creates `user`, `session`, `account` and
    `verification` through its own CLI. That arrives straight into
-   [§ Two schema authorities](../plans/postgres-migration.md#two-schema-authorities-and-the-tools-that-dont-respect-them).
-   Spideryarn already runs two ledgers — Drizzle's and the old app's — and each one has to be scoped
-   away from the other's schemas; Better Auth would make it three. Workable — generate the SQL and hand-fold it into a
+   [§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes).
+   Spideryarn already runs two migration authorities — Drizzle's, for `spideryarn`, and Supabase's
+   own, for `auth` and `storage`, which we neither own nor touch. Better Auth would make it three,
+   and the third would want to write tables next to schemas it does not own. Workable — generate the SQL and hand-fold it into a
    timestamped migration — but that is permanent manual glue, re-done every time a plugin adds a
    column.
 3. **A live CVE stream.** Three in 2025-2026, two critical: unauthenticated API-key creation leading

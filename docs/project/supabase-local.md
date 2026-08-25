@@ -17,7 +17,14 @@ npm run db:start       # supabase start — first run pulls ~2 GB of images
 npm run db:status      # the URLs and keys again
 npm run db:stop        # containers down; the data is kept and restored on next start
 npm run db:reset       # wipes the database and replays NOTHING — read below first
+npm run db:migrate     # apply drizzle/ — this is what creates the `spideryarn` schema
+npm run db:generate    # regenerate drizzle/ SQL after editing src/db/schema.ts
 ```
+
+**After any reset, run `npm run db:migrate`.** Our migrations are Drizzle's, in `drizzle/`, and the
+Supabase CLI cannot see them — so a reset leaves the `spideryarn` schema absent and
+[its tests](../../tests/db-schema.test.ts) go quietly back to skipping rather than failing. The
+tables and what they promise are in [database.md](database.md#next-supabase-postgres).
 
 Docker has to be running first. Greg's `docker` context points at **OrbStack**, so `open -a
 OrbStack` is what starts the engine; `docker info` failing with *"Cannot connect to the Docker
