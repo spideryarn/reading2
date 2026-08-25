@@ -183,7 +183,10 @@ export function DesignPage() {
           woff2 failed to load and everything has fallen through to the system stack.
         </p>
         <div className="design-panel">
-          <div className="prose">
+          {/* `design-sample` restates the row padding the reading view gets from
+              its table, off the same --rhythm. Without it these blocks touch —
+              see styles.css § THE SAMPLE ARTICLE HAS NO TABLE UNDER IT. */}
+          <div className="prose design-sample">
             <h2>How markets learn, and how slowly</h2>
             <p>
               The first thing to notice is that prices already contain most of what anyone knows,
@@ -274,7 +277,12 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
                 const r = ratio(m?.rgb ?? null, page);
                 return (
                   <div key={name} className="design-swatch">
-                    <div className="design-chip" style={{ background: `var(${name})` }} />
+                    {/* The colour goes on a CHILD of the chequerboard, not on
+                        it: `background` is a shorthand and would reset the
+                        board's background-image to none. styles.css explains. */}
+                    <div className="design-chip">
+                      <div className="design-chip-fill" style={{ background: `var(${name})` }} />
+                    </div>
                     <code className="design-token">{name}</code>
                     <span className="design-note">{m ? m.css : "measuring…"}</span>
                     {/* Never silently blank: a token that could not be measured

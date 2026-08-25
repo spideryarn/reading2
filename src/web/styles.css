@@ -101,7 +101,13 @@
    docs/reusable/css-sticky-containing-block.md. */
 .reader {
   --spine-w: 13rem;
-  padding-left: var(--spine-w);
+  /* The mode band's width, set inline in pixels by App from `fit.modeW`, and
+     ZERO in the table-of-contents mode. Declared here so every rule below can
+     add it unconditionally: `+ 0px` is a no-op, which is what makes the default
+     mode cost nothing rather than needing a second set of rules.
+     See § mode band at the end of this file. */
+  --mode-w: 0px;
+  padding-left: calc(var(--spine-w) + var(--mode-w));
   /* min-width is set inline, in pixels, by App — see the note above. */
 }
 .reader.spine-full { --spine-w: 13rem; }
@@ -137,8 +143,12 @@ body {
    don't drift away when you scroll right. */
 .masthead {
   position: sticky;
-  left: var(--spine-w);
-  width: calc(100vw - var(--spine-w));
+  /* Shifted clear of the mode band, along with the controls bar below it.
+     Both are `100vw`-wide sticky bars, so without the `--mode-w` term the band
+     would paint over their left end — and what it would cover is the article's
+     own title, which is the one thing on this page you would notice missing. */
+  left: calc(var(--spine-w) + var(--mode-w));
+  width: calc(100vw - var(--spine-w) - var(--mode-w));
   background: var(--page);
   padding: 1.25rem 1.5rem 0.9rem;
 }
@@ -201,8 +211,8 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 .controls {
   position: sticky;
   top: 0;
-  left: var(--spine-w);
-  width: calc(100vw - var(--spine-w));
+  left: calc(var(--spine-w) + var(--mode-w));
+  width: calc(100vw - var(--spine-w) - var(--mode-w));
   z-index: 40;
   height: var(--bar-h);
   display: flex;
@@ -373,8 +383,11 @@ td.pin-left, thead th.pin-left {
   position: sticky;
   /* Not `left: 0` — that is the viewport edge, which is underneath the spine.
      The rail is `position: fixed`, so it does not push the sticky edge along
-     for us. */
-  left: var(--spine-w);
+     for us, and neither does the mode band. `--mode-w` is 0 in the
+     table-of-contents mode, where this rule does all its work today; the term
+     is here so that a mode which keeps a pinned column cannot slide it under
+     the band. */
+  left: calc(var(--spine-w) + var(--mode-w));
   z-index: 15;
   box-shadow: 1px 0 0 var(--rule-strong), 8px 0 14px -8px rgb(0 0 0 / 0.75);
 }
@@ -2015,6 +2028,25 @@ mark.cmt[data-mark-end]::after {
   border-radius: var(--radius);
 }
 
+/* THE SAMPLE ARTICLE HAS NO TABLE UNDER IT, and that turned out to matter.
+   In the reading view every block is its own table row, and all the vertical
+   rhythm comes from `td.text` padding (§ text, far above). Here the same
+   elements are plain siblings inside one .prose, where `.prose > * { margin: 0 }`
+   leaves them touching: the heading sat directly on the paragraph it
+   introduced, the quote directly on the paragraph before it, and the sample
+   demonstrated the exact opposite of what its own caption claims.
+
+   So the row padding is restated here — in the SAME arithmetic off the SAME
+   variable, never as hand-picked numbers, so the sample still shows the real
+   spacing rather than an imitation of it:
+
+     between blocks   half a unit each side of a row  = 1 unit
+     above a heading  1 unit + the previous half      = 1.5 units
+     below a heading  a quarter + the next half       = 0.75 units  */
+.design-sample > * + * { margin-top: var(--rhythm); }
+.design-sample > :is(h1, h2, h3, h4, h5, h6) { margin-top: calc(var(--rhythm) * 1.5); }
+.design-sample > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--rhythm) * 0.75); }
+
 .design-row {
   display: flex;
   flex-wrap: wrap;
@@ -2031,10 +2063,23 @@ mark.cmt[data-mark-end]::after {
 .design-swatch { display: flex; flex-direction: column; gap: 0.15rem; }
 .design-swatch .design-note { margin: 0; }
 /* The chequerboard shows through anything not fully opaque, which is the only
-   way to see at a glance that a token you assumed was solid is not. */
+   way to see at a glance that a token you assumed was solid is not.
+
+   TWO ELEMENTS, and the reason is a shorthand. The swatch colour arrives as an
+   inline `style={{ background: … }}`, and `background` is a SHORTHAND: it
+   resets `background-image` to `none`. Painted onto this element it therefore
+   wiped the chequerboard, and every chip rendered flat — the comment above
+   promised a capability the code had silently removed, which nothing would ever
+   have reported because all our tokens happen to be opaque today.
+
+   Even switching the inline style to `background-color` would not fix it:
+   `background-image` paints ABOVE `background-color`, so the chequerboard would
+   cover the colour rather than show through it. The board has to be on a parent
+   and the colour on a child. */
 .design-chip {
   height: 3rem;
   margin-bottom: 0.3rem;
+  overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: calc(var(--radius) - 4px);
   background-image:
@@ -2042,6 +2087,7 @@ mark.cmt[data-mark-end]::after {
     linear-gradient(-45deg, var(--rule-strong) 25%, transparent 25%);
   background-size: 10px 10px;
 }
+.design-chip-fill { height: 100%; }
 
 .design-table { border-collapse: collapse; width: 100%; }
 /* `border-right: 0` is not redundant. The bare `td` rule far above gives EVERY
@@ -2056,6 +2102,9 @@ mark.cmt[data-mark-end]::after {
   vertical-align: middle;
 }
 .design-table td:first-child { width: 10rem; }
+/* Otherwise the last row's rule and the next section's top border stack up a
+   few pixels apart and read as a mistake. */
+.design-table tr:last-child td { border-bottom: 0; }
 
 .design-icons { gap: 1.4rem; }
 .design-icon-cell {
@@ -2064,7 +2113,12 @@ mark.cmt[data-mark-end]::after {
   gap: 0.5rem;
   color: var(--ink-soft);
 }
+/* `.design-note` carries a 0.9rem bottom margin for its use as a paragraph,
+   and inside a centred flex row that margin lifts the label clear of the icons
+   beside it — they looked misaligned, and the cause was a margin rather than
+   anything to do with alignment. */
 .design-icon-cell em { font-style: normal; }
+.design-icon-cell .design-note { margin: 0; }
 
 /* The one place in the app outside the article where --rhythm is legitimate:
    this section exists to display it. */
@@ -2088,3 +2142,282 @@ mark.cmt[data-mark-end]::after {
   padding-top: var(--rhythm);
   padding-bottom: calc(var(--rhythm) / 4);
 }
+
+/* --------------------------------------------------------- § mode band ----
+   The strip between the spine and the prose when the middle belongs to a mode
+   rather than to the table of contents. Chat is the first one; see
+   ChatPanel.tsx and docs/plans/chat-mode.md.
+
+   THE ONE THING TO UNDERSTAND HERE: the band is `position: fixed`, and the
+   room for it is made by `--mode-w` in four rules further up this file —
+   `.reader`'s padding-left, `.masthead`, `.controls`, and `td.pin-left`. The
+   band itself reserves no space, because a fixed element cannot. Change its
+   width anywhere other than by setting `--mode-w` and the article will simply
+   be underneath it, with no error and nothing in the layout to blame. */
+.chat {
+  position: fixed;
+  /* Left of the spine's right edge, right of nothing — the band starts exactly
+     where the spine ends, so the two read as one rail of chrome. */
+  left: var(--spine-w);
+  width: var(--mode-w);
+  /* Below the controls bar and above the dock. NOT below the masthead: the
+     masthead scrolls away, and a band that started under it would slide up to
+     meet the bar and leave a gap that opens and closes as you read. */
+  top: var(--bar-h);
+  bottom: var(--dock-h);
+  z-index: 44; /* under the spine (45), over the controls bar (40) */
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* or the scroller below refuses to shrink and overflows the band */
+  background: var(--panel);
+  border-right: 1px solid var(--rule-strong);
+  font-family: var(--font-ui);
+  font-size: 0.87rem;
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.chat-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  /* A thread's title is the reader's first sentence and can be sixty
+     characters. One line, cut — the whole thing is in the list behind the ×. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.chat-icon:hover { background: var(--surface-raised); color: var(--ink); }
+.chat-icon.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+
+.chat-error {
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  color: var(--highlight-ink);
+  font-size: 0.8rem;
+}
+
+/* ---- the list of conversations ---- */
+.chat-threads { flex: 1; margin: 0; padding: 0.35rem; list-style: none; overflow-y: auto; }
+.chat-thread {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  border-radius: var(--radius);
+}
+.chat-thread:hover { background: var(--surface-raised); }
+.chat-thread-open {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-thread-open:hover { color: var(--ink); }
+.chat-thread-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-thread-count { color: var(--ink-faint); font-size: 0.75rem; }
+.chat-rename {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font: inherit;
+}
+
+.chat-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
+.chat-empty p { margin: 0 0 0.5rem; }
+.chat-empty-hint { font-size: 0.82rem; line-height: 1.45; }
+.chat-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.chat-new:hover { border-color: var(--highlight); }
+
+/* ---- one conversation ---- */
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.7rem;
+  /* The band is narrow and the turns are prose, so they get the reading face
+     rather than the UI one — an answer set in the interface font reads as a
+     system message rather than as something written. */
+  font-family: var(--font-reading);
+  line-height: 1.5;
+}
+
+.chat-turn { margin: 0 0 0.85rem; }
+.chat-turn.you {
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  /* Preserved, because a reader's own newlines are theirs — Shift-Enter in the
+     composer means something, and collapsing it would make the box lie. */
+  white-space: pre-wrap;
+}
+.chat-turn.model { color: var(--ink-soft); }
+.chat-turn.model p {
+  margin: 0 0 0.6rem;
+  /* `pre-wrap`, not the default, and the reason is a wart you would only notice
+     on the answers that use it. ChatPanel splits an answer on BLANK lines into
+     paragraphs and interprets nothing else — so a model that writes a short
+     bullet list, which the prompt permits, separates its items with single
+     newlines. Collapsed to spaces those items run together on one line as
+     "- one - two - three", which reads as a formatting bug in the model rather
+     than in us. `pre-wrap` keeps the breaks and still wraps long lines. */
+  white-space: pre-wrap;
+}
+.chat-turn.model p:last-child { margin-bottom: 0; }
+.chat-turn.model.failed { color: var(--ink-faint); }
+
+.chat-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+}
+
+/* The caret at the end of a streaming answer. Purely so a long pause between
+   tokens reads as "still coming" rather than as "finished, oddly". */
+.chat-cursor {
+  display: inline-block;
+  width: 0.45rem;
+  height: 1em;
+  margin-left: 0.1rem;
+  background: var(--highlight);
+  vertical-align: text-bottom;
+  animation: chat-blink 1s steps(2, start) infinite;
+}
+@keyframes chat-blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .chat-cursor { animation: none; opacity: 0.6; }
+}
+
+.chat-failed {
+  margin: 0.3rem 0 0;
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+
+/* Block-id chips. The whole feature, visually: a claim you can press to go and
+   check. Deliberately quiet — they are punctuation in a sentence, not buttons —
+   and they light up on hover, where the tooltip also says where they go. */
+.chat-cite {
+  display: inline-flex;
+  gap: 0.2rem;
+  margin: 0 0.1rem;
+  vertical-align: baseline;
+}
+.chat-cite .block-ref {
+  padding: 0 0.28rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 0.4rem;
+  background: var(--surface-raised);
+  font-size: 0.72em;
+}
+.chat-cite .block-ref:hover {
+  border-color: var(--highlight);
+  color: var(--highlight-ink);
+}
+
+.chat-sources {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px solid var(--rule);
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+}
+.chat-sources a { color: var(--ink-faint); }
+.chat-sources a:hover { color: var(--highlight-ink); }
+
+/* ---- the composer ---- */
+.chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border-top: 1px solid var(--rule);
+}
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  /* Height is set inline by the component as the content grows; this is the
+     floor, and `resize: none` is what stops the reader dragging the box over
+     the article it is supposed to sit beside. */
+  max-height: 10rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  resize: none;
+}
+.chat-input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.chat-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+}
+.chat-send:disabled { opacity: 0.45; cursor: default; }
+.chat-send:not(:disabled):hover { border-color: var(--highlight); color: var(--highlight-ink); }
