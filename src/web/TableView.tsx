@@ -119,7 +119,10 @@ export function TableView({
       style={{ width: layout.tableW }}
     >
       <colgroup>
+        {/* The index is the column's identity here — <col> is positional by
+            definition, and these never reorder. */}
         {layout.widths.map((w, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: <col> is positional
           <col key={i} style={{ width: w }} />
         ))}
       </colgroup>

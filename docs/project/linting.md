@@ -155,15 +155,66 @@ So `biome.jsonc` sets `"useEditorconfig": true` even though the formatter is off
 today, and it means that whoever eventually flips `enabled` to `true` gets space/2 from
 `.editorconfig` rather than silently converting all 10,151 lines to tabs on the first run.
 
+## What the first run found
+
+Twenty diagnostics on the first real run. They sorted into three piles, and the split is the useful
+part — a linter's findings are not uniformly "bugs to fix".
+
+**Fixed (12).** Five `<button>`s with no `type` (harmless today — there is no `<form>` in the app at
+all — but `type` defaults to `submit`, so it is a trap laid for whoever adds one); three string
+concatenations that wanted template literals; three `return fail(…), null` comma operators in
+[`validate-tree.ts`](../../src/validate-tree.ts) that read as a typo and are now two statements; and
+the vendored `src/web/components/ui/**` excluded rather than hand-edited, since `npx shadcn add`
+overwrites those.
+
+**False positives, suppressed one line at a time with the reason (5).** Never by switching a rule
+off globally. The interesting one is
+[`Spine.tsx`](../../src/web/Spine.tsx): `useExhaustiveDependencies` reports `layoutKey` as a
+dependency the effect doesn't use — true, it doesn't *read* it. It is a **re-run trigger**, which is
+the entire purpose of the prop. Biome marks that diagnostic `FIXABLE`, and its fix deletes
+`layoutKey` from the array, which stops the spine re-measuring when the table's layout changes.
+
+> **`npm run lint:fix` would have introduced that bug silently.** Read what a fix does before
+> applying it in bulk; `FIXABLE` means "Biome can rewrite this", not "Biome is right".
+
+The others: `<col key={i}>` — a `<col>` is positional by definition, the index *is* its identity;
+two static lists rebuilt whole with no child state; and a `tabIndex={0}` on a `role="img"` span that
+`noNoninteractiveTabindex` wants removed, when it is what makes the tooltip reachable without a mouse
+([Tooltip.tsx](../../src/web/Tooltip.tsx) opens on focus). Removing it would take accessibility away.
+
+**Left alone, on purpose (2 + 1).** Two `useKeyWithClickEvents` on gist cells in
+[`TableView.tsx`](../../src/web/TableView.tsx): real, but making cells focusable and Enter-activated
+is a design decision about [keyboard.md](keyboard.md), not a lint fix. And the one that matters —
+`noDangerouslySetInnerHtml` — turned out to be a genuine way for a hostile article to run JavaScript
+in the reading view. It has its own entry, [Q9](open-questions.md#q9), with the pipeline traced and
+the payloads that survive Readability. **It is deliberately not suppressed.**
+
+### Suppression syntax, since it cost us three attempts
+
+A `biome-ignore` comment must sit **immediately** above the thing it suppresses, and "the thing" is
+whatever the diagnostic points at — sometimes a JSX *attribute* rather than the element:
+
+```jsx
+<span
+  className={…}
+  // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the tooltip
+  tabIndex={0}     // ← the diagnostic is on this attribute, so the comment goes here
+```
+
+Put explanatory prose *above* the `biome-ignore` line, never between it and the code — any line in
+between and the suppression stops applying. Inside JSX children, `//` is rendered text, not a
+comment; use `{/* biome-ignore … */}` there.
+
+The saving grace is that Biome **tells you** when a suppression does nothing
+(`suppressions/unused`), which is the opposite of how it treats a comment in `biome.json`. A dead
+suppression is loud; a dead config is silent.
+
 ## The baseline is not green yet
 
-`npm run lint` currently reports around 20 errors, and they are real — mostly accessibility
-(`useButtonType`, `useKeyWithClickEvents`), a couple of React correctness ones
-(`useExhaustiveDependencies`, `noArrayIndexKey`), and one `dangerouslySetInnerHTML`.
-
-They were left alone deliberately. Nearly every file involved is being edited by another agent right
-now, and a lint sweep across someone else's in-flight work is how you lose their changes. Fixing
-them is a separate piece of work, best done per-file by whoever owns that file.
+`npm run lint` still reports a handful, and the count moves as other agents land work. What remains
+is the two `useKeyWithClickEvents` and the `dangerouslySetInnerHTML` above, plus whatever arrived
+this morning.
 
 **So `npm run lint` is not yet a gate that passes.** Don't wire it into anything that must be green
-until the baseline is cleared — and don't clear the baseline by turning rules off.
+until the baseline is cleared — and don't clear the baseline by turning rules off. Suppress a single
+line with a reason, or fix it, or write it down as an open question. Not the third option quietly.

@@ -117,3 +117,53 @@ Related and also open: the fisheye sketch leans toward showing the author's **re
 the tabular view shows **generated gists**. Those are different bargains with
 [principle 1](vision.md#principles) and should be reconciled deliberately.
 
+
+---
+
+## Q9 — A hostile article can run JavaScript in the reading view <a id="q9"></a>
+
+Found by the linter — `lint/security/noDangerouslySetInnerHtml` at
+[`src/web/TableView.tsx`](../../src/web/TableView.tsx). Not a style complaint. The chain is:
+
+```
+any URL the reader gives us
+  → fetch → JSDOM → Readability            (src/extract.ts)
+  → output/<slug>.html
+  → content.outerHTML  →  block.html       (src/blocks.ts)
+  → annotateHtml(...)  →  dangerouslySetInnerHTML   (src/web/TableView.tsx)
+```
+
+Readability is **not a sanitiser** and Mozilla says so in its own README. Tested rather than assumed
+— a hostile page through the real pipeline, checking what comes out the other end:
+
+| Payload | Survives Readability? |
+|---|---|
+| `<script>` | stripped |
+| `<iframe>`, `<form>` | stripped |
+| `javascript:` href | stripped |
+| `onmouseover=` | stripped |
+| **`<img onerror=…>`** | **survives** |
+| **`<svg onload=…>`** | **survives** |
+
+`<script>` inserted via `innerHTML` never executes, which is presumably why this has gone unnoticed.
+`onerror` and `onload` are not so lucky: both fire, and the surviving `<img src="…/x" onerror="…">`
+runs on load failure — which is guaranteed, because the src is bogus. So arbitrary JavaScript from
+the article's author runs in our origin.
+
+**What it gets.** Not much on the open web — no other site's cookies, since we are our own origin.
+Locally it is worse than it looks: `npm run dev` is a Vite dev server, so same-origin `fetch` reaches
+the dev middleware and whatever Vite will serve off disk, and the result can be POSTed anywhere. The
+whole point of the app is to point it at arbitrary URLs, so "don't open untrusted articles" is not
+available as a mitigation.
+
+**Recommendation: sanitise at stage 3, in [`src/blocks.ts`](../../src/blocks.ts), not in the client.**
+Then the stored `blocks.json` is clean, every later consumer inherits it, and the client stays a
+renderer. Use a real sanitiser — DOMPurify is the boring choice, runs under JSDOM, and is what
+Mozilla points at — rather than a hand-rolled attribute filter, because the interesting cases are
+exactly the ones a hand-rolled filter misses. Follow
+[third-party-library-selection.md](../reusable/third-party-library-selection.md) and write the
+decision down.
+
+Left undone deliberately: stage 3 belongs to another agent, this adds a dependency, and it wants a
+deliberate choice rather than a drive-by fix from whoever happened to install the linter. The lint
+error is **not suppressed** — it should keep complaining until this is really fixed.

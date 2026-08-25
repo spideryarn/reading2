@@ -48,9 +48,18 @@ const blockKind = new Map(blocks.map((b) => [b.id, b.kind]));
 const span = (n: TreeNode): [number, number] | null => {
   const lo = index.get(n.range[0]);
   const hi = index.get(n.range[1]);
-  if (lo === undefined) return fail(`${n.id}: range start "${n.range[0]}" not in blocks.json`), null;
-  if (hi === undefined) return fail(`${n.id}: range end "${n.range[1]}" not in blocks.json`), null;
-  if (lo > hi) return fail(`${n.id}: range is reversed (index ${lo} > ${hi})`), null;
+  if (lo === undefined) {
+    fail(`${n.id}: range start "${n.range[0]}" not in blocks.json`);
+    return null;
+  }
+  if (hi === undefined) {
+    fail(`${n.id}: range end "${n.range[1]}" not in blocks.json`);
+    return null;
+  }
+  if (lo > hi) {
+    fail(`${n.id}: range is reversed (index ${lo} > ${hi})`);
+    return null;
+  }
   return [lo, hi];
 };
 
@@ -183,13 +192,13 @@ const unique = (xs: string[]) => [...new Set(xs)];
 if (advice.length) {
   const a = unique(advice);
   console.warn(`\n${a.length} warning(s) — editorial, not structural:`);
-  for (const w of a) console.warn("  ! " + w);
+  for (const w of a) console.warn(`  ! ${w}`);
 }
 
 if (problems.length) {
   const p = unique(problems);
   console.error(`\n${p.length} problem(s):`);
-  for (const msg of p) console.error("  ✗ " + msg);
+  for (const msg of p) console.error(`  ✗ ${msg}`);
   process.exit(1);
 }
 console.log(advice.length ? "\n  ✓ structure is sound" : "  ✓ all invariants hold");

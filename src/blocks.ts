@@ -335,7 +335,7 @@ async function main() {
     console.error("Usage: tsx src/blocks.ts <article.html> [blocks.json]");
     process.exit(1);
   }
-  const outJson = process.argv[3] ?? input.replace(/\.html$/, "") + ".blocks.json";
+  const outJson = process.argv[3] ?? `${input.replace(/\.html$/, "")}.blocks.json`;
 
   // If a previous run's blocks.json is sitting there, use it to carry ids
   // across a re-extraction that wiped them from the HTML.

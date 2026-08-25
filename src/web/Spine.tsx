@@ -133,6 +133,11 @@ export function Spine({ outline, layoutKey, narrow, onJump }: Props) {
   const [viewportH, setViewportH] = useState(() => window.innerHeight);
 
   // ---- measurement -------------------------------------------------------
+  // `layoutKey` is a re-run trigger, not a value this effect reads — that is
+  // the whole point of the prop (see its doc comment above). Biome sees it
+  // unused in the body and its autofix DELETES it from the deps, which stops
+  // the spine re-measuring when the table's layout changes. Don't apply it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger
   useLayoutEffect(() => {
     let raf = 0;
     const run = () => {

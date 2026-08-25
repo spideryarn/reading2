@@ -97,18 +97,18 @@ export function CommentDialog({
         {/* Only worth the room once there is somewhere to go. */}
         {total > 1 && (
           <span className="cmt-nav">
-            <button onClick={onPrev} disabled={!hasPrev} title="Previous comment, up the article" aria-label="Previous comment">
+            <button type="button" onClick={onPrev} disabled={!hasPrev} title="Previous comment, up the article" aria-label="Previous comment">
               <ChevronLeft size={15} />
             </button>
             <span className="cmt-count" aria-live="polite">
               {position} / {total}
             </span>
-            <button onClick={onNext} disabled={!hasNext} title="Next comment, down the article" aria-label="Next comment">
+            <button type="button" onClick={onNext} disabled={!hasNext} title="Next comment, down the article" aria-label="Next comment">
               <ChevronRight size={15} />
             </button>
           </span>
         )}
-        <button className="cmt-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
+        <button type="button" className="cmt-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
           <X size={15} />
         </button>
       </header>
@@ -128,7 +128,7 @@ export function CommentDialog({
       {comment.status === "error" && (
         <div className="cmt-error">
           <p>{comment.error ?? "Something went wrong."}</p>
-          <button className="linky" onClick={onRetry}>
+          <button type="button" className="linky" onClick={onRetry}>
             Try again
           </button>
         </div>
@@ -137,6 +137,7 @@ export function CommentDialog({
       {comment.status === "done" && comment.answer && (
         <div className="cmt-answer">
           {paragraphs(comment.answer).map((p, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: rebuilt whole on each answer, no child state
             <p key={i}>{p}</p>
           ))}
         </div>
@@ -168,7 +169,7 @@ export function CommentDialog({
             {pending} still working
           </span>
         )}
-        <button className="linky cmt-delete" onClick={onDelete}>
+        <button type="button" className="linky cmt-delete" onClick={onDelete}>
           Delete
         </button>
       </footer>
@@ -211,8 +212,14 @@ function SearchBadge({ comment }: { comment: Comment }) {
         )
       }
     >
+      {/* tabIndex is what makes the tooltip reachable without a mouse: Tooltip.tsx
+          opens on focus (useFocus), so this is the keyboard path to the
+          explanation. The rule is right in general — a focusable non-interactive
+          element is usually a dead stop for a keyboard user — but here removing it
+          would take accessibility away rather than add it. */}
       <span
         className={`cmt-search ${searched ? "on" : "off"}`}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the tooltip
         tabIndex={0}
         role="img"
         aria-label={

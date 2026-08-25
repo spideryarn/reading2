@@ -14,6 +14,12 @@
     "includes": [
       "src/**",
       "!src/web/tailwind.css",
+      // Vendored shadcn/ui components: `npx shadcn add` writes these and will
+      // overwrite them again, so hand-fixing their lint findings is work that
+      // gets thrown away and a diff against upstream that has to be re-resolved
+      // every time. Their style is not ours either (no semicolons, `@/` alias).
+      // Not linted, on purpose.
+      "!src/web/components/ui/**",
       "tests/**",
       "scripts/**",
       "vite.config.ts",

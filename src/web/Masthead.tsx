@@ -122,6 +122,7 @@ export function Masthead({ article, expanded, onToggle }: Props) {
 
           <p className="facts">
             {facts.map((f, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static line, rebuilt whole, no child state
               <span key={i}>{f}</span>
             ))}
           </p>
