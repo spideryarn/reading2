@@ -52,9 +52,11 @@ touch anything storage-shaped:
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
 - **A custom schema does not isolate migration history.** Both repos share
-  `supabase_migrations.schema_migrations`, so exactly one repository must own `db push` —
-  [§ The condition: one migration authority](../plans/postgres-migration.md#the-condition-one-migration-authority).
-  This is still an open blocker.
+  `supabase_migrations.schema_migrations`. **No longer a blocker**, because Drizzle keeps its own
+  migration ledger and never touches Supabase's — but a separate ledger is necessary, not sufficient:
+  an unscoped `supabase db diff`, a linked `db reset`, or a `drizzle-kit push` still reaches across
+  the boundary. The rules are in
+  [§ Two schema authorities](../plans/postgres-migration.md#two-schema-authorities-and-the-tools-that-dont-respect-them).
 - **The grant block in the Supabase custom-schemas guide opens the database.** Granting to `anon`
   plus permissive-or-absent RLS means the public key reads everything, and nothing errors.
 

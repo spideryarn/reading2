@@ -6,8 +6,10 @@
 > — Greg, 2026-08-25
 
 **Nothing here has been implemented. This is the plan.** It was written after three agents read the
-old app, the live Supabase project and this codebase, and after a GPT-5.6 review of the seven
-decisions that actually matter. Where that review changed our minds, this document says so.
+old app, the live Supabase project and this codebase, and after **two** GPT-5.6 reviews — one of the
+seven decisions that actually matter, and a second, adversarial one of the client decision after
+Greg reopened it. Where a review changed our minds, this document says so, and where it caught us
+being wrong it says that too.
 
 This is the work [deploy-and-repo-move.md](deploy-and-repo-move.md#what-this-plan-needs-from-the-supabase-work)
 is waiting on. That plan lists four things it needs; [§ What the deploy plan asked for](#what-the-deploy-plan-asked-for)
@@ -23,9 +25,9 @@ cost is stated rather than buried.
 | | Decision | Standing |
 |---|---|---|
 | **Auth** | Design for it, don't build it — tables carry an owner column, RLS deferred, no login UI of our own | **Settled elsewhere, and compatibly.** Greg has since told the deploy plan that auth *is* in scope as [a one-email beta gate](deploy-and-repo-move.md#the-beta-gate). See [§ Auth](#auth-the-gate-is-someone-elses-plan) |
-| **Project** | Reuse the old app's Supabase project, new tables alongside | **Conditional.** See [one migration authority](#the-condition-one-migration-authority) — if that condition can't be met, this decision should be reversed |
+| **Project** | Reuse the old app's Supabase project, new tables alongside | **Standing, with the cost now known.** The migration-ledger clash is solved ([§ Two schema authorities](#two-schema-authorities-and-the-tools-that-dont-respect-them)); the old project's `auth.users` trigger is not, and can't be ([§ The one thing reuse costs](#the-one-thing-reuse-costs-that-scoping-cannot-fix)) |
 | **Scope** | Everything in Postgres, including the HTML blobs | **Fine at these sizes.** One correction: what we store today isn't raw, so don't call it that |
-| **Client** | `supabase-js`, not Drizzle/Prisma/`postgres.js` | **Fine.** RPCs are the escape hatch for the four things it genuinely can't do |
+| **Client** | ~~`supabase-js`, not Drizzle/Prisma~~ | **Reversed by Greg, 2026-08-25**, once he decided [the API layer, not RLS, is the security boundary](deploy-and-repo-move.md#rls-and-realtime-not-now). Now **Drizzle for all data, Supabase for Auth alone** — see [§ The client](#the-client-drizzle-for-data-supabase-for-auth) |
 
 ## What we found
 
@@ -84,16 +86,24 @@ Size is not a constraint and will not be one for a long time.
 Three things the docs say that the code does not do, all of which the migration should fix rather
 than carry across:
 
-1. **There is no content-hash caching.** [architecture.md § Storage](../project/architecture.md#storage)
-   says `tree.json` is "keyed on `hash(blocks.json)` + prompt version + model id", and
-   [AGENTS.md](../../AGENTS.md) says "anything expensive is cached on a content hash". `grep` for
-   `createHash` across `src/` returns **nothing**. The real mechanism is `stepIsDone`, an
-   `access()` existence check. This is the old app's own top lesson — "check the code before
-   believing a doc" — reproducing itself here.
+1. **Content-hash caching exists in exactly one stage of six.**
+   [architecture.md § Storage](../project/architecture.md#storage) says `tree.json` is "keyed on
+   `hash(blocks.json)` + prompt version + model id", and [AGENTS.md](../../AGENTS.md) says "anything
+   expensive is cached on a content hash". For `toc` and `arc` that is still aspirational — the real
+   mechanism is `stepIsDone`, an `access()` existence check. But `tweets` landed while this plan was
+   being written and does it properly, via `hashBlocks` in
+   [`src/tweets.ts`](../../src/tweets.ts) and the new optional `isDone(ctx)` hook on `PipelineStep`.
+
+   **Copy its choice of input, not just its existence.** It hashes `id \t text` per block, joined —
+   deliberately *not* the bytes of `blocks.json`, because those bytes change when an unread field is
+   recomputed and *don't* change when two blocks swap ids. Hashing the file would have been both
+   over- and under-sensitive. `revision_step_runs.input_hash` below should be that hash, and
+   `PipelineStep.isDone` is the seam it already plugs into.
 2. **`src/api.ts` is the read seam, not the storage seam.** It says in its own header that it is
    "the seam Postgres goes behind", and for reads that is true. The *write* path is
    `PipelineStep.outputs(ctx): string[]` — an interface that returns **file paths** — implemented
-   across five stage modules. Any plan describing this as a one-file change is wrong.
+   across six stage modules (`fetch`, `extract`, `blocks`, `toc`, `arc`, `tweets`). Any plan
+   describing this as a one-file change is wrong.
 3. **`raw.html` is not raw.** [`src/pipeline.ts:172`](../../src/pipeline.ts) calls `fetchHtml()`,
    which returns a **decoded string**, and writes it back as UTF-8. `fetchDocument()` — which keeps
    the actual bytes, the final URL, the content type and the detected encoding — exists and is
@@ -126,7 +136,7 @@ create schema if not exists spideryarn;
 -- Identity. One row per article, for as long as the article exists.
 create table spideryarn.articles (
   id                  uuid primary key default gen_random_uuid(),
-  owner_id            uuid references auth.users(id),
+  owner_id            uuid not null references auth.users(id),   -- see § every row has an owner
   slug                text not null unique,          -- global: it is the URL contract
   current_revision_id uuid,                          -- FK added below, deferrable
   created_at          timestamptz not null default now()
@@ -154,8 +164,8 @@ create table spideryarn.article_revisions (
 alter table spideryarn.articles
   add constraint articles_current_revision_fk
   foreign key (id, current_revision_id)
-  references spideryarn.article_revisions(article_id, id)
-  deferrable initially deferred;
+  references spideryarn.article_revisions(article_id, id);
+  -- NOT deferrable, on purpose. See § the deferrable FK we talked ourselves out of.
 
 -- THE SPINE. A block id, once minted, is never deleted from here.
 create table spideryarn.block_identities (
@@ -185,7 +195,7 @@ create table spideryarn.revision_blocks (
 create table spideryarn.comments (
   article_id uuid not null references spideryarn.articles(id) on delete cascade,
   id         text not null,                      -- client-minted; creation is idempotent on it
-  owner_id   uuid references auth.users(id),
+  owner_id   uuid not null references auth.users(id),
   block_id   text not null,
   quote text not null, start int not null check (start >= 0),
   status text not null check (status in ('pending','done','error')),
@@ -220,8 +230,35 @@ durable identity in the system**, and identities want a table with a foreign key
 The old app's element ids lived inside an HTML blob and were never queried; ours are the join key
 for every feature the product has.
 
-The "140 inserts per article" objection disappears inside an RPC — one JSON array in, expanded with
-`jsonb_array_elements(...) WITH ORDINALITY`, one request, one transaction.
+The "140 inserts per article" objection was going to be answered by an RPC taking one JSON array and
+expanding it with `jsonb_array_elements(...) WITH ORDINALITY`. With Drizzle it is answered more
+plainly: **one multi-row `INSERT`** (chunked if an article ever gets big enough to approach the
+parameter limit) inside one transaction. Same round-trip count, no JSON round-trip, no second
+validator.
+
+What must not change is that **`ordinal` is written explicitly** from the array index. It is not
+inferred from insertion order, from a sequence, or from `WITH ORDINALITY` on something that might be
+reordered on the way in. Document order is data.
+
+### Every row has an owner, and the DDL now says so
+
+An earlier draft's prose said every row carries an owner while its DDL left `owner_id` nullable —
+the two disagreed, and the nullable version would have won. Both are `not null`, and the importer
+assigns Greg's user id to everything it brings across. A row with no owner is not a state this system
+has; a column that permits one is an invitation to produce it.
+
+### The deferrable FK we talked ourselves out of
+
+`articles.current_revision_id` was `deferrable initially deferred`, so that an article and its first
+revision could be inserted inside one transaction that pointed each at the other. Look again and
+there is no cycle to break: **`current_revision_id` is nullable**, so creation is insert the article,
+insert the revision, update the pointer — no intermediate state ever violates the constraint.
+
+It is now an ordinary foreign key. Recorded because the complexity was inherited from a first draft
+rather than required by anything, and because Drizzle's foreign-key builder has no deferrability
+option — so keeping it would have forced a hand-written migration for a constraint nothing needed.
+Whenever a plan carries a feature only because an earlier draft of the same plan had it, that is the
+moment to ask what would break without it.
 
 ---
 
@@ -248,15 +285,21 @@ A global unique index would start rejecting valid inserts at around a hundred ar
 *upsert* would be worse: it would silently overwrite one article's paragraph with another's. **The
 primary key is `(article_id, block_id)`.** Nobody may "tidy" that into a single column later.
 
-### The Data API silently truncates at 1,000 rows
+### The Data API's 1,000-row truncation, and why the assertion stays anyway
 
-Supabase's Data API returns **at most 1,000 rows by default**, and going over is not an error — you
-get exactly 1,000 rows and a `content-range: 0-999/*` header that nothing in this codebase reads. A
-long article would lose its tail and render as a shorter article that looks entirely fine.
+This was the sharpest trap in the first draft: PostgREST returns **at most 1,000 rows by default**,
+and going over is not an error — you get exactly 1,000 rows and a `content-range: 0-999/*` header
+that nothing in this codebase reads. A long article would lose its tail and render as a shorter
+article that looks entirely fine.
 
-Today's articles are ~140 blocks. The fetch cap allows far larger. **Either** read blocks through a
-`load_article(slug)` RPC that aggregates them server-side, **or** paginate and assert that the
-returned count equals `block_count`. Do not rely on the default being generous enough.
+**Going direct to Postgres deletes this risk from the data path entirely.** It was a PostgREST
+default, not a Postgres one, and nothing in the new design goes through PostgREST.
+
+**Keep the assertion anyway.** `block_count === blocks.length`, checked where the article is
+assembled, costs nothing and catches the *other* ways a block list silently loses its tail — a
+`LIMIT` left in during debugging, a bad join, a partially-written draft revision, an importer that
+stopped early. The specific cause is gone; the failure mode is generic. Deleting a cheap check
+because one of its causes went away is how the next cause gets to be silent.
 
 ### Stage 3 recovers ids from `output/`, not from `data/`
 
@@ -277,8 +320,22 @@ run `GRANT ALL ON ALL TABLES IN SCHEMA myschema TO anon, authenticated, service_
 key is public by design.** Combine that grant with "RLS written but permissive" and the result is a
 world-readable and world-writable database containing untrusted fetched HTML.
 
-Grant to `service_role` only while the app is server-side. Public reads, when they come, go through
-a narrow view or a read RPC — never a blanket grant.
+The client decision improves on this rather than just avoiding it: **do not expose `spideryarn`
+through the Data API at all.** Leave it out of the dashboard's "Exposed schemas" setting, and never
+run that grant. PostgREST then cannot see the schema whatever the keys are, which makes the anon key
+irrelevant to it — a structural answer instead of a careful one.
+
+Three separate credentials, and none of them is the project's `postgres` superuser password:
+
+| Credential | Used by | Privileges |
+|---|---|---|
+| runtime role | Vercel functions, via the transaction pooler | `SELECT/INSERT/UPDATE/DELETE` on `spideryarn.*` and nothing else — **no access to the old app's `public` tables** |
+| migration role | `drizzle-kit migrate`, via a direct/session connection | DDL on `spideryarn` and its migration ledger schema |
+| Supabase anon/publishable key | the browser, for Auth only | no data access, because the schema isn't exposed |
+
+**Assert the negative in a test**: the runtime role must fail when it selects from the old app's
+`public.documents`. A privilege you believe you didn't grant is exactly the kind of thing that is
+true right up until someone runs a convenience `GRANT` to fix an unrelated error.
 
 ### `SKIP LOCKED` does not give you concurrency 1
 
@@ -328,30 +385,108 @@ optional. So the guarantee is narrower and more useful:
 > **A reader sees either the previous published revision or the complete new one. Never a mixture.**
 
 Stages build a **draft** revision, each committing its own output in a short request. One
-`publish_revision(...)` RPC then validates the draft and advances `articles.current_revision_id`,
+`publishRevision(...)` helper then validates the draft and advances `articles.current_revision_id`,
 comparing against an expected value so a concurrent publish is rejected rather than silently
 winning. Rolling back a bad refresh becomes a pointer change.
 
 This is the one place the plan spends real complexity, and it is worth it: today a failed
 re-extraction overwrites a good article in place.
 
-### `supabase-js`, with RPCs for four things
+**Validate the same draft you publish.** Loading a draft, validating it in TypeScript, and then
+opening a *separate* transaction to move the pointer is a race with a window in the middle — the
+draft can change between the two. Either do the load-validate-publish in one transaction, or version
+the draft and make the pointer update assert that version. Moving the transaction boundary out of
+SQL and into TypeScript is what makes this newly easy to get wrong; the answer is not to be careful,
+it is to keep the read inside the transaction that acts on it.
 
-`supabase-js` cannot group calls into a transaction — Supabase documents a database function as the
-answer, and PostgREST runs each request in one transaction that rolls back on error. So RPCs own:
-**publication**, **block expansion**, **queue claiming**, and **article reads** (to dodge the
-1,000-row cap). Everything else is ordinary `.from().select()`.
+### The client: Drizzle for data, Supabase for Auth
 
-Costs, stated plainly: transactional rules move into SQL migrations, JSON inputs need explicit
-validation, function changes need regenerated types, and RPC errors are less pleasant than
-TypeScript ones. Use `SECURITY INVOKER`; if `SECURITY DEFINER` is ever needed, pin `search_path = ''`
-and schema-qualify everything. Don't overload RPC names — PostgREST resolves overloads badly.
+**Reversed from the first draft**, after Greg reopened it:
+
+> Ok, given my new decision that maybe I'll go with API instead of RLS, maybe that means we should
+> reconsider Drizzle instead of Supabase.js? […] We are still using Supabase for authentication —
+> does that tilt us towards Supabase.js over Drizzle? Or should we consider using both?
+>
+> — Greg, 2026-08-25
+
+Yes to both, and the split is clean:
+
+| | Client |
+|---|---|
+| sign-in, session refresh, token verification, sign-out | Supabase's auth client (browser **and** server) |
+| every application table query | Drizzle, over a direct Postgres connection |
+
+**Why the reversal follows from Greg's RLS decision.** `supabase-js` was chosen when RLS was going to
+be the security boundary — PostgREST plus RLS is a coherent design, because the database enforces the
+rules and the client is thin on purpose. Take RLS away and put the boundary in the API layer, and
+PostgREST is left contributing only its restrictions: it cannot span a transaction, so **all four**
+of the operations this plan cares about — publication, block insertion, queue claiming, article
+reads — had to become PL/pgSQL functions. That is the tail wagging the dog. Every one of those
+functions existed to work around the client, not to express something the database is better at.
+
+**What that buys, concretely:**
+
+- **The four RPCs stop being SQL.** Note what this does *not* mean: their invariants don't relax.
+  `publishRevision`, `claimNextJob`, `heartbeatJob` and `finishJob` are still carefully-designed
+  transactional operations with the same rules — the singleton lock, the expected-revision compare,
+  the fencing token. They move from PL/pgSQL to TypeScript-plus-SQL. That is a change of language,
+  not a change of difficulty, and anyone reading this as "the hard part goes away" will write a race.
+- **One validator instead of two.** Tree, arc and range validation already exist in TypeScript
+  ([`src/validate-tree.ts`](../../src/validate-tree.ts)). An RPC taking JSON would need its own
+  checks in PL/pgSQL, and two validators for one rule drift. Keep database constraints for row-level
+  facts — the block-id regex, `ordinal >= 0`, the status enums — and keep structural validation in TS.
+- **The 1,000-row trap disappears** ([above](#the-data-apis-1000-row-truncation-and-why-the-assertion-stays-anyway)).
+- **Types come from the checked-in schema**, with no generation step. A first draft of this argument
+  overstated it — `supabase gen types --local` works against a local instance and its output can be
+  committed, so "the project can't typecheck offline" was **wrong**. The real difference is smaller:
+  Drizzle's types are the schema file, so they cannot be stale, where generated types are a
+  build artefact somebody has to remember to regenerate.
+
+**What it costs, and this is the honest half.** PostgREST was restrictive, but it was also hiding
+work: transaction correctness, credential scope, connection pooling and migration isolation were
+Supabase's problem and are now ours. Every one of the four sections that follow this one exists
+because of that transfer. Drizzle is not simpler — it is more direct, and directness is what this
+design needs. That is the trade, stated in the direction that makes it a trade.
+
+**Two things Drizzle can't express**, needing one `drizzle-kit generate --custom` migration
+alongside the generated ones: foreign keys into `auth.users` (declaring an Auth-owned table in the
+Drizzle schema risks migration generation treating it as ours to manage), and the roles and grants
+above. Everything else — composite primary and foreign keys, raw SQL `CHECK` including the block-id
+regex, `UNIQUE NULLS NOT DISTINCT`, `bytea`, JSONB — is supported directly.
+
+The drift this creates is real: Drizzle's snapshot doesn't know about the custom migration, so a
+future generated migration that drops and recreates one of those tables can lose the `auth.users` FK
+silently. **The check is a catalog assertion in the integration tests** — query `pg_constraint` and
+assert the Auth FKs exist, the `NULLS NOT DISTINCT` constraint exists, the app tables are in
+`spideryarn`, and the runtime role cannot read `public.documents`. A custom companion migration makes
+the divergence visible; hand-editing a generated file hides it.
+
+**And Drizzle does not validate JSONB.** `tree`, `arc`, `tweets`, citations and step blobs are typed
+at compile time and unchecked at runtime. They still need explicit validation at the storage
+boundary, along with the [`null`-to-absent normalisation](#null-is-not-an-absent-property). A type
+that describes a column is not a parser.
 
 ### The queue
 
 A plain `jobs` table plus a singleton `queue_state` row, claimed by lease
-(`claim_next_job` / `heartbeat_job` / `finish_job`). **Not pg-boss** — it wants a direct Postgres
-connection and its own pool, which is the second client the `supabase-js` decision exists to avoid.
+(`claimNextJob` / `heartbeatJob` / `finishJob`).
+
+**`jobs.id` is `text`, not `uuid`.** [`src/jobs.ts:426`](../../src/jobs.ts) mints job ids with the
+same `mintId()` as blocks — they are `spya-` ids. Typing the column `uuid` would break every existing
+id on import. Worth noting while we're here: jobs call bare `mintId()` where blocks call
+`mintUniqueId(taken)`, so a job-id collision today silently overwrites a file. A primary key makes
+that loud for free — a small, real win from the migration.
+
+**Not pg-boss.** The first draft rejected it because it needs a direct Postgres connection and its
+own pool, which was the second client the `supabase-js` decision existed to avoid. **That reason is
+now gone** — we have a direct connection and a pool. Reopening it honestly: pg-boss brings retries,
+backoff, dead-lettering and cron, all of which we would otherwise write. We are still not adopting
+it, for a different and weaker reason — our `jobs` table is unusually rich (per-step state,
+cancellation that must not release the slot, forced-step de-duplication) and would have to exist
+*beside* pg-boss's, leaving two sources of truth about the same work. **Revisit when redelivery or
+backoff becomes a requirement rather than a nicety**, which is the point at which pg-boss's half is
+the bigger half.
+
 **Not Supabase Queues** — `pgmq` isn't enabled, it doesn't execute workers, and we'd still need the
 rich `jobs` table for the UI, cancellation, steps and errors.
 
@@ -364,37 +499,158 @@ while a cancelled blocks stage was still writing); and de-duplication keys on ow
 steps + forced steps, because an arc-only job and a full refresh of the same slug are *different
 work* and a blunt "one active job per slug" index would swallow one of them.
 
+**The lease only works if it fences every write.** `attempt_id` must be a condition on the update,
+not a column that records what happened:
+
+```sql
+update spideryarn.jobs set ...
+ where id = $job and attempt_id = $attempt and status = 'running'
+```
+
+— and the code must assert that exactly one row changed. This applies to heartbeats, completion,
+error writes, step transitions and publication, and to the comment lease that replaces the in-process
+`answering` Set. The case it exists for: a worker whose lease expires *during* a two-minute model
+call cannot be stopped mid-call, so a second worker starts, and the first one wakes up and tries to
+write. Without the fence, the stale attempt overwrites the newer one's answer, and the result looks
+like a successful job with the wrong output. Give each ingest attempt its own draft revision so the
+same rule covers stage output as well as job rows.
+
 It stops being right when redelivery, multiple workers, backoff, dead-letters or scheduled work
-become requirements. Then Supabase Queues is the first thing to evaluate, because it stays reachable
-through `supabase-js`.
+become requirements.
 
-### `supabase-js` runs server-side only
+### The driver underneath Drizzle is not settled
 
-The React client keeps talking to `/api/*`. Moving Supabase into the browser would delete two GET
-handlers and none of the API layer — safe fetching, the Anthropic and OpenRouter keys, queue
+Drizzle sits on a Postgres driver, and the two reviews disagreed about which:
+
+| | Position |
+|---|---|
+| this plan's first pass | **`postgres.js`** — Drizzle's most idiomatic driver, and the one Supabase's own docs use |
+| the second review | **`node-postgres` (`pg`)** — citing an open transaction-reservation report on `postgres.js` ([porsager/postgres#1189](https://github.com/porsager/postgres/issues/1189)) with possible cross-request transaction contamination, and better alignment with Vercel's documented pool lifecycle helper |
+
+**Unresolved, and deliberately not resolved here.** A third opinion was commissioned to break the
+tie and did not come back; rather than launder one reviewer's citation into a decision, it is written
+down as a question. Neither claim in that second row has been checked against the issue itself — and
+a bug report about *transaction contamination* is exactly the kind of claim that must be read
+first-hand, because the failure it describes (one request seeing another's transaction) would be
+severe here, and the difference between "affects `reserve()` under a specific misuse" and "affects
+`sql.begin()` generally" is the whole decision.
+
+**Do this before step 3**, since it is fifteen minutes of reading: open the issue, check whether it
+touches plain transactions, check the current published version and release cadence, then pick. The
+schema, the migrations and every transaction helper in this plan are driver-agnostic, so this can be
+decided late — but it must be decided *deliberately*, not by whichever `npm install` line got copied
+from a tutorial first.
+
+If the issue turns out not to touch `sql.begin()`, `postgres.js` stands. If it does, or if it can't
+be ruled out, take `pg` — at this traffic the ergonomic difference between them is worth nothing and
+transaction correctness is worth everything.
+
+### Connections: transaction pooling, and the five things it takes away
+
+Vercel functions reach Postgres through Supabase's **transaction-mode pooler** (Supavisor), which
+hands out a backend connection for the duration of each transaction. Migrations and dumps use a
+**direct or session connection** instead — Supabase recommends this explicitly, and the pooler is
+also the IPv4 path where direct connections are IPv6-only.
+
+The good news for this design: transaction mode is per-transaction, so `db.transaction(...)` is one
+real Postgres transaction and ordinary row locks behave normally. **The lease-based queue works
+unchanged**, provided claiming is shaped as one short transaction — lock `queue_state` `FOR UPDATE`,
+expire the recorded lease using *database* time, select and mark one job, store a fresh `attempt_id`
+and expiry, commit — with the long fetch-and-model work happening strictly after the commit, and
+heartbeats and completion as their own short transactions.
+
+Prepared statements must be off (`prepare: false`). The cost is server-side reuse of parsed and
+planned statements; queries stay parameterised and safe. At this traffic it is immaterial.
+
+**What transaction pooling silently takes away.** None of these error at connect time — they fail, or
+quietly do nothing, at the moment you rely on them:
+
+- `LISTEN`/`NOTIFY` — **already recommended by [ingest-queue.md](../project/ingest-queue.md) for
+  worker wakeups.** Delete that line; keep polling.
+- session advisory locks (`pg_advisory_lock`). The transaction-scoped
+  `pg_advisory_xact_lock` is fine.
+- `SET` outside a transaction — `SET LOCAL` inside one is fine.
+- temporary tables expected to outlive a transaction.
+- session-held cursors, and anything else pinned to a session.
+
+`LISTEN/NOTIFY` is the dangerous one here, because it is written down as a future improvement in a
+doc an agent would reasonably follow.
+
+### **Data** runs server-side only — Auth runs in both
+
+The first draft's heading said "`supabase-js` runs server-side only". That is wrong once Supabase is
+the login: signing in, refreshing a session and signing out all happen in the browser. The rule that
+actually holds is narrower and clearer — **no application data query ever leaves the server.**
+
+Which is easy to state as a lint-able boundary: the module that owns the Supabase client exports
+auth calls and nothing else. No `.from()`, no `.rpc()`, no `.schema("spideryarn")`, anywhere. Since
+the schema isn't exposed through the Data API at all, those calls would fail — but failing at runtime
+in production is not as good as not existing.
+
+The React client keeps talking to `/api/*` for everything else. Moving data into the browser would
+delete two GET handlers and none of the API layer — safe fetching, the Anthropic and OpenRouter keys, queue
 orchestration, spend limits, publication, validation and stable wire types all still need trusted
 server code. It would also couple the UI to the schema at exactly the moment we need the
 filesystem/Postgres switch to stay *below* the API seam.
 
-### The condition: one migration authority
+### Two schema authorities, and the tools that don't respect them
 
-**A custom schema does not isolate migration history.** Both repos would still share
-`supabase_migrations.schema_migrations`. `supabase db push` builds the remote list from that table
-and refuses when the local files diverge, telling you to run `supabase migration repair` — which
-rewrites the shared ledger and can break the other repo's view of it. The old repo has **34
-migrations** and a workflow that pushes on every commit to `main`.
+The first draft said a custom schema isolates migration history. **It doesn't** — both repos share
+`supabase_migrations.schema_migrations`, and `supabase migration repair` rewrites it for everyone.
+That was the plan's worst factual error and it survived a whole review before being caught.
 
-So, before the first Spideryarn migration, **exactly one repository must own `db push`.** Either
-disable `.github/workflows/deploy-production.yml` in the old repo, or have this repo apply its
-migrations with its own small runner and its own history table inside the `spideryarn` schema,
-never touching `supabase db push`.
+Drizzle removes the *specific* collision, because `drizzle-kit` keeps its own ledger table and never
+touches Supabase's. The old repo's `supabase db push` will not see Spideryarn migration ids and so
+will not refuse. Verified locally: the old workflow runs `supabase db push --linked` and
+`supabase gen types --linked` and nothing else — **no diff, no reset** — so a routine old-repo deploy
+cannot drop `spideryarn.*`.
 
-The custom schema is still worth having — for naming, for privileges, and so the old app's tables
-can eventually be dropped without an audit. It just solves a different problem than the one it
-looked like it solved.
+But **a separate ledger is necessary, not sufficient.** Four commands still reach across the boundary:
 
-If neither condition can be met, **the decision to reuse the project should be reversed.** A new
-project costs nothing and removes this entire section, along with the billing-banner risk.
+| Command | What it does to us | Rule |
+|---|---|---|
+| `supabase db diff --linked` in the old repo | defaults to **all** schemas; can adopt our tables into the old migration history, or generate SQL to remove them | always `--schema public` (plus any other old-owned schema). The `[api].schemas` setting does **not** scope this — it only controls PostgREST exposure |
+| `supabase db reset --linked` | drops remote objects and replays only that repo's migrations. `spideryarn` would be gone and unrecoverable from the old history | never against this project. It is for throwaway environments |
+| `drizzle-kit push` | introspects the live database and computes a diff. Current Drizzle defaults to all schemas unless `schemaFilter` is set — and that default **changed** between major versions | never against production. Locally, `schemaFilter: ["spideryarn"]` |
+| `drizzle-kit generate` / `migrate` | compares TS against Drizzle's own snapshot; applies committed files. Blind to live objects, which is what makes it safe | the only two that run against production |
+
+Two more consequences:
+
+- **Name the Drizzle ledger.** Not the default generic `drizzle` schema — use something like
+  `spideryarn_migrations.__drizzle_migrations`, so a second Drizzle app can't silently share it. Keep
+  it *outside* the `spideryarn` schema filter, or a future `push` will see its own bookkeeping table
+  as an undeclared object and offer to drop it.
+- **Pin `drizzle-orm`, `drizzle-kit` and the driver to exact versions.** Drizzle has already changed
+  its default schema scope once between major lines. A `latest` range in migration CI is precisely how
+  a command that was scoped yesterday starts inspecting the whole shared project tomorrow.
+
+So the condition is no longer "one repository owns `db push`". It is: **two authorities, two ledgers,
+every cross-boundary command explicitly scoped, and no `push` or `reset` against production.**
+
+### The one thing reuse costs that scoping cannot fix
+
+The old project has this, applied 2025-06-03 and still live:
+
+```sql
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();   -- inserts into public.profiles
+```
+
+**Every future Spideryarn signup writes a row into the old app's `profiles` table**, and because the
+function is `SECURITY DEFINER` and unguarded, a failure inside it — a constraint the old app adds
+later, a column that stops accepting `'{}'` — **fails the signup itself**. Our new user cannot log in,
+and the error surfaces from a repository nobody is looking at.
+
+Greg's existing login won't trigger it (the row already exists), so this will not show up in testing.
+With a one-email beta gate it is close to harmless today. It is listed because it is the honest
+counterweight to the reuse decision: schema scoping is a discipline we can keep, and this is a
+coupling that exists whatever we do. Together with the billing banner, it is the case for a separate
+project — which costs nothing and deletes this section and the one above it.
+
+**Greg has decided to reuse the project.** This is written down so the decision is made with the
+trigger in view rather than around it, and so that if a signup ever fails mysteriously, this is the
+first place to look.
 
 ### Auth: the gate is someone else's plan
 
@@ -436,9 +692,9 @@ an exporter for moving back, both temporary.
 
 | # | Step | Ends with |
 |---|---|---|
-| 1 | **Settle migration ownership and the mutation-security question.** Record the exposed-schema setting and local `config.toml` | Nothing built, the two blockers cleared |
+| 1 | **Settle the tooling boundary** — scoped old-repo diffs, no linked reset, no production `push`, a named Drizzle ledger, pinned versions. Create the runtime and migration roles | Nothing built, the boundary written down where the old repo can see it |
 | 2 | **Introduce storage contracts, still filesystem-backed**: `ArticleReader`, `CommentStore`, `JobStore`, `PipelineArtifactStore` | Existing tests pass unchanged |
-| 3 | **Apply the schema additively** — tables, RPCs, grants, policies, `ai_calls`, generated types | No behaviour change. Nothing dropped |
+| 3 | **Apply the schema additively** — Drizzle schema in TS, `drizzle-kit generate`, a `--custom` migration for the `auth.users` FKs and the roles/grants, `ai_calls` | No behaviour change. Nothing dropped. Catalog assertions pass |
 | 4 | **Build the importer and the exporter.** The exporter *is* the rollback mechanism | Both idempotent, ids and ordinals preserved exactly |
 | 5 | **Backfill and compare both readers** — compare the API-shaped `Article`, not SQL rows. Assert `block_count` equals the array length | Proven parity, files still authoritative |
 | 6 | **Postgres reads in preview**, behind an explicit env flag | Exercised: library, article, tree, arc, comments |
@@ -483,7 +739,11 @@ lists four requirements. Answering its explicit question — **it is storage, no
 - [library.md § When this becomes Postgres](../project/library.md#when-this-becomes-postgres) — its
   today→then table is right in shape; the revision model is new
 - [ingest-queue.md § When this becomes Postgres](../project/ingest-queue.md#when-this-becomes-postgres)
-  — the pg-boss recommendation is reversed here, with reasons
+  — the pg-boss recommendation is reversed here, with reasons. **Also delete its `LISTEN/NOTIFY`
+  wakeup suggestion** (line 324): `LISTEN/NOTIFY` is session-scoped and does not work through a
+  transaction-mode pooler. The polling contract the doc already describes is the right one, and this
+  is a good example of a "when Postgres lands" note that would have been implemented and quietly not
+  worked
 - [deploy-and-repo-move.md](deploy-and-repo-move.md) — its Option 4 says "Postgres, a real queue,
   per-step functions… **Not now**". Greg has now said now. That line should be updated rather than
   left silently contradicted, the same way the Tailwind/shadcn reversal was written down
@@ -496,12 +756,22 @@ lists four requirements. Answering its explicit question — **it is storage, no
 2. ~~Mutations in production: closed, or a minimal gate?~~ **Answered** by
    [the beta gate](deploy-and-repo-move.md#the-beta-gate) — a one-email allowlist. Kept here only to
    note that it authenticates against a user pool that already has 9 accounts in it.
-3. **Which repo owns `db push`?** Blocks the first migration.
+3. ~~Which repo owns `db push`?~~ **Answered** by separate ledgers — see
+   [§ Two schema authorities](#two-schema-authorities-and-the-tools-that-dont-respect-them). What
+   replaces it is not a blocker but a discipline: the scoping rules in that table have to be written
+   into the *old* repo too, since that is where the dangerous commands would be typed.
 4. **How many revisions to keep?** Recommendation: current + previous, pruned beyond that. Full
    history is an archive nobody asked for.
 5. **Does the old app's data need extracting** before that project is eventually retired? 15
    documents, 9 users, 41 storage objects.
-6. **Does the `example` fixture become a seed row, or go?** It is the fresh-clone empty state today
+6. **The `on_auth_user_created` trigger.** Leave it, guard it with an exception handler, or drop it?
+   Dropping it is the old repo's call, not ours. Recommendation: leave it and remember it exists —
+   see [§ The one thing reuse costs](#the-one-thing-reuse-costs-that-scoping-cannot-fix).
+7. **How many pipeline artefacts does `tweets` add to the schema?** It arrived after this plan was
+   drafted, with a `tweets.json` per article and a real content hash. It should be a JSONB column on
+   the revision plus a `revision_step_runs` row, like `tree` and `arc` — but confirm before writing
+   the DDL rather than after.
+8. **Does the `example` fixture become a seed row, or go?** It is the fresh-clone empty state today
    and the tests rely on it.
 
 ## Related docs
