@@ -66,6 +66,7 @@ import { useState } from "react";
 import {
   BookA,
   ExternalLink,
+  Globe,
   Info,
   Loader2,
   RotateCcw,
@@ -77,6 +78,7 @@ import type { BlockId, Glossary, GlossaryEntry, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
+import { isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
 
 interface Props extends UseGlossary {
@@ -92,6 +94,12 @@ interface Props extends UseGlossary {
    */
   gate: number | null;
   onGate(gate: number | null): void;
+  /* Straight through from `useGlossary`. The panel owns none of this state —
+     the hook does — because a lookup outlives the row that started it: the
+     reader can select another term while one runs. */
+  look(id: string): Promise<void>;
+  looking: string | null;
+  lookFailed: string | null;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
 }
@@ -100,6 +108,7 @@ export function GlossaryPanel({
   status,
   glossary,
   stale,
+  outdated,
   error,
   job,
   failed,
@@ -114,6 +123,9 @@ export function GlossaryPanel({
   gate: chosenGate,
   onGate,
   onJump,
+  look,
+  looking,
+  lookFailed,
 }: Props) {
   /* `effectiveSort` and not `sort`: `prioritised` is the default, so it arrives
      on glossaries whose scores cannot support it, and everything below — the
@@ -176,7 +188,21 @@ export function GlossaryPanel({
               particular will point at blocks that may not be there. The button
               needs no `force`: the step's own freshness check already knows
               this glossary is out of date, so an ordinary run rewrites it. */}
-          {stale && (
+          {/* Two different facts, and they were nearly one. `stale` is *the
+              article moved underneath these terms* — every entry below is a
+              claim about a piece that no longer exists, and the occurrences in
+              particular will point at blocks that may not be there.
+
+              `outdated` is *the article is the same and we would write these
+              differently now*, which is what bumping `PROMPT_VERSION` means.
+              It got its own flag because it was briefly nobody's: `isStale`
+              compares source hashes and nothing else, so the `glossary/2`
+              rewrite marked exactly zero glossaries as anything, and the panel
+              went on showing pre-rewrite entries with no banner and no offer.
+
+              Stale wins when both are true — it is the one that makes the
+              occurrence links wrong, and two banners stacked is a wall. */}
+          {stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -190,7 +216,22 @@ export function GlossaryPanel({
                 label="Find them again"
               />
             </div>
-          )}
+          ) : outdated ? (
+            <div className="gloss-stale">
+              <p>
+                <TriangleAlert size={13} />
+                These were written before entries said where each half came from. Finding them
+                again splits each one into what the article means and what the model knows.
+              </p>
+              <Progress
+                job={job}
+                failed={failed}
+                onRun={find}
+                onCancel={cancel}
+                label="Find them again"
+              />
+            </div>
+          ) : null}
 
           {/* A `div` rather than the `ol` it used to be, because it is the
               scroller and there may now be two lists inside it. Each group
@@ -221,6 +262,10 @@ export function GlossaryPanel({
                          actually about — and a default order they did not
                          choose needs it more, not less. */
                       showScore={order}
+                      look={look}
+                      looking={looking === entry.id}
+                      lookBusy={looking !== null}
+                      lookFailed={looking === null && entry.id === termId ? lookFailed : null}
                       onSelect={() => {
                         // Pressing the selected term again clears it, which is
                         // what takes the underlines back out of the prose.
@@ -804,12 +849,22 @@ function Term({
   entry,
   selected,
   showScore,
+  look,
+  looking,
+  lookBusy,
+  lookFailed,
   onSelect,
   onJump,
 }: {
   entry: GlossaryEntry;
   selected: boolean;
   showScore: TermSort | null;
+  look(id: string): Promise<void>;
+  /** A lookup is running for *this* term. */
+  looking: boolean;
+  /** A lookup is running for some term — one at a time, so every button waits. */
+  lookBusy: boolean;
+  lookFailed: string | null;
   onSelect(): void;
   onJump(id: BlockId): void;
 }) {
@@ -917,6 +972,18 @@ function Term({
             </div>
           ))}
 
+          {/* What the web said, kept apart from what the model remembered. The
+              two are never merged: a reader who cannot tell the checked answer
+              from the recalled one has lost the thing the labels above exist to
+              give them. */}
+          <Looked
+            entry={entry}
+            look={look}
+            looking={looking}
+            busy={lookBusy}
+            failed={lookFailed}
+          />
+
           {entry.aliases.length > 0 && (
             <p className="gloss-aliases">also: {entry.aliases.join(", ")}</p>
           )}
@@ -964,6 +1031,137 @@ function Term({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * The web's answer for one term, or the button that asks for it.
+ *
+ * Greg, 2026-08-26: *"provide web citations (e.g. clickable links with
+ * hover-tooltips for sources) if we're using the web"* — the conditional is
+ * doing real work in that sentence, and this component is where the condition
+ * becomes visible. The batch call that writes an entry **does not** search; its
+ * `background` is the model's memory and its `url` is a guess at a canonical
+ * page. So until somebody presses this, the honest thing to show is a button
+ * rather than a badge claiming a check nobody ran.
+ *
+ * ## Three things it says that a simpler version would not
+ *
+ * **`searches: 0` is drawn, not hidden.** The model decides per call whether to
+ * look anything up, so an answer with no searches is a real outcome — *I
+ * already knew this* — and it is indistinguishable from a broken tool unless
+ * something says which. Same call CommentDialog's search badge makes, and the
+ * reason its comment gives: the absence of a search is a fact about the answer.
+ *
+ * **Sources are host names with the title in the tooltip.** The band is 18rem.
+ * A page title is the useful thing to read and the wrong thing to lay out, so
+ * the host is on the line and the title is one hover away — which is exactly
+ * what was asked for, and it is `Tooltip.tsx` doing it rather than a `title=`
+ * attribute, so it works on focus too.
+ *
+ * **The date is there.** An answer from the web is an answer about the web on
+ * one day, and a lookup from a month ago is a different object from one from a
+ * minute ago.
+ */
+function Looked({
+  entry,
+  look,
+  looking,
+  busy,
+  failed,
+}: {
+  entry: GlossaryEntry;
+  look(id: string): Promise<void>;
+  looking: boolean;
+  busy: boolean;
+  failed: string | null;
+}) {
+  const lookup = entry.lookup;
+
+  if (!lookup) {
+    return (
+      <div className="gloss-look">
+        <button
+          type="button"
+          className="gloss-btn"
+          /* Disabled while any lookup runs, not just this one. Each is a model
+             call somebody pays for, and a panel that fires five because five
+             rows were clicked spends money on a mis-click. */
+          disabled={busy}
+          title="One model call, with a web search if it decides it needs one. Kept afterwards."
+          onClick={() => void look(entry.id)}
+        >
+          {looking ? <Loader2 size={12} className="gloss-spin" /> : <Globe size={12} />}
+          {looking ? "Checking…" : "Check the web"}
+        </button>
+        {failed && <p className="gloss-error">{failed}</p>}
+      </div>
+    );
+  }
+
+  const sources = lookup.citations.filter((c) => isWebUrl(c.url));
+
+  return (
+    <div className="gloss-look on">
+      <p className="gloss-part-label">
+        checked
+        <Tooltip
+          content={
+            lookup.searches > 0 ? (
+              <>
+                <strong>Searched the web.</strong> {lookup.searches}{" "}
+                {lookup.searches === 1 ? "search" : "searches"} on{" "}
+                {new Date(lookup.at).toLocaleDateString()}, by {lookup.model}. The sources below are
+                what it cited.
+              </>
+            ) : (
+              <>
+                <strong>No web search.</strong> {lookup.model} judged it already knew, on{" "}
+                {new Date(lookup.at).toLocaleDateString()}. It decides per question, so this is a
+                choice rather than a setting — and it means this answer is memory too.
+              </>
+            )
+          }
+          placement="top"
+        >
+          <span
+            className={`gloss-globe ${lookup.searches > 0 ? "on" : "off"}`}
+            /* The same call the comment dialog's badge makes: focus is what
+               makes the tooltip reachable without a mouse, and without it the
+               only way to learn whether this answer was checked is to hover. */
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the tooltip
+            tabIndex={0}
+            role="img"
+            aria-label={
+              lookup.searches > 0
+                ? `Searched the web ${lookup.searches} times`
+                : "Answered without searching the web"
+            }
+          >
+            <Globe size={11} />
+          </span>
+        </Tooltip>
+      </p>
+      <p className="gloss-part-text">{lookup.answer}</p>
+
+      {sources.length > 0 && (
+        <ul className="gloss-sources">
+          {sources.map((c) => (
+            <li key={c.url}>
+              {/* The title in the tooltip and the host on the line. `rel` carries
+                  `noreferrer` as well as `noopener` for the reason the canonical
+                  link above does: the article's own URL is a reading history. */}
+              <Tooltip content={c.title ?? c.url} placement="top">
+                <a href={c.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink size={10} />
+                  {hostOf(c.url)}
+                </a>
+              </Tooltip>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

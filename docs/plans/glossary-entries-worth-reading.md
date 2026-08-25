@@ -213,6 +213,55 @@ Only persons and works, or only high-difficulty entries. Better than blanket sea
 it keeps the latency and the citation-mapping problem for exactly the longest entries, and it spends
 money on entries nobody will open.
 
+### What it turned out to be, once built
+
+**The lookup is `explain` with a different selection** — not a call *like* it, the same function.
+That was not the plan's design (it said "an explain-style call") and it is better than the plan's
+design, for three reasons that only became clear with the code in front of us:
+
+- **The prompt already asks the right question.** `SYSTEM` in [`src/explain.ts`](../../src/explain.ts)
+  tells the model to supply *"the term of art, the named person, the debate being alluded to"* — which
+  is what a glossary reader wants — and its `WEB RESEARCH` section already says to search unless
+  genuinely sure.
+- **The article prefix is cached, and shared.** A lookup on a piece somebody has already asked a
+  comment about is a cache hit rather than a fresh read of the whole article.
+- **It is the convergence, rather than a description of it.**
+  [glossary.md § What is still open](../project/glossary.md#what-is-still-open) has carried *"a
+  glossary should be the same mechanism as comments with a different prompt"* since the feature
+  landed. This is the first half of that paid off in code rather than in a note.
+
+The term's **name is the quote**, and that is honest rather than a trick: the entry earned its place
+because the article uses those words, `findOccurrences` proved it, and `entry.blocks[0]` is a block
+they appear in. "The reader has selected this passage" is literally true.
+
+Run against the entry that started all this, it took **10.5 seconds**, ran **one search**, and came
+back with a real cited source and this:
+
+> Leslie Lamport is a computer scientist best known for foundational work in distributed systems (the
+> "happens-before" relation, Paxos consensus algorithm) and for creating LaTeX … He won the Turing
+> Award — computing's top honor — in 2013 … Graham invokes him here not for the LaTeX or systems work
+> but as the source of the aphorism that follows.
+
+### Three things the implementation had to decide that the plan did not
+
+**`searches: 0` is drawn, not hidden.** The model chooses per call whether to look anything up, so an
+answer with no searches is a real outcome — *I already knew this* — and it is indistinguishable from
+a broken tool unless something says which. The globe has an off state for the same reason
+[comments.md](../project/comments.md) gives for its badge.
+
+**Every citation goes through `safeUrl` at the storage boundary**, even though `explain` built them
+from the provider's own annotations. This is where a model-supplied URL stops being a value in flight
+and becomes a value on disk that the panel puts in an `href` — the same call `converse` makes, and
+[glossary.md § Five ways to break this quietly](../project/glossary.md#five-ways-to-break-this-quietly)
+item 3 is about exactly this field.
+
+**Two writers, one file, no lock.** The lookup re-reads `glossary.json` after the model call and
+re-finds the entry **by id** — a second pass may have merged, renamed or reordered it, and ids are
+identity while names are display. That narrows the race to the width of the write rather than the
+width of a thirty-second call; it does not close it. Said plainly rather than papered over: this is
+last-writer-wins, the loss is one lookup the reader can ask for again, and a term that has *gone*
+gets an honest 409 rather than a lookup written back into a list it is no longer in.
+
 ### How this most plausibly fails
 
 **The long tail.** For an obscure person in a niche piece, a memory-only `background` is the
@@ -260,13 +309,80 @@ gave *John F. Kennedy* and *Martin Luther King Jr.* Worth recording as a general
 what a field says can move what the model thinks the entry is about**, and the two are further apart
 than they look.
 
+## What review caught
+
+Two of the three bullets below were **wrong when this plan was written**, and one of them shipped as
+a live data-loss bug before an adversarial review found it. Both are recorded rather than quietly
+edited, because the shape of the mistake is the useful part.
+
+### The version bump marked nothing stale
+
+The plan said bumping `PROMPT_VERSION` "makes every existing glossary read as stale, which the panel
+already handles". **It does not.** `isStale` compares `sourceHash` and nothing else
+([`src/glossary.ts`](../../src/glossary.ts)), and that is the function the read path uses. The
+version is checked only in `glossaryIsCurrent`, which is a *pipeline* predicate that never reaches
+the panel. So a `glossary/1` list on an unchanged article reported `stale: false`, the banner never
+rendered, and the reader was never offered the button that would have rewritten it.
+
+The fix is a **second flag, not a widened first one**: `GlossaryResponse.outdated`, computed at read
+time beside `stale`. They are different facts and they need different sentences — *the article moved
+underneath these terms* is not *the article is the same and we would write these differently now* —
+and folding the second into the first would have made the panel say something untrue.
+
+### "Find more terms" destroyed the list, silently
+
+This is the one that shipped. The plan tightened the append gate to require a version match, so that
+a second pass could not hand `dedupe` two vocabularies. Follow what that actually does:
+
+`existing` becomes `null` → `buildGlossary` gets no previous entries → `taken` is empty → **every id
+is re-minted**, so every `?term=` link a reader holds goes dead → the file is overwritten wholesale →
+`passes` resets to 1, so the log line reads `N terms (N new, pass 1)` and is indistinguishable from a
+first run. And because of the bug above, the only button on screen was the one that did it, labelled
+**"Find more terms"**.
+
+Textbook [silent success](../reusable/silent-success.md): the operation reported success, and the
+check you would naturally run — *did the glossary come back?* — returns yes.
+
+**The gate is gone, replaced by an `upcast`.** The thing it was protecting against was real: `merge`
+cannot choose between a `gloss` and a `background`, because they are not the same field. The answer
+is to translate the old entries into the new shape *before* they are merged, so there is one
+vocabulary rather than a refusal. Nothing is lost, no id moves, and the blend goes to `background`
+for the same reason `toEntries` puts it there — `senseHere` is labelled "in this piece", and a blend
+under that label would attribute the model's own knowledge to the article.
+
+**What would have caught it:** a test that asserts ids survive a pass. There now is one.
+
+### And what the review got right that this plan had not decided
+
+**The lookup does not go in `glossary.json`.** The plan said "stored on the entry" and that was the
+wrong file. `glossary.json` is a pipeline artefact written by one stage with a bare `writeFile` — no
+temp-and-rename, no serialisation, because until now it had exactly one writer. A second writer
+inherits three failures, and the third is fatal rather than annoying: a crash mid-write leaves JSON
+that `readGlossary` swallows into `null`, `loadGlossary` then 404s, and the panel says *"Nobody has
+found the terms for this one yet"* and offers a model call. **The reader's whole glossary, gone,
+with nothing anywhere saying so.**
+
+The second failure cannot be engineered around at all while the file is shared: the `glossary` step
+reads it, spends a minute in a model call, and writes back what it read. No in-process lock helps a
+stale read held across a call.
+
+So lookups live in [`src/glossary-lookups.ts`](../../src/glossary-lookups.ts) —
+`data/<slug>/glossary-lookups.json`, keyed by entry id, temp-and-rename, serialised, all copied from
+[`src/comments.ts`](../../src/comments.ts), which learned each of those the hard way. It also
+crosses back over a line the repo had already drawn and this plan had lost: **a lookup is reader
+state**, and reader state lives beside the artefact rather than inside it, which is exactly what
+`Comment` says about itself.
+
+It buys something too. Ids survive a regeneration by design, so a lookup keyed by id is still
+attached to its term after "Find more terms" — where inside `glossary.json` it would have been
+discarded by the next run.
+
 ## What this costs, and what it breaks
 
-- **`PROMPT_VERSION` goes to `glossary/2`.** That is what makes every existing glossary read as
-  stale, which the panel already handles: it says so at the top and offers *Find them again*.
-- **The append condition tightens.** `generateGlossary` appends to a glossary whose `sourceHash`
-  matches; it must now also require the **version** to match, or a second pass would merge new-shape
-  entries into an old-shape list and hand `dedupe` two vocabularies.
+- **`PROMPT_VERSION` goes to `glossary/2`**, and `GlossaryResponse.outdated` is what carries that to
+  the reader. See above for why it is not `stale`.
+- **The append path upcasts rather than refuses**, so ids and entries survive across the version
+  boundary. See above.
 - **The panel keeps rendering old-shape entries.** `gloss` / `detail` / `fromOutside` still display
   on artefacts written before today, so nothing blanks while a glossary is stale.
 - **`answerTokens` rises** from `600 + count × 260`. A `background` for a person runs longer than the

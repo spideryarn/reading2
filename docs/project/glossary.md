@@ -39,6 +39,12 @@ until you know what they are for.
  │             │ ┊The ordinary use in │        is selected     │
  │             │ ┊philosophy of mind… │                         │
  │             │ ┊ ↗ en.wikipedia.org │                         │
+ │             │ ┌───────────────────┐│                         │
+ │             │ │CHECKED         🌐 ││   ← or, before anybody  │
+ │             │ │Seth uses it in the││     pressed it:         │
+ │             │ │sense Chalmers…    ││   [🌐 Check the web]    │
+ │             │ │ ↗ plato.stanford  ││                         │
+ │             │ └───────────────────┘│                         │
  │             │ ▸ also: nonredu…     │                         │
  │             │ ▸ used in 3 places   │                         │
  │             │   k3m9qt qw82nf      │                         │
@@ -67,6 +73,13 @@ until you know what they are for.
  inside that section because checking it is all the link is for. A closed
  row shows whichever of the two exists — for a person quoted once there is
  no "in this piece" worth writing, and saying so is the entry's whole job.
+
+ CHECKED is the only part of an entry that has been near a source. The batch
+ call does not search — background is memory, and the ↗ under it is a guess
+ at a canonical page — so until somebody presses the button there is a button
+ rather than a badge claiming a check nobody ran. The globe has an off state,
+ because "the model judged it already knew" is a real answer and otherwise
+ looks identical to a broken tool.
 
  The threshold row is where that product's one free number lives. Drag it
  left and the top group swallows the list; drag it right and it narrows to
@@ -346,6 +359,63 @@ the article**, and those two entries only found their blocks because `JFK` and `
 aliases. The prompt now names both as examples of what not to do, and the re-run gave
 *John F. Kennedy* and *Martin Luther King Jr.*
 
+### Checking a term on the web
+
+`background` is the model's memory. **Nothing in the batch call is checked against anything**, and
+the `url` it sometimes offers is a guess at a canonical page rather than a page it visited. So the
+open entry carries a **"Check the web"** button, and pressing it is what turns a remembered answer
+into a checked one:
+
+```
+POST /api/glossary/:slug/:id/lookup   →  { entry }   (~10s, one model call)
+```
+
+**Its answers live in their own file**, `data/<slug>/glossary-lookups.json`, keyed by entry id
+([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. A lookup
+is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and
+sharing the file with the generating stage is unfixable rather than merely racy, because that stage
+holds its read across a minute-long model call. Worse, `glossary.json` is written with a bare
+`writeFile`, and a truncated one reads as `null`, which the panel reports as *"Nobody has found the
+terms for this one yet"* — the whole glossary gone, silently. The sidecar is temp-and-rename and
+serialised, both copied from [`src/comments.ts`](../../src/comments.ts). `loadGlossary` attaches them
+at read time, so the panel still just sees `entry.lookup`.
+
+**Its answers live in their own file**, `data/<slug>/glossary-lookups.json`, keyed by entry id
+([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. A lookup
+is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and
+sharing a file with the generating stage is unfixable rather than merely racy, because that stage
+holds its read across a minute-long model call. Worse, `glossary.json` is written with a bare
+`writeFile`, and a truncated one reads as `null` — which the panel reports as *"Nobody has found the
+terms for this one yet"*, the whole glossary gone and nothing saying so. The sidecar is
+temp-and-rename and serialised, both copied from [`src/comments.ts`](../../src/comments.ts).
+`loadGlossary` attaches them at read time, so the panel still just sees `entry.lookup`.
+
+**It is `explain` with a different selection** — the same function comments use
+([`src/explain.ts`](../../src/explain.ts)), with the term's own name as the quote and
+`entry.blocks[0]` as the anchor. That is not opportunism: our review of the previous version argued a
+glossary should be *the same mechanism as comments with a different prompt* rather than a second
+system, and this is the first half of that. It also means the article prefix is **cached and shared**,
+so a lookup on a piece somebody has already asked a question about is a cache hit.
+
+Three decisions inside it:
+
+- **Per entry, on demand — never in the batch call.** One call over a whole article with the model
+  choosing per entry could serialise a dozen searches, on a call that is already capped and
+  paginated *because output tokens caused 504s in the previous version*, and its citations would not
+  map onto entries anyway: annotations attach to spans of the response, and the response is one JSON
+  blob. [The plan](../plans/glossary-entries-worth-reading.md#3-the-web-on-demand-per-entry-never-in-the-batch)
+  has the full argument, including the one that decided it — searching would not have fixed the entry
+  that prompted all this.
+- **The answer sits beside `background`, never merged into it.** A reader who cannot tell the checked
+  answer from the recalled one has lost the thing the labels above exist to give them.
+- **`searches: 0` is drawn, not hidden.** The model decides per call, so "it judged it already knew"
+  is a real outcome and the globe has an off state saying so. Without that, an answer that was never
+  checked looks identical to one that was.
+
+Sources render as **host names with the page title in a hover tooltip** — Greg's own suggestion, and
+the shape an 18rem band can take: the title is the useful thing to read and the wrong thing to lay
+out. `Tooltip.tsx` rather than a `title=` attribute, so it works on focus too.
+
 ### What this replaced, and how old glossaries behave
 
 `glossary/1`'s `gloss`, `detail` and `fromOutside` are **still read and still rendered**, unlabelled
@@ -353,11 +423,26 @@ and with their badge, exactly as before. There is no honest label for a blend: p
 `gloss` under "in this piece" would attribute the model's own knowledge to the article, which is the
 one direction of error this change exists to prevent.
 
-They do not linger. `PROMPT_VERSION` went to `glossary/2`, which makes every existing glossary read
-as **stale** — the panel says so at the top and offers *Find them again*. And the append gate in
-`generateGlossary` now requires the version to match as well as the source hash, so *Find more terms*
-on an old list starts a new one rather than handing [`dedupe`](#two-their-dedup-deleted-the-more-specific-term)
-two vocabularies to merge.
+They do not linger, and **the first attempt at making sure of that was a data-loss bug** worth
+knowing about, because both halves of it were invisible.
+
+`PROMPT_VERSION` went to `glossary/2`, and the plan claimed that made every existing glossary read as
+stale. It did not: `isStale` compares `sourceHash` and nothing else, so an old list on an unchanged
+article showed no banner and the reader was never offered the button that would rewrite it. That is
+what `GlossaryResponse.outdated` is for — a **second** flag beside `stale`, because they are
+different facts needing different sentences: *the article moved underneath these terms* is not *the
+article is the same and we would write these differently now*.
+
+The append path then briefly **refused** to append across the version boundary, to avoid handing
+[`dedupe`](#two-their-dedup-deleted-the-more-specific-term) two vocabularies. Follow it through:
+`existing` becomes null, `buildGlossary` gets no previous entries, so `taken` is empty and **every id
+is re-minted** — every `?term=` link dead — the file is overwritten, and `passes` resets to 1 so the
+log reads like a first run. All behind a button labelled *Find more terms*, which was the only one on
+screen because of the bug above.
+
+What it does now is **upcast**: the old entries are translated into the new shape before they are
+merged, so there is one vocabulary rather than a refusal. Nothing is lost and no id moves. The blend
+goes to `background`, for the same reason `toEntries` puts it there.
 
 ## The scores, and the condition attached to keeping them
 
@@ -529,11 +614,13 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   about. If entries ever want emphasis, the answer is a restricted renderer, not
   `dangerouslySetInnerHTML`. This is also the second reason inline provenance marking was rejected
   on 2026-08-26: marks inside the prose mean markup inside a stored string, and that reverses this.
-- **Nothing has been checked against a source.** `background` is the model's memory, and `url` is
-  its guess at a canonical page rather than one it visited. The glossary call does not search the
-  web, and [the plan](../plans/glossary-entries-worth-reading.md#3-the-web-on-demand-per-entry-never-in-the-batch)
-  says why the answer is a per-entry lookup the reader asks for rather than search in the batch
-  call — including the reason searching would not have fixed the entry that prompted all this.
+- **Nothing is checked against a source until somebody asks.** `background` is the model's memory
+  and `url` is a guess at a canonical page. The per-entry lookup above is the answer, and it is
+  reader-initiated by design — but it means an entry nobody has pressed the button on is entirely
+  unverified, and the only thing saying so is the absence of a "checked" block.
+- **A term nobody has pressed the button on is entirely unchecked**, and the only thing saying so is
+  the absence of a "checked" block. That is the cost of making the web reader-initiated, and it is
+  the right cost, but it is a cost.
 - **Nothing ties a term to a question.** [comments.md](comments.md) already answers "what does this
   mean" for a selected passage, and our review of their version argued a glossary should be *the same
   mechanism with a different prompt* rather than a second system. It is currently a second system —

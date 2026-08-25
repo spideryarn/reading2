@@ -31,7 +31,9 @@ import {
   normaliseTerm,
   richness,
   safeUrl,
+  existingFor,
   suggestedCount,
+  upcast,
 } from "../src/glossary.js";
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
 import { hashBlocks } from "../src/source-hash.js";
@@ -892,5 +894,171 @@ describe("entryProse", () => {
     expect(old.legacy).toBe(true);
     expect(old.lead).toBe("A blend of both.");
     expect(old.sections).toEqual([]);
+  });
+});
+
+describe("upcasting a glossary/1 list instead of refusing it", () => {
+  /* The regression this exists for, found in review before anybody hit it.
+
+     `glossary/2` briefly *refused* to append across a version boundary. That
+     sounds conservative and was a data-loss bug: `existing` became null, so
+     `buildGlossary` got no previous entries, `taken` was empty, **every id was
+     re-minted** — killing every `?term=` link a reader held — the file was
+     overwritten wholesale, and `passes` reset to 1 so the log line looked like
+     a first run. All from a button labelled "Find more terms".
+
+     Compounded by a second thing: `isStale` compares source hashes only, so
+     bumping the prompt version marked nothing stale, the panel showed no
+     banner, and the only button on screen was the forcing one. Both halves are
+     tested here — the upcast below, and `outdated` in tests/api.test.ts. */
+  const v1 = entry({ name: "Seth", gloss: "The author.", detail: "Wrote a book." });
+
+  it("translates the old shape into the new one, blend into background", () => {
+    const out = upcast(without(v1, "senseHere"));
+    expect(out.background).toBe("The author. Wrote a book.");
+    expect(out.senseHere).toBeUndefined();
+    expect(out.gloss).toBeUndefined();
+    expect(out.detail).toBeUndefined();
+    // The blend goes to `background`, never `senseHere`. `senseHere` is
+    // labelled "in this piece", and a blend under that label would attribute
+    // the model's own knowledge to the article — the one direction of error
+    // this design exists to prevent. `background` under-claims, which is safe.
+  });
+
+  it("keeps the id, which is what a ?term= link points at", () => {
+    expect(upcast(without(v1, "senseHere")).id).toBe(v1.id);
+  });
+
+  it("keeps fromOutside, the only field that could ever split a blend", () => {
+    // Dropping it would close the door on a real upcast for good: it is the one
+    // signal saying which half of an old gloss came from outside the article.
+    const flagged = { ...without(v1, "senseHere"), fromOutside: true as const };
+    expect(upcast(flagged).fromOutside).toBe(true);
+  });
+
+  it("leaves a new-shape entry completely alone, and is idempotent", () => {
+    // It runs on every append, so a second pass must not re-translate what the
+    // first one already did.
+    const v2 = entry({ name: "Seth", senseHere: "Narrowed here." });
+    expect(upcast(v2)).toEqual(v2);
+    expect(upcast(upcast(without(v1, "senseHere")))).toEqual(upcast(without(v1, "senseHere")));
+  });
+
+  it("leaves an entry with nothing to translate alone", () => {
+    const bare = without(without(entry({ name: "bare" }), "senseHere"), "background");
+    expect(upcast(bare)).toEqual(bare);
+  });
+});
+
+describe("which prose a merge puts in front of the reader", () => {
+  /* Raised in review, and the test was the reviewer's point rather than the
+     rule: the existing merge test asserts both fields survive but never asserts
+     **which one the reader sees first**, and the lead is the thing that matters.
+
+     The rule here is `winner.x ?? loser.x` per field, so nothing is thrown away
+     — and the cost, stated rather than discovered later, is that a merge can
+     resurrect a `senseHere` the winner deliberately omitted. The prompt now
+     treats an absent field as a real answer, so that omission may have been a
+     judgment, and this fills it from the other entry anyway.
+
+     Kept because the two failures are not equally visible. A resurrected weak
+     line is on screen where a reader can see it is weak. A deleted good one is
+     invisible, and there is nothing anywhere that would ever surface it. Prefer
+     the error somebody can catch. */
+  it("takes the winner's senseHere when it has one", () => {
+    const out = dedupe([
+      entry({ name: "Lamport", aliases: ["Leslie Lamport"], senseHere: "The loser's line." }),
+      entry({ name: "Leslie Lamport", senseHere: "The winner's line." }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.name).toBe("Leslie Lamport");
+    expect(entryProse(out[0]!).lead).toBe("The winner's line.");
+  });
+
+  it("fills a gap from the loser rather than dropping it — and that then leads", () => {
+    const out = dedupe([
+      without(entry({ name: "Lamport", aliases: ["Leslie Lamport"], senseHere: "Only line." }), "background"),
+      without(entry({ name: "Leslie Lamport", background: "Turing Award." }), "senseHere"),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.senseHere).toBe("Only line.");
+    expect(out[0]?.background).toBe("Turing Award.");
+    // Documented consequence, pinned so it is a decision rather than a surprise:
+    // the merged-in senseHere takes the closed row.
+    expect(entryProse(out[0]!).lead).toBe("Only line.");
+  });
+});
+
+describe("a second pass over a glossary/1 list", () => {
+  /* The regression test for the data-loss bug, at the level where it happened.
+     `buildGlossary` takes `existing` and needs no model call, so the whole
+     append path is assertable here.
+
+     What went wrong: refusing to append across a version boundary meant
+     `existing` arrived null, `taken` was empty, and every id was re-minted —
+     killing every `?term=` link the reader held — while the file was
+     overwritten and `passes` reset to 1. The button that did it said "Find more
+     terms". */
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1 };
+
+  const v1: Glossary = {
+    version: "glossary/1",
+    generator: MODEL,
+    slug: "a-slug",
+    sourceHash: "deadbeefdeadbeef",
+    entries: [without(entry({ name: "Seth", gloss: "The author." }), "senseHere")],
+    passes: 1,
+    generatedAt: "2026-08-25T12:00:00.000Z",
+    elapsedMs: 1,
+  };
+
+  it("appends across a prompt-version boundary rather than starting over", () => {
+    /* The bug itself, at the line where it lived. Null here is what re-mints
+       every id. A version change must NOT produce it; a source-hash change
+       must, because those entries describe a piece that has moved. */
+    const kept = existingFor(v1, "deadbeefdeadbeef");
+    expect(kept).not.toBeNull();
+    expect(kept?.entries[0]?.id).toBe(v1.entries[0]!.id);
+    // And upcast on the way in, so `dedupe` never sees two vocabularies.
+    expect(kept?.entries[0]?.background).toBe("The author.");
+    expect(kept?.entries[0]?.gloss).toBeUndefined();
+
+    expect(existingFor(v1, "a-different-hash")).toBeNull();
+    expect(existingFor(null, "deadbeefdeadbeef")).toBeNull();
+  });
+
+  it("keeps the old entry's id, which is what a ?term= link points at", () => {
+    const before = v1.entries[0]!.id;
+    const g = buildGlossary(
+      { entries: [{ name: "Qualia", senseHere: "Raw feels, narrowed." }] },
+      { ...opts, existing: { ...v1, entries: v1.entries.map(upcast) } },
+    );
+    expect(g.entries.find((e) => e.name === "Seth")?.id).toBe(before);
+  });
+
+  it("keeps the old entries at all, and counts the pass", () => {
+    const g = buildGlossary(
+      { entries: [{ name: "Qualia", senseHere: "Raw feels, narrowed." }] },
+      { ...opts, existing: { ...v1, entries: v1.entries.map(upcast) } },
+    );
+    expect(g.entries.map((e) => e.name).sort()).toEqual(["Qualia", "Seth"]);
+    // `pass 1` on a second pass was the log line that made the loss look like a
+    // first run. It is the cheapest signal that the append happened at all.
+    expect(g.passes).toBe(2);
+  });
+
+  it("leaves one vocabulary behind, not two", () => {
+    // The thing the refusal was protecting against, solved by translating
+    // rather than refusing: after an append every entry answers the same
+    // question, because the old ones were upcast on the way in.
+    const g = buildGlossary(
+      { entries: [{ name: "Qualia", senseHere: "Raw feels, narrowed." }] },
+      { ...opts, existing: { ...v1, entries: v1.entries.map(upcast) } },
+    );
+    for (const e of g.entries) {
+      expect(e.gloss).toBeUndefined();
+      expect(e.senseHere !== undefined || e.background !== undefined).toBe(true);
+    }
+    expect(g.entries.find((e) => e.name === "Seth")?.background).toBe("The author.");
   });
 });

@@ -19,7 +19,14 @@
 import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadComments } from "./comments.js";
-import { isStale as glossaryIsStale, readGlossary } from "./glossary.js";
+import { explain } from "./explain.js";
+import { loadLookups, saveLookup } from "./glossary-lookups.js";
+import {
+  isStale as glossaryIsStale,
+  PROMPT_VERSION,
+  readGlossary,
+  safeUrl,
+} from "./glossary.js";
 import { isStale as summariesStale, readSummaries } from "./summarise.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
@@ -32,6 +39,8 @@ import type {
   Article,
   ArticleMetadata,
   Block,
+  GlossaryEntry,
+  GlossaryLookup,
   GlossaryResponse,
   SummariesResponse,
   LibraryEntry,
@@ -276,7 +285,145 @@ export async function loadGlossary(slug: string): Promise<GlossaryResponse> {
   // `articleDir` already proved blocks.json is there, so the fallback is for a
   // file that has become unreadable between the two reads. Unknown counts as
   // stale: the honest answer, and the safe way round to be wrong.
-  return { glossary, stale: !blocksFile || glossaryIsStale(glossary, blocksFile.blocks) };
+  /* Attached here, at the read seam, rather than stored on the entry. Lookups
+     live in their own file for the three reasons src/glossary-lookups.ts sets
+     out — the short one being that `glossary.json` has a writer holding a stale
+     read across a ninety-second model call, so a second writer cannot be made
+     safe by any lock. The panel sees `entry.lookup` either way. */
+  const lookups = await loadLookups(slug);
+  const entries = glossary.entries.map((entry) =>
+    lookups[entry.id] ? { ...entry, lookup: lookups[entry.id]! } : entry,
+  );
+
+  return {
+    glossary: { ...glossary, entries },
+    stale: !blocksFile || glossaryIsStale(glossary, blocksFile.blocks),
+    /* Two different facts, computed side by side, both at read time for the
+       reason the header gives: a flag stored at generation time is right until
+       the moment it matters. `stale` is about the article; this is about us. */
+    outdated: glossary.version !== PROMPT_VERSION,
+  };
+}
+
+/**
+ * Check one glossary term on the web, and keep what comes back.
+ *
+ * **This is `explain` with a different selection, and that is the point.** Our
+ * review of the version this feature was borrowed from argued that a glossary
+ * should be *the same mechanism as comments with a different prompt* rather
+ * than a second system, and docs/project/glossary.md § What is still open has
+ * carried that as an open question since the feature landed. It is answered
+ * here by using the mechanism rather than by describing it: the same call, the
+ * same web-search tool, the same `Citation` shape, the same cached article
+ * prefix — so a lookup on an article somebody has already asked a question
+ * about is a cache hit rather than a fresh read of the whole piece.
+ *
+ * The term's own name is the quote. That is not a trick: the entry earned its
+ * place because the article uses those words, `findOccurrences` proved it, and
+ * `entry.blocks[0]` is a block they appear in. So "the reader selected this
+ * passage" is literally true, and the prompt's own instruction to supply *"the
+ * term of art, the named person, the debate being alluded to"* is the question
+ * a glossary reader is asking.
+ *
+ * **What it does not do is touch `background`.** The remembered answer and the
+ * checked one sit side by side, because a reader who can no longer tell which
+ * is which has lost the thing this panel spent a rewrite acquiring.
+ */
+export async function lookUpTerm(
+  slug: string,
+  termId: string,
+  signal?: AbortSignal,
+): Promise<{ entry: GlossaryEntry }> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  /* The fixture is not the reader's to write into — the same guard
+     `deleteGlossary` carries, and for the same reason: `articleDir` falls
+     through to `example/` for any slug with no output of its own, so without
+     this a lookup on an unknown slug would edit the one committed directory in
+     the repo. */
+  if (dir !== path.join(ROOT, "data", slug)) {
+    throw Object.assign(
+      new Error(`"${slug}" is the built-in example. Its glossary is not yours to write to.`),
+      { status: 403 },
+    );
+  }
+
+  const glossary = await readGlossary(dir);
+  const entry = glossary?.entries.find((e) => e.id === termId);
+  if (!glossary || !entry) {
+    throw Object.assign(new Error(`No glossary term "${termId}" in "${slug}".`), { status: 404 });
+  }
+
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  if (!blocksFile) {
+    throw Object.assign(new Error(`Cannot read the blocks for "${slug}".`), { status: 500 });
+  }
+  /* A missing meta.json is not worth refusing over — it only tells the model
+     what it is reading — so the fallback carries the two fields `Meta` actually
+     requires and nothing invented. Same call the glossary stage itself makes. */
+  const meta: Meta = (await readJson<Meta>(path.join(dir, "meta.json"))) ?? { slug, title: slug };
+
+  /* The first block the term appears in, or the first block of the article when
+     the model named a term this piece does not use in those words — which the
+     panel already surfaces as "These exact words do not appear in the article".
+     A lookup on one of those is a stranger question but still a real one, and
+     refusing it would be a second, quieter place for that failure to appear. */
+  const anchor = entry.blocks[0] ?? blocksFile.blocks[0]?.id;
+  if (!anchor) {
+    throw Object.assign(new Error(`"${slug}" has no blocks to anchor a lookup to.`), { status: 500 });
+  }
+
+  const result = await explain({
+    meta,
+    blocks: blocksFile.blocks,
+    blockId: anchor,
+    quote: entry.name,
+    ...(signal ? { signal } : {}),
+  });
+
+  const lookup: GlossaryLookup = {
+    answer: result.answer,
+    /* Filtered here rather than trusted, even though `explain` built these from
+       the provider's own annotations. This is where a model-supplied URL stops
+       being a value in flight and becomes a value on disk that the panel will
+       put in an `href` — src/glossary.ts § `safeUrl`, and the same call
+       `converse` makes at its own storage boundary. */
+    citations: result.citations.flatMap((c) => {
+      const url = safeUrl(c.url);
+      return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];
+    }),
+    searches: result.searches,
+    model: result.model,
+    at: new Date().toISOString(),
+  };
+
+  /* Into its own file, keyed by id, atomically and one at a time — never into
+     `glossary.json`. src/glossary-lookups.ts sets out the three failures that
+     patching the artefact would have inherited; the one that cannot be
+     engineered around is that the `glossary` step reads that file, spends a
+     minute in a model call, and then writes back what it read.
+
+     Keyed by **id** because ids are identity and names are display: a later
+     pass may merge or rename this term, and `merge` keeps the incumbent's id
+     precisely so a `?term=` link survives. The lookup survives with it. */
+  await saveLookup(slug, termId, lookup);
+  const updated: GlossaryEntry = { ...entry, lookup };
+
+  /* No prose in the log line, and that includes the answer and the term. What
+     is here is what tells you the feature is working or quietly is not:
+     `searches: 0` on every call means the model has stopped choosing to look,
+     which is invisible from the outside because "I already knew that" is a
+     legitimate answer. src/log.ts. */
+  log("store").info(
+    { slug, termId, searches: lookup.searches, citations: lookup.citations.length, model: lookup.model },
+    "looked up a glossary term",
+  );
+
+  return { entry: updated };
 }
 
 /**

@@ -23,7 +23,7 @@
  * See docs/project/glossary.md.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Glossary, GlossaryResponse, Job } from "../types.js";
+import type { Glossary, GlossaryEntry, GlossaryResponse, Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
 export type GlossaryStatus = "loading" | "none" | "ready" | "error";
@@ -33,6 +33,8 @@ export interface UseGlossary {
   glossary: Glossary | null;
   /** The article moved after the list was written. Said out loud, never worked around. */
   stale: boolean;
+  /** The list predates the current prompt. A different fact from `stale`, with its own sentence. */
+  outdated: boolean;
   /** A read failure, or the reason the last request could not be started. */
   error: string | null;
   /** The job writing this article's glossary, if one is. Null otherwise. */
@@ -43,6 +45,12 @@ export interface UseGlossary {
   more(): Promise<void>;
   reset(): Promise<void>;
   cancel(id: string): void;
+  /** Check one term on the web. Resolves when the answer is in `glossary`. */
+  look(id: string): Promise<void>;
+  /** The term a lookup is running for, or null. One at a time, on purpose. */
+  looking: string | null;
+  /** Why the last lookup failed, if it did. Cleared when another is started. */
+  lookFailed: string | null;
 }
 
 /** Is this job one that would write a glossary? */
@@ -54,7 +62,10 @@ export function useGlossary(slug: string): UseGlossary {
   const [status, setStatus] = useState<GlossaryStatus>("loading");
   const [glossary, setGlossary] = useState<Glossary | null>(null);
   const [stale, setStale] = useState(false);
+  const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [looking, setLooking] = useState<string | null>(null);
+  const [lookFailed, setLookFailed] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +75,7 @@ export function useGlossary(slug: string): UseGlossary {
         // this is what the panel's button is for.
         setGlossary(null);
         setStale(false);
+        setOutdated(false);
         setError(null);
         setStatus("none");
         return;
@@ -73,6 +85,7 @@ export function useGlossary(slug: string): UseGlossary {
       const loaded = body as GlossaryResponse;
       setGlossary(loaded.glossary);
       setStale(loaded.stale);
+      setOutdated(loaded.outdated);
       setError(null);
       setStatus("ready");
     } catch (err) {
@@ -183,9 +196,55 @@ export function useGlossary(slug: string): UseGlossary {
     }
     setGlossary(null);
     setStale(false);
+    setOutdated(false);
     setStatus("none");
     await run(false);
   }, [slug, run]);
+
+  /**
+   * Check one term on the web — the panel's "check this" button.
+   *
+   * **A plain request rather than a job**, unlike everything else here. Finding
+   * terms is one call over a whole article and belongs in the queue; checking a
+   * single term is a question with a reader waiting on it, which is the shape
+   * `useComments` already has. It reuses that call too — see `lookUpTerm` in
+   * src/api.ts.
+   *
+   * **One at a time**, which is a deliberate limit and not a missing feature:
+   * each of these is a model call the reader pays for, and a panel that will
+   * fire five because five rows were clicked spends money on a mis-click. The
+   * button is disabled while one is running.
+   *
+   * The answer is merged into the entry in place rather than refetching the
+   * list, because a refetch would rebuild every row and lose the reader's
+   * selection — and the server has just told us the one thing that changed.
+   */
+  const look = useCallback(
+    async (id: string) => {
+      if (looking) return;
+      setLooking(id);
+      setLookFailed(null);
+      try {
+        const res = await fetch(
+          `/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
+          { method: "POST" },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((body as { error?: string }).error ?? res.statusText);
+        const { entry } = body as { entry: GlossaryEntry };
+        setGlossary((current) =>
+          current
+            ? { ...current, entries: current.entries.map((e) => (e.id === entry.id ? entry : e)) }
+            : current,
+        );
+      } catch (err) {
+        setLookFailed((err as Error).message);
+      } finally {
+        setLooking(null);
+      }
+    },
+    [slug, looking],
+  );
 
   /* `queue.error` is read here at render and not inside `run`, where it would
      be the value from the render that created the closure — the hook sets it
@@ -198,6 +257,7 @@ export function useGlossary(slug: string): UseGlossary {
     status,
     glossary,
     stale,
+    outdated,
     error,
     job,
     failed,
@@ -205,5 +265,8 @@ export function useGlossary(slug: string): UseGlossary {
     more,
     reset,
     cancel: (id) => void queue.cancel(id),
+    look,
+    looking,
+    lookFailed,
   };
 }

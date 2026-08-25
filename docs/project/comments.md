@@ -355,6 +355,24 @@ belongs:
 actually argue for. Chat is the one that had to earn its place; the argument is in
 [chat-mode.md § Say the awkward thing first](../plans/chat-mode.md#say-the-awkward-thing-first).
 
+### And since 2026-08-26, a third caller of this same call
+
+The glossary's **"Check the web"** button ([glossary.md § Checking a term on the
+web](glossary.md#checking-a-term-on-the-web)) calls `explain` directly, with the term's name as the
+quote and the block it first appears in as the anchor. Not a copy of it — the function.
+
+That is worth knowing here rather than only there, for two reasons. **A change to `SYSTEM` in
+[`src/explain.ts`](../../src/explain.ts) now changes what a glossary entry's checked answer says**,
+and nothing in this file would tell you. And it is the first half of a merge our review of the
+previous version asked for and
+[glossary.md § What is still open](glossary.md#what-is-still-open) has been carrying since: *a
+glossary should be the same mechanism as comments with a different prompt, not a second system.* The
+second half — one storage artefact, one anchor model — is still open.
+
+One practical consequence: because the article half of the prompt is one cached prefix
+([prompt-caching.md](prompt-caching.md)), a glossary lookup on a piece somebody has already asked a
+question about is a cache hit rather than a fresh read of the whole article.
+
 ## See also
 
 - [vision.md](vision.md#where-this-goes-after-granularity-zoom) — where "ask in place" sits in the plan

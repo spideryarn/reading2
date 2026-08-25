@@ -296,6 +296,61 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
 }
 
 /**
+ * What a second pass appends to, or null for a fresh start.
+ *
+ * **One expression, and it has been wrong once**, which is why it is a named
+ * function with tests rather than a ternary inside a 120-line call — the
+ * docstring on `generateGlossary` has pointed at "`existingFor` below" since
+ * before there was one.
+ *
+ * A glossary whose `sourceHash` no longer matches describes a piece that no
+ * longer exists, so its entries are about text that has moved and appending to
+ * them would produce a list half-describing each. That one is a real refusal.
+ *
+ * A glossary written by an **older prompt** is not. It was briefly refused too,
+ * and the refusal was a data-loss bug: null here means `buildGlossary` gets no
+ * previous entries, so `taken` is empty and every id is re-minted — every
+ * `?term=` link the reader holds goes dead — while the file is overwritten and
+ * `passes` resets to 1, so nothing anywhere says it happened. Behind a button
+ * labelled "Find more terms". See docs/plans/glossary-entries-worth-reading.md
+ * § What review caught.
+ *
+ * The thing that refusal was protecting against is real — `merge` cannot choose
+ * between a `gloss` and a `background`, because they are not the same field —
+ * and `upcast` answers it properly, by translating rather than discarding.
+ */
+export function existingFor(onDisk: Glossary | null, sourceHash: string): Glossary | null {
+  if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
+  return { ...onDisk, entries: onDisk.entries.map(upcast) };
+}
+
+/**
+ * A `glossary/1` entry in `glossary/2` shape, so a second pass has one
+ * vocabulary to merge rather than two.
+ *
+ * The blend goes to **`background`**, which is the same call `toEntries` makes
+ * when the model answers in the old shape, and for the same reason: the old
+ * `gloss` mixed what the article means with what the model knows, `senseHere`
+ * is labelled "in this piece", and putting a blend under that label would
+ * attribute the model's own knowledge to the article. `background` under-claims
+ * the article, which is the harmless direction.
+ *
+ * `fromOutside` is carried rather than dropped. It is the only field that could
+ * ever discriminate an old blend into its two halves without guessing, and an
+ * upcast that threw it away would close that door for good.
+ *
+ * An entry already in the new shape is returned untouched — this is idempotent,
+ * which matters because it runs on every append.
+ */
+export function upcast(entry: GlossaryEntry): GlossaryEntry {
+  if (entry.senseHere !== undefined || entry.background !== undefined) return entry;
+  const background = [entry.gloss, entry.detail].filter(Boolean).join(" ");
+  if (!background) return entry;
+  const { gloss, detail, ...rest } = entry;
+  return { ...rest, background };
+}
+
+/**
  * Merge two entries for the same thing, keeping the **richer name**.
  *
  * The id is always the incumbent's, even when the challenger's name wins. A
@@ -840,21 +895,25 @@ export async function generateGlossary(opts: {
 
   const sourceHash = hashBlocks(blocks);
   const onDisk = await readGlossary(opts.dir);
-  /* Append only to a glossary that still describes THIS text, **and that this
-     prompt wrote**. See the note above for the first half.
-   
-     The version half arrived with `glossary/2` on 2026-08-26, which replaced
-     one blended `gloss` with `senseHere` and `background`. Without it, "Find
-     more terms" on an old list would hand `dedupe` two vocabularies to merge
-     and produce a list where half the entries answer a different question from
-     the other half — and `merge` would have to pick between a `gloss` and a
-     `background` that are not the same field. Falling back to a fresh list is
-     the cheap, legible outcome: the panel already says the list is stale and
-     already offers to find them again. */
-  const existing =
-    onDisk && onDisk.sourceHash === sourceHash && onDisk.version === PROMPT_VERSION
-      ? onDisk
-      : null;
+  /* Append to any glossary that still describes THIS text, whatever prompt
+     version wrote it — **upcast on the way in** rather than refused.
+
+     This was briefly a *gate*, and the gate was a bug. `glossary/2` replaced one
+     blended `gloss` with `senseHere` and `background`, and refusing to append
+     across that boundary sounds conservative until you follow it: `existing`
+     becomes null, `buildGlossary` gets no previous entries, so `taken` is empty
+     and **every id is re-minted** — every `?term=` link the reader holds goes
+     dead, the file is overwritten wholesale, and `passes` resets to 1 so the log
+     line is indistinguishable from a first run. A button labelled "Find more
+     terms" quietly destroying the list is the exact shape
+     docs/reusable/silent-success.md is about.
+
+     The thing the gate was actually protecting against — `dedupe` handed two
+     vocabularies, and `merge` asked to choose between a `gloss` and a
+     `background`, which are not the same field — is real, and `upcast` answers
+     it properly: there is one vocabulary because the old entries are translated
+     into it before they are merged. Nothing is lost and no id moves. */
+  const existing = existingFor(onDisk, sourceHash);
 
   const words = blocks.reduce((n, b) => n + b.words, 0);
   const count = suggestedCount(words);
