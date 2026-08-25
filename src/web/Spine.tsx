@@ -210,7 +210,7 @@ export function Spine({ outline, layoutKey, narrow, onJump }: Props) {
       className={`spine${narrow ? " narrow" : ""}`}
       aria-label="Article outline"
       /* The whole rail is one keyboard-navigation zone, meaning L1: it draws
-         parts as bands and names the current one in the header strip, so ← / →
+         parts as bands and names the current one in the header strip, so ↑ / ↓
          over it step part by part. Its click targets are L2 — finer than its
          bands, because a 1px tick is unhittable — but that is a pointing
          concession, not what the rail is *about*. See keynav.ts. */

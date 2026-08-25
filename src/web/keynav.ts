@@ -8,12 +8,21 @@
  * > left/right should jump to the prev/next L2 item, and so on.
  *
  * So the keys carry the *direction* and the pointer carries the *stride*. Over
- * the Sections column, → is "next section"; slide the mouse right onto the
+ * the Sections column, ↓ is "next section"; slide the mouse right onto the
  * prose and the same key becomes "next paragraph"; onto the spine and it
  * becomes "next part". One pair of keys addresses every level the view is
  * already showing, without a modal state to get stuck in — the aim is wherever
  * you happen to be pointing, and you can see it before you press anything
  * (App.tsx puts the level in the controls bar, TableView lights the header).
+ *
+ * **The keys are ↑ / ↓, not ← / →** — Greg, same day: "let's switch to using
+ * up/down instead of left/right". Left and right were the first try and were
+ * the wrong axis: this view spends left-right on granularity, and moving
+ * through the piece is a downward motion at every level
+ * (granularity-zoom.md#the-tabular-view). Pointing sideways to say *how far* and
+ * pressing downwards to say *go* now agree with what the screen shows. It also
+ * hands ← / → back to the browser, which needs them to pan a table wider than
+ * the window.
  *
  * The table is deliberately not the source of that aim. Every zone that means
  * a granularity level tags itself with `data-nav-depth`, and this file reads
@@ -27,7 +36,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Block } from "../types.js";
 import { activeSectionIndex } from "./position.js";
-import { SCROLL_MS, STICKY_OFFSET, scrollToBlock } from "./scroll.js";
+import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
 import type { Cell, Geometry } from "./tree.js";
 
 /**
@@ -76,11 +85,11 @@ export function itemStarts(cells: Cell[]): number[] {
  * Where a keypress lands: the row to scroll to, or null if there is nowhere to
  * go (the ends of the article).
  *
- * → is always the next item. ← is not its mirror: part-way into an item it
+ * ↓ is always the next item. ↑ is not its mirror: part-way into an item it
  * goes to the *top of the item you are in*, and only steps back to the previous
  * one once you are already there. That is the track-skip rule from every music
- * player, and it is what makes the pair reversible — → then ← puts you back
- * exactly where you were, because a → always leaves you on an item's first row.
+ * player, and it is what makes the pair reversible — ↓ then ↑ puts you back
+ * exactly where you were, because a ↓ always leaves you on an item's first row.
  * The mirror version would instead skip the start of the thing you are reading,
  * which is the one place you are most likely to want.
  */
@@ -104,7 +113,7 @@ export function stepTarget(
 function measureRow(): number {
   const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
   const tops = Array.from(rows, (r) => r.getBoundingClientRect().top);
-  return activeSectionIndex(tops, STICKY_OFFSET + 1);
+  return activeSectionIndex(tops, stickyOffset() + 1);
 }
 
 /** Typing somewhere? Then the arrows are the caret's, not ours. */
@@ -120,7 +129,7 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /**
- * Wire up ← / → and report the depth they are currently aimed at, so the view
+ * Wire up ↑ / ↓ and report the depth they are currently aimed at, so the view
  * can say so.
  *
  * Nothing here touches the URL. It scrolls, and the reading-position listener
@@ -174,9 +183,10 @@ export function useArrowNav(
     };
 
     const onKey = (e: KeyboardEvent) => {
-      const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      const dir = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
       if (dir === 0) return;
-      // Alt+← is Back, Cmd+← is Back on a Mac, Shift+← extends a selection.
+      // Cmd+↓ jumps to the end of the document, Alt+↓ and Shift+↓ have their own
+      // meanings, and none of them is ours.
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       // Auto-repeat is deliberately ignored: thirty smooth scrolls a second is
       // a blur you cannot read, and you would arrive somewhere you never saw.
@@ -191,8 +201,8 @@ export function useArrowNav(
       const target = stepTarget(starts, chain.current ?? measureRow(), dir);
       const block = target === null ? undefined : blocks[target];
       // No preventDefault when we do nothing: at the ends of the article the
-      // keypress goes back to the browser, which is the only thing left that
-      // could usefully act on it (panning a table wider than the window).
+      // keypress goes back to the browser, so ↓ on the last paragraph still
+      // scrolls the last screenful into view instead of dying silently.
       if (!block) return;
       e.preventDefault();
 

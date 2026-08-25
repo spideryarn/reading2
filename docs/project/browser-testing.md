@@ -112,7 +112,7 @@ at `Spine.tsx`.
 
 ## The arrow keys, and the thing that makes them hard to check
 
-← / → step through the article at whichever level the pointer is hovering
+↑ / ↓ step through the article at whichever level the pointer is hovering
 ([keyboard.md](keyboard.md)). The awkward part for testing is that **the input is two-handed**: a
 keypress alone proves nothing, because the aim comes from the mouse. Set the pointer first, then
 press.
@@ -120,20 +120,22 @@ press.
 Five checks that between them catch every wiring mistake:
 
 1. **Slide the pointer across the columns without pressing anything.** The header underline and the
-   `←→ …` label in the controls bar should follow it, and they should agree. Over the spine both
+   `↑↓ …` label in the controls bar should follow it, and they should agree. Over the spine both
    should say *Parts*; over the masthead or the controls bar, *Sections*.
-2. **Park in each column and press →.** The distance travelled should get shorter as you move right:
+2. **Park in each column and press ↓.** The distance travelled should get shorter as you move right:
    a part, a section, a paragraph.
-3. **Scroll to the middle of a section and press ←.** It should go to the top of *that* section, not
-   the one before — then ← again leaves it. Then → should put you back exactly where the second ←
+3. **Scroll to the middle of a section and press ↑.** It should go to the top of *that* section, not
+   the one before — then ↑ again leaves it. Then ↓ should put you back exactly where the second ↑
    started. If that round trip doesn't close, the track-skip rule is broken.
-4. **Press → twice quickly.** You should advance two items. One item means the chaining in
+4. **Press ↓ twice quickly.** You should advance two items. One item means the chaining in
    `keynav.ts` is measuring mid-flight instead of stepping from its own last target.
 5. **Press Back.** As with scrolling, it must leave the page — arrow keys write `?at=` through the
    ordinary position listener and must never push a history entry.
 
-And two negatives worth confirming, because both are silent when wrong: Alt+→ should still be the
-browser's Back, and holding → down should do nothing after the first step (auto-repeat is dropped).
+And three negatives worth confirming, because all are silent when wrong: Cmd+↓ should still jump to
+the end of the document, holding ↓ down should do nothing after the first step (auto-repeat is
+dropped), and **← / → must still pan the table sideways** when it is wider than the window — that is
+the axis we deliberately did *not* take.
 
 ## Do not judge colour from a screenshot
 

@@ -2,6 +2,10 @@
  * Arrow-key navigation — the pure half: which row a keypress lands on, given
  * where the reader is and which level the pointer has aimed at.
  *
+ * The keys are ↑ / ↓; `dir` here is -1 for up and 1 for down. The arithmetic is
+ * about document order, not about the keyboard, which is why switching the keys
+ * from ← / → to ↑ / ↓ changed nothing below.
+ *
  * The DOM half (reading the pointer's zone, measuring the current row, the
  * chaining of rapid presses) is not tested here because it needs a real layout;
  * it's covered by hand, per docs/project/browser-testing.md.
@@ -54,8 +58,8 @@ describe("stepTarget", () => {
     expect(stepTarget(starts, 6, 1)).toBe(9);
   });
 
-  // The track-skip rule: back goes to the top of what you are reading first,
-  // and only then to the item before it.
+  // The track-skip rule: ↑ goes to the top of what you are reading first, and
+  // only then to the item before it.
   it("goes to the top of the current item before leaving it", () => {
     expect(stepTarget(starts, 6, -1)).toBe(4);
     expect(stepTarget(starts, 4, -1)).toBe(0);
@@ -63,7 +67,7 @@ describe("stepTarget", () => {
 
   // Why that rule and not the mirror image: it is what makes the pair
   // reversible, because a forward step always lands on an item's first row.
-  it("is reversible — → then ← returns you where you were", () => {
+  it("is reversible — ↓ then ↑ returns you where you were", () => {
     for (const depth of geometry.columnDepths) {
       const s = startsAt(depth);
       for (const row of s) {
