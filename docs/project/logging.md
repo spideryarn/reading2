@@ -256,12 +256,28 @@ All of this came out of a GPT/Codex review of the change (2026-08-25). It is wri
 because every one of these looked completely fine, and three of them were written by an agent that
 had just finished writing the rules they broke.
 
-**And it came back the next day, which is the part worth learning from.** `src/chat.ts` was written
-by copying `src/comments.ts`, and it copied the `reason` field — the exact line that had just been
-removed, carrying its own comment explaining that the value was safe because it is "the stored error
-string, never the answer". True, and not the point: the stored error string is where the provider's
-response body is. A fix that lives only in one file's history does not survive that file being used
-as a template, so both places now carry the reasoning in full and say to keep each other in step.
+**And it came back twice the next day, which is the part worth learning from.** `src/chat.ts` was
+written by copying `src/comments.ts` and copied the `reason` field with it — the exact line that had
+just been removed. Then `src/searches.ts` was written the same way and did it a third time. Each
+copy carried its own comment explaining why the value was safe: "the stored error string, never the
+answer", "the stored error string, never the criterion and never a quote". Both true, and neither is
+the point — the stored error string is *where the provider's response body is*.
+
+Three things follow from that, and the third is the one that matters:
+
+1. A fix that lives only in one file's history does not survive that file being used as a template.
+   All three sites now carry the reasoning in full and name each other.
+2. **A comment asserting that something is safe is not evidence that it is.** All three were written
+   by someone who had reasoned about it and reached the wrong answer, and the comment made the next
+   reader confident rather than curious.
+3. Removing the field at each log site is whack-a-mole, and the mole won twice. **The durable fix is
+   at the throw site**: `src/explain.ts`, `src/converse.ts` and `src/search.ts` each build
+   `` `OpenRouter ${status}: ${detail.slice(0, 400)}` ``, and as long as they do, every file that
+   stores that message and logs it is one copy-paste away from the same leak. Putting the body
+   somewhere structured — where `safeError`'s allowlist drops it — would make the pattern safe to
+   copy. That is **not done yet**; it spans three stage files and changes what the reader sees when
+   a model call fails, so it needs a decision rather than a patch. Until then the rule is: **never
+   log a stored `error` string, however sure you are of what is in it.**
 
 The same review found the rule broken in a second shape, which is easier to miss because the leak and
 the log are in different files. `src/toc.ts` validated a node's range and threw
