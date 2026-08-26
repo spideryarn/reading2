@@ -351,23 +351,73 @@ What this deliberately is **not** is ticks on the spine. Three results scattered
 article are still three places you have to scroll to find, and a shared rail is the thing that would
 actually fix that — it stays in [what is still open](#what-is-still-open) below.
 
-## The four counts in the log line
+## The counts in the log line
 
 Every finished search writes one line under `model` carrying, besides the usual timings and token
-counts, four numbers that exist because **each of them is invisible from the outside**. A dropped
+counts, a set of numbers that exist because **each of them is invisible from the outside**. A dropped
 hit looks exactly like a passage the model chose not to return, and "nothing in this article matches
 that" is a legitimate answer a reader sees. Textbook [silent-success](../reusable/silent-success.md),
 handled by making it countable.
+
+*(This heading said "the four counts" until 2026-08-26, while `Dropped` carried five and the
+streaming work was about to add another. A number in a heading is a hostage to the next change.)*
 
 | Count | What it means when it climbs |
 |---|---|
 | `unknownIds` | the model is citing block ids the article does not have — the id contract has stopped working |
 | `unquoted` | the model is paraphrasing what it claims to be quoting |
 | `subOne` | the confidence unit has drifted to 0–1 |
+| `clamped` | confidences are arriving outside 0–100 and being pulled back into range |
 | `truncated` | a criterion is matching more than `MAX_HITS` passages and the list is being cut |
+| `streamedHits` | how many hits the reader was shown *before* the authoritative parse ran — see below |
 
 **Never logged**: the criterion, any quote, any reasoning, the article, the key. A criterion is as
 private as a selection — it is what somebody was looking for. See [logging.md](logging.md).
+
+## The results arrive one at a time
+
+**Since 2026-08-26.** Search asks for one JSON object and used to wait for all of it, which is
+thirty to sixty seconds of spinner. It now shows each passage as it lands.
+
+The reason this took a second look is worth keeping, because the first answer was confidently wrong.
+The argument for not streaming was: *a search result is a list, not prose — half a JSON array is a
+syntax error, so there is nothing to paint until it parses*. The first half is true. The conclusion
+is not. Hits come back **best first**, and a *complete hit object* is renderable the moment its
+closing brace arrives. The apparent alternative — asking for JSON Lines instead — would have changed
+the prompt and therefore the ranking, which is a question about result quality and belongs in
+[`evals/`](../../evals/README.md); it is also unnecessary. **Nothing about the prompt changed.**
+
+[`search-hits-stream.ts`](../../src/search-hits-stream.ts) is a brace counter with a one-character
+lookahead for strings and escapes — deliberately not a JSON parser. It hands back each element of
+the `hits` array as it completes. Braces inside quoted prose do not count, which matters because
+article prose is full of them.
+
+**What makes a brace counter acceptable is one property, and it is worth stating exactly**, because
+it is what a future change must not quietly break:
+
+> Everything fed in is kept verbatim, so the strict whole-response `parseHits` + `validateHits`
+> still decides what gets stored. The extractor's output is a preview. A hit it misses, splits
+> wrongly, or never completes costs a **late** hit — never a wrong one.
+
+That claim was false for about an hour after it was first written: the extractor took *the first
+array one level inside the object*, so a reply of `{"notes":[…],"hits":[]}` would have previewed a
+hit the stored result did not contain. Found by cross-model review. It keys on the `hits` key now.
+The lesson generalises — **a comment claiming a safety property is not the property**, and this one
+was the entire justification for the design.
+
+Mid-stream hits go through `validateHits` one item at a time, the same function and not a copy, so a
+hit shown while the reader watches has already passed the check the final pass will run again. That
+is not tidiness: `validateHits` is where the quote is matched with `findQuote`, **the same function
+the browser uses to decide which characters to wash**. A second set of rules here would let the
+panel and the prose disagree, which is the thing this whole feature is built to avoid.
+
+`streamedHits` in the log line exists for the one failure that is otherwise invisible: the reader
+sees a row appear, and then quietly not be there once the run is saved.
+
+One more consequence, in [`openrouter-stream.ts`](../../src/openrouter-stream.ts): **search reads
+the stream strictly and chat and explain do not.** A malformed SSE frame costs prose a few words,
+which is worth swallowing. It can cost one JSON object a whole array element while leaving text that
+still parses — a confidently wrong answer, stored.
 
 ## Saving, and the toy it stops this being
 
@@ -722,10 +772,12 @@ a hope.
 - **A hit that is real but wrong** — the model quotes an adjacent sentence that does not actually
   match — is undetectable from here and uncounted. Only a quote that is not in the block at all is
   caught. The same residual [chat-mode.md](../plans/chat-mode.md#what-is-still-open) has.
-- **One result set at a time.** You cannot hold a meaning-search on screen and a words-search at
-  once, or two saved searches together. Their version had the same limitation and called it debt;
-  here it is a deliberate simplification, but it *is* the thing to revisit first if comparing two
-  criteria turns out to be what people want.
+- **The two *matchers* still cannot be on at once.** You cannot hold a words-search and a
+  meaning-search on screen together — one box, one matcher, and switching clears the other's
+  selection. Several *saved* searches together stopped being a limitation on 2026-08-26 (see
+  [Several searches at once](#several-searches-at-once-each-with-a-colour)); this half remains,
+  and the case for changing it is much weaker, because "the letters I typed" and "what I meant"
+  are not two criteria to compare so much as two ways of asking.
 - **No re-run of a stale search.** A saved search is answered against the article as it was; if the
   article is re-extracted, hits whose blocks are gone are silently dropped and the rest may have
   moved. Nothing says the run is out of date, where the tweet thread page does say exactly that

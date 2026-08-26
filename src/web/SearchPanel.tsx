@@ -89,6 +89,8 @@ interface Props {
   onFind(next: string | null): void;
   /** Every saved meaning-search for this article. */
   runs: SearchRun[];
+  /** False until the fetch has answered — see `SearchApi.loaded`. */
+  loaded: boolean;
   /** Which of them are switched on — `?runs=`. Possibly none, which is the default. */
   active: string[];
   /** Its palette slot, for every saved run. `assignSlots` in hit-colours.ts. */
@@ -116,6 +118,7 @@ export function SearchPanel({
   find,
   onFind,
   runs,
+  loaded,
   active,
   slots,
   onToggle,
@@ -187,6 +190,7 @@ export function SearchPanel({
       {matcher === "meaning" && (
         <Saved
           runs={runs}
+          loaded={loaded}
           active={active}
           slots={slots}
           onToggle={onToggle}
@@ -205,6 +209,7 @@ export function SearchPanel({
         matcher={matcher}
         slots={slots}
         runs={runs}
+        loaded={loaded}
         active={active}
         typed={(find ?? "").trim().length}
       />
@@ -494,6 +499,7 @@ const Box = forwardRef<
  */
 function Saved({
   runs,
+  loaded,
   active,
   slots,
   onToggle,
@@ -503,6 +509,7 @@ function Saved({
   onDelete,
 }: {
   runs: SearchRun[];
+  loaded: boolean;
   active: string[];
   slots: Map<string, number>;
   onToggle(id: string, on: boolean): void;
@@ -512,6 +519,21 @@ function Saved({
   onDelete(id: string): void;
 }) {
   const sorted = [...runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  /* Not "nothing searched for yet" until we know that. An empty list means two
+     different things for the length of one request, and the wrong one is a
+     claim about the article rather than about our own fetch — see
+     `SearchApi.loaded`. It is also the only thing a reader following a shared
+     link sees, and for a legacy `?run=` link it directly contradicts the URL. */
+  if (!loaded && sorted.length === 0) {
+    return (
+      <div className="srch-empty">
+        <p className="srch-working">
+          <LoaderCircle size={13} className="srch-spin" /> Fetching your saved searches…
+        </p>
+      </div>
+    );
+  }
 
   if (sorted.length === 0) {
     return (
@@ -598,7 +620,7 @@ function Saved({
                     <AlertTriangle size={13} />
                   </button>
                 ) : (
-                  <span className="srch-icon" title={run.error ?? "This search failed."}>
+                  <span className="srch-icon srch-icon-dead" title={run.error ?? "This search failed."}>
                     <AlertTriangle size={13} />
                   </span>
                 ))}
@@ -694,6 +716,7 @@ function Results({
   matcher,
   slots,
   runs,
+  loaded,
   active,
   typed,
 }: {
@@ -705,6 +728,7 @@ function Results({
   matcher: Matcher;
   slots: Map<string, number>;
   runs: SearchRun[];
+  loaded: boolean;
   active: string[];
   typed: number;
 }) {
@@ -724,6 +748,11 @@ function Results({
      asked a question of yet. Only when there is a list to tick: with no saved
      searches at all, `Saved` above is already explaining that, and two empty
      states stacked is one too many. */
+  /* Nothing to say about saved searches until we know whether there are any.
+     `Saved` above is already showing a spinner; two of them stacked is noise,
+     and "Nothing matched" underneath it would be a second wrong answer. */
+  if (matcher === "meaning" && !loaded) return null;
+
   if (matcher === "meaning" && runs.length > 0 && switchedOn.length === 0) {
     return (
       <div className="srch-empty">

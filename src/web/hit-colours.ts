@@ -23,7 +23,13 @@
  *
  * - **Appending a search never recolours an existing one.** Runs are walked
  *   oldest-first and each takes a slot nobody before it has taken, so a new
- *   search can only ever consume a slot that was free.
+ *   search can only ever consume a slot that was free. One caveat, because the
+ *   sentence is otherwise slightly too strong: "appending" means *later in
+ *   creation order*. A run created in the same millisecond as an existing one
+ *   can sort before it on the id tie-break and take its slot. That needs two
+ *   searches saved inside the same millisecond, which a human cannot do and a
+ *   fixture does constantly — so it is a thing to know when writing tests
+ *   rather than a thing a reader will meet.
  * - **A reload does not reshuffle.** Nothing here reads the clock, the order the
  *   server happened to answer in, or which searches are switched on. Given the
  *   same set of runs it returns the same map, on any machine.
@@ -31,7 +37,11 @@
  * And the honest cost, because it is real and there is no version of this
  * without one: **deleting a search can recolour the searches made after it.**
  * Its slot is freed, and a later run whose first choice was that slot will take
- * it next time round. Two ways out were considered and both are worse. Storing
+ * it next time round — and then *its* old slot is free, so in a full palette
+ * the change can walk along a probing cluster rather than stopping at one run.
+ * Usually it moves nothing; the worst case is not "exactly one".
+ *
+ * Two ways out were considered and both are worse. Storing
  * the colour on the run means a schema change, a migration, and a server that
  * has an opinion about the palette — for a value that is derived. Never reusing
  * a freed slot means keeping a tombstone list forever so that the tenth search
@@ -116,8 +126,20 @@ function inCreationOrder<T extends { id: string; createdAt: string }>(runs: T[])
      a fixture does routinely and a fast reader can do for real — come out in a
      fixed order rather than in whatever order the array arrived in. Without it
      the "a reload does not reshuffle" promise above is false for exactly the
-     case nobody tests. */
-  return [...runs].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+     case nobody tests.
+
+     **Plain `<`, not `localeCompare`.** These are ISO-8601 timestamps and
+     `spya-` ids: both are ASCII, both sort correctly byte-wise, and byte order
+     is the same everywhere. `localeCompare` is not — it consults the runtime's
+     collation, which differs between engines, between ICU builds, and with the
+     host's locale. For these strings it will almost always agree; "almost
+     always" is the wrong guarantee for a function whose whole promise is that
+     the same set of searches gets the same colours on any machine. Raised by a
+     GPT Sol review, 2026-08-26. */
+  return [...runs].sort((a, b) => {
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 }
 
 /**

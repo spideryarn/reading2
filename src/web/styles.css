@@ -1243,10 +1243,19 @@ mark.hit {
    entirely and leaves a colour that simply is not drawn.
 
    The band grows with the count and then stops. Two searches over one phrase is
-   common enough to want room for; five is not a case anybody has reached, and
-   growing without limit would push the rules into the line below. So the band
-   caps at 6px and the stripes inside it get thinner instead — see `HUE_STRIPES`
-   in annotate.ts for what happens past four, which is that they are not drawn.
+   common enough to want room for; growing without limit would push the rules
+   into the line below. So the band caps at **6px** and the stripes inside it get
+   thinner instead — 2px each at three, 1px each at six, which is the last width
+   that is still a mark rather than a suggestion. `HUE_STRIPES` in annotate.ts is
+   six for that reason and no other; it was four, on the strength of an
+   arithmetic claim that turned out to be false (a GPT Sol review, 2026-08-26,
+   did the division: six stripes in 6px are 1px, not sub-pixel).
+
+   **The bar down the left of the paragraph is capped separately, and far
+   higher**, because it has the paragraph's whole height to divide rather than
+   a few pixels of leading. It shows all eight. Two different amounts of room,
+   so two different caps — conflating them was throwing away provenance in the
+   one place there was no need to.
 
    The band is repeated on the confidence chip in the panel and on the bar down
    the left of the paragraph, from the same `--h*` properties, so the three
@@ -1263,16 +1272,16 @@ mark.hit[data-hues="2"] {
   --hue-band: 4px;
   background-image: linear-gradient(
     to bottom,
-    rgb(var(--h0)) 50%,
-    rgb(var(--h1)) 50%
+    rgb(var(--h0)) 50.0%,
+    rgb(var(--h1)) 50.0%
   );
 }
 mark.hit[data-hues="3"] {
   --hue-band: 6px;
   background-image: linear-gradient(
     to bottom,
-    rgb(var(--h0)) 33.34%,
-    rgb(var(--h1)) 33.34% 66.67%,
+    rgb(var(--h0)) 33.33%,
+    rgb(var(--h1)) 33.33% 66.67%,
     rgb(var(--h2)) 66.67%
   );
 }
@@ -1280,10 +1289,33 @@ mark.hit[data-hues="4"] {
   --hue-band: 6px;
   background-image: linear-gradient(
     to bottom,
-    rgb(var(--h0)) 25%,
-    rgb(var(--h1)) 25% 50%,
-    rgb(var(--h2)) 50% 75%,
-    rgb(var(--h3)) 75%
+    rgb(var(--h0)) 25.0%,
+    rgb(var(--h1)) 25.0% 50.0%,
+    rgb(var(--h2)) 50.0% 75.0%,
+    rgb(var(--h3)) 75.0%
+  );
+}
+mark.hit[data-hues="5"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 20.0%,
+    rgb(var(--h1)) 20.0% 40.0%,
+    rgb(var(--h2)) 40.0% 60.0%,
+    rgb(var(--h3)) 60.0% 80.0%,
+    rgb(var(--h4)) 80.0%
+  );
+}
+mark.hit[data-hues="6"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 16.67%,
+    rgb(var(--h1)) 16.67% 33.33%,
+    rgb(var(--h2)) 33.33% 50.0%,
+    rgb(var(--h3)) 50.0% 66.67%,
+    rgb(var(--h4)) 66.67% 83.33%,
+    rgb(var(--h5)) 83.33%
   );
 }
 /* A literal match has no saved search behind it and therefore no colour of its
@@ -1335,6 +1367,10 @@ td.text.has-hit {
    "one of yours is in here" rather than "this clause". `blockHues` in
    search-hits.ts is where the two scopes are set out.
 
+   All eight, because this bar is as tall as the paragraph and has the room —
+   unlike the stripes under a phrase, which share a few pixels of leading and
+   cap at six.
+
    A background rather than the inset shadow above, because a shadow cannot be
    divided into segments. The shadow stays for the literal matcher, which has no
    colours; the two never apply at once, because the two matchers never do. */
@@ -1350,25 +1386,71 @@ td.text.has-hit[data-hues="1"] {
 td.text.has-hit[data-hues="2"] {
   background-image: linear-gradient(
     to bottom,
-    rgb(var(--h0)) 50%,
-    rgb(var(--h1)) 50%
+    rgb(var(--h0)) 50.0%,
+    rgb(var(--h1)) 50.0%
   );
 }
 td.text.has-hit[data-hues="3"] {
   background-image: linear-gradient(
     to bottom,
-    rgb(var(--h0)) 33.34%,
-    rgb(var(--h1)) 33.34% 66.67%,
+    rgb(var(--h0)) 33.33%,
+    rgb(var(--h1)) 33.33% 66.67%,
     rgb(var(--h2)) 66.67%
   );
 }
 td.text.has-hit[data-hues="4"] {
   background-image: linear-gradient(
     to bottom,
-    rgb(var(--h0)) 25%,
-    rgb(var(--h1)) 25% 50%,
-    rgb(var(--h2)) 50% 75%,
-    rgb(var(--h3)) 75%
+    rgb(var(--h0)) 25.0%,
+    rgb(var(--h1)) 25.0% 50.0%,
+    rgb(var(--h2)) 50.0% 75.0%,
+    rgb(var(--h3)) 75.0%
+  );
+}
+td.text.has-hit[data-hues="5"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 20.0%,
+    rgb(var(--h1)) 20.0% 40.0%,
+    rgb(var(--h2)) 40.0% 60.0%,
+    rgb(var(--h3)) 60.0% 80.0%,
+    rgb(var(--h4)) 80.0%
+  );
+}
+td.text.has-hit[data-hues="6"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 16.67%,
+    rgb(var(--h1)) 16.67% 33.33%,
+    rgb(var(--h2)) 33.33% 50.0%,
+    rgb(var(--h3)) 50.0% 66.67%,
+    rgb(var(--h4)) 66.67% 83.33%,
+    rgb(var(--h5)) 83.33%
+  );
+}
+td.text.has-hit[data-hues="7"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 14.29%,
+    rgb(var(--h1)) 14.29% 28.57%,
+    rgb(var(--h2)) 28.57% 42.86%,
+    rgb(var(--h3)) 42.86% 57.14%,
+    rgb(var(--h4)) 57.14% 71.43%,
+    rgb(var(--h5)) 71.43% 85.71%,
+    rgb(var(--h6)) 85.71%
+  );
+}
+td.text.has-hit[data-hues="8"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 12.5%,
+    rgb(var(--h1)) 12.5% 25.0%,
+    rgb(var(--h2)) 25.0% 37.5%,
+    rgb(var(--h3)) 37.5% 50.0%,
+    rgb(var(--h4)) 50.0% 62.5%,
+    rgb(var(--h5)) 62.5% 75.0%,
+    rgb(var(--h6)) 75.0% 87.5%,
+    rgb(var(--h7)) 87.5%
   );
 }
 
@@ -3636,6 +3718,13 @@ td.text.has-hit[data-hues="4"] {
 }
 .srch-icon:hover { background: var(--surface-raised); color: var(--ink); }
 .srch-icon.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+/* The warning sign on a search that failed in a way running it again cannot fix.
+   It carries the same glyph as the retry button next to it, so without this it
+   inherits `cursor: pointer` and a hover background and reads as a control —
+   which is the "button under a message saying it will not help" mistake at one
+   remove: the reader is invited to press, and nothing happens. */
+.srch-icon-dead { cursor: default; }
+.srch-icon-dead:hover { background: none; color: var(--ink-faint); }
 
 /* ---- nothing to show, in its five flavours ---- */
 
@@ -3709,13 +3798,27 @@ td.text.has-hit[data-hues="4"] {
    colour, so a literal result (which has no search and no slot) simply has no
    edge rather than borrowing one that would mean something. */
 .srch-hit-btn { border-left: 2px solid transparent; }
-.srch-hit-btn[data-hue] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
 /* The row whose passage is marked as open in the prose. */
 .srch-hit-btn.on {
   border-color: rgb(var(--hit-rgb) / 0.45);
+  /* NOTE: this sets all four edges, which is why the categorical left edge is
+     reasserted BELOW rather than above — see the rule after this block. */
   background: rgb(var(--hit-rgb) / 0.1);
   color: var(--ink);
 }
+/* The row's own left edge in its search's hue — the same pairing the saved rows
+   use, and for the same reason: one small mark is one too few.
+
+   **After `.on`, and that is not cosmetic ordering.** `.srch-hit-btn[data-hue]`
+   and `.srch-hit-btn.on` have identical specificity (0,2,0), so whichever comes
+   last wins — and `.on` sets `border-color` on all four edges. With this rule
+   above it, pressing a result replaced its categorical hue with the flat search
+   blue, so the one row the reader had just picked out was the one row that
+   stopped saying which search found it. Caught by a GPT Sol review, 2026-08-26.
+
+   No fallback colour: a literal result has no search and no slot, so it gets no
+   edge rather than borrowing one that would mean something. */
+.srch-hit-btn[data-hue] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
 
 /* ---- the gutter: how sure, and where ----
 
@@ -3974,6 +4077,14 @@ td.text.has-hit[data-hues="4"] {
   min-height: 0;
   overflow-y: auto;
   padding: 0.6rem 0.7rem 0.8rem;
+  /* Wheeling past the end of the outline must not start scrolling the article.
+     Chrome chains an over-scroll to the nearest scrollable ancestor by default,
+     and here that ancestor is the page — so a flick at the top of the list moved
+     the reader's place in the piece, which moved `?at=`, which moved this panel.
+     A flick in the outline is not a request to go somewhere. Found at a narrow
+     window, where the panel and the prose sit close enough that it is easy to
+     do by accident (browser pass, 2026-08-26). */
+  overscroll-behavior: contain;
 }
 
 .summ-list, .summ-children { margin: 0; padding: 0; list-style: none; }

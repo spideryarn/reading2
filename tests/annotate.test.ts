@@ -18,6 +18,7 @@ import {
   termMarks,
   type Mark,
 } from "../src/web/annotate.js";
+import { CATEGORICAL_SLOTS } from "../src/web/hit-colours.js";
 
 describe("renderedText", () => {
   it("is the concatenation of text nodes, with entities decoded", () => {
@@ -429,14 +430,33 @@ describe("annotateHtml — the colours of the searches that found the words", ()
   });
 
   it("draws no more than HUE_STRIPES of them", () => {
-    /* Past four the band would push into the line below. The reader loses the
-       knowledge that a fifth search matched *here*, not that it matched. */
+    /* Past the cap the band would push into the line below. The reader loses
+       the knowledge that a further search matched *here*, not that it matched:
+       it keeps its row in the results list and its segment in the paragraph's
+       left-edge bar, which is capped separately and much higher.
+
+       Both bounds derived from `HUE_STRIPES` rather than written out, because
+       the cap has already moved once — it was four, on the strength of an
+       arithmetic claim that turned out to be false — and a hardcoded `--h4`
+       here would have to be remembered every time it moves again. */
     const out = annotateHtml(
       HTML,
-      [0, 1, 2, 3, 4, 5].map((slot) => hitMark({ id: `h${slot}`, slot })),
+      Array.from({ length: HUE_STRIPES + 2 }, (_, i) => hitMark({ id: `h${i}`, slot: i % 8 })),
     );
     expect(out).toContain(`data-hues="${HUE_STRIPES}"`);
-    expect(out).not.toContain("--h4:");
+    expect(out).toContain(`--h${HUE_STRIPES - 1}:`);
+    expect(out).not.toContain(`--h${HUE_STRIPES}:`);
+  });
+
+  it("ignores a slot past the end of the palette", () => {
+    /* An eight-hue palette has no `--cat-8-rgb`, so a slot of 8 emits a
+       reference to a property nobody defined — invalid at computed-value time,
+       which paints nothing. Exactly as silent as the NaN case above, and the
+       reason the guard checks both ends of the range rather than just the
+       bottom. Raised by a GPT Sol review, 2026-08-26. */
+    const out = annotateHtml(HTML, [hitMark({ slot: CATEGORICAL_SLOTS })]);
+    expect(out).not.toContain("data-hues");
+    expect(out).not.toContain(`--cat-${CATEGORICAL_SLOTS}-rgb`);
   });
 
   it("gives a literal match no stripe attribute at all", () => {

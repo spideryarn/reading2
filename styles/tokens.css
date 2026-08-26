@@ -66,6 +66,14 @@
        reading as any of the palette's answers to "marked by which". Alpha is
        always applied to it, hence the triplet — see the note above. */
     --hit-wash-rgb: 148 158 168;
+    /* The ordinary-colour alias, exactly as `--hit` is for `--hit-rgb`. Every
+       triplet here needs one: a bare `148 158 168` is not a colour, so
+       `background: var(--hit-wash-rgb)` is an invalid declaration that paints
+       *whatever was already there* rather than failing. That is precisely what
+       it did on /design until a GPT Sol review caught it, 2026-08-26 — a swatch
+       showing the wrong colour, and a measured contrast ratio for something
+       else entirely. */
+    --hit-wash: rgb(var(--hit-wash-rgb));
 
     /* ---- surfaces and text (dark only; see the header) ---------------- */
     /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,

@@ -80,18 +80,49 @@ describe("assignSlots", () => {
     if (!gone) throw new Error("fixture");
     const after = assignSlots(list.filter((r) => r.id !== gone.id));
     const moved = [...after].filter(([id, slot]) => before.get(id) !== slot);
-    expect(moved.length).toBeLessThanOrEqual(1);
+    /* The bound is "a few", not "one". A freed slot can be taken by a later run,
+       which frees *its* slot in turn, so in a crowded palette the change walks
+       along a probing cluster — a GPT Sol review was right that the earlier
+       `<= 1` was pinning this fixture rather than the property. What must stay
+       true is that it is nothing like the position-based version, where
+       deleting the first of six moves all five others. */
+    expect(moved.length).toBeLessThan(list.length - 1);
   });
 
-  it("is unaffected by which searches are switched on", () => {
-    /* Not a property of the function so much as of its *call site*, and it is
-       pinned here because the call site is one line in App.tsx that is very
-       easy to write as `assignSlots(active)`. That version passes every other
-       test in this file and recolours the page every time a box is ticked. */
-    const list = runs(4);
-    expect(Object.fromEntries(assignSlots(list))).toEqual(
-      Object.fromEntries(assignSlots(list)),
-    );
+  it("would give different answers for a subset, which is why the call site must not narrow", () => {
+    /* The previous version of this test compared `assignSlots(list)` with
+       `assignSlots(list)` and called it "unaffected by which searches are
+       switched on". It compared the function with itself and tested nothing —
+       a GPT Sol review caught it, 2026-08-26.
+
+       The real property belongs to the *call site*: App.tsx must pass **every**
+       saved run, not the ticked ones, or a search changes colour whenever the
+       reader unticks the search above it. A test can only pin that negatively —
+       by showing the two calls genuinely differ, so that "it does not matter
+       which you pass" is visibly false and the call site's choice is load-
+       bearing rather than incidental. */
+    const list = runs(9);
+    const all = assignSlots(list);
+    const subset = assignSlots(list.filter((_, i) => i % 3 === 0));
+    const differs = [...subset].some(([id, slot]) => all.get(id) !== slot);
+    expect(differs).toBe(true);
+  });
+
+  it("is deterministic across engines, not merely within one", () => {
+    /* The ordering used `localeCompare`, which consults the runtime's collation
+       — different between engines, between ICU builds, and with the host's
+       locale. It now compares ISO timestamps and ASCII ids byte-wise, which is
+       the same everywhere. Pinned by feeding it the orderings a different
+       collation could produce and requiring one answer. */
+    const list = runs(7);
+    const shuffles = [
+      list,
+      [...list].reverse(),
+      [...list].sort((a, b) => (a.id > b.id ? -1 : 1)),
+      [...list].sort((a, b) => (a.id < b.id ? -1 : 1)),
+    ];
+    const answers = shuffles.map((s) => JSON.stringify([...assignSlots(s)].sort()));
+    expect(new Set(answers).size).toBe(1);
   });
 
   it("hands out slots deterministically for a known set of ids", () => {

@@ -47,12 +47,18 @@ its own context, quietly wrong in ours.
 A ramp built by interpolating two endpoints in CSS is shorter and wrong in two ways that do not
 announce themselves.
 
-- **Hue takes the long way round.** `color-mix(in oklch, …)` interpolates hue on the shorter arc,
-  and for a diverging scale the endpoints are more than 180° apart — so "blue to red" travels
-  through green, and the middle of the scale is a colour nobody asked for. `tokens.css` already
-  carries a scar from the neighbouring version of this: `--highlight-wash` mixes `in oklab` because
-  `--page` is written `oklch(0.145 0 0)` with a hue *explicitly* set to 0, so polar interpolation
-  drags the mix round to 11.7° and the result is pink rather than warm.
+- **The hue goes somewhere you did not ask for.** `color-mix(in oklch, …)` interpolates hue on the
+  *shorter* arc by default ([CSS Color 5](https://drafts.csswg.org/css-color-5/#hue-interpolation)),
+  which for our blue (255°) and red (27°) runs 255° → 360° → 27° and passes through magenta. Not
+  green — an earlier version of this paragraph said "long way round" and "shorter arc" in the same
+  sentence and named the wrong intermediate; a GPT Sol review caught the contradiction. Whichever
+  route it takes, the point stands: the middle of a two-endpoint mix is a hue nobody chose, and for
+  a diverging scale the middle is the value that matters most.
+
+  `tokens.css` already carries a scar from the same family of problem: `--highlight-wash` mixes
+  `in oklab` because `--page` is written `oklch(0.145 0 0)` with a hue *explicitly* set to 0, so
+  polar interpolation interpolates it and drags the mix round to 11.7° — a wash that is quietly pink
+  rather than warm.
 - **Gamut clipping flattens the middle.** Intermediate colours that fall outside sRGB are clipped
   per channel, which loses the most chroma exactly where the ramp is trying to be legible.
 
@@ -67,10 +73,16 @@ changes, both forced by the ground:
 
 - Its eighth colour is **black**, which on this page *is* the page. It has become a light neutral
   (slot 7), and that is the weakest slot in the set — deliberately the one an eighth search reaches.
-- Three of its colours sit below L\* 0.65 and disappear into a near-black ground. The blue, the
-  bluish green and the vermilion are lifted, keeping hue and chroma. The published hex is recorded
-  beside each in the stylesheet, so the change is visible rather than something you would have to
-  infer by comparing against a reference.
+- **Five of the remaining seven are lifted**, keeping hue and roughly keeping chroma: the blue
+  (`#0072B2`, much the darkest and moved furthest), the bluish green (`#009E73`), the vermilion
+  (`#D55E00`), the reddish purple (`#CC79A7`) and the orange (`#E69F00` → `#E8A33B`). Only the sky
+  blue (`#56B4E9`) and the yellow (`#F0E442`) are the published values untouched — they were already
+  light enough.
+
+  An earlier version of this page said *three*, and labelled the orange "unchanged" when it is not;
+  a GPT Sol review compared the stylesheet against the source and found both. The published hex is
+  recorded beside every entry in the stylesheet precisely so that this comparison is possible
+  without a reference open, which only helps if the labels are right.
 
 ### Why Okabe–Ito rather than something prettier
 

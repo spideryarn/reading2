@@ -25,7 +25,9 @@ import {
   parseAsBit,
   parseAsBlockId,
   parseAsDepths,
+  parseAsIdList,
   resolveMatcher,
+  resolveRuns,
   runParam,
   spineParam,
   TERM_SORTS,
@@ -334,5 +336,90 @@ describe("search mode parameters", () => {
     // And a mode from a later version still shows the article.
     expect(modeParam.parse("summaries")).toBeNull();
     expect(modeParam.defaultValue).toBe("toc");
+  });
+});
+
+/**
+ * `?runs=` — which saved searches are switched on, and the legacy `?run=` it
+ * replaced. See docs/project/search.md § The URL.
+ *
+ * The reason this block exists at all is the bug it opens with. Everything here
+ * is a pure round-trip, and the failure was a round-trip that did not close:
+ * the empty set went out as one string and came back meaning something else.
+ * Nothing in the component layer could have caught it, and nothing in the
+ * browser looked wrong — the reader unticked a search, it went away, and it was
+ * back on the next reload.
+ */
+describe("runsParam and the legacy run= it replaced", () => {
+  it("survives a round trip", () => {
+    const ids = ["spya-k3m9qt", "spya-p7x2vb"];
+    expect(parseAsIdList.parse(parseAsIdList.serialize(ids))).toEqual(ids);
+  });
+
+  it("keeps the empty set distinguishable from an absent one", () => {
+    /* **The bug.** An empty list joined with commas is `""`; `""` parses back to
+       "no valid ids", which is `null`, which is exactly what an *absent*
+       parameter gives you — so `resolveRuns` fell through to the legacy `?run=`
+       and switched a search back on that the reader had just switched off. On
+       every reload, with no way to make it stop. Found by a GPT Sol review,
+       2026-08-26; the fix is a spelling for "deliberately empty", the same
+       trick `?cols=` plays with `none`. */
+    expect(parseAsIdList.serialize([])).toBe("none");
+    expect(parseAsIdList.parse("none")).toEqual([]);
+    expect(resolveRuns(parseAsIdList.parse(parseAsIdList.serialize([])), "spya-k3m9qt")).toEqual([]);
+  });
+
+  it("drops one bad id rather than the whole list", () => {
+    /* The opposite call from `?cols=`, which rejects the whole value. A depth
+       list is short and hand-written; a run list is machine-written and
+       long-lived, and the id most likely to be wrong in one is a search deleted
+       on another machine. Throwing away the other searches over it would be the
+       worst available answer. */
+    expect(parseAsIdList.parse("spya-k3m9qt,NOT-AN-ID,spya-p7x2vb")).toEqual([
+      "spya-k3m9qt",
+      "spya-p7x2vb",
+    ]);
+  });
+
+  it("degrades a wholly mangled value to nothing, not to the empty set", () => {
+    /* `null`, not `[]`: a hand-mangled URL has said nothing intelligible, and
+       "nothing intelligible" is not the same claim as "none of them". Only
+       `none` means the second, which is what lets it beat the legacy fallback. */
+    expect(parseAsIdList.parse("garbage")).toBeNull();
+    expect(parseAsIdList.parse("")).toBeNull();
+  });
+
+  it("drops duplicates, because two ticks of one box is one tick", () => {
+    expect(parseAsIdList.parse("spya-k3m9qt,spya-k3m9qt")).toEqual(["spya-k3m9qt"]);
+    expect(parseAsIdList.serialize(["spya-k3m9qt", "spya-k3m9qt"])).toBe("spya-k3m9qt");
+  });
+
+  it("keeps the order the reader switched them on in", () => {
+    /* Unlike `?cols=`, which sorts. Sorting a set of ids would order the
+       reader's searches by a random six characters, which is not an order. */
+    expect(parseAsIdList.parse("spya-p7x2vb,spya-k3m9qt")).toEqual([
+      "spya-p7x2vb",
+      "spya-k3m9qt",
+    ]);
+  });
+
+  it("opens a link written before the plural existed", () => {
+    /* `?run=<id>` was the only spelling of a shown search until 2026-08-26, so
+       every one pasted into a message or left in a history entry is that shape.
+       Same rule, and same reason, as `resolveMatcher` above: absence has to stay
+       visible, so there is no `withDefault` and one function decides. */
+    expect(resolveRuns(null, "spya-k3m9qt")).toEqual(["spya-k3m9qt"]);
+    expect(runParam.parse("spya-k3m9qt")).toBe("spya-k3m9qt");
+  });
+
+  it("lets the plural win when a URL carries both", () => {
+    expect(resolveRuns(["spya-p7x2vb"], "spya-k3m9qt")).toEqual(["spya-p7x2vb"]);
+  });
+
+  it("defaults to nothing switched on", () => {
+    /* Greg's ask: the boxes start unticked. Landing on an article in search mode
+       paints nothing until the reader says so — the rule the glossary and the
+       summaries both already follow. */
+    expect(resolveRuns(null, null)).toEqual([]);
   });
 });

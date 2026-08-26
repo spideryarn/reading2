@@ -91,7 +91,13 @@ const SWATCHES: { group: string; names: string[] }[] = [
   { group: "States", names: ["--ring", "--destructive", "--primary", "--primary-foreground"] },
   {
     group: "The search mark (the wash is a slate; the colour is in the rules)",
-    names: ["--hit", "--hit-wash-rgb"],
+    /* `--hit-wash`, not `--hit-wash-rgb`. The `-rgb` form is three numbers, and
+       this page paints its swatches with `background: var(...)` — which for a
+       bare triplet is an invalid declaration that silently keeps the previous
+       colour, so the chip lies and the contrast figure beside it measures
+       something else. The one page whose whole job is catching that kind of
+       thing should not be the page doing it. */
+    names: ["--hit", "--hit-wash"],
   },
 ];
 

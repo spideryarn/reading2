@@ -34,6 +34,7 @@
  */
 
 import { termPattern, termSpans } from "../term-match.js";
+import { CATEGORICAL_SLOTS } from "./hit-colours.js";
 import type { Block, BlockId } from "../types.js";
 
 /**
@@ -70,21 +71,31 @@ import type { Block, BlockId } from "../types.js";
 export type MarkKind = "cmt" | "term" | "hit";
 
 /**
- * How many coloured rules one phrase can wear before we stop drawing them.
+ * How many coloured rules one phrase can wear.
  *
- * Four, and the number is set by the stylesheet rather than by taste: the rules
- * are drawn inside the mark's own box, in the leading below the text, and that
- * space is finite. `styles.css § stacked hues` has the arithmetic — the band is
- * capped in height and the stripes inside it get thinner as they multiply, so
- * a fifth would be a sub-pixel line that no display can show and every reader
- * would take for a rendering fault.
+ * Six, and it was four until a GPT Sol review pointed out that the reason given
+ * for four was **arithmetically false**. That reason said a fifth stripe would
+ * be sub-pixel; six stripes in a 6px band are 1 CSS pixel each, which is a
+ * hairline but is a line, and every modern display draws it. Dropping a
+ * search's mark is a real loss of provenance, and it was being justified by a
+ * number nobody had done.
  *
- * Five searches finding the *same phrase* is not a case anybody has hit; the
- * palette only holds eight in total. If it ever happens the reader loses the
- * knowledge that a fifth search matched **here**, not that it matched at all —
- * the results list still lists it, in its own colour.
+ * Six rather than eight because the band cannot grow: the stripes live in the
+ * leading below the text (styles.css § stacked hues), and past 6px they reach
+ * the line underneath. Six is where the stripes hit 1px, which is the last
+ * width that is still a mark rather than a suggestion.
+ *
+ * **What is lost past six, and why it is nearly unreachable.** This is the cap
+ * on searches covering *the same phrase*, not on searches switched on — three
+ * searches matching one article routinely touch different sentences and each
+ * gets a full 2px rule. Seven searches whose model all quoted the same words is
+ * not a case anybody has reached, and the palette only holds eight. When it
+ * happens the reader loses the knowledge that a seventh search matched **here**;
+ * they do not lose the search. It is still in the results list in its own
+ * colour, and — since `blockHues` is capped separately and far higher — still
+ * a segment in the bar down the left of the paragraph.
  */
-export const HUE_STRIPES = 4;
+export const HUE_STRIPES = 6;
 
 export interface Mark {
   /** The comment, or the glossary term, this mark belongs to. */
@@ -287,9 +298,9 @@ export function annotateHtml(html: string, marks: Mark[]): string {
            Two hits from *one* search covering one phrase is one rule, which is
            right: the question was asked once.
 
-           Only the slot number crosses this seam; `--h0` … `--h3` name palette
+           Only the slot number crosses this seam; `--h0` … `--h5` name palette
            entries, and styles.css turns them into a stripe of the right height
-           at the right offset. See `HUE_STRIPES` for why four. */
+           at the right offset. See `HUE_STRIPES` for why six. */
         /* `Number.isInteger` and the range check, not just `typeof number`.
            The slot is interpolated straight into a custom-property *name*
            (`--cat-3-rgb`), so a `NaN` or a `2.5` arriving here would emit
@@ -303,7 +314,20 @@ export function annotateHtml(html: string, marks: Mark[]): string {
         const usable: number[] = [];
         for (const m of hits) {
           const slot = m.slot;
-          if (typeof slot !== "number" || !Number.isInteger(slot) || slot < 0) continue;
+          /* Both ends of the range, not just the bottom. A slot of 8 in an
+             eight-hue palette emits `var(--cat-8-rgb)` — a reference to a
+             property nobody defined, so the declaration is invalid at
+             computed-value time and the stripe paints nothing at all. Same
+             silent shape as a NaN, and worth the second comparison for the same
+             reason. Raised by a GPT Sol review, 2026-08-26. */
+          if (
+            typeof slot !== "number" ||
+            !Number.isInteger(slot) ||
+            slot < 0 ||
+            slot >= CATEGORICAL_SLOTS
+          ) {
+            continue;
+          }
           usable.push(slot);
         }
         const slots = [...new Set(usable)].sort((a, b) => a - b).slice(0, HUE_STRIPES);

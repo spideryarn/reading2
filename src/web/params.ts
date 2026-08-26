@@ -479,16 +479,30 @@ export const runParam = parseAsBlockId.withOptions({ history: "replace" });
  * the results list sorts by place or confidence), so this is about the URL
  * being readable rather than about the view.
  *
- * Duplicates are dropped, because two ticks of one box is one tick, and the
- * empty set serializes to `null` — a removed parameter rather than `runs=`,
- * which nothing downstream would be able to tell from a mangled one.
+ * Duplicates are dropped, because two ticks of one box is one tick.
+ *
+ * **The empty set serializes to `runs=none`, and that is load-bearing.** It is
+ * the same trick `?cols=` plays with `NO_COLUMNS`, and here it is not merely
+ * tidy — without it the legacy fallback below resurrects a search the reader
+ * has switched off. An empty list joined with commas is `""`, `""` parses back
+ * to "no valid ids", and "no valid ids" is indistinguishable from *absent*, at
+ * which point `resolveRuns` reads the old `?run=` and switches it on again. So
+ * `?run=a` → untick → reload → `a` is back, with no way for the reader to make
+ * it stop. Found by a GPT Sol review, 2026-08-26.
+ *
+ * A *mangled* value still degrades to nothing, which is the right answer for a
+ * hand-edited URL. `none` is the only spelling of "deliberately empty".
  *
  * `replace`, like `?run=` before it and for the same reason: switching a saved
  * search on while you read is browsing, not navigating, and `?mode=` already
  * put the entry on the stack that Back should use.
  */
+/** The empty set, which would otherwise serialize to an empty string. */
+const NO_RUNS = "none";
+
 export const parseAsIdList = createParser<string[]>({
   parse(value) {
+    if (value === NO_RUNS) return [];
     const parts = value.split(",").filter((p) => p !== "");
     /* Every id validated, and a single bad one drops **only itself**. `?cols=`
        takes the opposite view and rejects the whole value, which is right there
@@ -499,7 +513,7 @@ export const parseAsIdList = createParser<string[]>({
     const ids = [...new Set(parts.filter((p) => isSpideryarnId(p)))];
     return ids.length === 0 ? null : ids;
   },
-  serialize: (value) => [...new Set(value)].join(","),
+  serialize: (value) => (value.length === 0 ? NO_RUNS : [...new Set(value)].join(",")),
   eq: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]),
 });
 
@@ -520,6 +534,12 @@ export const runsParam = parseAsIdList.withOptions({ history: "replace" });
  * It is safe in the other direction because **`?run=` is never written any
  * more**: the panel serializes the plural only, so a live URL that has one can
  * only have got it from an old link.
+ *
+ * And note what `runs` being *present but empty* has to mean, because getting
+ * this wrong is a bug the reader cannot escape from: `?runs=none` is the reader
+ * saying "none of them", and it must beat a leftover `?run=`. That is why the
+ * empty set has a spelling of its own rather than serializing to nothing —
+ * `parseAsIdList` above has the full account.
  *
  * The default is the **empty** set, which is Greg's ask on 2026-08-26 that the
  * boxes start unticked. Landing on an article in search mode therefore paints

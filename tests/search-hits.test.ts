@@ -413,6 +413,13 @@ describe("orderFound", () => {
   const row = (index: number, start: number, confidence: number | null): Found => ({
     key: `${index}:${start}`,
     blockId: "spya-k3m9qt",
+    /* Ordering knows nothing about which search a result came from, so these are
+       inert here. They are written out rather than cast away because the typed
+       fixture is what makes `npm run typecheck` a gate on this file at all —
+       vitest transpiles without checking, so an incomplete `Found` passes every
+       test and fails the build. Caught by a GPT Sol review, 2026-08-26. */
+    runId: null,
+    slot: null,
     index,
     start,
     end: start + 4,

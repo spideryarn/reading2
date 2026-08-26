@@ -1,4 +1,12 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
 import { Library } from "./Library.js";
@@ -1136,7 +1144,7 @@ function SearchBand({
   openHit: string | null;
   onOpenHit(next: string | null): void;
 }) {
-  const { runs, ask, retry, remove, error } = useSearch(slug);
+  const { runs, loaded, ask, retry, remove, error } = useSearch(slug);
   const [match, setMatcher] = useQueryState("match", matchParam);
   const [find, setFind] = useQueryState("find", findParam);
   /* `?match=` has no default of its own, so that a URL carrying `?find=` and
@@ -1186,8 +1194,24 @@ function SearchBand({
   );
 
   /* Push the results up to `Reader`, which owns the prose. `onFound` is a plain
-     setter and therefore stable, so this cannot loop. */
-  useEffect(() => onFound(results), [results, onFound]);
+     setter and therefore stable, so this cannot loop.
+
+     **`useLayoutEffect`, not `useEffect`, and the difference is a frame the
+     reader can see.** This component renders the new results list immediately;
+     the prose is `Reader`'s, so it only changes once this setter has run and a
+     second commit has happened. `useEffect` runs *after* the browser may have
+     painted, so there is a window — a tick, a stream frame landing, a matcher
+     switch — where the panel shows the new passages and the article still shows
+     the old marks. That is the one invariant this feature is built around
+     (search-hits.ts § the panel and the prose agree), so a frame of it is worth
+     a synchronous commit. `useLayoutEffect` runs before paint, which closes it.
+
+     It is cheap because the expensive half already happened: the memo above has
+     computed `results` either way, and this only adds one render before paint.
+     Raised by a GPT Sol review, 2026-08-26, which is also right that the real
+     fix is one owner for the derived state rather than two — that is a change
+     to how all four bands talk to `Reader`, and it is not this change. */
+  useLayoutEffect(() => onFound(results), [results, onFound]);
 
   /* Leaving search mode must take the marks out of the prose with it. Its own
      effect, with no dependency on the results, so it runs on unmount and only
@@ -1224,6 +1248,7 @@ function SearchBand({
         onOpenHit(null);
       }}
       runs={runs}
+      loaded={loaded}
       active={active}
       slots={slots}
       onToggle={(id, on) => {
