@@ -14,17 +14,17 @@
  * See docs/project/ingest-queue.md, and docs/project/testing.md for why the
  * line is drawn here.
  */
-import { afterAll, describe, expect, it } from "vitest";
-import { readdir, readFile, rm } from "node:fs/promises";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  advanceJob,
   cascadeForce,
   enqueue,
   forceForRetry,
   freeSlug,
   getJob,
   orderSteps,
-  STOPPED,
   sweepStopped,
 } from "../src/jobs.js";
 import {
@@ -318,7 +318,13 @@ describe("what a step counts as done", () => {
 });
 
 describe("sweepStopped", () => {
-  it("turns a job the server died under into a visible error", () => {
+  /* Its job changed on 2026-08-26 and these tests changed with it. It used to
+     mark an interrupted job `error` — which was right while one long-lived
+     process was the only thing that could run a job, and became wrong the
+     moment `advanceJob` could pick one back up. A closed tab is a pause, not a
+     failure. See docs/plans/ingest-resume.md § 2. */
+
+  it("leaves a job the server died under waiting, not failed", () => {
     const j = job("running", [
       step("fetch", "done"),
       step("extract", "done"),
@@ -326,15 +332,15 @@ describe("sweepStopped", () => {
       step("toc", "pending"),
     ]);
     expect(sweepStopped(j)).toBe(true);
-    expect(j.status).toBe("error");
-    expect(j.error).toBe(STOPPED);
-    expect(j.finishedAt).toBeTypeOf("string");
+    expect(j.status).toBe("queued");
+    // No error, and nothing saying it ended — because it has not.
+    expect(j.error).toBeUndefined();
+    expect(j.finishedAt).toBeUndefined();
   });
 
-  it("leaves the finished steps finished, so a retry can skip them", () => {
-    // This is the half that makes it worth doing at all: the record of which
-    // stages succeeded is what turns Retry into "pick up where it stopped"
-    // rather than "spend the two model calls again".
+  it("puts the interrupted step back to pending, so resuming runs it again", () => {
+    // It did not fail; it did not happen. `error` on that row put a red line
+    // and a Retry button in front of a reader whose ingest was fine.
     const j = job("running", [
       step("fetch", "done"),
       step("extract", "done"),
@@ -342,16 +348,35 @@ describe("sweepStopped", () => {
       step("toc", "pending"),
     ]);
     sweepStopped(j);
-    expect(j.steps.map((s) => s.status)).toEqual(["done", "done", "error", "pending"]);
-    expect(j.steps[2]?.error).toBe(STOPPED);
+    expect(j.steps.map((s) => s.status)).toEqual(["done", "done", "pending", "pending"]);
+    expect(j.steps[2]?.error).toBeUndefined();
   });
 
-  it("sweeps a job that never started, not just a running one", () => {
-    // `queued` is the same orphan: this process has just started and its queue
-    // is empty, so nothing on disk can have work coming.
+  it("leaves the finished steps finished, so resuming skips them", () => {
+    // The half that makes it worth doing at all — though the record is a
+    // convenience here rather than the authority. What actually decides is
+    // `stepIsDone` over the artefacts; see `advanceJob`.
+    const j = job("running", [step("fetch", "done"), step("extract", "running")]);
+    sweepStopped(j);
+    expect(j.steps[0]?.status).toBe("done");
+  });
+
+  it("says nothing changed about a job that was already merely queued", () => {
+    // `queued` is already the right answer for it, so there is nothing to write.
     const j = job("queued", [step("fetch", "pending")]);
+    expect(sweepStopped(j)).toBe(false);
+    expect(j.status).toBe("queued");
+  });
+
+  it("finishes the cancel the dead process never delivered", () => {
+    /* Stop had been pressed and the abort had not landed. Nothing is going to
+       deliver it now, and resuming a job somebody stopped would be the one
+       interruption they actually noticed. */
+    const j: Job = { ...job("running", [step("fetch", "running")]), cancelling: true };
     expect(sweepStopped(j)).toBe(true);
-    expect(j.status).toBe("error");
+    expect(j.status).toBe("cancelled");
+    expect(j.cancelling).toBeUndefined();
+    expect(j.finishedAt).toBeTypeOf("string");
   });
 
   it("leaves a job that already finished exactly as it was", () => {
@@ -702,5 +727,210 @@ describe("freeSlug", () => {
     await expect(freeSlug("news", "https://b.example/news", everything)).rejects.toThrow(
       /Too many articles/,
     );
+  });
+});
+
+/* --------------------------------------------------------------------------
+   `POST /api/jobs/:id/advance` — one step per request, derived from the
+   artefacts.
+
+   The browser-driven half of the queue: docs/plans/job-queue-rethink.md
+   § Decided, and docs/plans/ingest-resume.md for the resume it delivers.
+
+   These run the real runner, so they are built the same way as the suite above
+   — around a slug nothing can be fetched for, so a step that gets as far as the
+   network fails before reaching it. `fetch` is stubbed where a step has to
+   *succeed*, because there is no offline step that can.
+   -------------------------------------------------------------------------- */
+
+/** A slug with a `raw.json`, so `fetch` counts as done and `extract` is next. */
+async function fixtureWithRawJson(slug: string): Promise<void> {
+  const dir = path.join(ROOT_DATA, slug);
+  await mkdir(dir, { recursive: true });
+  // `{ file }` with a non-empty string is what the store's `raw` decoder asks
+  // of it — src/store/artifacts-fs.ts § DECODERS. Nothing reads the file it
+  // names, because `extract` never gets that far without a URL.
+  await writeFile(path.join(dir, "raw.json"), JSON.stringify({ file: "raw.html" }), "utf8");
+}
+
+/**
+ * Put a settled job back into the state a stopped server leaves behind.
+ *
+ * `getJob` hands back the live record — the same object the queue's map holds —
+ * so this is the one honest way to reach "the process died under this job"
+ * without killing a process. It is exactly what `sweepStopped` writes: `queued`,
+ * nothing running, the finished steps still finished.
+ *
+ * It has to happen *after* the in-process queue has let the job go, or advance
+ * would correctly refuse to touch a job somebody else owns.
+ */
+function pause(job: Job, from: number): void {
+  job.status = "queued";
+  delete job.error;
+  delete job.finishedAt;
+  delete job.failureKind;
+  for (const step of job.steps.slice(from)) {
+    step.status = "pending";
+    delete step.error;
+    delete step.detail;
+    delete step.finishedAt;
+  }
+}
+
+describe("advancing a job one step at a time", () => {
+  const SLUGS = [
+    "test-advance-resume",
+    "test-advance-one-step",
+    "test-advance-idempotent",
+    "test-advance-concurrent",
+    "test-advance-queue-owns",
+  ];
+
+  afterAll(async () => {
+    for (const slug of SLUGS) await rm(path.join(ROOT_DATA, slug), { recursive: true, force: true });
+    for (const file of await readdir(JOBS_DIR).catch(() => [])) {
+      const full = path.join(JOBS_DIR, file);
+      const record = JSON.parse(await readFile(full, "utf8")) as { slug?: string };
+      if (record.slug !== undefined && SLUGS.includes(record.slug)) await rm(full, { force: true });
+    }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("picks up at the first step the artefacts say is not done", async () => {
+    /* The resume case, and the whole reason the endpoint exists. `fetch` has
+       its artefact, so a job that stopped after it must not fetch again — that
+       is somebody's server asked twice and, for the later steps, a model call
+       paid for twice. */
+    const slug = "test-advance-resume";
+    await fixtureWithRawJson(slug);
+
+    const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
+    const settled = await settle(queued.id);
+    // The in-process queue got there first and skipped `fetch` for the same
+    // reason advance is about to: the artefact is there.
+    expect(settled.steps[0]?.status).toBe("skipped");
+    expect(settled.status).toBe("error");
+
+    const fetched = vi.spyOn(STEPS.fetch, "run");
+    pause(settled, 1);
+
+    const advanced = await advanceJob(queued.id);
+    expect(advanced).not.toBeNull();
+    // It ran `extract`, not `fetch` — and it worked that out from the file on
+    // disk rather than from the job record, which is what makes a job resumed
+    // a week later land in the right place.
+    expect(advanced?.ran).toBe("extract");
+    expect(fetched).not.toHaveBeenCalled();
+    expect(advanced?.job.steps[0]?.status).toBe("skipped");
+    expect(advanced?.job.steps[1]?.status).toBe("error");
+    expect(advanced?.done).toBe(true);
+  });
+
+  it("runs exactly one step and stops, leaving the next one pending", async () => {
+    /* The other half of the contract. A call that ran two steps would be a call
+       that can exceed a serverless function's time limit, which is the whole
+       thing this design is avoiding. */
+    const slug = "test-advance-one-step";
+    const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
+    await settle(queued.id); // fails at `fetch`: no URL, nothing fetched
+    const job = (await getJob(queued.id)) as Job;
+
+    /* Stubbed to succeed. `assertProduced` still asks the store for the
+       artefact afterwards, so the stub has to write one — a step that returns
+       happily having written nothing is caught, and should be. */
+    const fetched = vi.spyOn(STEPS.fetch, "run").mockImplementation(async () => {
+      await fixtureWithRawJson(slug);
+      return "stubbed";
+    });
+    pause(job, 0);
+
+    const first = await advanceJob(queued.id);
+    expect(fetched).toHaveBeenCalledTimes(1);
+    expect(first?.ran).toBe("fetch");
+    expect(first?.done).toBe(false);
+    expect(first?.job.steps[0]?.status).toBe("done");
+    // Untouched. This is the assertion the whole endpoint is for.
+    expect(first?.job.steps[1]?.status).toBe("pending");
+
+    const second = await advanceJob(queued.id);
+    expect(second?.ran).toBe("extract");
+    // Still `done`, still saying what it said. A second pass that relabelled it
+    // `skipped` would take the first pass's own report off the card.
+    expect(second?.job.steps[0]?.status).toBe("done");
+    expect(second?.job.steps[0]?.detail).toBe("stubbed");
+    expect(fetched).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing to a job that has already finished, however often it is asked", async () => {
+    const slug = "test-advance-idempotent";
+    const queued = await enqueue({ slug, steps: ["fetch"] });
+    const settled = await settle(queued.id);
+    expect(settled.status).toBe("error");
+    const before = JSON.stringify(settled);
+
+    const fetched = vi.spyOn(STEPS.fetch, "run");
+    for (let i = 0; i < 3; i++) {
+      const advanced = await advanceJob(queued.id);
+      expect(advanced?.done).toBe(true);
+      expect(advanced?.ran).toBeNull();
+      expect(advanced?.busy).toBe(false);
+    }
+    expect(fetched).not.toHaveBeenCalled();
+    expect(JSON.stringify(await getJob(queued.id))).toBe(before);
+  });
+
+  it("turns the second of two simultaneous callers away rather than running twice", async () => {
+    /* Two tabs. Both may ask; one must win. Running the step twice would have
+       two runners writing one article's files, which is the fault this whole
+       design is shaped around — docs/plans/job-queue-rethink.md. */
+    const slug = "test-advance-concurrent";
+    const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
+    await settle(queued.id);
+    const job = (await getJob(queued.id)) as Job;
+
+    let running = 0;
+    let most = 0;
+    const fetched = vi.spyOn(STEPS.fetch, "run").mockImplementation(async () => {
+      running++;
+      most = Math.max(most, running);
+      await new Promise((r) => setTimeout(r, 30));
+      running--;
+      await fixtureWithRawJson(slug);
+      return "stubbed";
+    });
+    pause(job, 0);
+
+    const [a, b] = await Promise.all([advanceJob(queued.id), advanceJob(queued.id)]);
+    expect(fetched).toHaveBeenCalledTimes(1);
+    expect(most).toBe(1);
+    // One did the work; the other was told to wait and ask again. Neither is an
+    // error: a second tab cannot know without asking.
+    expect([a?.busy, b?.busy].sort()).toEqual([false, true]);
+    expect([a?.ran, b?.ran].sort()).toEqual([null, "fetch"]);
+    // And the one that was turned away must not claim the job is over, or its
+    // loop would stop on a job that still has a step to run.
+    expect(a?.busy === true ? a?.done : b?.done).toBe(false);
+  });
+
+  it("refuses while the in-process queue still owns the job", async () => {
+    /* The rule that keeps the two drivers off each other: advance stands aside
+       for as long as this process intends to run the job itself. Checked
+       without waiting, because `enqueue` claims the job before it returns. */
+    const slug = "test-advance-queue-owns";
+    const queued = await enqueue({ slug, steps: ["fetch"] });
+    const advanced = await advanceJob(queued.id);
+    expect(advanced?.busy).toBe(true);
+    expect(advanced?.ran).toBeNull();
+    expect(advanced?.done).toBe(false);
+    await settle(queued.id);
+  });
+
+  it("has nothing to say about a job that does not exist", async () => {
+    // Null rather than a made-up job, so the route can 404 rather than hand a
+    // client a loop over something that was never there.
+    expect(await advanceJob("spya-nosuch")).toBeNull();
   });
 });

@@ -649,6 +649,51 @@ out, because stage 3 sanitises everything.
 instructions printed inside it rather than follow them. That is a mitigation, not a control — a
 prompt is not a boundary — and it is listed as such below.
 
+### And since 2026-08-27 that PDF can come off the reader's own disk
+
+Uploading changes **who chooses** the hostile input, not what happens to it: the same two
+unsandboxed parsers, in the same process, on bytes we did not write. Before this, reaching them
+meant getting us to fetch a URL. Now a signed-in person hands the parser a file directly, and that
+is a shorter path with more control over the bytes at the end of it.
+
+Three things bound it, and only the last is new:
+
+- **The page cap fires before the parse**, on `doc.numPages`, immediately after `getDocument` and
+  before any page loop. It used to fire after `pass0` had walked every page and every text item
+  into memory, which meant a small valid ten-thousand-page PDF defeated it. That was moved *as a
+  prerequisite of shipping uploads* rather than as a follow-on — Sol's finding, and the reason is
+  exactly this section: an upload hands a stranger the parser directly. It is also the only thing
+  here that bounds **spend** rather than storage.
+- **The bucket's own limits.** 50 MiB per object and a PDF-only MIME allowlist, enforced by Storage
+  at the moment of upload. A second line under our own checks, never a replacement: a bucket cannot
+  tell a PDF from a file named one.
+- **`%PDF-` over the bytes, and our SHA-256 against the browser's**, in `acquireUpload` before
+  anything expensive runs. Both over *one* download, because reading the object twice is the one
+  sequence content addressing does not cover.
+
+**The two rules the upload path is built on**, both worth stating as security properties rather
+than as design notes:
+
+> **Never accept a client-supplied object path.** The client sends an `uploadId` and nothing else;
+> the key is `stagingKey(uploadId)`, derived from an id we minted. `POST /api/jobs` refuses
+> `{url, uploadId}` and `{slug, uploadId}` outright rather than picking a winner, because there is
+> no honest reason to send two origins and therefore no precedence rule to get wrong.
+
+> **A grant is only ever minted for a staging key; a canonical key is never writable by one.** A
+> Supabase signed upload grant is a bearer credential that lives two hours and is *not* one-time:
+> measured, replaying it while the object exists gives 409, and replaying it **after the object is
+> deleted succeeds**. So anything that deletes an object re-arms the grant over its key. Verified
+> bytes are copied to `sha256/<hash>.pdf` and the staging object is left alone; nothing sweeps it
+> inside the TTL. See [pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md).
+
+**What is genuinely open here.** Minting grants and spending model money from an endpoint whose
+gate admits [anyone Supabase will vouch for](#the-gate) is an open storage quota and an open wallet.
+That is Greg's recorded decision, not an oversight — and the page cap and the object cap are what
+make it bounded rather than unbounded. Cross-reader deduplication also leaks *existence*: sharing
+one object per content hash means a reader who already holds a file can learn whether somebody else
+uploaded that exact file. Named, empty of consequence with one reader, and closable later without a
+migration.
+
 ## A third untrusted party: what the model returns
 
 The two above are the content and the URL. There is now a third, and it is quieter because it does

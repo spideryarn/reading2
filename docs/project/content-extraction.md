@@ -56,6 +56,16 @@ The differences that matter to a reader:
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).
 
+**And since 2026-08-27 the PDF need not have been fetched at all.** A reader can upload one, and
+that is a change to stage *1*, not to this stage: the acquisition step verifies the bytes and writes
+the same `raw.json` with `origin: "upload"`, so the branch above reads `"pdf"` and nothing here
+knows the difference. The one thing this stage does notice is the absence of a URL — an uploaded
+document has none — which is why `requireUrl` moved *inside* the HTML branch. It was at the top,
+and Readability is the only caller that ever wanted it: not as something to fetch, but as a base
+for relative links, which a PDF has not got. Asking for it up here made a missing URL the first
+thing an upload hit, three stages after the last thing that could have supplied one. The upload path
+is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf).
+
 One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
 relative links resolve against the wrong origin.

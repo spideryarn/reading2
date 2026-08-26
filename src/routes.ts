@@ -39,8 +39,10 @@
  *   GET    /api/search/:slug     every saved meaning-search for the article
  *   POST   /api/search/:slug     { id?, criterion } → **a stream**, see `search`
  *   DELETE /api/search/:slug/:id
+ *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
+ *   GET    /api/uploads/:id      what became of one upload
  *   GET    /api/jobs             every ingest job this server knows about
- *   POST   /api/jobs             { url } | { slug, steps?, force?, guidance? } → the queued job
+ *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force?, guidance? }
  *   GET    /api/jobs/:id         one job, for the progress indicator to poll
  *   DELETE /api/jobs/:id         forget a finished job's record
  *   POST   /api/jobs/:id/cancel
@@ -95,9 +97,24 @@ import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { readRaw } from "./fetch.js";
 import { isSpideryarnId } from "./ids.js";
-import { isSlug, normaliseUrl, slugFromUrl } from "./ingest.js";
+import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { requireUser, type Verifier } from "./auth.js";
+import { UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import { currentOwnerId } from "./owner.js";
+import { stagingKey } from "./source.js";
+import { uploadGrants } from "./store/blobs.js";
+import { uploadProblem } from "./uploads.js";
+import {
+  asOf,
+  claimUpload,
+  isUploadId,
+  mintUpload,
+  noteSlug,
+  readUpload,
+  recordsSurviveTheRequest,
+  type UploadRecord,
+} from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
@@ -1802,6 +1819,46 @@ async function patchShelf(
  * The slug is validated even in the second shape, and especially there: it is
  * joined onto `data/` and `output/`, so an unchecked one is a path traversal.
  */
+/**
+ * A request naming an upload names **nothing else**, and this throws if it does.
+ *
+ * `{ url, uploadId }` and `{ slug, uploadId }` are both requests whose author
+ * believed something false about what they were asking for, and the second is
+ * the shape that would have been dangerous: an upload's bytes written into an
+ * article the caller named. There is no honest reason to send two origins, so
+ * there is deliberately no precedence rule — and therefore none to get wrong
+ * later.
+ *
+ * Asserting the id's shape here too, so that the two checks a caller has to
+ * pass are in one place rather than one here and one three lines down.
+ */
+function checkUploadOrigin(
+  uploadId: unknown,
+  others: { url: unknown; slug: unknown; steps: unknown; force: unknown; guidance: unknown },
+): asserts uploadId is string {
+  if (others.url !== undefined || others.slug !== undefined) {
+    throw httpError(400, "Send a url, a slug, or an uploadId — not two of them");
+  }
+  /* **And no step controls either**, which is not tidiness. Claiming happens
+     before `enqueue` validates anything, so `{ uploadId, steps: [] }` takes the
+     one-and-only claim and *then* gets a 400 for having no steps — leaving an
+     attempt stuck `claimed` with no job and no way to reach it. `steps:
+     ["arc"]` is worse: it claims, skips acquisition entirely, and runs a model
+     stage over an article that does not exist. An upload is always the default
+     ingest, which is what the documented `{ uploadId }` shape already said.
+     GPT Sol, 2026-08-27. */
+  for (const [name, value] of [
+    ["steps", others.steps],
+    ["force", others.force],
+    ["guidance", others.guidance],
+  ] as const) {
+    if (value !== undefined) {
+      throw httpError(400, `An upload runs the default steps — ${name} is not accepted with one`);
+    }
+  }
+  if (!isUploadId(uploadId)) throw httpError(400, "That is not an upload id");
+}
+
 export function parseJobRequest(body: unknown): {
   slug: string;
   url?: string;
@@ -1819,8 +1876,18 @@ export function parseJobRequest(body: unknown): {
    * arbitrary text into a prompt that writes an artefact.
    */
   useProfile?: boolean;
+  /**
+   * An upload to make an article from, instead of a URL.
+   *
+   * **Only the id.** The filename, the size and the claimed hash all live on
+   * the record we wrote when we minted the grant, and the object key is derived
+   * from the id by `stagingKey` — so there is nothing here for a caller to
+   * point at somebody else's bytes with. That is the rule the plan calls
+   * load-bearing: *never accept a client-supplied object path*.
+   */
+  uploadId?: string;
 } {
-  const { url, slug, steps, force, guidance, useProfile } = (body ?? {}) as Record<
+  const { url, slug, steps, force, guidance, useProfile, uploadId } = (body ?? {}) as Record<
     string,
     unknown
   >;
@@ -1843,6 +1910,32 @@ export function parseJobRequest(body: unknown): {
     throw httpError(400, "useProfile must be true or false");
   }
   const parsedUseProfile = useProfile;
+
+  /* The four optional fields, spelled once. They were written out at each of
+     the three `return`s, which is three chances for one of them to be quietly
+     dropped from a branch — and `exactOptionalPropertyTypes` means the spread
+     has to be conditional rather than `steps: parsedSteps`, so each one is four
+     lines rather than one. */
+  const rest = {
+    ...(parsedSteps ? { steps: parsedSteps } : {}),
+    ...(parsedForce ? { force: parsedForce } : {}),
+    ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
+    ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
+  };
+
+  /* Before the URL branch. `checkUploadOrigin` refuses every combination rather
+     than picking a winner — see its own note. */
+  if (uploadId !== undefined) {
+    checkUploadOrigin(uploadId, { url, slug, steps, force, guidance });
+    return {
+      /* A placeholder the caller must replace. The real slug comes from the
+         upload record's filename and is allocated inside `enqueue`, which is
+         the only place with no gap between deciding and inserting. */
+      slug: "",
+      uploadId,
+      ...rest,
+    };
+  }
 
   if (typeof url === "string" && url.trim() !== "") {
     // **The slug is derived, never accepted.** It used to fall back to a
@@ -1875,10 +1968,7 @@ export function parseJobRequest(body: unknown): {
     return {
       slug: derived,
       url: source,
-      ...(parsedSteps ? { steps: parsedSteps } : {}),
-      ...(parsedForce ? { force: parsedForce } : {}),
-      ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
-      ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
+      ...rest,
     };
   }
 
@@ -1887,11 +1977,159 @@ export function parseJobRequest(body: unknown): {
   }
   return {
     slug,
-    ...(parsedSteps ? { steps: parsedSteps } : {}),
-    ...(parsedForce ? { force: parsedForce } : {}),
-    ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
-    ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
+    ...rest,
   };
+}
+
+/* ------------------------------------------------------------- uploads --
+   docs/plans/pdf-upload-and-storage.md. Three small handlers, and between them
+   they move no file bytes at all — which is the entire design. Everything this
+   server handles is a few hundred bytes of JSON, so the 4.5 MB Vercel body
+   limit never applies to anything on the critical path and `MAX_BODY_BYTES`
+   above stays exactly as it is.
+   ------------------------------------------------------------------------- */
+
+/** What the browser claims about the file it is about to send. All three are checked. */
+function parseUploadRequest(body: unknown): { filename: string; bytes: number; sha256: string } {
+  const { filename, bytes, sha256 } = (body ?? {}) as Record<string, unknown>;
+  if (typeof filename !== "string" || filename.trim() === "") {
+    throw httpError(400, "An upload needs a filename");
+  }
+  /* A whole number of bytes, and a positive one. `Number.isSafeInteger` rather
+     than `typeof === "number"` because `1e21`, `NaN` and `1.5` all pass that
+     and none of them is a file size — and the cap comparison below would wave
+     `NaN` straight through, since every comparison with it is false. */
+  if (!Number.isSafeInteger(bytes) || (bytes as number) <= 0) {
+    throw httpError(400, "An upload needs its size in bytes");
+  }
+  if (typeof sha256 !== "string" || !/^[0-9a-f]{64}$/.test(sha256)) {
+    throw httpError(400, "An upload needs a lower-case hex SHA-256 of its contents");
+  }
+  return { filename, bytes: bytes as number, sha256 };
+}
+
+/**
+ * `POST /api/uploads` — a place to put a file, and permission to put it there.
+ *
+ * The checks here are **the cheap ones, and deliberately the same ones the file
+ * picker already ran** (`uploadProblem`, src/uploads.ts, imported by both). A
+ * browser refusing a file the server would have taken is a confusing bug; the
+ * other way round is a reader watching 50 MB upload and then being told no.
+ *
+ * What it cannot check is what is actually in the file, because the file has
+ * not been sent yet. That is the acquisition step's job, over the bytes, and
+ * nothing here should ever be mistaken for it.
+ */
+async function mintAnUpload(body: unknown): Promise<{
+  uploadId: string;
+  url: string;
+  expiresAt: string;
+  slug: string;
+}> {
+  const grants = uploadGrants();
+  /* 503 rather than 500: the request was fine and the server is not broken, it
+     simply has not got the thing this needs. The sentence says which. */
+  if (!grants) throw httpError(503, UPLOAD_UNAVAILABLE.message);
+  /* **The other half of "not switched on here", and it is a harder one to
+     admit.** Storage is configured and grants would mint perfectly; what will
+     not work is the *next* request finding the record this one writes, because
+     a serverless function's filesystem is neither durable nor shared. Refused
+     here rather than discovered as a 404 three minutes into an 11 MB upload.
+     See `recordsSurviveTheRequest`. */
+  if (!recordsSurviveTheRequest()) throw httpError(503, UPLOAD_UNAVAILABLE.message);
+
+  /* Resolved **after** the two guards above, not passed in by the dispatcher.
+     `currentOwnerId()` throws on a production host with no owner configured, and
+     as an argument it was evaluated before this function ran at all — so an
+     installation that cannot take uploads answered 500 about an owner rather
+     than 503 about uploads. Caught by the test that pins the 503. */
+  const owner = currentOwnerId();
+  const claim = parseUploadRequest(body);
+  /* **`type: ""`, not `"application/pdf"`.** The browser's MIME guess does not
+     cross the wire and we must not supply one on its behalf: writing the answer
+     we want into the input makes `looksLikePdf` return true for `notes.txt`,
+     because it accepts *either* the type or the name and the type was ours. The
+     empty string is what `uploadProblem` documents as "no guess, and that is
+     not a refusal", so the name is what decides here — which is all the server
+     has to go on before the bytes arrive. Caught by the test below it. */
+  const wrong = uploadProblem({ name: claim.filename, type: "", size: claim.bytes });
+  if (wrong) throw httpError(413, wrong);
+
+  const minted = await mintUpload({ ...claim, owner }, (key) => grants.sign(key), stagingKey);
+  return {
+    uploadId: minted.record.id,
+    url: minted.url,
+    expiresAt: minted.expiresAt,
+    /* The slug this *will* get, if nothing else has taken it — a preview, for
+       the same reason the add box previews one for a URL. `enqueue` decides for
+       real, and may add a number; the job card shows what it decided. */
+    slug: slugFromFilename(minted.record.filename) || "document",
+  };
+}
+
+/** An upload record as a client may see it. Our hash is included; the claimed one is not. */
+function publicUpload(record: UploadRecord): Record<string, unknown> {
+  return {
+    uploadId: record.id,
+    filename: record.filename,
+    status: record.status,
+    ...(record.sha256 ? { sha256: record.sha256 } : {}),
+    ...(record.bytes !== undefined ? { bytes: record.bytes } : {}),
+    ...(record.reason ? { reason: record.reason } : {}),
+    ...(record.slug ? { slug: record.slug } : {}),
+  };
+}
+
+/**
+ * `POST /api/jobs { uploadId }` — take ownership of an upload and queue it.
+ *
+ * The order is the whole of it: **claim, then enqueue.** Claiming is a
+ * create-only file, so two tabs racing produce one winner and one `taken`; if
+ * enqueueing then throws, the upload is stuck `claimed` and the reader chooses
+ * the file again, which is cheap and correct. Enqueue-then-claim would be the
+ * other way round — two jobs, two articles, two transcriptions paid for.
+ *
+ * A repeat of the *same* request is not a race, though, and must not read like
+ * one. A double-clicked button, or a reload of `/add/upload/<id>`, arrives
+ * after the claim has been taken by the first one — so `taken` looks for the
+ * article that claim produced and hands back its job. Only a claim with nothing
+ * to show for it is an error.
+ */
+async function queueAnUpload(uploadId: string): Promise<Job> {
+  const owner = currentOwnerId();
+  const record = await readUpload(uploadId, owner);
+  if (!record) throw httpError(404, "No such upload");
+
+  const claim = await claimUpload(uploadId, { owner });
+  if (!claim.ok) {
+    if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
+    /* `taken`. If the first claim got as far as a job, that job is the answer —
+       this is the same request arriving twice, not a conflict. */
+    const already = record.slug ? await jobForSlug(record.slug) : null;
+    if (already) return already;
+    throw httpError(409, "That upload is already being turned into an article.");
+  }
+
+  const candidate = slugFromFilename(claim.record.filename) || "document";
+  const job = await enqueue({
+    slug: candidate,
+    upload: { id: uploadId, filename: claim.record.filename },
+  });
+  /* **Immediately, and this line is what makes the paragraph above true.** The
+     record's slug used to be written only by the acquisition step, on success —
+     so a reload of `/add/upload/<id>` while the job was still queued behind
+     another one found a claimed upload with no slug, could not find its job,
+     and answered 409. Every reload, for ever, if acquisition never began. The
+     doc claimed the recovery worked while the field it recovers through was
+     never set. GPT Sol, 2026-08-27. */
+  await noteSlug(uploadId, job.slug);
+  return job;
+}
+
+/** The job currently working on this article, if there is one. For the repeat-claim case above. */
+async function jobForSlug(slug: string): Promise<Job | null> {
+  const all = await listJobs();
+  return all.find((j) => j.slug === slug) ?? null;
 }
 
 /**
@@ -2235,6 +2473,8 @@ export async function handleApi(
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(url);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const allJobs = url === "/api/jobs";
+  const uploads = url === "/api/uploads";
+  const upload = /^\/api\/uploads\/([\w-]+)$/.exec(url);
   const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(url);
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(url);
   const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(url);
@@ -2493,11 +2733,33 @@ export async function handleApi(
       send(res, 200, { jobs: (await listJobs()).map(publicJob) });
       return true;
     }
+    if (uploads && req.method === "POST") {
+      // 201: a record now exists that did not before, and the body says where
+      // to put the bytes. Nothing has been queued and nothing has been read.
+      send(res, 201, await mintAnUpload(await readBody(req)));
+      return true;
+    }
+    /* `GET /api/uploads/:id` — for a browser that lost its tab, and for the
+       picker to confirm what landed. Read-only in the strict sense: an expired
+       grant is *reported* as expired without the record being rewritten, so a
+       poll cannot be a mutation. See `asOf`. */
+    if (upload && req.method === "GET") {
+      const found = await readUpload(part(upload, 1), currentOwnerId());
+      if (!found) throw httpError(404, "No such upload");
+      send(res, 200, publicUpload(asOf(found)));
+      return true;
+    }
     if (allJobs && req.method === "POST") {
       // 202, not 200: the work has been accepted and has not been done. The
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
       const request = parseJobRequest(await readBody(req));
+      if (request.uploadId !== undefined) {
+        /* No other field survives `checkUploadOrigin`, so there is nothing to
+           forward: an upload is always the default ingest. */
+        send(res, 202, publicJob(await queueAnUpload(request.uploadId)));
+        return true;
+      }
       /* **Not for the `{ url }` shape**, and that is a correctness fix rather
          than an economy. The slug this resolves against is the one *derived*
          from the URL, and `enqueue` may not use it: `freeSlug` renames on a

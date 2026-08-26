@@ -18,12 +18,13 @@
  * the stage implementations belong to other agents and are reached through
  * their exported functions, never by reimplementing what they do.
  */
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { generateArc } from "./arc.js";
 import { runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
-import { fetchDocument, readRaw, writeRaw } from "./fetch.js";
+import { fetchDocument, type RawManifest, readRaw, writeRaw } from "./fetch.js";
 import { generateGlossary, PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "./glossary.js";
 import {
   generateIdeas,
@@ -37,7 +38,17 @@ import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { hashProfile } from "./profile.js";
+import {
+  type RejectReason,
+  canonicalKey,
+  looksLikePdf,
+  MAX_UPLOAD_BYTES,
+  rejectionFailure,
+  stagingKey,
+} from "./source.js";
+import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { fsLocations } from "./store/artifacts-fs.js";
+import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
 import {
   type ArtifactKind,
   type ArtifactStore,
@@ -557,6 +568,38 @@ export async function assertProduced(
   }
 }
 
+/**
+ * Is there an article under this slug at all?
+ *
+ * **Separate from `urlForSlug` because an uploaded article has no URL**, so
+ * asking for one and reading `undefined` as "nothing here" would hand the next
+ * upload of a file with the same name the same directory — and every step would
+ * find its artefact, skip, and report a row of successes over somebody else's
+ * document. The same silent success `freeSlug` was written against, arriving
+ * through the one door that function does not watch.
+ */
+export async function articleExists(slug: string): Promise<boolean> {
+  try {
+    await readFile(path.join(ROOT, "data", slug, "meta.json"), "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A label for a step, given how this job is getting its document.
+ *
+ * Only the acquisition step has two of them, and the reason it needs two is
+ * that "Fetching the page" is a false statement about an upload — there is
+ * nothing to fetch and no page. A reader watching a row that says it is
+ * fetching, when the file came off their own disk, learns something untrue
+ * about where their document went.
+ */
+export function stepLabel(name: StepName, upload: boolean): string {
+  return name === "fetch" && upload ? "Checking the file" : STEPS[name].label;
+}
+
 /** The source URL for a slug, from its meta.json. Undefined if there isn't one yet. */
 export async function urlForSlug(slug: string): Promise<string | undefined> {
   try {
@@ -650,11 +693,17 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
     throw stageFailure("ours", `No record of upload ${upload.id}.`);
   }
 
-  const refuse = (reason: RejectReason): never => {
-    /* Settled before the throw, so the record says why even though the job card
-       is what the reader is looking at. A `rejected` upload is terminal, which
-       is what stops a Retry quietly re-running a check that cannot pass. */
-    void settleUpload(upload.id, "rejected", { reason });
+  /* **Awaited, not fired and forgotten.** The first version was `void
+     rejectUpload(...)` followed immediately by a throw, which reads fine and
+     races: the throw unwinds the step, the job fails with the right sentence,
+     and the record is still `claimed` — so the *reason* an upload was refused
+     is lost exactly when somebody comes looking for it, and the state machine
+     never reaches the terminal state that stops a pointless re-run. Caught by
+     the three refusal tests below, all of which asserted the record and not
+     only the message. `Promise<never>`, so every call site has to `await` it
+     and the compiler says so. */
+  const refuse = async (reason: RejectReason): Promise<never> => {
+    await rejectUpload(upload.id, reason);
     const failure = rejectionFailure(reason);
     throw stageFailure(failure.kind, failure.message);
   };
@@ -662,20 +711,20 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
   const store = blobStore();
   const key = stagingKey(upload.id);
   const info = await store.head(key);
-  if (!info) refuse("missing");
-  if ((info as { bytes: number }).bytes > MAX_UPLOAD_BYTES) refuse("too-big");
+  if (!info) await refuse("missing");
+  if ((info as { bytes: number }).bytes > MAX_UPLOAD_BYTES) await refuse("too-big");
 
   ctx.report(upload.filename);
   const bytes = await store.get(key, { maxBytes: MAX_UPLOAD_BYTES, signal: ctx.signal });
   /* Absent between the `head` and the `get` — a sweep, or somebody with the
      service key. Rare, and it is still "that file never finished arriving" as
      far as the reader is concerned. */
-  if (!bytes) refuse("missing");
+  if (!bytes) await refuse("missing");
 
   const got = bytes as Uint8Array;
-  if (!looksLikePdf(got)) refuse("not-a-pdf");
+  if (!looksLikePdf(got)) await refuse("not-a-pdf");
   const sha256 = createHash("sha256").update(got).digest("hex");
-  if (sha256 !== record.claimedSha256) refuse("checksum-mismatch");
+  if (sha256 !== record.claimedSha256) await refuse("checksum-mismatch");
 
   /* Promoted to a name that is a statement about its contents, and create-only.
      `already-there` is the dedup hit — two readers with the same paper — and it
@@ -713,11 +762,19 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
     "utf8",
   );
 
-  await settleUpload(upload.id, "verified", {
-    sha256,
-    bytes: got.byteLength,
-    slug: ctx.slug,
-  });
+  /* Only from `claimed`. A second run of this step — Retry, or `advanceJob`
+     walking the list again over a job whose `raw.json` was written and whose
+     later stage failed — finds the upload already `verified`, and re-verifying
+     is not a transition. The work above is idempotent and cheap enough to
+     repeat; the state machine is the thing that must not be asked to go
+     backwards. */
+  if (record.status === "claimed") {
+    await settleUpload(upload.id, "verified", {
+      sha256,
+      bytes: got.byteLength,
+      slug: ctx.slug,
+    });
+  }
 
   const kb = Math.round(got.byteLength / 1024);
   /* Not the filename: it is the reader's own string and can hold anything,
@@ -836,11 +893,11 @@ export const STEPS: Record<StepName, PipelineStep> = {
          Asking for one up here — which this did — is what made `requireUrl` the
          first thing an upload hit, three stages after the last thing that could
          have supplied one. */
-      const url = manifest?.kind === "pdf" ? ctx.url : requireUrl(ctx);
       /* No manifest means an article fetched before `raw.json` existed. Those
          all have a `raw.html`, so HTML is the right assumption — and a wrong
          one would fail loudly on the read below rather than quietly. */
       if (manifest?.kind !== "pdf") {
+        const url = requireUrl(ctx);
         const html = await readFile(path.join(ctx.dir, manifest?.file ?? "raw.html"), "utf8");
         try {
           const result = await runExtract({ html, url, outFile: ctx.htmlFile, dataDir: ctx.dir });
@@ -859,7 +916,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
       const bytes = new Uint8Array(await readFile(path.join(ctx.dir, manifest.file)));
       const result = await runPdfExtract({
         bytes,
-        ...(url ? { url } : {}),
+        ...(ctx.url ? { url: ctx.url } : {}),
         /* The last rung of the title ladder is the filename, and for an upload
            that is the reader's own — which is very often the best name anybody
            has for a scan. For a fetched PDF it stays the URL's last segment,

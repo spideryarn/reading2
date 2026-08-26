@@ -141,6 +141,35 @@ not RLS. That is the safe default and it should stay until something specific ne
 - **A stale socket looks like a running daemon.** `~/.orbstack/run/docker.sock` exists whether or not
   OrbStack is running. `ls` proves nothing; `docker info` is the check.
 
+## The `sources` bucket, and the one thing about it that is local-only
+
+Since 2026-08-27 the stack is not only a database here — uploaded PDFs live in Supabase Storage, in
+a bucket declared in [`supabase/config.toml`](../../supabase/config.toml):
+
+```toml
+[storage.buckets.sources]
+public = false
+file_size_limit = "50MiB"
+allowed_mime_types = ["application/pdf"]
+```
+
+`npm run db:start` creates it, so nobody has to remember a dashboard click and nobody has to be told
+about it. `sources` and not `pdfs`, because it holds *the document an article was made from*, which
+is what `GET /api/source/:slug` already names, and PDFs are only the first kind. Private, always:
+these are a reader's own documents.
+
+**Declaring it here does not create it on a remote project.** That needs
+`supabase seed buckets --project-ref <ref>` — checked against the CLI we have, 2.115.0; a web search
+will tell you the flag is `--linked` and on this version it is not — or the equivalent insert into
+`storage.buckets`. It is a deployment step, it is in
+[deployment.md](deployment.md#the-sources-bucket-has-to-exist-on-the-remote-too), and it is exactly
+the kind of thing that fails by appearing to work: nothing notices a missing bucket until the first
+upload.
+
+The whole upload path is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf); what
+was measured against these containers rather than read in a doc is in
+[pdf-upload-and-storage.md § What was measured, not read](../plans/pdf-upload-and-storage.md#what-was-measured-not-read).
+
 ## What is deliberately not set up
 
 - **Not linked to any cloud project.** Greg's call, 2026-08-25: local first, nothing from the cloud.

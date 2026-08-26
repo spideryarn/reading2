@@ -383,13 +383,24 @@ export function Actions({
       <IconButton label="Edit title" onClick={onEdit}>
         <Pencil size={14} />
       </IconButton>
-      <IconButton
-        label={rerunning ? "Queueing…" : "Re-fetch and rebuild"}
-        onClick={() => void rerun()}
-        disabled={rerunning}
-      >
-        <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
-      </IconButton>
+      {/* **Only where there is something to re-fetch.** An uploaded PDF has no
+          address, and neither has an article old enough to predate our
+          recording one — so this button queued a job whose first step failed
+          with "No source URL", every time, having looked exactly like a button
+          that ought to work. Keyed on the URL rather than on "is it an upload",
+          because that is the actual precondition and it covers both cases.
+          Re-running the *later* stages is still meaningful and is still
+          reachable from the metadata page; only the re-fetch is impossible.
+          GPT Sol, 2026-08-27. */}
+      {entry.url && (
+        <IconButton
+          label={rerunning ? "Queueing…" : "Re-fetch and rebuild"}
+          onClick={() => void rerun()}
+          disabled={rerunning}
+        >
+          <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
+        </IconButton>
+      )}
       {entry.url && (
         <a
           href={entry.url}

@@ -1,33 +1,53 @@
 /**
  * Choose a PDF off your own machine, or drop one on the shelf.
  *
- * **The front half of an upload, and only the front half.** There is no
- * `POST /api/uploads` yet, no object store behind it, and the pipeline still
- * refuses to run without a URL — the whole of it is planned, reviewed and
- * unbuilt in docs/plans/pdf-upload-and-storage.md. So this picks a file, checks
- * what can be checked without the bytes, and then says plainly that it cannot
- * send it anywhere.
+ * **Wired up, 2026-08-27.** It used to pick a file and then say plainly that
+ * there was nowhere to send it, which was the honest thing to do while the
+ * object store was unbuilt. There is one now, so this sends the bytes — and
+ * everything that was here for the inert version survived unchanged: the drop
+ * target, the drag counter, the refusals, and `uploadProblem` in
+ * src/uploads.ts, which `POST /api/uploads` now uses too.
  *
- * Saying so is the point. A picker that swallowed the file and showed a
- * spinner, or one whose button was disabled with no explanation, would both be
- * a version of the failure this repo keeps writing up
- * (docs/reusable/silent-success.md) — something that looks like it worked.
- * The reader is told what happened and that the file never left their machine.
+ * ## The two halves, and why the file never leaves this component
  *
- * What survives into the real version is everything here except the last
- * paragraph of copy: the drop target, the drag counter, the refusals, and
- * `uploadProblem` in src/uploads.ts, which the server will use too.
+ * The bytes go **straight to the object store** and never through our server —
+ * src/web/upload.ts says why, and it is not an optimisation. That upload
+ * happens here, on the shelf, because this is where the `File` is: navigating
+ * first and uploading there would mean carrying a file handle through a page
+ * change, which is not a thing an address can do.
+ *
+ * Then, and only then, the reader goes to `/add/upload/<id>` — which queues the
+ * job and watches it, exactly as `/add/<url>` does for a page. So an ingest
+ * still has one place and one address, and the thing without an address (the
+ * transfer) is over before the navigation happens.
  */
 import { useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type ChosenFile, formatBytes, uploadProblem } from "../uploads.js";
+import { addUploadHref, navigate } from "./router.js";
+import { uploadPdf } from "./upload.js";
 
 export function UploadPicker() {
   const input = useRef<HTMLInputElement>(null);
   const [chosen, setChosen] = useState<ChosenFile | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  /**
+   * How far the transfer has got, or `null` when none is running.
+   *
+   * Bytes rather than a percentage, because the two things a reader wants from
+   * a progress bar during a 50 MB upload are "is it moving" and "how much is
+   * left", and a rounded percentage answers the first badly — it sits on the
+   * same integer for seconds at a time on a slow connection.
+   */
+  const [sent, setSent] = useState<number | null>(null);
+  /* The `File` itself, which `ChosenFile` deliberately is not: that type is the
+     small shared shape src/uploads.ts can check in either process, and this is
+     the handle the bytes come out of. Held in a ref rather than in state
+     because nothing renders it and a re-render must not lose it. */
+  const file = useRef<File | null>(null);
+  const abort = useRef<AbortController | null>(null);
 
   /* **A counter, not a boolean.** `dragleave` fires every time the pointer
      crosses into a child element — the icon, the button, the text — and each of
@@ -48,11 +68,44 @@ export function UploadPicker() {
     // Named separately because `File` is a `ChosenFile` and nothing more is
     // wanted here; the bytes stay where they are until there is somewhere to
     // send them.
-    const file = files[0] as File;
-    const picked: ChosenFile = { name: file.name, type: file.type, size: file.size };
+    const chose = files[0] as File;
+    const picked: ChosenFile = { name: chose.name, type: chose.type, size: chose.size };
     const wrong = uploadProblem(picked);
     setProblem(wrong);
     setChosen(wrong ? null : picked);
+    file.current = wrong ? null : chose;
+  }
+
+  /**
+   * Send it, then go to the page that owns the ingest.
+   *
+   * `navigate` only on success. A failed upload leaves the reader here, with
+   * the file still chosen and the reason on screen, so pressing the button
+   * again is the whole of the recovery — no page to come back from, and nothing
+   * to re-pick.
+   */
+  async function send() {
+    const chose = file.current;
+    if (!chose || sent !== null) return;
+    const controller = new AbortController();
+    abort.current = controller;
+    setProblem(null);
+    setSent(0);
+    try {
+      const grant = await uploadPdf(chose, {
+        onProgress: (p) => setSent(p.sent),
+        signal: controller.signal,
+      });
+      navigate(addUploadHref(grant.uploadId));
+    } catch (err) {
+      /* An abort is the reader's own doing and is not a failure to report —
+         `name` rather than `instanceof DOMException`, which is false across a
+         realm boundary and true of several things that are not aborts. */
+      if ((err as Error).name !== "AbortError") setProblem((err as Error).message);
+      setSent(null);
+    } finally {
+      abort.current = null;
+    }
   }
 
   /** Whether this drag is carrying files at all, rather than selected text. */
@@ -140,15 +193,28 @@ export function UploadPicker() {
             <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-foreground">
               {chosen.name}
             </span>
-            <span className="tw:shrink-0">{formatBytes(chosen.size)}</span>
+            <span className="tw:shrink-0">
+              {/* While it is going, how much of it has gone. The same units in
+                  both states, so the second number does not change meaning
+                  when the first appears. */}
+              {sent === null
+                ? formatBytes(chosen.size)
+                : `${formatBytes(sent)} of ${formatBytes(chosen.size)}`}
+            </span>
             <Button
               type="button"
               variant="ghost"
               size="icon-xs"
-              title="Forget this file"
+              title={sent === null ? "Forget this file" : "Stop uploading"}
               onClick={() => {
+                /* One button, two jobs, and the second is why it stays on
+                   screen during the upload: a transfer nobody can stop is a
+                   page the reader has to reload to escape. */
+                abort.current?.abort();
                 setChosen(null);
                 setProblem(null);
+                setSent(null);
+                file.current = null;
               }}
             >
               <X size={12} />
@@ -156,12 +222,29 @@ export function UploadPicker() {
           </div>
         )}
 
-        {chosen && (
-          <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-            Uploading isn't built yet, so this is as far as it goes — the file
-            hasn't left your machine. A PDF on the web still works: paste its
-            address in the box above.
-          </p>
+        {/* A real bar rather than a spinner, for the reason src/web/upload.ts
+            reaches for `XMLHttpRequest` at all: 50 MB on a domestic connection
+            is tens of seconds, and "something is happening" is not the question
+            a reader has after the first five of them.
+
+            `<progress>` rather than a styled div, because it is the element
+            that already announces itself to a screen reader and already has a
+            determinate value. */}
+        {chosen && sent !== null && (
+          <progress
+            className="tw:mt-2 tw:h-1 tw:w-full"
+            value={sent}
+            max={chosen.size}
+            aria-label={`Uploading ${chosen.name}`}
+          />
+        )}
+
+        {chosen && sent === null && (
+          <div className="tw:mt-2">
+            <Button type="button" size="sm" onClick={() => void send()}>
+              <Upload size={13} /> Send it
+            </Button>
+          </div>
         )}
       </div>
     </div>

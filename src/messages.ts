@@ -231,8 +231,14 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      have come with a Retry button that cannot work. */
   "up-big": "blocked",
   "up-pdf": "blocked",
-  "up-sum": "retry",
-  "up-gone": "retry",
+  /* Both `blocked` rather than `retry`, changed 2026-08-27 when the acquisition
+     step made the button real. `kind` answers "will another go at *this job*
+     help", and for these two it will not: the step would read the same damaged
+     object, or the same absent one, out of the same staging key. What helps is
+     a new upload, which is what both sentences now say. */
+  "up-off": "ours",
+  "up-sum": "blocked",
+  "up-gone": "blocked",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
      for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
      both. It guessed right — both are `retry`, and null means offer the retry —
@@ -544,23 +550,39 @@ export const UPLOAD_NOT_A_PDF: ReaderFacingFailure = {
 };
 
 /**
- * What arrived is not what was sent. `retry`, and genuinely so.
+ * What arrived is not what was sent.
  *
- * This is the one upload failure where trying again is the right move rather
- * than the polite one: a mismatch means the transfer was damaged, and transfers
- * usually succeed. Says whose problem it is — nobody's fault here, not the
+ * **`blocked`, and it was `retry` until 2026-08-27** — which was written with
+ * the right instinct and the wrong subject. Trying again *is* the right move
+ * here: a mismatch means the transfer was damaged, and transfers usually
+ * succeed. But `kind` does not answer "should the reader try again", it answers
+ * "will the **Retry button on this job card** help", and it will not: Retry
+ * re-runs the steps that did not finish, and this step would read the same
+ * damaged object out of the same staging key and refuse it again, for ever.
+ *
+ * The distinction is the whole of docs/postmortems/toc-max-tokens.md — a button
+ * that cannot work — and it only became visible when the acquisition step was
+ * built, because until then nothing could press it. So the sentence says what
+ * to do instead, the way `UPLOAD_TOO_BIG` does: a *new upload*, not another go
+ * at this one. Says whose problem it is too — nobody's fault here, not the
  * reader's file — because the natural reading of "checksum" is that the file is
  * broken.
  */
 export const UPLOAD_CHECKSUM: ReaderFacingFailure = {
-  kind: "retry",
+  kind: "blocked",
   message:
     "The file that arrived isn't quite the file that was sent, so something went wrong on the " +
-    "way. The file itself is fine — uploading it again usually works. [up-sum]",
+    "way. Running this again will not help — it would read the same damaged copy. The file " +
+    "itself is fine: choosing it again usually works. [up-sum]",
 };
 
 /**
- * We never received it, or it sat too long. `retry`.
+ * We never received it, or it sat too long.
+ *
+ * `blocked` for the same reason as `UPLOAD_CHECKSUM` above, and changed at the
+ * same moment: there is nothing at that key, so re-running the step that looks
+ * there finds nothing again. What helps is choosing the file once more, which
+ * mints a fresh grant at a fresh key.
  *
  * Two hours is the grant's life and it is Supabase's number, not ours
  * (src/source.ts). Named in the sentence because "it expired" without a
@@ -568,10 +590,40 @@ export const UPLOAD_CHECKSUM: ReaderFacingFailure = {
  * broken.
  */
 export const UPLOAD_MISSING: ReaderFacingFailure = {
-  kind: "retry",
+  kind: "blocked",
   message:
     "That file never finished arriving. An upload has two hours to complete, so a very slow " +
-    "connection or an interrupted one will do this. Try again. [up-gone]",
+    "connection or an interrupted one will do this. Running this again will not help — there is " +
+    "nothing there to read. Choose the file again. [up-gone]",
+};
+
+/**
+ * This installation cannot take uploads at all.
+ *
+ * Not a failure of the reader's file, and not a transient one. **Two different
+ * things can be missing**, and the sentence covers both rather than naming
+ * either, because the reader can act on neither:
+ *
+ *  - no object store for the browser to write to (no Supabase credentials), and
+ *    there is no way to fake one from a server that refuses request bodies over
+ *    4.5 MB — see src/store/blobs.ts;
+ *  - or a store, but nowhere to *remember* the upload between the two requests
+ *    it takes, which is a serverless function's filesystem — see
+ *    `recordsSurviveTheRequest` in src/upload-records.ts.
+ *
+ * The second is the one worth refusing loudly: everything about it works right
+ * up until the reader has spent minutes sending an 11 MB file, and then answers
+ * "no such upload". A limitation said at the door is a limitation; the same
+ * limitation found at the end is [a silent success](docs/reusable/silent-success.md).
+ *
+ * `ours`, because nothing refused anything — this server is short a setting.
+ */
+export const UPLOAD_UNAVAILABLE: ReaderFacingFailure = {
+  kind: "ours",
+  message:
+    "Uploading isn't switched on here — this server isn't set up to take a file yet. Trying " +
+    "again will not help until somebody finishes setting up its file storage. A web page still " +
+    "works: paste its address in the box above instead. [up-off]",
 };
 
 /** @see STORAGE_BUSY — the other half, for a database that answered "no". */

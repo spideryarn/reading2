@@ -23,8 +23,10 @@ import {
   stagingKey,
   SWEEP_GRACE_MS,
   sweepable,
+  rejectionFailure,
   type UploadStatus,
 } from "../src/source.js";
+import { canRetry, kindOfMessage } from "../src/messages.js";
 
 const UPLOAD_ID = "3f2a1b8c-4d5e-4f60-8a91-2b3c4d5e6f70";
 const HASH = "a".repeat(64);
@@ -64,6 +66,24 @@ describe("the keys a grant may and may not be minted for", () => {
     expect(isStagingKey(canonicalKey(HASH, "pdf"))).toBe(false);
     expect(isStagingKey("staging/../sha256/x")).toBe(false);
   });
+
+  /**
+   * Staging-*shaped* and still not a staging key.
+   *
+   * The first version of `isStagingKey` tested `[0-9a-f-]{36}` and every one of
+   * these passed it — right length, right alphabet, not an id. The review found
+   * it, and this is the test that would have. Without these rows the assertion
+   * above is satisfied by a regex that has stopped meaning anything.
+   */
+  it.each([
+    ["-".repeat(36), "thirty-six hyphens"],
+    ["a".repeat(36), "hex with no hyphens at all"],
+    ["3f2a1b8c4d5e4f608a912b3c4d5e6f70aaaa", "the right characters, wrong shape"],
+    ["3f2a1b8c-4d5e-4f60-8a91-2b3c4d5e6f7", "one character short, padded elsewhere"],
+    ["3f2a1b8c-4d5e-4f60-8a91-2b3c4d5e6f70/x", "an id with something after it"],
+  ])("refuses staging/%s (%s)", (tail) => {
+    expect(isStagingKey(`staging/${tail}`)).toBe(false);
+  });
 });
 
 describe("an upload moves through its states exactly once", () => {
@@ -79,12 +99,44 @@ describe("an upload moves through its states exactly once", () => {
     expect(canTransition("pending", "rejected")).toBe(false);
   });
 
-  it("treats every ending as an ending", () => {
-    const terminal: UploadStatus[] = ["verified", "rejected", "expired"];
+  /**
+   * A crashed worker must not strand the row for ever.
+   *
+   * Only the worker that claimed an upload was going to verify it, so without
+   * this edge a `claimed` row can never move again. The recovery is deliberately
+   * a *new* upload rather than a resumed one — re-reading staging after a crash
+   * is the one sequence content addressing does not protect, because the grant
+   * is still live and the bytes may no longer be the ones we hashed.
+   */
+  it("lets a claimed upload expire when its worker never came back", () => {
+    expect(canTransition("claimed", "expired")).toBe(true);
+  });
+
+  /**
+   * **The whole matrix, spelled out.**
+   *
+   * The three tests above each check one edge, and between them they would all
+   * still pass if `claimed → pending` were added by accident — which is exactly
+   * the edge that would let a claimed upload be handed out a second time. So
+   * the legal set is written down here in full, and anything not in it is
+   * asserted illegal rather than left unexamined. The review named this as the
+   * gap; this is the version that closes it.
+   */
+  it("allows exactly these transitions and no others", () => {
     const every: UploadStatus[] = ["pending", "claimed", "verified", "rejected", "expired"];
-    for (const from of terminal) {
+    const legal = new Set([
+      "pending>claimed",
+      "pending>expired",
+      "claimed>verified",
+      "claimed>rejected",
+      "claimed>expired",
+    ]);
+    for (const from of every) {
       for (const to of every) {
-        expect(canTransition(from, to)).toBe(false);
+        expect({ edge: `${from}>${to}`, allowed: canTransition(from, to) }).toEqual({
+          edge: `${from}>${to}`,
+          allowed: legal.has(`${from}>${to}`),
+        });
       }
     }
   });
@@ -99,6 +151,20 @@ describe("a sweep must not race the browser it is cleaning up after", () => {
    */
   it("waits strictly longer than a grant lives", () => {
     expect(SWEEP_GRACE_MS).toBeGreaterThan(GRANT_TTL_MS);
+    /* And by a margin worth having. `TTL + 1ms` satisfies the line above and
+       would be worthless against any clock skew between us and Supabase, which
+       is the thing the margin is actually for. The review made that point. */
+    expect(SWEEP_GRACE_MS - GRANT_TTL_MS).toBeGreaterThanOrEqual(60 * 60 * 1000);
+  });
+
+  /**
+   * The TTL is Supabase's, not ours, and it was measured rather than read: a
+   * minted token's payload decodes to `exp - iat === 7200`. Pinning the number
+   * here means a future edit that "tidies" it to something rounder has to
+   * explain itself, because nothing else in this repo can tell you it is wrong.
+   */
+  it("matches the token lifetime that was actually measured", () => {
+    expect(GRANT_TTL_MS).toBe(7200 * 1000);
   });
 
   it("calls a grant dead only once its two hours are up", () => {
@@ -172,13 +238,65 @@ describe("the words a refused upload gets", () => {
     expect(new Set(codes).size).toBe(reasons.length);
   });
 
+  /**
+   * **The one that matters, and the one that was missing.**
+   *
+   * `kindOfMessage` returns null for a code it does not know, and null means
+   * *offer another go*. So before these codes were registered, "that file isn't
+   * a PDF" carried a Retry button that could not work. The earlier tests here
+   * checked the shape of the code and its uniqueness, and every one of them
+   * stayed green through exactly that bug — which is what the review meant by
+   * calling them decorative.
+   */
+  it.each(reasons)("reads %s back to the kind it was declared with", (reason) => {
+    const failure = rejectionFailure(reason);
+    expect(kindOfMessage(failure.message)).toBe(failure.kind);
+  });
+
+  it("does not offer another go at a file that will fail the same way twice", () => {
+    expect(canRetry(rejectionFailure("too-big").kind)).toBe(false);
+    expect(canRetry(rejectionFailure("not-a-pdf").kind)).toBe(false);
+  });
+
+  /**
+   * **This asserted `true` until 2026-08-27, and the change is deliberate.**
+   *
+   * The instinct was right and the subject was wrong. Trying again *is* the
+   * cure for a damaged transfer or an object that never arrived — but `kind`
+   * does not answer "should the reader try again", it answers "will the **Retry
+   * button on this job card** help". It will not: Retry re-runs the steps that
+   * did not finish, and the acquisition step would read the same damaged object
+   * out of the same staging key, for ever.
+   *
+   * That only became visible when the step was built, because until then
+   * nothing could press the button. So the kind is `blocked` and both sentences
+   * now name the thing that does work — choosing the file again, which mints a
+   * fresh grant at a fresh key. docs/postmortems/toc-max-tokens.md is the same
+   * shape.
+   */
+  it("does not offer a Retry that would read the same bad bytes again", () => {
+    expect(canRetry(rejectionFailure("checksum-mismatch").kind)).toBe(false);
+    expect(canRetry(rejectionFailure("missing").kind)).toBe(false);
+  });
+
+  /** …and still tells the reader the one thing that *would* work. */
+  it("points a transfer failure at a fresh upload rather than at nothing", () => {
+    for (const reason of ["checksum-mismatch", "missing"] as const) {
+      expect(rejectionMessage(reason), reason).toMatch(/choos(e|ing) (it|the file) again/i);
+    }
+  });
+
   it("says the cap in megabytes rather than in bytes", () => {
     expect(rejectionMessage("too-big")).toContain(`${MAX_UPLOAD_BYTES / 1024 / 1024} MB`);
   });
 
-  /* copy.md again: say what happened and what to do, and never leave the
-     reader wondering whether their file is sitting half-uploaded somewhere. */
-  it("tells a reader with too big a file that nothing was uploaded", () => {
-    expect(rejectionMessage("too-big")).toContain("Nothing was uploaded");
+  /**
+   * One cap, one home. src/uploads.ts owns it because the browser's file picker
+   * imports that module; a second copy here would let the picker accept a file
+   * the server had started refusing, with both suites green.
+   */
+  it("shares one cap with the file picker", async () => {
+    const picker = await import("../src/uploads.js");
+    expect(MAX_UPLOAD_BYTES).toBe(picker.MAX_UPLOAD_BYTES);
   });
 });

@@ -367,6 +367,29 @@ export function slugFromUrl(url: string): string {
 
 
 /**
+ * The slug an uploaded file gets, from the name the reader gave it.
+ *
+ * The filename with its extension off, kebab-cased by the same function
+ * `slugFromUrl` uses — so `Bergson — Matter & Memory (1911).pdf` becomes
+ * `bergson-matter-memory-1911`, which is a directory name a person recognises.
+ *
+ * **`""` for anything that leaves nothing**, which is a real case rather than a
+ * theoretical one: `.pdf`, `2026.pdf`, `文档.pdf` all kebab to nothing at all,
+ * because `kebab` is ASCII-only by design. The caller substitutes a default
+ * rather than this function inventing one, for the same reason `slugFromUrl`
+ * returns `""` — a function that always succeeds cannot be asked whether it
+ * did, and the add box's preview needs to be able to stay quiet.
+ *
+ * It is here, beside `slugFromUrl`, and not in src/uploads.ts, because this is
+ * the module that owns "what will this article be called" and the answer has to
+ * be the same in the browser and on the server. See the note at the top.
+ */
+export function slugFromFilename(filename: string): string {
+  const last = filename.split(/[/\\]/).pop() ?? "";
+  return kebab(last.replace(/\.[a-z0-9]{1,5}$/i, ""));
+}
+
+/**
  * Whether a string is a slug we are willing to turn into a path.
  *
  * **This is a path-traversal guard, not a tidiness check.** A slug arrives from

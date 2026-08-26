@@ -231,6 +231,31 @@ Worth it here because the thing being checked is a **silence**: the summary pane
 the length ladder when a rung is missing, and the mark saying so is the only difference between a
 fallback and a section the model had less to say about ([summaries.md](summaries.md)).
 
+## What an upload's tests are for
+
+Four files, and each of them exists because of a specific way this could report success while being
+broken. Worth reading as a group before adding to them
+([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf) is the feature):
+
+- [`tests/blobs.test.ts`](../../tests/blobs.test.ts) — the object store gives back the **exact
+  bytes** it was given (a NUL, a lone `0xFF`, a stray continuation byte: every one survives a
+  `Buffer` round trip and none survives a `toString()`/`from()` one), and `putIfAbsent` never
+  overwrites. Refuse-over-the-cap rather than truncate, because a prefix of a PDF is a corrupt PDF
+  that hashes to a real-looking number.
+- [`tests/upload-records.test.ts`](../../tests/upload-records.test.ts) — **two simultaneous claims,
+  exactly one winner**. That is the one that costs money if it is wrong.
+- [`tests/uploads-api.test.ts`](../../tests/uploads-api.test.ts) — what a request may *name*. A test
+  that only checked for a 400 would pass while refusing for entirely the wrong reason, so these
+  assert the shape rather than the status where they can.
+- [`tests/upload-acquire.test.ts`](../../tests/upload-acquire.test.ts) — the byte checks, and the
+  checksum one is a **same-length** substitution on purpose: a length check would otherwise catch
+  it and the test would pass while the hash comparison did nothing at all.
+
+**The Supabase adapter is deliberately not unit-tested.** What it actually gets wrong is that
+Storage answers HTTP 400 for *both* "missing" and "duplicate", with the real status buried in the
+body as a string — and a mock would agree with whatever the code believed about that. It is checked
+by running the real thing, which is the same reasoning as the model calls below.
+
 ## Evals are not tests, and live in their own folder
 
 [`evals/`](../../evals) holds things that call a model. They cost money, take minutes, and give a

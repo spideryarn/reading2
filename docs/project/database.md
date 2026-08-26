@@ -20,7 +20,29 @@ data/writes/
   glossary.json
 data/_jobs/
   spya-*.json   one file per ingest job
+data/_uploads/
+  <uuid>.json   one file per upload attempt   (see below)
 ```
+
+**And, since 2026-08-27, one thing that is deliberately not a file here at all.** An uploaded PDF's
+bytes go to **Supabase Storage**, in the private `sources` bucket, because the browser has to be
+able to write them without passing through our server — a serverless function refuses a body over
+4.5 MB. The article's directory still gets its `raw.pdf` and `raw.json` the way a fetched one does;
+Storage additionally holds a copy at `sha256/<hash>.pdf`, keyed by its own contents so two readers
+with the same paper converge on one object.
+
+So there are now **two** stores under the filesystem era, and the seam between them is
+[`src/store/blobs.ts`](../../src/store/blobs.ts). That is early rather than premature: the eventual
+design has *every* raw document — fetched or uploaded, HTML or PDF — as an object with the row
+holding a key and a checksum, which is
+[the appendix of pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md#appendix-where-the-bytes-should-eventually-live),
+and the seam is what makes that a follow-on rather than a rewrite.
+
+`data/_uploads/` is **queue state, not article state** — created, claimed and finished inside one
+ingest, and meaningless once the article exists. It is on the filesystem because `data/_jobs/` is,
+and it moves when that moves ([job-queue-rethink.md](../plans/job-queue-rethink.md)). The rules it
+obeys are in [`src/source.ts`](../../src/source.ts) and touch no storage, which is what makes that
+move a change of adapter.
 
 **Reads** all go through [`src/api.ts`](../../src/api.ts) — `loadArticle`, `loadTweets`,
 `loadGlossary`, `articleMetadata`, `listArticles`. (`deleteGlossary` is the one *write* that goes

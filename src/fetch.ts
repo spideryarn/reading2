@@ -93,8 +93,30 @@ export interface RawManifest {
   kind: DocumentKind;
   /** The file beside this manifest that holds the bytes — `raw.html` or `raw.pdf`. */
   file: string;
-  requestedUrl: string;
-  url: string;
+  /**
+   * How we came by this document. **Absent means `"url"`**, which is what every
+   * manifest written before uploads existed is.
+   *
+   * The two origins are the same artefact from stage 2 onwards, so this field
+   * exists for the three things that genuinely have to know: the acquisition
+   * step (src/pipeline.ts), `GET /api/source/:slug`, and anything asking "can a
+   * refresh re-fetch this?" — for an upload the answer is no, and saying so is
+   * better than a refresh that fails.
+   */
+  origin?: "url" | "upload";
+  /**
+   * The two URLs, present **only for a fetched document**.
+   *
+   * Optional since uploads arrived, and deliberately optional rather than
+   * filled with a placeholder: `file://…` or `upload://…` reads as an address
+   * to every caller downstream, and not one of them would have complained.
+   * Making the typechecker ask instead is the entire benefit.
+   */
+  requestedUrl?: string;
+  url?: string;
+  /** Upload only — our id for the attempt, and the reader's own name for the file. */
+  uploadId?: string;
+  filename?: string;
   contentType: string | null;
   encoding: string | null;
   bytes: number;

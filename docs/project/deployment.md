@@ -327,6 +327,24 @@ It reports `bytes`, and it counts them with the *same* `for await` loop
 vouching for can pass while the real path fails. `bytes: 0` against a request
 that had one means something read it first.
 
+### The `sources` bucket has to exist on the remote too
+
+Uploading a PDF (2026-08-27) puts bytes in Supabase Storage, in a bucket called `sources`.
+[`supabase/config.toml`](../../supabase/config.toml) declares it, and **that only creates it
+locally** — a remote project needs `supabase seed buckets --project-ref <ref>`, or the equivalent
+insert into `storage.buckets`.
+
+This is on the "fails quietly" list rather than beside it because of *how* it fails: nothing checks
+for the bucket at boot. `POST /api/uploads` mints a grant against a path in a bucket that is not
+there, the browser gets a signed URL that looks perfectly good, and the `PUT` is what discovers it.
+The reader sees an upload failure on a file that is fine.
+
+The other half of the same setting: `SUPABASE_SERVICE_ROLE_KEY` must be present in the deployed
+environment, because minting a grant is server-only by construction — the anon key gets
+`403 Unauthorized: new row violates row-level security policy`, which is the right answer. Without
+the key, `uploadGrants()` returns `null` and `POST /api/uploads` answers 503 saying uploading is not
+switched on, which is at least honest.
+
 ## What does not work in production yet
 
 Reading an article, the shelf, comments, **chat and meaning-search** all come

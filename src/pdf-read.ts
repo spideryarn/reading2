@@ -637,7 +637,17 @@ export interface PdfExtractResult {
 
 export interface PdfExtractOptions {
   bytes: Uint8Array;
-  url: string;
+  /**
+   * Where this PDF was fetched from. **Absent for one the reader uploaded**,
+   * which has no address at all — see docs/plans/pdf-upload-and-storage.md.
+   *
+   * Only two things here use it, and neither is the transcription: the last
+   * rung of the title ladder, and the `raw.json` this writes when nothing else
+   * has. Nothing sends it to a model.
+   */
+  url?: string;
+  /** The reader's own name for an uploaded file. The title ladder's last rung prefers it. */
+  filename?: string;
   outFile: string;
   dataDir: string;
   slug: string;
@@ -827,7 +837,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   }
 
   all.sort((a, b) => a.page - b.page);
-  const title = titleFrom(all, pass, opts.url);
+  /* Rung 4 of the ladder wants **a name**, and the two origins spell one
+     differently: an uploaded file has the reader's own filename, and a fetched
+     one has the last segment of its URL. Worked out here rather than inside
+     `titleFrom`, so that function keeps taking one string and stays testable
+     without a URL. `decodeURIComponent` can throw on a hand-mangled escape,
+     which used to take the whole stage with it. */
+  const title = titleFrom(all, pass, lastName(opts));
   await mkdir(path.dirname(opts.outFile), { recursive: true });
   await writeFile(opts.outFile, renderHtml(all, title), "utf-8");
 
@@ -851,7 +867,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const meta: Meta = {
     slug: opts.slug,
     title,
-    url: opts.url,
+    ...(opts.url ? { url: opts.url } : {}),
     fetchedAt: new Date().toISOString(),
     source: "pdf",
     method: reader.id,
@@ -911,8 +927,7 @@ async function keepTheOriginal(opts: PdfExtractOptions, sha256: string): Promise
       {
         kind: "pdf",
         file: "raw.pdf",
-        requestedUrl: opts.url,
-        url: opts.url,
+        ...(opts.url ? { requestedUrl: opts.url, url: opts.url } : { origin: "upload" }),
         contentType: "application/pdf",
         encoding: null,
         bytes: opts.bytes.byteLength,
@@ -1113,7 +1128,7 @@ export function wordsOf(pass: Pass0, pages: number[]): Set<string> | null {
  * Pass 0's "biggest line on page 1" is deliberately not in the ladder: on a
  * library scan the biggest line on page one belongs to the library.
  */
-function titleFrom(records: PdfRecord[], pass: Pass0, url: string): string {
+function titleFrom(records: PdfRecord[], pass: Pass0, name: string): string {
   if (pass.metaTitle && !looksLikeAFilename(pass.metaTitle)) return pass.metaTitle;
   const firstPage = pass.pages[0]?.page ?? 1;
   const heading = records.find(
@@ -1130,7 +1145,26 @@ function titleFrom(records: PdfRecord[], pass: Pass0, url: string): string {
     .split("\n")
     .find((l) => l.trim().length > 3 && !pass.furniture.has(foldLine(l)));
   if (line) return line.trim();
-  return decodeURIComponent(url.split("/").pop() ?? "Untitled").replace(/\.pdf$/i, "");
+  return name.replace(/\.pdf$/i, "") || "Untitled";
+}
+
+/**
+ * The best name we have for this document, before the model is asked anything.
+ *
+ * An uploaded file has one the reader chose; a fetched one has the last segment
+ * of its address, which is a filename often enough to be worth trying.
+ */
+function lastName(opts: PdfExtractOptions): string {
+  if (opts.filename) return opts.filename;
+  const last = opts.url?.split("/").pop() ?? "";
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    /* `new URL` accepts a malformed percent escape that `decodeURIComponent`
+       throws on, and this is the last rung of a title ladder — the one place
+       where throwing would replace an article with a stack trace. */
+    return last;
+  }
 }
 
 /** `Microsoft Word - thing.doc`, `untitled`, `document1` — a title that is really a file. */

@@ -55,9 +55,23 @@ import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
-export function AddPage({ url }: { url: string }) {
+/**
+ * Which of the two origins this page is starting.
+ *
+ * A union rather than two components, because everything that is hard here is
+ * shared and none of it is about URLs: post exactly once across StrictMode's
+ * double mount, watch **that** job by id rather than by slug, and navigate on
+ * success with `replace`. Each of those has a bug in it that was found the hard
+ * way (see the comments below), and a second copy would have to find them
+ * again. What actually differs is three lines: what gets posted, what the
+ * subtitle says, and whether "that isn't a web address" can apply at all.
+ */
+export type AddSource = { kind: "url"; url: string } | { kind: "upload"; uploadId: string };
+
+export function AddPage({ source: origin }: { source: AddSource }) {
   const queue = useJobs();
   const [started, setStarted] = useState<string | null>(null);
+  const url = origin.kind === "url" ? origin.url : "";
 
   /* What the server will actually fetch, worked out here so the page can show
      it. Typing `example.com/an-essay` into the address bar is meant to work
@@ -69,7 +83,21 @@ export function AddPage({ url }: { url: string }) {
      and it is the same function the server derives the slug with, so a second
      opinion here could only ever be a way for the two to disagree. */
   const source = normaliseUrl(url);
-  const ok = slugFromUrl(source) !== "";
+  /* An upload has nothing to validate here — the file is already in the object
+     store and the server has already refused everything it could refuse before
+     minting the grant. So `ok` is about the *address*, and an upload simply has
+     not got one. */
+  const ok = origin.kind === "upload" || slugFromUrl(source) !== "";
+
+  /* What the "have we posted this one already" guard compares. Not a boolean —
+     see the note on `posted` below — and not the URL, because for an upload
+     there isn't one. The id and the normalised address are both stable strings
+     that identify exactly one thing to queue. */
+  const wanted = origin.kind === "upload" ? origin.uploadId : source;
+  /* Named separately because the effect's dependency list needs it and cannot
+     narrow a union inside one — `origin.uploadId` does not typecheck against
+     the URL arm. Undefined for a URL, which is a perfectly stable value. */
+  const uploadId = origin.kind === "upload" ? origin.uploadId : undefined;
 
   /* Which URL we have already posted, **not a boolean**. It was a boolean, and
      the difference is a bug GPT Sol found (2026-08-26): this component does not
@@ -96,6 +124,8 @@ export function AddPage({ url }: { url: string }) {
   // fix that would do exactly that.
   const addRef = useRef(queue.add);
   addRef.current = queue.add;
+  const uploadRef = useRef(queue.addUpload);
+  uploadRef.current = queue.addUpload;
 
   useEffect(() => {
     /* Cleared rather than simply skipped. Going from a URL we would add to one
@@ -107,12 +137,18 @@ export function AddPage({ url }: { url: string }) {
       setFailed(false);
       return;
     }
-    const want = `${attempt}\u0000${source}`;
+    const want = `${attempt}\u0000${wanted}`;
     if (posted.current === want) return;
     posted.current = want;
     setStarted(null);
     setFailed(false);
-    void addRef.current(source).then((job) => {
+    /* On `uploadId` rather than on `origin.kind`, so the effect reads only
+       plain strings it also depends on — and so the union narrows, which
+       `origin.kind === "upload"` does not do for a field read inside a
+       dependency list. */
+    const queueIt =
+      uploadId !== undefined ? uploadRef.current(uploadId) : addRef.current(source);
+    void queueIt.then((job) => {
       /* **Only if this is still the POST we are waiting for.** Two `/add/`
          addresses in quick succession, or Retry, leave two requests in flight,
          and the first can land last — which would put the *first* article's job
@@ -126,7 +162,13 @@ export function AddPage({ url }: { url: string }) {
       if (job) setStarted(job.id);
       else setFailed(true);
     });
-  }, [source, ok, attempt]);
+    /* The two plain strings, never `origin` itself. That object is a fresh
+       literal on every render of the component above, so depending on it would
+       re-run this effect once a second — harmless only because of the guard,
+       which is not a thing to rely on. `uploadId` and `source` are strings (or
+       `undefined`), so they are stable, and `wanted` is derived from them.
+       Biome asks for them by name and it is right to. */
+  }, [wanted, ok, attempt, uploadId, source]);
 
   const job = queue.jobs.find((j) => j.id === started) ?? null;
 
@@ -142,9 +184,14 @@ export function AddPage({ url }: { url: string }) {
         {/* The URL as text rather than as a link. It is not somewhere we are
             sending the reader, it is what they asked us to read — and a live
             link to an unvisited address on a page they may have arrived at from
-            a bookmarklet is a click we have no reason to offer. */}
+            a bookmarklet is a click we have no reason to offer.
+
+            For an upload it is the filename, which the *job* carries rather
+            than the address — so until the first poll comes back there is
+            genuinely nothing to name, and saying "your file" is better than an
+            empty line that fills in a second later. */}
         <p className="tw:mt-2 tw:mb-0 tw:font-mono tw:text-[13px] tw:break-all tw:text-muted-foreground">
-          {ok ? source : url}
+          {origin.kind === "upload" ? (job?.upload?.filename ?? "your file") : ok ? source : url}
         </p>
       </header>
 

@@ -312,7 +312,8 @@ from the diagram:
 > spinner over nothing, either of which would be a
 > [silent success](../reusable/silent-success.md). No route was added, no bytes are read, and
 > nothing in steps 0–5 was started. What is still owed here is the wiring and the progress bar.
-> See [ingest-queue.md § The picker that cannot send anything yet](../project/ingest-queue.md#the-picker-that-cannot-send-anything-yet).
+> See [ingest-queue.md § Uploading a PDF](../project/ingest-queue.md#uploading-a-pdf) — which
+> is what that section became on 2026-08-27, when the back half landed.
 
 A drop zone and a "choose a file" button beside the URL field in
 [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), and a progress bar on
@@ -930,6 +931,205 @@ whole project rather than over the files you edited, which is how it was nearly 
    */
   rawSourceId: "carry",
 ```
+
+## What was built, 2026-08-27 — and the four places it departs from this plan
+
+**It works end to end.** Measured against the running dev server and the running local Supabase:
+`POST /api/uploads` → a bare `PUT` with no credentials → `POST /api/jobs {uploadId}` → the five
+ingest steps → a readable article, 148 seconds for the 145 KB fixture, with
+`GET /api/source/:slug` handing back all 144,779 bytes. Every file in
+[§ Build order, revised](#build-order-revised-after-the-review) steps 3–6 exists.
+
+The reader-facing half is written up in
+[ingest-queue.md § Uploading a PDF](../project/ingest-queue.md#uploading-a-pdf), which is where to
+look first. This section is only the four things that are **not** what this plan says, each with
+its reason, so that nobody has to diff a plan against a repo to find them.
+
+### 1. The upload record is on the filesystem, not in Postgres
+
+This plan specifies `raw_sources` and `uploads` tables and an `article_revisions.raw_source_id`
+column, written out in full in [the schema appendix](#appendix-the-schema-written-and-waiting-on-a-migration).
+None of them landed. The record is `data/_uploads/<id>.json`
+([`src/upload-records.ts`](../../src/upload-records.ts)).
+
+**Because the thing it sits beside is also on the filesystem.** [`src/jobs.ts`](../../src/jobs.ts)
+writes `data/_jobs/<id>.json`, and the `jobs` table in [`src/db/schema.ts`](../../src/db/schema.ts)
+is *unused* — moving the queue into Postgres is its own piece of work
+([job-queue-rethink.md](job-queue-rethink.md)). An upload record is queue state: created, claimed
+and finished inside one ingest, and meaningless once the article exists. Landing it in Postgres
+ahead of its neighbours would have bought nothing and cost two things — a migration in a schema
+file several agents share, and a second durability story for a subsystem whose first one is
+`data/_jobs/`.
+
+What makes this a change of *adapter* later rather than a rewrite is that the rules are not in the
+storage: `canTransition`, `grantExpired` and `sweepable` are in
+[`src/source.ts`](../../src/source.ts) and touch nothing. `grant_expires_at` — Sol's correction, that
+`minted_at` counts from the wrong clock — **is** in the record, so that part is not owed any more.
+
+The appendix stands as the eventual design. It moves when the queue moves.
+
+### 2. The acquisition step is `fetch` with a branch, not a new step name
+
+Sol asked for "a common **acquisition** step with one `raw` output contract that both fetch and
+upload satisfy", and that is exactly what exists — under the old name. `StepName` is a union in
+[`src/types.ts`](../../src/types.ts) that is *persisted into job records on disk*, so renaming it
+strands every in-flight job at a step nothing recognises. The contract Sol actually cared about is
+met: it is a real step, inside `beginStep`/`finishStep`/cancellation/`assertProduced`, with one
+output (`raw.json`) that both halves write.
+
+The **label** is per-origin, because "Fetching the page" is a false statement about a file off the
+reader's own disk. `stepLabel` in [`src/pipeline.ts`](../../src/pipeline.ts) is the one place that
+knows, and a test pins it.
+
+### 3. There is no filesystem grant issuer, and no local-only upload route
+
+This plan's § 2 proposed one, warned that it would be a lie, and proposed a health check to catch
+the lie. Sol's answer was better — *split the interface* — and that is what was built:
+`RawSourceStore` (head / get / putIfAbsent / remove) is implemented by both adapters honestly, and
+`UploadGrants` is implemented **only** by Supabase. `uploadGrants()` returns `null` on an
+installation with no service key, and `POST /api/uploads` answers 503 with `UPLOAD_UNAVAILABLE`.
+
+So the health check is not needed: there is no shape to repair. Local development uses the local
+Supabase container, which is what § The shape said all along.
+
+The filesystem adapter is still worth having — it is what the tests run against, and it is what a
+laptop with no container falls back to for *reading* — and its `putIfAbsent` is a real
+compare-and-swap (`wx`), not a check followed by a write.
+
+### 4. `POST /api/jobs {uploadId}` claims, and then enqueues, in that order
+
+The plan says the request checks cheap metadata and the job's first step verifies. That is what
+happens. What the plan does not say is the **order** of the two things the request does, and it
+matters: claim first, enqueue second. If the enqueue then throws, the upload is stuck `claimed` and
+the reader chooses the file again — cheap and correct. Enqueue-then-claim is the other way round:
+two jobs, two articles, two transcriptions paid for.
+
+A *repeat* of the same request is not a race and must not read like one. A double-clicked button or
+a reload of `/add/upload/<id>` arrives after the first claim has been taken, so `taken` looks for
+the article that claim produced and hands back its job. Only a claim with nothing to show for it is
+an error.
+
+### Two bugs this wiring found in code that was already committed and already reviewed
+
+Both in [`src/messages.ts`](../../src/messages.ts), both the same shape, and neither findable before
+the step existed — **because until then nothing could press the button**.
+
+`UPLOAD_CHECKSUM` and `UPLOAD_MISSING` were `kind: "retry"`. The instinct was right and the subject
+was wrong: trying again *is* the cure for a damaged transfer, but `kind` does not answer "should the
+reader try again", it answers "will the **Retry button on this job card** help". It will not — Retry
+re-runs the steps that did not finish, and the acquisition step would read the same damaged object
+out of the same staging key, for ever. That is [toc-max-tokens](../postmortems/toc-max-tokens.md)
+exactly. Both are `blocked` now, and both sentences name the thing that does work: choosing the file
+again, which mints a fresh grant at a fresh key. The test in
+[`tests/source.test.ts`](../../tests/source.test.ts) that asserted the old behaviour now asserts the
+new one and says why.
+
+And a bug of mine that the tests caught rather than the reviewer: the first `acquireUpload` wrote
+its rejection with `void rejectUpload(...)` and threw on the next line. The job failed with the
+right sentence and the record stayed `claimed` — so the *reason* an upload was refused was lost
+exactly when somebody came looking for it. `Promise<never>`, so the compiler now requires the
+`await`.
+
+## The third review — of this code, and the ten things it found
+
+**Ran 2026-08-27**, GPT-5.6 Sol, high effort, read-only, over the built upload path. Full text:
+[pdf-upload-code-review-sol-2.md](pdf-upload-code-review-sol-2.md); the prompt is
+[pdf-upload-code-review-2-prompt.md](pdf-upload-code-review-2-prompt.md). Its verdict was
+**NO-SHIP for a deployed feature**, and it was right; the local path it called workable is what
+exists. Nine of the ten findings are fixed; the tenth is the reason for the verdict and is written
+up as blocking rather than closed. Every one was checked before being acted on, and two of Sol's
+own claims are narrowed below.
+
+**The one that stands, and blocks deployment.** Minting a grant and queueing the job are **two HTTP
+requests**, and the record has to survive between them. On a serverless function's filesystem it
+does not — neither durable nor shared — so the second request answers *"no such upload"* for a file
+that uploaded perfectly. My reasoning above (§ 1) said this was no worse than the queue's own
+filesystem dependency, and that is true and not sufficient: the URL path needs no *prior* request,
+so uploads add a dependency the queue migration must carry rather than merely inherit.
+
+What changed as a result is that the code now says so: `recordsSurviveTheRequest()` in
+[`src/upload-records.ts`](../../src/upload-records.ts) refuses at `POST /api/uploads` on a platform
+where the handoff cannot work, with `UPLOAD_UNAVAILABLE`. **A limitation stated at the door is a
+limitation; the same limitation discovered at the end of an 11 MB upload is
+[a silent success](../reusable/silent-success.md).** The real fix is shared durable storage, and it
+arrives with [job-queue-rethink.md](job-queue-rethink.md), which is where the `uploads` table
+belongs.
+
+**Two bugs that were mine and were serious.**
+
+*Slug allocation and job insertion were not atomic.* `freeUploadSlug` does I/O, so two uploads
+called `paper.pdf` arriving together could both be told `paper` — and `sameWork` correctly says
+they are different work, so neither is handed the other's job and the second one's steps find the
+first one's artefacts, skip, and report a row of successes over somebody else's document. There is
+now a synchronous reconciliation immediately before the insert, with **no `await` after it**, which
+closes the window completely within one process. It re-allocates rather than appending a counter,
+because a counter appended at that point could land on a finished article's slug that only
+`articleExists` knows about. `urlForSlug` also stopped being consulted for an upload, since it reads
+the `meta.json` at a slug that could still move.
+
+*`noteSlug` was written and never called.* So the record's slug was set only by the acquisition
+step, on success — and the "a reload hands you the existing job" recovery this plan describes could
+not work while the job was still queued. It is called at enqueue now. Sol noticed that the doc
+claimed the recovery worked while the field it recovers through was never set, which is precisely
+the kind of thing a plan-stage review cannot find.
+
+**Two that were dangerous in a smaller way.** `{ uploadId, steps: [] }` took the one-and-only claim
+and *then* got a 400 from `enqueue`, leaving an attempt stuck `claimed` with no job; `steps:
+["arc"]` would have claimed, skipped acquisition entirely, and run a model stage over an article
+that did not exist. An upload now refuses `steps`, `force` and `guidance` outright — which is what
+the documented `{ uploadId }` shape always said. And **"Re-fetch and rebuild" was offered on every
+shelf card**, including uploaded articles, where it queued a job whose first step failed with "No
+source URL" every time. It is now shown only where there is a URL, which is the actual precondition
+and covers articles too old to have one.
+
+**Three small ones, each worth its own sentence.** `claimUpload` was checking `mintedAt +
+GRANT_TTL_MS` while the record stored the issuer's `grantExpiresAt` — so `GET /api/uploads/:id`
+could say `expired` while a claim still succeeded. *Storing a value and then not consuming it is
+worse than never storing it, because the doc says it is used.* The browser read `xhr.status` for
+Storage's refusals, where the server adapter knows the real status is in the body — so a duplicate
+(outer 400, inner 409) told the reader their permission had run out. And `put()` listened for a
+future `abort` without asking `signal.aborted`, so an abort that had already happened sent 50 MB
+anyway.
+
+**And the same regex, twice.** The client router matched an upload id as `[0-9a-f-]{36}` — the right
+length and the right alphabet, and it matches thirty-six hyphens. That is the *exact* bug Sol found
+in `isStagingKey` in [`src/source.ts`](../../src/source.ts) two weeks earlier. Not exploitable
+either time; both times a guard had quietly stopped describing the thing it guards. There are
+router tests now, and they name the case.
+
+**Where I have narrowed Sol.** It rates "uploads have no owner" as High, on a two-user scenario. The
+premise is right and the *new* exposure is not: `currentOwnerId()` is process-wide and the shelf is
+not owner-filtered either ([auth.md](../project/auth.md)), so an upload without an owner is no more
+of a boundary than an article without one, and that is a recorded open decision rather than
+something this feature introduced. The record carries and checks an owner now anyway — cheap, and
+right the day it stops being trivial — with not-yours answering as not-found, because telling a
+stranger an id exists but is not theirs is telling them the id exists.
+
+It also notes that the acquisition tests call `STEPS.fetch.run` directly and so do not prove the
+work sits inside the runner's transactional markers. Fair, and unfixed: the generic runner satisfies
+that contract and the named upload test would stay green if the wiring later bypassed it.
+
+**Its confirmations are worth as much as its findings**, and it gave four: the shared `fetch` step
+name is fine and genuinely bracketed; the split interfaces and the 503 without Supabase are honest;
+leaving staging objects is right under the measured grant-replay behaviour; and **the load-bearing
+invariant holds** — neither the upload request nor the job request accepts an object path, and
+minting derives `staging/<server-generated UUID>` which acquisition derives again.
+
+### Still open, and named rather than quietly decided
+
+**An upload's slug comes from its filename.** `source.pdf` becomes `source`; `document.pdf` becomes
+`document`, then `document-2`. The reader sees the *title* everywhere that matters, so this is a
+directory name rather than anything they read — but the common filenames are common, and the
+counters will pile up.
+
+The alternative in [§ 5](#5-the-pipelines-url-assumptions) — provisional id, run pass 0, reserve
+from the title — is a **rename**, and [block-ids.md](../project/block-ids.md) is largely about why
+renames here are expensive. **Recommendation: leave it.** A slug is not a name a reader types, and
+the cost of getting a rename wrong is anchors that point nowhere while looking exactly like
+anchors. Worth Greg's call rather than mine.
+
+**And still not built, from step 7:** the sweep for abandoned uploads and staging objects, and
+resumable (TUS) uploads. Both were named as not-in-v1 above and both still are.
 
 ## See also
 

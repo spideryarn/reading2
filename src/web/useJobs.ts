@@ -133,6 +133,17 @@ export interface UseJobs {
    */
   add(url: string): Promise<Job | null>;
   /**
+   * Queue a file that has **already been sent to the object store**, by its
+   * upload id.
+   *
+   * `add`'s other half rather than an argument to it, because the two are
+   * different requests with different bodies and different failure modes: an
+   * upload can be claimed by somebody else, or its grant can have run out, and
+   * neither of those is a thing a URL can be. The bytes are long gone by the
+   * time this is called — see src/web/upload.ts, which is what sends them.
+   */
+  addUpload(uploadId: string): Promise<Job | null>;
+  /**
    * Run named steps on an article that is already on the shelf, and hand back
    * the job so the caller can watch that one rather than the whole list.
    *
@@ -317,6 +328,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
     loaded,
     error,
     add: (url) => act(() => post({ url })),
+    addUpload: (uploadId) => act(() => post({ uploadId })),
     run: (request) => act(() => post(request)),
     cancel: async (id) => {
       await act(() => send(`/api/jobs/${id}/cancel`, { method: "POST" }));

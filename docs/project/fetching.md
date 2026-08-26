@@ -288,6 +288,28 @@ Two to three attempts, because a person is waiting. 429 (honouring `Retry-After`
 will fail identically. Backoff uses **full jitter**, a delay drawn uniformly from zero to the
 ceiling.
 
+## Not everything gets fetched: `RawManifest` has an origin
+
+Since 2026-08-27 an article's raw document can also come off a **reader's own disk**
+([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). Nothing in this file runs
+for one — there is nothing to fetch — but the artefact it writes is shared, so `RawManifest`
+changed in three ways worth knowing before you read one:
+
+- **`origin`** is `"url"` or `"upload"`, and **absent means `"url"`**, which is what every manifest
+  written before this is.
+- **`requestedUrl` and `url` are optional.** They used to be required, which is the assumption that
+  would have taken the time: filling them with `file://…` or `upload://…` for an upload reads as an
+  *address* to everything downstream — `GET /api/source/:slug`, import/export, the metadata page —
+  and not one of them would have said anything. Making the typechecker ask instead is the whole
+  benefit, and it turned out to be four call sites.
+- **`uploadId` and `filename`** are there for an upload. The filename is the reader's own string,
+  kept to show them and to feed the last rung of the PDF title ladder; nothing derives a key or a
+  path from it.
+
+Both origins write the same `raw.json` with the same `sha256` over the same bytes, which is what
+lets stage 2 onwards stay ignorant of which ran. See
+[content-extraction.md](content-extraction.md).
+
 ## The user-agent question
 
 We send a **browser** string, not an honest one. This is the least comfortable decision here and it

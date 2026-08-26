@@ -27,10 +27,12 @@ import { mintId } from "./ids.js";
    src/store/index.ts — that file is the *reader's* store, and switching the
    pipeline over is a separate decision from switching reads over. */
 import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
+import { readRaw } from "./fetch.js";
 import { failureKindOf } from "./job-failure.js";
 import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
-import { errorFields, log, since } from "./log.js";
+import { errorFields, log, type Log, since } from "./log.js";
 import {
+  articleExists,
   assertProduced,
   contextPaths,
   DEFAULT_INGEST_STEPS,
@@ -40,10 +42,11 @@ import {
   STEPS,
   stepIsDone,
   type StepContext,
+  stepLabel,
   urlForSlug,
 } from "./pipeline.js";
 import type { FailureKind } from "./messages.js";
-import type { Job, JobStep, StepName } from "./types.js";
+import type { Job, JobStep, JobUpload, StepName } from "./types.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
    from either module — they are only ever used structurally, inside types.ts,
@@ -158,38 +161,107 @@ function persist(job: Job): Promise<void> {
 }
 
 /* ---------------------------------------------------------------- startup --
-   Anything on disk marked `running` or `queued` was left there by a process
-   that is no longer alive — this one has just started and its queue is empty.
-   Saying so out loud is the whole point: a status of `running` on disk does not
-   mean work is happening, and a spinner that spins for ever is the worst of the
-   available outcomes. Exactly the argument `sweepOrphaned` makes for orphaned
-   comments in src/routes.ts, and the same fix.
+   Anything on disk marked `running` was left there by a process that is no
+   longer alive — this one has just started and its queue is empty. Saying so
+   out loud is the whole point: a status of `running` on disk does not mean work
+   is happening, and a spinner that spins for ever is the worst of the available
+   outcomes. Exactly the argument `sweepOrphaned` makes for orphaned comments in
+   src/routes.ts.
 
-   The steps keep their own statuses, so a swept job still shows which stages
-   finished — and retrying it skips them. */
-
-/** What a job left running by a dead process should say instead. */
-export const STOPPED = "The server stopped before this finished.";
+   What it says instead changed on 2026-08-26, and the change is the whole of
+   `docs/plans/ingest-resume.md` § 2. */
 
 /**
- * Mark a job abandoned by a restart, in place. Returns true if anything changed.
+ * A job the process stopped under is **waiting**, not failed.
  *
- * Pure and exported so it can be tested, because the thing it gets wrong is
- * invisible: leave a step at `running` and the panel shows a spinner for work
- * nothing is doing, for ever.
+ * Returns true if anything changed, so the caller knows whether to write.
+ *
+ * ## Why this stopped meaning `error`
+ *
+ * It used to mark the job `error` with *"The server stopped before this
+ * finished"*, and mark its running step `error` too. That reasoning was sound
+ * for one long-lived process — this process has just started, so nothing can be
+ * running, so anything that says it is running is a lie — and it is wrong the
+ * moment work is *expected* to pause and continue. Closing a tab, restarting
+ * the dev server, or a serverless instance being torn down between steps are
+ * all interruptions, not faults, and calling them failures put a red card and a
+ * Retry button in front of the reader for something that had gone perfectly
+ * well up to that point.
+ *
+ * With `POST /api/jobs/:id/advance` (`advanceJob` below) there is now something
+ * that picks a paused job back up, so "waiting" is a state with a way out of it
+ * rather than a nicer word for stuck.
+ *
+ * ## Why `queued` and not a sixth status
+ *
+ * Because `queued` already means exactly this: *nobody is running this job and
+ * it still has work to do*. A `waiting` or `paused` member of `JobStatus` would
+ * have to be learned by every switch over it — `isBusy` in
+ * src/web/useJobs.ts, `activeFor` and `prune` and `forgetJob` here, the busy
+ * check on the card in src/web/AddArticle.tsx — and every one of those would
+ * want to treat it the way it already treats `queued`. A status nothing
+ * distinguishes is not a status.
+ *
+ * The one thing this loses is the *reason* the job stopped, and it is worth
+ * losing: a job that carries on where it left off does not need to explain an
+ * interruption the reader may never have noticed.
+ *
+ * ## The running step goes back to `pending`, not to `error`
+ *
+ * It did not fail; it did not happen. `beginStep`'s marker in the artefact
+ * store (src/store/artifacts.ts) is what stops its half-written output being
+ * mistaken for a finished one, so `stepIsDone` will answer false and the step
+ * will run again — which is the resume, and it is derived from the artefacts
+ * rather than from this status.
+ *
+ * ## Except when the reader had already pressed Stop
+ *
+ * `cancelling` means an abort was asked for and had not landed when the process
+ * went. Nothing is going to deliver it now, and resuming a job somebody stopped
+ * would be the one interruption they *did* notice. So that one lands
+ * `cancelled`, which is what they asked for.
  */
 export function sweepStopped(job: Job): boolean {
   if (job.status !== "running" && job.status !== "queued") return false;
-  job.status = "error";
-  job.error = STOPPED;
-  job.finishedAt = new Date().toISOString();
+
+  let changed = false;
   for (const step of job.steps) {
     if (step.status === "running") {
-      step.status = "error";
-      step.error = STOPPED;
+      step.status = "pending";
+      delete step.startedAt;
+      changed = true;
     }
   }
-  return true;
+
+  if (job.cancelling) {
+    markCancelled(job);
+    return true;
+  }
+
+  if (job.status !== "queued") {
+    job.status = "queued";
+    changed = true;
+  }
+  return changed;
+}
+
+/** The three statuses a job never leaves. */
+function isFinished(job: Job): boolean {
+  return job.status === "done" || job.status === "error" || job.status === "cancelled";
+}
+
+/**
+ * The reader stopped it — the same four fields wherever that is decided.
+ *
+ * Four assignments written out at four call sites is four chances to forget
+ * `delete job.cancelling`, which is the one that matters: leave it set and the
+ * card's Stop button stays disabled on a job that has already stopped.
+ */
+function markCancelled(job: Job, message?: string): void {
+  job.status = "cancelled";
+  if (message !== undefined) job.error = message;
+  job.finishedAt = new Date().toISOString();
+  delete job.cancelling;
 }
 
 /**
@@ -313,8 +385,212 @@ function recordFailureKind(job: Job, kind: FailureKind | undefined): void {
   else delete job.failureKind;
 }
 
-function newStep(name: StepName, force: boolean): JobStep {
-  return { name, label: STEPS[name].label, status: "pending", ...(force ? { force: true } : {}) };
+function newStep(name: StepName, force: boolean, upload: boolean): JobStep {
+  return {
+    name,
+    label: stepLabel(name, upload),
+    status: "pending",
+    ...(force ? { force: true } : {}),
+  };
+}
+
+/**
+ * Should this step run even though its artefact is already on disk?
+ *
+ * `force` is a **request**, and a request is spent once it has been honoured.
+ * Inside `runJob` that distinction never comes up — a job runs its steps once,
+ * top to bottom, and every step reaches the runner at `pending`. It comes up
+ * the moment `advanceJob` runs one step per request: the second call would read
+ * the same `force: true` on a step the first call had just re-run, force it
+ * again, and keep forcing it for ever. A refresh would never finish and would
+ * bill a model call a minute for as long as a tab was open.
+ *
+ * **This is the one thing advance has to remember rather than derive**, and it
+ * is worth naming why, because the rule everywhere else is the opposite (see
+ * `advanceJob`). "Has this step's output been rebuilt since the reader asked
+ * for it to be" is not a question the artefacts can answer — a forced `toc`
+ * writes a `tree.json` that looks exactly like the one it replaced. The job
+ * record is the only account of it there is.
+ */
+function stillForced(step: JobStep): boolean {
+  return step.force === true && step.status !== "done";
+}
+
+/** What one step of a job did. */
+type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
+
+/**
+ * Run — or skip — exactly one step, recording all of it on the job.
+ *
+ * The single implementation of "do this step", shared by the two things that
+ * drive a job: `runJob`, which loops it until the job ends, and `advanceJob`,
+ * which calls it once per HTTP request. Two copies of this would be two places
+ * to keep the marker discipline, the cancel bookkeeping and the failure kinds
+ * in step, and they would drift on the first change to any of them.
+ *
+ * **Never throws.** A failure is an outcome, recorded on the job and on the
+ * step, because both callers have to persist the same story about it.
+ */
+async function runStep(
+  job: Job,
+  step: JobStep,
+  controller: AbortController,
+  jlog: Log,
+): Promise<StepOutcome> {
+  const { dir, htmlFile } = contextPaths(job.slug);
+
+  const ctx: StepContext = {
+    slug: job.slug,
+    ...(job.url ? { url: job.url } : {}),
+    ...(job.upload ? { upload: job.upload } : {}),
+    dir,
+    htmlFile,
+    // In memory only. Persisting at this rate would be two writes a second
+    // per running job, to record something nobody reads afterwards.
+    report: (detail: string) => {
+      step.detail = detail;
+    },
+    signal: controller.signal,
+    /* Only pay to cache the article if something still to come in *this job*
+       can read it. `job.steps` is the whole plan, so the steps after this one
+       are the ones that could — see `sharesArticleCache`, and
+       docs/project/prompt-caching.md for why the answer is usually no. */
+    cacheArticle: sharesArticleCache(
+      step.name,
+      job.steps.slice(job.steps.indexOf(step) + 1).map((s) => s.name),
+    ),
+    ...(job.guidance !== undefined && { guidance: job.guidance }),
+    ...(job.profile !== undefined && { profile: job.profile }),
+  };
+
+  if (!stillForced(step) && (await stepIsDone(STEPS[step.name], ctx, pipelineStore))) {
+    /* **A step this job already ran keeps saying so.** `runJob` never meets
+       this case — it visits each step once, at `pending` — but `advanceJob`
+       walks the whole list on every call, so without the guard the second
+       request would relabel the first request's work `skipped` and replace
+       whatever it reported ("12 KB", the article's title) with "already done".
+       The reader would watch the card lose its own progress, one row per step.
+
+       The `stepIsDone` check still runs and still decides. This only chooses
+       the word for a yes. */
+    if (step.status !== "done") {
+      step.status = "skipped";
+      step.detail = "already done";
+    }
+    // `debug`, not `info`. Most steps of most jobs skip — a re-run of one
+    // stage skips the four before it — so at `info` this would be the bulk of
+    // the log and the lines that matter would be sitting in it.
+    jlog.debug({ step: step.name }, `step skipped: ${step.name} — ${job.slug}`);
+    await persist(job);
+    return "skipped";
+  }
+
+  /* Timed here rather than read back off `startedAt`/`finishedAt`. Those are
+     ISO strings because they go to the browser, and a duration you have to
+     subtract two strings to get is a duration nobody charts. */
+  const stepStarted = Date.now();
+  step.status = "running";
+  step.startedAt = new Date().toISOString();
+  delete step.error;
+  jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
+  await persist(job);
+
+  try {
+    /* Bracketing the run, not decorating it. A step that dies between two of
+       its own writes leaves artefacts that all exist and all parse and
+       describe two different generations, and nothing about the files can
+       say so — so the marker is what says so. It is cleared only on the
+       success path below, which means a throw, a cancel or a kill all leave
+       the step honestly not-done. See `beginStep` in
+       src/store/artifacts.ts. */
+    const attempt = await pipelineStore.beginStep(job.slug, step.name);
+    step.detail = await STEPS[step.name].run(ctx);
+    await assertProduced(STEPS[step.name], ctx, pipelineStore);
+    /* **Before the abort check, not after.** A cancel here is about the job,
+       not about this step: `run` returned and its postcondition passed, so
+       the work is real and paid for. Clearing the marker after the throw
+       would leave a completed step looking interrupted, and the Retry that
+       follows a cancel would buy the same model call twice. */
+    await pipelineStore.finishStep(job.slug, step.name, attempt);
+    step.status = "done";
+    step.finishedAt = new Date().toISOString();
+    /* **`step.detail` is deliberately not logged**, though it is the obvious
+       thing to put here and the first version did.
+
+       `detail` is whatever a step chose to return, so what it holds is a
+       different kind of thing for each one — and for `extract` it is the
+       article's title, which is article content on a line that goes out at
+       production `info`. The generic field is the problem rather than the
+       title: a step added later can put anything in it, and nothing in this
+       file would notice.
+
+       Nothing diagnostic is lost. src/pipeline.ts logs each step's real
+       numbers — tokens, model, block counts — under the `pipeline`
+       component, where the fields are named and auditable. Found by
+       GPT/Codex reviewing this change. */
+    jlog.info({ step: step.name, ms: since(stepStarted) }, `step done: ${step.name} — ${job.slug}`);
+    // The title only exists once extraction has run, and the moment it does
+    // is the moment the progress card can stop calling the article by its slug.
+    if (step.name === "extract") job.title = step.detail;
+    await persist(job);
+    return "ran";
+  } catch (err) {
+    const message = (err as Error).message;
+    /* A cancel unwinds through here too — the `throw new Error("Cancelled")`
+       above, and any step that honours the signal by throwing. The reader
+       pressing Stop is not a fault of the step's, and giving it an `error`
+       line would make Stop the most common error in the log. The job's own
+       `warn` below is the record of it.
+
+       The message string says which step and which article and stops there:
+       an error's own text can carry the URL, or whatever a remote server put
+       in a body, and rule 3 in src/log.ts is that `redact` cannot reach
+       anything inside `msg`. The full error goes in the object, where it can. */
+    if (controller.signal.aborted) {
+      jlog.debug(
+        { step: step.name, ms: since(stepStarted) },
+        `step cancelled: ${step.name} — ${job.slug}`,
+      );
+    } else {
+      jlog.error(
+        { ...errorFields(err), step: step.name, ms: since(stepStarted) },
+        `step failed: ${step.name} — ${job.slug}`,
+      );
+    }
+    step.status = "error";
+    step.error = message;
+    step.finishedAt = new Date().toISOString();
+    if (controller.signal.aborted) {
+      markCancelled(job, message);
+      /* Not on a cancel: the reader stopped it, and a stopped job is always
+         worth starting again. */
+      recordFailureKind(job, undefined);
+      await persist(job);
+      return "cancelled";
+    }
+    job.status = "error";
+    job.error = message;
+    recordFailureKind(job, failureKindOf(err));
+    job.finishedAt = new Date().toISOString();
+    delete job.cancelling;
+    await persist(job);
+    return "failed";
+  }
+}
+
+/**
+ * Every step is done or skipped: close the job off.
+ *
+ * Shared by both drivers for the same reason `runStep` is — the pruning and the
+ * one-line-per-job log are part of finishing, not part of looping.
+ */
+async function finishDone(job: Job, jlog: Log, startedMs: number): Promise<void> {
+  job.status = "done";
+  job.finishedAt = new Date().toISOString();
+  delete job.cancelling;
+  await persist(job);
+  jlog.info({ ms: since(startedMs), status: "done" }, `job done: ${job.slug}`);
+  await prune();
 }
 
 /**
@@ -349,9 +625,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
   // p-queue no longer removes it (see the note at `queue.add`) — so the check
   // belongs here, before anything is written.
   if (controller.signal.aborted) {
-    job.status = "cancelled";
-    job.finishedAt = new Date().toISOString();
-    delete job.cancelling;
+    markCancelled(job);
     await persist(job);
     finished("cancelled");
     return;
@@ -361,170 +635,217 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
   job.startedAt = new Date().toISOString();
   await persist(job);
 
-  const { dir, htmlFile } = contextPaths(job.slug);
-
   for (const step of job.steps) {
     if (controller.signal.aborted) {
-      job.status = "cancelled";
-      job.finishedAt = new Date().toISOString();
-      delete job.cancelling;
+      markCancelled(job);
       await persist(job);
       finished("cancelled");
       return;
     }
 
-    const ctx: StepContext = {
-      slug: job.slug,
-      ...(job.url ? { url: job.url } : {}),
-      dir,
-      htmlFile,
-      // In memory only. Persisting at this rate would be two writes a second
-      // per running job, to record something nobody reads afterwards.
-      report: (detail: string) => {
-        step.detail = detail;
-      },
-      signal: controller.signal,
-      /* Only pay to cache the article if something still to come in *this job*
-         can read it. `job.steps` is the whole plan, so the steps after this one
-         are the ones that could — see `sharesArticleCache`, and
-         docs/project/prompt-caching.md for why the answer is usually no. */
-      cacheArticle: sharesArticleCache(
-        step.name,
-        job.steps.slice(job.steps.indexOf(step) + 1).map((s) => s.name),
-      ),
-      ...(job.guidance !== undefined && { guidance: job.guidance }),
-      ...(job.profile !== undefined && { profile: job.profile }),
-    };
-
-    if (!step.force && (await stepIsDone(STEPS[step.name], ctx, pipelineStore))) {
-      step.status = "skipped";
-      step.detail = "already done";
-      // `debug`, not `info`. Most steps of most jobs skip — a re-run of one
-      // stage skips the four before it — so at `info` this would be the bulk of
-      // the log and the lines that matter would be sitting in it.
-      jlog.debug({ step: step.name }, `step skipped: ${step.name} — ${job.slug}`);
-      await persist(job);
-      continue;
+    const outcome = await runStep(job, step, controller, jlog);
+    if (outcome === "cancelled" || outcome === "failed") {
+      finished(job.status);
+      return;
     }
 
-    /* Timed here rather than read back off `startedAt`/`finishedAt`. Those are
-       ISO strings because they go to the browser, and a duration you have to
-       subtract two strings to get is a duration nobody charts. */
-    const stepStarted = Date.now();
-    step.status = "running";
-    step.startedAt = new Date().toISOString();
-    delete step.error;
-    jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
-    await persist(job);
+    /* Checked after as well as before — a step that ignores the signal runs
+       to completion regardless, and starting the next one would spend a
+       model call on a job the reader has already stopped.
+       **And checked here, after this step is recorded done, rather than by
+       throwing.** Unwinding a finished step through `runStep`'s catch marked it
+       `error`, and `forceForRetry` then forces the first step that is not
+       done — so pressing Stop as `toc` finished, then Retry, bought that
+       model call a second time. Moving `finishStep` earlier did not fix that
+       on its own, because the *job record*, not the marker, is what Retry
+       reads. Found by review, 2026-08-26; the first fix for it was
+       incomplete.
 
-    try {
-      /* Bracketing the run, not decorating it. A step that dies between two of
-         its own writes leaves artefacts that all exist and all parse and
-         describe two different generations, and nothing about the files can
-         say so — so the marker is what says so. It is cleared only on the
-         success path below, which means a throw, a cancel or a kill all leave
-         the step honestly not-done. See `beginStep` in
-         src/store/artifacts.ts. */
-      const attempt = await pipelineStore.beginStep(job.slug, step.name);
-      step.detail = await STEPS[step.name].run(ctx);
-      await assertProduced(STEPS[step.name], ctx, pipelineStore);
-      /* **Before the abort check, not after.** A cancel here is about the job,
-         not about this step: `run` returned and its postcondition passed, so
-         the work is real and paid for. Clearing the marker after the throw
-         would leave a completed step looking interrupted, and the Retry that
-         follows a cancel would buy the same model call twice. */
-      await pipelineStore.finishStep(job.slug, step.name, attempt);
-      step.status = "done";
-      step.finishedAt = new Date().toISOString();
-      /* **`step.detail` is deliberately not logged**, though it is the obvious
-         thing to put here and the first version did.
-
-         `detail` is whatever a step chose to return, so what it holds is a
-         different kind of thing for each one — and for `extract` it is the
-         article's title, which is article content on a line that goes out at
-         production `info`. The generic field is the problem rather than the
-         title: a step added later can put anything in it, and nothing in this
-         file would notice.
-
-         Nothing diagnostic is lost. src/pipeline.ts logs each step's real
-         numbers — tokens, model, block counts — under the `pipeline`
-         component, where the fields are named and auditable. Found by
-         GPT/Codex reviewing this change. */
-      jlog.info({ step: step.name, ms: since(stepStarted) }, `step done: ${step.name} — ${job.slug}`);
-      // The title only exists once extraction has run, and the moment it does
-      // is the moment the progress card can stop calling the article by its slug.
-      if (step.name === "extract") job.title = step.detail;
+       Only after a step that actually **ran**. A skip costs nothing and did not
+       observe the signal, so the check at the top of the next turn is the right
+       place to notice a cancel that arrived during one. */
+    if (outcome === "ran" && controller.signal.aborted) {
+      jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
+      markCancelled(job, "Cancelled");
       await persist(job);
-
-      /* Checked after as well as before — a step that ignores the signal runs
-         to completion regardless, and starting the next one would spend a
-         model call on a job the reader has already stopped.
-         **And checked here, after this step is recorded done, rather than by
-         throwing.** Unwinding a finished step through the catch below marked it
-         `error`, and `forceForRetry` then forces the first step that is not
-         done — so pressing Stop as `toc` finished, then Retry, bought that
-         model call a second time. Moving `finishStep` earlier did not fix that
-         on its own, because the *job record*, not the marker, is what Retry
-         reads. Found by review, 2026-08-26; the first fix for it was
-         incomplete. */
-      if (controller.signal.aborted) {
-        jlog.debug(
-          { step: step.name },
-          `job cancelled after ${step.name} — ${job.slug}`,
-        );
-        job.status = "cancelled";
-        job.error = "Cancelled";
-        job.finishedAt = new Date().toISOString();
-        delete job.cancelling;
-        await persist(job);
-        finished("cancelled");
-        return;
-      }
-    } catch (err) {
-      const message = (err as Error).message;
-      /* A cancel unwinds through here too — the `throw new Error("Cancelled")`
-         above, and any step that honours the signal by throwing. The reader
-         pressing Stop is not a fault of the step's, and giving it an `error`
-         line would make Stop the most common error in the log. The job's own
-         `warn` below is the record of it.
-
-         The message string says which step and which article and stops there:
-         an error's own text can carry the URL, or whatever a remote server put
-         in a body, and rule 3 in src/log.ts is that `redact` cannot reach
-         anything inside `msg`. The full error goes in the object, where it can. */
-      if (controller.signal.aborted) {
-        jlog.debug(
-          { step: step.name, ms: since(stepStarted) },
-          `step cancelled: ${step.name} — ${job.slug}`,
-        );
-      } else {
-        jlog.error(
-          { ...errorFields(err), step: step.name, ms: since(stepStarted) },
-          `step failed: ${step.name} — ${job.slug}`,
-        );
-      }
-      step.status = "error";
-      step.error = message;
-      step.finishedAt = new Date().toISOString();
-      job.status = controller.signal.aborted ? "cancelled" : "error";
-      job.error = message;
-      /* Not on a cancel: the reader stopped it, and a stopped job is always
-         worth starting again. */
-      recordFailureKind(job, controller.signal.aborted ? undefined : failureKindOf(err));
-      job.finishedAt = new Date().toISOString();
-      delete job.cancelling;
-      await persist(job);
-      finished(job.status);
+      finished("cancelled");
       return;
     }
   }
 
-  job.status = "done";
-  job.finishedAt = new Date().toISOString();
-  delete job.cancelling;
-  await persist(job);
-  finished("done");
-  await prune();
+  await finishDone(job, jlog, jobStarted);
+}
+
+/* ------------------------------------------------------------- advancing --
+
+   The other way a job moves: one step per HTTP request, driven by whoever is
+   watching it. Designed in docs/plans/job-queue-rethink.md § Decided, and it is
+   what makes docs/plans/ingest-resume.md work.
+   -------------------------------------------------------------------------- */
+
+/**
+ * Jobs an `advanceJob` call is inside a step of, right now, in this process.
+ *
+ * Separate from `aborts` even though `advanceJob` writes to both, because the
+ * two answer different questions: `aborts` is *"can this be stopped"* and is
+ * also set for every job sitting in the p-queue, while this is *"is a request
+ * already running a step of this one"*. Keeping them apart is what lets the
+ * log line say which of the two owners turned a caller away.
+ */
+const advancing = new Set<string>();
+
+/** What one `POST /api/jobs/:id/advance` did. */
+export interface Advanced {
+  /** The job as it now stands — the same record `GET /api/jobs/:id` returns. */
+  job: Job;
+  /** The step this call ran, if it ran one. Null when it only skipped, or was turned away. */
+  ran: StepName | null;
+  /** Somebody else is running a step of this job. Nothing was done; ask again shortly. */
+  busy: boolean;
+  /** There is nothing left to do. The caller's loop stops on this and only this. */
+  done: boolean;
+}
+
+/**
+ * Run **exactly one** not-yet-done step of a job, and say what happened.
+ *
+ * This is the browser-driven half of the queue, and the whole of the design is
+ * in three properties:
+ *
+ * **The caller cannot name a step.** It says *advance this job* and the server
+ * works out which step that means. So a client cannot skip a stage, re-order
+ * two, or run one twice — the three things that produce an article whose tree
+ * describes a previous version of its own text, with a row of green ticks over
+ * it.
+ *
+ * **What is done is derived, not remembered.** Every step is asked
+ * `stepIsDone`, which reads the *artefacts* (src/pipeline.ts): does this step's
+ * output exist, was it made from this article, by this prompt, by this model,
+ * and did the run that wrote it finish. So a job resumed a week later starts
+ * wherever the files say, and there is no second account of progress that can
+ * drift from the first. `stillForced` above is the one deliberate exception and
+ * says why.
+ *
+ * **It is idempotent.** On a finished job it does nothing and reports `done`.
+ * Called twice at once, the second call is turned away with `busy` rather than
+ * starting a second runner over the same files.
+ *
+ * ## How this and the in-process queue keep out of each other's way
+ *
+ * They do not share work; they take turns, and the rule is **advance refuses
+ * while the queue owns the job**.
+ *
+ * `enqueue` puts an `AbortController` in `aborts` the moment it creates a job
+ * and removes it only when the p-queue's promise for that job has settled — so
+ * `aborts.has(id)` is exactly "this process still intends to run it". Advance
+ * checks that first and answers `busy`, which the client reads as *wait and ask
+ * again*. Nothing is lost: the queue is finishing the job, and the browser's
+ * poll shows it happening.
+ *
+ * That makes advance a **no-op for a job this process queued**, which is most
+ * jobs on this laptop, and exactly the point. What is left for it is the case
+ * the queue cannot serve: a job whose process is gone. On Vercel that is every
+ * job after the invocation that started it freezes; here it is a job that
+ * survived a dev-server restart, which `sweepStopped` now leaves `queued` and
+ * waiting rather than marking failed.
+ *
+ * **What this deliberately does not do:** take a job away from an owner that
+ * has stopped making progress. A frozen instance that still holds an entry in
+ * `aborts` will keep answering `busy` for as long as it lives, and no amount of
+ * elapsed time will change that answer. Guessing that an owner is dead is how
+ * two runners end up writing one article — the fault
+ * docs/plans/job-queue-rethink.md names in pgmq — and the honest fix is the
+ * attempt token and the fenced write, which is item 2 and item 3 of that plan's
+ * list and is not built yet. Until then the recovery is Stop, then Retry.
+ *
+ * @returns null if there is no such job, so the route can 404.
+ */
+export async function advanceJob(id: string): Promise<Advanced | null> {
+  await ready();
+  const job = jobs.get(id);
+  if (!job) return null;
+
+  // Already over. Safe to call for ever, which is what makes a client loop that
+  // races its own poll harmless.
+  if (isFinished(job)) return { job, ran: null, busy: false, done: true };
+
+  /* Somebody else has it. The p-queue (see the note above) or another request
+     mid-step. `cancelling` counts too: Stop has been pressed and the abort has
+     not landed, so starting another step would spend a model call on a job the
+     reader has already stopped. */
+  if (aborts.has(job.id) || advancing.has(job.id) || job.cancelling === true) {
+    return { job, ran: null, busy: true, done: false };
+  }
+
+  /* A child logger, made here and used locally — never a module-level "current
+     job". Rule 4 at the top of src/log.ts, and it matters more here than in
+     `runJob`: several advance requests for *different* jobs really can be in
+     flight in one instance at once. */
+  const jlog = log("jobs").child({ jobId: job.id, slug: job.slug });
+  const startedMs = Date.now();
+  const controller = new AbortController();
+
+  /* Claimed **synchronously**, before the first `await` below. Two requests
+     arriving together are two turns of one event loop, so as long as nothing
+     yields between the check above and these two lines, the second one sees the
+     claim. Put an `await` in that gap and both start a step. */
+  advancing.add(job.id);
+  aborts.set(job.id, controller);
+
+  try {
+    if (job.status !== "running") {
+      job.status = "running";
+      // `??=`: a resumed job started once already, and the card's "how long has
+      // this been going" should not restart every time a tab picks it back up.
+      job.startedAt ??= new Date().toISOString();
+      await persist(job);
+    }
+
+    for (const step of job.steps) {
+      const outcome = await runStep(job, step, controller, jlog);
+
+      if (outcome === "skipped") continue;
+
+      if (outcome === "cancelled" || outcome === "failed") {
+        /* Read off the outcome rather than off `job.status`, which the compiler
+           has narrowed to "running" from the assignment above and cannot know
+           `runStep` just changed. Same two lines `runJob`'s `finished` writes:
+           `warn` for a cancel, because the reader chose it and it is neither a
+           fault nor a clean finish; `info` for an error, because the step that
+           failed has already logged the stack. */
+        const status = outcome === "cancelled" ? "cancelled" : "error";
+        const line = { ms: since(startedMs), status, step: step.name };
+        if (status === "cancelled") jlog.warn(line, `job cancelled: ${job.slug}`);
+        else jlog.info(line, `job error: ${job.slug}`);
+        return { job, ran: step.name, busy: false, done: true };
+      }
+
+      // It ran. One step per call, so stop here — even if the next one would
+      // only skip. The caller comes straight back for it, and a request that
+      // returns keeps every step inside its own serverless invocation, which
+      // is the whole reason this endpoint exists.
+      if (controller.signal.aborted) {
+        jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
+        markCancelled(job, "Cancelled");
+        await persist(job);
+        return { job, ran: step.name, busy: false, done: true };
+      }
+      const finished = job.steps.every((s) => s.status === "done" || s.status === "skipped");
+      if (finished) await finishDone(job, jlog, startedMs);
+      return { job, ran: step.name, busy: false, done: finished };
+    }
+
+    // Every step skipped: there was nothing left to do. A job re-added after
+    // its article was already on the shelf lands here on its first call.
+    await finishDone(job, jlog, startedMs);
+    return { job, ran: null, busy: false, done: true };
+  } finally {
+    advancing.delete(job.id);
+    // Only ours. `aborts` is keyed by job id and this call put the entry there,
+    // so deleting it here cannot take the p-queue's — the check at the top
+    // guarantees there wasn't one.
+    aborts.delete(job.id);
+  }
 }
 
 /* -------------------------------------------------------------------- api -- */
@@ -532,6 +853,16 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
 export interface EnqueueRequest {
   slug: string;
   url?: string;
+  /**
+   * The file this article is being made from, when it came off the reader's disk.
+   *
+   * **Mutually exclusive with `url` in practice**, though not in the type: a
+   * job acquires its document one way or the other, and it is the route's job
+   * to refuse a request naming both. Typed as optional-and-optional rather than
+   * a union because the third shape is real and common — `{ slug, steps }`, a
+   * late stage re-run on an article already on the shelf, which has neither.
+   */
+  upload?: JobUpload;
   /**
    * Which steps to run. Sorted into pipeline order here.
    *
@@ -601,8 +932,17 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   // A fresh add carries a URL; a late step run on its own takes it from disk.
   // When both exist and disagree, `freeSlug` has already moved us to a slug of
   // our own, so this cannot silently adopt somebody else's article.
-  const slug = request.url ? await freeSlug(request.slug, request.url) : request.slug;
-  const url = request.url ?? (await urlForSlug(slug));
+  let slug = request.url
+    ? await freeSlug(request.slug, request.url)
+    : request.upload
+      ? await freeUploadSlug(request.slug, request.upload.id)
+      : request.slug;
+  /* **Never for an upload**, and not only because it would find nothing. It
+     reads the `meta.json` at `slug`, and `slug` can still move below — so a
+     URL read here from an article we then step aside from would be carried onto
+     a job for a *different* document. It is also an `await`, and the
+     reconciliation below has to be the last thing before the insert. */
+  const url = request.url ?? (request.upload ? undefined : await urlForSlug(slug));
   const forced = cascadeForce(names, new Set(request.force ?? []));
 
   // Already in hand: hand back the job doing it rather than starting a second
@@ -617,14 +957,49 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   // happened. Anything else queues behind, which is safe: concurrency is 1 and
   // a cancelled job now really does release its slot last (see `queue.add`).
   const running = activeFor(slug);
-  if (running && sameWork(running, names, forced, request.guidance, request.profile))
+  if (running && sameWork(running, names, forced, request.guidance, request.profile, request.upload))
     return running;
+
+  /* **The last word on the slug, and it has to be here rather than in
+     `freeUploadSlug`.** That function does I/O — `articleExists` reads a file —
+     so between the answer it gives and the `jobs.set` below there is an `await`
+     that another request can run inside. Two uploads called `paper.pdf`,
+     arriving together, both see `paper` free and both take it; `sameWork` says
+     they are different work, so neither is handed the other's job, and the
+     second one's steps then find the first one's artefacts, skip, and report a
+     row of successes over somebody else's document.
+
+     From here to `jobs.set` there is no `await`, and `activeFor` reads the same
+     in-memory map, so re-asking synchronously closes the window completely
+     *within this process*. Across processes it does not, and nothing in this
+     file does — that is the same gap `data/_jobs/` has, and it closes when the
+     queue moves to Postgres (docs/plans/job-queue-rethink.md).
+
+     Uploads only. A URL is allowed to land on an existing slug: `freeSlug`
+     compares `urlKey`, so an occupied slug means *the same article*, which is
+     exactly what should be joined rather than avoided. GPT Sol, 2026-08-27. */
+  if (request.upload) {
+    for (let tries = 0; tries < 20; tries++) {
+      const held = activeFor(slug);
+      /* Free, or held by this very upload (a retry). Either way it is ours, and
+         **this check is the last thing before the insert with no `await` after
+         it** — which is what makes it airtight rather than merely narrower. */
+      if (!held || held.upload?.id === request.upload.id) break;
+      /* Re-allocated rather than bumped with a counter. The racing job is in
+         the map now, so `freeUploadSlug` *sees* it this time and derives the
+         next free name properly — where a counter appended here would have to
+         guess, and could land on a finished article's slug that only
+         `articleExists` knows about. */
+      slug = await freeUploadSlug(request.slug, request.upload.id);
+    }
+  }
 
   const job: Job = {
     id: mintId(),
     slug,
     ...(url ? { url } : {}),
-    steps: names.map((n) => newStep(n, forced.has(n))),
+    ...(request.upload ? { upload: request.upload } : {}),
+    steps: names.map((n) => newStep(n, forced.has(n), request.upload !== undefined)),
     status: "queued",
     createdAt: new Date().toISOString(),
     ...(request.guidance ? { guidance: request.guidance } : {}),
@@ -724,8 +1099,17 @@ function sameWork(
   forced: Set<StepName>,
   guidance?: string,
   profile?: string,
+  upload?: JobUpload,
 ): boolean {
   if (job.steps.length !== names.length) return false;
+  /* **Two uploads are never one piece of work**, whatever they are called and
+     whatever steps they name. This is belt and braces — `freeUploadSlug` never
+     hands two attempts the same slug, so `activeFor` should not have found the
+     other one at all — and it is here because the cost of the two mechanisms
+     disagreeing is that a reader watches somebody else's document succeed
+     under their own filename. Sol's finding on the plan: `sameWork` compares
+     steps, guidance and profile only, and had no upload identity at all. */
+  if ((job.upload?.id ?? "") !== (upload?.id ?? "")) return false;
   if ((job.guidance ?? "") !== (guidance ?? "")) return false;
   /* And the profile, for the identical reason one field up — plus a sharper
      one. Unticking "use your profile" and pressing the button again is a
@@ -811,6 +1195,71 @@ export async function freeSlug(
     if (!(await taken(numbered))) return numbered;
   }
   throw Object.assign(new Error(`Too many articles already called "${slug}".`), { status: 409 });
+}
+
+/**
+ * A slug for an uploaded file that is **not already something else's**, ever.
+ *
+ * The sibling of `freeSlug`, and the difference is the whole of it: `freeSlug`
+ * may *adopt* an existing slug, because the thing that decides is `urlKey` and
+ * two spellings of one address really are one article. An upload has no address
+ * to compare, so there is nothing that could make two of them the same article
+ * — and Greg's answer settles what that means:
+ *
+ * > If it was previously uploaded by a different user, then reuse the source
+ * > object, but add a new per-user article object.
+ * >
+ * > — Greg, 2026-08-26
+ *
+ * A new article every time. The source object is shared by content hash in the
+ * blob store (`canonicalKey`), which is where sharing belongs; the *article* is
+ * per-reader and per-upload, so two files called `paper.pdf` get two of them.
+ *
+ * **The existence check is `articleExists`, not `urlForSlug`.** An uploaded
+ * article has no URL in its `meta.json`, so the lookup `freeSlug` uses reads
+ * `undefined` for one and calls the slug free. That is the exact collision the
+ * plan's test asserts against, and it fails open — every step finds an
+ * artefact, skips, and the reader is shown a different document under their own
+ * filename in about a second. See docs/reusable/silent-success.md.
+ *
+ * The counter is deliberately the only fallback. `freeSlug` can prefix a host
+ * because a URL has one; a filename has nothing equivalent, and prefixing the
+ * upload id would make a directory name nobody can read.
+ */
+export async function freeUploadSlug(
+  slug: string,
+  uploadId: string,
+  claimed: (candidate: string, mine: string) => Promise<boolean> = slugIsSpokenFor,
+): Promise<string> {
+  if (!(await claimed(slug, uploadId))) return slug;
+  for (let n = 2; n < 100; n++) {
+    const numbered = `${slug}-${n}`;
+    if (isSlug(numbered) && !(await claimed(numbered, uploadId))) return numbered;
+  }
+  throw Object.assign(new Error(`Too many articles already called "${slug}".`), { status: 409 });
+}
+
+/**
+ * Is this slug something *other* than this upload's own article?
+ *
+ * The `mine` argument is what makes Retry work, and leaving it out is a bug
+ * that only shows on the second attempt: without it, retrying a job whose
+ * `paper.pdf` already reached stage 3 finds `data/paper/` occupied — by itself
+ * — steps aside to `paper-2`, and re-runs from the top, paying for the
+ * transcription a second time and leaving a half-built `paper` behind. An
+ * article is this upload's own when its manifest says so, which is a fact on
+ * disk rather than a flag anyone has to remember to pass.
+ *
+ * A job in flight counts as a claim too. A finished `meta.json` is not the only
+ * way a slug is spoken for — two uploads a few seconds apart would otherwise
+ * both find the directory empty and both take it.
+ */
+async function slugIsSpokenFor(candidate: string, mine: string): Promise<boolean> {
+  const other = activeFor(candidate);
+  if (other && other.upload?.id !== mine) return true;
+  if (!(await articleExists(candidate))) return false;
+  const manifest = await readRaw(contextPaths(candidate).dir);
+  return !(manifest?.origin === "upload" && manifest.uploadId === mine);
 }
 
 /**
@@ -922,6 +1371,7 @@ export async function retryJob(id: string): Promise<Job | null> {
   return await enqueue({
     slug: old.slug,
     ...(old.url ? { url: old.url } : {}),
+    ...(old.upload ? { upload: old.upload } : {}),
     steps: old.steps.map((s) => s.name),
     force: forceForRetry(old.steps),
     // Copied, unlike force. The steer is not a thing the first attempt used up

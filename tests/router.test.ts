@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addHref,
+  addUploadHref,
   addUrlFrom,
   addUrlFromQuery,
   canonicalAddHref,
@@ -194,6 +195,60 @@ describe("the add route", () => {
  * a raw paste has had its query string and fragment taken off it by the browser
  * before anybody looks, and main.tsx is the only place they can be put back.
  */
+/**
+ * `/add/upload/<uploadId>` — the one `/add/` address whose parameter is one of
+ * ours rather than somebody else's.
+ */
+describe("the upload route", () => {
+  const ID = "069894e5-aa66-48b0-8e25-a35c508777ef";
+
+  it("reads an upload id, and the href round-trips", () => {
+    expect(parseRoute(`/add/upload/${ID}`)).toEqual({ kind: "add-upload", uploadId: ID });
+    expect(parseRoute(addUploadHref(ID))).toEqual({ kind: "add-upload", uploadId: ID });
+  });
+
+  /* An id is hex, and a URL path is not reliably one case or the other — a
+     copied address can arrive shouting. Lower-cased on the way in so that the
+     server, which matches lower-case, is asked about the same string. */
+  it("accepts the shouted spelling, and a trailing slash", () => {
+    expect(parseRoute(`/add/upload/${ID.toUpperCase()}/`)).toEqual({
+      kind: "add-upload",
+      uploadId: ID,
+    });
+  });
+
+  /**
+   * **Thirty-six hyphens are the right length and the right alphabet.**
+   *
+   * `[0-9a-f-]{36}` matched them, and this is the second time that exact regex
+   * has appeared in this codebase — the first was `isStagingKey` in
+   * src/source.ts, found by a cross-family review; this one was found by the
+   * next review, two weeks later. Not a security hole either time, because the
+   * server refuses the id anyway. What it did was render a whole ingest page
+   * for an address that could never mean anything.
+   */
+  it("refuses the things that are shaped like an id and are not one", () => {
+    for (const bad of [
+      "-".repeat(36),
+      "069894e5aa6648b08e25a35c508777ef",
+      "069894e5-aa66-48b0-8e25-a35c50877",
+      "069894e5-aa66-48b0-8e25-a35c508777efff",
+      "nope",
+    ]) {
+      expect(parseRoute(`/add/upload/${bad}`).kind, bad).not.toBe("add-upload");
+    }
+  });
+
+  /* It has to win over the general `/add/<a whole URL>` branch, which reads
+     everything after the prefix as an address. Losing that race would land the
+     reader on the shelf with their file already in the object store and nothing
+     pointing at it. */
+  it("is matched before the general add route, not after it", () => {
+    expect(parseRoute(`/add/upload/${ID}`).kind).toBe("add-upload");
+    expect(parseRoute("/add/https://example.com/upload/x").kind).toBe("add");
+  });
+});
+
 describe("addUrlFrom", () => {
   it("puts a raw URL's query string and fragment back on", () => {
     expect(addUrlFrom("/add/https://example.com/x", "?a=1&b=2", "#frag")).toBe(

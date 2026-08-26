@@ -75,6 +75,19 @@ export type Route =
    * is the only route here that carries an arbitrary string rather than a slug.
    */
   | { kind: "add"; url: string }
+  /**
+   * Turn an already-uploaded file into an article — `/add/upload/<uploadId>`.
+   *
+   * A separate route from `add` and not a variant of it, because the parameter
+   * is one of *ours* rather than somebody else's address: an upload id we
+   * minted, which is the only thing about an upload a URL can carry. `/add/`
+   * cannot take a file — a form post is not an address — so the file goes to
+   * the object store from the shelf, and then this page picks it up by id.
+   *
+   * That keeps the property Greg asked for: one place that starts an ingest,
+   * and it has an address you can reload.
+   */
+  | { kind: "add-upload"; uploadId: string }
   /** The design reference — every primitive on one page. See DesignPage.tsx. */
   | { kind: "design" }
   /**
@@ -140,6 +153,19 @@ const NAVIGATED = "spideryarn:navigated";
 const ADD_PREFIX = "/add/";
 
 /**
+ * An upload id, in the shape `crypto.randomUUID` writes one.
+ *
+ * **Not `[0-9a-f-]{36}`**, which is the right length and the right alphabet and
+ * matches thirty-six hyphens. That exact mistake was in `isStagingKey` in
+ * src/source.ts and was found by a cross-family review; it was in this file two
+ * weeks later, found by the next one. Neither was exploitable — the server
+ * refuses the id either way — but the client rendered a whole ingest page for
+ * an address that could never mean anything, and a guard that has stopped
+ * describing what it guards is how the change after next becomes exploitable.
+ */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+
+/**
  * Anything that isn't an article is the library, including nonsense.
  *
  * No 404 page, deliberately: a mistyped path lands you on the shelf, which is
@@ -165,6 +191,16 @@ export function parseRoute(pathname: string): Route {
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
   // whole other URL, slashes and all. A bare /add — nothing to add — falls
   // through to the shelf, which is where the add box is.
+  /* **Above the general `/add/` branch**, because that one reads everything
+     after the prefix as a whole URL, and `upload/<uuid>` is not one — it would
+     fall through `normaliseUrl` to `""` and land the reader on the shelf with
+     their file already in the object store and nothing pointing at it. The
+     match is exact: a real upload id or nothing. */
+  const uploaded = new RegExp(
+    `^${ADD_PREFIX}upload/(${UUID.source})/?$`,
+    "i",
+  ).exec(pathname);
+  if (uploaded) return { kind: "add-upload", uploadId: (uploaded[1] as string).toLowerCase() };
   if (pathname.startsWith(ADD_PREFIX)) {
     const url = addUrlFrom(pathname);
     if (url) return { kind: "add", url };
@@ -251,6 +287,11 @@ export const CALLBACK_HREF = "/auth/callback";
  * to this one by main.tsx before React mounts — the same trick the three legacy
  * rewrites there use, and for the same reason: one spelling reaches React.
  */
+/** Where an upload's ingest lives. The only place this path is spelled. */
+export function addUploadHref(uploadId: string): string {
+  return `${ADD_PREFIX}upload/${encodeURIComponent(uploadId)}`;
+}
+
 export function addHref(url: string): string {
   return `${ADD_PREFIX}${encodeURIComponent(url.trim())}`;
 }

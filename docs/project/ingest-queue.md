@@ -26,30 +26,92 @@ the progress list.
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | `/add/<a whole URL>` — [§ The add page](#the-add-page) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
-| [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker and the drop zone — [§ The picker that cannot send anything yet](#the-picker-that-cannot-send-anything-yet) |
+| [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker, the drop zone and the progress bar — [§ Uploading a PDF](#uploading-a-pdf) |
 | [`src/uploads.ts`](../../src/uploads.ts) | what counts as a PDF worth uploading, and how big is too big |
 
-## The picker that cannot send anything yet
+## Uploading a PDF
 
-**Added 2026-08-26, and it is deliberately inert.** There is an Upload button and a drag-and-drop
-area under the URL box on the shelf. It takes a file, checks what can be checked without reading
-the bytes, shows you what you chose — and then says, in as many words, that uploading is not built
-and the file has not left your machine.
+**Built 2026-08-27.** Choose a PDF off your own machine, or drop one on the shelf, and it becomes
+an article the same way a pasted URL does. The picker had been sitting there since 2026-08-26
+saying in as many words that there was nowhere to send a file — deliberately, because a disabled
+button or a spinner over a file going nowhere are both
+[the failure this repo keeps writing up](../reusable/silent-success.md). There is somewhere now.
 
-That is the whole of it on purpose. The upload path behind it — the `sources` bucket, the blob
-store seam, `POST /api/uploads`, a `verify-source` step, and the pipeline's several assumptions
-that every article has a URL — is planned in full and built not at all:
-[pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md), which is *step 5* of that plan's
-build order arriving before steps 0–4.
+**The bytes never touch our server**, and that is not an optimisation. A Vercel function refuses a
+request body over 4.5 MB — flat, unraisable, the same on Node, Edge and Fluid — and two of the
+three PDFs in this project's own eval set are bigger than that. So:
 
-**Why ship the front half early rather than wait.** The picker is the part of an upload that has
-nothing to do with storage: the drop target, the drag counter, the refusals, and the question of
-what we will accept. None of it changes when the back half lands. What *would* have been wrong is
-either of the two obvious ways to hide the gap — a disabled button with no explanation, or a
-spinner over a file that is going nowhere. Both are the failure this repo keeps writing up
-([silent-success.md](../reusable/silent-success.md)): something that looks like it worked.
+```
+  POST /api/uploads   {filename, bytes, sha256}   ~200 bytes of JSON to us
+  PUT  <signed url>   the whole file              straight to Supabase Storage, no credentials
+  POST /api/jobs      {uploadId}                  ~60 bytes of JSON to us
+```
 
-**The checks are the cheap ones, and they are not the real ones.** `uploadProblem` in
+The middle step carries no bearer token and no API key. The grant is in the URL, it is bound to one
+path *we* chose, and it lasts two hours. `MAX_BODY_BYTES` in
+[`src/routes.ts`](../../src/routes.ts) is untouched — that is the point, no route grew a
+large-body path. Measured end to end on 2026-08-27 with the 145 KB fixture: verified, extracted,
+split, ToC'd and arc'd in 148 seconds, and `GET /api/source/:slug` handed back all 144,779 bytes.
+
+**Where each piece lives.** [`src/web/upload.ts`](../../src/web/upload.ts) hashes and sends;
+[`src/store/blobs.ts`](../../src/store/blobs.ts) is the seam, with the Supabase and filesystem
+adapters beside it; [`src/upload-records.ts`](../../src/upload-records.ts) is one attempt's state;
+`acquireUpload` in [`src/pipeline.ts`](../../src/pipeline.ts) is the half of stage 1 that verifies
+bytes instead of fetching them. The design, the measurements behind it and the two cross-family
+reviews are in [pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md).
+
+### Four things about it that are not obvious
+
+**The upload is not the ingest, and they happen in different places.** The transfer runs on the
+shelf, because that is where the `File` is — a file handle is not something an address can carry,
+so navigating first and uploading there is not available. Only when the bytes have landed does the
+reader go to `/add/upload/<uploadId>`, which queues the job and watches it exactly as `/add/<url>`
+does. So an ingest still has one place and one address, and the thing that *cannot* have an address
+is over before the navigation happens.
+
+**There is no new step in the pipeline.** An upload's first step is still called `fetch`; it simply
+has two halves, and the branch on `ctx.upload` is the only place in the whole pipeline that knows
+where an article came from. Both halves write the same `raw.json`, so stage 2 onwards cannot tell
+which ran — the same seam [content-extraction.md](content-extraction.md) calls the entire design.
+What the step *says* does change: "Checking the file", not "Fetching the page", because there is
+nothing to fetch and no page, and a reader watching a row that claims otherwise learns something
+untrue about where their document went.
+
+**The staging object is never deleted, and that is a rule rather than an oversight.** Measured
+against the running stack: deleting an object **re-arms** any grant still live over its key. So a
+tidy-up inside the two-hour TTL races the browser it is cleaning up after, and can end with us
+having checksummed one document and extracted another. Verified bytes are *copied* to
+`sha256/<hash>.pdf` — create-only, so the name stays a true statement about the contents — and the
+staging key is left alone. A sweep after `SWEEP_GRACE_MS` is not built;
+[`tests/upload-acquire.test.ts`](../../tests/upload-acquire.test.ts) asserts the object survives,
+which is what stops somebody adding the obvious `remove` later.
+
+**An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
+prove two addresses are one piece. An upload has no address, so `freeUploadSlug` in
+[`src/jobs.ts`](../../src/jobs.ts) always finds a slug nothing else has — two files called
+`paper.pdf` get two articles, per [Greg's answer](../plans/pdf-upload-and-storage.md#gregs-answers-2026-08-26).
+The existence check is `articleExists` and **not** `urlForSlug`, which is the trap: an uploaded
+article has no URL in its `meta.json`, so the lookup `freeSlug` uses reads `undefined` and calls
+the slug free. Every step would then find an artefact, skip, and show the reader a different
+document under their own filename in about a second. It also takes the *upload's own id*, so a
+Retry keeps the article it already started rather than stepping aside from itself and paying for
+the transcription twice.
+
+### The slug comes from the filename, and that is the ugly part
+
+`source.pdf` becomes the slug `source`; `paper.pdf` becomes `paper`, then `paper-2`. The reader
+sees the title everywhere that matters — the shelf card, the masthead, the tab — so this is a
+directory name rather than anything they read. But `document.pdf` and `download.pdf` are extremely
+common and the counters will pile up.
+
+The plan's alternative is to store under a provisional id, run pass 0, and reserve the final slug
+from the title. That is a **rename**, and [block-ids.md](block-ids.md) is largely about why renames
+here are expensive. Written up as an open question rather than quietly decided:
+[pdf-upload-and-storage.md § Still open](../plans/pdf-upload-and-storage.md).
+
+### The checks are the cheap ones, and they are not the real ones
+
+**The picker's checks** `uploadProblem` in
 [`src/uploads.ts`](../../src/uploads.ts) reads a name, a browser-guessed MIME type and a size,
 every one of which is a claim by whoever chose the file. The check that decides anything is the
 `%PDF-` magic over the bytes that actually arrived, on the server, before anything expensive. The
@@ -58,7 +120,19 @@ module is shared rather than inlined in the component for exactly the reason
 browser and a server disagreeing about what counts as a PDF is invisible until a file is taken in
 one place and refused in the other.
 
-Two smaller things in it that are easy to get wrong and are worth not rediscovering:
+**And the server must not answer that question on the browser's behalf.** `POST /api/uploads` calls
+the same `uploadProblem` with `type: ""` — no guess — because the browser's MIME guess does not
+cross the wire, and supplying `"application/pdf"` there writes the answer we want into the input:
+`looksLikePdf` accepts *either* the type or the name, so `notes.txt` sails through on a type we
+made up. Caught by a test, not by reading.
+
+**The real check is `acquireUpload`**, in the step, over the bytes: the object exists and is under
+the cap (`head`, before anything moves), one bounded `get`, `%PDF-` over what came back, and our
+SHA-256 against the browser's. Downloading once and doing the last two over that same copy is not
+tidiness — reading the object twice is the one sequence content addressing does not cover, because
+the grant is still live and the second read may not be the bytes the first one verified.
+
+Two smaller things in the picker that are easy to get wrong and are worth not rediscovering:
 
 - **The drag highlight counts, it does not toggle.** `dragleave` fires every time the pointer
   crosses into a child element, so a boolean cleared on leave makes the zone flicker as you move
@@ -367,7 +441,19 @@ stored `blocks.json` is already safe and no later consumer has to remember —
 [`src/sanitize.ts`](../../src/sanitize.ts), and see [open-questions.md § Q9](open-questions.md) for
 how that landed.
 
-### `fetch` is its own step, and that is new
+### `fetch` is its own step, and since 2026-08-27 it has two halves
+
+**The second half is an upload**, and everything about it is above under
+[Uploading a PDF](#uploading-a-pdf). The short version, here because this is the section somebody
+reads when they are looking at the step list: same step name, same one output (`raw.json`), same
+`beginStep`/`finishStep`/cancellation/`assertProduced` machinery — a different label and a
+different way of coming by the bytes.
+
+That it is a *step* rather than something beside the step list was a review finding, and the
+reasoning is worth keeping: work that floats outside the list bypasses exactly the machinery built
+to make interrupted work visible.
+
+#### Why it is a step at all
 
 Stage 1 used to be three lines inside `src/extract.ts`. It is now a step with an artefact,
 `data/<slug>/raw.html`, which [architecture.md § Storage](architecture.md#storage) has always listed
@@ -609,7 +695,9 @@ derivation so the two agree by construction rather than by trust.
 ```
   GET    /api/tweets/:slug     the thread, and whether it still describes the article
   GET    /api/jobs             every job this server knows about, newest first
-  POST   /api/jobs             { url } | { slug, steps?, force? }  → 202, the job
+  POST   /api/uploads          { filename, bytes, sha256 } → 201, where to PUT a PDF and for how long
+  GET    /api/uploads/:id      what became of one upload
+  POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }  → 202, the job
   GET    /api/jobs/:id         one job — what the poll reads
   DELETE /api/jobs/:id         forget a finished job's record (artefacts untouched)
   POST   /api/jobs/:id/cancel
