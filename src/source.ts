@@ -51,6 +51,14 @@
  * See docs/plans/pdf-upload-and-storage.md § What was measured, not read.
  */
 import type { DocumentKind } from "./fetch.js";
+import {
+  type ReaderFacingFailure,
+  UPLOAD_CHECKSUM,
+  UPLOAD_MISSING,
+  UPLOAD_NOT_A_PDF,
+  UPLOAD_TOO_BIG,
+} from "./messages.js";
+import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /* ------------------------------------------------------------- the axes -- */
 
@@ -146,19 +154,36 @@ export function canonicalKey(sha256: string, media: DocumentKind): string {
   return `sha256/${sha256}.${EXTENSION[media]}`;
 }
 
-/** True for a key a grant may be minted against. Used as a guard, not a hint. */
+/**
+ * True for a key a grant may be minted against. Used as a guard, not a hint.
+ *
+ * **Reuses the exact UUID matcher rather than approximating it.** The first
+ * version tested `[0-9a-f-]{36}` — the right length and the right alphabet, and
+ * it accepts `staging/------------------------------------`, thirty-six
+ * hyphens. Nothing downstream would have minted a grant for that, so it was not
+ * exploitable; it was a guard that had quietly stopped describing the thing it
+ * guards, which is how the change after next becomes exploitable. Found by the
+ * cross-family review.
+ */
 export function isStagingKey(key: string): boolean {
-  return /^staging\/[0-9a-f-]{36}$/.test(key);
+  const rest = key.startsWith("staging/") ? key.slice("staging/".length) : null;
+  return rest !== null && UUID_RE.test(rest);
 }
 
 /* --------------------------------------------------------------- limits -- */
 
 /**
- * 50 MB — Greg's cap, and the ceiling Supabase's free plan puts on one object.
- * The two landing on the same number is luck, but it means v1 needs no plan
- * change and any later raise needs one.
+ * The cap lives in src/uploads.ts and is **re-exported, not redeclared.**
+ *
+ * That module is the one the browser's file picker already imports, and it has
+ * no dependencies precisely so both sides can share it. A second `50 * 1024 *
+ * 1024` here would be two constants that agree today: the picker would go on
+ * accepting a file the server had started refusing, both test suites would stay
+ * green, and the disagreement would surface as somebody holding a 60 MB scan.
+ * Found by the cross-family review, which noticed the duplication before it
+ * had a chance to drift.
  */
-export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+export { MAX_UPLOAD_BYTES };
 
 /**
  * How long a Supabase signed upload grant lives. **Measured, not configurable:**
@@ -198,7 +223,21 @@ export type UploadStatus = "pending" | "claimed" | "verified" | "rejected" | "ex
 
 const NEXT: Record<UploadStatus, readonly UploadStatus[]> = {
   pending: ["claimed", "expired"],
-  claimed: ["verified", "rejected"],
+  /**
+   * `expired` is reachable from `claimed`, and it has to be.
+   *
+   * A worker that claims an upload and then dies leaves a row nothing can move
+   * again, because only that worker was going to verify it. The review called
+   * this out: without this edge the row is stuck for ever and the reader is
+   * told nothing.
+   *
+   * **And the recovery is a new upload, never a resumed one.** Re-reading the
+   * staging object after a crash is the one sequence that defeats content
+   * addressing — the grant is still live, so the bytes at that key may no
+   * longer be the bytes we hashed. Expiring and asking for a fresh upload id
+   * costs the reader one re-upload and costs us nothing we cannot reason about.
+   */
+  claimed: ["verified", "rejected", "expired"],
   verified: [],
   rejected: [],
   expired: [],
@@ -258,31 +297,36 @@ export function cleanFilename(raw: string): string | null {
 }
 
 /**
- * Why an upload was refused, in the words the reader gets.
+ * Why an upload was refused. **The words live in src/messages.ts.**
  *
- * One place, so the four refusals cannot drift apart, and phrased the way
- * docs/project/copy.md asks: what happened, whose problem it is, what to do.
+ * The reason is a domain fact and belongs here; the sentence a reader sees is
+ * copy and belongs in the one file docs/project/copy.md says holds all of it.
+ * Keeping them apart is not tidiness — `tests/messages.test.ts` walks every
+ * exported `ReaderFacingFailure` and checks its bracketed code reads back to
+ * the kind it was declared with, and a message defined out here is a message
+ * that check never sees.
+ *
+ * It nearly mattered. These four codes were not in `CODE_KINDS`, and an
+ * unrecognised code means *offer another go* — so "that file isn't a PDF" would
+ * have arrived with a Retry button that could not possibly work, which is the
+ * failure docs/postmortems/toc-max-tokens.md exists about. Found by the
+ * cross-family review.
  */
 export type RejectReason = "too-big" | "not-a-pdf" | "checksum-mismatch" | "missing";
 
+const REJECTIONS: Record<RejectReason, ReaderFacingFailure> = {
+  "too-big": UPLOAD_TOO_BIG,
+  "not-a-pdf": UPLOAD_NOT_A_PDF,
+  "checksum-mismatch": UPLOAD_CHECKSUM,
+  missing: UPLOAD_MISSING,
+};
+
+/** The whole failure — the sentence and whether another go is worth offering. */
+export function rejectionFailure(reason: RejectReason): ReaderFacingFailure {
+  return REJECTIONS[reason];
+}
+
+/** Just the sentence, for callers that only render. */
 export function rejectionMessage(reason: RejectReason): string {
-  switch (reason) {
-    case "too-big":
-      return (
-        `That file is larger than ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB, which is the ` +
-        `most we can take. Nothing was uploaded. [up-big]`
-      );
-    case "not-a-pdf":
-      return "That file isn't a PDF, whatever it is called. Try a different file. [up-pdf]";
-    case "checksum-mismatch":
-      return (
-        "The file that arrived isn't quite the file that was sent — something went wrong in " +
-        "transit. Try uploading it again. [up-sum]"
-      );
-    case "missing":
-      return (
-        "We never received that file. The upload may have been interrupted, or it may have taken " +
-        "longer than two hours. Try again. [up-gone]"
-      );
-  }
+  return REJECTIONS[reason].message;
 }
