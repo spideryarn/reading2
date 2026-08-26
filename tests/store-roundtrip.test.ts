@@ -29,6 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
+import { isSpideryarnId } from "../src/ids.js";
 import { exportArticle } from "../src/store/export.js";
 import { importArticle } from "../src/store/import.js";
 
@@ -94,8 +95,18 @@ function canonical(artefact: string, value: unknown): unknown {
     artefact
   ];
   if (!key || !value || typeof value !== "object") return value;
-  const list = (value as Record<string, unknown>)[key];
-  if (!Array.isArray(list)) return value;
+  const raw = (value as Record<string, unknown>)[key];
+  if (!Array.isArray(raw)) return value;
+  /* A comment whose anchor is not a block id cannot exist in Postgres —
+     `block_identities` has a format check and `comments.json` does not, and
+     something wrote one on `data/writes` anchored to `zzzz00`. The importer
+     skips it and says so, so it cannot come back, and dropping it from the
+     original is the honest comparison rather than a lowered bar. Delete the
+     corrupt row and this stops matching anything. */
+  const list: unknown[] =
+    key === "comments"
+      ? raw.filter((c) => isSpideryarnId((c as { blockId?: string }).blockId ?? ""))
+      : raw;
   const rank = (x: unknown) => {
     const o = x as { createdAt?: string; id?: string };
     return `${o.createdAt ?? ""}|${o.id ?? ""}`;

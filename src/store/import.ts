@@ -57,6 +57,7 @@ import {
   revisionStepRuns,
   searchRuns,
 } from "../db/schema.js";
+import { isSpideryarnId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId, type OwnerId } from "../owner.js";
 import { parseJsonFrom } from "../parse-json.js";
@@ -80,6 +81,8 @@ export interface ImportResult {
   readonly glossaryLookups: number;
   /** Artefacts that were not on disk. Absent is ordinary, not a fault. */
   readonly absent: readonly string[];
+  /** Comments dropped because their anchor is not a block id. Always look. */
+  readonly unanchoredComments: readonly string[];
   /** Fields that exist in the schema and cannot be recovered from files. */
   readonly unrecoverable: readonly string[];
 }
@@ -210,8 +213,34 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
      already the functions the app trusts. Reading through them means the
      importer cannot disagree with the reader about what is on disk — which is
      the entire property an importer needs. See docs/reusable/silent-success.md. */
-  const storedComments = await loadComments(slug);
-  if (!storedComments.length) absent.push("comments.json");
+  const allComments = await loadComments(slug);
+  if (!allComments.length) absent.push("comments.json");
+  /* **A comment whose anchor is not a block id cannot be imported, and one bad
+     row must not stop the migration.**
+
+     `block_identities` has a format check, so `spya-xxxxxx` is enforced by the
+     database. The filesystem store enforces nothing, and something wrote a
+     comment on `data/writes` anchored to `zzzz00` on 2026-08-26 — which the
+     file accepted in silence and the constraint refused, taking the whole
+     import down with it. Both halves of that are worth knowing: there is a
+     writer somewhere producing anchors that are not block ids, and the file
+     store will never tell you.
+
+     Skipped rather than fatal, because this is a migration tool and one
+     malformed row out of eleven should not block ten good ones — the same
+     partial-salvage rule the summaries stage already follows. Skipped rather
+     than repaired, because there is nothing to repair it to: the anchor names
+     no paragraph, so there is no right answer to guess. Counted and logged, so
+     "the import lost a comment" can never be something you find out later. */
+  const storedComments = allComments.filter((c) => isSpideryarnId(c.blockId));
+  const unanchored = allComments.filter((c) => !isSpideryarnId(c.blockId));
+  if (unanchored.length) {
+    // Ids only. The quote is the reader's selected prose — docs/project/logging.md.
+    logger.warn(
+      { slug, comments: unanchored.map((c) => c.id), count: unanchored.length },
+      "comments skipped: anchor is not a block id",
+    );
+  }
   const chat = await loadThreads(slug);
   if (!chat.length) absent.push("chat.json");
   const runs = await loadRuns(slug);
@@ -590,6 +619,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
     revisionId,
     blocks: blocks.length,
     comments: storedComments.length,
+    unanchoredComments: unanchored.map((c) => c.id),
     chatThreads: chat.length,
     chatMessages: chat.reduce((n, thread) => n + thread.messages.length, 0),
     searchRuns: runs.length,

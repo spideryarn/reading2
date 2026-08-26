@@ -257,7 +257,7 @@ and the one it led with turned out not to be this work at all — which is the r
 | **Blocker:** `archived_at`, `title_override`, `opens`, `last_opened_at` are in the schema and in `pg.ts` but in no migration | **Real, not mine** | Those columns arrived in the working tree *after* commit `351c054`, in another agent's uncommitted shelf work. Sol reviewed the tree, not the commits, and even noticed `schema.ts` growing under it mid-review. Passed on rather than fixed — see [Rules for this work](#rules-for-this-work) on staying inside your stage |
 | The exporter filters chat messages on `thread_id` alone, so two articles sharing a thread id mix | **Real** | Fixed. Thread ids are per-article by design, so this was one reader's conversation landing under someone else's article. [tests/store-export-isolation.test.ts](../../tests/store-export-isolation.test.ts) reproduces it |
 | `create()` in the comment store races: two overlapping requests both insert | **Real** | Fixed — one `insert … on conflict do update` instead of select-then-branch. The red test holds a transaction open by hand, because two concurrent calls pass either way |
-| `on conflict do nothing` means a re-import never removes what the files dropped | **Real, and already happening** | `data/writes/comments.json` held two comments while Postgres held three. The importer now replaces reader state inside its transaction, and `tests/store-import-convergence.test.ts` asserts it — **both are in the working tree and NOT in this commit**, see the note below |
+| `on conflict do nothing` means a re-import never removes what the files dropped | **Real, and already happening** | `data/writes/comments.json` held two comments while Postgres held three. The importer now replaces reader state inside its transaction, and [tests/store-import-convergence.test.ts](../../tests/store-import-convergence.test.ts) asserts it |
 | The exporter has no `order by`, so array order is luck | **Real** | Fixed. It broke the same afternoon: the convergence fix changed the physical row order and `searches.json` came back shuffled |
 | `order by created_at, id` does not reproduce the file's array order | **Real** | `data/noema-…/comments.json` has a hand-written comment sitting out of date order. Not fixed and deliberately so: nothing reads array order — [comment-nav.ts](../../src/web/comment-nav.ts) sorts into document order first — so the round trip now says "every row, unchanged" rather than "byte-identical" |
 | `isLocalDatabaseUrl` pattern-matches the whole URL, and that answer authorises destructive commands | **Real** | Fixed — parse the URL, compare the hostname, fail closed on anything unparseable |
@@ -270,19 +270,40 @@ and the one it led with turned out not to be this work at all — which is the r
 | A second user would see the first one's library; `articles.slug` is globally unique | **Real** | Recorded in `owner.ts` rather than fixed. Global slug uniqueness is a recorded decision (it is the URL contract), so this is the beta gate's problem |
 | The round-trip claim is overstated: `raw.html` is not in `ARTEFACTS` and stamped HTML is only asserted absent | Real | Left as a known gap |
 
-### Two files this commit deliberately leaves behind
+### What the shelf columns turned out to be
 
-`src/store/import.ts` and `src/db/schema.ts` both hold another agent's in-flight shelf work at the
-same time as they hold my changes — the `archived_at` / `title_override` / `opens` /
-`last_opened_at` columns and the code that reads them, with **no migration yet**, which is the
-blocker Sol led with. Committing my half would have swept theirs in, and committing a schema whose
-columns no migration creates is a fresh-checkout breakage rather than an untidy diff. `import.ts`
-cannot even be staged by the hunk, because until the NUL byte is committed git still calls it
-binary.
+Sol's lead blocker — `archived_at`, `title_override`, `opens` and `last_opened_at` in the schema
+with no migration — was another agent's shelf work, uncommitted at the time Sol read the tree. It
+landed properly in `f862af5` with its migration, and that commit swept up two of my edits sitting in
+the same files (the `schema.ts` header and the `pg.ts` underscore filter below). That is the
+expected cost of one working tree and several agents, and it is fine.
 
-So the importer's convergence fix, its two corrected comments, the `schema.ts` header, and
-`tests/store-import-convergence.test.ts` are all sitting in the working tree, verified green, for
-whoever commits the shelf work to carry in. Nothing else depends on them.
+### Three more things the review indirectly turned up
+
+None of these were in Sol's answer. All three came out of checking it, and two were found by a test
+going red for a reason that was not the test's fault.
+
+1. **The Postgres library listed `_`-prefixed slugs and the filesystem one never has.**
+   [src/api.ts](../../src/api.ts) has skipped the prefix since it was written — `data/_jobs/` is the
+   ingest queue's directory — and `pg.ts` had no equivalent, so the two libraries disagreed about
+   any such slug. Nothing noticed until a test fixture used one. This is a direct answer to Sol's
+   question 1, "what is compared nowhere at all". Fixed, with `left(slug, 1) <> '_'` rather than
+   `not like '_%'` — `_` is LIKE's single-character wildcard, so the obvious spelling excludes every
+   slug in the table, and did.
+2. **An article deleted from `data/` leaves its row behind for ever.** `importArticle` imports one
+   article and cannot know a different one has gone, and nothing prunes, so
+   `npm run db:import` does **not** make Postgres match `data/`. A stale `labels-checkpoint-check`
+   row from somebody's checkpoint run is what made
+   [tests/store-parity.test.ts](../../tests/store-parity.test.ts) fail in full runs and pass alone —
+   almost certainly the "one flaky failure" recorded at the bottom of this document, which was never
+   about load. The parity comparison is now scoped to articles that exist on disk; **the pruning gap
+   itself is not fixed** and is listed below.
+3. **`comments.json` accepts an anchor that is not a block id, and Postgres does not.** Something
+   wrote a comment on `data/writes` anchored to `zzzz00` on 2026-08-26. `block_identities` has a
+   format check, so the import died on it — one malformed row out of eleven stopping ten good ones.
+   The importer now skips such a comment, logs its id, and returns it in `unanchoredComments`.
+   **The writer that produced it has not been found**, and the file store will never report another
+   one; validating the anchor where comments are written belongs to whoever owns that stage.
 
 Two things Sol did **not** find, both turned up while checking its work:
 
@@ -313,6 +334,11 @@ Two things Sol did **not** find, both turned up while checking its work:
   alone because the pipeline is about to own this table properly.
 - **The exporter is not a full rollback.** `raw.html` is outside the round trip's `ARTEFACTS` list,
   and the stamped HTML is only asserted to be in the right *place*, never compared.
+- **Nothing prunes an article whose `data/` directory has gone.** `npm run db:import` adds and
+  updates and never removes, so a deleted article goes on being served from Postgres. Reader state
+  within an article now converges; articles themselves do not. The fix is a bulk-import step that
+  deletes rows absent from disk, and it carries the same warning as the reader-state one: it must
+  not run after cutover, when the files are the stale copy.
 - **`SPIDERYARN_STORE` falls back to files on a typo.** Deliberate while the cutover is staged, but
   it should reject any non-empty value that is not `files` or `postgres`.
 - **The on-demand artefacts do not yet survive re-extraction, and the schema is why.** Today
@@ -339,7 +365,8 @@ Two things Sol did **not** find, both turned up while checking its work:
   chat and search writes do not yet, and should be given the same treatment when their stores land.
 - **Jobs are still a p-queue and an in-memory `Map`.** The table, the fencing columns and the
   singleton `queue_state` guard all exist and nothing uses them.
-- **One flaky failure, seen once and not reproduced.** A single test failed in a full run while the
-  dev server and a browser session were both hammering the same local database; four subsequent
-  runs were clean and the failure was not captured. The plausible cause is two test files calling
-  `importArticle` for the same slugs concurrently. Recorded rather than declared fixed.
+- ~~**One flaky failure, seen once and not reproduced.**~~ **Found.** It was not load and it was not
+  concurrency: an orphaned `labels-checkpoint-check` row, left in Postgres by a checkpoint run whose
+  `data/` directory was later deleted, made the parity test disagree about the library whenever the
+  suite happened to reach it. Six consecutive full runs are clean since. The pruning gap that
+  allowed the orphan is listed above.
