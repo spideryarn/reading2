@@ -33,7 +33,7 @@ was visible when the decision was made, and it is not a bug report.
 
 ## Progress
 
-Legend: ✅ done · 🔵 in progress · ⬜ not started
+Legend: ✅ done · 🔵 in progress · 📐 designed, not built · ⬜ not started
 
 | # | Step | State |
 |---|---|---|
@@ -48,9 +48,9 @@ Legend: ✅ done · 🔵 in progress · ⬜ not started
 | 8 | Artefact manifest test — the guard against the next file | ✅ |
 | 9 | Comments — writes | ✅ |
 | 9b | Shelf state — archive, rename, opens — and library-wide search | ✅ **added 2026-08-26**, both adapters. See [library-shelf-actions-and-search.md](library-shelf-actions-and-search.md) |
-| 10 | Chat, searches, glossary lookups — writes | ⬜ |
-| 11 | Pipeline writes to draft revisions (+ carry-forward) | ⬜ **needs coordination** |
-| 12 | Jobs and claiming | ⬜ |
+| 10 | Chat, searches, glossary lookups — writes | 📐 **designed and reviewed 2026-08-26, not built.** [The design](#step-10-chat-searches-and-glossary-lookups-writes) · two criticals from the review, one of them in a choice the design defended. Partial by construction: `deleteGlossary` stays 501 |
+| 11 | Pipeline writes to draft revisions (+ carry-forward) | 📐 **designed and reviewed 2026-08-26, not built.** [The design](#step-11-the-pipeline-writes-revisions) · smaller than this document claimed — `outputs` is one table, not eight modules — but four criticals, and it does need one schema migration |
+| 12 | Jobs and claiming | 📐 **designed and reviewed 2026-08-26, not built.** [The decisions](#step-12-jobs-and-claiming-decided-before-it-is-built) · three criticals, including a fence this document had dropped |
 | 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ |
 
 **The import reconciles, and the direction it reconciles in reverses at cutover.** The importer
@@ -328,6 +328,339 @@ Two things Sol did **not** find, both turned up while checking its work:
   which cost twenty minutes of believing a function did not exist. Fixed.
 - The `toStrictEqual` added for Sol's point 3 passes on every article, which is positive evidence
   the conditional spreads in `pg.ts` are complete rather than merely untested.
+
+## Step 10 — chat, searches and glossary lookups (writes)
+
+`SPIDERYARN_STORE=postgres` serves all three from Postgres. After this step the file-backed writes
+left are the pipeline (step 11), jobs (step 12) — **and `deleteGlossary`, which stays 501**, so step 10
+is partial by construction and its progress state should say so rather than claiming a clean sweep.
+
+Designed 2026-08-26, then cross-reviewed by GPT Sol, **which found two critical faults**, one of them
+in a choice the design had made deliberately. See
+[What the review found](#what-the-review-found-in-step-10) at the end; read it before building any of
+this.
+
+### The structural move that makes the rest cheap
+
+The parts of [`src/chat.ts`](../../src/chat.ts) and [`src/searches.ts`](../../src/searches.ts) that
+carry the invariants — id minting, the discard rule, the title rule, the retry preconditions,
+`titleFrom`, `MAX_RUNS` — become **pure functions over the API-shaped arrays**, and *both* adapters
+call them. Only persistence differs.
+
+Two already exist and are already exported: `withRetry` and `withEdit`. A third comes out of
+`beginTurn`'s `update` callback as `withTurn` — a pure refactor with no behaviour change, which
+`tests/chat.test.ts` keeps honest.
+
+Everything else — `finishTurn`, `renameThread`, `deleteThread`, `finishRun`, `deleteRun`, `saveLookup`
+— is a single SQL statement. Routing *those* through a pure function would force the Postgres store to
+rewrite a whole thread to change one row, **which is the file's bug rather than its contract**.
+
+### The four places the contract is not a copy of today's module
+
+`contracts.ts` argues that an identical surface is what makes cutover safe. That argument is about not
+*improving* shapes; these four are about a return value the caller throws away — free on a filesystem,
+a whole extra query in SQL.
+
+| Today | Contract | Why |
+|---|---|---|
+| `update(slug, mutate: (t[]) => t[])` | `sweepPending(slug, opts)` | **The file-shaped leak.** A mutate callback over the whole array can only be implemented in SQL as select-everything, diff, write-everything — the read-modify-write the table exists to delete. One caller, one thing it does, so the method *is* that thing |
+| `finishTurn(): Promise<ChatThread[]>` | `Promise<void>` | Both call sites already discard it. Returning it costs a full read of every thread in the article **per streamed answer** |
+| `finishRun(): Promise<SearchRun[]>` | `Promise<SearchRun \| undefined>` | The caller does `.find(…)` and 404s when missing. `UPDATE … RETURNING *` answers that directly: zero rows *is* "deleted while running" |
+| `renameThread` / `deleteThread` / `deleteRun` → the whole list | **unchanged** | Not a habit here — the list *is* the response body |
+
+`beginTurn` / `retryTurn` / `editTurn` keep `thread` with its `messages`, because `streamChat` builds
+the model's history from `thread.messages.slice(0, -2)`. Not negotiable. Every method keeps its
+`now?: () => string` injector, which is what lets a parity test drive both stores from one clock.
+
+### Concurrency: the lock is the mutex
+
+The file stores serialise every write for the whole process through a module-global promise chain.
+Postgres replaces it with **per-thread (chat) or per-article (searches) serialisation across
+processes** — strictly stronger, and observably identical: every concurrent pair that both succeed
+today both succeed here.
+
+The design reached for `pg_advisory_xact_lock` because **`beginTurn` may have no thread row to
+lock** — a thread is created by its first question, and `withTurn` can *overrule* the client's thread
+id, so upserting first would create a thread the pure function would not have created.
+
+**That rationale overlooked the parent row, and the review corrected it: lock `articles … FOR UPDATE`.**
+An article row always exists. (The advisory lock would at least have been *safe* — transaction-scoped
+advisory locks are fine under the transaction pooler, which is what this app connects through; it is
+the *session*-scoped kind that is not.)
+
+**And the lock must be article-wide, not per-thread.** `taken()` scans ids across every thread in the
+article, while the schema permits the same message id in different threads — so two concurrent writers
+on *different* threads would mint against the same stale article-wide snapshot. A same-thread
+concurrency test cannot catch that, which is why the design's proposed test would have passed.
+
+**No model call happens inside any of these transactions.** The lock is held for the two or three
+statements it takes to write rows the caller already computed.
+
+#### Where `ChatConflict` comes from
+
+From exactly where it comes from today — `withRetry` and `withEdit`, run on the thread list read
+**inside** the locked transaction. There is no version column and **adding one would be wrong**: a
+`where updated_at = $expected` check would 409 a *concurrent* write, where today two concurrent writes
+both succeed because the mutex orders them. That is a new failure mode invented by the storage change,
+which is the one thing this migration must not do. Every `ChatConflict` in the code is a **stale
+client** — a second tab, a Back button, a retry on a turn that is no longer last — and those are still
+conflicts and still 409.
+
+So: lock, read, run the pure function, write the difference, commit. The check and the act inside one
+lock is the only property the module-global mutex was buying.
+
+**Throw the `ChatConflict` out of the transaction callback directly; do not call `tx.rollback()`** —
+Drizzle replaces the error with `TransactionRollbackError` and the route answers 500 instead of 409.
+Pin that with a test rather than trusting the paragraph.
+
+**Load the whole article's threads inside the transaction**, not one. `withTurn` and `withEdit` mint
+ids against every thread id *and* message id in the article, including ids an edit is about to
+discard. Passing one thread would let a mint collide with another thread's message id — legal under
+the `(article_id, thread_id, id)` primary key, illegal on disk, so a divergence that only shows up in
+an export.
+
+### The chat statements, and what is easy to get wrong
+
+`ordinal` is **always the index of the message in the array the pure function produced**, never
+`max(ordinal) + 1` computed separately: two derivations of one position can disagree, and the unique
+index then rejects a legitimate write.
+
+- **`finishTurn`** never puts `id` or `role` in the SET, and **bumps the thread's `updated_at` even
+  when the message id matched nothing** — the file does that unconditionally, and the panel sorts
+  threads by it, so an `if (rowCount)` guard is a real divergence.
+- **`retryTurn`** must clear `citations`, `searches`, `model`, `error`, `stopped` **and reset
+  `created_at`**. `withRetry` rebuilds the reply field by field precisely so the replaced attempt's
+  fields do not survive. The obvious UPDATE — `text` and `status` only — leaves the previous attempt's
+  sources sitting under text that never mentions them; and a stale `created_at` makes the sweep see a
+  `pending` message older than the grace window and error the retry the reader is watching arrive.
+- **`editTurn`** deletes `ordinal > $k`, never `>=`, and deletes before inserting in the same
+  transaction so the unique index never sees a duplicate.
+- **`renameThread` deliberately does not touch `updated_at`.** The file does not, and the panel sorts
+  by it — so "touch `updated_at` on every write", which is a habit rather than a decision, would jump a
+  renamed thread to the top of the list.
+- **`sweepPending`: `NOT IN ()` is a syntax error.** Build the clause only when `keep` is non-empty.
+  This is the single most likely way to ship a sweep that 500s on the first read of an article with
+  nothing streaming. Drop the file's "is anything stale?" pre-check — it exists to avoid rewriting the
+  file, and in SQL an `UPDATE` matching zero rows is free.
+
+The chat error string is **not logged**; keep that as it is, for the provider-echo reason
+[`src/chat.ts`](../../src/chat.ts) gives at length.
+
+### Searches, and the `MAX_RUNS` trim
+
+`beginRun` runs in one transaction under an article lock. A `wantedId` that names an existing row is a
+retry **only when the criterion matches and the status is `error`**; any other combination means the
+id is taken, and it falls through to minting. All three conditions must be checked —
+[`src/searches.ts`](../../src/searches.ts) carries a postmortem link for the one that was missing, and
+without it a double-clicked POST resets a `done` run and throws away an answer the reader already has.
+
+The reset does **not** touch `created_at`: it is still the same search the reader asked for, only the
+attempt is new. That is the exact opposite of `retryTurn`, and both are deliberate — a chat reply's
+`created_at` is the attempt's clock, a run's is the question's.
+
+**The trim runs inside the same transaction, only on the insert branches, never on the reset branch.**
+The file slices only in its append branch; trimming on a retry would silently delete a run the reader
+can see. `order by created_at desc, id desc offset 30` keeps the newest thirty. Import `MAX_RUNS`;
+do not write `30`.
+
+**A `pending` run whose model call is in flight is not spared**, exactly as on disk. If it is the
+oldest and thirty newer runs arrive it goes, `finishRun` then updates zero rows and returns
+`undefined`, and the route answers the 404 that already exists for the reader deleting a run
+mid-search.
+
+### The one place Sol's fencing rule lands
+
+Nothing in step 10 is fenced — `chat_messages` and `search_runs` have no `attempt_id`. But the
+underlying rule, *a conditional write must name the status it expects and not only the identity*,
+lands on one statement with a history: **`beginRun`'s retry-reset must carry
+`and criterion = $ and status = 'error'` in the `UPDATE` itself**, not only in the TypeScript branch
+that chose it, and must check `rowCount` rather than assume. The predicate is guaranteed today by a
+`SELECT … FOR UPDATE` a few lines earlier — correct now, and exactly the kind of correctness that
+evaporates when someone later collapses the select and the update into one statement.
+
+### Ordering
+
+`chat_threads` by `created_at, id`; messages by **`ordinal`**; `search_runs` by `created_at, id`;
+lookups by `entry_id`. These are the clauses [`src/store/export.ts`](../../src/store/export.ts)
+already uses and **they must stay identical**, or a write through the new store and a read through the
+exporter disagree about array order and the round-trip test goes red for a reason that is not a bug.
+
+**The NULLs-FIRST-under-DESC class does not apply here** — all four columns are `notNull`, checked one
+by one rather than assumed. Two live hazards remain and neither is NULLs:
+
+1. **Ties.** Two threads created in the same microsecond sort arbitrarily without the `id` tie-break,
+   where the file's order is insertion order. The tie-break is what makes the stores agree
+   deterministically rather than usually.
+2. **Ordering messages by `created_at`** is the obvious clause, looks right, and is wrong: a user turn
+   and the `pending` assistant turn answering it are written in one call with one timestamp, so they
+   collide and sort arbitrarily. That is why `ordinal` exists. **A test that only ever writes one turn
+   cannot catch it** — the same shape as the shelf bug, where the data we happen to have agreed by
+   accident.
+
+Neither panel depends on server order for display, so the cost of getting this wrong is the export and
+the parity comparison rather than the screen — which makes it *less* likely to be noticed, not more.
+
+### Schema audit: no drift
+
+Every field has a column — all eleven of `ChatMessage`, all of `ChatThread`, `SearchRun` and
+`GlossaryLookup`, checked field by field. Unlike `jobs.guidance` there is no defect here. Three
+asymmetries worth knowing before they read as bugs:
+
+1. **`chat_messages` has no `owner_id`** — a message's owner is its thread's. Deliberate; do not add
+   one, do not filter on it.
+2. **`chat_messages` has no id-format CHECK** where `chat_threads` and `search_runs` do. Nothing in
+   this code can write a malformed id, but nothing *stops* one either — which is exactly how `zzzz00`
+   got into `comments.json` and took an import down.
+3. **No `attempt_id` on `chat_messages` or `search_runs`**, so there is **no durable equivalent of the
+   in-process `streaming` / `searching` maps** and the sweep stays process-local. Two servers on one
+   database will error each other's live answers.
+
+   The design called preserving that *right for this step*. **The review disagrees, and it is
+   correct:** on the filesystem two servers sharing one `data/` directory is a thing nobody does, and
+   under shared Postgres multi-process access is the ordinary production case. See critical 1 below —
+   this one grows a column.
+
+### `lookUpTerm` has to move out of `api.ts`
+
+The lookup **storage** is a plain upsert — and the row upsert is the whole point, because it deletes
+the file's read-modify-write race, where a lookup landing during a `glossary` job is overwritten
+wholesale and no in-process lock can help, the stale read being held across the model call.
+
+But `src/api.ts`'s `lookUpTerm` reads `glossary.json`, `blocks.json` and `meta.json` off the disk
+itself before calling `explain`. A Postgres store for the storage alone is not enough — the glossary it
+looks the term up in would still come from a file. Writing a second `lookUpTerm` would mean two copies
+of the 404/403/409 logic, the anchor rule and the `safeUrl` filter, which is the divergence this
+migration exists to make impossible.
+
+So it becomes a store-independent `makeLookUpTerm({ reader, lookups, assertWritable })` in a new
+`src/glossary-lookup.ts`. `assertWritable` exists because the filesystem's 403 comes from `articleDir`
+falling through to `example/` for any slug with no artefacts; Postgres has no fixture to fall into and
+404s instead. **A stated difference with a test on each side, not something discovered.**
+
+`notMigrated("Looking a term up")` then leaves `src/store/index.ts`.
+
+### `deleteGlossary` is step 11's, and that leaves a hole
+
+It nulls `article_revisions.glossary` on the **current published revision**, and that table says
+*immutable once published*. The SQL is trivial; whether a published revision may be mutated at all is
+the open decision step 11 carries. Until then it stays 501 — which means **the glossary panel's "start
+over" does not work under `postgres`**, and that belongs in the progress table rather than being found.
+
+### Divergences to record rather than fix
+
+| | Files | Postgres |
+|---|---|---|
+| Unknown slug on `load` | `[]` — ENOENT is ordinary | **404** via `articleIdFor` |
+| A slug that is not a slug | throws **untagged** → 500 | `status: 400` |
+| Corrupt stored state | refuses to write | no such state exists |
+
+The first is **already shipped for comments**, so this step inherits it rather than introducing it —
+but it is a visible API difference between the two modes, and whether the filesystem side should be
+brought up to it instead is Greg's call. The second: Postgres is right, and the parity test already
+asserts 400 for reads.
+
+### The tests
+
+Fixtures follow `tests/store-comments.test.ts`: an `articles` row with **no `current_revision_id`**, so
+`listArticles` cannot see it and the parity test cannot be made flaky by it.
+
+The assertions that matter are the ones with a way to make them red — a retry that keeps the previous
+attempt's citations, an edit that deletes `>=` instead of `>`, a rename that bumps `updated_at`, a
+`do nothing` upsert on a lookup, `offset 29`, a sweep emitting `not in ()`, and **`tx.rollback()`
+turning a 409 into a 500**. Two concurrent `beginTurn`s on one thread must both land with ordinals 0–3;
+to force the overlap, hold a transaction open by hand, because two plain concurrent calls pass either
+way.
+
+And one scripted parity sequence per store — begin, finish, begin, retry, finish, edit, finish, rename,
+delete — against a fixed clock, comparing the wire form after every step. Ordering messages by
+`created_at` breaks exactly that test and almost nothing else.
+
+### What the review found in step 10
+
+GPT Sol reviewed the design above on 2026-08-26 and returned two critical faults. It is **not safe to
+implement as written**. One of them is in a choice the design made on purpose and defended, which is
+the more interesting kind.
+
+**1. The search sweep is unsafe in the deployment topology, and "preserve today's behaviour" was the
+wrong instinct.** `searching` is process-local, and `sweepSearches` immediately errors every `pending`
+run absent from *that process's* set. On Vercel, process A runs the POST while process B handles a GET
+and marks A's live run `error`; the reader retries; A's eventual `finishRun`, fenced only by identity,
+overwrites the retry. The design noticed this and called preserving it right, on the grounds that two
+servers on one `data/` directory behave the same way today.
+
+*That parallel does not hold.* Two servers sharing one `data/` directory is a thing nobody does; under
+shared Postgres, multi-process is the ordinary production case. **Add `attempt_id` and
+`attempt_started_at` to `search_runs`**, sweep only expired attempts, and finish with
+`WHERE id = $ AND attempt_id = $ AND status = 'pending'` — the same three-part rule step 12 arrived at.
+This is not queue-framework over-engineering; it closes one concrete cross-instance race.
+
+**2. "A version check would be wrong" is too broad — a stale edit can silently delete a live turn
+today.** `withEdit` checks only that its target still exists and is a user message, then discards
+everything after it. So:
+
+1. Tab A appends Q2 / A2 successfully
+2. Stale tab B edits Q1 successfully, **deleting Q2 and A2**
+3. A's model finishes; `finishTurn` matches no message — and the reader still sees a successful answer
+4. Reload, and Q2 and its answer are gone
+
+**The mutex orders those writes; it does not make the result correct.** Two concurrent edits of the
+same question have the same fault. So the design's argument — that a version column would 409 writes
+that succeed today — is right about *appends* and wrong about *destructive edits*.
+
+*The correction, and it is deliberately narrow:* no blanket thread version. Add an **`expectedTailId`
+to the destructive operations only**, compared under the lock, so the only edits rejected are those
+whose advertised discard set has changed underneath them. `withRetry` already has exactly this guard,
+by requiring the exact last assistant message.
+
+#### Four smaller corrections
+
+- **The `MAX_RUNS` trim does not match the file exactly.** The file appends and keeps the last thirty
+  *array elements*; `order by created_at desc, id desc offset 30` keeps thirty in *timestamp* order.
+  Those differ under a fixed clock, a clock rollback, hand-ordered imported data, or ties — and a newly
+  inserted run with an older timestamp can be trimmed immediately, so its model call ends in a 404.
+  Either store an insertion ordinal or adopt timestamp retention as a stated behaviour change; the
+  cheap compromise is to **exclude the newly inserted id from the trim candidates**, so a successful
+  `beginRun` can never delete itself.
+- **The search reset and identity rules were omitted from the design and its red-test list.** A retry
+  must set `hits = []`, `model = NULL` and `error = NULL` — the file rebuilds the run without them, so
+  they clear — and `finishRun` must never set `id` or `criterion`. Without the first, a failed
+  attempt's error survives beneath a later successful run.
+- **`makeLookUpTerm` misses two dependencies.** The body also touches `explain`, the clock, `safeUrl`,
+  `quoteIn` and logging. The pure helpers need not be injected, but **`explain` and `now` must be**, or
+  the new orchestration still cannot be tested end to end — the existing tests deliberately avoid the
+  successful model path, which is exactly the path this step moves.
+- **The privacy logging contract is spelled out only for chat.** Searches forbid logging the criterion,
+  the hit quote, the reasoning and the stored provider error; glossary lookups log ids, counts and
+  model but never the term or the answer. All three need saying, because this is an omission with
+  privacy consequences rather than a documentation nicety.
+
+#### Four claims that survived the attack
+
+Worth recording, so nobody re-opens them: imported chat ordinals really are dense array indices, and
+edit → retry → edit stays consistent. `finishTurn` really does bump `updatedAt` when the thread exists
+but the message does not. Retry really must reset the reply's `createdAt`, because the sweep reads it
+as attempt age. And row-constructor `NOT IN` is valid — NULL would poison it, but both stored ids are
+non-null, and `<> ALL` has the same NULL problem, so it is not the safer form. The empty-list guard is
+what matters.
+
+The unknown-slug divergence is real but not a blocker: an existing article with no chat still resolves
+its row and returns `[]`, so only a genuinely unknown slug 404s, and both clients already handle an
+error body. Standardise the files side eventually.
+
+#### The single change that most reduces risk
+
+**Durable attempt fencing on `search_runs`** — `attempt_id` plus attempt time, with both the sweep and
+the finish conditional on that attempt.
+
+### Open, and needing an answer before building
+
+1. **Does Drizzle's `db.transaction` propagate a thrown `ChatConflict` unchanged?** Believed yes for a
+   plain `throw`, not run. It decides whether a stale tab gets 409 or 500 — one assertion, written
+   before the chat store is built around it.
+2. **Is the `[]`-versus-404 divergence acceptable**, or should the filesystem side be brought up to
+   Postgres's behaviour? Greg's call.
+3. **Should `deleteGlossary` be dragged into step 10 anyway?** The SQL is trivial; leaving it 501 is a
+   real hole for anyone testing `postgres` mode.
 
 ## Step 11 — the pipeline writes revisions
 
