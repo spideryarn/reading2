@@ -162,6 +162,22 @@ byte-identical to a copy taken before. A gate test that has never been seen to f
 twenty-odd characters that make it an actual key. Checking the hit rather than trusting it is the
 whole reason to write these down.
 
+**Checked against a genuinely signed token, which is the one thing the unit tests mock.** A
+password grant from the local stack gives a real 928-character ES256 token; the gate was then asked
+five questions through the running dev server:
+
+```
+with a REAL token          -> 200
+with no token              -> 401
+with one character changed -> 401   ← the signature is VERIFIED, not decoded
+with the publishable key   -> 401   ← the key in the browser bundle is not a login
+POST /api/jobs, no token   -> 401   ← the open wallet, closed
+```
+
+The third line is the one worth having. `JSON.parse(atob(token.split(".")[1])).email` would answer
+200 to all five, and every unit test in `tests/auth.test.ts` would still pass, because they hand
+`requireUser` a stubbed verifier. This is the check that the stub is standing in for something real.
+
 **The local Google round trip is still unverified, and the reason is worth writing down** — it is
 [Sol's finding #2](#the-cross-family-review-and-what-it-changed) happening exactly as predicted.
 The `/**` entries were added to `supabase/config.toml`, but **GoTrue reads that file when its
