@@ -244,4 +244,36 @@ describe("failures are loud", () => {
 
     await expect(run()).rejects.toThrow(/stopped arriving after/);
   });
+
+  it("refuses without repeating what the provider said", async () => {
+    /* The leak this pins: OpenRouter's error body is the one place an upstream
+       might echo part of what we sent, and what we sent is the whole article
+       plus the reader's question. It used to reach `Error.message`, which
+       routes.ts hands to Pino *and* returns to the client — article prose in a
+       log, which docs/project/logging.md forbids outright.
+
+       Written for all three callers rather than just the one that had a test,
+       because the leak was in all three: converse, explain and search each had
+       their own copy of the throw. See `providerRefused` in
+       src/openrouter-stream.ts. */
+    const secret = "your prompt contained: the whole article, verbatim";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => secret,
+        body: null,
+      } as unknown as Response),
+    );
+
+    async function run() {
+      for await (const _event of converse({ meta, blocks, history: [], question: "why?" })) {
+        // Draining is the point; the throw happens on the failed response.
+      }
+    }
+
+    await expect(run()).rejects.toThrow(/refused this request \(HTTP 429\)/);
+    await expect(run()).rejects.not.toThrow(/whole article, verbatim/);
+  });
 });

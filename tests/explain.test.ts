@@ -276,11 +276,17 @@ describe("failures are loud", () => {
     await expect(ask()).rejects.toThrow(/returned no text/);
   });
 
-  it("surfaces an error carried inside a 200 stream", async () => {
-    // A mid-generation provider failure arrives as data, not as a broken
-    // connection, so nothing else in the plumbing would notice it.
+  it("surfaces an error carried inside a 200 stream, without repeating what it said", async () => {
+    /* A mid-generation provider failure arrives as data, not as a broken
+       connection, so nothing else in the plumbing would notice it. That it is
+       noticed is what this test is for, and it used to prove it by matching the
+       provider's own words — which is the thing we now specifically must not do
+       (docs/project/logging.md, and `providerRefused` in openrouter-stream.ts).
+       So: it still throws, and the provider's text is nowhere in what it throws.
+       The second assertion is the one that would have caught the leak. */
     fetchMock.mockResolvedValue(sse(frame({ error: { message: "upstream exploded" } })));
-    await expect(ask()).rejects.toThrow(/upstream exploded/);
+    await expect(ask()).rejects.toThrow(/reported an error while answering/);
+    await expect(ask()).rejects.not.toThrow(/upstream exploded/);
   });
 });
 

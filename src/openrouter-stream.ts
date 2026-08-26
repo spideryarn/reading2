@@ -276,3 +276,58 @@ export interface StreamChunk {
     delta?: { content?: string; annotations?: Annotation[] };
   }[];
 }
+
+/* ------------------------------------------ what the three callers must agree --
+   converse.ts, explain.ts and search.ts each open an OpenRouter call, and there
+   are two things they must not answer differently. Both used to be written out
+   in all three files, comments included, with nothing checking they matched. */
+
+/**
+ * Where to send the call, and why it is a preference rather than a rule.
+ *
+ * Ordered, **not** `allow_fallbacks: false`. A cache lives on the upstream that
+ * wrote it, so naming Anthropic first is what keeps repeat calls landing where
+ * the article already is — and OpenRouter's own sticky routing hashes the first
+ * user message, which varies here, so the heuristic would miss exactly the case
+ * this is for.
+ *
+ * But forbidding fallback outright would turn an Anthropic outage into a hard
+ * failure on a call a reader is sitting and waiting for. A cache miss costs
+ * money; an unavailable feature costs the reader the feature. Preference, not a
+ * ban.
+ */
+export const PROVIDER_ORDER = { order: ["anthropic"] } as const;
+
+/**
+ * The provider refused, and **what it said about why is not ours to repeat.**
+ *
+ * OpenRouter's error body is the one place an upstream might echo part of what
+ * we sent back at us, and what we sent is the whole article plus the reader's
+ * question or selection. All three callers used to put up to 400 characters of
+ * it into `Error.message`, which routes.ts hands to Pino and also returns to the
+ * client — so article prose could reach a log, which
+ * docs/project/logging.md forbids outright.
+ *
+ * The body is discarded **here, at the boundary**, rather than carried on a
+ * field marked do-not-log: sensitive data parked on an object is sensitive data
+ * waiting for the next serialiser to find it. Nothing diagnostic is lost that
+ * was being kept — every caller already logs the status, the model and the
+ * elapsed time on its own line before it throws.
+ *
+ * The status stays **in the sentence** on purpose. It is what a later decision
+ * about telling the reader "busy, try again" apart from "this is broken" would
+ * have to key on, and putting it there now means that change is a wording
+ * change rather than a plumbing one. See docs/plans/simplification-audit.md § A.5
+ * — the wording here is interim and Greg's to settle.
+ */
+export function providerRefused(status: number): Error {
+  return new Error(`The model provider refused this request (HTTP ${status}). Try again.`);
+}
+
+/**
+ * A 200 that carries an error in its body or its stream — a provider failing
+ * mid-generation. Same rule as above: the provider's own words are dropped.
+ */
+export function providerFailedMidAnswer(): Error {
+  return new Error("The model provider reported an error while answering. Try again.");
+}

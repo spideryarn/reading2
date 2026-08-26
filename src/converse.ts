@@ -58,9 +58,13 @@ import { loadEnvLocal } from "./env.js";
 import { ID_PATTERN } from "./ids.js";
 import { errorFields, log, since } from "./log.js";
 import {
+
   type StreamEnd,
   type Usage,
   explainAbort,
+  PROVIDER_ORDER,
+  providerFailedMidAnswer,
+  providerRefused,
   readerAborted,
   searchCount,
   sseChunks,
@@ -403,17 +407,7 @@ export async function* converse({
            content arrays for no gain here.
            docs/research/prompt-caching-openrouter.md § How OpenRouter exposes it. */
         cache_control: { type: "ephemeral" },
-        /* Ordered, **not** `allow_fallbacks: false`. A cache lives on the
-           upstream that wrote it, so naming Anthropic first is what keeps repeat
-           calls landing where the article already is — and OpenRouter's own
-           sticky routing hashes the first user message, which varies here, so
-           the heuristic would miss exactly the case this is for.
-
-           But forbidding fallback outright would turn an Anthropic outage into a
-           hard failure on a call a reader is sitting and waiting for. A cache
-           miss costs money; an unavailable feature costs the reader the feature.
-           Preference, not a ban. */
-        provider: { order: ["anthropic"] },
+        provider: PROVIDER_ORDER,
         stream: true,
         // Without this the usage block never arrives on a streamed response, and
         // every token count in the log line below is silently null — which reads
@@ -460,7 +454,10 @@ export async function* converse({
 
   if (!response.ok || !response.body) {
     clearTimeout(stallTimer);
-    const detail = await response.text().catch(() => "");
+    /* Drained and dropped without being looked at. The body has to be
+       consumed or the connection leaks, but nothing here wants to know
+       what it said — see `providerRefused`. */
+    await response.text().catch(() => "");
     // The status, not the body. OpenRouter's error text is the one place a
     // provider might echo part of what we sent, and what we sent is the whole
     // article plus the reader's question.
@@ -468,7 +465,7 @@ export async function* converse({
       { model, ms: since(started), status: response.status },
       `OpenRouter refused: ${response.status}`,
     );
-    throw new Error(`OpenRouter ${response.status}: ${detail.slice(0, 400)}`);
+    throw providerRefused(response.status);
   }
 
   let text = "";
@@ -493,7 +490,7 @@ export async function* converse({
       // A 200 that carries an error in the stream — a mid-generation provider
       // failure. It arrives as data, not as a broken connection, so nothing
       // else would notice it.
-      if (chunk.error) throw new Error(`OpenRouter: ${chunk.error.message}`);
+      if (chunk.error) throw providerFailedMidAnswer();
       const choice = chunk.choices?.[0];
       if (choice?.finish_reason) finishReason = choice.finish_reason;
       for (const a of choice?.delta?.annotations ?? []) {
