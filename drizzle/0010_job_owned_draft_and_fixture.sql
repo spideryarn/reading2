@@ -1,0 +1,4 @@
+ALTER TABLE "spideryarn"."articles" ADD COLUMN "fixture" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "spideryarn"."jobs" ADD COLUMN "draft_revision_id" uuid;--> statement-breakpoint
+ALTER TABLE "spideryarn"."jobs" ADD CONSTRAINT "jobs_draft_revision_id_article_revisions_id_fk" FOREIGN KEY ("draft_revision_id") REFERENCES "spideryarn"."article_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "jobs_draft_revision_unique" ON "spideryarn"."jobs" USING btree ("draft_revision_id") WHERE "spideryarn"."jobs"."draft_revision_id" is not null;

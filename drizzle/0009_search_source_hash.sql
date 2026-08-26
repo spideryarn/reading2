@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."search_runs" ADD COLUMN "source_hash" text;
