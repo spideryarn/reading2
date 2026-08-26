@@ -979,7 +979,9 @@ Step 1 of the build order, done, then re-run after
 more evidence."* Ninety calls, five auditable runs on each of the two chunks that mattered, and one
 control experiment. Everything is in
 [`evals/pdf/baselines/bakeoff-2026-08-26.json`](../../evals/pdf/baselines/bakeoff-2026-08-26.json) —
-scores, usage and page lists, no transcribed prose.
+scores, usage and page lists, no transcribed prose — and the harness that produced it is committed
+beside it at [`evals/pdf/bakeoff/`](../../evals/pdf/bakeoff/README.md), because a measurement whose
+method you cannot read is an anecdote.
 
 **Read the caveats in that file before the numbers.** The short version, because it governs how much
 any of this is worth:
