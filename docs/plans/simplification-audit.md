@@ -11,8 +11,9 @@ here are not discoveries. They are places where a comment, a doc, or a postmorte
 must stay in step, and nothing makes them. `security.md` predicted the `assertSlug` spread.
 `useChat.ts` names the bug a shared `r.ok` check would have prevented — twice. `searches.ts` says
 "this is the third file to carry this bug" and names the durable fix that was never made.
-`explain.ts` points at `converse.ts` for a guard `converse.ts` does not have. Most of the work below
-is finishing sentences the repo already started.
+And the plan behind explain's streaming rewrite wrote down, in as many words, a guard `converse.ts`
+was missing — then nothing tracked it for four months. Most of the work below is finishing sentences
+the repo already started.
 
 ## Status, 2026-08-26
 
@@ -106,9 +107,16 @@ in "try again", so the reader never notices; what is lost is the log line, which
 `ended without finishing` instead of `stalled: true` — the line somebody reads when explanations
 start failing and they want to know whether to blame the network or the provider.
 
-And `explain.ts`'s comment says *"See the same guard… in `src/converse.ts`"* — pointing at a file
-that does not have it. **Drift, documented in the wrong direction.** This is the concrete evidence
-that §3.4 was wrongly declined in the first draft.
+**Correction to this section's first draft.** It said `explain.ts`'s comment pointed at
+`converse.ts` for a guard `converse.ts` lacks. That is wrong: the comment saying so sits on *guard 1*
+(`readerAborted`), which `converse` does have. Guard 2's comment cites `tests/explain.test.ts` and
+does not mention `converse` at all.
+
+The truth is better evidence for §3.4, not worse. The gap was **written down and left**: the plan
+behind the commit that gave `explain` guard 2 says *"`src/converse.ts` has the same shape, guarded
+only for the reader's signal"* ([explain-deeper-answers.md § 2](explain-deeper-answers.md)) — and
+nothing tracked it afterwards. Two copies of one invariant plus a note in a plan is not a mechanism;
+a shared transport is.
 
 **Do:** the failing test first, mirroring `tests/explain.test.ts` § "says a silence is a silence".
 Then the guard. Then §3.4 stops it recurring.
@@ -119,12 +127,18 @@ Reported by GPT Sol, **under investigation, not yet confirmed**: a retry sends a
 replaces the old row with `pending` and then appends the reminted row without removing the old one
 (`useSearch.ts:95`). If real: a stuck pending run, a duplicate, and `?run=` pointing at the wrong id.
 
-`tests/searches.test.ts:107` calls the client tombstone "the other half of the same guarantee" —
-only the server half is currently pinned.
+**Confirmed**, and written up in
+[search-retry-remints-instead-of-resetting.md](../postmortems/search-retry-remints-instead-of-resetting.md).
+Introduced by `cb1f269`, the single commit that created `searches.ts` and `useSearch.ts` by copying
+`comments.ts`/`useComments.ts`: it carried the delete-tombstone across and dropped the other half of
+the contract.
 
-**§2.4 is blocked on this.** Extracting `useTombstonedList` over a broken identity contract would
-enshrine the bug in shared code. Check `useComments` for the same defect — it also remaps a
-server-reminted id.
+**`useComments` was checked and is clean.** `createComment` has the reset-in-place branch, so the
+server never remints a comment's own id on a retry — which means the `begin`-frame remap in
+`useComments.ts` that looks like the fix is actually dead code for the retry case.
+
+**§2.4 stays blocked until this is done.** Extracting `useTombstonedList` now would enshrine the
+asymmetry, because `useComments`'s safety comes from a server contract `useSearch` did not have.
 
 ---
 

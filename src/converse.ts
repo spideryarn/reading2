@@ -575,11 +575,15 @@ export async function* converse({
      of `stalled: true`, and that is the line somebody reads when chat starts
      failing and they want to know whether to blame the network or the provider.
 
-     explain.ts has had this guard since it became a stream. This file did not,
-     although explain.ts's comment on the guard above says to come here for the
-     account of how it was found — drift documented in the wrong direction, and
-     the reason docs/plans/simplification-audit.md § 3.4 now schedules a shared
-     transport rather than leaving these two to agree by hand. Full account:
+     explain.ts has had this guard since it became a stream (62a5d85) and this
+     file did not, which is worth being exact about: it was not missed. The plan
+     behind that commit wrote it down —
+     *"`src/converse.ts` has the same shape, guarded only for the reader's
+     signal"* (docs/plans/explain-deeper-answers.md § 2) — and then nothing
+     tracked it, for four months. A known gap with nowhere to live is a gap that
+     stays open, which is the argument for
+     docs/plans/simplification-audit.md § 3.4: one transport both callers share,
+     rather than two copies of an invariant and a note in a plan. Full account:
      docs/postmortems/converse-stall-misfiled-as-incomplete.md. */
   if (!stopped && (deadline.aborted || stall.signal.aborted)) {
     line.error(
