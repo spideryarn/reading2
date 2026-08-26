@@ -20,7 +20,7 @@
  * at `main()` in src/blocks.ts. With one, this module becomes an async module,
  * and importing it would also *run* it.
  */
-import { JSDOM } from "jsdom";
+import { JSDOM, VirtualConsole } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -133,7 +133,27 @@ export async function runExtract(opts: {
   const outFile = opts.outFile ?? defaultOutFile(opts.url);
   const slug = slugForOutFile(outFile);
 
-  const dom = new JSDOM(opts.html, { url: opts.url });
+  /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
+     JSDOM's default forwards its own errors straight to `console`, and one of
+     them quotes the page: a malformed `@import` produces `Could not parse CSS
+     @import URL "<whatever the page said>" relative to base URL "<the full
+     source URL, query string included>"`. That is fetched-page-controlled text
+     and a possibly private URL on the server's stderr, going round Pino,
+     `errorFields` and redaction alike — none of which can reach a string
+     somebody else's library printed.
+
+     Ordinary CSS parse failures print a fixed sentence and are harmless; it is
+     the `@import` branch that carries the page's own words. Dropping the lot is
+     right anyway: we are here for the article text, and JSDOM's opinion of a
+     stylesheet is not something anybody running this needs.
+
+     Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
+     of the same class, and the first one where the leak was a dependency's
+     rather than ours. See docs/project/logging.md. */
+  const dom = new JSDOM(opts.html, {
+    url: opts.url,
+    virtualConsole: new VirtualConsole(),
+  });
   const article = new Readability(dom.window.document).parse();
   if (!article) {
     throw new Error("Readability could not parse this page.");

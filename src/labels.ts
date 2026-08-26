@@ -1223,7 +1223,15 @@ export async function generateLabels(opts: {
      testable without a network or a credential, which is the only way a test
      can prove a resumed batch did not quietly go and ask again. */
   let client: Anthropic | null = null;
-  const clientFor = (): Anthropic => (client ??= new Anthropic());
+  /* `logLevel: "off"`, and it is a privacy setting rather than a preference. The
+     SDK has a logger of its own that defaults to `console` and reads
+     `ANTHROPIC_LOG` from the environment; at `debug` it prints the outgoing
+     request — **which is the whole article** — and, for a non-JSON error
+     response, the raw upstream body. Neither goes through Pino, so neither can
+     be redacted, and `anthropicCallFailed` never sees them. One environment
+     variable, set by somebody debugging something else, and every article this
+     app has read is on stdout. See docs/project/logging.md. */
+  const clientFor = (): Anthropic => (client ??= new Anthropic({ logLevel: "off" }));
   const sourceHash = hashBlocks(opts.blocks);
   const manifest = {
     version: PROMPT_VERSION,
