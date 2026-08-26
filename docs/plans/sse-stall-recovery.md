@@ -186,15 +186,32 @@ second watch for the same row supersedes the first instead of running beside it.
 What it cleared: the fire-and-forget `cancel`, the `wasThread`/`wasReply` capture, and the heartbeat
 lifetimes.
 
-## What this does not close
+## What is left, and what the tidying pass closed
 
-- **A stream lost before `begin`** cannot be recovered, and is reported as a plain failure. The
-  message id is one the client invented and no amount of looking on the server will find it. Closing
-  it would mean the client sending a correlation id the server echoes and stores.
-- **`useComments` and `useSearch` still read their streams with no clock**, so both can still hang
-  on a dead connection. One argument each way: they are much shorter waits, and neither has anywhere
-  to recover *to*, so they would get the failure without the fix. The option is one argument away
-  when somebody wants it.
-- **`run` is over the cognitive-complexity threshold** and this made it worse (64 → 86). It was
-  already the largest function in the file. Splitting the frame loop out of the lifecycle is the
-  obvious move and is not this change.
+Three things were written down as open when this landed. A tidying pass the same day closed two of
+them; the first is still open, and is the only one of the three that is not a small change.
+
+- **A stream lost before `begin` still cannot be recovered**, and is reported as a plain failure.
+  The message id is one the client invented and no amount of looking on the server will find it.
+  Closing it means the client sending a correlation id that the server stores on the assistant row,
+  so a watch can ask for the row by a name it chose rather than by one it was given. That is now
+  more than a client change: chat rows live in Postgres as well as on disk
+  ([`src/store/pg-chat.ts`](../../src/store/pg-chat.ts)), so it wants a column and a migration, and
+  the store is somebody else's live work. Deliberately left.
+  The window is narrow — the POST going out to `beginTurn`'s write returning — and the cost of
+  losing it is one orphan row that the server's own sweep turns into a visible failure.
+- **`useComments` and `useSearch` now have the clock too**, added 2026-08-26 in the tidying pass
+  after this landed. One argument each way, and the argument for won: they are shorter waits and
+  neither has anywhere to *recover* to, so all a clock buys them is a failure the reader can see
+  instead of a spinner that never stops — but that is the whole of the bug this plan is about, and
+  a comment that has hung for ever is not improved by having hung for a shorter time. The
+  `StreamStalled` class message ("the stream sent nothing for 60s") is the right thing in a log and
+  the wrong thing on screen, so `describeFetchFailure` — which all three hooks describe their
+  failures through — now words it with `wentQuiet` and its `[ai-stalled]` code.
+- **`run` is no longer the file's most complicated function by a wide margin**, though it is still
+  over the advisory threshold: **86 → 46**, by lifting the frame loop out into `drainTurn` and the
+  `begin` frame's id-juggling out into `nameRow`. The split is the one the shape suggests — frames
+  in one function, which knows nothing about ids or deadlines, and the lifecycle in the other.
+  Measured: only `drainTurn` moved the number; `nameRow` is readability and is written down as
+  such, because a comment claiming a complexity win the tool disagrees with is worse than no
+  comment.

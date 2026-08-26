@@ -333,6 +333,42 @@ alone, in order.
 
 ## Still open
 
+- **A turn can spend itself entirely on tools and answer with nothing.** Reported by Greg,
+  2026-08-26, and not yet diagnosed. The question was *"Search your library for other things I have
+  read about AI values, then read the most relevant passage, and compare it carefully with this
+  article. Take your time."* Eight `search_library` calls ran — five of them `nothing found`, three
+  of them finding passages — and then the turn ended on
+  `The AI service finished without saying anything at all. [ai-empty]`. It never reached
+  `read_passage`, and the reader got the tool strip and no answer.
+
+  Two separate things are visible in that one screenshot and they should not be conflated:
+
+  - The five empty searches are **the literal matcher**, which is the first bullet below and is
+    already understood. "AI values alignment", "corrigibility", "machine ethics" and "welfare
+    wellbeing AI" are phrases nobody writes verbatim; "Anthropic" and "superintelligence" are, and
+    those are the ones that found something. Not a new bug, but it is what set up the second one:
+    a question told to take its time, against a matcher that answers most of its guesses with
+    nothing, will keep guessing.
+  - The empty answer is **new and is the actual fault**. `saidNothing` is what prints `[ai-empty]`
+    (src/messages.ts), so the last round came back with no text. The loop is supposed to make that
+    impossible: the final round is offered no tools precisely so that it must be prose
+    ([above](#2-the-last-round-is-offered-no-tools-of-ours-and-that-is-what-terminates-the-loop)).
+    Something let a round end with neither a tool call nor a word.
+
+  Suspects, in the order worth checking: **the output budget** — eight tool calls' worth of
+  arguments are output tokens, and a turn that spends them has nothing left to write with, which is
+  the same shape as the capped-list bug in [The bug that shaped the literal
+  search](#the-bug-that-shaped-the-literal-search); the **`finish_reason`** on that final round,
+  which `saidNothing` already branches on and which would say whether this was a length cap, a
+  filter, or a genuinely empty completion; and whether **eight calls across three rounds** means the
+  model asked for several per round, in which case the round cap is not the bound anyone thinks it
+  is. The `rounds` and token counts are already in the log line ([What is
+  logged](#what-is-logged)), so a repeat with the server log beside it should settle which.
+
+  Worth saying plainly: the honest reader-facing outcome here is bad in a way the message does not
+  admit. *"Asking again usually gets an answer"* is true of a one-off empty completion and false of
+  a question that will spend its budget the same way every time.
+
 - **Tools run one at a time.** Two web pages fetched at once would be twice as fast; what it costs is
   the reader watching one line at a time and understanding what is being done for them. Models here
   ask for one or two tools at a time, so the saving is small today. Revisit if that changes.

@@ -17,6 +17,8 @@ import {
   patchComment,
 } from "../src/comments.js";
 import { describeFetchFailure } from "../src/web/useComments.js";
+import { StreamStalled } from "../src/web/lib/sse.js";
+import { wentQuiet } from "../src/messages.js";
 
 const SLUG = "test-comments-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -141,6 +143,17 @@ describe("describeFetchFailure", () => {
     expect(describeFetchFailure(new Error("OpenRouter 402: Insufficient credits"))).toBe(
       "OpenRouter 402: Insufficient credits",
     );
+  });
+
+  it("words a stalled stream for a reader rather than for a stack trace", () => {
+    // `StreamStalled`'s own message is "the stream sent nothing for 60s", which
+    // is the right thing to find in a log and the wrong thing to put on screen.
+    // All three streaming hooks describe their failures through this function,
+    // so wording it here is what stops the class message reaching any of them.
+    const message = describeFetchFailure(new StreamStalled(60_000));
+    expect(message).toBe(wentQuiet(60).message);
+    expect(message).toContain("[ai-stalled]");
+    expect(message).not.toContain("the stream sent nothing");
   });
 });
 

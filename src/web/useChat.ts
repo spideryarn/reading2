@@ -314,10 +314,121 @@ function release(owned: Map<string, number>, id: string): void {
   else owned.delete(id);
 }
 
+interface TurnSink {
+  /** Rewrite the assistant row this turn is writing into. */
+  patch(patch: Partial<ChatMessage>): void;
+  /** The server has named the thread and the row. */
+  begin(begun: Begun): void;
+}
+
+/**
+ * The frames of one turn, and the four kinds of them.
+ *
+ * Lifted out of `run` because the two are different jobs that happened to be
+ * written in one place: this one turns frames into patches and knows nothing
+ * about ids, ownership, deadlines or what a lost stream means, all of which is
+ * `run`'s business. A five-branch loop nested inside a `try` inside an async
+ * IIFE inside a callback also made `run` far and away the most complicated
+ * function in the file, and the two accumulators the loop needs — `text` and
+ * `tools` — sat in `run`'s scope where nothing else could reach them anyway.
+ *
+ * `begin` is handed back rather than handled here for the opposite reason: it
+ * is *entirely* about ids, and every line of it reassigns something `run`
+ * owns. `sink.begin` is also what records that the row has been named — a flag
+ * in `run` rather than a return value from here, because the stream can throw
+ * after that frame and the answer to "was it ever named?" has to survive the
+ * throw.
+ */
+async function drainTurn(body: ReadableStream<Uint8Array>, sink: TurnSink): Promise<void> {
+  /* Accumulated here rather than read back off the row, because the row is
+     React state: a patch is not visible to the next frame's read, and two
+     deltas arriving in one tick would each append to the same stale text. */
+  let text = "";
+  /** What the tools have done so far, kept here for the same reason `text` is. */
+  let tools: ToolRun[] = [];
+  for await (const event of readEvents(body, { stallMs: STREAM_STALL_MS })) {
+    if (event.name === "begin") {
+      sink.begin(event.data as Begun);
+      continue;
+    }
+    if (event.name === "delta") {
+      text += (event.data as { text: string }).text;
+      sink.patch({ text });
+      continue;
+    }
+    /* A tool starting, or the same tool finishing. **Assigned by index
+       rather than appended**, which is what makes the row that says
+       "searching your library…" become the row that says what it found,
+       in place, rather than a second row underneath it.
+
+       `tools.slice()` because the array on the row is the one React has
+       already rendered; mutating it and handing back the same reference
+       is the classic way to make a list that updates on the next
+       unrelated render and not before. */
+    if (event.name === "tool") {
+      const { index, run } = event.data as { index: number; run: ToolRun };
+      tools = tools.slice();
+      tools[index] = run;
+      sink.patch({ tools });
+      continue;
+    }
+    if (event.name === "done") {
+      const done = event.data as {
+        text: string;
+        citations: Citation[];
+        searches: number;
+        tools?: ToolRun[];
+        truncated?: boolean;
+        model: string;
+        stopped?: boolean;
+      };
+      /* `stopped: false` explicitly, not left off. This row may be a
+         retry of one that *was* stopped, and a patch that omits the
+         field leaves the old `true` sitting under new text — a complete
+         answer wearing "Stopped" underneath it. */
+      /* `stopped` and `tools` are both defaulted *before* the spread,
+         for one reason: the server omits each of them when there is
+         nothing to say, so a spread alone cannot clear a stale one. A
+         retry of an answer that ran three tools would otherwise keep
+         that answer's tool strip sitting above text those tools had
+         nothing to do with. */
+      sink.patch({ stopped: false, truncated: false, tools: [], ...done, status: "done" });
+      continue;
+    }
+    if (event.name === "error") {
+      const failed = event.data as { error: string; text: string };
+      // The partial answer is kept — the reader watched it appear, and
+      // taking it away on failure is more confusing than leaving it
+      // there with the failure attached. The server stores it too.
+      sink.patch({ text: failed.text || text, status: "error", error: failed.error });
+    }
+  }
+}
+
 export function useChat(slug: string): ChatApi {
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * What is on screen right now, readable from an event handler.
+   *
+   * One thing needs it: an edit has to tell the server which message this tab
+   * believes is last, so the server can refuse an edit whose discard set has
+   * changed underneath it. Without that guard a stale tab editing an old
+   * question silently deletes every turn added since it last looked, and
+   * nothing notices — see `expectedTailId` in src/store/contracts.ts.
+   *
+   * A ref written from an effect rather than a value closed over by `edit`,
+   * because `edit` deliberately has an empty-ish dependency list and closing
+   * over `threads` would make it a new function on every delta of every
+   * streaming answer. The effect runs at commit, and a click happens after a
+   * commit, so what this holds is exactly what the reader was looking at.
+   */
+  const onScreen = useRef<ChatThread[]>([]);
+  useEffect(() => {
+    onScreen.current = threads;
+  }, [threads]);
 
   /**
    * Threads the reader deleted while an answer was still arriving.
@@ -780,6 +891,67 @@ export function useChat(slug: string): ChatApi {
           messages: t.messages.map((m) => (m.id === pendingId ? { ...m, ...patch } : m)),
         }));
 
+      /* Whether the server ever named this row. Until it has, `pendingId` is
+         a name this client invented and no amount of looking on the server
+         will find it — so a stream lost before `begin` cannot be recovered
+         and goes straight to a failure. */
+      let began = false;
+
+      /* The `begin` frame's whole job, kept out of the loop that delivers it.
+
+         Named and lifted here rather than written inline in the sink because it
+         is the one frame that is not about the answer at all: it is the server
+         telling this client the real names of the two rows it invented, and
+         every line below reassigns something declared above. Beside
+         `patchReply` it reads as what it is; inline it was forty lines of
+         reassignment inside an object literal inside a call.
+
+         That is a readability argument and not a complexity one — moving it
+         changed the measured score by nothing, since Biome scores a nested
+         function on its own. The 86 → 46 came from `drainTurn`. */
+      const nameRow = (begun: Begun): void => {
+        began = true;
+        /* Claimed before anything else in this frame. From here on the
+           watcher must leave this row alone: it is `pending` and it has
+           somebody. Released in the `finally` below, whatever happens. */
+        claim(owned.current, begun.messageId);
+        /* Both ids read into `const`s **before** the updater is handed
+           over, and that is a bug fix rather than a style. React runs a
+           functional updater during the next render, not at the call —
+           and the four lines below this one reassign both `current` and
+           `pendingId`, which the closure would then see. So
+           `withServerIds` was being asked to find a thread under the id
+           the server had just moved it to, and a row under the id it
+           was about to be renamed to; it found neither and returned the
+           list untouched.
+           Invisible in the ordinary case, because the server accepts
+           the client's thread id and neither variable changes. It bites
+           on exactly the path this frame exists for — a thread id the
+           server overrules — leaving the panel holding invented names
+           for both rows, which is the "That message is not in this
+           conversation." failure this file already describes once.
+           Found by tests/use-chat-recovery.test.ts, 2026-08-26. */
+        const wasThread = current;
+        const wasReply = pendingId;
+        setThreads((prev) => withServerIds(prev, wasThread, wasReply, begun));
+        const wanted =
+          stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
+        if (begun.attempt !== undefined) {
+          attempts.current.set(begun.messageId, begun.attempt);
+        }
+        pendingId = begun.messageId;
+        if (begun.threadId !== current) {
+          current = begun.threadId;
+          // The URL is pointing at an id the server did not accept. Tell
+          // the caller so `?thread=` can follow, or a reload lands on a
+          // conversation that does not exist.
+          onThreadId?.(begun.threadId);
+        }
+        // A stop pressed before this frame arrived. Now there is an id
+        // for it, so it happens rather than being dropped on the floor.
+        if (wanted) void askToStop(current, pendingId);
+      };
+
       void (async () => {
         /* A deadline on the *response*, cleared the moment the headers arrive —
            see `OPEN_TIMEOUT_MS`. It must not outlive the `await` below, or it
@@ -834,112 +1006,11 @@ export function useChat(slug: string): ChatApi {
             throw new Error(why);
           }
 
-          let text = "";
-          /** What the tools have done so far, kept here for the same reason `text` is. */
-          let tools: ToolRun[] = [];
-          /* Whether the server ever named this row. Until it has, `pendingId` is
-             a name this client invented and no amount of looking on the server
-             will find it — so a stream lost before `begin` cannot be recovered
-             and goes straight to a failure. */
-          let began = false;
           try {
-            for await (const event of readEvents(response.body, { stallMs: STREAM_STALL_MS })) {
-              if (event.name === "begin") {
-                began = true;
-                const begun = event.data as Begun;
-                /* Claimed before anything else in this frame. From here on the
-                   watcher must leave this row alone: it is `pending` and it has
-                   somebody. Released in the `finally` below, whatever happens. */
-                claim(owned.current, begun.messageId);
-                /* Both ids read into `const`s **before** the updater is handed
-                   over, and that is a bug fix rather than a style. React runs a
-                   functional updater during the next render, not at the call —
-                   and the four lines below this one reassign both `current` and
-                   `pendingId`, which the closure would then see. So
-                   `withServerIds` was being asked to find a thread under the id
-                   the server had just moved it to, and a row under the id it
-                   was about to be renamed to; it found neither and returned the
-                   list untouched.
-                   Invisible in the ordinary case, because the server accepts
-                   the client's thread id and neither variable changes. It bites
-                   on exactly the path this frame exists for — a thread id the
-                   server overrules — leaving the panel holding invented names
-                   for both rows, which is the "That message is not in this
-                   conversation." failure this file already describes once.
-                   Found by tests/use-chat-recovery.test.ts, 2026-08-26. */
-                const wasThread = current;
-                const wasReply = pendingId;
-                setThreads((prev) => withServerIds(prev, wasThread, wasReply, begun));
-                const wanted =
-                  stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
-                if (begun.attempt !== undefined) {
-                  attempts.current.set(begun.messageId, begun.attempt);
-                }
-                pendingId = begun.messageId;
-                if (begun.threadId !== current) {
-                  current = begun.threadId;
-                  // The URL is pointing at an id the server did not accept. Tell
-                  // the caller so `?thread=` can follow, or a reload lands on a
-                  // conversation that does not exist.
-                  onThreadId?.(begun.threadId);
-                }
-                // A stop pressed before this frame arrived. Now there is an id
-                // for it, so it happens rather than being dropped on the floor.
-                if (wanted) void askToStop(current, pendingId);
-                continue;
-              }
-              if (event.name === "delta") {
-                text += (event.data as { text: string }).text;
-                patchReply({ text });
-                continue;
-              }
-              /* A tool starting, or the same tool finishing. **Assigned by index
-                 rather than appended**, which is what makes the row that says
-                 "searching your library…" become the row that says what it found,
-                 in place, rather than a second row underneath it.
-
-                 `tools.slice()` because the array on the row is the one React has
-                 already rendered; mutating it and handing back the same reference
-                 is the classic way to make a list that updates on the next
-                 unrelated render and not before. */
-              if (event.name === "tool") {
-                const { index, run } = event.data as { index: number; run: ToolRun };
-                tools = tools.slice();
-                tools[index] = run;
-                patchReply({ tools });
-                continue;
-              }
-              if (event.name === "done") {
-                const done = event.data as {
-                  text: string;
-                  citations: Citation[];
-                  searches: number;
-                  tools?: ToolRun[];
-                  truncated?: boolean;
-                  model: string;
-                  stopped?: boolean;
-                };
-                /* `stopped: false` explicitly, not left off. This row may be a
-                   retry of one that *was* stopped, and a patch that omits the
-                   field leaves the old `true` sitting under new text — a complete
-                   answer wearing "Stopped" underneath it. */
-                /* `stopped` and `tools` are both defaulted *before* the spread,
-                   for one reason: the server omits each of them when there is
-                   nothing to say, so a spread alone cannot clear a stale one. A
-                   retry of an answer that ran three tools would otherwise keep
-                   that answer's tool strip sitting above text those tools had
-                   nothing to do with. */
-                patchReply({ stopped: false, truncated: false, tools: [], ...done, status: "done" });
-                continue;
-              }
-              if (event.name === "error") {
-                const failed = event.data as { error: string; text: string };
-                // The partial answer is kept — the reader watched it appear, and
-                // taking it away on failure is more confusing than leaving it
-                // there with the failure attached. The server stores it too.
-                patchReply({ text: failed.text || text, status: "error", error: failed.error });
-              }
-            }
+            await drainTurn(response.body, {
+              patch: patchReply,
+              begin: nameRow,
+            });
             /* The stream ended without saying how — the server always sends
                `done` or `error` before it ends the response. Usually nothing is
                done about it here, and that is the point: the row is left
@@ -1084,6 +1155,14 @@ export function useChat(slug: string): ChatApi {
     (threadId: string, messageId: string, question: string, at: string | null) => {
       const now = new Date().toISOString();
       const pendingId = mintId();
+      /* Read **before** the optimistic rewrite below, which is the whole point:
+         this is what the reader was looking at when they pressed save, and the
+         server refuses the edit if the conversation has moved past it. Absent
+         only for a thread this tab has never seen the server's version of, in
+         which case there is nothing after the question to be lost. */
+      const expectedTailId = onScreen.current
+        .find((t) => t.id === threadId)
+        ?.messages.at(-1)?.id;
       put(threadId, (t) => {
         const index = t.messages.findIndex((m) => m.id === messageId);
         if (index < 0) return t;
@@ -1102,7 +1181,11 @@ export function useChat(slug: string): ChatApi {
           ],
         };
       });
-      run(threadId, { edit: messageId, question, at }, pendingId);
+      run(
+        threadId,
+        { edit: messageId, question, at, ...(expectedTailId ? { expectedTailId } : {}) },
+        pendingId,
+      );
     },
     [put, run],
   );

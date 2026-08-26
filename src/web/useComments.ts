@@ -14,7 +14,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Comment } from "../types.js";
 import { mintId } from "../ids.js";
-import { readEvents } from "./lib/sse.js";
+import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
+import { wentQuiet } from "../messages.js";
 import type { SelectionAnchor } from "./selection.js";
 import { failure, readJson } from "./lib/api.js";
 
@@ -32,6 +33,14 @@ import { failure, readJson } from "./lib/api.js";
  * The original text is kept in parentheses so the message is still searchable.
  */
 export function describeFetchFailure(error: Error): string {
+  /* A stream that stopped delivering bytes. `StreamStalled`'s own message is
+     written for whoever is reading a stack trace — "the stream sent nothing for
+     60s" — and `wentQuiet` is the same fact said to a reader, with the bracketed
+     code every other failure here carries. Handled in the one function all three
+     hooks describe their failures through, rather than at each of the three
+     `catch` blocks, because a raw class message reaching a reader is exactly the
+     kind of thing that only shows up when the failure does. */
+  if (error instanceof StreamStalled) return wentQuiet(error.seconds).message;
   // A TypeError from fetch means the request never got a response at all; an
   // Error we threw ourselves already carries a real message from the server.
   return error instanceof TypeError
@@ -202,7 +211,15 @@ export function useComments(slug: string): CommentsApi {
              are two different things, and only the first can be an HTTP code. */
           if (!r.ok || !r.body) throw await failure(r);
 
-          for await (const event of readEvents(r.body)) {
+          /* A clock on the bytes. Nothing here can *recover* the way chat does —
+             there is no `pending` comment row for a watcher to adopt, and the
+             answer the server finished writing simply appears on the next
+             reload — so all this buys is a failure the reader can see instead
+             of a spinner that never stops. That is most of the value: the bug
+             this was built for was a panel that said "thinking…" for ever.
+             `sse(res)` beats every 15 seconds on this route too, so the same
+             60-second silence means the same thing here. */
+          for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
             /* **Read to the end even when the reader has deleted it.** Breaking
                out here was the obvious thing and it loses the row: the server
                writes the answer on its own `done`, *after* our DELETE has run,
