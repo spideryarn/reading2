@@ -66,9 +66,28 @@ export interface ReaderFacingFailure {
  *
  * Derived rather than stored, so a new kind cannot be added without deciding
  * this — the compiler makes you come here.
+ *
+ * **A total map rather than `kind === "retry"`, which is what makes that last
+ * sentence true.** It was written as the comparison, and a fifth member of
+ * `FailureKind` would have compiled without touching this function and quietly
+ * become non-retryable — so the cost this comment claims to charge for a new
+ * kind was never actually collected. Found by a GPT Sol review on 2026-08-26,
+ * while it was answering whether a fifth kind was affordable. A missing key
+ * here is a type error, which is the entire reason for the shape.
+ *
+ * A map and not a `switch` with a throwing `default`: `FailureKind` is closed
+ * and declared in this file, so the right failure is a red compile, not a
+ * crash at runtime on a value somebody added upstream.
  */
+const RETRYABLE: Record<FailureKind, boolean> = {
+  retry: true,
+  ours: false,
+  bug: false,
+  blocked: false,
+};
+
 export function canRetry(kind: FailureKind): boolean {
-  return kind === "retry";
+  return RETRYABLE[kind];
 }
 
 /**
@@ -140,10 +159,22 @@ export function kindOfMessage(message: string): FailureKind | null {
  * rephrase in the box, edit the question), which is exactly what makes hiding a
  * button safe there and not here.
  *
- * **AddArticle's Retry**, which restarts a pipeline job. Job errors are not
- * these strings and carry no code, so this would return `true` for all of them
- * and change nothing. Worth revisiting when job failures get the same
- * treatment; today it would be decoration.
+ * **AddArticle's Retry**, which restarts a pipeline job. This one is a real
+ * gap, not a decision, and the reason recorded here has gone stale: it said job
+ * errors carry no code. Some do now — `anthropicCallFailed`
+ * (src/anthropic-call.ts) throws `providerHttpFailure(status).message`, code
+ * and all, and the Anthropic stages surface it.
+ *
+ * But the failure that most needs this still carries nothing.
+ * `TooLongForOnePass` (src/token-budget.ts) is arithmetic: a second attempt
+ * cannot succeed, and the button is offered anyway. See
+ * docs/postmortems/toc-max-tokens.md.
+ *
+ * The fix wants a structured `FailureKind` on the job rather than a code parsed
+ * back out of a sentence. A job is a struct with room for a field; the stored
+ * messages this file serves are not, and that constraint is the *only* reason
+ * the code carries the kind — see `kindOfMessage`. A workaround should not be
+ * inherited by the case that does not need it.
  */
 export function worthRetrying(message: string | null | undefined): boolean {
   if (!message) return true;
@@ -191,6 +222,19 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      glance — see `STORAGE_BUSY`. */
   "db-busy": "retry",
   "db-failed": "bug",
+  /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
+     for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
+     both. It guessed right — both are `retry`, and null means offer the retry —
+     which is exactly why nothing ever looked wrong.
+
+     The cross-check in tests/messages.test.ts was written to catch this and did
+     not, because it compared this table against a second hand-written list that
+     was missing the same two messages. Two lists that agree while both being
+     wrong are not a check. That test now collects the messages out of this
+     module instead, so only one of the two lists is maintained by hand and it
+     is this one. Found by a GPT Sol review. */
+  "ai-no-response": "retry",
+  "ai-tool-lost": "retry",
 };
 
 

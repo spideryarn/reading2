@@ -8,19 +8,13 @@
  * is the test that would have caught the bug this file was written after.
  */
 import { describe, expect, it } from "vitest";
+import * as messages from "../src/messages.js";
 import {
-  ANSWER_OVERFLOWED,
   canRetry,
   CODE_KINDS,
   kindOfMessage,
   worthRetrying,
-  ENDED_UNFINISHED,
-  MODEL_REFUSED,
-  NOT_CONFIGURED,
-  UNEXPECTED_FAILURE,
   type FailureKind,
-  PROVIDER_FAILED_MID_ANSWER,
-  PROVIDER_UNREADABLE,
   providerHttpFailure,
   type ReaderFacingFailure,
   saidNothing,
@@ -28,25 +22,45 @@ import {
   wentQuiet,
 } from "../src/messages.js";
 
-/** Every failure this module can produce, so the invariants below can sweep. */
-const EVERY: ReaderFacingFailure[] = [
+/**
+ * Every failure this module can produce, so the invariants below can sweep.
+ *
+ * **Collected from the module rather than listed by hand**, and that is the
+ * whole point of it. The hand-written version had `MODEL_REFUSED` twice and
+ * was missing `NO_RESPONSE` and `TOOL_CALL_LOST` entirely — so two of this
+ * app's reader-facing sentences had never been through a single assertion in
+ * this file.
+ *
+ * The cross-check below ("the code table and the messages are one fact") was
+ * written to catch exactly that, and did not, because **it compares two lists
+ * that were both wrong in the same way**: neither `ai-no-response` nor
+ * `ai-tool-lost` was in `CODE_KINDS` either, so the two agreed and the test
+ * was green. Two lists checking each other prove nothing about a message that
+ * skipped both. Only one of them can be hand-maintained, and it is not this
+ * one.
+ *
+ * The constants come out of the namespace import. The factories cannot — they
+ * need arguments — so they stay explicit, and `everyFactoryIsCovered` below is
+ * what stops a new one being forgotten.
+ */
+const isFailure = (v: unknown): v is ReaderFacingFailure =>
+  typeof v === "object" && v !== null && "kind" in v && "message" in v;
+
+const CONSTANTS: ReaderFacingFailure[] = Object.values(messages).filter(isFailure);
+
+/** The exported functions that mint a failure, and arguments that exercise each branch. */
+const FROM_FACTORIES: ReaderFacingFailure[] = [
   ...[400, 401, 402, 403, 404, 408, 409, 413, 418, 422, 429, 451, 500, 502, 503, 504, 599].map(
     providerHttpFailure,
   ),
-  PROVIDER_FAILED_MID_ANSWER,
-  PROVIDER_UNREADABLE,
-  ENDED_UNFINISHED,
-  MODEL_REFUSED,
-  NOT_CONFIGURED,
-  ANSWER_OVERFLOWED,
-  MODEL_REFUSED,
-  UNEXPECTED_FAILURE,
   tookTooLong(60),
   wentQuiet(20),
   saidNothing(null),
   saidNothing("content_filter"),
   saidNothing("length"),
 ];
+
+const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...FROM_FACTORIES];
 
 const codeOf = (m: string) => m.match(/\[([a-z0-9-]+)\]$/)?.[1];
 
