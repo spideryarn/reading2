@@ -98,11 +98,14 @@ step rather than a flag flip.
 Written down because by 2026-08-26 evening the answer was spread across five sections and three
 documents, and several agents work this tree at once.
 
-1. ~~**Fix the three criticals in the built seam.**~~ **Done 2026-08-26** — see [What was fixed, and
-   the two choices inside it](#what-was-fixed-and-the-two-choices-inside-it). The red
-   test the item asked for is `tests/pipeline-artifact-store.test.ts` § *"catches a generation half-
-   replaced by a run that died"*, and it was watched red before the fix. Six of the smaller findings
-   went with it; two are named there as belonging to other owners.
+1. ~~**Fix the three criticals in the built seam.**~~ **Done 2026-08-26**, and then reviewed again
+   — see [What was fixed](#what-was-fixed-and-the-two-choices-inside-it) and [what the review of the
+   fixes found](#what-the-review-of-the-fixes-found-2026-08-26-evening). The red test the item
+   asked for is `tests/pipeline-artifact-store.test.ts` § *"catches a generation half-replaced by a
+   run that died"*, watched red before the fix. **The second review returned NO-SHIP for concurrent
+   or resumable ingest and four of its findings now sit under item 4**, which is where they belong:
+   a marker the stage CLIs bypass, and a write ceiling that cannot bind while the stages still
+   write their own files.
 2. **Wire step 10 into `src/routes.ts`**, and move `lookUpTerm` out of `src/api.ts`. The three stores
    exist, are reviewed twice and are still unreachable — which is the most dangerous state in this
    table, because the work looks done from the file list. `deleteGlossary` stays 501 until step 11
@@ -115,6 +118,14 @@ documents, and several agents work this tree at once.
 4. **Step 11 half B stage 5** — the writes leave the eight stage modules, one commit each, by each
    stage's owner. Remember the correction: the stages still **read** files too, so a stage is only
    done when its inputs arrive as values.
+
+   **The shape of this changed on 2026-08-26 evening.** It is no longer only "move the writes"; the
+   second review made it *"one shared step runner, owned by the queue and the CLIs alike — claim,
+   run, validate, commit"*. Three of its findings collapse into that one change: the stage CLIs
+   bypass the run marker entirely, the store's write ceiling cannot protect a pipeline that does not
+   write through the store, and `assertProduced` cannot tell a freshly written artefact from an old
+   readable one because the validation is not shared with the skip decision. Doing this as eight
+   independent "move my writes" commits would leave all three open.
 5. **The advance endpoint** ([job-queue-rethink.md](job-queue-rethink.md)), which depends on
    `draft_revision_id` from step 3 above.
 6. **Step 13.** Flip the default, seed the fixture, delete the filesystem adapter — and **reverse the
@@ -1350,6 +1361,65 @@ Left for their owners, and named here so it is not mistaken for done: **`STEP_ST
 belongs to step 11 half A this week), and **`tweets` and `summary` still use `isDone` rather than
 `stamp`** — the review's `expectedStamp(blocks)` factory is the right shape and belongs to those two
 stages' owners.
+
+#### What the review of the *fixes* found — 2026-08-26 evening
+
+GPT Sol reviewed the three fixes rather than the plan for them, and returned
+**NO-SHIP for resumable or concurrent ingest**. Four of its findings are fixed
+(`b9b70b9`); four are real and are somebody else's step. Worth reading in that
+order, because the fixed ones are all one shape: *the mechanism was right and its
+edges were not*.
+
+**Fixed.**
+
+1. **The marker had no owner.** Six steps: two runners start, the second
+   overwrites the first's marker, the first finishes and removes *the second's*,
+   the second dies half-way through its writes, and the step reports done holding
+   two generations with nothing left to say so. `beginStep` returns an attempt
+   token now and `finishStep` will not accept another's. **It is still not a
+   lock** — stopping a second runner is the queue's job, and in Postgres the
+   `jobs_only_one_running` index's. Read-then-unlink is not atomic either, so a
+   marker overwritten in the gap is still removed by the wrong owner; the
+   Postgres adapter does it as one fenced `UPDATE … WHERE attempt_id = $attempt`.
+2. **The earlier cancel fix was incomplete, and the reason is worth keeping.**
+   Moving `finishStep` before the abort check fixed the *marker* — and Retry does
+   not read the marker. It reads the job record, where the completed step had
+   been unwound through the catch and marked `error`, so `forceForRetry` forced
+   it and the model call was bought again. Fixing a symptom in the layer you were
+   already editing, while the layer that actually decides sat one file away.
+3. **Two comments claimed more than the code did**, which is worse than no
+   comment. `htmlCarriesItsIds` is a *membership* test, not a binding — swapped
+   ids, an id on an unrelated wrapper and duplicates all pass; it catches a
+   re-extraction wiping every id, which is what it was built for. And
+   `assertProduced` cannot tell that *this run* wrote what it reads, so a forced
+   stage leaving one old output untouched passes it.
+4. **`src/api.ts` had its own `exists()`** still swallowing every `stat` error, so
+   a permissions error on a real article made the metadata page fall through to
+   the `example/` fixture and answer 200 about somebody else's piece.
+
+**Real, and not this step's to fix.** Each is named here so it is not rediscovered
+as new:
+
+- **Every stage CLI bypasses the marker.** `npm run toc` calls `generateToc`
+  directly and publishes labels, blocks and tree as three separate renames; kill
+  it between two of them and generation A's remaining files sit beside generation
+  B's with no marker having ever existed. `extract` and `blocks` have the same
+  window. The fix is **one shared step runner owned by the queue and the CLIs
+  alike** — claim, run, validate, commit — which is half B stage 5.
+- **The write ceiling does not protect the pipeline**, because `ArtifactStore.write`
+  is called only by tests; the stages still write directly. An oversized write is
+  caught afterwards by `assertProduced`, the marker stays, and Retry repeats a
+  deterministic failure for ever. Also half B stage 5, plus a failure-kind for
+  "this will never succeed".
+- **`htmlCarriesItsIds` wants a generation token**, written by stage 3 into both
+  `blocks.json` and the HTML. Cheap *because both files have one writer* — the
+  reason a token was rejected for `extract` (a later step legitimately rewrites
+  its HTML) does not apply to stage 3. Belongs to `blocks`'s owner.
+- **A death between the last write and `finishStep` leaves a marker over complete
+  output.** A safe false negative costing one repeat, except where the failure is
+  deterministic. `toc` has the widest window: it publishes all three outputs and
+  then awaits checkpoint deletion, so a cleanup that throws means `run` never
+  returns.
 
 #### What survived
 
