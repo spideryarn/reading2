@@ -1333,6 +1333,42 @@ function IdeasBand({
     onFound(found);
   }, [found, onFound]);
 
+  /* An open occurrence that is no longer in the list cannot stay open.
+     Regenerating mints new keys for every passage, and a re-extraction can drop
+     one — either way the row and its mark both go, while `openKey` survives and
+     the stepper reads "– / 3" over a list the reader has not left. `SearchBand`
+     has the same effect for the same reason, and it was missing here.
+     Keyed on absence from `found`, so ordinary selection changes are left
+     alone. GPT Sol, 2026-08-27. */
+  useEffect(() => {
+    if (openKey && !found.some((f) => f.key === openKey)) onOpenKey(null);
+  }, [found, openKey, onOpenKey]);
+
+  /* Selecting an idea arrives at its first passage — and it has to be the first
+     one that RESOLVED, which cannot be decided in the panel: until the
+     selection changes, nothing has resolved that idea's occurrences at all.
+     So the press records an intention and this effect spends it once the list
+     exists.
+
+     A ref rather than state, so spending it does not cause a render; and
+     cleared before the jump rather than after, so a `found` that changes again
+     while the reader is reading cannot fling them back to the top. */
+  const wantsJump = useRef(false);
+  useEffect(() => {
+    if (!wantsJump.current || found.length === 0) return;
+    wantsJump.current = false;
+    const first = found[0]!;
+    /* **Open it as well as go to it.** Without this the reader is standing on
+       occurrence one — the page has scrolled there and the words are washed —
+       while the stepper reads "– / 3", and their first press of › appears to do
+       nothing because it moves them to the passage they are already looking at.
+       Found in the browser, 2026-08-27; it is exactly the kind of thing that is
+       invisible from the code, where "nothing selected yet" and "on the first"
+       are two perfectly reasonable states that happen to look identical here. */
+    onOpenKey(first.key);
+    onJump(first.blockId);
+  }, [found, onJump, onOpenKey]);
+
   /* Unmount only, with no data dependencies: leaving the mode must take the
      marks out of the prose with it, and folding this into the effect above
      would clear them on every change before setting them again — one frame of
@@ -1354,6 +1390,10 @@ function IdeasBand({
         /* A new idea means the old occurrence is meaningless — its key names an
            idea nobody is looking at, so the stepper would read "0 / 3". */
         onOpenKey(null);
+        /* Only on selecting, never on clearing: pressing the open idea again
+           takes the marks away, and throwing the reader down the article as it
+           does would be the opposite of what that gesture means. */
+        wantsJump.current = next !== null;
       }}
       found={found}
       openKey={openKey}

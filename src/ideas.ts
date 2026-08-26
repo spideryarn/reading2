@@ -159,8 +159,28 @@ export interface Dropped {
   unquoted: number;
   /** Occurrences past `MAX_OCCURRENCES` on one idea. */
   truncated: number;
+  /** Ideas past `MAX_IDEAS`, discarded whole. */
+  overCap: number;
   /** Ideas with a name but no usable prose, or an unusable provenance. */
   malformed: number;
+  /**
+   * **Assumed** occurrences with no `reasoning`, and assumed ideas with no
+   * `whyYouNeedIt`.
+   *
+   * Its own counter rather than folded into `malformed`, because it is a
+   * different fact and the difference is the whole feature: a malformed idea is
+   * one we could not read, and this is one we could read perfectly well and
+   * which **does not carry its argument**.
+   *
+   * An assumed idea's entire claim is that the piece would not go through
+   * without it. The passage alone cannot establish that — it only proves the
+   * passage exists — so an assumed occurrence with no line saying which
+   * inferential step fails is a block id lending the appearance of evidence to
+   * an assertion nobody has argued for. That is the failure this whole mode is
+   * shaped against (docs/project/ideas.md § It is a hypothesis), and it was
+   * getting through: GPT Sol's review of the built code, 2026-08-27.
+   */
+  unargued: number;
   /**
    * Ideas that lost **every** occurrence and were therefore dropped whole.
    *
@@ -189,6 +209,12 @@ export function validateOccurrences(
   raw: unknown,
   blocks: readonly Block[],
   dropped: Dropped,
+  /**
+   * `true` when the idea claims to be *assumed*, which raises the bar on every
+   * occurrence under it: it must say which local step fails without the idea.
+   * See `Dropped.unargued`.
+   */
+  assumed: boolean,
 ): IdeaOccurrence[] {
   const byId = new Map(blocks.map((b) => [b.id, b]));
   const out: IdeaOccurrence[] = [];
@@ -215,10 +241,22 @@ export function validateOccurrences(
       dropped.unquoted++;
       continue;
     }
+    const reasoning = text(o.reasoning);
+    /* For an assumed idea this is not a nicety. The panel puts these passages
+       under "the model thinks these passages rely on it", and without the line
+       naming what fails they are just paragraphs sitting beside a claim —
+       which is exactly the shape of evidence, with none of the substance. An
+       introduced idea is different: the passage *states* the thing, so the
+       reader can check it by reading, and a missing line costs them nothing
+       they cannot get themselves. */
+    if (assumed && !reasoning) {
+      dropped.unargued++;
+      continue;
+    }
     out.push({
       blockId,
       quote,
-      reasoning: text(o.reasoning),
+      reasoning,
       /* A disambiguator between repeats, never the anchor — the client re-finds
          the words itself in the *rendered* text, which is a different offset
          space from `block.text`. src/web/annotate.ts § the header. */
@@ -250,7 +288,8 @@ export function toIdeas(
   dropped: Dropped,
 ): Idea[] {
   const out: Idea[] = [];
-  for (const item of Array.isArray(raw) ? raw : []) {
+  const raws = Array.isArray(raw) ? raw : [];
+  for (const [i, item] of raws.entries()) {
     if (!item || typeof item !== "object") {
       dropped.malformed++;
       continue;
@@ -263,22 +302,44 @@ export function toIdeas(
       dropped.malformed++;
       continue;
     }
-    const occurrences = validateOccurrences(r.occurrences, blocks, dropped);
+    const provenance = provenanceText as IdeaProvenance;
+    const assumed = provenance === "assumed";
+    const whyYouNeedIt = text(r.whyYouNeedIt);
+    /* Checked before the occurrences, so an assumed idea that cannot say what
+       fails without it costs nothing to reject. The prompt calls this field
+       required for `assumed` and optional for `introduced`; a rule the prompt
+       states and the validator does not enforce is a rule that holds until the
+       first time it matters. */
+    if (assumed && !whyYouNeedIt) {
+      dropped.unargued++;
+      continue;
+    }
+    const occurrences = validateOccurrences(r.occurrences, blocks, dropped, assumed);
     if (occurrences.length === 0) {
       dropped.unanchored++;
       continue;
     }
-    const whyYouNeedIt = text(r.whyYouNeedIt);
     const analogy = text(r.analogy);
     out.push({
       id: mintUniqueId(taken),
       name,
-      provenance: provenanceText as IdeaProvenance,
+      provenance,
       statement,
       ...(whyYouNeedIt ? { whyYouNeedIt } : {}),
       ...(analogy ? { analogy } : {}),
       occurrences,
     });
+    /* **The cap is enforced here, not merely requested in the prompt.**
+       `suggestedIdeas` asks for at most `MAX_IDEAS`; nothing made the model
+       obey, and everything else in this file believes as little as possible of
+       what came back. It also has a second effect nobody would look for: the
+       band synthesises a `createdAt` per idea from its index, and `#10` sorts
+       before `#2` lexicographically, so an eleventh idea would quietly reshuffle
+       the palette. GPT Sol, 2026-08-27. */
+    if (out.length === MAX_IDEAS) {
+      dropped.overCap += Math.max(0, raws.length - i - 1);
+      break;
+    }
   }
   return out;
 }
@@ -404,9 +465,10 @@ export function buildIdeas(
     const d = opts.dropped;
     throw new Error(
       "No ideas could be anchored to the article, so there is nothing to write. " +
-        `Dropped: ${d.unanchored} with no usable passage, ${d.unknownIds} passages naming ` +
-        `a block id that is not in this article, ${d.unquoted} whose quote could not be ` +
-        `found in the block it named, ${d.malformed} malformed.`,
+        `Dropped: ${d.unanchored} with no usable passage, ${d.unargued} assumed without ` +
+        `saying what fails without them, ${d.unknownIds} passages naming a block id that is ` +
+        `not in this article, ${d.unquoted} whose quote could not be found in the block it ` +
+        `named, ${d.malformed} malformed.`,
     );
   }
 
@@ -800,7 +862,9 @@ export async function generateIdeas(opts: {
     unknownIds: 0,
     unquoted: 0,
     truncated: 0,
+    overCap: 0,
     malformed: 0,
+    unargued: 0,
     unanchored: 0,
   };
   const ideas = buildIdeas(parseJson(raw), {
@@ -871,9 +935,10 @@ async function main(): Promise<void> {
   console.log(`\nTokens:  ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed: ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(
-    `Dropped: ${run.dropped.unanchored} unanchored, ${run.dropped.unknownIds} bad ids, ` +
-      `${run.dropped.unquoted} unquoted, ${run.dropped.malformed} malformed, ` +
-      `${run.dropped.truncated} over the cap`,
+    `Dropped: ${run.dropped.unanchored} unanchored, ${run.dropped.unargued} unargued, ` +
+      `${run.dropped.unknownIds} bad ids, ${run.dropped.unquoted} unquoted, ` +
+      `${run.dropped.malformed} malformed, ${run.dropped.truncated} occurrences over the ` +
+      `cap, ${run.dropped.overCap} ideas over the cap`,
   );
   console.log(`\nWrote ${run.outFile}`);
 }

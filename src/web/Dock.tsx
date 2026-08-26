@@ -636,6 +636,11 @@ function DockModes({ mode, onMode }: { mode: Mode; onMode(next: Mode): void }) {
               }}
               className={`dock-btn${m.mode === mode ? " on" : ""}`}
               aria-checked={m.mode === mode}
+              /* Explicit, because the visible label is `display: none` at
+                 narrow widths and an accessible name computed from the text
+                 would go with it — leaving a screen reader six radio buttons
+                 called nothing at all. */
+              aria-label={m.label}
               // The roving tabindex: one tab stop for the whole group.
               tabIndex={m.mode === mode ? 0 : -1}
               onClick={(e) => {
@@ -647,7 +652,13 @@ function DockModes({ mode, onMode }: { mode: Mode; onMode(next: Mode): void }) {
               }}
             >
               <m.icon size={15} />
-              <span>{m.label}</span>
+              {/* Classed so the stylesheet can drop it on a narrow window.
+                  Every one of these buttons already carries its label in the
+                  tooltip above and in its accessible name below, so hiding the
+                  text costs the sighted reader a hover and costs a screen
+                  reader nothing — which is why the label is the thing that
+                  gives way rather than the button. See § the modes segment. */}
+              <span className="dock-btn-label">{m.label}</span>
             </button>
           </Tooltip>
         ))}

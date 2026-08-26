@@ -60,12 +60,50 @@ interface Props {
    * applies here too: an id is random by construction, so sorting by the string
    * compiles, runs, and is meaningless.
    */
-  targets: readonly { id: string; blockId: BlockId }[];
+  targets: readonly Target[];
   /** Which one the reader is on, or null for "not started". */
   currentId: string | null;
   onGo(id: string, blockId: BlockId): void;
   /** "occurrence" / "passage" — what the tooltip calls the thing. */
   noun: string;
+}
+
+export interface Target {
+  id: string;
+  blockId: BlockId;
+}
+
+/**
+ * Where the stepper is, and where its two arrows go — **the whole of the
+ * component's logic, as a function**.
+ *
+ * Pulled out because the first test of this tested `stepComment` from
+ * comment-nav.ts instead, which `BlockNav` does not call: the two agreed about
+ * the middle of a list and disagreed about a `currentId` that is not in it at
+ * all. `stepComment` returns null both ways; this treats an unknown id as
+ * "before the first", so *next* still goes somewhere. Both are defensible and
+ * only one of them is what runs. GPT Sol, 2026-08-27: *pick one contract and
+ * test the component*.
+ *
+ * `position` is 1-based, and **0 means "not on one of them"** — which the
+ * caller draws as "–". That is now a rarer state than it was: selecting an idea
+ * opens its first passage, so the reader arrives already on 1. It survives for
+ * the case it is honest about, which is a `currentId` that no longer resolves.
+ */
+export function navState(
+  targets: readonly Target[],
+  currentId: string | null,
+): { position: number; prev: Target | null; next: Target | null } {
+  const at = targets.findIndex((t) => t.id === currentId);
+  return {
+    position: at + 1,
+    prev: (at > 0 ? targets[at - 1] : null) ?? null,
+    /* From "before the first", *next* is the first — not the second. Reading
+       `at + 1` off a -1 would land on index 0 by accident rather than by rule,
+       which is the same answer for the wrong reason and would break the moment
+       anyone changed the sentinel. */
+    next: (at + 1 < targets.length ? targets[at + 1] : null) ?? null,
+  };
 }
 
 export function BlockNav({ targets, currentId, onGo, noun }: Props) {
@@ -75,16 +113,9 @@ export function BlockNav({ targets, currentId, onGo, noun }: Props) {
      CommentDialog. */
   if (targets.length < 2) return null;
 
-  const at = targets.findIndex((t) => t.id === currentId);
-  /* -1 — the reader has selected the thing but not stepped into it yet — reads
-     as "before the first", so *next* takes them to the first and *prev* is
-     dead. The alternative, treating it as position 1, would make the first
-     press of ‹ or › skip an occurrence. */
-  const position = at + 1;
-  const prev = (at > 0 ? targets[at - 1] : null) ?? null;
-  const next = (at + 1 < targets.length ? targets[at + 1] : null) ?? null;
+  const { position, prev, next } = navState(targets, currentId);
 
-  const go = (target: { id: string; blockId: BlockId } | null) => () => {
+  const go = (target: Target | null) => () => {
     if (!target) return;
     onGo(target.id, target.blockId);
   };

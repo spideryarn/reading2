@@ -17,8 +17,8 @@
  * miscounted stepper looks like a shorter list.
  */
 import { describe, expect, it } from "vitest";
-import { orderFound, resolveHits, resolveIdea, type Found } from "../src/web/search-hits.js";
-import { stepComment, positionOf } from "../src/web/comment-nav.js";
+import { orderFound, resolveHits, resolveIdea } from "../src/web/search-hits.js";
+import { navState } from "../src/web/BlockNav.js";
 import type { Block, IdeaOccurrence } from "../src/types.js";
 
 const block = (id: string, html: string): Block => {
@@ -185,20 +185,42 @@ describe("resolveHits, after resolveOne was extracted out of it", () => {
 });
 
 /**
- * The arithmetic behind `BlockNav`. The component is markup over these two
- * functions plus one `findIndex`, so what is worth pinning is the end
- * conditions — every one of which renders perfectly when it is wrong.
+ * The arithmetic behind `BlockNav` — `navState`, which is what the component
+ * actually calls.
+ *
+ * The first version of this file tested `stepComment` from comment-nav.ts
+ * instead, on the reasoning that the two do the same job. They agree about the
+ * middle of a list and disagree about its edges, and only one of them runs
+ * here: a test that passes against the function you did not ship is worse than
+ * no test, because it reports the contract as checked. GPT Sol caught it.
  */
-describe("the stepper's end conditions", () => {
+describe("navState — the stepper's end conditions", () => {
   const targets = (n: number) =>
     Array.from({ length: n }, (_, i) => ({ id: `k${i}`, blockId: `spya-b${i}` }));
 
-  it("reads 'nothing selected yet' as before the first, so the first press goes to the first", () => {
-    /* `positionOf` returns 0, which the component renders as "–" and which makes
-       *prev* dead and *next* land on index 0. Treating it as position 1 would
-       make the first press of › skip an occurrence — invisible, and wrong. */
-    expect(positionOf(targets(4), null)).toBe(0);
-    expect(stepComment(targets(4), null, 1)).toBeNull();
+  it("treats 'nothing selected' as before the first, so next goes to the FIRST", () => {
+    /* Not the second. Reading `at + 1` off a -1 lands on index 0 by accident
+       rather than by rule, and the two look identical until somebody changes
+       the sentinel. */
+    const { position, prev, next } = navState(targets(4), null);
+    expect(position).toBe(0);
+    expect(prev).toBeNull();
+    expect(next?.id).toBe("k0");
+  });
+
+  it("treats an id that is not in the list the same way, which is the point of the extraction", () => {
+    /* The stale case: the reader had a passage open, the article moved, and the
+       key names one that no longer resolves. `stepComment` would return null in
+       both directions and strand them; this leaves *next* live, so the stepper
+       is a way back into the list rather than a dead control.
+
+       In practice `IdeasBand` clears a `currentId` that has left `found`, so
+       this is the belt to that effect's braces — and it is exactly the state
+       that used to be reachable and untested. */
+    const { position, prev, next } = navState(targets(3), "k99");
+    expect(position).toBe(0);
+    expect(prev).toBeNull();
+    expect(next?.id).toBe("k0");
   });
 
   it("does not wrap at either end", () => {
@@ -206,32 +228,27 @@ describe("the stepper's end conditions", () => {
        steppers three inches apart behaving differently on the same gesture is
        worse than either rule alone. */
     const four = targets(4);
-    expect(stepComment(four, "k3", 1)).toBeNull();
-    expect(stepComment(four, "k0", -1)).toBeNull();
+    expect(navState(four, "k3").next).toBeNull();
+    expect(navState(four, "k0").prev).toBeNull();
   });
 
-  it("steps one at a time through the middle", () => {
+  it("steps one at a time through the middle, 1-based", () => {
     const four = targets(4);
-    expect(stepComment(four, "k1", 1)).toBe("k2");
-    expect(stepComment(four, "k1", -1)).toBe("k0");
-    expect(positionOf(four, "k2")).toBe(3);
+    const { position, prev, next } = navState(four, "k1");
+    expect(position).toBe(2);
+    expect(prev?.id).toBe("k0");
+    expect(next?.id).toBe("k2");
   });
 
-  it("returns null for a current id that is not in the list at all", () => {
-    /* The stale case: the reader had an occurrence open, the article was
-       re-extracted, and the key names a passage that no longer resolves. Both
-       arrows go dead and the counter reads "– / 2", which is the honest answer
-       — the alternative is stepping from a position that does not exist. */
-    const two = targets(2);
-    expect(stepComment(two, "k99", 1)).toBeNull();
-    expect(stepComment(two, "k99", -1)).toBeNull();
-    expect(positionOf(two, "k99")).toBe(0);
-  });
-
-  it("is generic over anything with an id, which is why it could be shared", () => {
-    // A glossary term's targets are block ids; an idea's are `Found.key`s.
-    const found: Pick<Found, "key">[] = [{ key: "a" }, { key: "b" }];
-    const asIds = found.map((f) => ({ id: f.key }));
-    expect(stepComment(asIds, "a", 1)).toBe("b");
+  it("counts two targets in one block as two", () => {
+    /* One idea can be needed twice in a paragraph, so the stepper counts
+       passages rather than blocks. Keying on the block id would silently make
+       "2 of 4" step through three. */
+    const same = [
+      { id: "a", blockId: "spya-bbbbbb" },
+      { id: "b", blockId: "spya-bbbbbb" },
+    ];
+    expect(navState(same, "a").next?.id).toBe("b");
+    expect(navState(same, "b").position).toBe(2);
   });
 });

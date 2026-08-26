@@ -6020,3 +6020,35 @@ tr:hover .block-chat,
 .diag-cluster .diag-node:hover .diag-box,
 .diag-cluster .diag-node.on .diag-box { fill: var(--surface-raised); }
 .diag-cluster .diag-node.here .diag-box { fill: transparent; stroke: var(--highlight); stroke-width: 1.5; }
+
+/* The modes segment, when the window is too narrow to spell them out.
+ *
+ * **A bar that silently eats its own buttons.** `.dock-modes` is
+ * `overflow: hidden` for a good reason — it clips the selected button's fill to
+ * the frame's rounded corners — and that rule quietly turned into a different
+ * one as modes were added: below about 1046px the row no longer fits, and the
+ * end of it is simply not drawn. At ~909px "Chat" reads "Cha" and its last 13
+ * pixels are not hit-testable; at ~636px three whole buttons are outside the
+ * clip and cannot be pressed at all. Nothing overflows visibly, nothing scrolls,
+ * and there is no sign that anything is missing. Found in a browser pass on
+ * 2026-08-27, after Ideas made it six.
+ *
+ * The label gives way rather than the button, because the label is the part
+ * that is said twice: every mode button carries its name in a hover tooltip and
+ * in an explicit `aria-label`. So a narrow window costs a sighted reader a hover
+ * and costs a screen-reader user nothing, where a dropped button costs both of
+ * them the mode.
+ *
+ * **1100px rather than the measured 1046**, so the labels go before the clip
+ * arrives rather than at the moment it does — the failure this prevents is
+ * invisible, so the margin is worth more than the two hundred pixels of text.
+ *
+ * This does not make the bar right at every width; it makes it *honest* at
+ * every width. Whether nine or ten buttons in one row is the design is Greg's
+ * call — see docs/plans/ideas-mode.md § Questions. */
+@media (max-width: 1100px) {
+  .dock-modes .dock-btn-label { display: none; }
+  /* Square-ish once the text is gone, so six icons read as one segmented
+     control rather than as six loose glyphs. */
+  .dock-modes .dock-btn { padding-inline: 0.6rem; }
+}

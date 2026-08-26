@@ -46,7 +46,7 @@ import {
 } from "./store/artifacts.js";
 import { generateToc } from "./toc.js";
 import { generateTweets, threadIsCurrent } from "./tweets.js";
-import type { Meta, StepName } from "./types.js";
+import type { JobUpload, Meta, StepName } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -206,6 +206,16 @@ export interface StepContext {
   slug: string;
   /** The source URL. Absent only when re-running a late stage on an article that has one on disk. */
   url?: string;
+  /**
+   * The file the reader uploaded, when that is where this article came from.
+   *
+   * Beside `url` rather than replacing it, and **only the acquisition step ever
+   * reads it**. Stage 2 onwards work off `raw.json`, which both origins write
+   * and neither signs — that is the seam docs/project/content-extraction.md
+   * calls the entire design, and putting the origin into every context without
+   * putting it into every step is what keeps it true.
+   */
+  upload?: JobUpload;
   /** `data/<slug>` — where the durable artefacts live. */
   dir: string;
   /** `output/<slug>.html` — the debug page, and what stage 3 reads and writes ids into. */
@@ -592,6 +602,137 @@ function requireUrl(ctx: StepContext): string {
 }
 
 /**
+ * **Stage 1 for a file the reader gave us** — the verification the plan calls
+ * `verify-source`, living inside the acquisition step rather than beside it.
+ *
+ * That placement is the whole point and it was a review finding:
+ *
+ * > My "write `raw.json` + `raw.pdf` from the blob store" floats outside the
+ * > step list, which means it bypasses `beginStep`, `finishStep`, cancellation,
+ * > retry and `assertProduced` — the exact machinery built to make interrupted
+ * > work visible.
+ * >
+ * > — docs/plans/pdf-upload-and-storage.md, on GPT Sol's review
+ *
+ * So it is `fetch`'s other half. Same step name, same contract, same one output
+ * (`raw.json`), and from stage 2 onwards nothing can tell which half ran.
+ *
+ * ## The order of the checks, and why the bytes move exactly once
+ *
+ *  1. **`head`** — cheap, and refuses an over-cap object before anything moves.
+ *  2. **one `get`**, bounded by the same cap.
+ *  3. **`%PDF-`** over the bytes we hold. The bucket's MIME allowlist checked
+ *     the type the *uploader claimed*; this checks the actual one, and they are
+ *     different questions asked of different parties.
+ *  4. **our SHA-256 against the browser's**, over that same copy. A mismatch is
+ *     a refusal rather than a warning: the thing we are about to spend model
+ *     money reading is not the thing the reader chose.
+ *
+ * Downloading once and doing 3 and 4 over that one copy is not an
+ * optimisation — reading the object twice is the sequence content addressing
+ * does not cover, because the grant is still live and the second read may not
+ * be the bytes the first one verified.
+ *
+ * ## What it deliberately does not do
+ *
+ * **It does not delete the staging object.** Measured against the running
+ * stack: deleting an object *re-arms* any grant still live over its key, so a
+ * tidy-up inside the two-hour TTL races the browser it is cleaning up after and
+ * can end with us having checksummed one document and extracted another.
+ * Staging litter is swept later, after `SWEEP_GRACE_MS` — see src/source.ts.
+ */
+async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<string> {
+  const record = await readUpload(upload.id);
+  if (!record) {
+    /* `ours`: the bytes may well be sitting in Storage perfectly intact, and
+       there is nothing the reader can do about our having lost the note saying
+       they are theirs. */
+    throw stageFailure("ours", `No record of upload ${upload.id}.`);
+  }
+
+  const refuse = (reason: RejectReason): never => {
+    /* Settled before the throw, so the record says why even though the job card
+       is what the reader is looking at. A `rejected` upload is terminal, which
+       is what stops a Retry quietly re-running a check that cannot pass. */
+    void settleUpload(upload.id, "rejected", { reason });
+    const failure = rejectionFailure(reason);
+    throw stageFailure(failure.kind, failure.message);
+  };
+
+  const store = blobStore();
+  const key = stagingKey(upload.id);
+  const info = await store.head(key);
+  if (!info) refuse("missing");
+  if ((info as { bytes: number }).bytes > MAX_UPLOAD_BYTES) refuse("too-big");
+
+  ctx.report(upload.filename);
+  const bytes = await store.get(key, { maxBytes: MAX_UPLOAD_BYTES, signal: ctx.signal });
+  /* Absent between the `head` and the `get` — a sweep, or somebody with the
+     service key. Rare, and it is still "that file never finished arriving" as
+     far as the reader is concerned. */
+  if (!bytes) refuse("missing");
+
+  const got = bytes as Uint8Array;
+  if (!looksLikePdf(got)) refuse("not-a-pdf");
+  const sha256 = createHash("sha256").update(got).digest("hex");
+  if (sha256 !== record.claimedSha256) refuse("checksum-mismatch");
+
+  /* Promoted to a name that is a statement about its contents, and create-only.
+     `already-there` is the dedup hit — two readers with the same paper — and it
+     is a success, not a collision: the bytes at that key are these bytes, by
+     construction, because the key is their hash. */
+  const promotion = await store.putIfAbsent(
+    canonicalKey(sha256, "pdf"),
+    got,
+    CONTENT_TYPE.pdf,
+  );
+
+  await mkdir(ctx.dir, { recursive: true });
+  await writeFile(path.join(ctx.dir, "raw.pdf"), got);
+  const manifest: RawManifest = {
+    kind: "pdf",
+    file: "raw.pdf",
+    /* **No URL, and none invented.** `RawManifest` used to require two, which
+       is exactly the assumption docs/plans/pdf-upload-and-storage.md § 5 warned
+       would take the time. A `file://` or an `upload://…` here would have read
+       as an address to everything downstream — `GET /api/source/:slug`,
+       import/export, the metadata page — and none of them would have said
+       anything. */
+    origin: "upload",
+    uploadId: upload.id,
+    filename: upload.filename,
+    contentType: CONTENT_TYPE.pdf,
+    encoding: null,
+    bytes: got.byteLength,
+    sha256,
+    fetchedAt: new Date().toISOString(),
+  };
+  await writeFile(
+    path.join(ctx.dir, "raw.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8",
+  );
+
+  await settleUpload(upload.id, "verified", {
+    sha256,
+    bytes: got.byteLength,
+    slug: ctx.slug,
+  });
+
+  const kb = Math.round(got.byteLength / 1024);
+  /* Not the filename: it is the reader's own string and can hold anything,
+     including the title of something they would not want in a log. The size and
+     whether the bytes were already ours are what a person running this server
+     actually wants — `deduped` going from false to always-false is how you find
+     out the canonical keys have stopped being content hashes. */
+  plog.debug(
+    { slug: ctx.slug, step: "fetch", origin: "upload", kb, deduped: promotion === "already-there" },
+    `upload ${ctx.slug}: ${kb} KB verified`,
+  );
+  return `${kb} KB`;
+}
+
+/**
  * What stage 2 says when Readability finds no article in the page.
  *
  * **Matched on its sentence, which is the one place here that does that, and it
@@ -644,6 +785,12 @@ export const STEPS: Record<StepName, PipelineStep> = {
     outputs: (ctx) => [path.join(ctx.dir, "raw.json")],
     produces: ["raw"],
     async run(ctx) {
+      /* **The one branch in the whole pipeline that knows where an article came
+         from.** An upload has nothing to fetch — the bytes are already ours —
+         so this half verifies them and writes the same manifest the other half
+         does. See `acquireUpload`, and the label this step shows, which is not
+         "Fetching the page" when there is nothing to fetch. */
+      if (ctx.upload) return await acquireUpload(ctx, ctx.upload);
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
       ctx.report(host);
@@ -682,8 +829,14 @@ export const STEPS: Record<StepName, PipelineStep> = {
     outputs: (ctx) => [ctx.htmlFile, path.join(ctx.dir, "meta.json")],
     produces: ["extractedHtml", "meta"],
     async run(ctx) {
-      const url = requireUrl(ctx);
       const manifest = await readRaw(ctx.dir);
+      /* **Only the HTML half needs a URL**, and it needs it as a base for
+         relative links rather than as a thing to fetch. A PDF does not: it
+         carries no relative hrefs, and an uploaded one has no address at all.
+         Asking for one up here — which this did — is what made `requireUrl` the
+         first thing an upload hit, three stages after the last thing that could
+         have supplied one. */
+      const url = manifest?.kind === "pdf" ? ctx.url : requireUrl(ctx);
       /* No manifest means an article fetched before `raw.json` existed. Those
          all have a `raw.html`, so HTML is the right assumption — and a wrong
          one would fail loudly on the read below rather than quietly. */
@@ -706,7 +859,12 @@ export const STEPS: Record<StepName, PipelineStep> = {
       const bytes = new Uint8Array(await readFile(path.join(ctx.dir, manifest.file)));
       const result = await runPdfExtract({
         bytes,
-        url,
+        ...(url ? { url } : {}),
+        /* The last rung of the title ladder is the filename, and for an upload
+           that is the reader's own — which is very often the best name anybody
+           has for a scan. For a fetched PDF it stays the URL's last segment,
+           which is what it always was. */
+        ...(manifest.filename ? { filename: manifest.filename } : {}),
         outFile: ctx.htmlFile,
         dataDir: ctx.dir,
         slug: ctx.slug,
@@ -1166,6 +1324,13 @@ export const STEPS: Record<StepName, PipelineStep> = {
              the prompt having drifted, and nothing else would report it.
              docs/reusable/silent-success.md. */
           unanchored: run.dropped.unanchored,
+          /* The second one to watch, and it is about honesty rather than
+             coverage: an assumed idea that cannot say which step fails without
+             it is a block id lending the look of evidence to an unargued
+             claim. A run that starts returning several means the prompt has
+             drifted off the thing this mode exists to be careful about. */
+          unargued: run.dropped.unargued,
+          overCap: run.dropped.overCap,
           unknownIds: run.dropped.unknownIds,
           unquoted: run.dropped.unquoted,
           malformed: run.dropped.malformed,

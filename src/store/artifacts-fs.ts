@@ -559,7 +559,18 @@ function assertStampAgrees(
 ): void {
   if (STAMP_SOURCE[step] !== kind) return;
   const onDisk = stampOf(value);
-  const clashes = (["inputHash", "promptVersion", "model"] as const).filter(
+  /* `profileHash` joined the list on 2026-08-27, with `ideas`. Leaving it out
+     was not a deliberate narrowing — it was the field arriving after this
+     function was written, which is exactly how a consistency check quietly
+     stops covering the thing it was extended for: a caller could pass
+     `profileHash: null` while writing an artefact stamped with a real hash, and
+     the store would accept the contradiction and then answer freshness
+     questions from whichever of the two it happened to read. GPT Sol.
+
+     `!== undefined` rather than a truthiness test, because `null` is a REAL
+     value here — "written deliberately without a profile" — and has to be able
+     to clash with a hash. */
+  const clashes = (["inputHash", "promptVersion", "model", "profileHash"] as const).filter(
     (field) =>
       stamp[field] !== undefined &&
       onDisk[field] !== undefined &&

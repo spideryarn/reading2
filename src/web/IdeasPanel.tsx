@@ -224,13 +224,18 @@ export function IdeasPanel({
                            next door does exactly this. */
                         if (idea.id === ideaId) return onIdea(null);
                         onIdea(idea.id);
-                        /* Selecting jumps to the first occurrence, always,
-                           unlike the stepper below which leaves you alone if
-                           the target is already on screen. Pressing a row is
-                           arriving somewhere; stepping is moving between
-                           neighbours. The glossary already jumps on select. */
-                        const first = idea.occurrences[0];
-                        if (first) onJump(first.blockId);
+                        /* **The jump lives in `IdeasBand`, not here**, and
+                           that is forced rather than chosen. Selecting jumps to
+                           the first occurrence — pressing a row is arriving
+                           somewhere, unlike the stepper below, which leaves you
+                           alone if the target is already on screen — but it has
+                           to be the first *resolved* one, and this panel only
+                           holds the resolved passages of the idea that is
+                           **already** selected. The stored list can name a
+                           block a re-extraction removed, so jumping to
+                           `idea.occurrences[0]` does nothing at all: the reader
+                           presses an idea, the marks appear off screen, and the
+                           page sits still. GPT Sol, 2026-08-27. */
                       }}
                       found={idea.id === ideaId ? found : []}
                       openKey={openKey}
@@ -305,7 +310,15 @@ function IdeaRow({
           {idea.analogy && (
             <div
               className="gloss-part gloss-part-background"
-              title="The model's own comparison. The article does not use it."
+              /* **It says whose it is, and stops.** This used to end "The
+                 article does not use it", which is a claim about the article
+                 whose only evidence is a line in the prompt — and the very
+                 first real run broke that line, handing back the essay's own
+                 gym analogy as the model's. A label that asserts something we
+                 have not checked is worse than a label that says less,
+                 especially in the one field whose whole job is provenance.
+                 GPT Sol, 2026-08-27. */
+              title="The model's own comparison, not something quoted from the article."
             >
               <p className="gloss-part-label">One way to picture it</p>
               <p className="gloss-part-text">{idea.analogy}</p>
@@ -318,7 +331,13 @@ function IdeaRow({
                   idea is BY DEFINITION not in the article, so "assumed in"
                   would claim the passages say something they do not. */}
               {assumed ? "The model thinks these passages rely on it" : "Where the piece states it"}
-              <span className="gloss-count">{found.length || idea.occurrences.length}</span>
+              {/* `found.length`, full stop. This was `found.length ||
+                  idea.occurrences.length`, and the `||` made the ONE case it
+                  was there for — every passage lost to a re-extraction — read
+                  as the old nonzero count beside an empty list. A count that
+                  disagrees with the rows under it is the panel telling the
+                  reader two things. GPT Sol, 2026-08-27. */}
+              <span className="gloss-count">{found.length}</span>
             </p>
 
             {/* Built from what actually RESOLVED, not from what was stored. After

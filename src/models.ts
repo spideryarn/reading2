@@ -341,9 +341,14 @@ export type ArticleStage = "arc" | "tweets" | "glossary" | "ideas";
  * and `max_tokens` do; this one does not, and nothing about "it's a generation
  * parameter" would have told you which.
  *
- * **So this table is also the cache grouping**: two stages share a cached
- * article if and only if they share a value here. src/pipeline.ts reads it that
- * way rather than keeping a second list that could disagree.
+ * **This table is HALF the cache grouping**, and it was the whole of it until
+ * 2026-08-27. Two stages share a cached article only if they share a value here
+ * *and* send the same bytes — see `ARTICLE_RENDERER` below, which became a
+ * second table the day `ideas` arrived and had to send block ids where the
+ * other four deliberately send none. Effort alone was a correct grouping for
+ * exactly as long as every article-reading stage happened to use one renderer,
+ * which is the kind of true-by-accident that reads as true-by-design.
+ * `sharesArticleCache` in src/pipeline.ts reads both.
  *
  * **The values are not aligned, on purpose.** Aligning them would let all three
  * share, and it was tested on two articles rather than assumed: arc at `medium`

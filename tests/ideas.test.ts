@@ -85,7 +85,24 @@ function tree(parts: TreeNode[] = [node({ id: "n1", title: "All of it", gist: "A
 }
 
 function fresh(): Dropped {
-  return { unknownIds: 0, unquoted: 0, truncated: 0, malformed: 0, unanchored: 0 };
+  return {
+    unknownIds: 0,
+    unquoted: 0,
+    truncated: 0,
+    overCap: 0,
+    malformed: 0,
+    unargued: 0,
+    unanchored: 0,
+  };
+}
+
+/** A well-formed **assumed** idea, which has to carry its argument. */
+function rawAssumed(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return raw({
+    provenance: "assumed",
+    whyYouNeedIt: "The step from the quoted line to the conclusion needs it and is never argued.",
+    ...over,
+  });
 }
 
 /** One well-formed raw idea, as the model would return it. */
@@ -125,6 +142,7 @@ describe("validateOccurrences", () => {
       [{ blockId: "spya-aaaaaa", quote: "Writing is thinking", reasoning: "why" }],
       BLOCKS,
       d,
+      false,
     );
     expect(out).toHaveLength(1);
     expect(out[0]!.start).toBe(0);
@@ -137,6 +155,7 @@ describe("validateOccurrences", () => {
       [{ blockId: "spya-zzzzzz", quote: "Writing is thinking", reasoning: "why" }],
       BLOCKS,
       d,
+      false,
     );
     expect(out).toEqual([]);
     expect(d.unknownIds).toBe(1);
@@ -152,6 +171,7 @@ describe("validateOccurrences", () => {
       [{ blockId: "spya-bbbbbb", quote: "Writing is thinking", reasoning: "why" }],
       BLOCKS,
       d,
+      false,
     );
     expect(out).toEqual([]);
     expect(d.unquoted).toBe(1);
@@ -167,6 +187,7 @@ describe("validateOccurrences", () => {
       [null, "nonsense", { blockId: "spya-aaaaaa", quote: "Writing is thinking", reasoning: "" }],
       BLOCKS,
       d,
+      false,
     );
     expect(out).toHaveLength(1);
     expect(d.malformed).toBe(2);
@@ -179,7 +200,7 @@ describe("validateOccurrences", () => {
       quote: "Writing is thinking",
       reasoning: "why",
     }));
-    const out = validateOccurrences(many, BLOCKS, d);
+    const out = validateOccurrences(many, BLOCKS, d, false);
     expect(out).toHaveLength(MAX_OCCURRENCES);
     expect(d.truncated).toBe(3);
   });
@@ -196,6 +217,7 @@ describe("validateOccurrences", () => {
       ],
       BLOCKS,
       d,
+      false,
     );
     expect(out).toHaveLength(2);
     expect(out.map((o) => o.blockId)).toEqual(["spya-aaaaaa", "spya-aaaaaa"]);
@@ -207,6 +229,7 @@ describe("validateOccurrences", () => {
       [{ blockId: "spya-aaaaaa", quote: "writing   is  THINKING", reasoning: "why" }],
       BLOCKS,
       d,
+      false,
     );
     expect(out).toHaveLength(1);
     expect(d.unquoted).toBe(0);
@@ -221,7 +244,12 @@ describe("toIdeas", () => {
        also the failure to expect — a topic rather than a proposition — so the
        count is the one quality signal the stage gives. */
     const d = fresh();
-    const out = toIdeas([raw({ occurrences: [{ blockId: "spya-nope00", quote: "x" }] })], BLOCKS, new Set(), d);
+    const out = toIdeas(
+      [raw({ occurrences: [{ blockId: "spya-nope00", quote: "x" }] })],
+      BLOCKS,
+      new Set(),
+      d,
+    );
     expect(out).toEqual([]);
     expect(d.unanchored).toBe(1);
     expect(d.unknownIds).toBe(1);
@@ -256,8 +284,77 @@ describe("toIdeas", () => {
 
   it("accepts a provenance the model shouted", () => {
     const d = fresh();
-    const [idea] = toIdeas([raw({ provenance: "ASSUMED" })], BLOCKS, new Set(), d);
+    const [idea] = toIdeas([rawAssumed({ provenance: "ASSUMED" })], BLOCKS, new Set(), d);
     expect(idea?.provenance).toBe("assumed");
+  });
+
+  it("drops an ASSUMED idea that never says what fails without it", () => {
+    /* **The highest finding of the built-code review.** An assumed idea's whole
+       claim is that the piece does not go through without it. The passage alone
+       cannot establish that — it only proves the passage exists — so an assumed
+       idea with no `whyYouNeedIt` is a block id lending the appearance of
+       evidence to an assertion nobody has argued for. That is the failure this
+       mode is shaped against, and it was getting through. */
+    const d = fresh();
+    const out = toIdeas([rawAssumed({ whyYouNeedIt: "  " })], BLOCKS, new Set(), d);
+    expect(out).toEqual([]);
+    expect(d.unargued).toBe(1);
+    /* Not `malformed`: we could read it perfectly well. Two different facts
+       needing two different counters, exactly as `stale` and `outdated` are. */
+    expect(d.malformed).toBe(0);
+  });
+
+  it("drops an ASSUMED occurrence with no reasoning, and counts it", () => {
+    const d = fresh();
+    const out = toIdeas(
+      [
+        rawAssumed({
+          occurrences: [
+            { blockId: "spya-aaaaaa", quote: "Writing is thinking", reasoning: "" },
+            { blockId: "spya-bbbbbb", quote: "Most people", reasoning: "names the step that fails" },
+          ],
+        }),
+      ],
+      BLOCKS,
+      new Set(),
+      d,
+    );
+    expect(out[0]!.occurrences).toHaveLength(1);
+    expect(d.unargued).toBe(1);
+  });
+
+  it("does NOT hold an INTRODUCED idea to either rule", () => {
+    /* The asymmetry is the point. An introduced idea's passage *states* the
+       thing, so a reader can check it by reading; a missing line costs them
+       nothing they could not get themselves. */
+    const d = fresh();
+    const out = toIdeas(
+      [
+        raw({
+          whyYouNeedIt: "",
+          occurrences: [{ blockId: "spya-aaaaaa", quote: "Writing is thinking", reasoning: "" }],
+        }),
+      ],
+      BLOCKS,
+      new Set(),
+      d,
+    );
+    expect(out).toHaveLength(1);
+    expect(d.unargued).toBe(0);
+  });
+
+  it("enforces MAX_IDEAS rather than trusting the model to obey the prompt", () => {
+    /* `suggestedIdeas` only ASKS for at most ten. Everything else in this file
+       believes as little as possible of what came back, and this was the one
+       place that took the model's word for it — with a second effect nobody
+       would look for: the band synthesises a per-idea `createdAt` from the
+       index, and `#10` sorts before `#2`, so an eleventh idea would quietly
+       reshuffle the palette. */
+    const d = fresh();
+    const many = Array.from({ length: MAX_IDEAS + 3 }, (_, i) => raw({ name: `Idea number ${i}` }));
+    const out = toIdeas(many, BLOCKS, new Set(), d);
+    expect(out).toHaveLength(MAX_IDEAS);
+    expect(d.overCap).toBe(3);
   });
 });
 

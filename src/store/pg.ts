@@ -44,6 +44,7 @@ import {
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
   isStale as ideasAreStale,
+  inputFingerprint as ideasFingerprint,
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "../ideas.js";
 import { isSlug } from "../ingest.js";
@@ -274,6 +275,56 @@ const STEP_STORAGE: Record<StepName, string[]> = {
  */
 export const ADDED_AT = sql`coalesce(${articleRevisions.fetchedAt}, ${articles.createdAt})`;
 
+/**
+ * Is the stored `ideas` artefact one we would write again today?
+ *
+ * **A function rather than a fifth arm of `isCurrent`**, and not only because
+ * it took that switch past Biome's complexity ceiling: it is the only step
+ * whose answer needs four values rather than three, so inlining it would have
+ * made the longest arm of a switch the one carrying the exception.
+ *
+ * Without this the step fell through to `default: true` and **every completed
+ * run reported itself current** — on the metadata page and in filesystem /
+ * Postgres parity — while `loadIdeas` a few hundred lines below was correctly
+ * calling the same artefact stale. Two answers to one question, and the
+ * confident one was wrong. GPT Sol's review of the built code, 2026-08-27.
+ */
+function ideasAreCurrent(
+  revision: { ideas: unknown; tree: unknown },
+  blocks: readonly Block[],
+): boolean {
+  const found = revision.ideas as Ideas | null;
+  const tree = revision.tree as Tree | null;
+  if (!found || !tree || blocks.length === 0) return false;
+  /* The blocks AND the tree — src/ideas.ts § `inputFingerprint`. This artefact
+     is written from the skeleton as much as from the paragraphs, so a
+     re-sectioned article is a different question even when every block is
+     byte-identical. */
+  const profile =
+    found.profileHash !== undefined ? { profileHash: found.profileHash } : {};
+  return sameStamp(
+    {
+      inputHash: found.sourceHash,
+      promptVersion: found.version,
+      model: found.generator,
+      ...profile,
+    },
+    {
+      inputHash: ideasFingerprint(blocks, tree),
+      promptVersion: IDEAS_PROMPT_VERSION,
+      model: CAPABLE_MODEL,
+      /* The artefact's own value on both sides, deliberately. The profile the
+         pipeline would stamp with today is resolved per job (src/jobs.ts) and
+         this read has no access to it; a guess here would mark every profiled
+         artefact stale on a page that only lists which stages have run. The
+         reader is told about a changed profile by `loadIdeas`'s
+         `profileChanged`, and whether to RE-RUN is decided by the stamp in
+         src/pipeline.ts, which does know. */
+      ...profile,
+    },
+  );
+}
+
 export const pgArticleReader: Pick<
   ArticleReader,
   | "loadArticle"
@@ -486,18 +537,34 @@ export const pgArticleReader: Pick<
           const summaries = revision.summary as Summaries | null;
           return Boolean(summaries && !summariesStale(summaries, blocks));
         }
+        case "ideas":
+          return ideasAreCurrent(revision, blocks);
         default:
           // fetch, extract, blocks, arc — nothing to compare, in either store.
           return true;
       }
     };
 
-    const stages: StageState[] = STEP_ORDER.map((step) => ({
-      step,
-      label: STEPS[step].label,
-      outputs: STEP_STORAGE[step],
-      done: byStep.get(step)?.status === "done" && isCurrent(step),
-    }));
+    const stages: StageState[] = STEP_ORDER.map((step) => {
+      const run = byStep.get(step);
+      return {
+        step,
+        label: STEPS[step].label,
+        outputs: STEP_STORAGE[step],
+        done: run?.status === "done" && isCurrent(step),
+        /* `finished_at`, falling back to `started_at` for a run that is going
+           or died mid-way — the same reason that column exists at all
+           (src/db/schema.ts): without it a `running` row has no timestamp to
+           judge it by, and "still going" and "died an hour ago" look identical.
+           The filesystem's answer to the same question is an mtime, so both
+           stores say *when this stage last wrote*, from whatever each one has.
+
+           No `bytes`: there are no files here, and a row count or a jsonb
+           length would be a different measurement wearing the same label. */
+        ranAt: (run?.finishedAt ?? run?.startedAt)?.toISOString() ?? null,
+        bytes: null,
+      };
+    });
 
     const commentRows = await db
       .select({ id: commentsTable.id })

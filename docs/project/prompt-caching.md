@@ -90,9 +90,22 @@ wins, so aligning would mean paying in writing quality to win a cache. The setti
 chosen for what each stage writes, and that is the right reason to choose them.
 
 The effort table now lives in [`src/models.ts`](../../src/models.ts) beside `CAPABLE_MODEL`, because both
-are part of the cache key, and **that table is the cache grouping** — `sharesArticleCache` in
+are part of the cache key, and **that table is half the cache grouping** — `sharesArticleCache` in
 [`src/pipeline.ts`](../../src/pipeline.ts) reads it rather than keeping a second list that could
 drift back out of agreement with it.
+
+**Half, since 2026-08-27, and it used to say "the".** Effort is the *surprising* half, which is why
+it got written down first — but the bytes are the obvious half, and they stopped being uniform when
+[ideas](ideas.md) arrived. That stage answers with block ids, so it must send `articleWithIds` where
+the arc, the thread, the glossary and the summary all send `articleText`; the two renderings of one
+article agree on the head and on nothing after it. Matching on effort alone would have marked the
+article on an `arc` run because `ideas` was queued behind it at the same effort, paid the 1.25×
+write premium, and collected no read at all. `ARTICLE_RENDERER` in `src/models.ts` is the second
+table, and the predicate reads both.
+
+The shape is worth remembering past this instance: **a grouping that is correct because of a fact
+nobody wrote down stops being correct the moment the fact does.** Every article stage using one
+renderer was that fact.
 
 ### And on the normal path, the pipeline breakpoints lose money
 
