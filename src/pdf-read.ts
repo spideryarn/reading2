@@ -570,6 +570,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     );
   }
   const rawSha256 = createHash("sha256").update(opts.bytes).digest("hex");
+  await keepTheOriginal(opts, rawSha256);
   const chunks = planChunks(pass);
   const cacheDir = path.join(opts.dataDir, "pdf-chunks");
   await mkdir(cacheDir, { recursive: true });
@@ -697,6 +698,49 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     usage,
     stripped,
   };
+}
+
+/**
+ * **Make sure the PDF itself is beside the article, whatever route got us here.**
+ *
+ * The ingest queue has already done this — stage 1 wrote `raw.pdf` and
+ * `raw.json` before stage 2 ran, and this leaves both alone. `npm run pdf --
+ * <file.pdf>` has not, and without this the article it produces claims
+ * `source: "pdf"` while `GET /api/source/:slug` returns 404 and the reader's
+ * "view the scanned pages" link goes nowhere.
+ *
+ * That link is not decoration. On a scan it is the *only* verification there
+ * is — a person looking at the ink — so an article that offers it and cannot
+ * honour it is worse than one that never offered.
+ *
+ * Only when absent, and that matters: the queue's manifest carries the final
+ * URL, the content type and the redirect chain, and overwriting it from here
+ * would replace real provenance with what a local file can know, which is
+ * almost nothing.
+ */
+async function keepTheOriginal(opts: PdfExtractOptions, sha256: string): Promise<void> {
+  if (await readFile(path.join(opts.dataDir, "raw.json"), "utf-8").catch(() => null)) return;
+  await mkdir(opts.dataDir, { recursive: true });
+  await writeFile(path.join(opts.dataDir, "raw.pdf"), opts.bytes);
+  await writeFile(
+    path.join(opts.dataDir, "raw.json"),
+    `${JSON.stringify(
+      {
+        kind: "pdf",
+        file: "raw.pdf",
+        requestedUrl: opts.url,
+        url: opts.url,
+        contentType: "application/pdf",
+        encoding: null,
+        bytes: opts.bytes.byteLength,
+        sha256,
+        fetchedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+    "utf-8",
+  );
 }
 
 /**

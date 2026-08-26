@@ -257,6 +257,11 @@ describe("the whole stage, with the model stubbed out", () => {
     expect(result.meta.recall).toBeGreaterThan(0.9);
     expect(result.meta.pagesChecked).toBe(8);
     expect(await readFile(result.outFile, "utf-8")).toContain("<article>");
+    /* The PDF itself has to be beside the article whatever route made it, or
+       the reader's "view the original" link 404s. src/pdf-read.ts. */
+    const manifest = JSON.parse(await readFile(path.join(path.dirname(result.outFile), "raw.json"), "utf-8"));
+    expect(manifest.kind).toBe("pdf");
+    expect(manifest.sha256).toBe(result.meta.rawSha256);
   }, 30_000);
 
   it("refuses to write anything when a page comes back empty", async () => {
