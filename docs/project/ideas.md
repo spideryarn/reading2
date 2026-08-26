@@ -82,7 +82,8 @@ Code: [`src/ideas.ts`](../../src/ideas.ts) (stage 5f — the prompt, the call, t
 `resolveIdea` in [`src/web/search-hits.ts`](../../src/web/search-hits.ts), `IdeasBand` in
 [`src/web/App.tsx`](../../src/web/App.tsx), and `§ ideas mode` at the end of
 [`src/web/styles.css`](../../src/web/styles.css). Tests:
-[`tests/ideas.test.ts`](../../tests/ideas.test.ts).
+[`tests/ideas.test.ts`](../../tests/ideas.test.ts) (the stage) and
+[`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts) (the client, in jsdom).
 
 ## The unit is what is new, not the provenance
 
@@ -148,13 +149,35 @@ stage runs the *other* discipline, the one [`src/search.ts`](../../src/search.ts
 | the `blockId` is not in `blocks.json` | `unknownIds` |
 | `findQuote` cannot locate the quote in the block the model named | `unquoted` |
 | more than six occurrences on one idea | `truncated` |
+| more than ten ideas | `overCap` |
 | a name, a statement or a usable provenance is missing | `malformed` |
+| an **assumed** idea, or one of its occurrences, will not say what fails without it | `unargued` |
 | **every** occurrence of an idea failed | `unanchored` |
 
 `findQuote` and not a string compare, because it is the rule the *browser* will use to draw the
 marks. If the server's idea of "is this quote in this block" differed from the client's, the panel
 would list a passage and the article would show nothing marked — the failure
 [`quote-match.ts`](../../src/quote-match.ts) exists to prevent.
+
+### An assumed idea has to carry its argument
+
+**The highest finding of the built-code review, and the one that made it a NO-SHIP.** An assumed idea
+could pass validation carrying neither `whyYouNeedIt` nor a single occurrence `reasoning` — every
+counter zero, stored, and drawn under *"the model thinks these passages rely on it"*.
+
+That is this mode's own worst failure arriving through the front door. An assumed idea's entire claim
+is that the piece does not go through without it; **the passage cannot establish that** — it only
+proves the passage exists. So both fields are now required for `assumed` and neither for
+`introduced`, whose passage *states* the thing and can therefore be checked by reading.
+
+They count as `unargued` rather than `malformed`, because *"we could not read it"* and *"we read it
+and it does not carry its argument"* are different facts needing different sentences — the same
+reason `stale` and `outdated` are two flags rather than one.
+
+On both test articles the count is **zero**: the model already writes these fields when asked, which
+is what you want from a validator — a guard rather than a filter that fires constantly. A run that
+starts returning several means the prompt has drifted off the thing this mode exists to be careful
+about.
 
 **An idea with no surviving occurrence is dropped, which is the opposite of the glossary's rule.** An
 unmatched glossary entry is still a definition you can read, and its emptiness is a signal worth
@@ -329,20 +352,28 @@ on the re-run — which is the right answer.
 
 ## What is still open
 
-- **Which half is actually earning its place.** `introduced` is the redundant half but the
-  **checkable** one — read the idea, read the passage, decide. `assumed` is the distinctive half and
-  the **weakly falsifiable** one. On `data/writes` the assumed ideas were genuinely good (it caught
-  the essay's undefended leap from *"they plagiarised boilerplate"* to *"they cannot write"*); on the
-  8,283-word noema piece the split was 2 assumed to 8 introduced, so the valuable half is scarce on
-  longer articles. **That ratio is the thing to watch.**
+- **Which half is actually earning its place, and the ratio says the valuable half is scarce.** On
+  `data/writes` (561 words) the split is **1 assumed to 2 introduced**; on the 8,283-word noema piece
+  it is **1 to 9**. So the longer the article, the more this looks like a list of takeaways with one
+  prerequisite attached — which is the outcome
+  [the plan](../plans/ideas-mode.md#say-the-awkward-thing-first) named as the thing to watch for, and
+  it is showing up on the second article tried.
+
+  Worth being precise about which way that cuts. `introduced` is the **redundant** half — Summary
+  already compresses the argument — but it is the **checkable** one: read the idea, read the passage,
+  decide. `assumed` is the **distinctive** half and the **weakly falsifiable** one. So a 1:9 split is
+  not "mostly working"; it is mostly the half that has a competitor.
 - **No eval file yet.** The judging so far is two articles read by hand, written up in
   [the plan](../plans/ideas-mode.md). A scored pass under [`evals/`](../../evals/README.md) is what
   would turn that into a number the next prompt change is compared against.
 - **Nothing generates ideas for the committed `example/` fixture**, so the panel there offers a
   button that writes into `data/`. The same gap the glossary and the thread page have, and equally
   unsatisfying in all three.
-- **`resolveIdea`, `BlockNav` and the two-state fix have no tests.**
-  [`tests/ideas.test.ts`](../../tests/ideas.test.ts) covers the stage's deterministic half only.
+- **The two-state fix has no test.** `resolveIdea` and the stepper's arithmetic are covered by
+  [`tests/ideas-resolve.test.ts`](../../tests/ideas-resolve.test.ts); the search → ideas → search
+  mode handoff is not, and it is the one place a React-level test would earn its keep.
+- **`Reader` in App.tsx is over Biome's complexity ceiling** (29 against 25). Pre-existing and
+  structural rather than caused here, but this feature added to it.
 - **Quote-copy failures are real but rare** — 3 of ~30 occurrences on the noema article. Those fall
   back to washing the whole paragraph and saying so, which is the right behaviour, but the rate is
   worth watching.
