@@ -146,8 +146,12 @@ steps that are not optional**, because each has a failure with no symptom:
 1. **Register the code in `CODE_KINDS`.** Miss it and `kindOfMessage` returns
    null, `worthRetrying` says yes, and a permanent failure quietly grows a Retry
    button.
-2. **Add the failure to `EVERY` in [`tests/messages.test.ts`](../../tests/messages.test.ts).**
-   Miss it and your message skips every invariant in that file.
+2. **If it is a *factory* — a function that takes an argument — add it to
+   `FROM_FACTORIES` in [`tests/messages.test.ts`](../../tests/messages.test.ts),
+   with arguments that reach each branch.** Miss it and your message skips every
+   invariant in that file. An exported `const` needs nothing: those are collected
+   out of the module by `Object.values`, which is the half of this that used to
+   be hand-maintained and is not any more.
 
 Those two lists check each other — the test asserts the table's keys are exactly
 the codes the messages carry — so doing one and forgetting the other is a red

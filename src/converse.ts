@@ -26,9 +26,12 @@
  * decision (src/routes.ts keeps it, marked as failed, because a half-answer the
  * reader watched appear is worse than useless if it vanishes on reload).
  *
- * The generator's contract: zero or more `delta` events, then exactly one of
- * `done`. A throw means no `done` is coming and the deltas so far are all there
- * is.
+ * The generator's contract: zero or more `delta` events and zero or more `tool`
+ * events, interleaved in the order they happened, then exactly one `done`. A
+ * throw means no `done` is coming and what arrived so far is all there is. (The
+ * `tool` half was missing from this sentence for as long as tools have existed,
+ * which is a day — noticed by a GPT Sol review, 2026-08-26, and worth fixing
+ * because a contract that omits a case is read as forbidding it.)
  *
  * ## The citation contract
  *
@@ -129,9 +132,11 @@ export const CHAT_STALL_MS = 45_000;
 /**
  * How many times in one turn the model may ask for tools and be answered.
  *
- * Three, plus a fourth round with our tools withheld so it has to write prose —
- * see the loop in `converse`, where dropping the tools rather than counting to a
- * number is what actually guarantees termination.
+ * Three, plus a fourth with our tools withheld and told so — see the loop in
+ * `converse`, where dropping the tools rather than counting to a number is what
+ * guarantees termination. "Withheld, *and told*" is the whole of the correction
+ * made on 2026-08-26: withholding alone does not make a round write prose, it
+ * only makes the round after it never happen.
  *
  * The cost of a round is the whole request again: the article, the history, and
  * every tool result so far. So this is a budget for the reader's patience and
@@ -748,7 +753,16 @@ export async function* converse({
   let sawUsage = false;
   let stopped = false;
   const toolRuns: ToolRun[] = [];
-  const toolContext: ToolContext = { slug, meta, blocks, ...(signal ? { signal } : {}) };
+  /* **The reader's stop *and* the turn's deadline.**
+     A tool used to get only the reader's signal, so `timeoutMs` bounded the
+     model requests and nothing else: with a 20ms deadline a tool was measured
+     still running at 88ms, and only the *next* round noticed the turn had
+     expired. Several sequential tools stretch that further. Not the stall
+     clock, which is per round and about a silent stream — a tool taking eight
+     seconds is not a stalled stream, and killing it for that would be wrong.
+     Found by a GPT Sol review, 2026-08-26. */
+  const toolSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+  const toolContext: ToolContext = { slug, meta, blocks, signal: toolSignal };
 
   /* The last round's, read by the guards after the loop. Declared out here so
      those guards can stay where they are and keep meaning what they meant. */
@@ -953,34 +967,31 @@ export async function* converse({
       });
     } catch (err) {
       clearTimeout(stallTimer);
-      /* Stopped before the model said anything — before it was even asked, on a
-         slow connection. Not a failure and not a model to blame, so it ends the
-         same way a stop always ends: a `done` with nothing in it and the flag on.
-         `recentHistory` drops an empty turn, so nothing is sent back to the model
-         claiming it once said nothing. */
+      /* Stopped before *this round's* model said anything — before it was even
+         asked, on a slow connection. Not a failure and not a model to blame, so
+         it ends the way a stop always ends: the flag on, and out.
+
+         **It used to end by yielding its own `done` here**, hard-coded to no
+         text, no citations, no searches and four null token counts, under a
+         comment saying "nothing was asked, so there is nothing to report". That
+         was true of a function that made one request. It stopped being true the
+         day a turn became several rounds: a reader who stops while round four is
+         connecting has already paid for three, and this threw away their tokens,
+         their citations, the searches, and any words the earlier rounds had
+         written. Found by a GPT Sol review, 2026-08-26.
+
+         So it breaks instead, and the single ending after the loop does the
+         reporting — which is also the only copy of that logic anyone maintains.
+         Two log lines rather than one, matching what a mid-stream stop already
+         does: this one says the stop landed between rounds, and the shared line
+         says what the turn had done by then. */
       if (stoppedByReader(err, signal, deadline, stall.signal)) {
-        line.info({ model, ms: since(started) }, `reader stopped before ${model} replied`);
-        yield {
-          type: "done",
-          text: "",
-          citations: [],
-          searches: 0,
-          model,
-          unknownIds: [],
-          // Whatever ran before the stop still ran, and the reader watched it.
-          tools: toolRuns,
-          truncated: false,
-          stopped: true,
-          // Nothing was asked, so there is nothing to report — and four nulls
-          // say that, where four zeros would claim a free call.
-          usage: {
-            inputTokens: null,
-            outputTokens: null,
-            cacheReadTokens: null,
-            cacheWriteTokens: null,
-          },
-        };
-        return;
+        stopped = true;
+        line.info(
+          { ...turnSoFar(), model, ms: since(started) },
+          `reader stopped before ${model} replied to round ${rounds}`,
+        );
+        break;
       }
       line.error(
         {
@@ -1089,10 +1100,11 @@ export async function* converse({
     }
 
     /* **The round's numbers, added to the turn's.** Everything OpenRouter
-       reports is per request, and a turn is now several. Summed here rather
-       than at the end because `usage` holds only the last round's object by the
-       time we get there — which was the bug: a three-round turn logged one
-       round's tokens and read as a third of its real cost. */
+       reports is per request, and a turn is now several. Summed here, once per
+       round, rather than once at the end — because `usage` is a single variable
+       holding the most recent block, so reading it after the loop gave the last
+       round's tokens and called them the turn's. A three-round turn read as a
+       third of its real cost. */
     searches += roundSearches;
     inputTokens += usage?.prompt_tokens ?? 0;
     outputTokens += usage?.completion_tokens ?? 0;
@@ -1268,6 +1280,15 @@ export async function* converse({
 
     if (!withTools || wanted.length === 0) break;
 
+    /* **Stopped while the model was still asking. Do not start the batch.**
+       `stopped` is set above, by the signal-only test, and everything between
+       there and here is a guard that steps aside when it is true — so without
+       this the reader's stop ran every tool the model had just asked for and
+       *then* noticed, which is the opposite of what a stop button is for. The
+       check below catches a stop that lands during the batch; this one catches
+       a stop that landed before it. Found by a GPT Sol review, 2026-08-26. */
+    if (stopped) break;
+
     /* The model's own turn goes back verbatim before its results do. Both are
        required: a `tool` message with no `tool_calls` above it addressing the
        same id is rejected, and this is also the only record the model has of
@@ -1289,6 +1310,15 @@ export async function* converse({
        behalf. Models here ask for one or two tools at a time, so the saving is
        small and the legibility is not. Revisit if that stops being true. */
     for (const call of wanted) {
+      /* **Between tools, not only after them.** A model can ask for three at
+         once, and they run one at a time — so a stop landing during the first
+         used to wait for the third. Checked before the row is pushed rather
+         than after, because a `running` row that nothing will ever finish is
+         the one thing this loop must not leave behind. */
+      if (readerAborted(signal, deadline, stall.signal)) {
+        stopped = true;
+        break;
+      }
       const index = toolRuns.length;
       const args = parseToolArgs(call.args);
       const at = Date.now();
@@ -1342,11 +1372,12 @@ export async function* converse({
       messages.push({ role: "tool", tool_call_id: call.id, content: outcome.content });
     }
 
-    /* A reader who pressed stop while a tool was running. `runTool` does not
-       throw on an abort — it returns a sentence like any other failure — so
+    /* A reader who pressed stop while the last tool was running. `runTool` does
+       not throw on an abort — it returns a sentence like any other failure — so
        without this the turn would go round again and ask the model to write an
-       answer nobody is waiting for. */
-    if (readerAborted(signal, deadline, stall.signal)) {
+       answer nobody is waiting for. The two checks inside the batch above cover
+       a stop that lands earlier; this one is what ends the round. */
+    if (stopped || readerAborted(signal, deadline, stall.signal)) {
       stopped = true;
       break;
     }
@@ -1422,6 +1453,11 @@ export async function* converse({
            chat quietly becoming the uncited chatbot vision.md refuses.
            Added after a GPT-5.6 review, 2026-08-26. */
         citedBlocks,
+        /* Beside `chars` from the helper, and they are not the same number:
+           `chars` is what streamed, `answerChars` is what was stored after a
+           trim. Equal on almost every turn, and the pair is worth keeping —
+           a gap between them means something was dropped between the wire and
+           the row. */
         answerChars: answer.length,
         historyTurns: recentHistory(history).length,
         unknownIds: unknownIds.length,

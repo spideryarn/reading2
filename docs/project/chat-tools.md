@@ -110,8 +110,15 @@ than with frames we imagined.
 
 `MAX_TOOL_ROUNDS` is 3. A cap that simply *stops* after N rounds has to throw away whatever the model
 asked for on round N, leaving an assistant message carrying tool calls nothing answered — which the
-provider rejects. Withholding the tools instead means the model cannot ask again, so the final round
-is always prose.
+provider rejects. Withholding the tools ends the loop instead, because the round after the withheld
+one never happens.
+
+**It does not stop the model asking.** This paragraph used to end "the model cannot ask again, so the
+final round is always prose", and that sentence was wrong and cost a day —
+[the postmortem](../postmortems/chat-last-round-can-still-ask-for-tools.md) is about exactly it.
+Taking the array away removes the schema, not the three of its own turns full of tool calls the model
+is looking at. So the withheld round is *told* it has no more of our tools, and asking anyway has its
+own guard and its own sentence.
 
 The cost of a round is **the whole request again**: the article, the history, and every tool result so
 far. Which is why the caps in `chat-tools.ts` are small, and why `rounds` is logged.
@@ -334,7 +341,8 @@ alone, in order.
 ## Still open
 
 - **A turn can spend itself entirely on tools and answer with nothing.** Reported by Greg,
-  2026-08-26, and not yet diagnosed. The question was *"Search your library for other things I have
+  2026-08-26. **One reachable cause has been found and fixed and the rest is now diagnosable**; what
+  happened on his particular turn is still not established, which is why this bullet is still here. The question was *"Search your library for other things I have
   read about AI values, then read the most relevant passage, and compare it carefully with this
   article. Take your time."* Eight `search_library` calls ran — five of them `nothing found`, three
   of them finding passages — and then the turn ended on
@@ -350,10 +358,70 @@ alone, in order.
     a question told to take its time, against a matcher that answers most of its guesses with
     nothing, will keep guessing.
   - The empty answer is **new and is the actual fault**. `saidNothing` is what prints `[ai-empty]`
-    (src/messages.ts), so the last round came back with no text. The loop is supposed to make that
-    impossible: the final round is offered no tools precisely so that it must be prose
-    ([above](#2-the-last-round-is-offered-no-tools-of-ours-and-that-is-what-terminates-the-loop)).
-    Something let a round end with neither a tool call nor a word.
+    (src/messages.ts), so the last round came back with no text. The design was believed to make
+    that impossible — the final round is offered no tools, so what else could it do
+    ([above](#2-the-last-round-is-offered-no-tools-of-ours-and-that-is-what-terminates-the-loop))
+    — and that belief is the first thing this turned out to be wrong about. Withholding the tools
+    stops the *next round* happening. It does not oblige this one to write anything.
+
+  ### The assumption that turned out to be wrong
+
+  *"The final round is offered no tools, so it must be prose"* was not true, and the comment in
+  [`src/converse.ts`](../../src/converse.ts) said it in as many words: the model *"cannot ask again"*.
+  It can. Withholding the array removes the **schema**. It does not remove the three assistant turns
+  full of tool calls sitting in the history directly above — which is a far stronger cue than a list
+  the model is under no obligation to read. Nothing anywhere told it to stop.
+
+  And when it did ask again, `converse` dropped the request on the floor, found `text` empty, and
+  reported `saidNothing`: *"The AI service finished without saying anything at all."* Which is a
+  false sentence. It did not finish saying nothing — it asked for a ninth search and this app threw
+  the question away. **A wrong sentence about a failure is worse than a blunt one, because it is the
+  sentence somebody debugs from**, and this one sends you looking at the model.
+
+  Both halves are fixed, and both are pinned in
+  [`tests/chat-tools.test.ts`](../../tests/chat-tools.test.ts) § the last round:
+
+  - **The round is told.** *"That is all the looking things up you can do inside this app for this
+    question — the article and library tools are finished. Write the answer now from what you have
+    already found. If it is not as much as you wanted, say what you did find and what is still
+    missing."* Two things in that are deliberate. The last sentence is load-bearing: a model told
+    only to stop searching can decline to answer instead, which is the same empty turn reached by
+    better manners. And it says *inside this app* rather than "there are no tools left", because
+    OpenRouter's web search is a server tool and stays on for this round too — a nudge contradicted
+    by the request carrying it is a nudge the model has a reason to ignore. (Sol caught that; the
+    first version overclaimed.) It is pushed as a user message on that one request rather than
+    folded into `SYSTEM`, because `SYSTEM` is the part of the conversation that has to stay
+    byte-identical for the cache ([prompt-caching.md](prompt-caching.md)).
+  - **If it asks anyway, it fails in its own words**: `KEPT_ASKING_FOR_TOOLS`, `[ai-tool-loop]` —
+    *"spent this whole answer looking things up and never got to the answer itself … asking about one
+    thing at a time works better."* Only when there is no text at all: a model that wrote its answer
+    *and* reached for one more search has answered, and that answer is kept untouched. And only on
+    the round that lost its tools **to the cap** — a caller passing `useTools: false` never had any,
+    so telling that reader the turn was spent searching would be a sentence about something that did
+    not happen.
+  - **And the guard next door was scoped the same wrong way.** `TOOL_CALL_LOST` — the model asked and
+    the request arrived in unusable pieces — was written as `withTools && …`, on the same assumption
+    that a withheld round cannot produce `finish_reason: "tool_calls"`. So a *garbled* call on the
+    final round fell through every check and reached the reader as "finished without saying anything
+    at all" as well. The same mistake, made twice in one file on one day, which is what a wrong
+    belief written into a comment does.
+
+  Written up in
+  [chat-last-round-can-still-ask-for-tools.md](../postmortems/chat-last-round-can-still-ask-for-tools.md),
+  which is also where the wider lesson lives: taking a capability away is a fact about our request,
+  and "so it will therefore write prose" is a guess about a language model wearing the same clothes.
+
+  **One live run since**, with the same question and the same article: four rounds, five tools,
+  `read_library_passage` reached, and a 4,157-character answer citing two blocks —
+  `rounds:4 tools:5 inputTokens:107035 outputTokens:3560 cacheReadTokens:47744 finishReason:"stop"`.
+  It went the whole way to the cap, so the nudge went out, and it answered. That is one sample with
+  no control: it says the nudge does not break a real turn and that the log finally says what one
+  did. It does not say the nudge is why.
+
+  Whether the original failure was this is **not known**, and the honest position is that it fits
+  the evidence without being proved by it. `finish_reason` separates the two — `tool_calls` means
+  this; `stop` means the model genuinely wrote nothing — and it was already in the log line. The
+  server log for that turn was not kept.
 
   Suspects, in the order worth checking: **the output budget** — eight tool calls' worth of
   arguments are output tokens, and a turn that spends them has nothing left to write with, which is
@@ -362,19 +430,58 @@ alone, in order.
   which `saidNothing` already branches on and which would say whether this was a length cap, a
   filter, or a genuinely empty completion; and whether **eight calls across three rounds** means the
   model asked for several per round, in which case the round cap is not the bound anyone thinks it
-  is. The `rounds` and token counts are already in the log line ([What is
-  logged](#what-is-logged)), so a repeat with the server log beside it should settle which.
+  is.
 
-  Worth saying plainly: the honest reader-facing outcome here is bad in a way the message does not
-  admit. *"Asking again usually gets an answer"* is true of a one-off empty completion and false of
-  a question that will spend its budget the same way every time.
+  **The first thing done about it was not a fix — it was making the next one diagnosable.** The
+  sentence above used to end *"the `rounds` and token counts are already in the log line, so a repeat
+  with the server log beside it should settle which"*, and that was wrong in the way that costs a
+  day: those numbers were on the line chat writes when it **succeeds**. The line it wrote about
+  Greg's failure said `model`, `ms` and `finishReason` and nothing else — no round count, no tool
+  count, no tokens, so every suspect above looks identical in the record. Since 2026-08-26 all eight
+  failure paths in [`src/converse.ts`](../../src/converse.ts) carry the same numbers the success line
+  does — **and the success line is built from the same helper**, which is what stops the two drifting
+  apart again; the rule and the reasoning are in
+  [logging.md § The failure line carries what the success line
+  carries](logging.md#the-failure-line-carries-what-the-success-line-carries), and
+  [`tests/chat-empty-answer-log.test.ts`](../../tests/chat-empty-answer-log.test.ts) reproduces this
+  exact turn — three, three and two tool calls, then a fourth round with nothing to say — and reads
+  the fields back off the log. A repeat now really does settle it.
+
+  Worth saying plainly, and still true of `[ai-empty]` itself: *"Asking again usually gets an
+  answer"* is right about a one-off empty completion and wrong about a question that will spend its
+  budget the same way every time. The new `[ai-tool-loop]` sentence says the second half out loud —
+  *"asking about one thing at a time works better"* — but it only covers the branch where the model
+  asked for a tool. If the remaining branch turns out to be the budget, `saidNothing`'s wording is
+  the next thing to fix, and it wants the same treatment: name the shape of the question, not just
+  the outcome.
 
 - **Tools run one at a time.** Two web pages fetched at once would be twice as fast; what it costs is
   the reader watching one line at a time and understanding what is being done for them. Models here
   ask for one or two tools at a time, so the saving is small today. Revisit if that changes.
 - **A tool cannot be stopped mid-flight.** The reader's signal reaches `fetchDocument` and
   `findPassages`, so a stop does end them — but the loop only notices between tools, so a stop during
-  a 20-second meaning search waits for it. Bounded by `TOOL_TIMEOUT_MS`, not fixed by it.
+  a 20-second meaning search waits for it. Bounded by `TOOL_TIMEOUT_MS`, not fixed by it. *"Between
+  tools" only became true on 2026-08-26: until then the signal was consulted after the whole batch,
+  so a stop during the first of three waited for all three. And a tool now carries the turn's
+  deadline as well as the reader's signal — it used to carry only the signal, so `timeoutMs` bounded
+  the model requests and nothing else. Both found by a GPT Sol review.*
+- **A stopped preamble comes back as an answer.** `recentHistory` replays a stored turn whose text is
+  non-empty and whose status is `done` — and a reader who stops after *"Looking that up."* has stored
+  exactly that. The next turn therefore sends the model a previous turn where it appears to have
+  answered a question with four words, with no tool exchange beside it and nothing saying it was cut
+  short. Raised by a GPT Sol review, 2026-08-26; the fix belongs to `recentHistory` and wants
+  thinking about rather than patching, because "was it stopped" is a fourth thing for that function
+  to know about a turn.
+- **Nothing watches the total size of a turn.** Tool results ride along on every later round, each
+  capped on its own (`WEB_PAGE_CHARS` and friends) with no cap on the sum. Three rounds of large
+  results plus a long article can exceed the model's context, and the only thing that notices is the
+  provider — a 413, which reaches the reader as `[ai-too-big]`. That is a visible failure rather than
+  a silent one, which is why this is a note and not a bug, but the honest position is that the caps
+  in `chat-tools.ts` were chosen per tool and never added up.
+- **The logged `model` is whichever one answered last.** OpenRouter can route different rounds of one
+  turn to different providers or models, and `used` is overwritten each round, so a turn that changed
+  hands mid-way reports only where it ended. Nobody has seen this happen; it would be invisible if it
+  did.
 - **`search_library` is literal.** See the top of this file; the fix is
   [semantic-search.md](../plans/semantic-search.md) and it lands behind the store contract.
 - **`read_web_page` can still be used to send a little.** The query cap above bounds it; it does not

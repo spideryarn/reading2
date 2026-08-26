@@ -25,6 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
+import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
  * Which kind of failure this is, which decides what the reader should do.
@@ -222,6 +223,16 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      glance — see `STORAGE_BUSY`. */
   "db-busy": "retry",
   "db-failed": "bug",
+  /* Uploading a file. `up-` for the same reason `db-` is not `ai-`: a reader
+     quoting four characters should not have to explain which part of the app
+     they were in. Two are `blocked` and two are `retry`, and the split is the
+     whole reason these are registered rather than left to fall through — an
+     unknown code means *offer another go*, so "that file isn't a PDF" would
+     have come with a Retry button that cannot work. */
+  "up-big": "blocked",
+  "up-pdf": "blocked",
+  "up-sum": "retry",
+  "up-gone": "retry",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
      for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
      both. It guessed right — both are `retry`, and null means offer the retry —
@@ -235,6 +246,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      is this one. Found by a GPT Sol review. */
   "ai-no-response": "retry",
   "ai-tool-lost": "retry",
+  "ai-tool-loop": "retry",
 };
 
 
@@ -493,6 +505,75 @@ export const STORAGE_BUSY: ReaderFacingFailure = {
     "generally works. [db-busy]",
 };
 
+/* ---- uploading a file. docs/plans/pdf-upload-and-storage.md ------------- */
+
+/**
+ * Too big, refused before the upload starts rather than after it finishes.
+ *
+ * `blocked`: the same file is the same size next time, so a Retry under this
+ * would be a button that cannot work — the mistake docs/postmortems has a whole
+ * file about. The size is named because "too big" without a number leaves the
+ * reader guessing whether to try a slightly smaller one.
+ *
+ * It deliberately does **not** say "nothing was uploaded". That is true of the
+ * check before the grant is minted and false if the bucket refuses mid-transfer,
+ * and a sentence that is sometimes false is worse than one that never claims it.
+ */
+export const UPLOAD_TOO_BIG: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    `That file is larger than ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB, which is the most ` +
+    "this app can take. Sending it again will not help — it will be the same size. A smaller " +
+    "file, or a shorter extract from this one, will. [up-big]",
+};
+
+/**
+ * The bytes are not a PDF, whatever the file is called.
+ *
+ * `blocked` for the same reason: renaming a file does not change what is in it.
+ * Phrased around the *contents* rather than the name, because a `.pdf` that is
+ * really something else is exactly the case this catches, and telling somebody
+ * their PDF is not a PDF without saying why reads like a bug.
+ */
+export const UPLOAD_NOT_A_PDF: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That file isn't a PDF inside, whatever its name says. Sending it again will not help, " +
+    "because it will be the same file — but if it opens in a PDF reader, saving it again from " +
+    "there usually produces one this app can read. [up-pdf]",
+};
+
+/**
+ * What arrived is not what was sent. `retry`, and genuinely so.
+ *
+ * This is the one upload failure where trying again is the right move rather
+ * than the polite one: a mismatch means the transfer was damaged, and transfers
+ * usually succeed. Says whose problem it is — nobody's fault here, not the
+ * reader's file — because the natural reading of "checksum" is that the file is
+ * broken.
+ */
+export const UPLOAD_CHECKSUM: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The file that arrived isn't quite the file that was sent, so something went wrong on the " +
+    "way. The file itself is fine — uploading it again usually works. [up-sum]",
+};
+
+/**
+ * We never received it, or it sat too long. `retry`.
+ *
+ * Two hours is the grant's life and it is Supabase's number, not ours
+ * (src/source.ts). Named in the sentence because "it expired" without a
+ * duration tells the reader nothing about whether they were slow or we were
+ * broken.
+ */
+export const UPLOAD_MISSING: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That file never finished arriving. An upload has two hours to complete, so a very slow " +
+    "connection or an interrupted one will do this. Try again. [up-gone]",
+};
+
 /** @see STORAGE_BUSY — the other half, for a database that answered "no". */
 export const STORAGE_FAILED: ReaderFacingFailure = {
   kind: "bug",
@@ -578,6 +659,38 @@ export const TOOL_CALL_LOST: ReaderFacingFailure = {
   message:
     "The AI service started to look something up and the request for it arrived garbled, so this " +
     "app stopped rather than answer from half of it. Trying again usually works. [ai-tool-lost]",
+};
+
+/**
+ * The model spent its last chance asking for another tool instead of answering.
+ *
+ * Chat withholds our tools on the final round, and tells it so, in the hope of
+ * prose. Withholding alone removes the *schema*; it does not remove the pattern,
+ * and by that point the model is looking at three of its own turns full of tool
+ * calls. A model that has been searching for three rounds can and does ask for a
+ * fourth, and there is nothing on the other end to answer it.
+ *
+ * Its own message because the alternative was `saidNothing` — *"finished without
+ * saying anything at all"* — which is not true and sends the reader to the wrong
+ * place. It did say something. It asked for a tool nobody could give it, and the
+ * app threw the request away. Telling somebody their question came back blank
+ * when it actually came back mid-search is the kind of wrong sentence that costs
+ * an afternoon. See docs/project/chat-tools.md.
+ *
+ * `retry` because the next attempt is a different sample and may go another
+ * way. **"May", not "usually"** — nobody has watched this happen enough times to
+ * say how often a plain retry gets there, and a message that promises a rate we
+ * have not measured is the same overclaim as `[ai-empty]`'s *"asking again
+ * usually gets an answer"*, which is the sentence this one exists to stop being
+ * said. The advice a reader can actually act on is the second half: a narrower
+ * question needs fewer searches to answer. Wording corrected after a GPT Sol
+ * review, 2026-08-26.
+ */
+export const KEPT_ASKING_FOR_TOOLS: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The AI service spent this whole answer looking things up and never got to the answer itself. " +
+    "Trying again may work; asking about one thing at a time works better. [ai-tool-loop]",
 };
 
 /** The call succeeded and the model said nothing. */

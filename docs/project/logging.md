@@ -186,6 +186,46 @@ An article re-run that mints new ids instead of carrying the old ones has **orph
 it** ([block-ids.md](block-ids.md)), and that is not visible in the response, in the artefacts, or
 anywhere else.
 
+### The failure line carries what the success line carries
+
+A rule that arrived the way most of these do — from a bug nobody could diagnose.
+
+Greg hit chat's `[ai-empty]` failure on 2026-08-26 (chat-tools.md
+[§ Still open](chat-tools.md#still-open)) with eight tool calls visible on his screen. The line
+[`src/converse.ts`](../../src/converse.ts) wrote about it said `model`, `ms` and `finishReason`, and
+nothing else. Not the round count, so a turn that reached the tool cap and one that gave up on its
+first request write the same line. Not the tool count, so the eight calls he could see appear nowhere
+in the record. Not a token count, so a model that spent its whole output budget thinking is
+indistinguishable from one that spent none — which is the *specific* question that failure turns on,
+and the question the previous version of it turned on too.
+
+Every one of those numbers already existed. They were on the **success** line and nowhere else.
+
+Which is exactly the wrong way round: an answer that arrived needs no diagnosis, and a turn that
+failed is the one somebody has to reconstruct afterwards from a log they cannot re-run. So the eight
+failure paths in `converse` now spread the same `rounds`, `tools`, `chars` and four token counts the
+success line carries, from one `turnSoFar()` helper.
+
+**And the success line spreads it too**, which is the half that makes "they cannot drift" a fact
+about the code rather than a promise in a comment. The first version of this left the success line
+maintained by hand — a GPT Sol review pointed out that two hand-maintained sets drift the moment
+somebody adds a number to one of them, which is exactly how `converse` arrived at a failure line
+with three fields on it.
+
+Worth generalising, because this is not a chat problem: **when a line is added to a success path, ask
+what the failure path says.** The natural instinct is the opposite one — the happy path is where you
+are looking when you write the numbers, and an error already feels informative because it has an
+error in it. It usually is not. `err` says what broke; it says nothing about what the request had
+already done, and that is most of what a diagnosis is.
+
+It is checked rather than trusted:
+[`tests/chat-empty-answer-log.test.ts`](../../tests/chat-empty-answer-log.test.ts) reproduces Greg's
+turn exactly — three rounds asking for three, three and two tools, then a fourth round offered no
+tools that writes nothing — and reads the fields off the child's stdout. A child process because the
+logger is `silent` under `NODE_ENV=test`, so an in-process assertion would be satisfied by a logger
+that emits nothing at all; the same harness and the same reasoning as
+[`tests/stop-details.test.ts`](../../tests/stop-details.test.ts).
+
 ### The fixture alarm, and what it can never fire for
 
 The `store` warning on [`src/api.ts`](../../src/api.ts) says when an article was answered out of

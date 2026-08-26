@@ -155,6 +155,184 @@ describe("a stop ends in `done`, never in a throw", () => {
     ]);
   });
 
+  it("keeps what a paid round already bought when the stop lands between rounds", async () => {
+    /* A turn is several requests now, and this is the gap between two of them:
+       round one has run a tool and been billed for it, round two is connecting,
+       and the reader presses stop. That used to yield a hard-coded `done` — no
+       text, no citations, no searches, four null token counts — under a comment
+       saying "nothing was asked, so there is nothing to report". True of a
+       function that made one request; false the day a turn became several. The
+       reader had already paid for a round, and this threw the receipt away.
+       Found by a GPT Sol review, 2026-08-26. */
+    const encoder = new TextEncoder();
+    /** A body that emits its frames and then properly ends, unlike `hangingBody`. */
+    const closedBody = (frames: string[]) =>
+      new ReadableStream<Uint8Array>({
+        start(c) {
+          for (const f of frames) c.enqueue(encoder.encode(f));
+          c.enqueue(encoder.encode("data: [DONE]\n\n"));
+          c.close();
+        },
+      });
+
+    const controller = new AbortController();
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(() => {
+        call++;
+        if (call > 1) return new Promise<Response>(() => {}); // round two never replies
+        return {
+          ok: true,
+          body: closedBody([
+            delta("Looking that up. "),
+            `data: ${JSON.stringify({
+              choices: [
+                {
+                  delta: {
+                    tool_calls: [
+                      {
+                        index: 0,
+                        id: "toolu_1",
+                        type: "function",
+                        function: {
+                          name: "search_article_words",
+                          arguments: JSON.stringify({ query: "alpha" }),
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            })}\n\n`,
+            `data: ${JSON.stringify({
+              choices: [],
+              usage: { prompt_tokens: 1234, completion_tokens: 56, prompt_tokens_details: { cached_tokens: 78 } },
+            })}\n\n`,
+            `data: ${JSON.stringify({ choices: [{ finish_reason: "tool_calls", delta: {} }] })}\n\n`,
+          ]),
+        } as Response;
+      }),
+    );
+
+    const events: { type: string }[] = [];
+    setTimeout(() => controller.abort(new Error("stopped")), 40);
+    for await (const event of converse({
+      meta,
+      blocks,
+      history: [],
+      question: "why?",
+      slug: "example",
+      signal: controller.signal,
+    })) {
+      events.push(event);
+    }
+    const last = events.at(-1) as
+      | {
+          type: string;
+          text: string;
+          stopped: boolean;
+          tools: unknown[];
+          usage: { inputTokens: number | null; outputTokens: number | null };
+        }
+      | undefined;
+    expect(last?.type).toBe("done");
+    expect(last?.stopped).toBe(true);
+    // The words round one wrote, and the tool it ran.
+    expect(last?.text).toBe("Looking that up.");
+    expect(last?.tools).toHaveLength(1);
+    // And what it cost. Nulls here would say the turn was free, which it was not.
+    expect(last?.usage.inputTokens).toBe(1234);
+    expect(last?.usage.outputTokens).toBe(56);
+  });
+
+  it("does not run the rest of a tool batch after the reader has stopped", async () => {
+    /* A model can ask for three tools at once and they run one at a time, so a
+       stop landing during the first used to wait for all three: the signal was
+       only consulted *after* the whole batch. Which is the opposite of what a
+       stop button is for, and it also let a turn run past its own deadline —
+       the deadline was attached to the model requests and to nothing else.
+       Found by a GPT Sol review, 2026-08-26.
+
+       The stop is delivered from inside the loop over the events, at the moment
+       the first tool reports `done`. That is deterministic in a way a timer is
+       not: the generator is suspended at that `yield` while this runs. */
+    const encoder = new TextEncoder();
+    const three = [0, 1, 2].map(
+      (i) =>
+        `data: ${JSON.stringify({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: i,
+                    id: `toolu_${i}`,
+                    type: "function",
+                    function: {
+                      name: "search_article_words",
+                      arguments: JSON.stringify({ query: "alpha" }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        })}\n\n`,
+    );
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        () =>
+          ({
+            ok: true,
+            body: new ReadableStream<Uint8Array>({
+              start(c) {
+                c.enqueue(encoder.encode(delta("Looking. ")));
+                for (const f of three) c.enqueue(encoder.encode(f));
+                c.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ choices: [{ finish_reason: "tool_calls", delta: {} }] })}\n\n`,
+                  ),
+                );
+                c.enqueue(encoder.encode("data: [DONE]\n\n"));
+                c.close();
+              },
+            }),
+          }) as Response,
+      ),
+    );
+
+    const events: { type: string; run?: { status: string } }[] = [];
+    let stoppedAt = -1;
+    for await (const event of converse({
+      meta,
+      blocks,
+      history: [],
+      question: "why?",
+      slug: "example",
+      signal: controller.signal,
+    })) {
+      events.push(event as { type: string; run?: { status: string } });
+      if (event.type === "tool" && event.run.status === "done" && stoppedAt < 0) {
+        stoppedAt = events.length;
+        controller.abort(new Error("stopped"));
+      }
+    }
+
+    expect(stoppedAt).toBeGreaterThan(0);
+    const done = events.at(-1) as { type: string; stopped: boolean; tools: unknown[] } | undefined;
+    expect(done?.type).toBe("done");
+    expect(done?.stopped).toBe(true);
+    // One tool ran, not three. The two the model also asked for were dropped.
+    expect(done?.tools).toHaveLength(1);
+    // And nothing was left mid-flight: a `running` row nothing finishes is the
+    // one thing this loop must never store.
+    const [first] = (done?.tools ?? []) as { status: string }[];
+    expect(first?.status).toBe("done");
+  });
+
   it("survives a stop after the response arrives but before a single word does", async () => {
     // The empty-answer check used to throw here — "the model returned no text"
     // — which is true of a broken provider and false of a reader in a hurry.

@@ -38,6 +38,7 @@ import {
   untrusted,
 } from "../src/chat-tools.js";
 import {
+  MAX_TOOL_ROUNDS,
   accumulateToolCalls,
   converse,
   type ConverseEvent,
@@ -568,9 +569,12 @@ describe("converse — a turn that uses a tool", () => {
   });
 
   it("leaves our tools out entirely when the caller says so", async () => {
-    /* Its own stub, replacing the two-round one above: with our tools withheld
-       the model cannot ask for one, so a stub that asks anyway would be testing
-       a request that cannot happen. */
+    /* Its own stub, replacing the two-round one above: this one is about what
+       the *request* carries, so the model has nothing to say and says it.
+       (An earlier version of this comment said a model with tools withheld
+       "cannot ask for one", which is the disproved claim this file's last
+       describe block exists because of. It can; it is just not what is being
+       measured here.) */
     vi.stubGlobal(
       "fetch",
       vi.fn((_url: string, init: RequestInit) => {
@@ -601,7 +605,312 @@ describe("converse — a turn that uses a tool", () => {
   });
 });
 
+/* --------------------------------------------- the round that has no tools -- */
+
+/**
+ * **What actually happens on the last round, as opposed to what we assumed.**
+ *
+ * `converse` withholds our tools on the final round so the model has to write
+ * prose, and the comment on that line used to say it therefore "cannot ask
+ * again". It can. Taking the array away removes the schema; it does not remove
+ * three of the model's own turns full of tool calls sitting in the history right
+ * above, which is the stronger cue by far.
+ *
+ * Greg hit the consequence on 2026-08-26: eight searches, no answer, and the
+ * app told him the service *"finished without saying anything at all"* — a
+ * sentence about a silence that never happened, and the sentence anybody would
+ * then go and debug from.
+ *
+ * Both halves are pinned here: the round is now *told* the tools are gone, and
+ * if it asks regardless it fails in its own words rather than in `saidNothing`'s.
+ */
+describe("the last round, where our tools are withheld", () => {
+  const sent: Record<string, unknown>[] = [];
+
+  /** A round that asks for one tool and says nothing else. */
+  const asks = (n: number) => [
+    frame({ model: "test/model", choices: [{ delta: {} }] }),
+    frame({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: `toolu_${n}`,
+                type: "function",
+                function: {
+                  name: "search_article_words",
+                  arguments: JSON.stringify({ query: "consciousness" }),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    }),
+    frame({ choices: [{ finish_reason: "tool_calls", delta: {} }] }),
+  ];
+
+  /** Every round asks for a tool, including the one that is offered none. */
+  function alwaysAsks(): void {
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init: RequestInit) => {
+        sent.push(JSON.parse(init.body as string));
+        call++;
+        return Promise.resolve({ ok: true, body: body(asks(call)) } as Response);
+      }),
+    );
+  }
+
+  beforeEach(() => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    sent.length = 0;
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** The text of the last message in one request. */
+  const lastMessage = (request: Record<string, unknown>): string => {
+    const messages = request.messages as { role: string; content: unknown }[];
+    const last = messages[messages.length - 1];
+    return typeof last?.content === "string" ? last.content : JSON.stringify(last?.content);
+  };
+
+  const drain = async (): Promise<string | null> => {
+    try {
+      for await (const _ of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "search everything and compare it",
+        slug: "example",
+      })) {
+        // drained
+      }
+      return null;
+    } catch (err) {
+      return (err as Error).message;
+    }
+  };
+
+  it("tells the model the tools are gone, on that round and no other", async () => {
+    alwaysAsks();
+    await drain();
+
+    // Four requests: three that were offered tools, and the one that was not.
+    expect(sent).toHaveLength(MAX_TOOL_ROUNDS + 1);
+    const rounds = sent.map(lastMessage);
+    for (const round of rounds.slice(0, MAX_TOOL_ROUNDS)) {
+      expect(round).not.toContain("article and library tools are finished");
+    }
+    // Plain words, and the second half matters: a model that is told only to
+    // stop searching can decline to answer instead, which is the same empty
+    // turn reached by better manners.
+    const last = rounds[MAX_TOOL_ROUNDS] as string;
+    expect(last).toContain("article and library tools are finished");
+    expect(last).toContain("what is still missing");
+    /* And it must not overclaim. OpenRouter's web search is a server tool and
+       stays on for every round including this one, so a nudge saying there are
+       no tools left would be contradicted by the request carrying it. Raised by
+       a GPT Sol review, 2026-08-26. */
+    expect(last).not.toContain("no tools left");
+    const tools = (sent[MAX_TOOL_ROUNDS] as { tools: { type: string }[] }).tools;
+    expect(tools).toHaveLength(1);
+    expect(tools[0]?.type).toBe("openrouter:web_search");
+  });
+
+  it("says what really happened when it asks anyway, instead of blaming a silence", async () => {
+    alwaysAsks();
+    const message = await drain();
+
+    expect(message).toContain("[ai-tool-loop]");
+    // The sentence this replaced, and the reason the whole guard exists.
+    expect(message).not.toContain("[ai-empty]");
+    expect(message).not.toContain("without saying anything");
+  });
+
+  it("does not blame a search spree on a caller who switched tools off", async () => {
+    /* `!withTools` covers two different situations and only one of them is a
+       turn that spent itself searching. A `useTools: false` caller is offered
+       nothing from round zero, so a model asking for a tool on its very first
+       request has run none — and telling that reader the service "spent this
+       whole answer looking things up" is a sentence about something that did
+       not happen. Found by a GPT Sol review, 2026-08-26. */
+    alwaysAsks();
+    let message: string | null = null;
+    try {
+      for await (const _ of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "does it say that?",
+        slug: "example",
+        useTools: false,
+      })) {
+        // drained
+      }
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    // One request, because there is no round to go back for.
+    expect(sent).toHaveLength(1);
+    /* Named, not merely "not [ai-tool-loop]" — which a success, or any unrelated
+       error, would also satisfy. `[ai-empty]` is the documented outcome on this
+       path and the one this test is holding still. Sharpened after a GPT Sol
+       review, 2026-08-26. */
+    expect(message).toContain("[ai-empty]");
+    expect(message).not.toContain("[ai-tool-loop]");
+  });
+
+  it("catches a garbled call on the withheld round instead of dropping it", async () => {
+    /* The other way this round can end badly: the model asks, and the request
+       arrives in pieces with no id, so nothing can be reassembled. `wanted` is
+       then empty, and before this the `TOOL_CALL_LOST` guard next door was
+       scoped to rounds where tools were offered — so it fell through every
+       check and reached the reader as "finished without saying anything at
+       all", for the third time in this file's history. Found by a GPT Sol
+       review, 2026-08-26. */
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init: RequestInit) => {
+        sent.push(JSON.parse(init.body as string));
+        call++;
+        const frames =
+          call <= MAX_TOOL_ROUNDS
+            ? asks(call)
+            : [
+                frame({ model: "test/model", choices: [{ delta: {} }] }),
+                // A fragment with no head: arguments for a call whose id and
+                // name never arrived.
+                frame({
+                  choices: [
+                    { delta: { tool_calls: [{ index: 0, function: { arguments: '{"q":"x"}' } }] } },
+                  ],
+                }),
+                frame({ choices: [{ finish_reason: "tool_calls", delta: {} }] }),
+              ];
+        return Promise.resolve({ ok: true, body: body(frames) } as Response);
+      }),
+    );
+
+    let message: string | null = null;
+    try {
+      for await (const _ of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "search everything and compare it",
+        slug: "example",
+      })) {
+        // drained
+      }
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain("[ai-tool-lost]");
+    expect(message).not.toContain("[ai-empty]");
+  });
+
+  it("does not let a preamble from round one stand in for an answer", async () => {
+    /* The guard reads `roundText` — *this* round's words — and the reason is a
+       trap the first version walked into. "Let me look that up for you." on
+       round one is text, so a guard reading the turn's accumulator would find it
+       non-empty, take the break, and store that half-sentence as a finished
+       answer. Which is the exact silent success the `TOOL_CALL_LOST` guard
+       twenty lines above exists to prevent. Nothing is lost by failing: the
+       route keeps the partial text and marks the row `error`. Found by a GPT Sol
+       review, 2026-08-26. */
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init: RequestInit) => {
+        sent.push(JSON.parse(init.body as string));
+        call++;
+        const frames = asks(call);
+        // The first round says something before asking. Nothing after it does.
+        if (call === 1) {
+          frames.splice(
+            1,
+            0,
+            frame({ choices: [{ delta: { content: "Let me look that up for you." } }] }),
+          );
+        }
+        return Promise.resolve({ ok: true, body: body(frames) } as Response);
+      }),
+    );
+
+    const events: ConverseEvent[] = [];
+    let message: string | null = null;
+    try {
+      for await (const event of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "search everything and compare it",
+        slug: "example",
+      })) {
+        events.push(event);
+      }
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain("[ai-tool-loop]");
+    // And it did not quietly finish instead.
+    expect(events.some((e) => e.type === "done")).toBe(false);
+  });
+
+  it("keeps an answer that arrived alongside the doomed request", async () => {
+    /* A model that wrote its answer *and* reached for one more search has
+       answered. The guard is about an empty turn, not about a stray call. */
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init: RequestInit) => {
+        sent.push(JSON.parse(init.body as string));
+        call++;
+        const frames =
+          call <= MAX_TOOL_ROUNDS
+            ? asks(call)
+            : [
+                frame({ model: "test/model", choices: [{ delta: { content: "It says [spya-k3m9qt]." } }] }),
+                ...asks(call).slice(1),
+              ];
+        return Promise.resolve({ ok: true, body: body(frames) } as Response);
+      }),
+    );
+
+    const events: ConverseEvent[] = [];
+    for await (const event of converse({
+      meta,
+      blocks,
+      history: [],
+      question: "search everything and compare it",
+      slug: "example",
+    })) {
+      events.push(event);
+    }
+    const done = events.find((e) => e.type === "done");
+    expect(done && "text" in done ? done.text : "").toBe("It says [spya-k3m9qt].");
+  });
+});
+
 describe("the caps are the numbers the docs claim", () => {
+  it("leaves at least one round with tools, or the loop means something else", () => {
+    /* `lastToolRound` is `round === MAX_TOOL_ROUNDS`, and the nudge and the
+       guard hanging off it both assume that round comes *after* at least one
+       round that had tools. At zero it would fire on the very first request —
+       a turn told "that is all the looking up you can do" before it had done
+       any, and a guard blaming a search spree that never happened. The constant
+       is 3 and nobody is about to set it to 0; this is here so that if somebody
+       does, it is a red test rather than a strange sentence on a reader's
+       screen. Raised by a GPT Sol review, 2026-08-26. */
+    expect(MAX_TOOL_ROUNDS).toBeGreaterThanOrEqual(1);
+  });
+
   it("keeps a fetched page well under what a turn can afford to re-send", () => {
     // Tool results ride along on every later round, so this number is paid
     // more than once. Pinned so a casual raise is a deliberate one.

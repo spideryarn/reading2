@@ -97,6 +97,7 @@ import { readRaw } from "./fetch.js";
 import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
+import { requireUser, type Verifier } from "./auth.js";
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
@@ -1063,8 +1064,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       /* Resolved per turn rather than once per thread, so a reader who edits
          their profile mid-conversation gets the next answer written to the new
          one. The opposite of the job path, which freezes it — and the reason
-         they differ is that a turn is one call, so there is no window in which
-         half an artefact could be written to each. */
+         they differ is that a turn resolves this **once** and hands the same
+         string to every round of it, so there is no window in which half an
+         artefact could be written to each. (That used to read "a turn is one
+         call", which stopped being true the day chat grew a tool loop. The
+         conclusion held; the reason had rotted. Found by a GPT Sol review,
+         2026-08-26.) */
       profile: wantsProfile ? await resolveProfile(slug) : null,
       signal: stop.signal,
     })) {
@@ -2133,7 +2138,15 @@ function logRequest(
 }
 
 /** Returns false if the request was not ours, so the caller can fall through. */
-export async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+export async function handleApi(
+  req: IncomingMessage,
+  res: ServerResponse,
+  /**
+   * How to check a token. Injected only by tests; see the gate below and
+   * src/auth.ts. Left alone it is the real thing.
+   */
+  verify?: Verifier,
+): Promise<boolean> {
   const url = req.url ?? "";
   // Before the clock starts, and before anything can log: a request that is not
   // ours must produce **no line at all**. In dev this function sees every
@@ -2233,6 +2246,26 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
      `send` has just set, so the exit points do not have to report anything. */
   let failure: unknown;
   try {
+    /* **The gate, and it is inside the `try` — that is the whole of this
+       comment's content.** An earlier plan put it just after the `/api/` prefix
+       check, eighty-five lines above, on the theory that this `try` would turn
+       its thrown `httpError` into the right status. It would not: a throw up
+       there escapes to the outer handler, which answers 500 with the message in
+       dev and a blank 500 on Vercel — and the `finally` below never runs, so
+       **the refusal is never logged at all**. It still fails closed, which is
+       the one mercy, but every word we have written about 401s and 403s would
+       have been false. GPT Sol found it; confirmed by reading the line numbers.
+
+       Before any body is read and before any route matches, so a malformed
+       request from a stranger is a 401 rather than a 400. We owe an
+       unauthenticated caller no diagnosis of their JSON.
+
+       `verify` is a seam rather than a hard call because six test files drive
+       this function with hand-built requests and none of them can mint a real
+       ES256 token. The default is the real verifier, so forgetting to inject
+       cannot make a production build permissive. src/auth.ts. */
+    await requireUser(req, verify);
+
     if (library && req.method === "GET") {
       /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
          meaning "no", and a loose check would hand them the archive. */
