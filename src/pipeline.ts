@@ -728,7 +728,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
       const previousBlocks = await previousBlockCount(ctx);
 
       const run = await runBlocks({ htmlFile: ctx.htmlFile });
-      const { total, minted, carried, reused } = run.stats;
+      const { total, minted, carried, reused, retargeted } = run.stats;
       const kept = reused + carried;
 
       const fields = {
@@ -738,6 +738,11 @@ export const STEPS: Record<StepName, PipelineStep> = {
         minted,
         carried,
         reused,
+        /* Zero on nearly every article and on every re-run, which is the point:
+           a page that links to its own sections is the case where stage 3
+           renaming an id used to break something (blocks.ts § retargetAnchors),
+           and this is the only place that says it happened. */
+        retargeted,
         previousBlocks,
       };
       plog.info(fields, `blocks ${ctx.slug}: ${total} blocks, ${minted} minted, ${kept} kept`);

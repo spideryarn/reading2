@@ -54,8 +54,8 @@ import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
 import { stageFailure } from "./job-failure.js";
 import { PDF_READER_MODEL } from "./models.js";
-import { type Pass0, pass0, type PdfRecord, RENDERED, type RecordType } from "./pdf.js";
-import { check } from "./pdf-score.js";
+import { foldLine, type Pass0, pass0, type PdfRecord, RENDERED, type RecordType } from "./pdf.js";
+import { type Check, check } from "./pdf-score.js";
 import type { Meta } from "./types.js";
 
 /**
@@ -88,6 +88,9 @@ const CHUNK_WORDS = 3200;
 const ASSUMED_WORDS = 500;
 
 const MAX_TOKENS = 16_000;
+
+/** How many times a chunk that fails its check is asked again. See the loop in `runPdfExtract`. */
+const ATTEMPTS = 2;
 
 /** Anthropic's own limit is on the whole encoded request; OpenRouter's providers are no kinder. */
 const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
@@ -552,6 +555,8 @@ export interface PdfExtractResult {
   records: number;
   /** Faults found in text v1 transcribes and does not show. Logged, never fatal. */
   notes: string[];
+  /** Chunks that failed their check once and passed on the second ask. */
+  retries: string[];
   /** Meaningless characters removed from the model's output — logged, never silent. */
   stripped: number;
   /** `null` for a scan: there was no text layer to check the transcription against. */
@@ -614,8 +619,12 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   let baselineTokens = 0;
   let matchedTokens = 0;
   let pagesChecked = 0;
+  const seen = new Set<string>();
   const failures: string[] = [];
   const notes: string[] = [];
+  /* Every chunk that had to be asked twice, and why. Logged from the seam —
+     a retry nobody counts is a cost nobody sees. */
+  const retries: string[] = [];
 
   for (const [i, chunk] of chunks.entries()) {
     const key = createHash("sha256")
@@ -633,47 +642,78 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       .slice(0, 16);
     const cacheFile = path.join(cacheDir, `${key}.json`);
 
+    /**
+     * **One retry of a chunk that fails its check, and it is not the fallback
+     * the plan forbids.**
+     *
+     * The distinction matters. What the plan rules out is escalating a failing
+     * page to a stronger model, because that quietly costs four times as much
+     * and hides the fault. This is the *same* call again, and its output has to
+     * pass the *same* check — so it cannot launder a bad reading, it can only
+     * survive a transient one.
+     *
+     * And transient is what these are. The `easy` fixture passed twice and then
+     * dropped thirteen words — "in an interview Derrida speaks again of this
+     * specter of the future" — from a page it had transcribed perfectly an hour
+     * earlier. A gate that fails an eight-page paper one run in three, on a
+     * fault that is gone when you ask again, is a gate somebody turns off.
+     *
+     * Two runs, then it fails with the page numbers in the message. The failure
+     * is still visible and still hard.
+     */
     let reading: ChunkReading;
+    let result: Check;
     const cached = await readFile(cacheFile, "utf-8").catch(() => null);
     if (cached) {
       reading = JSON.parse(cached) as ChunkReading;
+      result = checkChunk(reading, chunk, pass, seen);
     } else {
-      const sent = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
-      reading = await reader.read(
-        await cutPages(opts.bytes, sent),
-        instructionFor(chunk),
-        opts.signal,
-      );
-      /* `length` is a truncated answer, and a truncated answer is a lost page —
-         the previous version's own bug, shipped as a shorter article. Say which
-         it was before the scoring says "the model lost content", because that
-         is the right symptom and the wrong diagnosis. */
-      if (reading.finish === "length") {
-        throw new Error(
-          `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
+      for (let attempt = 1; ; attempt++) {
+        const sent = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
+        reading = await reader.read(
+          await cutPages(opts.bytes, sent),
+          instructionFor(chunk),
+          opts.signal,
         );
+        usage.input += reading.usage.input;
+        usage.output += reading.usage.output;
+        /* `length` is a truncated answer, and a truncated answer is a lost page —
+           the previous version's own bug, shipped as a shorter article. Say which
+           it was before the scoring says "the model lost content", because that
+           is the right symptom and the wrong diagnosis. */
+        if (reading.finish === "length") {
+          throw new Error(
+            `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
+          );
+        }
+        if (reading.finish === "content_filter") {
+          throw new Error(
+            `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}` +
+              `${reading.nativeFinish ? ` (${reading.nativeFinish})` : ""}. Verbatim transcription` +
+              ` of long boilerplate is a known trigger; a smaller chunk sometimes gets through.`,
+          );
+        }
+        result = checkChunk(reading, chunk, pass, seen);
+        if (result.ok || attempt >= ATTEMPTS) break;
+        retries.push(`pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its check"}`);
       }
-      if (reading.finish === "content_filter") {
-        throw new Error(
-          `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}` +
-            `${reading.nativeFinish ? ` (${reading.nativeFinish})` : ""}. Verbatim transcription` +
-            ` of long boilerplate is a known trigger; a smaller chunk sometimes gets through.`,
-        );
-      }
-      await writeFile(cacheFile, JSON.stringify(reading, null, 2), "utf-8");
+      /* Only a reading that passed is cached. A failed one is not worth
+         replaying, and caching it would make the retry above read back the
+         answer it is retrying. */
+      if (result.ok) await writeFile(cacheFile, JSON.stringify(reading, null, 2), "utf-8");
     }
 
-    usage.input += reading.usage.input;
-    usage.output += reading.usage.output;
+    const emitted = withoutRepeats(
+      reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
+      seen,
+    );
     stripped += reading.stripped ?? 0;
-    const emitted = reading.records.filter((r) => !chunk.context || r.page !== chunk.context);
-    const result = check(emitted, chunk.pages, pass);
     if (!result.ok) failures.push(...result.failures);
     notes.push(...result.notes);
     if (result.overall.recall !== null) {
       baselineTokens += result.overall.base;
       matchedTokens += result.overall.recall * result.overall.base;
-      pagesChecked += result.pages.filter((p) => p.recall !== null).length;
+      pagesChecked += result.scored.length;
     }
     all.push(...emitted);
     opts.onProgress?.(i + 1, chunks.length, chunk.pages);
@@ -736,6 +776,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     records: all.length,
     recall,
     notes,
+    retries,
     usage,
     stripped,
   };
@@ -784,20 +825,145 @@ async function keepTheOriginal(opts: PdfExtractOptions, sha256: string): Promise
   );
 }
 
+/** The check for one chunk's reading, with the two things only this stage knows: the context page and the bibliography. */
+function checkChunk(reading: ChunkReading, chunk: Chunk, pass: Pass0, seen: Set<string>): Check {
+  /* Against a COPY of `seen`: the dedup must not consume anything until the
+     reading is accepted, or a retry would find its own first attempt's
+     paragraphs already recorded and drop them all. */
+  const emitted = withoutRepeats(
+    reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
+    new Set(seen),
+  );
+  return check(emitted, chunk.pages, pass, {
+    context: chunk.context,
+    unchecked: bibliographyPages(emitted, chunk.pages, pass.pages.length),
+  });
+}
+
+/** A page is a bibliography if this much of what the model returned for it is a reference. */
+const MOSTLY_REFERENCES = 0.6;
+
+/** How far from the end of the document a bibliography is allowed to be. */
+const BIBLIOGRAPHY_TAIL = 3;
+
 /**
- * One title, chosen by one rule.
+ * **The pages at the end that are a reference list, and are therefore not
+ * checked.**
  *
- * PDF metadata first where it is not junk, then the model's own `h1`, then the
- * filename. Pass 0's "biggest line on page 1" is deliberately not in the ladder:
- * on a library scan the biggest line on page one belongs to the library.
+ * Rule 5 asks the model to transcribe references and label them, so that the
+ * baseline and the output cover the same text and the gate can be tight. On a
+ * paper with sixty of them the reader returns a couple of dozen and stops:
+ * pages 13–14 of the `harder` fixture score a recall of 0.291 while every word
+ * of body text on them is correct. Failing the paper for that would teach
+ * whoever met it to widen the threshold, and the threshold is the only thing
+ * standing between a lost paragraph and a reader.
+ *
+ * **Both conditions are load-bearing.** "The model said these are references"
+ * on its own is an invitation: a model could label a paragraph `reference` and
+ * lose it from the article and from the gate at once. Requiring the page to be
+ * within a few of the document's last also being true makes that evasion
+ * available exactly where nobody keeps their argument. A mid-document page
+ * labelled `reference` still gates, and still has to match its baseline.
+ *
+ * What it gives up is real and is reported every time it happens: prose on
+ * these pages is unchecked.
+ */
+function bibliographyPages(records: PdfRecord[], pages: number[], total: number): number[] {
+  return pages.filter((page) => {
+    if (page < total - BIBLIOGRAPHY_TAIL) return false;
+    const mine = records.filter((r) => r.page === page);
+    if (!mine.length) return false;
+    return mine.filter((r) => r.type === "reference").length / mine.length >= MOSTLY_REFERENCES;
+  });
+}
+
+/**
+ * **Drop a paragraph this document has already had, and remember the rest.**
+ *
+ * Every chunk after the first is sent the previous page as evidence, with the
+ * instruction not to emit anything for it. That instruction is not reliably
+ * obeyed: on the `harder` fixture the reader transcribed page 9 *and* labelled
+ * it page 10, so the page-number filter above let it straight through. Page 10
+ * then had 1,793 tokens of output against 704 of baseline — recall 1.0,
+ * precision 0.39 — and, far worse than any number, **a page of the article
+ * would have appeared twice**, in fluent English, with nothing downstream able
+ * to tell.
+ *
+ * The check caught it. This is what stops it happening, and it belongs here
+ * rather than in the check because a duplicated page is a defect in the
+ * article, not a disagreement about a score.
+ *
+ * **Exact matches only, and only for a substantial record.** A folded
+ * comparison of twenty words or more: two paragraphs that long being identical
+ * by coincidence does not happen, while a repeated `<h2>References</h2>` or a
+ * one-word list item happens constantly and must survive. Fuzzy matching here
+ * would silently delete a paragraph an author genuinely repeated, which is the
+ * more expensive mistake.
+ */
+function withoutRepeats(records: PdfRecord[], seen: Set<string>): PdfRecord[] {
+  const kept: PdfRecord[] = [];
+  for (const record of records) {
+    const words = record.text
+      .normalize("NFKC")
+      .replace(/[^\p{L}\p{N}\s]/gu, "")
+      .replace(/\s+/gu, " ")
+      .toLowerCase()
+      .trim();
+    if (words.split(" ").length < 20) {
+      kept.push(record);
+      continue;
+    }
+    if (seen.has(words)) continue;
+    seen.add(words);
+    kept.push(record);
+  }
+  return kept;
+}
+
+/**
+ * **One title, chosen by one rule** — and the rule has three rungs because
+ * every single rung is wrong on one of the three fixtures.
+ *
+ *   1. the PDF's own metadata title, if it is not obviously a filename
+ *   2. the first heading the model found ON THE FIRST PAGE
+ *   3. the first substantial line of the first page's text layer
+ *   4. the filename
+ *
+ * Rung 1 fails on the `easy` fixture, whose embedded title is
+ * `Microsoft Word - Lyn McCreddon 1`. Rung 2 is deliberately restricted to the
+ * first page, and that restriction is the whole of what it is for: without it,
+ * an article whose real title the model happened to label a paragraph came out
+ * called **"Hauntings"** — a section heading from three pages in. Rung 3 is
+ * what a scan gets, since a scan has no text layer at all and falls to 4.
+ *
+ * Pass 0's "biggest line on page 1" is deliberately not in the ladder: on a
+ * library scan the biggest line on page one belongs to the library.
  */
 function titleFrom(records: PdfRecord[], pass: Pass0, url: string): string {
-  const heading = records.find((r) => r.type === "heading1" && r.text.trim())?.text.trim();
+  if (pass.metaTitle && !looksLikeAFilename(pass.metaTitle)) return pass.metaTitle;
+  const firstPage = pass.pages[0]?.page ?? 1;
+  const heading = records.find(
+    (r) => r.page === firstPage && r.type === "heading1" && r.text.trim(),
+  )?.text.trim();
   if (heading) return heading;
-  const first = pass.pages[0]?.text.split("\n").find((l) => l.trim().length > 3);
-  if (first) return first.trim();
+  /* Furniture excluded, for the same reason the biggest line is not in this
+     ladder: the first substantial line of page 1 is very often the running
+     header. On the `easy` fixture it is "Coolabah, Vol.3, 2009, ISSN
+     1988-5946…", which is what this rung returned until pass 0's furniture list
+     was consulted — and pass 0 had already worked out that it appears on every
+     page. */
+  const line = pass.pages[0]?.text
+    .split("\n")
+    .find((l) => l.trim().length > 3 && !pass.furniture.has(foldLine(l)));
+  if (line) return line.trim();
   return decodeURIComponent(url.split("/").pop() ?? "Untitled").replace(/\.pdf$/i, "");
 }
+
+/** `Microsoft Word - thing.doc`, `untitled`, `document1` — a title that is really a file. */
+const looksLikeAFilename = (s: string) =>
+  /^(microsoft word|untitled|document\s*\d*|print|layout|final|draft)\b/i.test(s) ||
+  /\.(docx?|pdf|indd|pages|tex)$/i.test(s) ||
+  !/\s/.test(s);
 
 // ---------------------------------------------------------------- CLI
 

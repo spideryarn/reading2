@@ -38,7 +38,8 @@ describe("cutting a document into chunks", () => {
   const pages = (words: number[]): Pass0 => ({
     pages: words.map((w, i) => ({ page: i + 1, text: "", words: w, items: [] })),
     isScan: false,
-    furniture: new Set(),
+    metaTitle: null,
+      furniture: new Set(),
   });
 
   it("gives a dense document smaller chunks than a sparse one", () => {
@@ -162,6 +163,7 @@ describe("a scan, where recall is a number about nothing", () => {
         items: [],
       })),
       isScan: true,
+      metaTitle: null,
       furniture: new Set(),
     };
     const perfect = [
@@ -221,6 +223,7 @@ describe("the whole stage, with the model stubbed out", () => {
             if (line.trim()) records.push(record({ page: page.page, text: line }));
           }
         }
+        asks++;
         return {
           records: sabotage ? sabotage(records) : records,
           stripped: 0,
@@ -232,7 +235,11 @@ describe("the whole stage, with the model stubbed out", () => {
     };
   }
 
+  /** How many times the stub was asked, so a retry can be counted rather than inferred. */
+  let asks = 0;
+
   async function run(sabotage?: (r: PdfRecord[]) => PdfRecord[]) {
+    asks = 0;
     const bytes = new Uint8Array(await readFile(EASY));
     const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-"));
     const pass = await pass0(bytes);
@@ -249,6 +256,9 @@ describe("the whole stage, with the model stubbed out", () => {
   it("writes an article and records what read it", async () => {
     const result = await run();
     expect(result.pages).toBe(8);
+    /* Not "Hauntings", which is a section heading three pages in and which an
+       earlier version of the title ladder happily used. src/pdf-read.ts. */
+    expect(result.meta.title).toBe("Forms of Memory in Post-colonial Australia");
     expect(result.meta.source).toBe("pdf");
     expect(result.meta.method).toBe("test/honest");
     expect(result.meta.pages).toBe(8);
@@ -263,6 +273,17 @@ describe("the whole stage, with the model stubbed out", () => {
     expect(manifest.kind).toBe("pdf");
     expect(manifest.sha256).toBe(result.meta.rawSha256);
   }, 30_000);
+
+  it("asks a failing chunk exactly once more, and no more", async () => {
+    /* Not the fallback the plan forbids — the same call, judged by the same
+       check. It exists because the reader drops a clause about one run in
+       three, and a gate that fails a whole paper for that is a gate somebody
+       turns off. src/pdf-read.ts. */
+    await expect(run((records) => records.filter((r) => r.page !== 3))).rejects.toThrow();
+    const chunks = asks;
+    await run();
+    expect(chunks).toBe(asks + 1);
+  }, 60_000);
 
   it("refuses to write anything when a page comes back empty", async () => {
     await expect(run((records) => records.filter((r) => r.page !== 3))).rejects.toThrow(

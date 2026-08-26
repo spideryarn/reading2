@@ -49,6 +49,14 @@ export interface PageText {
 export interface Pass0 {
   pages: PageText[];
   /**
+   * The title in the PDF's own metadata, if it has one worth having.
+   *
+   * Recorded rather than trusted. A great many PDFs carry `Microsoft Word -
+   * Lyn McCreddon 1` here — the `easy` fixture does — which is a filename
+   * wearing a title's clothes. `titleFrom` in src/pdf-read.ts decides.
+   */
+  metaTitle: string | null;
+  /**
    * True when the pages carry no extractable text — a photographic scan.
    *
    * Judged on the *content* pages rather than on all of them, because a
@@ -110,6 +118,16 @@ export interface PdfRecord {
  * The check compares like with like, the gate can be tight, and v2 showing
  * footnotes is a change to one set rather than a change to the prompt, the
  * check and the thresholds together.
+ *
+ * **`tabledata` was the same lesson taught twice.** The first version applied
+ * this to footnotes and references and left rule 7 saying "do not transcribe a
+ * table's cells" — which is right about what v1 *shows*, and wrong in exactly
+ * the same way. The `harder` fixture's page 10 is Table 1, ninety-one words of
+ * cells in the text layer and one caption in the output, and a word-perfect
+ * transcription failed the gate for obeying its instructions. GPT Sol asked
+ * whether transcribing footnotes moved the problem rather than solving it; it
+ * had moved it as far as tables. Transcribe everything, label it, show a
+ * subset.
  */
 export type RecordType =
   | "heading1"
@@ -123,9 +141,16 @@ export type RecordType =
   | "code"
   | "footnote"
   | "reference"
-  | "cover";
+  | "cover"
+  | "tabledata";
 
-/** What v1 puts on the page. Everything else is transcribed, checked, and not shown. */
+/**
+ * What v1 puts on the page. Everything else is transcribed, checked, and not shown.
+ *
+ * This set is also **what the check gates on**, and that is not a coincidence:
+ * a fault the reader can never see is worth reporting and not worth failing an
+ * article for. src/pdf-score.ts § `check`.
+ */
 export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
   "heading1",
   "heading2",
@@ -209,7 +234,10 @@ export async function pass0(source: string | Uint8Array): Promise<Pass0> {
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
 
   const pages: PageText[] = [];
+  let metaTitle: string | null = null;
   try {
+    const info = (await doc.getMetadata().catch(() => null))?.info as { Title?: string } | undefined;
+    metaTitle = info?.Title?.trim() || null;
     for (let n = 1; n <= doc.numPages; n++) {
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
@@ -239,6 +267,7 @@ export async function pass0(source: string | Uint8Array): Promise<Pass0> {
   const withText = pages.filter((p) => p.words >= SCAN_WORDS_PER_PAGE);
   return {
     pages,
+    metaTitle,
     isScan: withText.length <= 1 && pages.length > 1,
     furniture: repeatedLines(pages),
   };
