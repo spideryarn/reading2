@@ -11,7 +11,12 @@
  * > will take up a few columns in the middle, so it should probably be
  * > vertically narrow, and think of the article's ordering as top to bottom.
  *
- * ## Nothing was installed, and that is the finding rather than the shortcut
+ * ## Nothing was installed **for these three**, and that is a finding
+ *
+ * Read this as history rather than as current fact: three more pictures arrived
+ * on 2026-08-27 and they *are* D3-driven, over a richer data structure that did
+ * not exist when the survey below was run. See [diagram-d3.ts](./diagram-d3.ts)
+ * for what changed and why the argument here still stands for the tree pictures.
  *
  * GPT-5.6 Luna was sent to survey the field first, per
  * docs/reusable/third-party-library-selection.md — d3-hierarchy, @visx/hierarchy,
@@ -54,7 +59,7 @@
  *   └──┴───────────┘                        └───────────────┘
  *    depth as thin      depth as indent      depth as a stem
  *    rails; height       and elbows;          off a centre
- *    ∝ blocks            one row each         trunk
+ *    ∝ words             one row each         trunk
  * ```
  *
  * `strata` is the only one whose vertical axis is *linear in the article*, and
@@ -64,17 +69,17 @@
  * docs/project/original-version/structure-panel.md against the previous version.
  * Here one is thirteen times taller.
  *
- * **In BLOCKS, though, not in words**, and that is worth being exact about
- * because "to scale" invites the stronger reading. A block is whatever stage 3
- * split out — a paragraph, a heading, a list item, a figure, a code block — so a
- * section of eight long paragraphs and a section of eight one-line list items
- * are the same height here, and a thousand-word code block is one row. It is
- * therefore the same unit the summary panel's `18¶` badge already counts, and
- * **not** the unit the spine uses: the spine is sized from measured pixel
- * heights (Spine.tsx), which is a different and better answer that costs a
- * layout pass this panel does not have. Weighting a block by its text length
- * would close most of the gap and is the obvious next change; see
- * docs/project/diagram.md.
+ * **In words, since 2026-08-27** — `DiagramOptions.wordsBefore`. It counted
+ * *blocks* first, which GPT Sol correctly called an overclaim: a section of
+ * eight long paragraphs and one of eight one-line list items came out the same
+ * height, and a thousand-word code block was one row. Blocks is still the
+ * fallback when no word counts are supplied, so the pure layout stays testable
+ * against a tree alone.
+ *
+ * It is still **not** the unit the spine uses. The spine is sized from measured
+ * pixel heights (Spine.tsx), which is better again and costs a layout pass this
+ * panel has not got — so the two rails are close but not interchangeable, and a
+ * position on one cannot be copied to the other. See docs/project/diagram.md.
  *
  * `tree` and `mindmap` keep document *order* but not document *scale* — every
  * node gets the room its label needs. That is a deliberate split rather than an
@@ -99,8 +104,23 @@
 import type { BlockId, NodeId } from "../types.js";
 import type { SummaryNode } from "./tree.js";
 
-/** Which picture. In the URL as `?diagram=` — see params.ts § diagramParam. */
-export const DIAGRAMS = ["strata", "tree", "mindmap"] as const;
+/**
+ * Which picture. In the URL as `?diagram=` — see params.ts § diagramParam.
+ *
+ * Six, in two groups. The first three are hand-rolled and draw the **tree**
+ * (this file); the last three are driven by D3 ([diagram-d3.ts](./diagram-d3.ts),
+ * over [graph.ts](./graph.ts)). The order runs from the most faithful to the
+ * article's own shape to the most interpretive, which is also roughly from
+ * cheapest to most surprising.
+ *
+ * **Only two of the last three are graph pictures.** `arc` and `force` draw the
+ * vocabulary edges — the relationships a tree cannot hold. `cluster` throws them
+ * away and redraws the containment tree with d3-hierarchy's algorithm; it is
+ * there to be compared against the hand-rolled `tree`, and GPT Sol's review
+ * recommends cutting it on the grounds that the comparison is now done and
+ * `tree` won. Recorded in docs/plans/diagram-mode.md rather than acted on.
+ */
+export const DIAGRAMS = ["strata", "tree", "mindmap", "arc", "force", "cluster"] as const;
 export type DiagramKind = (typeof DIAGRAMS)[number];
 
 /**
@@ -149,6 +169,15 @@ export interface DiagramNode {
   titleLines: number;
   /** Rotated a quarter turn, for a tall thin band that can only hold text sideways. */
   rotated?: boolean;
+  /**
+   * A mark drawn apart from the box, for the pictures whose hit target is a row
+   * but whose *node* is a point on a spine — `arc` and `cluster`.
+   *
+   * Separate from `x`/`y`/`w`/`h` on purpose: those are what the reader has to
+   * be able to hit, and a 3px circle is not that. Conflating the two is how a
+   * picture ends up looking right and being unclickable.
+   */
+  dot?: { x: number; y: number; r: number };
   hasChildren: boolean;
   collapsed: boolean;
 }
@@ -167,14 +196,30 @@ export interface DiagramLayout {
   nodes: DiagramNode[];
   links: DiagramLink[];
   /**
-   * The mapping from a block row to a y, for the you-are-here line — present
-   * only on the picture whose vertical axis really is the article.
+   * The extent of the article's own axis, for tests — present only on the
+   * picture whose vertical axis really is the article.
    *
-   * A `{top, height, rows}` triple rather than a function, because a function
-   * cannot be compared in a test and this is the number most likely to be
-   * quietly wrong.
+   * `rows` is in whatever unit that picture is measuring in, which since
+   * 2026-08-27 is **words** when `wordsBefore` is supplied and blocks otherwise.
+   * **Nothing outside this file may do arithmetic with it**; use `nowY` below.
    */
   axis: { top: number; height: number; rows: number } | null;
+  /**
+   * Where the reader is, already converted — or null if they are above the
+   * article or this picture has no article axis.
+   *
+   * **This is a `y`, not a ratio, and that is the whole point.** It used to be
+   * the panel's job: it divided `atRow` by `axis.rows` and drew a line. That was
+   * correct while both were block counts and became silently wrong the moment
+   * `rows` started counting words — the line still drew, still moved as you
+   * read, and pointed at the wrong place on any article whose paragraphs are not
+   * all the same length. Found by GPT Sol, 2026-08-27.
+   *
+   * A unit conversion belongs where the unit is decided. There is exactly one
+   * place that knows whether this axis is words or blocks, and it is
+   * `layoutStrata`.
+   */
+  nowY: number | null;
 }
 
 export interface DiagramOptions {
@@ -184,6 +229,24 @@ export interface DiagramOptions {
   height: number;
   /** Node ids the reader has closed. Their children are not laid out at all. */
   collapsed: ReadonlySet<NodeId>;
+  /**
+   * Where the reader is, as a row index into the article's blocks — so that the
+   * one function that knows this picture's unit can convert it. See
+   * `DiagramLayout.nowY`.
+   */
+  atRow?: number | null;
+  /**
+   * Words per block, as a prefix sum — `wordsBefore` from graph.ts.
+   *
+   * Optional, and what it changes is `strata`'s vertical axis: without it a row
+   * is a row and the picture is to scale in **blocks**, which is what the first
+   * round shipped and what GPT Sol correctly called an overclaim (eight long
+   * paragraphs and eight one-line list items came out the same height). With it
+   * the axis is **words**, which is what "how much of the piece" meant all
+   * along. Optional rather than required so the pure layout functions stay
+   * testable against a tree alone.
+   */
+  wordsBefore?: readonly number[];
 }
 
 /* ── shared ─────────────────────────────────────────────────────────────── */
@@ -216,6 +279,10 @@ export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
   strata: { 0: 11, 1: 10, 2: 11 },
   tree: { 0: 12, 1: 12, 2: 12 },
   mindmap: { 0: 12, 1: 11.5, 2: 10.5 },
+  arc: { 0: 11, 1: 11, 2: 11 },
+  // Only a number goes inside a force bubble, and it is small.
+  force: { 0: 10, 1: 10, 2: 10 },
+  cluster: { 0: 11, 1: 11, 2: 11 },
 };
 
 /** The gist's size, on the one picture that draws one. Same contract as above. */
@@ -235,6 +302,10 @@ export const LINE_STEP: Record<DiagramKind, { title: number; gist: number }> = {
   strata: { title: 13, gist: 13 },
   tree: { title: 15, gist: 12 },
   mindmap: { title: 13, gist: 13 },
+  // All three D3 pictures put one line on a node and the rest in the footer.
+  arc: { title: 13, gist: 13 },
+  force: { title: 12, gist: 12 },
+  cluster: { title: 13, gist: 13 },
 };
 
 /** How many characters fit in `px` at `fontPx`. At least one, so wrapping ends. */
@@ -368,6 +439,12 @@ const RAIL_GAP = 2;
 const LABEL_MIN_H = 13;
 /** No band may be thinner than this, or it cannot be clicked. Drives the height. */
 const MIN_BAND_H = 6;
+/**
+ * The most viewports tall `strata` may grow chasing a clickable smallest band.
+ * Six screens is already a long scroll for something whose whole promise is
+ * "the shape of the article at a glance".
+ */
+const MAX_STRATA_SCROLL = 6;
 
 /**
  * **Strata** — indented proportional bands. Vertical position *is* position in
@@ -383,31 +460,66 @@ const MIN_BAND_H = 6;
  */
 export function layoutStrata(root: SummaryNode, opts: DiagramOptions): DiagramLayout {
   const entries = walk(root, opts.collapsed);
-  const rows = Math.max(1, root.blocks);
   const pad = 4;
+
+  /**
+   * The article's vertical axis, in whatever unit we have.
+   *
+   * **Words when `wordsBefore` is given, blocks otherwise**, and the difference
+   * is the one thing this picture claims. `scale(row)` is "how much of the
+   * article is above row `row`", `span` is the whole of it, and every `y` below
+   * is a ratio of the two — so switching unit changes one function and nothing
+   * else. That is the point of doing it this way rather than with a flag: there
+   * is no branch further down that could be updated for one unit and not the
+   * other.
+   */
+  const words = opts.wordsBefore;
+  const usable = words !== undefined && words.length > root.endRow + 1;
+  const scale = (row: number) =>
+    usable && words ? (words[Math.min(row, words.length - 1)] ?? 0) : row;
+  const base = scale(root.startRow);
+  const span = Math.max(1, scale(root.endRow + 1) - base);
+  const rows = span;
 
   /* How tall must the picture be for the thinnest thing on it to be usable?
      The thinnest thing is the smallest *drawn* node, and a collapsed node's
      children are not drawn — so this is computed from `entries`, never from
      the tree, or closing a section would leave the picture stretched for
      bands that are no longer on it. */
+  const extent = (n: { startRow: number; endRow: number }) =>
+    scale(n.endRow + 1) - scale(n.startRow);
+  /* **Zero-extent nodes are excluded from the scale, not floored into it.**
+     Measuring in words, a section of nothing but images genuinely has zero,
+     where it could never have had zero blocks. Flooring it at one word and then
+     asking "how tall must this be for the smallest band to be six pixels"
+     answers *six pixels per word of the whole article* — a 5,000-word piece
+     gives a 30,000px diagram. Found by GPT Sol with exactly that probe,
+     2026-08-27. Such a node still gets its one-pixel band below; it just does
+     not get a vote on the scale. */
   const smallest = entries.reduce(
-    // `Math.max(1, …)` because a node claiming zero blocks divides to Infinity
-    // below, and an Infinite height renders as an empty picture with nothing in
-    // the console. `buildSummaryTree` cannot currently produce one; this
-    // function is exported and should not depend on that staying true.
-    (min, e) => (e.node.node.depth === 0 ? min : Math.min(min, Math.max(1, e.node.blocks))),
+    (min, e) => {
+      if (e.node.node.depth === 0) return min;
+      const x = extent(e.node);
+      return x > 0 ? Math.min(min, x) : min;
+    },
     Number.POSITIVE_INFINITY,
   );
+  const viewport = Math.max(60, opts.height - pad * 2);
+  /* **And even a positive smallest gets a ceiling.** One section that is a
+     twentieth of a per cent of a long article still asks for forty viewports,
+     and a map you scroll for a minute is not a map. Past the cap the smallest
+     bands go under MIN_BAND_H and get hard to hit — a real cost, but a smaller
+     one than a diagram nobody can take in, and the other five pictures are one
+     press away. */
   const needed = Number.isFinite(smallest) ? (rows / smallest) * MIN_BAND_H : 0;
-  /* The floor is not decoration. `opts.height` is a measured `clientHeight`, and
-     a scroller that has not been laid out yet measures 0 — which without the
+  /* `viewport` floors at 60 because `opts.height` is a measured `clientHeight`,
+     and a scroller that has not been laid out yet measures 0 — which without a
      floor gives a NEGATIVE height, a `rowToY` that runs upwards, and bands with
      negative `h` that SVG draws as nothing at all. No error, no warning, an
      empty picture. */
-  const height = Math.max(60, opts.height - pad * 2, needed);
+  const height = Math.min(viewport * MAX_STRATA_SCROLL, Math.max(viewport, needed));
 
-  const rowToY = (row: number) => pad + (row / rows) * height;
+  const rowToY = (row: number) => pad + ((scale(row) - base) / span) * height;
   const deepestX = ROOT_W + RAIL_GAP + PART_W + RAIL_GAP;
 
   const nodes: DiagramNode[] = entries.map((e) => {
@@ -459,7 +571,19 @@ export function layoutStrata(root: SummaryNode, opts: DiagramOptions): DiagramLa
     };
   });
 
-  return { width: opts.width, height: height + pad * 2, nodes, links: [], axis: { top: pad, height, rows } };
+  /* The you-are-here line, converted HERE, by the one function that knows what
+     unit this axis is in. `atRow` is a block index whatever the axis measures. */
+  const at = opts.atRow;
+  const nowY = at === null || at === undefined ? null : rowToY(Math.max(0, at));
+
+  return {
+    width: opts.width,
+    height: height + pad * 2,
+    nodes,
+    links: [],
+    axis: { top: pad, height, rows },
+    nowY,
+  };
 }
 
 /* ── tree: the picture that is legible ──────────────────────────────────── */
@@ -550,7 +674,7 @@ export function layoutTree(root: SummaryNode, opts: DiagramOptions): DiagramLayo
     y += h + TREE_GAP;
   }
 
-  return { width: opts.width, height: Math.max(opts.height, y + 10), nodes, links, axis: null };
+  return { width: opts.width, height: Math.max(opts.height, y + 10), nodes, links, axis: null, nowY: null };
 }
 
 /* ── mindmap: the picture that is a picture ─────────────────────────────── */
@@ -739,18 +863,7 @@ export function layoutMindmap(root: SummaryNode, opts: DiagramOptions): DiagramL
     depth: 0,
   });
 
-  return { width: opts.width, height: Math.max(opts.height, y + 8), nodes, links, axis: null };
-}
-
-/** The one entry point the panel uses. */
-export function layoutDiagram(
-  kind: DiagramKind,
-  root: SummaryNode,
-  opts: DiagramOptions,
-): DiagramLayout {
-  if (kind === "strata") return layoutStrata(root, opts);
-  if (kind === "mindmap") return layoutMindmap(root, opts);
-  return layoutTree(root, opts);
+  return { width: opts.width, height: Math.max(opts.height, y + 8), nodes, links, axis: null, nowY: null };
 }
 
 /**
