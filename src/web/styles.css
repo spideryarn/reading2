@@ -6052,3 +6052,28 @@ tr:hover .block-chat,
      control rather than as six loose glyphs. */
   .dock-modes .dock-btn { padding-inline: 0.6rem; }
 }
+
+/* The words behind a vocabulary link, in the footer card — see DetailCard.
+   These edges are a lexical heuristic, and a curve with no way to ask why looks
+   exactly as authoritative as one a model had reasoned about. Quiet type, but
+   present: the point is that the reader can check. */
+.diag-card-links {
+  margin: 0.3rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+.diag-card-links li {
+  display: flex;
+  gap: 0.4rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.diag-card-linknum {
+  flex: none;
+  color: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.95);
+  font-variant-numeric: tabular-nums;
+}
+.diag-card-linkterms { overflow: hidden; text-overflow: ellipsis; }

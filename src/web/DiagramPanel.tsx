@@ -52,17 +52,18 @@
  * to put a strip.
  */
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Network, Share2, Signal } from "lucide-react";
-import type { BlockId, NodeId } from "../types.js";
+import { ChevronDown, ChevronRight, GitBranch, Network, Share2, Signal, Spline, Waypoints } from "lucide-react";
+import type { Block, BlockId, NodeId } from "../types.js";
 import {
   DIAGRAMS,
   type DiagramKind,
   LINE_STEP,
   type DiagramLayout,
   type DiagramNode,
-  layoutDiagram,
   nodeAt,
 } from "./diagram.js";
+import { layoutDiagram } from "./diagrams.js";
+import { buildGraph, wordsBefore } from "./graph.js";
 import type { SummaryNode } from "./tree.js";
 
 interface Props {
@@ -74,6 +75,15 @@ interface Props {
   atRow: number | null;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
+  /**
+   * Every block of the article, in order — what the graph pictures are built
+   * from (src/web/graph.ts), and what lets `strata` be to scale in words.
+   *
+   * The whole array rather than a derived summary, because the graph needs the
+   * prose to count terms over and the word counts are already on it. It is the
+   * same array `Reader` already holds, so this costs a reference.
+   */
+  blocks: readonly Block[];
 }
 
 /** What each picture is called where the reader meets it, and what it promises. */
@@ -93,7 +103,31 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Signal; blurb: 
     icon: Share2,
     blurb: "A trunk down the middle with the parts hanging off it, still in reading order",
   },
+  /* The three below draw the GRAPH, not the tree — sections joined by the words
+     they share as well as by where they sit (src/web/graph.ts). Their blurbs say
+     what each one is *for*, because unlike the first three they are not showing
+     the reader something they could have worked out from the contents page. */
+  arc: {
+    label: "Arc",
+    icon: Spline,
+    blurb:
+      "Every section on one line in reading order, with an arc wherever two of them are about the same things — a long arc is the piece doubling back",
+  },
+  force: {
+    label: "Force",
+    icon: Waypoints,
+    blurb:
+      "The same relationships settled by physics: sections that share vocabulary pull together, while down the page stays reading order",
+  },
+  cluster: {
+    label: "Cluster",
+    icon: GitBranch,
+    blurb: "The tidy dendrogram d3-hierarchy draws — every section at the same depth, evenly spaced",
+  },
 };
+
+/** The three that need the graph rather than the tree. */
+const NEEDS_GRAPH = new Set<DiagramKind>(["arc", "force", "cluster"]);
 
 /**
  * Eight categorical hues, one per part, reused round the article.
@@ -107,7 +141,7 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Signal; blurb: 
  */
 const PART_HUES = 8;
 
-export function DiagramPanel({ root, kind, onKind, atRow, onJump }: Props) {
+export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Props) {
   /* Which nodes the reader has closed. Deliberately NOT in the URL: `?cols=`
      and `?rung=` are about how much of the article you are looking at, and a
      link carrying them tells the recipient something. A set of node ids tells
@@ -209,10 +243,39 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump }: Props) {
     };
   }, []);
 
+  /* **Built only when a graph picture is on.** Counting terms over a whole
+     article is cheap — a few milliseconds for sixty sections — but it is not
+     free, and three of the six pictures never look at it. Same reasoning that
+     keeps `DiagramBand` from fetching anything: a reader who never leaves
+     `strata` should not pay for the other three. */
+  const wantsGraph = NEEDS_GRAPH.has(kind);
+  const graph = useMemo(
+    () => (root && wantsGraph ? buildGraph(root, blocks, collapsed) : null),
+    // `wantsGraph`, NOT `kind`: stepping between Arc, Force and Cluster does not
+    // change the graph, and keying on `kind` rebuilt the whole term index on
+    // every one of those presses. On a 150-section article that is 100ms of
+    // main thread for a result byte-identical to the one just thrown away.
+    // GPT Sol's finding, 2026-08-27.
+    [root, wantsGraph, blocks, collapsed],
+  );
+
+  /* `strata` is to scale in WORDS. Computed here rather than taken from `graph`,
+     which is null unless a graph picture is on: the prefix sum is one pass over
+     an array we already hold, where the graph builds a whole term index. */
+  const words = useMemo(() => wordsBefore(blocks), [blocks]);
+
   const layout: DiagramLayout | null = useMemo(() => {
     if (!root || box === null || box.w === 0) return null;
-    return layoutDiagram(kind, root, { width: box.w, height: box.h, collapsed });
-  }, [root, kind, box, collapsed]);
+    return layoutDiagram(
+      kind,
+      root,
+      // `atRow` is in here because the layout converts it — see
+      // `DiagramLayout.nowY`. Leaving it out of the deps below is not a
+      // performance win, it is a you-are-here line that never moves.
+      { width: box.w, height: box.h, collapsed, atRow, wordsBefore: words },
+      graph,
+    );
+  }, [root, kind, box, collapsed, words, graph, atRow]);
 
   /* The node the reader is standing in — the deepest one drawn, which is the
      same rule the summary panel's follow mark uses. Computed from the LAID OUT
@@ -242,6 +305,29 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump }: Props) {
   const nodes = layout?.nodes ?? [];
   const rovingId =
     roving !== null && nodes.some((n) => n.id === roving) ? roving : (nodes[0]?.id ?? null);
+
+  /**
+   * What the graph says about the node the card is describing: which other
+   * sections it shares vocabulary with, and **which words earned each link**.
+   *
+   * Shown because the alternative is dishonest. These edges are a lexical
+   * heuristic — term overlap, not an understanding of the argument — and a
+   * curve drawn between two sections with no way to ask *why* looks exactly as
+   * authoritative as one the model had reasoned about. `graph.ts` computed the
+   * evidence from the start and nothing displayed it; GPT Sol's finding,
+   * 2026-08-27. The words are the difference between a claim and a showing.
+   */
+  const related = useMemo(() => {
+    if (!graph || !shown) return [];
+    return graph.edges
+      .filter((e) => e.kind === "vocabulary" && (e.source === shown || e.target === shown))
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 3)
+      .map((e) => {
+        const other = graph.byId.get(e.source === shown ? e.target : e.source);
+        return { number: other?.number ?? "", title: other?.title ?? "", shared: e.shared ?? [] };
+      });
+  }, [graph, shown]);
 
   const toggle = (id: NodeId) =>
     setCollapsed((prev) => {
@@ -431,20 +517,25 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump }: Props) {
                 fact is carried by the marked node, because a line across a
                 diagram whose vertical axis is "whatever fits" would be a
                 confident statement about a position that does not exist. */}
-            {layout.axis && atRow !== null && (
+            {layout.nowY !== null && (
               <line
                 className="diag-now"
                 x1={0}
                 x2={layout.width}
-                y1={layout.axis.top + (atRow / layout.axis.rows) * layout.axis.height}
-                y2={layout.axis.top + (atRow / layout.axis.rows) * layout.axis.height}
+                y1={layout.nowY}
+                y2={layout.nowY}
               />
             )}
           </svg>
         )}
       </div>
 
-      <DetailCard node={card} live={shown === here && hover === null} onJump={onJump} />
+      <DetailCard
+        node={card}
+        live={shown === here && hover === null}
+        onJump={onJump}
+        related={related}
+      />
     </aside>
   );
 }
@@ -581,6 +672,17 @@ function NodeShape({
           <rect className="diag-row" x={node.x} y={node.y} width={node.w} height={node.h} rx={3} />
           <circle className="diag-dot" cx={node.labelX - 9} cy={node.y + 7.5} r={3.5} />
         </>
+      ) : kind === "force" ? (
+        /* A bubble, and the box IS the circle here rather than a row around it —
+           in a force layout the shape's position is the whole of the
+           information, so a rectangular hit target would sit over its
+           neighbours. */
+        <circle
+          className="diag-box"
+          cx={node.x + node.w / 2}
+          cy={node.y + node.h / 2}
+          r={node.w / 2}
+        />
       ) : (
         <rect
           className="diag-box"
@@ -601,6 +703,12 @@ function NodeShape({
           cy={node.y + node.h / 2}
           r={3}
         />
+      )}
+      {/* `arc` and `cluster` put the node on a spine and the hit target across
+          the whole row, so the mark is carried separately — see `dot` in
+          diagram.ts for why those are not the same rectangle. */}
+      {node.dot && (
+        <circle className="diag-dot" cx={node.dot.x} cy={node.dot.y} r={node.dot.r} />
       )}
 
       <text
@@ -677,10 +785,13 @@ function DetailCard({
   node,
   live,
   onJump,
+  related,
 }: {
   node: DiagramNode | null;
   live: boolean;
   onJump(id: BlockId): void;
+  /** The graph pictures only: what this section shares words with, and which words. */
+  related: { number: string; title: string; shared: string[] }[];
 }) {
   if (!node) {
     return (
@@ -707,10 +818,23 @@ function DetailCard({
           {node.blocks} ¶
         </span>
       </div>
-      {node.gist && (
+      {node.gist && related.length === 0 && (
         <p className="diag-card-gist" title={node.gist}>
           {node.gist}
         </p>
+      )}
+      {/* The gist gives way to the evidence when there is evidence: on a graph
+          picture the question the reader has is "why is that line there", and
+          the gist is one press away on any of the other three. */}
+      {related.length > 0 && (
+        <ul className="diag-card-links">
+          {related.map((r) => (
+            <li key={`${r.number}-${r.title}`}>
+              <span className="diag-card-linknum">{r.number}</span>
+              <span className="diag-card-linkterms">{r.shared.slice(0, 4).join(" · ")}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

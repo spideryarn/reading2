@@ -145,7 +145,17 @@ export function App() {
     return (
       <>
         <HomeLogo />
-        <AddPage url={route.url} />
+        <AddPage source={{ kind: "url", url: route.url }} />
+      </>
+    );
+  /* The same page, given a file that is already in the object store rather than
+     an address to fetch. See AddSource in AddPage.tsx for why it is one
+     component and not two. */
+  if (route.kind === "add-upload")
+    return (
+      <>
+        <HomeLogo />
+        <AddPage source={{ kind: "upload", uploadId: route.uploadId }} />
       </>
     );
   if (route.kind === "design")
