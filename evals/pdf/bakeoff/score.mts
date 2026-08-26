@@ -1,129 +1,56 @@
 /**
- * Judge the bake-off. Deterministic — no model involved.
+ * Judge the bake-off — through **the production checker**, not a copy of it.
  *
  *   npx tsx evals/pdf/bakeoff/score.mts
+ *   npx tsx evals/pdf/bakeoff/score.mts much-harder     # one document
  *
- * READ THIS BEFORE READING ITS OUTPUT. Two reviewers found the same hole in it
- * independently: **it iterates over the pages the model claimed**, so a page
- * omitted entirely produces no row rather than a zero — which is the exact
- * failure the bake-off found, and this script did not catch it. It also folds
- * away case, punctuation and symbols that the prompt demands exactly, and
- * ignores record type, paragraph boundaries, `continues` and `uncertain`
- * altogether. It is a catastrophe detector, not a fidelity measure, and the
- * production checker is deliberately not this. See
- * docs/plans/pdf-ingestion.md#the-bake-off-and-what-it-decided-2026-08-26.
+ * It used to be a second implementation of the same idea living in this file,
+ * and that is how the bake-off shipped a result its own scoring could not see:
+ * the copy grouped records by the page the *model* claimed, so a page emitted
+ * nowhere produced no row rather than a zero. Two reviewers found it
+ * independently. A scorer that only ever runs on the eval is a scorer nobody
+ * fixes, so this now calls src/pdf-score.ts — which has tests — and does
+ * nothing but load files and print a table.
  *
- * Per page, against the pdf.js text layer minus the lines that repeat across
- * pages (running headers, footers, page numbers):
- *
- *   recall     baseline tokens found in the output      → omission, summary
- *   precision  output tokens found in the baseline      → invention
- *   order      longest common subsequence / baseline    → two columns interleaved,
- *                                                         paragraphs shuffled
- *
- * A multiset, not a set, so a duplicated paragraph cannot pay for a dropped one.
+ * **Read this before reading its numbers.** The saved responses in
+ * scratch-bakeoff/ were produced by the bake-off's older prompt, which told the
+ * model to LEAVE OUT footnotes and references. The baseline still contains them.
+ * So a legitimate exclusion shows up here as a missing run, and the failures
+ * below over-count. The production prompt transcribes and labels them instead —
+ * src/pdf.ts § RecordType — which is what makes the run gate affordable at all.
  */
+import "../../../src/env.js";
 import { readdir, readFile } from "node:fs/promises";
+import { pass0, type PdfRecord } from "../../../src/pdf.js";
+import { check } from "../../../src/pdf-score.js";
+import { DOCS } from "./docs.mjs";
 
 const OUT = process.env.BAKEOFF_OUT ?? "scratch-bakeoff";
-
-const fold = (s: string) =>
-  s.normalize("NFKC").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/gu, " ").toLowerCase().trim();
-const tokens = (s: string) => (fold(s) ? fold(s).split(" ") : []);
-
-function counts(list: string[]): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const t of list) m.set(t, (m.get(t) ?? 0) + 1);
-  return m;
-}
-
-/** How many of `want` are present in `have`, counting duplicates properly. */
-function overlap(want: string[], have: string[]): number {
-  const pool = counts(have);
-  let hit = 0;
-  for (const t of want) {
-    const n = pool.get(t) ?? 0;
-    if (n > 0) { pool.set(t, n - 1); hit++; }
-  }
-  return hit;
-}
-
-/** LCS length, Hirschberg-free: these sequences are ~1k tokens, so O(n·m) is fine. */
-function lcs(a: string[], b: string[]): number {
-  let prev = new Uint32Array(b.length + 1);
-  let cur = new Uint32Array(b.length + 1);
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1]! + 1 : Math.max(prev[j]!, cur[j - 1]!);
-    }
-    [prev, cur] = [cur, prev];
-    cur.fill(0);
-  }
-  return prev[b.length]!;
-}
-
-/** Lines that appear on three or more pages are furniture, not prose. */
-function furniture(pages: { text: string }[]): Set<string> {
-  const seen = new Map<string, number>();
-  for (const p of pages) {
-    for (const line of new Set(p.text.split("\n").map(fold).filter((l) => l.length > 3))) {
-      seen.set(line, (seen.get(line) ?? 0) + 1);
-    }
-  }
-  return new Set([...seen].filter(([, n]) => n >= 3).map(([l]) => l));
-}
+const only = process.argv[2];
 
 const files = (await readdir(OUT)).filter((f) => /\.c\d+\./.test(f));
-const rows: Record<string, unknown>[] = [];
 
-for (const doc of ["easy", "harder", "much-harder"]) {
-  let pages: { page: number; text: string; words: number }[];
-  try {
-    pages = JSON.parse(await readFile(`${OUT}/${doc}.pass0.json`, "utf-8"));
-  } catch { continue; }
-  const junk = furniture(pages);
-  const baselineFor = (page: number) => {
-    const p = pages.find((x) => x.page === page);
-    if (!p) return [];
-    return p.text.split("\n").filter((l) => !junk.has(fold(l))).flatMap(tokens);
-  };
-
-  for (const file of files.filter((f) => f.startsWith(`${doc}.`))) {
-    const r = JSON.parse(await readFile(`${OUT}/${file}`, "utf-8"));
-    if (!r.records) continue;
-    const byPage = new Map<number, string[]>();
-    for (const rec of r.records) {
-      const list = byPage.get(rec.page) ?? [];
-      list.push(rec.text ?? "");
-      byPage.set(rec.page, list);
-    }
-    for (const [page, texts] of [...byPage].sort((a, b) => a[0] - b[0])) {
-      const base = baselineFor(page);
-      const got = texts.flatMap(tokens);
-      if (base.length === 0) {
-        rows.push({ doc, page, reader: r.reader, base: 0, got: got.length, recall: null, precision: null, order: null });
-        continue;
-      }
-      const common = lcs(base, got);
-      rows.push({
-        doc,
-        page,
-        reader: r.reader,
-        base: base.length,
-        got: got.length,
-        recall: +(overlap(base, got) / base.length).toFixed(3),
-        precision: got.length ? +(overlap(got, base) / got.length).toFixed(3) : 0,
-        order: +(common / base.length).toFixed(3),
-      });
-    }
+console.log("doc          ch  reader                    pages   recall   prec  order  runs  invented  covered");
+for (const doc of DOCS.filter((d) => !only || d.name === only)) {
+  const pass = await pass0(doc.file);
+  for (const file of files.filter((f) => f.startsWith(`${doc.name}.c`)).sort()) {
+    const saved = JSON.parse(await readFile(`${OUT}/${file}`, "utf-8"));
+    if (!saved.records) continue;
+    const chunk = doc.chunks[saved.chunk];
+    if (!chunk) continue;
+    const records = saved.records as PdfRecord[];
+    const result = check(records, chunk.pages, pass);
+    const scored = result.pages.filter((p) => p.recall !== null);
+    const mean = (pick: (p: (typeof scored)[number]) => number | null) =>
+      scored.length ? (scored.reduce((a, p) => a + (pick(p) ?? 0), 0) / scored.length).toFixed(3) : "    —";
+    const label = file.replace(`${doc.name}.c${saved.chunk}.`, "").replace(/\.json$/, "");
+    console.log(
+      `${doc.name.padEnd(12)} ${String(saved.chunk).padStart(2)}  ${label.padEnd(24)} ` +
+        `${[...new Set(records.map((r) => r.page))].sort((a, b) => a - b).join("+").padEnd(6)} ` +
+        `${String(mean((p) => p.recall)).padStart(6)} ${String(mean((p) => p.precision)).padStart(6)} ` +
+        `${String(mean((p) => p.order)).padStart(6)}  ${String(result.pages.reduce((a, p) => a + p.spans.length, 0)).padStart(4)}  ` +
+        `${String(result.pages.reduce((a, p) => a + p.invented.length, 0)).padStart(8)}  ` +
+        `${result.coverage.missing.length || result.coverage.blank.length ? `NO: ${[...result.coverage.missing, ...result.coverage.blank].join(",")}` : "yes"}`,
+    );
   }
-}
-
-rows.sort((a, b) => `${a.doc}${String(a.page).padStart(3, "0")}${a.reader}`.localeCompare(`${b.doc}${String(b.page).padStart(3, "0")}${b.reader}`));
-console.log("doc          pg  reader                 base   got  recall  prec  order");
-for (const r of rows) {
-  console.log(
-    `${String(r.doc).padEnd(12)} ${String(r.page).padStart(2)}  ${String(r.reader).padEnd(21)} ${String(r.base).padStart(4)}  ${String(r.got).padStart(4)}  ` +
-      `${r.recall === null ? "   — " : String(r.recall).padStart(5)}  ${r.precision === null ? "  — " : String(r.precision).padStart(5)}  ${r.order === null ? "  — " : String(r.order).padStart(5)}`,
-  );
 }

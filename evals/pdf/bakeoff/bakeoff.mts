@@ -11,6 +11,13 @@
  *   npx tsx evals/pdf/bakeoff/bakeoff.mts easy       # one document
  *   npx tsx evals/pdf/bakeoff/bakeoff.mts harder 1   # one chunk
  *   RUN=label ...                                    # keep this run's files apart
+ *   READERS=gpt-luna,gemini-flash-native ...         # a subset of the table below
+ *
+ * **The readers are a table, not a function each.** They were a function each
+ * until adding a fourth model meant writing a fourth near-copy of the same
+ * request — which is how a bake-off quietly stops being able to add candidates.
+ * Everything that varies between readers is a field in `READERS`; the two
+ * transports (the Anthropic SDK, and OpenRouter) are one function each.
  */
 import "../../../src/env.js";
 import Anthropic from "@anthropic-ai/sdk";
@@ -19,11 +26,10 @@ import { createHash } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 import { pass0, type PageText } from "../../../src/pdf.js";
+import { instructionFor } from "../../../src/pdf-read.js";
+import { DOCS, type Doc } from "./docs.mjs";
 
 const OUT = process.env.BAKEOFF_OUT ?? "scratch-bakeoff";
-const ANTHROPIC_HAIKU = "claude-haiku-4-5-20251001";
-const OPENROUTER_HAIKU = "anthropic/claude-haiku-4.5"; // dot, not dash — see src/models.ts
-const OPENROUTER_GEMINI = "google/gemini-3.7-flash";
 const MAX_TOKENS = 16_000;
 
 // ─────────────────────────────────────────────────────────── the ask
@@ -89,42 +95,6 @@ const SCHEMA = {
   },
 } as const;
 
-// ─────────────────────────────────────────────────────── the documents
-
-interface Doc {
-  name: string;
-  file: string;
-  /** Chunks of contiguous pages to transcribe, 1-based, with an optional context page. */
-  chunks: { context?: number; pages: number[]; why: string }[];
-}
-
-const DOCS: Doc[] = [
-  {
-    name: "easy",
-    file: "evals/pdf/easy/source.pdf",
-    chunks: [
-      { pages: [1, 2], why: "first page: title block, abstract, keywords, running header" },
-      { context: 4, pages: [5, 6], why: "dense middle, paragraph continuing across the break" },
-    ],
-  },
-  {
-    name: "harder",
-    file: "evals/pdf/harder/source.pdf",
-    chunks: [
-      { pages: [1, 2], why: "first page: two columns begin, author block, abstract" },
-      { context: 6, pages: [7, 8], why: "densest pages, tables and captioned figures" },
-    ],
-  },
-  {
-    name: "much-harder",
-    file: "evals/pdf/much-harder/source.pdf",
-    chunks: [
-      { pages: [2, 3], why: "first content pages of the scan (page 1 is Wellcome's rights page)" },
-      { context: 9, pages: [10, 11], why: "mid-pamphlet, worst foxing, hyphenation across line-ends" },
-    ],
-  },
-];
-
 // ────────────────────────────────────────────────────────── the plumbing
 
 /**
@@ -162,6 +132,8 @@ async function cut(file: string, pages: number[]): Promise<{ data: string; sha25
 
 interface Result {
   reader: string;
+  /** The model id as its own vendor spells it — `anthropic/claude-haiku-4.5` is not `claude-haiku-4-5-20251001`. */
+  model: string;
   doc: string;
   chunk: number;
   ms: number;
@@ -174,97 +146,117 @@ interface Result {
   error?: string | undefined;
 }
 
-function instruction(pages: number[], context?: number): string {
-  const emit = pages.length === 1 ? `page ${pages[0]}` : `pages ${pages[0]}–${pages.at(-1)}`;
-  const ctx =
-    context === undefined
-      ? ""
-      : ` The FIRST page of the attached file is page ${context}, included only so you can see what continues onto the next page. DO NOT emit any record for it.`;
-  return `Transcribe ${emit} of the attached PDF.${ctx} Number every record with its real page number in the original document: the attached file's pages are, in order, ${(context ? [context, ...pages] : pages).join(", ")}.`;
-}
+/**
+ * **Now imported from src/pdf-read.ts rather than written out again here.**
+ *
+ * It was a copy, and the copy is how the bake-off's second finding came out
+ * wrong: the wording asked for "its real page number in the original document",
+ * three models answered with the folio printed on the paper — 49 and 50, for an
+ * offprint of pages 43–56 — and that was written down as invented page numbers.
+ * Fixing the production prompt would have left this file still asking the old,
+ * ambiguous question, and the eval would have gone on reproducing a result the
+ * product no longer produces.
+ */
+const instruction = (pages: number[], context?: number) =>
+  instructionFor(context === undefined ? { pages } : { pages, context });
 
 // ─────────────────────────────────────────────────────────── the readers
 
-const anthropic = new Anthropic();
-
-async function haikuNative(doc: Doc, i: number, textFirst = false, noCover = false): Promise<Result> {
-  const label = noCover
-    ? "haiku-native-nocover"
-    : textFirst
-      ? "haiku-native-textfirst"
-      : "haiku-native";
-  const chunk = doc.chunks[i]!;
-  const all = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
-  const { data, sha256 } = await cut(doc.file, all);
-  const t0 = performance.now();
-  try {
-    const stream = anthropic.messages.stream({
-      model: ANTHROPIC_HAIKU,
-      max_tokens: MAX_TOKENS,
-      system: noCover ? SYSTEM_NO_COVER : SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: textFirst || noCover
-            ? [
-                { type: "text", text: instruction(chunk.pages, chunk.context) },
-                { type: "document", source: { type: "base64", media_type: "application/pdf", data } },
-              ]
-            : [
-                { type: "document", source: { type: "base64", media_type: "application/pdf", data } },
-                { type: "text", text: instruction(chunk.pages, chunk.context) },
-              ],
-        },
-      ],
-      output_config: { format: { type: "json_schema", schema: SCHEMA as never } },
-    });
-    const msg = await stream.finalMessage();
-    const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-    return {
-      reader: label,
-      doc: doc.name,
-    chunkSha256: sha256,
-      chunk: i,
-      ms: Math.round(performance.now() - t0),
-      finish: msg.stop_reason ?? "?",
-      usage: msg.usage,
-      records: safeRecords(text),
-      raw: text,
-    };
-  } catch (e) {
-    return { reader: label, doc: doc.name, chunk: i, ms: Math.round(performance.now() - t0), finish: "error", usage: null, error: String(e) };
-  }
+/**
+ * One candidate. `transport` is the only thing that changes which function runs;
+ * everything else is a knob on the same request.
+ *
+ * The three Haiku variants are not three models — they are the same model asked
+ * three ways, and two of them exist to answer questions the numbers raised:
+ * `textfirst` because putting the file before the instruction made it skip a
+ * page, and `nocover` because the innocent explanation for that had to be
+ * refuted rather than dismissed.
+ */
+interface Reader {
+  label: string;
+  transport: "anthropic" | "openrouter" | "mistral-ocr";
+  model: string;
+  /** Anthropic only: send the instruction before the file. The default is file first. */
+  textFirst?: boolean;
+  /** Anthropic only: the prompt with the cover-page clause removed — the control experiment. */
+  noCover?: boolean;
+  /** Anthropic only: send pass 0's text layer instead of the PDF, so no page image. */
+  textOnly?: boolean;
+  /** Only run this reader on a document with no text layer. */
+  scanOnly?: boolean;
+  /** Skip this reader on a document with no text layer. */
+  bornDigitalOnly?: boolean;
 }
 
-async function haikuTextOnly(doc: Doc, i: number, baseline: PageText[]): Promise<Result> {
+const ANTHROPIC_HAIKU = "claude-haiku-4-5-20251001";
+
+/**
+ * The field. Prices per MTok in/out from OpenRouter's live model list,
+ * 2026-08-26, and every one of these takes `file` as an input modality — which
+ * is what `engine: "native"` needs to mean anything.
+ *
+ *   haiku-native            $1.00 / $5.00   the incumbent, direct through the SDK
+ *   haiku-via-openrouter    $1.00 / $5.00   the same model through the proxy — the proxy's own control
+ *   gemini-flash-native     $0.375 / $1.875 the bake-off's provisional winner
+ *   gpt-luna                $0.20 / $1.20   this repo's quick tier (src/models.ts), and the cheapest
+ *   gpt-luna-pro            $0.20 / $1.20   same price, different model — free to ask
+ *   gemini-flash-lite       $0.25 / $1.50   the cheap end of the family that won
+ *   mistral-medium          $0.40 / $2.00   a third family, and not the OCR engine below
+ */
+const READERS: Reader[] = [
+  { label: "haiku-native", transport: "anthropic", model: ANTHROPIC_HAIKU },
+  { label: "haiku-native-textfirst", transport: "anthropic", model: ANTHROPIC_HAIKU, textFirst: true },
+  { label: "haiku-native-nocover", transport: "anthropic", model: ANTHROPIC_HAIKU, textFirst: true, noCover: true },
+  { label: "haiku-text-only", transport: "anthropic", model: ANTHROPIC_HAIKU, textOnly: true, bornDigitalOnly: true },
+  { label: "haiku-via-openrouter", transport: "openrouter", model: "anthropic/claude-haiku-4.5" },
+  { label: "gemini-flash-native", transport: "openrouter", model: "google/gemini-3.7-flash" },
+  { label: "gpt-luna", transport: "openrouter", model: "openai/gpt-5.6-luna" },
+  { label: "gpt-luna-pro", transport: "openrouter", model: "openai/gpt-5.6-luna-pro" },
+  { label: "gemini-flash-lite", transport: "openrouter", model: "google/gemini-3.1-flash-lite" },
+  { label: "mistral-medium", transport: "openrouter", model: "mistralai/mistral-medium-3.1" },
+  { label: "mistral-ocr", transport: "mistral-ocr", model: "anthropic/claude-haiku-4.5", scanOnly: true },
+];
+
+const anthropic = new Anthropic();
+
+async function viaAnthropic(reader: Reader, doc: Doc, i: number, baseline: PageText[]): Promise<Result> {
   const chunk = doc.chunks[i]!;
   const all = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
-  const layer = all
-    .map((p) => `--- page ${p} ---\n${baseline[p - 1]?.text ?? ""}`)
-    .join("\n\n");
+  const ask = instruction(chunk.pages, chunk.context);
+  let content: Anthropic.ContentBlockParam[];
+  let sha256: string | undefined;
+  if (reader.textOnly) {
+    const layer = all.map((p) => `--- page ${p} ---\n${baseline[p - 1]?.text ?? ""}`).join("\n\n");
+    content = [
+      { type: "text", text: `The pages, as the PDF's own text layer gives them — no image:\n\n${layer}` },
+      { type: "text", text: ask },
+    ];
+  } else {
+    const cutChunk = await cut(doc.file, all);
+    sha256 = cutChunk.sha256;
+    const file = {
+      type: "document" as const,
+      source: { type: "base64" as const, media_type: "application/pdf" as const, data: cutChunk.data },
+    };
+    content = reader.textFirst ? [{ type: "text", text: ask }, file] : [file, { type: "text", text: ask }];
+  }
   const t0 = performance.now();
   try {
     const stream = anthropic.messages.stream({
-      model: ANTHROPIC_HAIKU,
+      model: reader.model,
       max_tokens: MAX_TOKENS,
-      system: SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: `The pages, as the PDF's own text layer gives them — no image:\n\n${layer}` },
-            { type: "text", text: instruction(chunk.pages, chunk.context) },
-          ],
-        },
-      ],
+      system: reader.noCover ? SYSTEM_NO_COVER : SYSTEM,
+      messages: [{ role: "user", content }],
       output_config: { format: { type: "json_schema", schema: SCHEMA as never } },
     });
     const msg = await stream.finalMessage();
     const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     return {
-      reader: "haiku-text-only",
+      reader: reader.label,
+      model: reader.model,
       doc: doc.name,
       chunk: i,
+      chunkSha256: sha256,
       ms: Math.round(performance.now() - t0),
       finish: msg.stop_reason ?? "?",
       usage: msg.usage,
@@ -272,7 +264,7 @@ async function haikuTextOnly(doc: Doc, i: number, baseline: PageText[]): Promise
       raw: text,
     };
   } catch (e) {
-    return { reader: "haiku-text-only", doc: doc.name, chunk: i, ms: Math.round(performance.now() - t0), finish: "error", usage: null, error: String(e) };
+    return failed(reader, doc, i, t0, String(e));
   }
 }
 
@@ -293,18 +285,13 @@ async function openrouter(body: unknown): Promise<any> {
   }
 }
 
-async function viaOpenRouter(
-  label: string,
-  model: string,
-  doc: Doc,
-  i: number,
-): Promise<Result> {
+async function viaOpenRouter(reader: Reader, doc: Doc, i: number): Promise<Result> {
   const chunk = doc.chunks[i]!;
   const all = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
   const { data, sha256 } = await cut(doc.file, all);
   const t0 = performance.now();
   const json = await openrouter({
-    model,
+    model: reader.model,
     max_tokens: MAX_TOKENS,
     messages: [
       { role: "system", content: SYSTEM },
@@ -322,13 +309,12 @@ async function viaOpenRouter(
     usage: { include: true },
   });
   const ms = Math.round(performance.now() - t0);
-  if (json.error) {
-    return { reader: label, doc: doc.name, chunk: i, ms, finish: "error", usage: null, error: JSON.stringify(json.error).slice(0, 400) };
-  }
+  if (json.error) return failed(reader, doc, i, t0, JSON.stringify(json.error).slice(0, 400));
   const choice = json.choices?.[0];
   const text = choice?.message?.content ?? "";
   return {
-    reader: label,
+    reader: reader.label,
+    model: reader.model,
     doc: doc.name,
     chunkSha256: sha256,
     chunk: i,
@@ -342,13 +328,13 @@ async function viaOpenRouter(
 }
 
 /** Mistral OCR is a parser engine, not a model: the PDF is parsed, then a model is asked about it. */
-async function mistralOcr(doc: Doc, i: number): Promise<Result> {
+async function viaMistralOcr(reader: Reader, doc: Doc, i: number): Promise<Result> {
   const chunk = doc.chunks[i]!;
   const all = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
   const { data, sha256 } = await cut(doc.file, all);
   const t0 = performance.now();
   const json = await openrouter({
-    model: OPENROUTER_HAIKU,
+    model: reader.model,
     max_tokens: 64,
     messages: [
       {
@@ -363,13 +349,12 @@ async function mistralOcr(doc: Doc, i: number): Promise<Result> {
     usage: { include: true },
   });
   const ms = Math.round(performance.now() - t0);
-  if (json.error) {
-    return { reader: "mistral-ocr", doc: doc.name, chunk: i, ms, finish: "error", usage: null, error: JSON.stringify(json.error).slice(0, 400) };
-  }
+  if (json.error) return failed(reader, doc, i, t0, JSON.stringify(json.error).slice(0, 400));
   // The parsed text comes back as file annotations, NOT as the model's answer.
   const annotations = json.choices?.[0]?.message?.annotations ?? [];
   return {
-    reader: "mistral-ocr",
+    reader: reader.label,
+    model: reader.model,
     doc: doc.name,
     chunkSha256: sha256,
     chunk: i,
@@ -378,6 +363,19 @@ async function mistralOcr(doc: Doc, i: number): Promise<Result> {
     nativeFinish: json.choices?.[0]?.native_finish_reason,
     usage: { ...json.usage, provider: json.provider },
     raw: JSON.stringify(annotations),
+  };
+}
+
+function failed(reader: Reader, doc: Doc, i: number, t0: number, error: string): Result {
+  return {
+    reader: reader.label,
+    model: reader.model,
+    doc: doc.name,
+    chunk: i,
+    ms: Math.round(performance.now() - t0),
+    finish: "error",
+    usage: null,
+    error,
   };
 }
 
@@ -394,6 +392,7 @@ function safeRecords(text: string): unknown[] | undefined {
 
 const only = process.argv[2];
 const onlyChunk = process.argv[3] === undefined ? undefined : Number(process.argv[3]);
+const onlyReaders = process.env.READERS?.split(",").map((s) => s.trim());
 await mkdir(OUT, { recursive: true });
 const results: Result[] = [];
 
@@ -404,28 +403,33 @@ for (const doc of DOCS.filter((d) => !only || d.name === only)) {
     JSON.stringify(baseline.map(({ items, ...p }) => p), null, 2),
   );
 
+  const readers = READERS.filter(
+    (r) =>
+      (!onlyReaders || onlyReaders.includes(r.label)) &&
+      (!r.scanOnly || isScan) &&
+      (!r.bornDigitalOnly || !isScan),
+  );
+
   for (let i = 0; i < doc.chunks.length; i++) {
     if (onlyChunk !== undefined && i !== onlyChunk) continue;
-    const jobs: Promise<Result>[] = [
-      haikuNative(doc, i),
-      haikuNative(doc, i, true),
-      haikuNative(doc, i, true, true),
-      viaOpenRouter("gemini-flash-native", OPENROUTER_GEMINI, doc, i),
-      viaOpenRouter("haiku-via-openrouter", OPENROUTER_HAIKU, doc, i),
-    ];
-    if (isScan) jobs.push(mistralOcr(doc, i));
-    else jobs.push(haikuTextOnly(doc, i, baseline));
+    const jobs = readers.map((r) =>
+      r.transport === "anthropic"
+        ? viaAnthropic(r, doc, i, baseline)
+        : r.transport === "openrouter"
+          ? viaOpenRouter(r, doc, i)
+          : viaMistralOcr(r, doc, i),
+    );
 
     for (const r of await Promise.all(jobs)) {
       results.push(r);
       const n = r.records?.length;
       console.log(
-        `${r.doc.padEnd(12)} c${r.chunk} ${r.reader.padEnd(21)} ${String(r.ms).padStart(6)}ms  ${r.finish}${r.nativeFinish && r.nativeFinish !== r.finish ? `/${r.nativeFinish}` : ""}  ${n === undefined ? "no records" : `${n} records`}${r.error ? `  ERROR ${r.error.slice(0, 120)}` : ""}`,
+        `${r.doc.padEnd(12)} c${r.chunk} ${r.reader.padEnd(23)} ${String(r.ms).padStart(6)}ms  ${r.finish}${r.nativeFinish && r.nativeFinish !== r.finish ? `/${r.nativeFinish}` : ""}  ${n === undefined ? "no records" : `${n} records`}${r.error ? `  ERROR ${r.error.slice(0, 160)}` : ""}`,
       );
       await writeFile(`${OUT}/${r.doc}.c${r.chunk}.${r.reader}${process.env.RUN ? "." + process.env.RUN : ""}.json`, JSON.stringify(r, null, 2));
     }
   }
 }
 
-await writeFile(`${OUT}/results.json`, JSON.stringify(results, null, 2));
+await writeFile(`${OUT}/results${process.env.RUN ? "." + process.env.RUN : ""}.json`, JSON.stringify(results, null, 2));
 console.log(`\n${results.length} results → ${OUT}/`);
