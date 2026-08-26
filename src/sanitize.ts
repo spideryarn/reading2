@@ -31,7 +31,12 @@
 
 import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
-import { ARTICLE_CONFIG, RISKY_ROOT_ATTR, installArticlePolicy } from "./sanitize-policy.js";
+import {
+  ARTICLE_CONFIG,
+  RISKY_ROOT_ATTR,
+  SANITIZER_VERSION,
+  installArticlePolicy,
+} from "./sanitize-policy.js";
 
 /**
  * One DOMPurify instance for the process, bound to a throwaway window. This is
@@ -78,4 +83,82 @@ export function sanitizeInPlace(root: Element): void {
 /** The same policy applied to a fragment of HTML text. */
 export function sanitizeHtml(html: string): string {
   return purify.sanitize(html, { ...ARTICLE_CONFIG });
+}
+
+/**
+ * An artefact off the disk, cleaned only if its stamp says it needs it.
+ *
+ * ## The problem this solves, which is not the one it looks like
+ *
+ * `blocks.json` files written before the sanitiser landed are dirty and are
+ * trusted as-is. docs/project/security.md carried that as a known gap with
+ * "re-run stage 3 to clean them" as the remedy — and the flaw is not the remedy,
+ * it is that **nothing anywhere says the re-run is needed**. A stale artefact
+ * has the same shape as a current one and serves perfectly, so the check a
+ * person would run to find out whether the old files were a problem comes back
+ * saying no. Another [silent success](docs/reusable/silent-success.md), this
+ * time in the fix rather than the bug.
+ *
+ * ## Why not simply sanitise every read
+ *
+ * Measured, not argued: 33ms and roughly 130MB of jsdom retention to re-clean
+ * the 141-block Noema article, 10ms for the 34-block fixture. Per article load,
+ * forever, on the deployed server, to protect against a case the browser pass at
+ * ingress (src/web/sanitize.ts) already covers. Comparing an integer costs
+ * nothing, and the article that actually needs the work is the rare one — and
+ * stops being rare exactly once, because re-running stage 3 stamps it.
+ *
+ * That is why `blocks` comes back by **identity** on the current path rather
+ * than as a fresh array: a version that mapped over the blocks and happened to
+ * return the same strings would look correct in every test and would still be
+ * paying for a parse per block on every request. tests/sanitize-stale-artefact.ts
+ * asserts the identity for that reason.
+ *
+ * ## What it does not do
+ *
+ * It does not write anything back. The heal is per read and in memory, which is
+ * the right shape for a store that is moving to Postgres and a server whose
+ * filesystem is read-only in production (docs/project/deployment.md) — and a
+ * read path that repairs files is a surprise nobody wants during an incident.
+ * `stale` is returned rather than logged here so the caller says it, following
+ * the rule `readJson` in src/api.ts already writes down: a helper that logs is
+ * convenient until it is called in a loop, and the loop is always somewhere else.
+ *
+ * It also does not touch `text`. That is never rendered as markup — it goes to
+ * the model, and it is the offset space comments and search hits are anchored in
+ * (src/quote-match.ts) — so rewriting it would move every anchor in the article
+ * for no gain. Same reasoning as `sanitizeArticle` in src/web/sanitize.ts.
+ *
+ * ## Blocks and a stamp, not a file
+ *
+ * The two arguments are deliberate. **There are two stores**, and the fix that
+ * only guards one of them is the shape this whole area keeps failing in: the
+ * filesystem reader is `loadArticle` in src/api.ts, and the Postgres reader is
+ * `loadArticle` → `blocksFor` in src/store/pg.ts, where the blocks are rows and
+ * the stamp is a column rather than a key in a JSON object. A parameter shaped
+ * like `blocks.json` would fit one caller and have to be faked by the other.
+ *
+ * `stamp` is required rather than optional even though `undefined` is a legal
+ * value, so that a caller with nothing to pass has to write `undefined` on
+ * purpose. Forgetting an optional argument and deciding you have no stamp are
+ * the same keystrokes otherwise, and only one of them is a decision. Both fail
+ * safe — unknown means stale means clean it — but one of them is silent.
+ */
+export function sanitizeStoredBlocks<T extends { html: string }>(
+  blocks: T[],
+  stamp: number | undefined,
+): { blocks: T[]; stale: boolean } {
+  /* Not "older than", just "different from". A stamp from a build we are not —
+     a rollback, a branch — is as unknown to us as no stamp at all, and
+     sanitising is idempotent, so there is nothing to buy by working out which
+     way the difference goes and a real cost to getting that wrong. */
+  if (stamp === SANITIZER_VERSION) return { blocks, stale: false };
+
+  return {
+    blocks: blocks.map((b) => {
+      const clean = sanitizeHtml(b.html);
+      return clean === b.html ? b : { ...b, html: clean };
+    }),
+    stale: true,
+  };
 }

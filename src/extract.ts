@@ -27,9 +27,60 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchHtml } from "./fetch.js";
 import { slugFromUrl } from "./ingest.js";
+import { sanitizeHtml } from "./sanitize.js";
 import type { Meta } from "./types.js";
 
-/** The standalone, styled debug page. Not what the reading view renders. */
+/**
+ * Text going into markup, made text again.
+ *
+ * Readability hands back `title`, `byline`, `siteName` and `lang` as strings it
+ * took the *textContent* of, and that reads as safe. It is not: textContent
+ * decodes entities, so a page whose `<title>` says
+ * `Real&lt;/title&gt;&lt;img src=x onerror=…&gt;` gives us back a string with a
+ * real `</title>` and a real `<img>` in it, and writing that into a template
+ * puts them back in the document. Verified against real Readability output in
+ * tests/extract-sanitize.test.ts, which is also where the byline — interpolated
+ * straight into a `<div>` — was confirmed to be a working `<img onerror>`.
+ *
+ * All five characters, not the three that "look like markup". `"` is what holds
+ * `lang` inside its attribute, and the source page's `lang` is the only one of
+ * these that lands in an attribute rather than in text.
+ */
+const escapeHtml = (s: string): string =>
+  s.replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
+  );
+
+/**
+ * The standalone, styled debug page. Not what the reading view renders — and
+ * that is exactly why it was the last unsanitised thing in the pipeline.
+ *
+ * Stage 3 sanitises before it mints ids, and it rewrites this same file, so for
+ * a while the argument was that the window is only between the two commands.
+ * The window is where the file is *for*: `npm run extract -- <url>` prints the
+ * path and the next thing anybody does is open it. Readability is not a
+ * sanitiser and says so; `<img onerror>` and `<span onmouseover>` come through
+ * it intact, and an `onerror` on a bogus src fires on load with no click.
+ *
+ * Sanitising the **content string** rather than the assembled document, for two
+ * reasons. It is the canonical DOMPurify call and the one that gets the
+ * scrutiny (src/sanitize.ts says why the string path won here). And the
+ * template's own `<style>` is in the `<head>`, which the policy forbids in
+ * source markup — running the whole page through would leave a debug page that
+ * still opens and has lost its looks, which is how that mistake would survive.
+ *
+ * The result is concatenated into `<body>`, an ordinary element context. Never
+ * move it inside `<xmp>`, `<noscript>` or any other raw-text element: re-parsing
+ * sanitised output in one of those is CVE-2026-65914's shape, and
+ * docs/project/security.md has the rule.
+ *
+ * Stage 3 is unaffected. It sanitises whatever it is handed, so a body that
+ * arrives clean is a no-op for it and blocks.json comes out identical — pinned
+ * in tests/extract-sanitize.test.ts rather than assumed, because the two stages
+ * share this file and stage 3 writes block ids back into it.
+ */
 type Maybe = string | null | undefined;
 function debugPage(article: {
   title: Maybe;
@@ -39,11 +90,12 @@ function debugPage(article: {
   length: number | null | undefined;
   content: Maybe;
 }): string {
+  const text = (s: Maybe) => escapeHtml(s ?? "");
   return `<!doctype html>
-<html lang="${article.lang ?? "en"}">
+<html lang="${text(article.lang) || "en"}">
 <head>
 <meta charset="utf-8">
-<title>${article.title ?? "Untitled"}</title>
+<title>${text(article.title) || "Untitled"}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body {
@@ -66,12 +118,12 @@ function debugPage(article: {
 </style>
 </head>
 <body>
-<h1>${article.title ?? ""}</h1>
+<h1>${text(article.title)}</h1>
 <div class="meta">
-  ${article.byline ? `${article.byline} &middot; ` : ""}${article.siteName ?? ""}
+  ${article.byline ? `${text(article.byline)} &middot; ` : ""}${text(article.siteName)}
   ${article.length ? `&middot; ~${Math.round(article.length / 5 / 200)} min read` : ""}
 </div>
-${article.content}
+${sanitizeHtml(article.content ?? "")}
 </body>
 </html>`;
 }

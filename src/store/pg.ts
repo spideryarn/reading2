@@ -44,6 +44,7 @@ import {
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import { isSlug } from "../ingest.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
+import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isStale as summariesStale } from "../summarise.js";
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
@@ -122,7 +123,7 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
     .where(eq(revisionBlocks.revisionId, revisionId))
     .orderBy(asc(revisionBlocks.ordinal));
 
-  return rows.map((row) => ({
+  const blocks = rows.map((row) => ({
     id: row.blockId,
     tag: row.tag,
     kind: row.kind as Block["kind"],
@@ -135,6 +136,24 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
     gistable: row.gistable,
     ...(row.note === null ? {} : { note: row.note }),
   }));
+
+  /* The same guard src/api.ts puts on the filesystem reader, because there are
+     two `loadArticle`s and guarding one of them passes every test — the fs half
+     is genuinely protected, the suite is green, and the store that is in the
+     middle of *replacing* the filesystem serves old HTML unchecked.
+
+     `undefined` for the stamp, deliberately, and not because nobody got round
+     to it: there is no column to keep one in yet, and absent reads as stale,
+     which cleans. That is the safe direction and the honest one — it costs a
+     re-clean on every Postgres article load until the column exists, and the
+     alternative is claiming a cleanliness nothing has checked.
+
+     The column belongs on `article_revisions` rather than `revision_blocks`
+     when it lands: a revision is exactly one blocks.json and one cleaning pass,
+     so per-block would store the same integer several hundred times and invite
+     a revision whose own blocks disagree about when they were cleaned. See
+     docs/project/security.md § There are two stores. */
+  return sanitizeStoredBlocks(blocks, undefined).blocks;
 }
 
 /**
@@ -166,6 +185,17 @@ function metaFrom(
     ...(revision.fetchedAt === null ? {} : { fetchedAt: revision.fetchedAt.toISOString() }),
     ...(revision.excerpt === null ? {} : { excerpt: revision.excerpt }),
     ...(revision.note === null ? {} : { note: revision.note }),
+    /* PDF provenance. Null on every web page, so the spread pattern above is
+       load-bearing here too: `source: null` in `meta.json` is not the same
+       artefact as no `source` key, and the round-trip test compares them.
+       docs/plans/pdf-ingestion.md. */
+    ...(revision.source === null ? {} : { source: revision.source as "pdf" }),
+    ...(revision.extractMethod === null ? {} : { method: revision.extractMethod }),
+    ...(revision.pages === null ? {} : { pages: revision.pages }),
+    ...(revision.rawSha256 === null ? {} : { rawSha256: revision.rawSha256 }),
+    ...(revision.unverified === null ? {} : { unverified: revision.unverified }),
+    ...(revision.recall === null ? {} : { recall: revision.recall }),
+    ...(revision.pagesChecked === null ? {} : { pagesChecked: revision.pagesChecked }),
   };
 }
 

@@ -36,6 +36,7 @@ import { parseJsonFrom } from "./parse-json.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone, type StepContext } from "./pipeline.js";
 import { createFsArtifactStore } from "./store/artifacts-fs.js";
 import { readingMinutes } from "./reading-time.js";
+import { sanitizeStoredBlocks } from "./sanitize.js";
 import { isStale } from "./tweets.js";
 import type {
   Arc,
@@ -145,7 +146,9 @@ function requireSlug(slug: string): void {
 export async function loadArticle(slug: string): Promise<Article> {
   requireSlug(slug);
   for (const dir of candidateDirs(slug)) {
-    const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+    const blocksFile = await readJson<{ blocks: Block[]; sanitizer?: number }>(
+      path.join(dir, "blocks.json"),
+    );
     const tree = await readJson<Tree>(path.join(dir, "tree.json"));
     if (!blocksFile || !tree) continue;
 
@@ -203,7 +206,27 @@ export async function loadArticle(slug: string): Promise<Article> {
     // Absent means the L0 column falls back to the root gist.
     const arc = await readJson<Arc>(path.join(dir, "arc.json"));
 
-    return { meta, blocks: blocksFile.blocks, tree, ...(arc ? { arc } : {}) };
+    /* The one read of blocks.json that hands `html` to a renderer, and so the
+       one that has to answer for an artefact written before the sanitiser it
+       is being trusted against. `sanitizeStoredBlocks` compares the stamp and
+       cleans only when it disagrees — measured at 33ms and ~130MB of jsdom
+       retention per article to do it unconditionally, which is a real cost on
+       every page load forever to cover a case that is rare and bounded. The
+       other five reads here (loadTweets, loadGlossary, lookUpTerm,
+       loadSummaries, describeDir) take `text`, not `html`.
+
+       The warn is the point as much as the cleaning is: a stale artefact is
+       still stale after we have served it safely, and stage 3 is what actually
+       fixes it. See docs/project/security.md. */
+    const { blocks, stale } = sanitizeStoredBlocks(blocksFile.blocks, blocksFile.sanitizer);
+    if (stale) {
+      log("store").warn(
+        { slug, dir: path.relative(ROOT, dir) },
+        "article artefact predates the current sanitiser — re-run stage 3",
+      );
+    }
+
+    return { meta, blocks, tree, ...(arc ? { arc } : {}) };
   }
   // Tagged 404 rather than left for routes.ts to infer. Inferring it meant
   // every unclassified fault — a corrupt tree.json, a permissions problem —

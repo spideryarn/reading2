@@ -24,6 +24,37 @@
 import type { Config, DOMPurify } from "dompurify";
 
 /**
+ * Which version of the policy below an artefact on disk was cleaned with.
+ *
+ * Stage 3 stamps this into `blocks.json` (src/blocks.ts) and the read seam
+ * compares it (`sanitizeStoredBlocks` in src/sanitize.ts). It exists because a
+ * stale artefact is otherwise **indistinguishable from a current one** — same
+ * shape, same fields, serves fine — so the check anybody would run to see
+ * whether the old files were a problem comes back saying no. docs/project/security.md
+ * carried "re-run stage 3 to clean them" as the remedy for a day, and nothing
+ * anywhere said the re-run was needed.
+ *
+ * `1` is the DOMPurify policy as it stood on 2026-08-25, which is every artefact
+ * that has ever carried a stamp. Files written before then have no `sanitizer`
+ * key at all, and absent counts as stale — which is the case that matters,
+ * because those are the ones written before there was a sanitiser.
+ *
+ * **Bump this whenever a change here means an already-stored artefact could now
+ * be wrong** — a tag or attribute moving onto a forbidden list, a hook getting
+ * stricter, the embed allowlist losing an origin. Do *not* bump it for a change
+ * that only affects what is kept, since re-cleaning old files would not find
+ * anything. Getting that call wrong in the safe direction costs one sanitise per
+ * article on the next read; getting it wrong the other way leaves the artefact
+ * claiming to have been cleaned by a policy it has never seen.
+ *
+ * A number rather than the DOMPurify version, deliberately. Upgrading the
+ * library does not make what is on disk unsafe — the stored HTML was checked
+ * against a policy, and this names the policy. Tying it to the dependency would
+ * re-sanitise every article in the library on every patch release, for nothing.
+ */
+export const SANITIZER_VERSION = 1;
+
+/**
  * Video embeds, by exact origin and path prefix.
  *
  * Readability deliberately keeps embeds from video hosts, so dropping every

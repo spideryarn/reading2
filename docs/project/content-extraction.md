@@ -9,8 +9,8 @@ Strips a rich HTML page (article/blog post) down to the main content — drops n
   [ingest-queue.md](ingest-queue.md). The CLI and the queue call the same function, so there is one
   code path and no way for them to disagree.
 - The fetch itself is no longer here. Stage 1 is [`src/fetch.ts`](../../src/fetch.ts), which keeps
-  what it got in `data/<slug>/raw.html` — so re-extracting costs nothing and does not ask the
-  publisher again.
+  what it got in `data/<slug>/raw.html` — or `raw.pdf` — with a `raw.json` manifest beside it saying
+  which, so re-extracting costs nothing and does not ask the publisher again.
 - Output: a standalone, styled HTML file (not Markdown — kept as HTML to avoid losing structure/links/images)
 - Dependencies: `@mozilla/readability` + `jsdom` (parses HTML into a DOM, since Node has none natively)
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
@@ -24,9 +24,37 @@ Stage 1 moved out of this script into [`src/fetch.ts`](../../src/fetch.ts) on 20
 character encoding rather than assumed to be UTF-8, a PDF refused by name instead of arriving as
 Readability-proof gibberish, and a typed failure rather than `Fetch failed: 403`.
 
-A PDF is about to stop being refused: [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md) adds a
-second extractor beside this one, producing the same `article.html` + `meta.json`, so that stage 3
-onwards never knows which of the two made it.
+## Two extractors, one artefact
+
+**Since 2026-08-26 a PDF is no longer refused.** There is a second extractor beside this one —
+[`src/pdf-read.ts`](../../src/pdf-read.ts) — and it produces the same `article.html` + `meta.json`,
+so stage 3 onwards cannot tell which of the two made a given article. That convergence is the whole
+design, and it is why the PDF path is not a parallel pipeline.
+
+```
+  raw.json says "html"  ──►  Readability  ──┐
+                                            ├──►  article.html + meta.json  ──► blocks ─► toc ─► arc
+  raw.json says "pdf"   ──►  a model reads ─┘
+                             the pages
+```
+
+**The branch is on the manifest, never on the URL.** A `.pdf` address that served a Cloudflare
+challenge is HTML; an `application/octet-stream` that starts `%PDF-` is a PDF. Stage 1 already looked
+at the bytes and wrote down what it found ([fetching.md](fetching.md#what-kind-of-document-it-is)),
+so stage 2 reads `raw.json` rather than guessing — and rather than picking "whichever raw file is
+there", which makes a stale file authoritative by accident after a refresh.
+
+The differences that matter to a reader:
+
+- **A PDF costs money to extract.** Readability is free and deterministic; a model reading pages is
+  neither. Every chunk's raw response is cached, so re-running the stage after a renderer fix is free.
+- **It is checked, and it can fail.** The transcription is scored per page against the PDF's own text
+  layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
+  than writing a half-transcribed article that reads fluently.
+- **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
+
+The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
+[../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).
 
 One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
@@ -45,8 +73,9 @@ id assignment belongs to **stage 3**, not extraction, and ids are random so they
 re-extraction ([block-ids.md](block-ids.md)); a block is the *finest* unit a reader takes in as one
 thing ([architecture.md § What a block is](architecture.md#what-a-block-is)).
 
-What this stage owes stage 3: HTML whose element structure is stable run-to-run. **Still not
-sanitized HTML** — but that is now a decision rather than an oversight.
+What this stage owes stage 3: HTML whose element structure is stable run-to-run. **Sanitising is
+still stage 3's job**, not a promise made here — but since 2026-08-26 this stage does sanitise the
+one thing it writes for a person to open.
 
 > **This file used to promise "sanitized HTML" and no part of the pipeline kept the promise.**
 > Readability is not a sanitiser and
@@ -56,12 +85,26 @@ sanitized HTML** — but that is now a decision rather than an oversight.
 > and stopped looking.
 >
 > Fixed 2026-08-25, at **stage 3** rather than here: see [security.md](security.md) for why, and for
-> what the sanitiser keeps and drops. One consequence lands on this stage and is still open — the
-> standalone debug page this script writes is *not* sanitised, so opening `output/<slug>.html`
-> directly in a browser before running stage 3 will execute whatever survived Readability. Two
-> lines fix it (import `sanitizeInPlace` from [`src/sanitize.ts`](../../src/sanitize.ts), call it on
-> the document before writing); it was left for whoever owns this stage. See
-> [security.md § Known gaps](security.md#known-gaps).
+> what the sanitiser keeps and drops.
+
+**The debug page is sanitised here, 2026-08-26.** The window between running this stage and running
+stage 3 is exactly what `output/<slug>.html` is for — the command prints the path and the next thing
+you do is open it — so the file goes through `sanitizeHtml` before it is written.
+
+The estimate for that fix, written down here and in security.md, was two lines. It was not, and the
+reason is the useful part: sanitising the body closes one hole and there were **four**. Readability
+hands `title`, `byline`, `siteName` and `lang` back as *text* it took the `textContent` of, and
+`textContent` decodes entities — so a title of `Real&lt;/title&gt;&lt;img …&gt;` comes back as real
+markup, and this file wrote all four into the template unescaped. A live `<img onerror>` in the
+byline and a live handler on `<html lang>` were both reproduced. Any string interpolated into markup
+is markup, however it was obtained.
+[security.md § Stage 2's debug page](security.md#stage-2s-debug-page) has the table and the reasoning;
+[`tests/extract-sanitize.test.ts`](../../tests/extract-sanitize.test.ts) has the payloads, each one
+checked against real Readability output first.
+
+Stage 3 is unaffected by this — it sanitises whatever it is handed, so a body arriving clean is a
+no-op and `blocks.json` comes out identical. That is asserted rather than assumed, because the two
+stages share this file and stage 3 writes block ids back into it.
 Ids are preserved by matching on the `spya-` attribute already in the document, so extraction must
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 

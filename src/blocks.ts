@@ -15,7 +15,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
-import { sanitizeInPlace } from "./sanitize.js";
+import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
+import { SANITIZER_VERSION } from "./sanitize-policy.js";
 /* `Block` and `BlockKind` come from types.ts rather than being declared here.
    This file *writes* blocks.json — the spine every later stage addresses text
    through (docs/project/block-ids.md) — so a second declaration of its shape is
@@ -572,6 +573,48 @@ export interface BlocksRun extends SplitResult {
 }
 
 /**
+ * The contents of a `blocks.json`, cleaned and then stamped. **Every writer of
+ * that file must go through this**, and there are three of them: stage 3 here,
+ * stage 4 in src/toc.ts, and the Postgres export in src/store/export.ts.
+ *
+ * The stamp is what lets the read seam tell an artefact cleaned by the current
+ * policy from one cleaned by nothing (`sanitizeStoredBlocks` in
+ * src/sanitize.ts, and docs/project/security.md). Two things had to be true for
+ * that to work, and the first version of this had neither.
+ *
+ * **It has to reach the file that is actually read.** Stage 3 stamps
+ * `output/<slug>.blocks.json`; the server opens `data/<slug>/blocks.json`, and
+ * stage 4 rewrites *that* one from scratch. A plain `{ blocks }` there dropped
+ * the stamp, so every article read back as stale — safe, since stale means
+ * re-sanitise, but it paid 33ms a load to re-clean files that were already clean
+ * and fired the "predates the sanitiser" warning on every article, which is how
+ * a warning stops being read.
+ *
+ * **And it has to be true.** This is why the sanitise is here rather than left
+ * to the caller. Stage 3 has genuinely just sanitised its blocks; the other two
+ * have not. Stage 4 reads whatever `blocks.json` it was pointed at, and the
+ * export reads rows out of Postgres that were imported from some file of unknown
+ * age — so a bare stamp at those two call sites would take content that may
+ * predate the sanitiser entirely and **certify it as clean**, which is worse
+ * than the gap it was written to close. A stamp that can be wrong is not a
+ * weaker version of this feature, it is the opposite of it.
+ *
+ * So the stamp is a fact by construction: nothing can be stamped without having
+ * been through the policy on the way. Sanitising is idempotent, so for stage 3
+ * this is a no-op, and all three of these are batch stages that make model calls
+ * — 33ms for a large article is not a number any of them can notice.
+ *
+ * A shared helper rather than a rule written down, for the reason
+ * docs/project/security.md gives about the slug check: a rule stated in one
+ * function is not a rule the codebase follows. The two things that make it one
+ * are a helper whose absence is visible at the call site, and a test that fails
+ * when it is missing — tests/sanitize-stale-artefact.test.ts has the test.
+ */
+export function blocksArtefact(blocks: Block[]): { sanitizer: number; blocks: Block[] } {
+  return { sanitizer: SANITIZER_VERSION, blocks: sanitizeStoredBlocks(blocks, undefined).blocks };
+}
+
+/**
  * Stage 3 over a file on disk: read, split, write both artefacts back.
  *
  * Exported because there are two callers and they must not drift — `main()`
@@ -603,7 +646,12 @@ export async function runBlocks(opts: {
   const result = splitIntoBlocks(source, previous);
 
   await writeFile(htmlFile, result.html, "utf-8");
-  await writeFile(jsonFile, JSON.stringify({ blocks: result.blocks }, null, 2), "utf-8");
+  /* `blocksArtefact`, not a bare `{ blocks }` — see its own comment. The stamp
+     is what makes a stale artefact visible at all; without it a blocks.json
+     written before DOMPurify existed is indistinguishable from one written this
+     morning, and "re-run stage 3 to clean them" is advice nothing ever asks
+     for. Re-running this stage *is* the migration: it rewrites the file anyway. */
+  await writeFile(jsonFile, JSON.stringify(blocksArtefact(result.blocks), null, 2), "utf-8");
 
   return { ...result, htmlFile, jsonFile };
 }
