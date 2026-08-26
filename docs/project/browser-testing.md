@@ -20,6 +20,35 @@ was told the server was running on 5273 and it wasn't — nothing was listening,
 had to be started fresh. A refused connection and a blank page look nothing alike in a terminal and
 almost identical in a screenshot.
 
+### And check the port, not just the server
+
+`npm run dev` takes 5273 if it can and **silently moves to 5274, 5275, …** if another agent in this
+tree already has it. It says so in one line of its own output and nowhere else, so a session that
+assumes 5273 gets a refused connection or — worse — *somebody else's* dev server, which serves a
+page that looks exactly right and is running different code. Read the port off the line Vite prints
+and pass it on to anything you dispatch.
+
+### Work in your own tab
+
+Several agents drive this same browser. On 2026-08-26 a session's measurements were being
+contaminated by a stray tab from another session that was auto-scrolling on its own; the fix was
+`tabs_context_mcp{createIfEmpty:true}` into a fresh tab group and staying in it. Related, and worth
+knowing before you conclude your fix did nothing: `resize_window` **reports success while doing
+nothing** once a session's window has got into a bad state — every later call returns fine and
+`innerWidth`/`innerHeight` stay pinned. Always read them back rather than trusting the call, and if
+they are stuck, a brand-new tab usually clears it. A whole verification pass that afternoon was run
+at 900×507 by a session that thought it had asked for 1300 tall, which made its numbers degenerate
+without making them look wrong.
+
+### Scroll for real, and let a frame render
+
+`window.scrollTo()` followed immediately by a DOM read measures a page mid-flight — before a
+`useLayoutEffect` has re-placed anything and before the rAF sampler has run. On 2026-08-26 that
+produced a reading showing a panel's current entry clipped 191px past its bottom edge, which a
+screenshot taken a moment later showed sitting correctly. Take a screenshot (which forces a real
+frame) between the scroll and the read, or use a real wheel scroll. And note the pair interacts:
+the same session saw a screenshot *between* `scrollTo` calls revert `scrollY` to 0.
+
 ## The URLs and widths worth checking
 
 The view has two modes and the second is easy to forget:
