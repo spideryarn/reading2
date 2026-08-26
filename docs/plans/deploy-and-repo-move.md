@@ -206,14 +206,33 @@ directory.
    time and `/read/<slug>` survives a reload. The build command gained a second half (the API), and
    the region is pinned to `lhr1` so the function sits next to the database rather than across an
    ocean from it.
-3. **The queue, honestly.** `POST /api/jobs` returns its 202 receipt and continues the work with
+3. ~~**The queue, honestly.** `POST /api/jobs` returns its 202 receipt and continues the work with
    Vercel's `waitUntil`, which is *exactly* the shape [`src/jobs.ts`](../../src/jobs.ts) already
-   has — return a receipt, keep working, let the browser poll. What is genuinely lost is p-queue's
-   global concurrency-1: a queue inside one process cannot order work across instances. With one
-   author and per-slug writes that does not matter yet; when it does, the answer is the
-   Postgres-backed queue [ingest-queue.md](../project/ingest-queue.md) already names as the one to
-   adopt. **Write that loss down when it happens** — a concurrency guarantee that quietly stopped
-   holding is the [silent success](../reusable/silent-success.md) pattern exactly.
+   has.~~ **Both halves of that were false, found 2026-08-26.**
+
+   There is **no `waitUntil` anywhere in the repo**, and `enqueue` starts an *untracked floating
+   promise* (`void queue.add(…)`) while the Vercel adapter awaits only the request handler. A
+   floating promise is not the shape `waitUntil` needs — `waitUntil` requires the promise to be
+   handed to the platform explicitly. So the function returns its receipt and the runtime is free to
+   freeze or tear down the instance immediately, while the browser polls a job that may never
+   advance. `vercel.json` caps the function at **300 seconds**, the exact upper bound of a 1–5 minute
+   ingest, with no margin.
+
+   [deployment.md](../project/deployment.md) was right and this bullet was wrong: it lists adding an
+   article as knowingly broken, *"and this one is more than storage: the queue assumes one long-lived
+   process"*. A plan that says the thing works, beside a doc that says it does not, is worse than
+   either — this is the [silent success](../reusable/silent-success.md) pattern applied to our own
+   deployment story.
+
+   **And `waitUntil` would not have rescued it anyway.** It is best-effort: no retries, no durability,
+   it dies with the invocation, and it is bounded by the same `maxDuration` rather than a longer
+   budget of its own. It is not a background worker and cannot be made into one.
+
+   What is genuinely lost either way is p-queue's global concurrency-1: a queue inside one process
+   cannot order work across instances. **The answer is no longer the Postgres-backed queue this
+   bullet used to point at** — see [job-queue-rethink.md](job-queue-rethink.md), which chose a
+   browser-driven advance endpoint precisely because it makes each step fit inside one ordinary
+   request and needs no background process at all.
 4. **The `answering` Set** ([`src/routes.ts:89`](../../src/routes.ts)) gets the same treatment or an
    honest downgrade to "it might answer twice under a double-click".
 5. **The beta gate**, before anything is reachable — see [§ The beta gate](#the-beta-gate). This

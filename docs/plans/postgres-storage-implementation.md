@@ -1214,13 +1214,20 @@ change narrows the check everywhere except the interrupted-rerun case above.
 
 ## Step 12 — jobs and claiming, decided before it is built
 
-> **Reconsidered 2026-08-26, after this was written and reviewed.**
-> [job-queue-rethink.md](job-queue-rethink.md) asks whether this whole design is the right shape, and
-> two credible alternatives came out of it — a **browser-driven advance endpoint** that deletes most
-> of what follows, and **pg-boss**, whose earlier rejection turned out to rest on an incomplete
-> reading of what it owns for you. Which one wins turns on a product question, not a technical one.
-> That document also found that **ingest does not currently work on Vercel at all**, which is
-> independent of any of this. Read it before building what is below.
+> **Superseded 2026-08-26, after this was written and reviewed.**
+> [job-queue-rethink.md](job-queue-rethink.md) asked whether this design is the right shape at all,
+> and the answer was no. **What gets built is a browser-driven advance endpoint**: Postgres owns the
+> job, the browser asks the server to advance it one step, and the server decides which step. That
+> deletes most of what follows — claiming, the claim loop, worker kicks, three-place rescue,
+> `queue_state`, and the heartbeat.
+>
+> **What survives from this section, and must:** the attempt token and the fenced write, a job-owned
+> draft revision, and the single-running-step rule. Everything below about fencing an *output* rather
+> than only the job row still holds, and is still the thing most likely to be got wrong.
+>
+> pg-boss was reopened and **deferred with a trigger** — adopt it if a long-lived worker host ever
+> exists, since a queue library gives you a queue and not durable compute. Read the rethink before
+> building any of this.
 
 
 Scoped, argued out and cross-reviewed on 2026-08-26 before a line was written, because this is the

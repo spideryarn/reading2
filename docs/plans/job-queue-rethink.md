@@ -211,6 +211,49 @@ process's `AbortSignal` (is it tied to the 60s monitor interval?); whether its p
 
 ---
 
+## Decided: the browser-driven advance endpoint
+
+**Greg, 2026-08-26: *"Go with whichever's easiest for now."*** That has a clear winner, and the
+reason is not code volume:
+
+> **pg-boss does not solve the actual blocker.** Vercel has no long-running process. A queue library
+> gives you a queue, not durable compute — you would still need something to *run* the job, and on
+> Vercel that is another cron-triggered function with its own time limit. Browser-driven advance makes
+> each step fit inside one ordinary request, so the problem disappears rather than moving.
+
+It is also easiest on every other axis: no new dependency, no extension to enable, no Dashboard click
+that CI cannot do, no `pgboss` schema, and none of the three unknowns that would need spiking first.
+It keeps [the boring-first rule](../../CLAUDE.md), and it reuses two things already built —
+`stepIsDone`, which derives progress from the *artefacts* rather than a job record, and the partial
+unique index that already enforces one running job.
+
+**The cost, stated plainly so it is not discovered later:** an ingest no longer finishes with nobody
+watching. Close the tab mid-ingest and it stops between steps until a browser comes back. If that
+turns out to matter, the cheap recovery is a one-minute Vercel Cron calling the *same* advance
+endpoint — the lock makes it a no-op while a tab is driving, so it is another caller of one
+primitive rather than a second scheduler. That is **not** the hybrid rejected above, which handed
+*ownership* over.
+
+**pg-boss is not dead, it is deferred**, and now with a trigger rather than a vague "revisit":
+adopt it if and when there is a long-lived worker host to run it on (Fly, Railway, Render), at which
+point its heartbeat, `singletonKey` and `AbortSignal` cancellation all become free rather than
+irrelevant. Record that rather than re-deriving it a third time.
+
+### What to build, smallest first
+
+1. `POST /api/jobs/:id/advance` — server reads the next permitted step, runs that one step, commits,
+   returns. The browser cannot name or skip a step.
+2. The atomic waiting→running transition, with a fresh attempt token, leaning on the partial unique
+   index that already exists.
+3. **The fenced output write** — the draft, the step-run row and the job transition in *one*
+   transaction, zero rows affected treated as failure. This is the part that must not be skipped.
+4. The client loop in the add-article page: call, await, call again.
+5. Only then, if wanted: the one-minute cron as a rescue net.
+
+Steps 1–3 depend on `draft_revision_id`, which
+[step 11](postgres-storage-implementation.md#step-11-the-pipeline-writes-revisions) needs anyway —
+so this waits on that migration rather than racing it.
+
 ## What this comes down to
 
 The two strong options — **browser-driven advance** and **pg-boss** — are alternatives, not
