@@ -787,6 +787,22 @@ export async function* findPassagesStream({
      Found by review, 2026-08-26; see src/search-hits-stream.ts § the safety
      property. */
   if (extractor.duplicateHitsKey()) {
+    /* `stopped` first, like the two checks below it. This one was written an
+       hour before they were and did not have the guard, which is how an
+       inconsistency of exactly this kind gets in: the window is narrow — a
+       duplicate key can only be seen after a first array has fully closed — so
+       nobody would have found it by using the app. A reader who disconnected in
+       that window would have been told the model misbehaved, and the log would
+       have carried it at `error`. Flagged in review by the agent that wrote the
+       other two guards, which is the argument for having them read each
+       other's work. */
+    if (stopped) {
+      line.info(
+        { model: used, ms: since(started) },
+        `search from ${used} was abandoned before the duplicate key mattered`,
+      );
+      throw new Error(READER_LEFT);
+    }
     line.error(
       { model: used, ms: since(started), chars: extractor.text().length },
       `${used} sent more than one "hits" key`,
