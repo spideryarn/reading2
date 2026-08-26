@@ -31,6 +31,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { MODEL_REFUSED } from "./messages.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
@@ -448,7 +449,11 @@ export async function generateTweets(opts: {
 
   const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") {
-    throw new Error(`Model refused: ${JSON.stringify(message.stop_details)}`);
+    /* `stop_details` is deliberately neither thrown nor logged — it is the
+       provider's own words about a request that carried the whole article,
+       and this error is copied onto the job and shown on the progress card.
+       See MODEL_REFUSED in src/messages.ts. */
+    throw new Error(MODEL_REFUSED.message);
   }
   if (message.stop_reason === "max_tokens") {
     throw new Error(

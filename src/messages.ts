@@ -170,6 +170,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-key": "ours",
   "ai-no-model": "ours",
   "ai-refused": "blocked",
+  "ai-model-refused": "blocked",
   "ai-too-big": "blocked",
   "ai-bad-request": "bug",
   "ai-timeout": "retry",
@@ -357,6 +358,36 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
   message:
     "The answer was longer than there was room for, so it arrived incomplete and could not be used. " +
     "Asking for something narrower usually fits. [ai-overflowed]",
+};
+
+/**
+ * The model declined to produce the answer at all.
+ *
+ * Anthropic's `stop_reason: "refusal"`, which arrives with a `stop_details`
+ * object. **That object does not reach the reader and does not reach a log**,
+ * for the same reason `providerRefused` drops OpenRouter's error body: it is
+ * the provider's own words about a request that contained the whole article,
+ * and we cannot promise it holds none of it back.
+ *
+ * Six pipeline stages — arc, labels, summarise, toc, glossary, tweets — each
+ * threw `Model refused: ${JSON.stringify(message.stop_details)}` until
+ * 2026-08-26, and that string is not thrown away afterwards: `jobs.ts` copies a
+ * step's error onto the job, and the job's error is rendered on the progress
+ * card. So provider prose had a straight path to the screen through six doors,
+ * found by review after seven other doors of the same shape had already been
+ * closed. The lesson is the one that plan's Rule 1 already stated — **grep the
+ * genre, not the list** (docs/plans/simplification-audit.md).
+ *
+ * Be honest about the cost, as `providerRefused` is: something was lost.
+ * `stop_details` is occasionally the fastest explanation of why a stage failed.
+ * What remains is `stop_reason`, the stage and the elapsed time, which is what
+ * separates a refusal from a timeout.
+ */
+export const MODEL_REFUSED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The AI service declined to do this one, and what it said about why is not something this app " +
+    "passes on. Running it again will most likely get the same answer. [ai-model-refused]",
 };
 
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */

@@ -35,6 +35,7 @@ import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
 import { CAPABLE_MODEL } from "./models.js";
+import { MODEL_REFUSED } from "./messages.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -1144,7 +1145,11 @@ async function runBatch(
     .join("");
 
   if (message.stop_reason === "refusal") {
-    throw new Error(`Model refused: ${JSON.stringify(message.stop_details)}`);
+    /* `stop_details` is deliberately neither thrown nor logged — it is the
+       provider's own words about a request that carried the whole article,
+       and this error is copied onto the job and shown on the progress card.
+       See MODEL_REFUSED in src/messages.ts. */
+    throw new Error(MODEL_REFUSED.message);
   }
   if (message.stop_reason === "max_tokens") {
     throw new BatchIncomplete(
