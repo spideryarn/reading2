@@ -89,13 +89,41 @@ Also measured today, and three of these are surprises worth having before writin
 
 | | |
 |---|---|
-| `spideryarn-greg-detre.vercel.app` | **200, serving the whole app and API to anyone.** `GET /api/library` answers a stranger |
+| `spideryarn-greg-detre.vercel.app` | **200, serving the whole app and API to anyone** — and see below, it is writable too |
 | `spideryarn-reading2-git-main-…vercel.app` | 200, but it is the *branch alias* and it points at a **failed build** — "Deployment has failed" |
 | `spideryarn-reading2-greg-detre.vercel.app` | 404. The obvious guess after the project rename, and it is not a hostname |
 | Custom domains | **none**. `vercel domains ls` → 0 |
 | `DATABASE_URL` on Vercel | **not set.** So the public site's API answers `{"error":"DATABASE_URL is not set…"}` |
 | `NODE_OPTIONS` on Vercel | set for **Production only, not Preview** — see [§ The preview environment is missing a flag](#the-preview-environment-is-missing-a-flag) |
 | `VITE_*` variables on Vercel | none, and they are read **at build time** |
+
+### It is not only readable. It is writable, right now
+
+Running `scripts/check-production-gate.sh` against the live site today, before any of this is built:
+
+```
+FAIL  GET  /api/library  refused → got 500, wanted 401
+FAIL  POST /api/jobs     refused → got 202, wanted 401
+FAIL  DELETE /api/health rejected → got 200, wanted 405
+```
+
+**A 202 means the job was created.** `GET /api/jobs` on production then showed it: id `spya-pchqc5`,
+`https://example.com`, `fetch` already running, with `toc` and `arc` — two model calls — queued
+behind it. That is the open wallet this gate exists to close, and it is open now, on a public URL,
+with no login in front of it.
+
+Two things keep the bill small and neither is a control: the pipeline advances through
+`POST /api/jobs/:id/advance`, which a browser drives — and which is just as unauthenticated — and
+the store cannot write without `DATABASE_URL`. Both are accidents of an unfinished deployment, not
+protection.
+
+**I created that job**, by running the check. One job, for `example.com`; a second POST returned the
+same one rather than a new one, and I did not advance it. It is `spya-pchqc5` if it wants deleting.
+
+**The check failing here is the point.** These lines had never been seen to fail before today, and a
+gate check that has only ever passed is worth nothing — [the mistake this repo already paid
+for](#the-check-and-why-it-is-written-this-way). Run it again after the gate lands and every one of
+these must flip.
 
 **The project was renamed and the old hostname survived it.** `spideryarn-greg-detre.vercel.app`
 still serves — so the redirect allow-list has to cover *two* name families, not one.
@@ -184,6 +212,15 @@ The count in the previous plan was 25 across 12 files; **it is 31 across 14**, c
 `useJobs.ts` is the easy one: its seven `/api/jobs…` calls already go through one local `send()`, so
 that file is a one-line change covering seven requests. The rest are individual.
 
+**One call site is not like the others, and converting it naively makes it worse.**
+`useProfile.ts:76` flushes an unsaved profile from a `pagehide` handler, and it already passes
+`keepalive: true` for exactly that case. `apiFetch` as described `await`s `getSession()` *before*
+the request starts — and a page being torn down can be killed inside that await. A best-effort save
+becomes a save that often never leaves. So the leaving path needs a token it already has and a
+`fetch` that starts immediately, and the debounced save should also fire on `visibilitychange`
+rather than leaving everything to the last moment. Test it with a deliberately slow session lookup;
+otherwise the bug only appears on someone's real machine, once, and unreproducibly. GPT Sol.
+
 What `apiFetch` does, and the one thing it must not do, are in
 [auth-supabase.md § apiFetch](auth-supabase.md#srcweblibapits-apifetch). Repeating only the
 rule that gets forgotten: **a 401 is not "the session is gone"**. Refresh once, retry once, and
@@ -214,8 +251,41 @@ Three ways out, and the third is the one to take:
 The synchronous-open detail is not fussiness: `window.open` after an `await` is blocked by every
 browser, and the symptom is nothing happening at all. Revoke the object URL on unmount.
 
-**A grep is the guard here**, and it belongs in the test suite: no `href` in `src/web/` may start
-with `/api/`. It is the only thing that will notice when somebody adds the third one.
+**And `window.open` gives up what the anchor had.** The `<a>` carries `rel="noreferrer noopener"`;
+a script-opened tab does not, so it must be `null`ed explicitly before the untrusted document
+loads. Close the blank tab and show the error if the fetch fails, rather than leaving the reader
+staring at `about:blank`.
+
+**Worth knowing before spending a day on this:** `sendSource` at `src/routes.ts:143` reads the PDF
+off the local filesystem via `fsLocations(slug)`, so **this link is already broken in production**
+and will stay broken until source storage moves to the database. The token fix is still right, and
+it is not urgent. GPT Sol found both.
+
+**A grep is one guard**, and it belongs in the test suite: no `href` in `src/web/` may start with
+`/api/`. It will notice when somebody adds a third one *to our own code*, which is not the same as
+noticing every one.
+
+### The third class: an article can link to our API
+
+The sweep below covers the code we write. **It does not cover the HTML we render**, and that is
+where the third one is. The sanitiser deliberately keeps links and images, relative ones included —
+`tests/sanitize.test.ts:77` pins that `<img src="/d.png">` survives, because the block splitter
+needs figures. So an article can contain:
+
+```html
+<img src="/api/health">          <!-- fires on render, unauthenticated, at a public endpoint -->
+<a href="/api/library">…</a>     <!-- a 401 page where the reader expected a link to go -->
+```
+
+No bearer token on either, and **no source-code grep can see them** — they arrive from a stranger's
+web page at runtime. GPT Sol found this; confirmed by reading the sanitiser's own test.
+
+The harm is bounded — the gate refuses the anchor, and `/api/health` is the only thing the image can
+reach — but "bounded" is a thing to decide rather than discover. So: **audit URL-bearing attributes
+in `src/sanitize.ts` and drop or rewrite anything that resolves to this origin under `/api/`.** Not
+only `href` and `src`: `srcset`, `<source>`, `<audio>`, `<video>`, `<track>`, and SVG's own URL
+attributes. Behavioural tests, one per attribute, because a rule that covers four of six looks
+exactly like a rule that covers six.
 
 **And there is no third one today** — swept for rather than assumed. No `EventSource` (`useChat.ts`
 says in its own comment why it uses `fetch` instead, and that choice is the reason this whole design
@@ -261,13 +331,62 @@ The work:
 
 - `parseRoute` gains `{ kind: "callback" }` and `{ kind: "login" }`.
 - **`main.tsx` runs four `history.replaceState` rewrites before React mounts. `/auth/callback` is
-  exempt from all four**, and the exemption goes *first*, above `canonicalAddHref`.
+  exempt from all four**, and the exemption goes *first*, above `canonicalAddHref`. Reviewed and
+  confirmed correct in that order; Vercel's SPA rewrite serves the route fine.
 - `redirectTo` is always `${location.origin}/auth/callback`. Never the current page.
-- Where the reader was going lives in `sessionStorage`, validated as a same-origin path on the way
-  out and on the way back.
+- Where the reader was going lives in `sessionStorage`, under the rules below.
 
-**Test the exemption by its consequence, not by reading it.** The test that matters is: land on
-`/auth/callback?code=X`, and assert `location.href` never contains `code=X` inside an `/add/` path.
+### Three things the first version of this got wrong
+
+**The local project does not allow that address.** `supabase/config.toml:203` reads
+
+```toml
+additional_redirect_urls = ["http://localhost:5273", "http://127.0.0.1:5273"]
+```
+
+— two exact roots, no `/**`. This morning's successful sign-in passed no `redirectTo` at all, so it
+went to the Site URL and never tested this. The moment `redirectTo` names `/auth/callback`, Supabase
+either refuses it or quietly falls back to `/`, and the browser test proves nothing. **Add `/**`
+entries for both roots before the browser pass**, and the same globs to the remote project. Named in
+the first review and not carried forward; caught again here.
+
+**`onAuthStateChange` cannot see a failed exchange, so the error state as described is unreachable.**
+Read from the installed SDK rather than assumed: `_initialize()` in
+`@supabase/auth-js/dist/module/GoTrueClient.js:376` calls `_getSessionFromURL`, and on an error it
+`_debug`-logs and `return { error }` — it notifies no subscriber. Listeners get
+`INITIAL_SESSION, null`, which is indistinguishable from "not signed in". Meanwhile **the failed
+parameters stay in the URL**, because only a successful exchange strips `code`.
+
+So the callback component reads `location.search` itself: capture a known-safe error code, clear
+*every* auth parameter (`code`, `state`, `error`, `error_description`, `error_code`), wait for
+initialisation to settle, then navigate. Without that, `/auth/callback?code=X` sits on screen for
+ever — and the test as first written passes the whole time, because `code=X` is indeed not inside
+an `/add/` path.
+
+**`sessionStorage` needs more than a same-origin check.** It is tab-scoped, so cross-tab confusion
+is limited, but a stale entry from a sign-in three days ago is not. Store `{ path, createdAt }`,
+delete it *before* navigating, give it a short TTL, and refuse `/auth/callback` as a destination so
+a bad value cannot loop. Validate with
+
+```ts
+new URL(value, location.origin).origin === location.origin
+```
+
+and **not** `value.startsWith("/")`, which happily accepts `//evil.example` — a protocol-relative
+URL, and an open redirect.
+
+### The tests that follow from that
+
+Four, not one. The single test first proposed here — "`code=X` never ends up inside an `/add/`
+path" — is true of a completely broken callback.
+
+| | |
+|---|---|
+| Success | lands on the saved path, and the URL has no auth parameters left on it |
+| Exchange failure | shows a message, clears the parameters, does not sit on `?code=` |
+| `?error=access_denied` | shows a message rather than a bare sign-in screen |
+| No verifier in storage | the PKCE verifier is gone (different browser, cleared storage) — refuse cleanly |
+| Return path `//evil.example` | refused |
 
 ### Signing out
 
@@ -292,12 +411,68 @@ because both are the kind of detail that survives a plan and dies in an editor:
 `try` throws past the catch — 500 with the message in dev, blank 500 on Vercel, and `logRequest`
 never runs, so **the refusal is never written down**.
 
+**A JWKS that will not load is not a bad credential.** The previous plan maps every `getClaims`
+failure to 401, and the first review asked for a **503** when the failure is the key set being
+unreachable rather than the token being wrong. That correction was never folded in, so it is folded
+in here: a 401 tells a client with a perfectly good session to throw it away and try to refresh,
+which cannot help, and it reports our outage as their fault. Signature invalid, expired, malformed →
+401. Cannot reach or parse the JWKS → 503.
+
+**Signing out is more than a button.** The screen is only the visible half: an active chat stream
+holds a `fetch` that the server has already admitted, and app state holds an article, a profile and
+a thread. Sign-out aborts every in-flight stream and clears what the client is holding, or the next
+person at the keyboard sees the last one's reading. Named in the first review, dropped from the
+second; back now.
+
 **Errors carry their status by convention here**, not by class: `httpError(status, message)` at
 `src/routes.ts:157` does `Object.assign(new Error(message), { status })`, and the catch at `:2450`
 reads `.status`. So `requireUser` throws `httpError(401, …)` and needs nothing else to be reported
 correctly. Every message it throws must be **fixed prose we wrote** — never the token, the header,
 the SDK's error, the `sub` or the email — because `logRequest` writes it into a `reason` field and
 redaction matches key paths, never text.
+
+### The gate says who you are. Nothing yet asks whose shelf this is
+
+**This needs a decision from Greg before the work is deployed, and it was not on the table when the
+allowlist was dropped.**
+
+`currentOwnerId()` at `src/owner.ts:71` reads one process-wide `SPIDERYARN_OWNER_ID`, and its own
+docstring says the Postgres reads do not filter by owner — *"When the gate lands this gains a
+request argument and the constant goes."* This is that moment, and this plan does not do it.
+
+So the deployed result of building exactly what is written here is: **anyone with a Google account
+signs in and gets Greg's shelf** — his articles, his reading positions, his profile, his chats, his
+searches — with the ability to rename and archive them.
+
+That is not what was decided. The decision was:
+
+> We can get rid of the allowlist once we've added authentication. I'll accept the risk
+>
+> — Greg, 2026-08-26
+
+and the risk that was put to him, twice and in writing, was **model spend**:
+[auth-supabase.md § Who gets in](auth-supabase.md#who-gets-in) says "what that buys them is the
+ingest pipeline and `ANTHROPIC_API_KEY`". It does not say "and everything you have ever read". A
+decision made on one set of facts is not consent to a different one, so this goes back to him
+rather than through.
+
+Three ways out, and they are not equally sized:
+
+1. **Put the allowlist back for this release.** One line in `isAllowed`, which exists as a function
+   precisely so this is an edit in one place. Ship the gate, decide the rest later.
+2. **Scope the data properly** — thread `claims.sub` through `currentOwnerId` and every owner-scoped
+   read and write. This is the right end state, it is what the schema was built for
+   ([Appendix C](auth-supabase.md#appendix-c-owner_id-rls-and-the-second-person)), and it is
+   its own piece of work rather than a corner of this one.
+3. **Decide the shelf is shared and say so out loud** in
+   [security.md](../project/security.md) and [deployment.md](../project/deployment.md). Defensible
+   while nothing private is in it; indefensible silently.
+
+**Recommendation: (1) now, (2) next.** It costs one line, it does not reopen the decision Greg made
+about who *should* eventually get in, and it means the answer to "who can read my library" is not
+"whoever finds the URL" during the window where nobody has thought about it yet. GPT Sol raised it;
+verified by reading `src/owner.ts` and grepping the Postgres store for an owner filter, which has
+none.
 
 ### Health must be fixed before it can be an exemption
 
@@ -317,6 +492,21 @@ Before "the gate covers everything except health" is a true sentence: **GET and 
 everything else; the POST body diagnostic behind auth or a deployment secret and capped; and a
 generic body for an import failure with the stack going to the log.** Found by GPT Sol on the
 previous plan, confirmed by reading the file, still true today.
+
+**"Health hardening" must explicitly include `api/index.js`, not just `src/vercel-health.ts`.**
+The import-failure branch at `api/index.js:43` returns the failure to the caller behind this comment:
+
+> Everything here is behind the deployment's login wall, so the stack is not being handed to
+> strangers.
+
+That sentence is **false**, and measurably so — `spideryarn-greg-detre.vercel.app` answered an
+unauthenticated `curl` today. Fix the comment along with the code, because the comment is why nobody
+looked.
+
+And note what stays public even after all that: an unauthenticated GET still **reads the database**
+(`listArticles` for the article count) and returns environment-variable names, Node version, region
+and commit SHA. That is a deliberate trade — the endpoint has to work when the app does not — but
+it is a database round trip anyone can ask for in a loop. Cache the count for a minute, or drop it.
 
 ---
 
@@ -453,14 +643,44 @@ with **no `headers`**, so `req.headers.authorization` throws on `undefined` in e
 and adding `headers: {}` converts the whole file from "throws" to "401" — which is worse, because it
 still looks like a test suite.
 
-Four additions this plan makes to that list:
+**And it is six harnesses, not one.** `tests/routes.test.ts` is the one the previous plan named;
+`grep -rln handleApi tests/` finds six files driving it with hand-built requests, and four of them
+set no `headers` at all:
+
+```
+tests/routes.test.ts             tests/chat-route.test.ts
+tests/chat-anchor-route.test.ts  tests/chat-live-turn.test.ts
+tests/store-wiring.test.ts       tests/vercel-url.test.ts
+```
+
+So the injected verifier is not a convenience for one file — it is the only way six suites keep
+being about what they are about. Give each an authenticated default.
+
+**One test in the old list is impossible and must go.** "A correctly signed token for the wrong
+email → 403" cannot pass while `isAllowed` returns true for everyone. Either the allowlist comes
+back — see [§ whose shelf this is](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is),
+which is the open question — and the test is real, or it does not and the test is a fiction that
+would be written to pass. Do not keep a test whose subject does not exist.
+
+Additions this plan makes:
 
 | Test | Why |
 |---|---|
-| No `href` in `src/web/` starts with `/api/` | The `<a>` that cannot carry a token. A grep, and the only thing that catches the third one |
-| `/auth/callback?code=X` never leaves `code=X` inside an `/add/` path | Tests the rewrite exemption by its consequence rather than by its presence |
-| No `VITE_*` variable, and no string in `dist/`, matches `sb_secret_`/`service_role` | Guards the bundle. Run against the built output, not the source |
+| No `href` in `src/web/` starts with `/api/` | The `<a>` that cannot carry a token. Catches *our* third one, not an article's |
+| Sanitised article HTML drops same-origin `/api/` in `href`, `src`, `srcset`, `<source>`, SVG | The class a grep cannot see |
+| The four callback tests | [above](#the-tests-that-follow-from-that) — success, exchange failure, denial, missing verifier |
+| `apiFetch`: header merging, exactly one retry, body and signal preserved, refresh failure, cross-origin refused | The seam every other request goes through, tested directly rather than through a route |
+| `useProfile` flush on a slow `getSession()` still leaves | The `pagehide` save the token lookup can eat |
+| No `VITE_*` variable, and nothing in the **deployed** bundle, is a secret-shaped key | Guards the bundle — and see below, because the obvious version of this check is broken |
 | `requireUser` commented out → the no-header test goes red | The gate's own [check-against-the-broken-state](../reusable/silent-success.md). Do it by hand once, and write down the pair of results |
+
+**The bundle check as first written does not work**, in two ways, and both are the house speciality.
+`grep -rc "sb_secret_\|service_role" dist/` prints a count per file and **exits 1 when it finds
+nothing** — so the passing case looks like a failure and the failing case looks like a pass, in a
+checklist read by eye. And a legacy service-role key does not contain the string `service_role` in
+the clear: it is a JWT, and the role is inside the base64 payload. So the check must decode
+JWT-shaped strings, and it must run against **assets downloaded from the deployment**, not against
+whatever `dist/` this laptop last built.
 
 **Note the tree is shared and is not reliably green.** Establish which failures are yours by running
 `npm test` before and after your change, not by reading one run.
@@ -513,18 +733,58 @@ Alternatively, create a **personal access token** at
 `SUPABASE_ACCESS_TOKEN`, and this can be done from the terminal instead — including reading it back
 to check it took.
 
-### 3. Nothing else
+### 3. One decision, not a click
+
+[§ whose shelf this is](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is) — signing
+in without owner-scoped data means any Google account gets *your* library, not just your API budget.
+That is a different fact from the one the no-allowlist decision was made on. One line either way,
+and it is yours.
 
 The Vercel variables can be set from here with `vercel env add`. Say the word.
 
 ---
 
+## What has to be true before this is promoted
+
+The plan used to say "nothing else", which was wrong: authentication landing on a deployment that
+cannot read its own database gives a site you can sign into and not use. **These are prerequisites
+for promotion, not follow-ups.**
+
+| | |
+|---|---|
+| `DATABASE_URL` set on Vercel | Not set today. Without it every API call fails after a successful sign-in |
+| Remote database has schema, owner and articles | [deployment.md:373](../project/deployment.md) — still outstanding, and not this plan's work |
+| `NODE_OPTIONS` on **Preview** | So a preview build can be used to check this at all |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Compiled in. Missing → `supabase.ts` throws at module load → **a blank page** |
+| Google redirect URI registered | Otherwise every sign-in is `redirect_uri_mismatch` |
+| Google enabled on the remote project | `"google": false` today |
+| Supabase redirect allow-list, with `/**` | Otherwise the callback is refused |
+
+### The release fence
+
+**A push to `main` deploys.** ([deployment.md](../project/deployment.md).) So the order is not a
+preference:
+
+1. Set every variable above, on Preview *and* Production.
+2. `vercel deploy` — a **preview**, not a push. Check sign-in against it end to end.
+3. Only then push to `main`, or promote that exact deployment.
+
+Get this backwards and the failure is not subtle: the gate is live, the client throws on load, and
+the site is a blank page nobody — Greg included — can sign into. The deliberate throw on a missing
+`VITE_*` is right, and it is exactly what makes the order matter. GPT Sol.
+
+---
+
 ## The order to build it
 
-1. **Greg's two dashboards** — in parallel with everything below. Only blocks the last step.
-2. **Scaffolding, safe to commit alone:** `npx shadcn add input label`, the Google asset,
-   `scripts/check-google-redirect.sh`, the `VITE_*` variables locally, `/api/health` hardening.
-   *(1 hour)*
+0. **Greg decides whether the allowlist comes back**
+   ([§ whose shelf this is](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is)).
+   One line, and it changes what step 3 has to be true about.
+1. **Greg's two dashboards** — in parallel with everything below. Blocks promotion, not building.
+2. **Scaffolding, safe to commit alone:** `npx shadcn add input label`, the Google asset, the
+   `/**` redirect entries in `supabase/config.toml`, the `VITE_*` variables locally,
+   `/api/health` **and `api/index.js`** hardening, the `/api/` audit in the sanitiser.
+   *(2 hours)*
 3. **The vertical commit.** Client singleton, session hook, `apiFetch` and all 31 call sites, the
    two `<a>`s, `/login` and `/auth/callback`, the sign-in screen, sign-out on `/profile`,
    `requireUser` inside `handleApi`, and the tests. *(a day)*
@@ -532,8 +792,9 @@ The Vercel variables can be set from here with `vercel env add`. Say the word.
    [browser-testing.md](../project/browser-testing.md) first.
 5. **GPT Sol on the built code**, weighted higher than the review of this plan, because a plan-stage
    review cannot see a call site that was missed.
-6. **Production.** Vercel variables, confirm `main` builds, deploy, then the checklist below from
-   *outside* — a different network, signed out.
+6. **Production**, in the order the [release fence](#the-release-fence) sets: every variable and
+   dashboard first, then a **preview** deployment checked end to end, and only then a push to
+   `main`. Then `./scripts/check-production-gate.sh` from outside, signed out.
 7. **Docs.** [auth.md](../project/auth.md) stops being a stub;
    [security.md](../project/security.md) gains the health note and the sentence that the gate admits
    anyone with a Google account; [deployment.md](../project/deployment.md) gains the `VITE_*` row and
@@ -548,23 +809,26 @@ spends the Anthropic key, and a gate that appears to be there does not get finis
 
 ## The production checklist
 
-Run from outside, signed out, on both hostnames. **Every line has an expected answer; a line without
-one is not a check.**
+`scripts/check-production-gate.sh`, run from outside and signed out. It takes both hostnames by
+default, because "check both" in prose gets done once.
 
 ```bash
-H=https://spideryarn-greg-detre.vercel.app
-
-curl -s -o /dev/null -w "%{http_code}\n" $H/                # 200 — the app still loads
-curl -s $H/api/library                                      # {"error":"…"} 401, NOT a shelf
-curl -s -X POST $H/api/jobs -H 'content-type: application/json' \
-     -d '{"url":"https://example.com"}'                     # 401, NOT 202
-curl -s $H/api/health | head -c 200                         # still answers; ok:true once DATABASE_URL is set
-curl -s -X DELETE $H/api/health                             # 405
-grep -rc "sb_secret_\|service_role" dist/                    # 0
+./scripts/check-production-gate.sh
 ```
 
-And the one that is not a curl: **sign in with Google in a browser you are not already Greg in**,
-and confirm the reader lands back where they started rather than on the shelf.
+Every line **asserts a status or a body**, which the first draft of this section did not:
+
+| Checked | Because the obvious version is wrong |
+|---|---|
+| `GET /` is 200 **and not** Vercel's failure page | "Deployment has failed" is also a 200. The branch alias served exactly that today |
+| `GET /api/library` is **401** | Printing the body proves nothing — a shelf and a refusal look alike at a glance |
+| `POST /api/jobs` is **401** | The one that is 202 today |
+| `/api/health` says `"ok":true` | The endpoint is allowed to answer `ok:false`; "it responded" is not the check |
+| `DELETE /api/health` is **405** | The unbounded body read |
+| The **served** JS carries no secret-shaped key | Downloaded from the deployment, not read from a local `dist/`. JWT-shaped strings are decoded, because a legacy service-role key does not spell `service_role` in the clear |
+
+And the one that is not a script: **sign in with Google in a browser you are not already Greg in**,
+and confirm you land back where you started rather than on the shelf.
 
 ---
 
@@ -580,9 +844,53 @@ and confirm the reader lands back where they started rather than on the shelf.
   Supabase `sub` is `f4d08b58-5573-4811-9887-e26c114fb324` and every local article is stamped with
   `DEV_OWNER_ID` `00000000-0000-4000-8000-000000000001`. One `UPDATE`, and it is
   [Appendix C](auth-supabase.md#appendix-c-owner_id-rls-and-the-second-person) rather than this.
+- **Whose shelf.** The one that needs Greg, and the one this plan will not decide for him:
+  [§ The gate says who you are](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is).
+- **The SDK on the server**, 7MB of `node_modules` to verify a signature:
+  [§ The server-side cost](#the-server-side-cost-of-the-sdk-which-nobody-has-weighed). Ship it,
+  measure it, and only then consider the sixty hand-written lines.
 - **Whether `/login` should exist as a route at all**, given the screen is a whole-app gate. It falls
   out of the callback work for free and Appendix A's password-reset landing needs one, so the answer
   is probably yes — but nothing in v1 links to it.
+
+---
+
+## The cross-family review, and what it changed
+
+Ran 2026-08-26 (GPT Sol, high effort, read-only). The full answer is at
+[auth-ui-and-production-review-sol.md](auth-ui-and-production-review-sol.md). Its verdict on the
+first draft was **"not safe to build as written"**, and it was right.
+
+**Every finding below was checked here before being acted on**, as [AGENTS.md](../../AGENTS.md)
+requires — five of them by reading the file it named, one by running a command.
+
+| Finding | Verified how | What changed |
+|---|---|---|
+| Production stays unusable: `DATABASE_URL` unset, and the plan said "nothing else" | `vercel env ls` — no `DATABASE_URL` | [§ What has to be true before this is promoted](#what-has-to-be-true-before-this-is-promoted), and the [release fence](#the-release-fence) |
+| Local Supabase allows two exact roots, not `/auth/callback` | `supabase/config.toml:203` | `/**` entries, before the browser pass |
+| `onAuthStateChange` never sees a failed code exchange | Read `GoTrueClient.js:376` — `_initialize` `_debug`-logs and `return { error }`, notifying nobody | The callback component reads the URL itself; four tests, not one |
+| `startsWith("/")` accepts `//evil.example` | Known open-redirect shape | `new URL(v, origin).origin` check, TTL, delete-before-navigate |
+| Every signed-in user gets the same shelf | `src/owner.ts:71` is process-wide; no owner filter in the pg store | [§ whose shelf this is](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is) — **back to Greg** |
+| Article HTML can carry `/api/` in `img`/`href` | `tests/sanitize.test.ts:77` pins that `<img src="/d.png">` survives | [§ The third class](#the-third-class-an-article-can-link-to-our-api) |
+| `apiFetch` breaks the `pagehide` profile save | `src/web/useProfile.ts:110` already sets `keepalive` — the new `await` is what breaks it | An immediate path for the leaving case |
+| Six test harnesses drive `handleApi`, not one | `grep -rln handleApi tests/` | All six named; injected verifier for each |
+| "Wrong email → 403" cannot pass while `isAllowed` is always true | Read both | Test deleted rather than written to pass |
+| JWKS unreachable should be 503, not 401 | Carried over from the first review, never folded in | Folded in |
+| `api/index.js:43` publishes a stack behind a comment claiming a login wall | The comment; and an unauthenticated `curl` | Named explicitly in the hardening work |
+| `grep -rc` exits 1 on no match; `service_role` is inside the JWT payload | Ran it: `exit=1` | The bundle check decodes, and reads the **served** assets |
+| The checklist observed rather than asserted | — | Replaced by `scripts/check-production-gate.sh`, which fails today |
+| `window.open` drops the anchor's `noopener`; `sendSource` is filesystem-only | `src/routes.ts:143` | Both written down |
+
+**One thing it got slightly wrong, and it does not matter.** It said the redirect probe has no
+control line and no `UNKNOWN` branch. It was reading the abbreviated snippet in this document; the
+script had both. Its underlying point stood anyway — the `UNKNOWN` branch exited 0, and a rejected
+URI also exited 0, so the check could not fail a caller. Both fixed, and both tested in the failing
+direction.
+
+**What it did not change.** The gate's placement inside `handleApi`'s `try` was reviewed again and
+found sound, and it confirmed there is no application-handler fail-open once it is there:
+`OPTIONS` and `HEAD` do not slip past, duplicate `__spy_path` is refused, and the SPA fallback
+reaches no data.
 
 ---
 

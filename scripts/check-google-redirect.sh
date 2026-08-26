@@ -54,21 +54,46 @@ probe () {
         | sed -n 's/.*authError=\([^&]*\).*/\1/p' \
         | tr '_-' '/+' | base64 -d 2>/dev/null | tr -cd '[:print:]' \
         | sed -n 's/^[^a-z]*\([a-z_]\{4,\}\).*/\1/p')
-      printf 'REJECTED  %-60s (%s)\n' "$uri" "${reason:-unknown}" ;;
+      printf 'REJECTED  %-60s (%s)\n' "$uri" "${reason:-unknown}"
+      rejected=$((rejected+1)) ;;
     */signin/identifier*|*/signin/v2/*|*/signin/oauth/consent*)
       printf 'ACCEPTED  %-60s\n' "$uri" ;;
+    "")
+      printf 'UNKNOWN   %-60s (curl reached nothing — network? proxy?)\n' "$uri"
+      unknown=1 ;;
     *)
-      printf 'UNKNOWN   %-60s -> %s\n' "$uri" "$final" ;;
+      printf 'UNKNOWN   %-60s -> %s\n' "$uri" "$final"
+      unknown=1 ;;
   esac
 }
+
+# An UNKNOWN is not a pass. A check that shrugs and exits 0 is the thing this
+# whole file is a reaction to.
+unknown=0
+# Rejections among the URIs you ASKED about (the control is probed separately,
+# before this is armed, so its own REJECTED never counts here).
+rejected=0
 
 echo "--- control (must say REJECTED, or ignore everything below) ---"
 control_line=$(probe "$CONTROL")
 echo "$control_line"
 echo "--- the ones you asked about ---"
+rejected=0
 for u in "${URIS[@]}"; do probe "$u"; done
 
 case "$control_line" in
-  REJECTED*) exit 0 ;;
+  REJECTED*) ;;
   *) echo; echo "The control was not rejected. This check is not working; do not trust it." >&2; exit 1 ;;
 esac
+
+if [ "$rejected" -ne 0 ]; then
+  echo; echo "$rejected of the URIs you asked about are NOT registered with this Google client." >&2
+  echo "Add them at https://console.cloud.google.com/apis/credentials — see docs/plans/auth-ui-and-production.md" >&2
+  exit 1
+fi
+
+if [ "$unknown" -ne 0 ]; then
+  echo; echo "At least one URI gave an answer this script does not understand. Look at it." >&2
+  exit 1
+fi
+exit 0
