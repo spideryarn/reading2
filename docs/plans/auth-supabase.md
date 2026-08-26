@@ -7,7 +7,7 @@
 | `@supabase/supabase-js@^2.112.4` | **installed** |
 | The Google credentials, under Supabase's own variable names in `.env.local` | **done** |
 | `[auth.external.google]` in `supabase/config.toml`, and a stack restart | **done** — `/auth/v1/settings` now reports `google: true` |
-| `http://127.0.0.1:54361/auth/v1/callback` registered on the Google OAuth client | **done** — it was rejected with `redirect_uri_mismatch` an hour earlier; the check now returns 0. Still to do on the remote project: [step 0](#step-0-what-greg-has-to-click-10-minutes-and-nobody-else-can-do-it). |
+| `http://127.0.0.1:54361/auth/v1/callback` registered on the Google OAuth client | **not done, and blocking.** A real browser sign-in dies on Google's `Error 400: redirect_uri_mismatch`. See [step 0](#step-0-what-greg-has-to-click-10-minutes-and-nobody-else-can-do-it) — and read [§ The check that could not fail](#the-check-that-could-not-fail) before trusting any command in this document. |
 | Everything in the app — client, gate, screen, tests | **not started** |
 | **A cross-family review** | **could not run.** See [§ The review that did not happen](#the-review-that-did-not-happen). |
 
@@ -188,19 +188,62 @@ turned on locally, `/auth/v1/authorize?provider=google` 302s to Google carrying
 `redirect_uri=http%3A%2F%2F127.0.0.1%3A54361%2Fauth%2Fv1%2Fcallback`. That, character for character,
 is what has to be registered.
 
-**And you can check it from a terminal, without a browser.** Follow the redirect to Google and see
-whether it bounces you to its error page:
+**And you can check it from a terminal, without a browser** — but only if the check follows the
+redirect chain, and the obvious version of it does not. See
+[§ The check that could not fail](#the-check-that-could-not-fail) below; this is the corrected one:
 
 ```bash
 U=$(curl -s -o /dev/null -w "%{redirect_url}" "http://127.0.0.1:54361/auth/v1/authorize?provider=google")
-curl -s "$U" | grep -c redirect_uri_mismatch     # 0 = Google accepts it. 1 = not registered yet.
+L=$(curl -s -o /dev/null -w "%{redirect_url}" "$U")
+python3 -c '
+import sys, base64, re, urllib.parse
+e = urllib.parse.parse_qs(urllib.parse.urlparse(sys.argv[1]).query).get("authError", [""])[0]
+if not e:
+    print("ACCEPTED - Google did not reject the redirect_uri")
+else:
+    raw = base64.urlsafe_b64decode(e + "=" * (-len(e) % 4)).decode("utf8", "replace")
+    m = re.search(r"[a-z][a-z_]{6,}", raw)
+    print("REJECTED -", m.group(0) if m else "reason not readable")
+' "$L"
 ```
 
-Run on 2026-08-26 before the URI was added this printed **1**, and after it printed **0** — so the
-check discriminates, which is the only property that makes it worth having. It is genuinely
-blocking rather than a formality: without it, nothing downstream can work and the failure arrives
-as a Google error page rather than as anything our code could report. Google can take a few minutes
-to propagate a new URI, so re-run a couple of times before concluding anything.
+Two hops, because there are two: GoTrue 302s to Google, and *Google* 302s to its error page. The
+reason is base64 in the `authError` parameter of that second redirect, wrapped in protobuf framing
+and localised prose — hence the decode. On 2026-08-26 this prints
+`REJECTED - redirect_uri_mismatch`, which is also exactly what a browser sign-in shows.
+
+Google can take a few minutes to propagate a new URI, so re-run a couple of times before concluding
+anything.
+
+### The check that could not fail
+
+The first version of that check was one line:
+
+```bash
+curl -s "$U" | grep -c redirect_uri_mismatch     # 0 = accepted, 1 = rejected  ← WRONG
+```
+
+**It returns 0 whatever is true**, because `curl` without `-L` fetches the *body of a 302*, and the
+body of a 302 is a stub containing a link — never the error page. The word it greps for is in the
+`Location` header of the next hop, base64-encoded, where `grep` was never going to see it.
+
+It was worse than a wrong answer, because it was reported as evidence twice. The first run, against
+an unregistered URI, printed the rejection in a *different* command's `-w "location=…"` output, and
+that was misread as the grep matching. From then on the check "returned 0", which was read as "the
+URI got registered" — and that was written into this plan's status table, and told to Greg. The
+browser was what disagreed, on the actual sign-in, with `Error 400: redirect_uri_mismatch` naming
+the same URI.
+
+Three things worth carrying, and they are the whole of
+[silent-success.md](../reusable/silent-success.md) in one afternoon:
+
+- **A check that has never been seen to fail has not been tested.** The fix is to run it against the
+  broken state *first*, deliberately, and watch it say so. "It agrees with what I hoped" is not the
+  same evidence as "it can tell the two apart".
+- **`grep` over `curl` output silently changes what it is looking at** the moment a redirect appears
+  between you and the page. `-L`, or read the `Location` yourself — but decide which.
+- **The browser was right and the terminal was wrong.** When a cheap proxy for a test disagrees with
+  the real thing, the real thing wins, and the proxy is the bug.
 
 **In the Supabase dashboard** for `alschkahzfagtppxspfq` → Authentication → Sign In / Providers →
 Google: enable it, paste the same client id and secret. (The dashboard shows you its callback URL —
