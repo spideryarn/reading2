@@ -35,6 +35,7 @@ import {
   wrapText,
 } from "../src/web/diagram.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
+import { siblingRuns } from "../src/web/DiagramPanel.js";
 
 /**
  * A `SummaryNode` by hand.
@@ -423,5 +424,38 @@ describe("the three pictures, against the real example article", () => {
       const layout = layoutDiagram(kind, real, { width: 320, height: 700, collapsed: NONE });
       for (const n of layout.nodes) expect(n.depth).toBeLessThanOrEqual(MAX_DRAWN_DEPTH);
     }
+  });
+});
+
+/**
+ * `aria-setsize` and `aria-posinset` — the two numbers a flat SVG has to state
+ * because its markup cannot imply them.
+ *
+ * Worth a test rather than a glance: they are read off preorder rather than off
+ * the tree, so an off-by-one here says "section 3 of 8" to a screen reader while
+ * the picture plainly shows the second of three, and nothing on screen changes.
+ */
+describe("siblingRuns", () => {
+  it("counts each node among its own siblings, not among its level", () => {
+    const { nodes } = layoutStrata(fixture(), OPTS);
+    const runs = siblingRuns(nodes);
+    const of = (id: string) => runs[nodes.findIndex((n) => n.id === id)];
+
+    expect(of("root")).toEqual({ size: 1, pos: 1 });
+    expect(of("a")).toEqual({ size: 2, pos: 1 });
+    expect(of("b")).toEqual({ size: 2, pos: 2 });
+    /* The one that a naive "count everything at this depth" gets wrong: a1 and
+       a2 are two of TWO, not two of the four depth-2 nodes in the article. */
+    expect(of("a1")).toEqual({ size: 2, pos: 1 });
+    expect(of("a2")).toEqual({ size: 2, pos: 2 });
+    expect(of("b1")).toEqual({ size: 2, pos: 1 });
+  });
+
+  it("counts a closed parent's siblings without counting its hidden children", () => {
+    const { nodes } = layoutStrata(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
+    const runs = siblingRuns(nodes);
+    const of = (id: string) => runs[nodes.findIndex((n) => n.id === id)];
+    expect(of("a")).toEqual({ size: 2, pos: 1 });
+    expect(of("b1")).toEqual({ size: 2, pos: 1 });
   });
 });

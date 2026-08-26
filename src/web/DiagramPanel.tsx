@@ -200,6 +200,11 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump }: Props) {
      closed section rather than vanishing. */
   const here = useMemo(() => nodeAt(layout?.nodes ?? [], atRow), [layout, atRow]);
 
+  /* `aria-setsize` / `aria-posinset` for every node, computed once per layout
+     rather than twice per node per render — the walk is O(n) each and there are
+     sixty of them. */
+  const runs = useMemo(() => siblingRuns(layout?.nodes ?? []), [layout]);
+
   /* What the reader is *pointing at*, whether with the pointer or the keyboard.
      Kept apart from `shown` below: this drives the `.on` highlight, and folding
      `here` into it would put the hover highlight and the you-are-here ring on
@@ -392,8 +397,8 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump }: Props) {
                 here={n.id === here}
                 focused={n.id === picked}
                 tabstop={n.id === rovingId}
-                setSize={sizeOfLevel(layout.nodes, i)}
-                posInSet={positionInLevel(layout.nodes, i)}
+                setSize={runs[i]?.size ?? 1}
+                posInSet={runs[i]?.pos ?? 1}
                 onJump={onJump}
                 onHover={setHover}
                 onRove={setRoving}
@@ -455,12 +460,9 @@ function siblingRun(nodes: readonly DiagramNode[], i: number): { size: number; p
   return { size, pos };
 }
 
-function sizeOfLevel(nodes: readonly DiagramNode[], i: number): number {
-  return siblingRun(nodes, i).size;
-}
-
-function positionInLevel(nodes: readonly DiagramNode[], i: number): number {
-  return siblingRun(nodes, i).pos;
+/** `siblingRun` for every node in one pass, so a render is not O(n²). */
+export function siblingRuns(nodes: readonly DiagramNode[]): { size: number; pos: number }[] {
+  return nodes.map((_, i) => siblingRun(nodes, i));
 }
 
 /**
