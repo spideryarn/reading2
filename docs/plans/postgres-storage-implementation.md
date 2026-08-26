@@ -48,8 +48,8 @@ Legend: ✅ done · 🔵 in progress · 📐 designed, not built · ⬜ not star
 | 8 | Artefact manifest test — the guard against the next file | ✅ |
 | 9 | Comments — writes | ✅ |
 | 9b | Shelf state — archive, rename, opens — and library-wide search | ✅ **added 2026-08-26**, both adapters. See [library-shelf-actions-and-search.md](library-shelf-actions-and-search.md) |
-| 10 | Chat, searches, glossary lookups — writes | 🔵 **stores built and reviewed 2026-08-26; not yet wired into `src/routes.ts`.** All three adapters exist on both sides, with a scripted parity sequence and the two criticals from the design review applied — then [a second review of the built code](#what-the-review-found-in-the-built-step-10) found two more races and four tests that passed for bad reasons. Those are fixed. **What is left is the wiring**, plus `lookUpTerm` moving out of `src/api.ts`; `deleteGlossary` stays 501 by construction |
-| 11 | Pipeline writes to draft revisions (+ carry-forward) | 🔵 **half B stages 1–4 built 2026-08-26** (`39b9892`, `fa3945c`): the artefact store, the file adapter, `produces` beside `outputs` with an agreement test, and `stepIsDone` taking a store — `has()` now **parses** rather than `stat`s, which closes the truncation hazard for the five steps that had no freshness check. **Then [a review of the built code](#what-the-review-of-the-built-seam-found) found three criticals, none yet fixed** — a mixed generation still reports done, `extractedHtml`/`stampedHtml` are indistinguishable on disk, and the `store` argument defaults to the filesystem. **Half A (carry-forward and publication) is designed, not started**, and needs the one schema migration |
+| 10 | Chat, searches, glossary lookups — writes | 🔵 **stores built and reviewed 2026-08-26; not yet wired into `src/routes.ts`.** All three adapters exist on both sides, with a scripted parity sequence and the two criticals from the design review applied — then [a second review of the built code](#what-the-review-found-in-the-built-step-10) found two more races and four tests that passed for bad reasons. Those are fixed. **The wiring was started 2026-08-26 evening and is uncommitted** — `src/routes.ts`, `src/store/index.ts`, `src/term-lookup.ts` and three new test files, with one unused-import typecheck error still in `routes.ts`. `deleteGlossary` stays 501 by construction. See [where this stopped](#where-this-stopped-2026-08-26-evening) |
+| 11 | Pipeline writes to draft revisions (+ carry-forward) | 🔵 **half B stages 1–4 built 2026-08-26** (`39b9892`, `fa3945c`): the artefact store, the file adapter, `produces` beside `outputs` with an agreement test, and `stepIsDone` taking a store — `has()` now **parses** rather than `stat`s, which closes the truncation hazard for the five steps that had no freshness check. Then [a review of the built code](#what-the-review-of-the-built-seam-found) found three criticals; **all three are fixed** (`8d751c1`, `b541557`) — see [what was fixed and the two choices inside it](#what-was-fixed-and-the-two-choices-inside-it). The store now records the *attempt* as well as the output, `blocks` checks that the HTML really carries its ids, and the store argument is required. **Half A (carry-forward and publication) was started 2026-08-26 evening and is uncommitted** — `drizzle/0010_job_owned_draft_and_fixture.sql` (generated and applied locally), `src/store/pg-revisions.ts`, `tests/store-revision-policy.test.ts`. See [where this stopped](#where-this-stopped-2026-08-26-evening) |
 | 12 | Jobs and claiming | ⚠️ **superseded 2026-08-26 — do not build what is below.** [job-queue-rethink.md](job-queue-rethink.md) replaced the autonomous queue with a **browser-driven advance endpoint**, on Greg's *"whichever's easiest"*: a queue library gives you a queue, not durable compute, and Vercel has no worker. Surviving from the old design: the attempt token, the **fenced output write**, a job-owned draft, and the single-running-step rule. Also found there: **ingest does not currently work on Vercel**, independent of all of this |
 | 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ Two decisions now made: the `example` fixture **goes in, marked as one** (a `fixture boolean` on `articles`, the directory staying on disk), and an unknown slug **404s** — the files side comes up to Postgres, not the reverse. Both in [postgres-migration.md § Open questions](postgres-migration.md#open-questions). The importer's reconciliation direction **reverses here**, and that is the reason this is a step rather than a flag flip |
 
@@ -98,11 +98,11 @@ step rather than a flag flip.
 Written down because by 2026-08-26 evening the answer was spread across five sections and three
 documents, and several agents work this tree at once.
 
-1. **Fix the three criticals in the built seam.** [What the review of the built seam
-   found](#what-the-review-of-the-built-seam-found). Start with the red test: leave a complete old
-   generation, replace exactly one of a step's outputs, assert the step reports **not** done. Today it
-   reports done. Nothing else in step 11 should be built on top until that is settled, because the
-   whole seam rests on "the store can tell you whether a step really finished".
+1. ~~**Fix the three criticals in the built seam.**~~ **Done 2026-08-26** — see [What was fixed, and
+   the two choices inside it](#what-was-fixed-and-the-two-choices-inside-it). The red
+   test the item asked for is `tests/pipeline-artifact-store.test.ts` § *"catches a generation half-
+   replaced by a run that died"*, and it was watched red before the fix. Six of the smaller findings
+   went with it; two are named there as belonging to other owners.
 2. **Wire step 10 into `src/routes.ts`**, and move `lookUpTerm` out of `src/api.ts`. The three stores
    exist, are reviewed twice and are still unreachable — which is the most dangerous state in this
    table, because the work looks done from the file list. `deleteGlossary` stays 501 until step 11
@@ -125,6 +125,45 @@ documents, and several agents work this tree at once.
 work on Vercel — `enqueue` starts a floating promise, there is no `waitUntil`, and the function is
 capped at 300 seconds. [deployment.md](../project/deployment.md) lists it as knowingly broken; the
 advance endpoint is what fixes it properly.
+
+## Where this stopped, 2026-08-26 evening
+
+Three agents were working this plan in parallel and all three stopped at once on a session limit,
+with GPT Sol out of credits at the same time, so **none of the three reviews that should have run
+did**. What follows is the honest state rather than a summary of intent.
+
+**Committed and tested:** the three seam criticals and the six smaller findings (`8d751c1`), and the
+cancel-ordering fix that stops a stopped job re-buying a model call it already paid for
+(`b541557`).
+
+**Written, not committed, not verified:**
+
+| What | Files | What is known about it |
+|---|---|---|
+| Step 10 wiring | `src/routes.ts`, `src/store/index.ts`, `src/store/fs.ts`, `src/chat.ts`, `src/searches.ts`, `src/term-lookup.ts`, `tests/term-lookup.test.ts`, `tests/store-wiring.test.ts`, `tests/chat-edit-guard.test.ts` | One typecheck error left: `readerStore` declared and unused in `routes.ts`. `tests/store-not-migrated.test.ts` was rewritten because it pinned the 501 scaffolding this step deletes |
+| Step 11 half A | `drizzle/0010_job_owned_draft_and_fixture.sql`, `src/db/schema.ts`, `src/store/pg-revisions.ts`, `tests/store-revision-policy.test.ts` | The migration is generated **and applied to the local stack**. It adds `articles.fixture` and `jobs.draft_revision_id` with its FK and partial unique index |
+
+**Two things about the schema that will bite whoever picks this up.** They were reported by the
+agent that hit them, not inferred:
+
+1. **The "one migration writer at a time" rule did not hold.** Three agents touched
+   `src/db/schema.ts` in the same hour. `drizzle-kit generate` diffs the *whole* schema against the
+   last snapshot, so an unrelated column in flight gets swept into your migration whether you want it
+   or not — leaving it out is worse, because the schema would then declare a column the database does
+   not have. `search_runs.source_hash` went out as `0009`; half A's is `0010`.
+2. **`articles.purpose` is declared in `schema.ts` and is not in the database.** The reader-profile
+   work added the column and the `reader_profiles` table without a migration, so every
+   `select … from articles` through Drizzle now fails against the local stack. That is what the
+   Postgres-store test failures are, and they look like everybody's bug rather than one agent's.
+
+**Also uncommitted, and not mine:** all three prompt versions moved in one afternoon —
+`glossary/3`, `summary/3`, `tweets/2`. That turned five tests in
+`tests/pipeline-artifact-store.test.ts` red for a reason unrelated to what they test, because the
+fixture pinned the versions as literals. The fix is in the working tree: `tweets.ts` and
+`summarise.ts` now `export` their `PROMPT_VERSION` the way `glossary.ts` already did, and the fixture
+imports all three. It is deliberately **not committed**, because committing it would sweep 120 lines
+of somebody else's live prompt rewrite in under this message. Whoever commits the prompt bump should
+take those three files with it.
 
 ### Step 0 — done
 
@@ -403,26 +442,28 @@ Two things Sol did **not** find, both turned up while checking its work:
 > `routes.ts` — which is this step, not a stopgap — or put the refusal inside `src/chat.ts` and
 > `src/searches.ts` themselves.
 >
-> **The refusal was taken, 2026-08-26**, and the wiring deliberately was not. `save()` in each of
-> those two modules now throws the same 501 the store's `notMigrated` throws, so the reader gets one
-> answer whichever door the call came through. It is on `save` because every write in each module
-> funnels through it, and because it fires *before* the model call rather than after it. Held by
-> `tests/store-not-migrated.test.ts`, and marked in both files as scaffolding this step deletes.
+> **The refusal was taken first; the wiring that deletes it was written the same day and is still
+> uncommitted** — see [where this stopped](#where-this-stopped-2026-08-26-evening). For a few
+> hours `save()` in each module threw the same 501 the store's `notMigrated` throws — on `save`
+> because every write in each module funnels through it, and because it fires *before* the model call
+> rather than after. Then this step landed, `chatStore` and `searchStore` went into
+> `src/store/index.ts`, routes.ts started calling them, and both guards came out.
 >
-> Two things came with it and are worth knowing:
+> Two things from the interim outlived it, and one of them is the more useful half:
 >
-> **The flag had to move to a leaf module**, `src/store/live.ts`. `index.ts` imports `fs.ts`, which
-> imports `chat.ts` and `searches.ts` — so those two asking `index.ts` which store is live is a
-> cycle, and `npm run check` gates on cycles. `STORE`, `storeFromEnv` and the 501 live there now, and
-> `index.ts` re-exports them so no caller has to know.
+> **The flag is in a leaf module**, `src/store/live.ts`, and stays there. `index.ts` imports
+> `fs.ts`, which imports `chat.ts` and `searches.ts` — so those two asking `index.ts` which store is
+> live is a cycle, and `npm run check` gates on cycles. `STORE`, `storeFromEnv` and the 501 live
+> there; `index.ts` re-exports them so no caller has to know.
 >
-> **Reads deliberately still answer from the filesystem.** `loadThreads` and `loadRuns` return `[]`
-> for an article nobody has chatted about, and in `postgres` mode that answer happens to be *correct*
-> rather than merely quiet: nothing writes chat or search rows to Postgres, so the Postgres side is
-> empty too. Refusing the read would put an error banner on every article for a feature whose only
-> honest answer is "there are none". **That flips the day this step lands** — once `pgChatStore` is
-> wired, a read that still comes off the disk is wrong, and the test that pins today's behaviour says
-> so at the assertion.
+> **The test was rewritten rather than deleted, and that is the transferable bit.**
+> `tests/store-not-migrated.test.ts` asserted *"the write is refused"* — it pinned the scaffolding,
+> so the proper fix turned it red. It was describing **how** the bug was avoided rather than that it
+> was. `tests/store-writes-land-in-postgres.test.ts` replaces it with what both fixes had in common
+> and what a third would also have to satisfy: the write comes back out of Postgres, **and no file
+> appears under `data/<slug>/`**. The file half is not belt-and-braces — it is the half that goes red
+> if somebody re-imports `src/chat.ts` directly in a route, which is exactly how this happened the
+> first time. Verified by unwiring `chatStore` back to `fsChatStore` and watching it fail.
 >
 > The general lesson is the one worth keeping: **a guard can only be written where the call goes**,
 > and "extend the guard" was proposed twice by people reading the store's own header, which said
@@ -1255,6 +1296,60 @@ afterwards. Make the store **mandatory now**.
   turns a missing step into silence. The "one place a path is written down" claim is false while it
   stands. Make it exhaustive over `StepName` and drop the fallback.
 - **Two "object" decoders accept arrays**, so `{"nodes":[]}` passes. One `!Array.isArray` each.
+
+#### What was fixed, and the two choices inside it
+
+All three, plus six of the smaller findings, on 2026-08-26.
+
+**The mixed generation is caught by recording the attempt, not by hashing the output.** The review
+offered two roads: a per-step manifest of content hashes committed last, or forcing the interrupted
+step and everything downstream on Retry. Neither was taken, and the reason the first one fails is
+worth writing down because it looks like the obvious answer. A manifest of content hashes cannot be
+kept for `extract`: `blocks` legitimately rewrites the same `output/<slug>.html` with the ids stamped
+in, so `extract`'s recorded hash stops matching the moment stage 3 runs, and `extract` would report
+itself *permanently unfinished* — re-fetching and re-extracting on every job, for ever. The second
+road only covers the Retry button, and the case Greg actually asked about is the reader closing the
+tab and coming back ([ingest-resume.md](ingest-resume.md)), which is not a retry.
+
+So the store records the **attempt**: `beginStep` before the run, `finishStep` on the success path
+only, `interrupted` asked first by `stepIsDone`. On the filesystem that is one small file under
+`data/<slug>/steps/`; in Postgres it is `revision_step_runs.status = 'running'`, which the schema
+already has — so this is not a file-store invention that has to be undone at cutover. A throw, a
+cancel and a `kill -9` all leave the marker, and all mean the same thing.
+
+**The HTML collision is closed by binding, not by moving the file.** Giving `extractedHtml` and
+`stampedHtml` distinct paths was the review's first suggestion and would have changed the layout on
+disk, the importer, the exporter and the manifest test. Instead `blocks` gained the one check that
+can tell the two apart: **every id in its `blocks.json` has to be in the HTML beside it.** Verified
+against the real articles before it was relied on — 360 blocks and 360 ids in `constitution`, 141
+and 141 in `noema-mythology-of-conscious-ai` — so "all of them" is the actual invariant rather than
+an approximation that starts failing on a long page.
+
+Also done, from the six smaller findings:
+
+- **`store` is required.** `stepIsDone` and `assertProduced` both take one and neither has a default.
+  `src/jobs.ts` passes the pipeline's store under that name, so the day the pipeline moves to
+  Postgres is one line in one file.
+- **`assertProduced` asks the store**, not the filesystem, so a malformed artefact, one over the size
+  ceiling, or a forced stage that returned without writing anything no longer passes a postcondition
+  and gets marked done.
+- **Only `ENOENT` is absence.** Every other `stat`/`open` failure propagates. A permissions error and
+  a file nobody has written yet used to be one answer, which is how the metadata page fell through to
+  the `example/` fixture for an article that was there all along.
+- **One file handle for the size and the bytes**, so an atomic replacement between the two cannot
+  slip past the ceiling — and **`write` enforces the ceiling too**, which is the side that matters:
+  a step could write an artefact too big to read back and report success, and then be permanently
+  not-done with no symptom but a stage that will not stay finished.
+- **The agreement test compares ordered arrays**, checks uniqueness on both sides, uses the `from`
+  column it used to merely record, and **proves itself red** by swapping `extract`'s two `PATHS`
+  entries and asserting the disagreement is noticed.
+- **Two "object" decoders no longer accept arrays.**
+
+Left for their owners, and named here so it is not mistaken for done: **`STEP_STORAGE` in
+`src/store/pg.ts`** is still a hand-maintained third declaration with a `?? []` fallback (that file
+belongs to step 11 half A this week), and **`tweets` and `summary` still use `isDone` rather than
+`stamp`** — the review's `expectedStamp(blocks)` factory is the right shape and belongs to those two
+stages' owners.
 
 #### What survived
 
