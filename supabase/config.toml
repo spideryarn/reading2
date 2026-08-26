@@ -350,6 +350,29 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+# Google SSO — docs/plans/auth-supabase.md. Copied from the old app's own
+# supabase/config.toml (/Users/greg/dev/spideryarn/reading), which has run this
+# same OAuth client against its own local stack for months, so this is a working
+# recipe rather than a first attempt.
+#
+# The client id and secret belong to Google Cloud project 815353440959 and are
+# shared with the old app deliberately — one OAuth client can hold many redirect
+# URIs, which is what that field is for. They live in `.env.local` under these
+# two names and nowhere else; `.env*` is gitignored.
+#
+# `skip_nonce_check` is the line somebody will delete while tidying. Google
+# returns a nonce in its ID token and GoTrue checks it against one it stored;
+# against a local stack that check fails and the sign-in dies at the last hop
+# with a message that does not say why. It is LOCAL ONLY. Nothing like it goes
+# on the remote project, where the check works and is doing real work.
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = true
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]

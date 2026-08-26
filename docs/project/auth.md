@@ -7,6 +7,14 @@ its pieces live.
 This is a **stub**. It should grow as the gate gets built; right now the design lives in the deploy
 plan and nothing is implemented yet.
 
+**The build is planned in [auth-supabase.md](../plans/auth-supabase.md)** (2026-08-26) — what to
+click in Google Cloud and in the Supabase dashboard, the client seam, the gate, the tests, and an
+appendix of the screens that come later. Read that before writing any of this. Two things in it
+that are cheap to get wrong and are measured rather than assumed: both the local and the remote
+project already sign tokens with **asymmetric ES256 keys**, so verification is local and needs no
+network call and no extra crypto library; and `flowType` in `createClient` **defaults to
+`implicit`**, not `pkce`.
+
 ## What auth is for here
 
 Not user accounts. There is one user. The gate exists because **a public site plus online ingest plus
