@@ -1106,7 +1106,22 @@ function Term({
                   nothing for a single occurrence. */}
               <BlockNav
                 targets={entry.blocks.map((id) => ({ id, blockId: id }))}
-                currentId={atBlock}
+                /* **`?? entry.blocks[0]`, and that is not a default — it is
+                   where the reader actually is.** Selecting a term jumps to its
+                   first use (see `onSelect` above), so by the time this control
+                   is on screen they are standing on occurrence one. Without the
+                   fallback the counter read "– / 3" beside a highlighted first
+                   use, and the reader's first press of › appeared to do nothing
+                   because it moved them to the passage they were already
+                   looking at.
+
+                   Derived rather than seeded into `atBlock` by an effect: there
+                   is no state to get out of step, and "nothing stepped to yet"
+                   and "on the first" are the same fact here precisely because
+                   selecting jumps. Ideas reaches the same place from the other
+                   end, by opening the first passage as it goes to it.
+                   Confirmed in a browser, 2026-08-27. */
+                currentId={atBlock ?? entry.blocks[0] ?? null}
                 onGo={(id, blockId) => {
                   setAtBlock(id as BlockId);
                   /* Nudge rather than jump: stepping between neighbours should

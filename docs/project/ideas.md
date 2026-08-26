@@ -295,6 +295,13 @@ exemplifying block"*. [`BlockNav.tsx`](../../src/web/BlockNav.tsx) is that, in b
   Stepping ‹ › is moving between neighbours, so it leaves you alone when the next one is already in
   front of you. Those are the comment stepper's rule and the search result's rule respectively, and
   both were already written down.
+- **Selecting opens the first passage as well as going to it.** Both modes jump to the first
+  occurrence on select, so the reader is standing on it — and the counter read *"– / 3"* beside a
+  highlighted first use, with the first press of › moving them to the passage they were already
+  looking at. Ideas sets the open key as it jumps; the glossary derives it (`atBlock ??
+  entry.blocks[0]`), because there the two facts are the same fact. Found in a browser both times,
+  which is where it had to be found: from the code, *"nothing stepped to yet"* and *"on the first"*
+  are two perfectly reasonable states that happen to look identical here.
 - **The glossary can key it on block ids and ideas cannot.** `findOccurrences` pushes each block at
   most once, so a term's ids are unique; an idea's occurrences are quoted passages and two can sit in
   one paragraph, so that side keys on `Found.key`.
