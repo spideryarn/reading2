@@ -9,7 +9,7 @@
 | `[auth.external.google]` in `supabase/config.toml`, and a stack restart | **done** — `/auth/v1/settings` now reports `google: true` |
 | `http://127.0.0.1:54361/auth/v1/callback` registered on the Google OAuth client | **not done, and blocking.** A real browser sign-in dies on Google's `Error 400: redirect_uri_mismatch`. See [step 0](#step-0-what-greg-has-to-click-10-minutes-and-nobody-else-can-do-it) — and read [§ The check that could not fail](#the-check-that-could-not-fail) before trusting any command in this document. |
 | Everything in the app — client, gate, screen, tests | **not started** |
-| **A cross-family review** | **could not run.** See [§ The review that did not happen](#the-review-that-did-not-happen). |
+| **A cross-family review** | **done** — GPT Sol, and it found three high-severity problems including one that would have leaked an OAuth code to a stranger's server. [§ what it changed](#the-cross-family-review-and-what-it-changed); full text in [auth-supabase-review-sol.md](auth-supabase-review-sol.md). |
 
 The provider argument is over — [auth.md](../project/auth.md) decided Supabase Auth on 2026-08-25,
 and [auth-options.md](../research/auth-options.md) is the survey behind it. This document is the
@@ -88,10 +88,11 @@ So the rule for this repo is narrower and more useful than the folklore: **use t
 overload; do not do refresh-triggering work inside the callback.** Reading the session out and
 putting it in React state is fine.
 
-**3. The publishable key is a valid signed JWT with no `sub` claim.** It is sitting in our own
-browser bundle, so a client bug that forwards the wrong string produces a *correctly signed* token.
-`getClaims` will verify it happily. **The gate must require `sub` and `email` explicitly**, not
-merely "the signature checked out". That is now a test.
+**3. A verified signature is a weaker statement than "this is one of our users".** `getClaims`
+checks the signature and the expiry. It does not check that `role` is `authenticated`, that `aud`
+and `iss` are ours, that `sub` is uuid-shaped, or that `is_anonymous` is false. The gate checks all
+of them — see [step 4](#step-4-the-gate), which also records the wrong reason this plan originally
+gave for the `sub` check and what the right one is.
 
 ### Which Google OAuth client
 
@@ -421,10 +422,27 @@ today (`useJobs`, `useChat`, `useShelf`, `useComments`, `useGlossary`, `useSumma
 `useSearch`, `useLibrarySearch`, `App.tsx`, `Metadata.tsx`, `ShelfEntry.tsx`, `Tweets.tsx`). Each
 becomes `apiFetch(…)`, which:
 
-1. reads the current access token from the Supabase client and sets `Authorization: Bearer …`;
-2. leaves everything else — method, body, signal, streaming response — exactly alone;
-3. on a **401**, tells the session hook the session is gone, so the app falls back to the sign-in
-   screen rather than showing 25 separate error toasts.
+1. **refuses anything that is not a same-origin `/api/` URL.** First, because it is the cheapest
+   line here and it stops a future absolute URL quietly posting a bearer token to somebody else.
+2. **calls `getSession()` on every request** — never a token cached in React state. The SDK
+   refreshes inside a 90-second margin and single-flights concurrent refreshes, so this is close to
+   free and it is what makes a restored bfcache page, a backgrounded tab, and a refresh already in
+   flight all behave.
+3. sets `Authorization: Bearer …` and leaves everything else — method, body, signal, streaming
+   response — alone.
+4. on a **401**, refreshes once and retries once. The gate refuses before any body is read, so
+   retrying is safe for the JSON and string bodies this app sends.
+
+**What it must NOT do is treat a 401 as "the session is gone".** That was the first draft's rule
+and it is wrong: a 401 can be a refresh race or a momentary verifier failure, and signing the
+reader out mid-article because one request lost a race is a worse bug than the one it prevents.
+Session state belongs to the SDK's own auth events. Add a `pageshow` resync in `useSession` for
+bfcache instead.
+
+**A stream does not fail because its token expires halfway through**, and it should not. The token
+is an admission check: once the server has accepted the request, there is nothing to re-check per
+SSE frame. Worth stating because "what about a chat stream that runs past the hour?" is the first
+question anyone asks about this design, and the answer is "nothing happens".
 
 This file already exists and already owns the "how do we read an API response" decision — its header
 explains that twelve call sites had independently written the same wrong four lines. This is the
@@ -443,12 +461,17 @@ design would have had to be cookies. It is worth knowing that we got that for fr
 ### `src/auth.ts`
 
 ```ts
-export const ALLOWED_EMAILS = ["greg@gregdetre.com"] as const;
-
 export interface AuthedUser { id: OwnerId; email: string }
 
 /** Throws httpError(401|403). Never returns a user it is not sure about. */
 export async function requireUser(req: IncomingMessage): Promise<AuthedUser>
+
+/**
+ * Is this signed-in person allowed in? Today: yes, anyone Supabase vouches for.
+ * One function rather than an inline `true` so that narrowing it later is an
+ * edit here and nowhere else. See § Who gets in.
+ */
+function isAllowed(_claims: { sub: string; email: string }): boolean
 ```
 
 What it does, in order:
@@ -457,14 +480,24 @@ What it does, in order:
 2. `supabase.auth.getClaims(token)` against a server-side client built from `SUPABASE_URL` and the
    **publishable** key. Error, or no claims → **401**. Verification is local, against the cached
    JWKS, because both projects sign ES256 (measured above).
-3. **`claims.sub` absent → 401.** Not a formality. The publishable key *is* a validly signed
-   Supabase JWT — it identifies a role rather than a person, and it has no `sub`. It is in our own
-   browser bundle, so the wrong string reaching this function is a plausible client bug rather than
-   an attack, and it would arrive with a perfect signature. "The signature checked out" is not the
-   same claim as "this is a user".
-4. `claims.email` absent, or not in `ALLOWED_EMAILS` (compared **lower-cased and trimmed**) →
-   **403**, with the beta message.
-5. Otherwise return `{ id: claims.sub, email: claims.email }`.
+3. **The claims are checked, not just the signature.** `sub` present and uuid-shaped;
+   `role === "authenticated"`; `aud` and `iss` the ones we expect; `is_anonymous !== true`. Any
+   miss → **401**. `getClaims` verifies the signature and the expiry and does not runtime-check any
+   of these, so "the signature checked out" is a strictly weaker statement than "this is one of our
+   users, signed in as a person".
+
+   > **An earlier version of this plan gave the wrong reason for the `sub` check**, and the reason
+   > mattered. It said the publishable key is itself a validly signed JWT with no `sub`. It is not
+   > a JWT at all — `sb_publishable_ACJWlzQHl…` has no dots and no payload. That was true of the
+   > **legacy `anon` key**, which really is a three-part JWT carrying `"role":"anon"` and no `sub`,
+   > and which this repo still has in `.env.local` as `SUPABASE_ANON_KEY`. So the test below stays
+   > — a legacy anon key forwarded by mistake must be refused — but it is testing the old key
+   > shape, not the new one. GPT Sol caught it; measured by counting the dots.
+4. `claims.email` absent → **401**. Every route downstream expects to be able to say who acted, and
+   an identity with no address is not one we can use.
+5. `isAllowed(claims)` false → **403**, with the beta message. Today it is never false. See
+   [§ Who gets in](#who-gets-in).
+6. Otherwise return `{ id: claims.sub, email: claims.email }`.
 
 **Note the ordering: the gate runs before any body is read or validated.** So a malformed request
 from a stranger gets 401 rather than 400, which is right — we owe an unauthenticated caller no
@@ -482,16 +515,68 @@ database-bypassing credential into a code path that runs on every request for no
 
 ### The wiring in `handleApi`
 
-Immediately after the `if (!url.startsWith("/api/")) return false` line and **before any route
-matches**, so a new route is gated by default. The `try` block already in place turns a thrown
-`httpError` into the right status, so this is genuinely a few lines.
+**Inside the `try`, and that is the whole of this section.** The first version of this plan said
+"immediately after the `if (!url.startsWith("/api/")) return false` line", and claimed the existing
+`try` would turn a thrown `httpError` into the right status. It would not: the prefix check is at
+`src/routes.ts:1792` and the `try` does not begin until `:1876`, eighty-four lines below it.
 
-**One exemption, and it is not in `handleApi` at all.** `/api/health` is answered by `src/vercel.ts`
-*before* `handleApi` is called, so it stays public by construction. That is defensible — it is a
-deployment probe that must work when the application does not, and it returns environment variable
-*names* (booleans), the node version, the region, the commit SHA and an article count. No secrets.
-But it does leak how many articles are on the shelf, and it is the one thing here that a stranger
-can read. Worth a line in [security.md](../project/security.md); worth revisiting if it ever grows.
+So an anonymous `GET /api/library` would have thrown *outside* the catch. In dev, `vite.config.ts`'s
+outer handler answers **500 and puts `err.message` in the body**; on Vercel, `src/vercel.ts` answers
+a generic 500. `handleApi`'s `finally` never runs, so **the refusal is never logged**. It still
+fails closed, which is the one mercy — but every word this document said about 401, 403 and logging
+would have been false, and the first person to debug it would be looking at a 500 for a request
+that was correctly refused. Found by GPT Sol, 2026-08-26, and confirmed by reading the line numbers.
+
+The shape:
+
+```ts
+let failure: unknown;
+try {
+  const user = await requireUser(req);   // ← before any route is matched or any body read
+  // ... the existing route table and dispatch, unchanged
+} catch (err) {
+  // existing status handling turns httpError(401|403) into the right answer
+} finally {
+  logRequest(...);
+}
+```
+
+Building the route regexes is pure, so the gate could equally sit just above the first dispatch
+branch. What it may not do is sit above the `try`.
+
+**One exemption, and it needs fixing before it can be one.** `/api/health` is answered by
+`src/vercel.ts` *before* `handleApi` is called, so it stays public by construction. A read-only
+probe that must work when the application does not is a reasonable thing to leave open — it returns
+environment variable *names* (booleans), the node version, region, commit SHA and an article count.
+
+**But it is not read-only.** `src/vercel-health.ts` sends every method that is not GET or HEAD into
+`bodyCheck`, which does `for await (const chunk of req) chunks.push(chunk)` and then
+`Buffer.concat` — **with no size cap at all**. `MAX_BODY_BYTES` lives in `src/routes.ts` and is not
+in this path. So this is an unauthenticated request that will read as much as anyone cares to send:
+
+```bash
+curl -X DELETE https://host/api/health --data-binary @a-very-large-file
+```
+
+And `api/index.js` returns the message and stack of a failed import before any application code
+runs, behind a comment claiming the endpoint is behind Vercel's login — which
+[step 8](#step-8-production) shows is not true of the production hostname.
+
+Neither is caused by this plan; both become this plan's business the moment it says "the gate covers
+everything except health". Before that sentence is true: **GET and HEAD public, 405 for everything
+else, the body diagnostic behind auth or a deployment secret and capped, and a generic body for an
+import failure with the stack going to the log instead.** All found by GPT Sol and confirmed by
+reading the file. Worth a line in [security.md](../project/security.md) either way.
+
+### What the gate may say out loud
+
+`logRequest` writes an `httpError`'s message into a `reason` field, and
+[logging.md](../project/logging.md) is emphatic that redaction here matches key paths and never
+text. So **every message `requireUser` throws must be fixed prose we wrote** — never the token,
+never the header, never the SDK's error, never `sub`, never the email address. The same rule
+`src/routes.ts` already states for its own errors, and the same one a `?token=…` in a URL broke
+once. A test that asserts the serialised log line contains no part of a real token is cheap and is
+the only thing that will notice when somebody helpfully adds detail.
 
 ### Copy
 
@@ -538,10 +623,70 @@ no user  → <SignInPage />
 user     → the app exactly as it is today
 ```
 
-A whole-app gate rather than a `/login` route, because [url-state.md](../project/url-state.md) says
-every bit of view state lives in the URL and "who you are" is not view state. It also means a
-bookmarked `/read/<slug>?at=spya-…` survives a sign-in: the address never changes, so after the
-round trip the reader lands on the paragraph they left.
+A whole-app gate rather than a `/login` route for the *screen*, because
+[url-state.md](../project/url-state.md) says every bit of view state lives in the URL and "who you
+are" is not view state.
+
+**But the place Google returns to has to be a real route, and that is not negotiable.** See below.
+
+### `/auth/callback` — the one route this must add
+
+The first draft claimed a bookmarked `/read/<slug>?at=spya-…` would survive a sign-in untouched,
+because Supabase would hand the reader back to the address they left. Two things are wrong with
+that, and the second is a security bug rather than an inconvenience.
+
+**It would not even have happened.** Without an explicit `redirectTo`, Supabase returns the reader
+to the project's **Site URL**, not to the page they were on. The promise needed code that the plan
+did not describe.
+
+**And `/add/<a whole URL>` absorbs the authorisation code.** `canonicalAddHref` in
+`src/web/router.ts` reads `location.search` as *part of the article's address* — that is its whole
+job, and it is why `/add/https://x.test/a?about=1` correctly queues a URL with `?about=1` on it. A
+return to `/add/…?code=C&state=S` is therefore rewritten with our own one-time OAuth code encoded
+**inside the article URL**. The ingest pipeline then fetches that URL. So a one-time authorisation
+code and its `state` would be sent to a stranger's web server, in a query string, in their access
+log. GPT Sol found this, 2026-08-26.
+
+The window is real rather than theoretical, because `main.tsx` imports `App` at module scope: once
+`App` reaches the session hook, the Supabase client initialises and reads `window.location.href`
+*before any line of `main.tsx` runs*. So the SDK may capture and use the code successfully while
+the rewrite still leaves a copy of it encoded in the article address. It works, and it leaks.
+
+```
+   Google  ──►  /add/https%3A%2F%2Fstranger.test%2Fa?code=C&state=S
+                          │
+                          ├──► Supabase SDK reads href, exchanges C   ✓ signed in
+                          │
+                          └──► canonicalAddHref folds ?code=C&state=S
+                               INTO the article URL
+                                        │
+                                        ▼
+                               ingest fetches
+                               https://stranger.test/a?code=C&state=S
+                                        │
+                                        ▼
+                               our auth code, in their access log
+```
+
+So:
+
+- **A stable `/auth/callback` route**, and `redirectTo` is *always* that address and never the
+  current page.
+- **Exempt it from every rewrite in `main.tsx`** — it is not a legacy address and must not be
+  canonicalised.
+- **Where the reader was going lives in `sessionStorage`**, not in the URL: save a validated
+  same-origin *path* before the redirect, navigate to it after the exchange. That keeps the
+  bookmarked-position promise the first draft made, by a mechanism that actually delivers it.
+- **Show OAuth errors.** A return can carry `?error=access_denied&error_description=…`, and the
+  session hook as first described had no state for that at all — the reader would see the sign-in
+  screen again with no explanation.
+- A stable `/login` route falls out of the same work, and
+  [Appendix A](#appendix-a-the-screens-we-are-not-building-yet)'s password-reset landing page needs
+  one too.
+
+One correction to that appendix while we are here: with `flowType: "pkce"`,
+`resetPasswordForEmail` generates a PKCE challenge, so recovery does **not** necessarily come back
+as a token fragment the way the appendix assumed.
 
 ### The Google button is specified, not designed
 
@@ -593,10 +738,29 @@ problem.
 
 > assert that **a request with no session and a request with the wrong email are both refused**.
 
-`tests/routes.test.ts` already drives `handleApi` with a fake request and no network, so this is
-cheap. **One thing will break first:** that harness builds its fake request with only `{ method, url }`
-and **no `headers`**, so the moment `requireUser` reads `req.headers.authorization` every existing
-test in the file throws on `undefined`. Add `headers: {}` to the harness in the same commit.
+`tests/routes.test.ts` already drives `handleApi` with a fake request and no network. **Two things
+break, and the second is the one that was missed.**
+
+That harness builds its fake request with only `{ method, url }` and **no `headers`**, so the moment
+`requireUser` reads `req.headers.authorization` every existing test throws on `undefined`. Adding
+`headers: {}` fixes the crash — and then **every existing route test gets a 401**, because none of
+them sends a token. Fixing the TypeError converts the whole file from "throws" to "wrong answer",
+which is a worse place to be. And the file's own header promises *"No server and no network"*, which
+a test minting a real token from a running Supabase would quietly end.
+
+So the shape is:
+
+- **Inject the verifier.** `requireUser` takes its claims-checker as a seam, so the route suite can
+  hand it a stub and go on being about routes. The default remains the real one.
+- **The route suite gets an authenticated default**, plus two explicit cases of its own: anonymous,
+  and a signed-in user the gate refuses.
+- **`src/auth.ts` is tested separately**, against a generated EC key and a fake JWKS, so the
+  signature checks are real without a network.
+- **One live integration test, opt-in**, that mints a token from the local stack. Skipped when the
+  stack is not running — and *reported* as skipped, not silently passed.
+- **Mutation-test the gate**: comment out `requireUser`, confirm the no-header test goes red, put it
+  back. A gate test that has never been seen to fail is
+  [the same mistake as before](#the-check-that-could-not-fail), one layer up.
 
 The list:
 
@@ -658,9 +822,14 @@ covers it. Two consequences worth writing down:
 - A glob that wide trusts every deployment under that name. That is fine while the team is one
   person and the account is Greg's, and it should be narrowed to the real domain the moment
   spideryarn.com moves across.
-- Vercel's own SSO protection sits **in front of** all of this. A browser that has not passed
-  Vercel's login never reaches the app at all, so the beta gate is currently the *second* of two
-  gates. Do not read "it asked me to log in" as evidence that this code works.
+- **There is no outer gate. This one is the only one.** An earlier draft of this section said
+  Vercel's SSO sits in front of everything, so our gate would be the second of two. That is false,
+  and [deployment.md](../project/deployment.md) already said so: Vercel generates *two* production
+  hostnames, only one was removed, and `spideryarn-greg-detre.vercel.app` **has been serving the
+  whole app to the world the entire time** — verified there by an unauthenticated `curl` from
+  outside on 2026-08-26. A production domain cannot be SSO-protected on Pro at all. So nothing is
+  in front of this code, and "it asked me to log in" on a per-deployment URL is not evidence that
+  any of it works.
 
 **`SPIDERYARN_OWNER_ID` still governs who owns rows.** The gate identifies people; it does not yet
 fill in `owner_id`. See [Appendix C](#appendix-c-owner_id-rls-and-the-second-person).
@@ -691,48 +860,76 @@ Six, and every one of them looks like success from the outside. This is the
 
 ---
 
-## What Greg decided, and the one thing worth pushing back on
+## Who gets in
+
+**Decided, 2026-08-26: anybody Supabase will vouch for. There is no allowlist.**
 
 > We can get rid of the allowlist once we've added authentication. I'll accept the risk
+
+and, when the alternative was put to him a second time:
+
+> I'm not worried about the risk without the allowlist
 >
 > — Greg, 2026-08-26
 
-and
+So `isAllowed` returns true. It exists as a function rather than as an inline `true` only so that
+narrowing it later is an edit in one place.
 
-> Hard-coded constant for now. Though like I said earlier, we might remove it later once we're sure
-> that authentication is working
+The consequence, stated once and not argued again, because a future reader will need to know it was
+seen rather than missed: **anyone with a Google account can sign in, in about four seconds**, and
+what that buys them is the ingest pipeline and `ANTHROPIC_API_KEY` at two model calls per article.
+`disable_signup` on the remote project is `false`. Both of those were put to Greg with the
+one-click alternative and he chose this deliberately.
 
-So the allowlist ships as a constant in v1, and its removal is a decision he has already taken in
-principle. **One thing to say out loud before that happens**, because it is a cheap fix and it will
-not be obvious later: *"authenticated" is not a small set.* Anyone with a Google account can sign in
-in about four seconds, and the wallet the gate exists to protect is `ANTHROPIC_API_KEY` at two model
-calls per article. Deleting the allowlist opens the ingest pipeline to the entire internet.
+Two things follow that are worth doing anyway, neither of which reopens the decision:
 
-The middle path costs one click and no code: **turn signups off** on the remote project
-(`disable_signup`, currently `false`). Then existing users can sign in, nobody new can appear, and
-letting a beta user in is one invite from the dashboard rather than a deploy. That gets the thing
-Greg actually wants — no allowlist to maintain — without the thing he is accepting the risk of.
-
-Recommended, not decided. His call.
+- **Say so in [security.md](../project/security.md).** "The gate admits anyone with a Google
+  account" is a property of this system now, and a security doc that does not mention it is wrong.
+- **A spend limit is the control that is actually missing**, and it always was — an allowlist of one
+  never limited how much *Greg* could spend either. Supabase's own rate limits cover sign-in, not
+  `/api/jobs`. An in-memory counter is useless across Vercel instances, so this has to be
+  database-backed or set at the provider. Out of scope here; worth its own line in
+  [open-questions.md](../project/open-questions.md).
 
 ---
 
 ## The order to build it
 
-Each of these is a commit, and each leaves the tree working.
+### The sign-in screen and the server gate ship in ONE commit
+
+This is the correction that matters most in the whole review, and the original order had it wrong.
+
+The first draft shipped the sign-in screen (step 5) *before* the gate (step 4), on the reasoning
+that each commit leaves the tree working. It does — and that is exactly the problem. In the window
+between those two commits the site **looks** protected: a browser sees nothing but a Sign In
+screen. Meanwhile:
+
+```bash
+curl https://host/api/library                      # the whole shelf
+curl -X POST https://host/api/jobs -H 'content-type: application/json' \
+     -d '{"url":"https://example.com"}'            # spends the Anthropic key
+```
+
+A gate that is visibly absent gets finished. A gate that *appears* to be there does not, because
+everyone who looks at it concludes it is done. And with no outer Vercel gate — see
+[step 8](#step-8-production) — there is nothing else in the way. So:
+
+**One vertical commit: the client singleton, the session hook, token-bearing `apiFetch`, sign-in,
+sign-out, `requireUser` inside `handleApi`, and the tests.** Earlier commits may add dependencies,
+config and test scaffolding only. Nothing that changes what a browser sees lands before the thing
+that changes what `curl` sees.
+
+### The order
 
 1. **Step 0** — Greg clicks. Blocks everything else. *(Greg)*
-2. **Steps 1–2** — install, config, `VITE_*` vars, restart, verify with curl that `google: true`.
+2. **Steps 1–2** — install, config, `VITE_*` vars, restart, verify the Google round trip end to end
+   with no app code ([above](#test-the-whole-google-round-trip-before-writing-any-app-code)).
    Nothing in the app changes. *(30 min)*
-3. **Step 3** — the singleton, the session hook, and `apiFetch` across 25 call sites. Still no gate,
-   so the app behaves identically whether or not you are signed in. *(2 hours, mostly mechanical)*
-4. **Step 5** — the sign-in screen and the `App.tsx` branch. Now you can sign in with Google and see
-   your own email. **This is the first browser test, and the one worth doing carefully.** *(2 hours)*
-5. **Step 4 + 7** — the gate and its tests, together, in one commit. Never the gate alone: a gate
-   without the no-session test is the thing this whole document is afraid of. *(2 hours)*
-6. **Step 6** — email + password. *(1 hour local, plus SMTP in production)*
-7. **Step 8** — production. *(unknown; depends on the remote Supabase work in flight)*
-8. **Docs** — [auth.md](../project/auth.md) stops being a stub, [security.md](../project/security.md)
+3. **Steps 3 + 4 + 5 + 7 together** — the vertical slice above. Big, and deliberately so.
+   *(a day)*
+4. **Step 6** — email + password. *(1 hour local, plus SMTP in production)*
+5. **Step 8** — production. *(unknown; depends on the remote Supabase work in flight)*
+6. **Docs** — [auth.md](../project/auth.md) stops being a stub, [security.md](../project/security.md)
    gains the health-endpoint note, [supabase-local.md](../project/supabase-local.md) gains the Google
    block and the `db:reset` consequence, [setup-dev.md](../project/setup-dev.md) gains the new
    environment variables, and [open-questions.md](../project/open-questions.md) loses whatever this
@@ -740,27 +937,42 @@ Each of these is a commit, and each leaves the tree working.
 
 ---
 
-## The review that did not happen
+## The cross-family review, and what it changed
 
-[AGENTS.md](../../AGENTS.md) says every plan under `docs/plans/` goes to GPT Sol before it is built.
-**This one has not been reviewed, and that is not because it found nothing.** Both Codex
-authentication paths are out of credits, on 2026-08-26:
+Ran 2026-08-26 (GPT Sol, high effort, read-only), after two earlier attempts died out of credits.
+The full answer is kept at `docs/plans/auth-supabase-review-sol.md`. **Every finding below was
+checked here before being acted on**, as [AGENTS.md](../../AGENTS.md) requires — three of them by
+reading the line numbers, one by counting the dots in a key.
 
-- `CODEX_API_KEY` from `.env.local` → *"The account is out of credits."*
-- Falling back to the logged-in ChatGPT subscription in `~/.codex/auth.json` → *"Your workspace is
-  out of credits. Ask your workspace owner to refill in order to continue."* It got 122k tokens into
-  the review — the activity log shows it reading `@supabase/auth-js`'s type definitions, which is
-  exactly the right place to be looking — and then died.
+Its opening sentence is the fairest summary of the plan's state: *"I found no final-state
+application route that bypasses a correctly placed `requireUser`. However, the plan as written
+creates a real fail-open deployment window, mishandles `handleApi`'s `try`, and has brittle OAuth
+callback routing."*
 
-The prompt is written and kept, so re-running is one command once credits exist. It asks nine
-specific adversarial questions, and the two most valuable are the ones this document is least sure
-of: whether the four URL rewrites in `src/web/main.tsx` damage a `?code=…` on the way back from
-Google, and what `apiFetch` must do about a token that expires mid-stream.
+| Finding | Verified how | Where it landed |
+|---|---|---|
+| The build order ships a **convincing but fake gate** — screen before enforcement | `curl` on the two routes would have worked; and the claimed outer Vercel gate does not exist | [§ one vertical commit](#the-sign-in-screen-and-the-server-gate-ship-in-one-commit) |
+| The gate sat **outside the `try`** it relied on | prefix check `src/routes.ts:1792`, `try` at `:1876` | [§ the wiring](#the-wiring-in-handleapi) |
+| `/add/<url>?code=…` folds our **one-time auth code into a stranger's URL**, which we then fetch | `canonicalAddHref` reads `location.search` by design | [§ /auth/callback](#authcallback-the-one-route-this-must-add) |
+| `redirectTo` omitted means Supabase returns to **Site URL**, not the reader's page | the bookmarked-position promise needed code the plan never described | same |
+| `apiFetch` must call `getSession()` per request, guard same-origin, and **not** sign the reader out on every 401 | | [§ apiFetch](#srcweblibapits-apifetch) |
+| `/api/health` runs an **uncapped body read** on any non-GET method, unauthenticated | `bodyCheck` in `src/vercel-health.ts` has no `MAX_BODY_BYTES` | [§ the wiring](#the-wiring-in-handleapi) |
+| Adding `headers: {}` to the test harness turns every existing route test **401** rather than fixing it | | [§ tests](#step-7-the-tests-that-have-to-exist) |
+| `getClaims` checks signature and expiry only — not `role`, `aud`, `iss`, `is_anonymous` | | [§ `src/auth.ts`](#srcauthts) |
+| **The publishable key is not a JWT.** The plan's stated reason for the `sub` check was wrong | `sb_publishable_…` has one dot-separated part; the legacy `anon` key has three | [§ `src/auth.ts`](#srcauthts) |
+| Do **not** pass a static `jwks` bundle — it outranks the SDK's cache TTL and can prolong trust in a revoked key. Fail **503**, not 401, when JWKS is unreachable | | here |
+| Shell-exported `VITE_*` values outrank `.env.local`, the opposite of this repo's Node loader | | [§ step 1](#step-1-the-client-library) |
+| The raw-`fetch` count is drifting in a shared tree — 25 when written, 30 across 14 files hours later | counted again | [§ apiFetch](#srcweblibapits-apifetch) |
 
-**Do not build [step 4](#step-4-the-gate) without it.** The plan-stage review is cheap insurance on
-a piece of code whose failure mode is silent and whose blast radius is the whole API.
+Two it raised that are **not** being taken:
 
----
+- **Authorise a fixed Supabase UUID rather than an email.** Cryptographically cleaner, and it
+  removes the hour-long window where an old JWT still carries a changed email. It is moot now that
+  [§ Who gets in](#who-gets-in) admits everyone; if an allowlist ever returns, it should key on
+  `sub`.
+- **Sign-out into v1.** Agreed, and it is already in the vertical commit — but this is worth
+  recording as Sol's, since the first draft had it in the appendix, and being unable to sign out of
+  a beta is a bad look.
 
 ## Open questions
 
