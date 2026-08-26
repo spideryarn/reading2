@@ -19,6 +19,10 @@
  * Plus a hard timeout: SIGTERM → grace → SIGKILL, applied to the whole process group, so a wedged
  * run (and the MCP servers it spawned) actually dies.
  *
+ * And the credential: by default the ChatGPT subscription is spent first and `CODEX_API_KEY` picks
+ * up whatever it can't — see AUTH_MODES. Codex prefers the key whenever the variable is set, so
+ * "subscription first" is implemented by withholding the key rather than by asking for anything.
+ *
  * What reaches the caller's context, by default: codex's *final answer* (capped at
  * --max-print-chars, then truncated with a pointer to the full file) plus a two-line status. The
  * activity log — which is the big one — only ever reaches a file. `--quiet` prints paths alone;
@@ -45,6 +49,20 @@ const DEFAULT_MODEL = 'gpt-5.6-sol';
 const DEFAULT_EFFORT = 'high';
 const DEFAULT_TIMEOUT_MINUTES = 30;
 const SANDBOXES = ['read-only', 'workspace-write', 'danger-full-access'];
+/**
+ * Which credential to spend, and in what order.
+ *
+ * Codex takes `CODEX_API_KEY` over a logged-in `~/.codex/auth.json` whenever the variable is set,
+ * and the only lever from out here is whether the variable crosses into the child at all. So
+ * "prefer the subscription" means *withholding* the key, and falling back means running the whole
+ * thing again with it.
+ *
+ *   subscription-first  the subscription, then the key if that credential is spent (default)
+ *   key-first           the key, or the subscription if no key is set — one attempt
+ *   subscription-only   the subscription, never the key — one attempt
+ */
+const AUTH_MODES = ['subscription-first', 'key-first', 'subscription-only'];
+const DEFAULT_AUTH = 'subscription-first';
 const GRACE_MS = 5_000;
 const EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 /** ~5k tokens. Big enough for any real review, small enough that a runaway answer can't flood a
@@ -92,6 +110,7 @@ interface Args {
   promptFile?: string;
   sandbox: string;
   effort: string;
+  auth: string;
   repoDir: string;
   timeoutMinutes: number;
   output?: string;
@@ -111,7 +130,8 @@ function fail(msg: string): never {
 
 export function parseArgs(argv: string[]): Args {
   const out: Args = {
-    model: DEFAULT_MODEL, sandbox: 'read-only', effort: DEFAULT_EFFORT, repoDir: process.cwd(),
+    model: DEFAULT_MODEL, sandbox: 'read-only', effort: DEFAULT_EFFORT, auth: DEFAULT_AUTH,
+    repoDir: process.cwd(),
     timeoutMinutes: DEFAULT_TIMEOUT_MINUTES, stream: false, print: false, quiet: false,
     maxPrintChars: DEFAULT_MAX_PRINT_CHARS, dryRun: false, passEnv: [],
   };
@@ -129,6 +149,7 @@ export function parseArgs(argv: string[]): Args {
       case '--prompt-file': out.promptFile = value(flag); break;
       case '--sandbox': case '-s': out.sandbox = value(flag); break;
       case '--effort': out.effort = value(flag); break;
+      case '--auth': out.auth = value(flag); break;
       case '--repo-dir': case '--cd': case '-C': out.repoDir = value(flag); break;
       case '--timeout-minutes': out.timeoutMinutes = Number(value(flag)); break;
       case '--output': case '-o': out.output = value(flag); break;
@@ -145,6 +166,13 @@ export function parseArgs(argv: string[]): Args {
   }
   if (!out.prompt && !out.promptFile) throw new Error('provide --prompt or --prompt-file');
   if (!SANDBOXES.includes(out.sandbox)) throw new Error(`--sandbox must be one of: ${SANDBOXES.join(', ')}`);
+  if (!AUTH_MODES.includes(out.auth)) throw new Error(`--auth must be one of: ${AUTH_MODES.join(', ')}`);
+  // --pass-env is applied *after* the denylist sweep, so this would hand the key to an attempt
+  // that had asked for the subscription — which then spends the key, reports the subscription,
+  // and "falls back" to the credential it was already using. --auth owns this one variable.
+  if (out.passEnv.includes(CODEX_SECRET)) {
+    throw new Error(`--pass-env ${CODEX_SECRET} would override --auth; use --auth key-first instead`);
+  }
   // Caught here rather than by codex: `-c model_reasoning_effort=hgih` is accepted by the config
   // parser as a literal string, so a typo silently runs at the model's own default effort.
   if (!EFFORTS.includes(out.effort)) throw new Error(`--effort must be one of: ${EFFORTS.join(', ')}`);
@@ -401,11 +429,15 @@ async function loadRepoEnv(): Promise<void> {
  * wants. An allowlist would break in ways nobody could predict from reading it. `--pass-env NAME`
  * is the escape hatch for an MCP server that needs a token of its own, and it makes each crossing
  * explicit and visible in the command.
+ *
+ * `useCodexKey: false` withholds even that one, which is how `--auth subscription-first` reaches
+ * `~/.codex/auth.json`: codex prefers the variable whenever it is set, so the only way to ask for
+ * the subscription is not to hand the key over.
  */
 export function childEnv(
-  parent: NodeJS.ProcessEnv, passThrough: string[] = [],
+  parent: NodeJS.ProcessEnv, passThrough: string[] = [], useCodexKey = true,
 ): NodeJS.ProcessEnv {
-  const allowed = new Set([CODEX_SECRET, ...passThrough]);
+  const allowed = new Set(useCodexKey ? [CODEX_SECRET, ...passThrough] : passThrough);
   const out: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(parent)) {
     if (value === undefined) continue;
@@ -422,12 +454,147 @@ export function childEnv(
 }
 
 /**
+ * Which credential each attempt spends, in order. `true` = `CODEX_API_KEY` crosses into the child.
+ *
+ * With no key set there is nothing to fall back *to*, so subscription-first is one attempt rather
+ * than two — otherwise every failure would be run twice against the same credential.
+ */
+export function authPlan(mode: string, haveKey: boolean): boolean[] {
+  // `[haveKey]`, not `[true]`: with no key set, codex falls through to the subscription and runs
+  // perfectly well — but the status line and the error hint both name whatever this array says,
+  // so `[true]` sent somebody to top up a key that does not exist. GPT Sol's, 2026-08-26.
+  if (mode === 'key-first') return [haveKey];
+  if (mode === 'subscription-only') return [false];
+  return haveKey ? [false, true] : [false];
+}
+
+/**
+ * Is this failure about the credential rather than about the work? Only these are worth spending
+ * the other credential on — retrying a bad prompt or a wedged run just pays for it twice.
+ *
+ * Anchored to codex's own `ERROR:` lines for the same reason authHint is: the activity log is
+ * mostly the contents of the files codex read, and this repo's own documentation contains every
+ * phrase below. An unanchored match would retry any run that happened to open this page.
+ */
+export function isCredentialFailure(log: string): boolean {
+  const errors = log.split('\n').filter((l) => /^\s*ERROR\b/i.test(l)).join('\n');
+  return /out of credits|no credits remaining|insufficient (credit|quota|funds)|quota exceeded/i.test(errors)
+    || /rate.?limit|usage limit|\b(401|429)\b|unauthor|not logged in|(missing|incorrect|invalid|no) api key/i.test(errors);
+}
+
+/**
+ * Whether to try the other credential. Reached only when an attempt produced no usable answer.
+ *
+ * **Positive evidence, every time.** The bar is a credential phrase in codex's own ERROR lines,
+ * and nothing else clears it — not a timeout, not a capture overflow, not a missing binary, and
+ * notably not an exit code. Two of those are new, and both were GPT Sol's on 2026-08-26:
+ *
+ *   - An **exit 0 with no answer** used to fall back unconditionally, on the reasoning that a
+ *     status code of 0 tells you nothing. True, but the log does: the one time this was actually
+ *     observed (0.149.1, a review that read ~279,000 tokens) `ERROR: Your workspace is out of
+ *     credits` was right there, so the evidence rule catches it anyway and the unconditional
+ *     branch only ever added false retries.
+ *   - A **streamed** run captured no log at all, which used to mean "fall back on any failure".
+ *     That is backwards: no evidence is a reason not to spend the second credential, not a licence
+ *     to. `--stream` is for a human watching a terminal, and they can re-run it themselves.
+ *
+ * And a write-capable run is never retried automatically, whatever the log says: the second
+ * attempt starts fresh and runs the whole prompt again over the first one's half-finished edits.
+ * Whether that is recoverable is a judgement about the diff, so it belongs to whoever reads it.
+ */
+export function shouldFallBack(
+  run: { status: number | null; timedOut: boolean; overflowed: boolean; spawnError?: Error },
+  log: string, opts: { streamed: boolean; sandbox: string },
+): boolean {
+  if (run.spawnError || run.timedOut || run.overflowed) return false;
+  if (opts.streamed || opts.sandbox !== 'read-only') return false;
+  return isCredentialFailure(log);
+}
+
+/**
+ * The two captured channels as one text. Joined with a newline rather than concatenated: without
+ * it the last line of stdout and the first of stderr fuse into one, which can both hide a real
+ * `ERROR:` line and manufacture a line that starts with one.
+ */
+export function combinedLog(run: { stdout: string; stderr: string }): string {
+  return `${run.stdout}\n${run.stderr}`;
+}
+
+/**
+ * The fallback that was available and deliberately not taken, said out loud. Without it a write
+ * run that died on a spent credential looks exactly like one where `--auth` was never going to
+ * help, and the obvious next move — re-run the same command — repeats the same failure.
+ */
+function accountNote(args: Args, run: RunResult, plan: boolean[], attempt: number): string {
+  if (args.stream) return '';   // both channels went to the terminal; there is no log to read
+  const log = combinedLog(run);
+  return authHint(log, plan[attempt]!) + heldFallbackNote(args, plan, attempt, log);
+}
+
+function heldFallbackNote(args: Args, plan: boolean[], attempt: number, log: string): string {
+  if (plan.length < 2 || attempt !== 0 || args.sandbox === 'read-only') return '';
+  // And only when the other credential would actually have helped. A write run that failed on a
+  // bad prompt gets told about a fallback that has nothing to do with it — noise in the one place
+  // somebody is reading carefully.
+  if (!isCredentialFailure(log)) return '';
+  return `\n  A ${args.sandbox} run is not retried on the other credential automatically — the`
+    + " second attempt would run the whole prompt again over the first one's edits. Check the"
+    + ' tree, then re-run with --auth key-first.';
+}
+
+/** The name of a credential, never its value. */
+function credentialName(withKey: boolean): string {
+  return withKey ? CODEX_SECRET : 'the ChatGPT subscription';
+}
+
+/**
+ * Exists, and has something in it that isn't whitespace. `existsSync` alone was the check, and it
+ * passes on the zero-byte file a killed run leaves behind — silence recorded as agreement. A lone
+ * newline is the same silence with a byte in it.
+ *
+ * Scanned in fixed-size chunks rather than read whole: memory stays bounded at one chunk, which is
+ * the property the rest of this file is careful about, without the "over 64 KiB, assume it's fine"
+ * shortcut the first version took — that shortcut said a large whitespace-only file was an answer,
+ * which is the exact claim the function exists to deny. GPT Sol's, 2026-08-26.
+ *
+ * Judged **byte by byte** rather than by decoding. A chunk boundary lands mid-codepoint most of
+ * the time, and the U+FFFD that produces is not whitespace — so a file of non-breaking spaces
+ * could come back "usable" purely because of where we cut. Any byte outside ASCII whitespace,
+ * including every byte of a multibyte character, counts as content.
+ */
+const ANSWER_CHUNK_BYTES = 64 * 1024;
+const ASCII_WHITESPACE = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20]);
+function answerIsUsable(path: string): boolean {
+  let fd: number | undefined;
+  try {
+    if (statSync(path).size === 0) return false;
+    fd = openSync(path, 'r');
+    const buf = Buffer.alloc(ANSWER_CHUNK_BYTES);
+    for (;;) {
+      const len = readSync(fd, buf, 0, ANSWER_CHUNK_BYTES, null);
+      if (len === 0) return false;
+      for (let i = 0; i < len; i++) if (!ASCII_WHITESPACE.has(buf[i]!)) return true;
+    }
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/**
  * Codex reports "out of credits" and "not logged in" as a bare exit 1, with the reason buried in
  * an activity log the caller has been told not to read. Both are about the human's account rather
  * than anything the caller did wrong, and both are one-line fixes, so lift them out — bounded to
  * the matched phrase, never the surrounding log.
+ *
+ * `usedKey` says which of the two accounts the failing attempt was actually spending, because the
+ * fix is different for each and the hint names an account. It used to hedge — "if CODEX_API_KEY is
+ * set, that key is the one that has run dry" — which was true while the key always won. Since
+ * `--auth` it isn't: a `subscription-only` run sent somebody to top up a key it had deliberately
+ * withheld, with the key sitting there full. Caught by the first smoke test that failed on purpose.
  */
-export function authHint(log: string): string {
+export function authHint(log: string, usedKey = true): string {
   // Anchored to codex's own `ERROR:` line, not matched anywhere in the log. The log is mostly the
   // *contents of files codex read*, so an unanchored search reads the repo's own prose back to
   // itself: this very repo documents the string "out of credits", and any failed run that happened
@@ -438,15 +605,62 @@ export function authHint(log: string): string {
      outcome this function exists to prevent. A ChatGPT subscription says "Your workspace is out
      of credits"; API-key billing says "You have no credits remaining". */
   if (/out of credits|no credits remaining|insufficient (credit|quota|funds)/i.test(errors)) {
-    return '\n  The account is out of credits. If CODEX_API_KEY is set, that key is the one that has' +
-      ' run dry — top it up at platform.openai.com billing. If it is not set, setting it (in' +
-      ' .env.local, or exported) bills pay-as-you-go instead, and takes precedence over a' +
-      ' logged-in ~/.codex/auth.json.';
+    return usedKey
+      ? '\n  CODEX_API_KEY is out of credits — top that key up at platform.openai.com billing.' +
+        ' A ChatGPT subscription with credit left is reachable with --auth subscription-only.'
+      // Not "falls back on its own": on a write run it doesn't, and this sentence would be
+      // contradicted by the very next line of the same error.
+      : '\n  The ChatGPT subscription is out of credits. Setting CODEX_API_KEY (in .env.local, or' +
+        ' exported) bills pay-as-you-go instead; --auth subscription-first spends the subscription' +
+        ' first and falls back to the key on a read-only run.';
   }
   if (/401|unauthor|not logged in|(missing|incorrect|invalid|no) api key|authentication/i.test(errors)) {
     return '\n  That looks like an auth failure. Run `codex login`, or set CODEX_API_KEY.';
   }
   return '';
+}
+
+/**
+ * Run the plan — one `codex exec` per credential, stopping at the first that produces a usable
+ * answer. Returns the **last** attempt, which is the one every error message downstream is about:
+ * with a fallback in play the earlier failure was on a credential we have already stopped using,
+ * and sending somebody to top that account up would point at the wrong one.
+ */
+async function runPlan(args: Args, prompt: string, tmpDir: string, plan: boolean[]): Promise<{
+  run: RunResult; outFile: string; logs: string[]; attempt: number;
+}> {
+  const logs: string[] = [];
+  let run!: RunResult;
+  let outFile = '';
+  let attempt = 0;
+  for (; attempt < plan.length; attempt++) {
+    const withKey = plan[attempt]!;
+    // A fresh -o path per attempt. Sharing one would let a first attempt's partial answer stand in
+    // for a retry that produced nothing — indistinguishable, from out here, from the retry working.
+    outFile = join(tmpDir, `output-${attempt + 1}.txt`);
+    run = await runCodex({
+      argv: buildCodexArgs({ ...args, outFile, prompt }),
+      timeoutMs: args.timeoutMinutes * 60_000,
+      stream: args.stream,
+      env: childEnv(process.env, args.passEnv, withKey),
+    });
+    const log = args.stream ? '' : combinedLog(run);
+    // Banner every attempt once there is more than one, *even when it printed nothing* — an
+    // attempt that failed silently is the one you most want to see listed, and a log holding only
+    // attempt 1 reads exactly like a run that never retried.
+    if (!args.stream) {
+      if (plan.length > 1) logs.push(`=== attempt ${attempt + 1}, ${credentialName(withKey)} ===\n${log}`);
+      else if (log) logs.push(log);
+    }
+    const worked = run.status === 0 && !run.spawnError && !run.timedOut && !run.overflowed
+      && answerIsUsable(outFile);
+    if (worked || attempt === plan.length - 1) break;
+    if (!shouldFallBack(run, log, { streamed: args.stream, sandbox: args.sandbox })) break;
+    // Said out loud, because a run that quietly cost twice what the caller expected is the whole
+    // risk of doing this automatically. Names the credential; never its value.
+    console.log(`${credentialName(withKey)} could not run this — retrying with ${credentialName(plan[attempt + 1]!)}.`);
+  }
+  return { run, outFile, logs, attempt };
 }
 
 async function main(): Promise<void> {
@@ -458,48 +672,54 @@ async function main(): Promise<void> {
   const prompt = args.promptFile ? readFileSync(resolve(args.promptFile), 'utf8') : args.prompt!;
   // Fresh temp dir per run, so a run's -o file can never be a previous run's leftover.
   const tmpDir = mkdtempSync(join(tmpdir(), 'run-codex-'));
-  const outFile = join(tmpDir, 'output.txt');
-  const codexArgs = buildCodexArgs({ ...args, outFile, prompt });
+  const plan = authPlan(args.auth, Boolean(process.env[CODEX_SECRET]));
 
   if (args.dryRun) {
+    const codexArgs = buildCodexArgs({ ...args, outFile: join(tmpDir, 'output-1.txt'), prompt });
     // The prompt is the last element, and with --prompt-file it can be arbitrarily large — a third
     // unbounded path to the caller's stdout, next to --stream and --print. Cap it like the answer.
     // The command stops being copy-pasteable at that size anyway (argv has its own limit), and
     // whoever wants the exact text has the file it came from.
     const shown = [...codexArgs.slice(0, -1), formatAnswer(prompt, args.maxPrintChars, args.promptFile ?? '(--prompt)')];
+    // Which credential is a property of the child's environment rather than of the command line,
+    // so an argv-only dry run would be silent about the half --auth controls. A comment line, so
+    // the thing below it still pastes.
+    console.log(`# auth ${args.auth}: ${plan.map(credentialName).join(', then ')}`);
     console.log(['codex', ...shown].join(' '));
     return;
   }
 
-  const run = await runCodex({
-    argv: codexArgs, timeoutMs: args.timeoutMinutes * 60_000, stream: args.stream,
-    env: childEnv(process.env, args.passEnv),
-  });
+  const { run, outFile, logs, attempt } = await runPlan(args, prompt, tmpDir, plan);
 
   let logPath: string | undefined;
-  if (!args.stream) {
-    const log = run.stdout + run.stderr;
-    if (log) {
-      logPath = args.activityLog
-        ? resolve(args.activityLog)
-        : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
-      mkdirSync(dirname(logPath), { recursive: true });
-      writeFileSync(logPath, log);
-    }
+  if (logs.length) {
+    logPath = args.activityLog
+      ? resolve(args.activityLog)
+      : (args.output ? `${resolve(args.output)}.activity.log` : join(tmpDir, 'activity.log'));
+    mkdirSync(dirname(logPath), { recursive: true });
+    writeFileSync(logPath, logs.join('\n'));
   }
   const hint = logPath ? `; activity log at ${logPath}` : '';
 
-  // Fail closed, most-specific cause first.
+  // Fail closed, most-specific cause first. Every branch reports the *last* attempt: with a
+  // fallback in play the earlier one failed on a credential we have already stopped using, and
+  // sending somebody to top that up would point at the wrong account.
   if (run.spawnError) fail(`could not run codex (${run.spawnError.message}) — is the Codex CLI on PATH?${hint}`);
   if (run.overflowed) fail(`codex exec exceeded the 64 MiB capture cap and was killed${hint}`);
   if (run.timedOut) fail(`codex exec timed out after ${args.timeoutMinutes}m and was killed${hint}`);
   // Only here. A timeout or a capture overflow is not an account problem, and telling someone to
   // go and buy credits because a 30-minute run was killed sends them somewhere useless.
   if (run.status !== 0) {
-    const why = args.stream ? '' : authHint(run.stdout + run.stderr);
-    fail(`codex exec exited ${run.status ?? 'null'}${run.signal ? ` [${run.signal}]` : ''}${hint}${why}`);
+    fail(`codex exec exited ${run.status ?? 'null'}${run.signal ? ` [${run.signal}]` : ''}`
+      + `${hint}${accountNote(args, run, plan, attempt)}`);
   }
-  if (!existsSync(outFile)) fail(`codex exec produced no output file${hint}`);
+  // Exit 0 and nothing to show for it. Same note as the branch above, and this is the path that
+  // most needs it: a run that died on a spent credential *and reported success* is the one place a
+  // caller has nothing else to go on. Leaving it off here left it off the one documented case.
+  if (!answerIsUsable(outFile)) {
+    fail('codex exec exited 0 but wrote no answer — which is what running out of credit mid-run'
+      + ` looks like${hint}${accountNote(args, run, plan, attempt)}`);
+  }
 
   let answerPath = outFile;
   if (args.output) {
@@ -508,7 +728,7 @@ async function main(): Promise<void> {
     copyFileSync(outFile, answerPath);
   }
 
-  console.log(`Done — codex exec (${args.model}, ${args.effort}, ${args.sandbox}).`);
+  console.log(`Done — codex exec (${args.model}, ${args.effort}, ${args.sandbox}, ${credentialName(plan[attempt]!)}).`);
   console.log(`Output: ${answerPath}`);
   if (logPath) console.log(`Activity log (not streamed): ${logPath}`);
   // The answer is the thing you asked for, so print it: a caller that has to shell out a second

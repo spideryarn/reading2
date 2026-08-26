@@ -24,7 +24,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  authHint, buildCodexArgs, childEnv, formatAnswer, parseArgs, readAnswerForConsole, runCodex,
+  authHint, authPlan, buildCodexArgs, childEnv, combinedLog, formatAnswer, isCredentialFailure,
+  parseArgs, readAnswerForConsole, runCodex, shouldFallBack,
 } from "../scripts/run-codex.js";
 
 /**
@@ -50,6 +51,21 @@ function fakeCodex(body: string): string {
 }
 
 describe("parseArgs", () => {
+  it("will not let --pass-env hand over the one variable --auth controls", () => {
+    /* --pass-env is applied after the denylist sweep, so `--pass-env CODEX_API_KEY` reached the
+       child on an attempt that had asked for the subscription: it would spend the key, report the
+       subscription, and then "fall back" to the credential it was already using. Every observable
+       thing about that run is wrong and none of it looks wrong. GPT Sol's finding, 2026-08-26. */
+    expect(() => parseArgs(["--prompt", "x", "--pass-env", "CODEX_API_KEY"]))
+      .toThrow(/--auth key-first/);
+    expect(parseArgs(["--prompt", "x", "--pass-env", "GITHUB_TOKEN"]).passEnv).toEqual(["GITHUB_TOKEN"]);
+  });
+
+  it("rejects an auth mode it does not have", () => {
+    expect(() => parseArgs(["--prompt", "x", "--auth", "chatgpt"])).toThrow(/--auth must be one of/);
+    expect(parseArgs(["--prompt", "x"]).auth).toBe("subscription-first");
+  });
+
   it("rejects a cap that would print the whole answer under a truncation banner", () => {
     // 1 and 2 are the values you reach for when checking by hand that the cap works, and they were
     // the two that returned the entire string via slice(-0).
@@ -200,6 +216,18 @@ describe("childEnv", () => {
     expect(out.CODEX_API_KEY).toBe("sk-codex");
   });
 
+  it("withholds even the codex key when the run is asking for the subscription", () => {
+    // This is the whole mechanism behind --auth subscription-first: codex prefers CODEX_API_KEY
+    // over ~/.codex/auth.json whenever the variable is set, so the only way to ask for the
+    // subscription is not to hand the key over. A version that passed the key anyway would still
+    // return an answer, still exit 0, and quietly bill the wrong account — nothing observable.
+    const out = childEnv(parent, [], false);
+    expect(out.CODEX_API_KEY).toBeUndefined();
+    // And nothing else changed: withholding *everything* would satisfy the line above too.
+    expect(out.PATH).toBe("/usr/bin");
+    expect(out.HOME).toBe("/Users/x");
+  });
+
   it("lets a named variable through, for an MCP server with a token of its own", () => {
     const out = childEnv(parent, ["GITHUB_TOKEN"]);
     expect(out.GITHUB_TOKEN).toBe("ghp_x");
@@ -236,6 +264,18 @@ describe("authHint", () => {
     expect(hint).toMatch(/billing|top|add credit/i);
   });
 
+  it("blames the account the run was actually spending", () => {
+    /* The hint used to hedge — "if CODEX_API_KEY is set, that key is the one that has run dry" —
+       which was true only while the key always won. Under --auth subscription-only the key is
+       deliberately withheld, and that sentence sent somebody to top up a full key while the
+       subscription was the empty one. A confident wrong hint is worse than no hint, and this is
+       the shape it takes when a fact ("the key always wins") quietly stops being true. */
+    const spent = "ERROR: Your workspace is out of credits.";
+    expect(authHint(spent, false)).toMatch(/subscription is out of credits/i);
+    expect(authHint(spent, false)).toMatch(/setting CODEX_API_KEY/i);
+    expect(authHint(spent, true)).toMatch(/CODEX_API_KEY is out of credits/i);
+  });
+
   it("reads codex's own ERROR lines, not the files codex printed", () => {
     // The activity log is mostly the *contents of files codex read*. This repo's own documentation
     // contains the string "out of credits", so an unanchored search would tell someone whose run
@@ -261,6 +301,112 @@ describe("authHint", () => {
     const hint = authHint(log);
     expect(hint).not.toContain("SECRET-FILE-CONTENTS");
     expect(hint.length).toBeLessThan(300);
+  });
+});
+
+describe("authPlan", () => {
+  it("spends the subscription first and keeps the key in reserve", () => {
+    expect(authPlan("subscription-first", true)).toEqual([false, true]);
+  });
+
+  it("does not run the same credential twice when there is nothing to fall back to", () => {
+    // With no key set, a second attempt would re-run the identical failure against the identical
+    // account — twice the wall-clock for the same error, and a log that looks like a flake.
+    expect(authPlan("subscription-first", false)).toEqual([false]);
+  });
+
+  it("keeps the old behaviour reachable, and one attempt means one attempt", () => {
+    expect(authPlan("key-first", true)).toEqual([true]);
+    expect(authPlan("subscription-only", true)).toEqual([false]);
+  });
+
+  it("does not claim key-first spent a key that does not exist", () => {
+    /* With no key set, codex falls through to the subscription and the run works — but the status
+       line and the error hint both name whatever this array says, so `[true]` sent somebody to top
+       up a key they had never had. The run succeeding is exactly why nothing else would catch it.
+       GPT Sol's finding, 2026-08-26. */
+    expect(authPlan("key-first", false)).toEqual([false]);
+  });
+});
+
+describe("combinedLog", () => {
+  it("keeps a channel boundary that would otherwise fuse two lines into one", () => {
+    // Plain concatenation makes this "…still working.ERROR: Your workspace is out of credits",
+    // which fails the ^ERROR anchor — so the fallback would not fire on a real spent credential.
+    const run = { stdout: "…still working.", stderr: "ERROR: Your workspace is out of credits." };
+    expect(isCredentialFailure(combinedLog(run))).toBe(true);
+    expect(isCredentialFailure(run.stdout + run.stderr)).toBe(false);
+  });
+});
+
+describe("isCredentialFailure", () => {
+  it("knows both spellings of out-of-credits and the rate-limit wording", () => {
+    // The two auth paths word the same failure differently, which has already cost this repo two
+    // review runs once — see the authHint tests below.
+    expect(isCredentialFailure("ERROR: Your workspace is out of credits.")).toBe(true);
+    expect(isCredentialFailure("ERROR: You have no credits remaining.")).toBe(true);
+    expect(isCredentialFailure("ERROR: 429 rate limit exceeded")).toBe(true);
+    expect(isCredentialFailure("ERROR: You've hit your usage limit. Try again later.")).toBe(true);
+    expect(isCredentialFailure("ERROR: status 401 Unauthorized")).toBe(true);
+  });
+
+  it("reads codex's ERROR lines, not the files codex printed", () => {
+    // Same trap as authHint's, and worse here: an unanchored match doesn't produce a wrong hint,
+    // it spends the second credential on a run that failed for an unrelated reason. This page is
+    // in this repo and contains every phrase above.
+    const log = [
+      "exec bash -lc 'cat docs/reusable/codex-cli-as-subagent.md'",
+      "  - **Running out of credit...** the reason (`out of credits`) is in the activity log",
+      "  see also 429 rate limit handling and `invalid api key` in the fixtures",
+      "turn.failed: model returned no content",
+    ].join("\n");
+    expect(isCredentialFailure(log)).toBe(false);
+  });
+
+  it("says no to a failure that is about the work", () => {
+    expect(isCredentialFailure("ERROR: turn.failed: model returned no content")).toBe(false);
+  });
+});
+
+describe("shouldFallBack", () => {
+  const clean = { status: 1, timedOut: false, overflowed: false };
+  const readOnly = { streamed: false, sandbox: "read-only" };
+  const spent = "ERROR: Your workspace is out of credits.";
+
+  it("spends the second credential when the log says the first one is spent", () => {
+    expect(shouldFallBack(clean, spent, readOnly)).toBe(true);
+  });
+
+  it("does not spend it on a failure the credential did not cause", () => {
+    // A 45-minute review that times out would otherwise run for another 45 and time out again.
+    expect(shouldFallBack({ ...clean, timedOut: true }, spent, readOnly)).toBe(false);
+    expect(shouldFallBack({ ...clean, overflowed: true }, spent, readOnly)).toBe(false);
+    expect(shouldFallBack({ ...clean, spawnError: new Error("ENOENT") }, "", readOnly)).toBe(false);
+    expect(shouldFallBack(clean, "ERROR: turn.failed: model returned no content", readOnly)).toBe(false);
+  });
+
+  it("wants evidence even when the exit code is 0 and there is no answer", () => {
+    /* This used to fall back unconditionally, reasoning that an exit code of 0 tells you nothing.
+       It doesn't — but the log does. The one time this was observed (0.149.1, a review that read
+       ~279,000 tokens and wrote no -o file) the credit error was right there in the log, so the
+       evidence rule catches the real case and the unconditional branch only added false retries.
+       GPT Sol's finding, 2026-08-26. */
+    expect(shouldFallBack({ ...clean, status: 0 }, "", readOnly)).toBe(false);
+    expect(shouldFallBack({ ...clean, status: 0 }, spent, readOnly)).toBe(true);
+  });
+
+  it("never falls back on a streamed run, which threw its evidence away", () => {
+    // The old rule was "no log, so fall back on any failure", which is backwards: no evidence is a
+    // reason not to spend the second credential. --stream is for a human, who can re-run it.
+    expect(shouldFallBack(clean, spent, { streamed: true, sandbox: "read-only" })).toBe(false);
+  });
+
+  it("never repeats a write-capable run, whatever the log says", () => {
+    // Attempt 2 starts fresh and runs the whole prompt again over attempt 1's half-finished edits.
+    // Whether that is recoverable is a judgement about the diff, so it belongs to whoever reads it.
+    for (const sandbox of ["workspace-write", "danger-full-access"]) {
+      expect(shouldFallBack(clean, spent, { streamed: false, sandbox })).toBe(false);
+    }
   });
 });
 
@@ -483,7 +629,9 @@ describe("the CLI, end to end", () => {
     // So the stand-in does what a debugging tool call would do: dumps its environment into every
     // channel it has. A fake child that never reads the environment proves only that our own
     // status line doesn't enumerate it, which was never the risk.
-    const r = runCli(`env\nenv >&2\nenv > "$out"`, [], {
+    /* --auth key-first because the default no longer hands the key to the first attempt, and the
+       last assertion here is that it arrives. The withheld case is childEnv's own test above. */
+    const r = runCli(`env\nenv >&2\nenv > "$out"`, ["--auth", "key-first"], {
       CODEX_API_KEY: "sk-CODEX-SENTINEL",
       OPENROUTER_API_KEY: "sk-OPENROUTER-SENTINEL",
       SUPABASE_SERVICE_ROLE_KEY: "sk-SUPABASE-SENTINEL",
@@ -526,5 +674,137 @@ describe("the CLI, end to end", () => {
     expect(r.stdout).toContain("PROMPT-HEAD");
     expect(r.stdout).toContain("approval_policy=never");
     expect(r.stdout.length).toBeLessThan(25_000);
+  }, 60_000);
+
+  /**
+   * Which credential a run spent is invisible from outside: the answer arrives, the exit code is 0,
+   * and the only difference is which account got billed. So the stand-in *records* what it was
+   * handed, one line per attempt, and the tests read that file. Asserting on the wrapper's own
+   * status line instead would pass just as happily if the plan were never followed.
+   */
+  function attemptsCodex(body: string, extraArgs: string[] = []) {
+    const attempts = join(mkdtempSync(join(tmpdir(), "attempts-")), "attempts");
+    const record = 'if [ -n "$CODEX_API_KEY" ]; then echo key >> "$ATTEMPTS"; else echo sub >> "$ATTEMPTS"; fi';
+    // CODEX_API_KEY is passed explicitly so the test doesn't depend on a .env.local existing —
+    // without a key set anywhere, subscription-first is one attempt and every assertion below
+    // would be about a plan that was never made.
+    const r = runCli(`${record}\n${body}`, extraArgs, { ATTEMPTS: attempts, CODEX_API_KEY: "sk-TEST" });
+    return { ...r, attempts: readFileSync(attempts, "utf8").trim().split("\n") };
+  }
+
+  const outOfCredits = 'echo "ERROR: Your workspace is out of credits." >&2; exit 1';
+
+  it("falls back to the key when the subscription is spent, and says so", () => {
+    const r = attemptsCodex(
+      `if [ -z "$CODEX_API_KEY" ]; then ${outOfCredits}; fi\nprintf 'THE-ANSWER\\n' > "$out"`,
+    );
+    expect(r.attempts).toEqual(["sub", "key"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("THE-ANSWER");
+    // A run that quietly cost twice what the caller expected is the risk of doing this
+    // automatically, so the retry is announced — by credential name, never its value.
+    expect(r.stdout).toContain("retrying with CODEX_API_KEY");
+    expect(r.stdout).not.toContain("sk-TEST");
+    // Both attempts' logs are kept: diagnosing why the first credential failed is the whole reason
+    // anyone opens this file, and it is the attempt the error message no longer talks about.
+    const log = readFileSync(`${r.answerPath}.activity.log`, "utf8");
+    expect(log).toContain("attempt 1");
+    expect(log).toContain("attempt 2");
+  }, 60_000);
+
+  it("stops at the subscription when the subscription works", () => {
+    // The half that a fallback test cannot see: always retrying would satisfy the test above.
+    const r = attemptsCodex(`printf 'THE-ANSWER\\n' > "$out"`);
+    expect(r.attempts).toEqual(["sub"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("THE-ANSWER");
+    expect(r.stdout).not.toContain("retrying");
+  }, 60_000);
+
+  it("does not spend the key on a failure the subscription did not cause", () => {
+    // Retrying this pays for the same wrong answer twice, and on a 45-minute review it costs
+    // 45 minutes to learn nothing.
+    const r = attemptsCodex('echo "ERROR: turn.failed: model returned no content" >&2; exit 1');
+    expect(r.attempts).toEqual(["sub"]);
+    expect(r.status).toBe(1);
+  }, 60_000);
+
+  it("falls back when the first attempt exits zero having written nothing", () => {
+    // Observed on 0.149.1: out of credit mid-run, exit 0, -o file never created. The status code
+    // says the run succeeded, so the answer is what has to catch it — and the log is what says
+    // whose fault it was, which is why the stand-in prints the error it really printed.
+    const r = attemptsCodex(
+      `if [ -z "$CODEX_API_KEY" ]; then echo "ERROR: Your workspace is out of credits." >&2; exit 0; fi\nprintf 'LATE\\n' > "$out"`,
+    );
+    expect(r.attempts).toEqual(["sub", "key"]);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("LATE");
+  }, 60_000);
+
+  it("treats a large whitespace-only answer as no answer too", () => {
+    /* The first version scanned only the first 64 KiB and called anything bigger usable, which
+       said a 200 KiB file of spaces was an answer — the exact claim the check exists to deny, and
+       one that only shows up above a threshold nobody tests by hand. GPT Sol's finding. */
+    const blank = `printf ' %.0s' $(seq 1 200000) > "$out"`;
+    const r = attemptsCodex(
+      `if [ -z "$CODEX_API_KEY" ]; then echo "ERROR: Your workspace is out of credits." >&2; ${blank}; exit 0; fi\nprintf 'REAL\\n' > "$out"`,
+    );
+    expect(r.attempts).toEqual(["sub", "key"]);
+    expect(r.stdout).toContain("REAL");
+  }, 60_000);
+
+  it("points a write run at --auth key-first even when it exits zero", () => {
+    // The non-zero branch had the note and this one didn't — and this is the path that most needs
+    // it, being the one where the run reported success and the caller has nothing else to go on.
+    const r = attemptsCodex(
+      'echo "ERROR: Your workspace is out of credits." >&2; exit 0',
+      ["--sandbox", "workspace-write"],
+    );
+    expect(r.attempts).toEqual(["sub"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("wrote no answer");
+    expect(r.stderr).toContain("--auth key-first");
+  }, 60_000);
+
+  it("treats a whitespace-only answer as no answer", () => {
+    // Exit 0 and a lone newline in the -o file. `existsSync`, and then a size check, both call
+    // this a success; a caller that pastes it into a doc records silence as agreement.
+    const r = attemptsCodex(
+      `if [ -z "$CODEX_API_KEY" ]; then echo "ERROR: Your workspace is out of credits." >&2; printf '\\n  \\n' > "$out"; exit 0; fi\nprintf 'REAL\\n' > "$out"`,
+    );
+    expect(r.attempts).toEqual(["sub", "key"]);
+    expect(r.stdout).toContain("REAL");
+  }, 60_000);
+
+  it("does not repeat a workspace-write run, and says why not", () => {
+    // The second attempt would run the whole prompt again over the first one's edits. Failing
+    // with a bare exit 1 instead would look exactly like a run --auth was never going to help.
+    const r = attemptsCodex(`${outOfCredits}`, ["--sandbox", "workspace-write"]);
+    expect(r.attempts).toEqual(["sub"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("--auth key-first");
+  }, 60_000);
+
+  it("does not offer a fallback to a write run whose failure it could not have fixed", () => {
+    // The note is only useful when the other credential would actually have helped. On a bad
+    // prompt it is noise, in the one place somebody is reading carefully.
+    const r = attemptsCodex('echo "ERROR: turn.failed: model returned no content" >&2; exit 1',
+      ["--sandbox", "workspace-write"]);
+    expect(r.status).toBe(1);
+    expect(r.stderr).not.toContain("--auth key-first");
+  }, 60_000);
+
+  it("--auth subscription-only never reaches for the key, even when the run fails", () => {
+    const r = attemptsCodex(`${outOfCredits}`, ["--auth", "subscription-only"]);
+    expect(r.attempts).toEqual(["sub"]);
+    expect(r.status).toBe(1);
+    // And it blames the account it was actually spending, not the full key sitting beside it.
+    expect(r.stderr).toContain("ChatGPT subscription is out of credits");
+  }, 60_000);
+
+  it("--auth key-first keeps the old single-attempt behaviour", () => {
+    const r = attemptsCodex(`printf 'THE-ANSWER\\n' > "$out"`, ["--auth", "key-first"]);
+    expect(r.attempts).toEqual(["key"]);
+    expect(r.status).toBe(0);
   }, 60_000);
 });

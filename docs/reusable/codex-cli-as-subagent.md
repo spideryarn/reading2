@@ -48,6 +48,71 @@ because one exists — verified 2026-08-26 on 0.149.1, where a subscription that
 fine as soon as the key was set for the one command. So the two are a fallback pair, and a
 credits-exhausted subscription doesn't have to stop a run.
 
+### Which credential a run spends
+
+Since 2026-08-26 the wrapper decides that, with `--auth`:
+
+| Mode | What runs |
+|---|---|
+| `subscription-first` (**default**) | the subscription; if that credential is spent, the whole run again with the key |
+| `key-first` | the key, or the subscription if no key is set — one attempt. The behaviour before this flag existed |
+| `subscription-only` | the subscription, never the key — one attempt |
+
+The subscription goes first because it is already paid for. There is no codex flag for this: codex
+prefers `CODEX_API_KEY` whenever the variable is set, so **"prefer the subscription" is implemented
+by withholding the key** — `childEnv(…, useCodexKey: false)` — and the fallback is a second full
+run with it put back.
+
+### When it actually falls back
+
+**Positive evidence, every time.** The bar is a credential phrase in codex's own `ERROR:` lines and
+nothing else clears it — `isCredentialFailure` matches out-of-credits (both spellings), rate and
+usage limits, 401 and 429, anchored the way `authHint` is. Unanchored, it would retry any run that
+happened to `cat` this very page.
+
+Three things never fall back, and each was a deliberate narrowing:
+
+- **A timeout, a capture overflow, a missing binary.** Not the account's fault. A 45-minute review
+  that times out would otherwise spend another 45 minutes timing out again.
+- **A streamed run** (`--stream`), which handed both channels to the terminal and so captured no
+  evidence at all. The first version read that as "no log, so fall back on any failure", which is
+  backwards: *no evidence is a reason not to spend the second credential.* A human is watching a
+  `--stream` run by definition, and they can re-run it.
+- **A write-capable run** (`workspace-write`, `danger-full-access`), whatever the log says. Attempt
+  2 starts fresh and runs the whole prompt again over attempt 1's half-finished edits. Whether that
+  is recoverable is a judgement about the diff, so it belongs to whoever reads it. The failure
+  message says so and names `--auth key-first`, because otherwise it looks exactly like a run
+  `--auth` was never going to help.
+
+**Exit 0 with an empty, whitespace-only or missing `-o` file** is a failure rather than an answer —
+see [the gotcha below](#gotchas) — but it falls back only on the same evidence as anything else.
+It used to fall back unconditionally, on the reasoning that an exit code of 0 tells you nothing;
+true, but the log does, and the one time this was actually observed the credit error was right
+there in it. So the unconditional branch only ever added false retries. GPT Sol's finding.
+
+`--pass-env CODEX_API_KEY` is **rejected**: `--pass-env` is applied after the denylist sweep, so it
+would hand the key to an attempt that had asked for the subscription — which then spends the key,
+reports the subscription, and "falls back" to the credential it was already using. Every observable
+thing about that run is wrong and none of it looks wrong. Also GPT Sol's.
+
+Two more things worth knowing:
+
+- **A dead first credential costs about 12 seconds**, measured 2026-08-26: five
+  `ERROR: Reconnecting... n/5` lines and then the real reason. That is the standing tax on every
+  run while the subscription is dry. `--auth key-first` skips it.
+- **The retry is announced on stdout** (`the ChatGPT subscription could not run this — retrying
+  with CODEX_API_KEY`) and the final status line names the credential that produced the answer. A
+  run that quietly cost twice what you expected is the whole risk of doing this automatically.
+
+Both attempts' activity goes into one log file, banner-separated (`=== attempt 1, the ChatGPT
+subscription ===`), and a silent attempt still gets its banner — a log holding only attempt 1 reads
+exactly like a run that never retried.
+
+The honest gap: `ERROR:` is a log level, not proof of provenance. A command codex runs could print
+`ERROR: 429` of its own and buy itself one wasted retry. Given the three exclusions above, the worst
+case is a read-only run repeated once, so this is not worth a provenance mechanism — but it is why
+the bar is codex's ERROR lines rather than the whole log.
+
 **In this repo, put it in `.env.local`.** The wrapper loads that file itself, via the same
 [`src/env.ts`](../../src/env.ts) every other script here uses, so nothing has to be exported first
 and an agent doesn't have to know the trick. The import is dynamic, and *only* a missing module is
@@ -55,23 +120,20 @@ ignored — anything else the loader throws is rethrown, because a half-built en
 downstream as an auth failure pointing at the wrong thing. See
 [setup-dev.md § Secrets](../project/setup-dev.md#secrets).
 
-> **This paragraph used to end "a real environment variable still wins over the file". In this repo
-> it no longer does, and that closes the fallback pair above.** `src/env.ts` was reversed on
-> 2026-08-26 at Greg's request — `.env.local` now beats anything the shell exported, because two
-> profile files were exporting a *different* OpenRouter key and silently overriding the one the repo
-> names. Deliberate and right for that problem, and it has a consequence here: **a
-> `CODEX_API_KEY` in `.env.local` that has run out of credits cannot be got round from the calling
-> shell.** `CODEX_API_KEY= npx tsx scripts/run-codex.ts …` prints
-> `[env] .env.local overrode CODEX_API_KEY from the shell environment` and uses the dead key anyway,
-> so the wrapper never reaches a perfectly good `codex login` sitting in `~/.codex/auth.json`.
-> Observed 2026-08-26, on a review that had to be re-run by hand.
+> **This paragraph used to end "a real environment variable still wins over the file", and it no
+> longer does.** `src/env.ts` was reversed on 2026-08-26 at Greg's request — `.env.local` now beats
+> anything the shell exported, because two profile files were exporting a *different* OpenRouter key
+> and silently overriding the one the repo names. Deliberate and right for that problem, and for a
+> day it had a consequence here: a dead `CODEX_API_KEY` in `.env.local` could not be got round from
+> the calling shell, because `CODEX_API_KEY= npx tsx scripts/run-codex.ts …` prints
+> `[env] .env.local overrode CODEX_API_KEY from the shell environment` and uses the dead key anyway.
 >
-> Until the wrapper grows a flag for it, the way through is the
-> [escape hatch](#raw-codex-exec-the-escape-hatch) with the variable stripped from the child —
-> `env -u CODEX_API_KEY codex exec …` — which does fall back to the subscription. Take the wrapper's
-> three guarantees with you by hand: `< prompt.md` (a finite file that EOFs), a `timeout`, and
-> `> some.log 2>&1` so the activity log lands in a file and only the `-o` answer is read. Verified
-> working on a `gpt-5.6-sol` review the same day.
+> `--auth` closes that: the choice is now a flag rather than a variable you have to be able to
+> unset, and the wrapper strips the key from the child itself. The
+> [escape hatch](#raw-codex-exec-the-escape-hatch) equivalent is still `env -u CODEX_API_KEY codex
+> exec …`, with the wrapper's three guarantees carried by hand: `< prompt.md` (a finite file that
+> EOFs), a `timeout`, and `> some.log 2>&1` so the activity log lands in a file and only the `-o`
+> answer is read.
 
 ### What codex is allowed to see
 
@@ -166,9 +228,9 @@ npx tsx scripts/run-codex.ts --sandbox workspace-write \
 ```
 
 Flags: `--model` · `--prompt` / `--prompt-file` · `--sandbox` (default `read-only`) · `--effort`
-(default `high`) · `--repo-dir` · `--timeout-minutes` (default 30) · `--output` · `--activity-log` ·
-`--stream` · `--print` · `--quiet` · `--max-print-chars` (default 20,000) · `--pass-env` ·
-`--dry-run`.
+(default `high`) · `--auth` (default `subscription-first`) · `--repo-dir` · `--timeout-minutes`
+(default 30) · `--output` · `--activity-log` · `--stream` · `--print` · `--quiet` ·
+`--max-print-chars` (default 20,000) · `--pass-env` · `--dry-run`.
 
 ### What reaches the caller's context
 
@@ -431,10 +493,14 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   `ERROR: Reconnecting... n/5` lines, so the first thing in the log is not the cause; and the run
   still exits 0 from the wrapper's own perspective when launched in the background, so a caller
   that checks only the exit status learns nothing.
-- **A dead key in `.env.local` cannot be overridden from the shell**, so the documented
-  key-or-subscription fallback does not work here. See [above](#setup-once-per-machine).
+- **A dead key in `.env.local` cannot be overridden from the shell** — `.env.local` wins over the
+  environment since 2026-08-26. Use `--auth` rather than trying to unset the variable; see
+  [Which credential a run spends](#which-credential-a-run-spends).
 - **Raw `codex exec` runs out of credit and exits _zero_, having written no `-o` file at all.**
-  The wrapper's exit-1-plus-hint is a courtesy of the wrapper; the escape hatch has none. Observed
+  The wrapper checks that the answer file exists, is non-empty *and is not just whitespace*
+  (`existsSync` alone passed on the zero-byte file a killed run leaves behind; a size check alone
+  passes on a lone newline), and reports exit-0-with-no-answer as a failure rather than an answer.
+  The escape hatch has none of that. Observed
   2026-08-26 on 0.149.1: a `--sandbox read-only` review read ~279,000 tokens, compacted its
   context, hit `ERROR: Your workspace is out of credits`, and ended `exit=0` with the answer path
   never created. A caller checking only the status code learns nothing, and a caller that
@@ -443,8 +509,14 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
 - **The two credentials can both be dry at once, and they fail in different words.** The pair is a
   fallback only while one of them has credit: `CODEX_API_KEY` said `You have no credits remaining`
   and the ChatGPT subscription underneath it said `Your workspace is out of credits` on the same
-  afternoon. Unsetting the key to fall back is worth trying — it costs one command — but confirm a
-  verdict arrived rather than assuming the fallback worked.
+  afternoon. `--auth subscription-first` now tries both for you, at the cost of ~12s on the dead
+  one — but confirm a verdict arrived rather than assuming the fallback worked.
+- **The error hint names an account, so it has to know which one the run was spending.** It used to
+  hedge ("if `CODEX_API_KEY` is set, that key is the one that has run dry"), which was true only
+  while the key always won. Under `--auth subscription-only` the key is withheld on purpose, and
+  that sentence sent you to top up a full key while the empty one sat elsewhere. `authHint` now
+  takes the credential as an argument. The shape is worth remembering: a hint that was correct
+  because of a fact, and the fact stopped being true.
 - **Running out of credit looks like a generic non-zero exit.** `codex exec` exits 1 and the wrapper
   reports `codex exec exited 1`; the actual reason (`Your workspace is out of credits`) is in the
   activity log, which is why the failure message names its path — and why the wrapper now lifts that
