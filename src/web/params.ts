@@ -25,14 +25,10 @@
  */
 import { createParser, debounce } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
-import {
-  DEFAULT_SORT,
-  isSortKey,
-  type ShelfFilter,
-  type ShelfView,
-  type SortDir,
-  type SortKey,
-} from "./library-sort.js";
+import { DIAGRAMS, type DiagramKind } from "./diagram.js";
+import { DEFAULT_BY } from "./library-columns.js";
+import { sameList } from "./lib/table-sort.js";
+import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
 
 /* Which article is NOT in here. It is the path — `/read/<slug>` — and has been
    since the library landed, 2026-08-25. The rule the two halves divide on:
@@ -228,9 +224,10 @@ export const panelParam = createParser<Panel>({
  * slot was the right shape: it cost this list one word. Search arrived the day
  * after (docs/project/search.md) and cost it one more, which is now enough
  * evidence to stop calling it evidence. Summary is the fourth
- * (docs/project/summaries.md).
+ * (docs/project/summaries.md). Diagram is the fifth
+ * (docs/project/diagram.md), and it cost this list one word as well.
  */
-export const MODES = ["toc", "chat", "glossary", "search", "summary"] as const;
+export const MODES = ["toc", "chat", "glossary", "search", "summary", "diagram"] as const;
 export type Mode = (typeof MODES)[number];
 
 export const modeParam = createParser<Mode>({
@@ -677,6 +674,32 @@ export const rungParam = createParser<Rung>({
   .withOptions({ history: "push" });
 
 /**
+ * Which picture the Diagram mode is drawing.
+ *
+ * Three of them, and the toggle is not a skin — see src/web/diagram.ts for what
+ * each one is honest about. Short version: `strata` is to scale and therefore
+ * cannot always be legible; `tree` and `mindmap` are legible and therefore
+ * cannot be to scale. That is a real choice a reader makes, so it belongs in
+ * the URL like every other bit of view state (docs/project/url-state.md).
+ *
+ * `strata` is the default because it is the one that says something the rest of
+ * this app does not already say: how much of the article a section actually is.
+ *
+ * `push`, like `?rung=` and `?cols=`. Switching picture is a deliberate act on
+ * the view and Back should undo it — and unlike stepping between glossary terms,
+ * you do not do it twice in ten seconds.
+ *
+ * An unknown value degrades to `strata` rather than throwing, the same rule as
+ * every other parser in this file.
+ */
+export const diagramParam = createParser<DiagramKind>({
+  parse: (v) => (DIAGRAMS.includes(v as DiagramKind) ? (v as DiagramKind) : null),
+  serialize: (v) => v,
+})
+  .withDefault("strata")
+  .withOptions({ history: "push" });
+
+/**
  * How far down the tree the summary panel goes — their structure panel's depth
  * cut-off, which is the one control that view had and the one thing it proved:
  * *one control, whole-document granularity* is usable.
@@ -709,7 +732,7 @@ export const deepParam = createParser<number>({
 /* -------------------------------------------------------- the library --- */
 
 /**
- * The shelf's own five parameters — `/?q=seth&by=opened&dir=desc&view=table`.
+ * The shelf's own five parameters — `/?q=seth&by=length,title&dir=desc,asc&view=table`.
  *
  * These live on `/`, and every parameter above lives on `/read/<slug>`.
  *
@@ -720,15 +743,10 @@ export const deepParam = createParser<number>({
  * `/?slug=x` spelling to `/read/x` **keeping every other parameter it arrived
  * with**, so `/?slug=x&by=length` really does land on an article page carrying
  * `by=length`. Distinct names are what make that harmless. A cross-family
- * review found the first version of this comment claiming the boundary was
+ * review found an earlier version of this comment claiming the boundary was
  * sealed, 2026-08-26. Beyond that: a URL should be readable without knowing
  * which page it is for, and a doc table with two rows called `sort` meaning
  * different things is a doc that has to apologise for itself.
- *
- * The rule they are here at all is the one this file exists for: reload the
- * homepage, or send somebody the link, and you get the same shelf back.
- * Until 2026-08-26 the search box was `useState` and the order was the server's,
- * so neither survived a reload.
  */
 
 /**
@@ -747,33 +765,60 @@ export const libraryQueryParam = createParser<string>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /**
- * Which key the shelf is ordered by — `by=length`.
+ * Which keys the shelf is ordered by, coarsest first — `by=length,title`.
  *
- * The vocabulary is `SORTS` in library-sort.ts rather than a list repeated
- * here, so a key cannot exist in the control and not in the URL. An unknown
- * value returns `null` and the shelf falls back to `added`, which is the order
- * it has always had — a mangled link degrades to the ordinary homepage.
+ * **A list rather than one value**, because since the move to TanStack Table a
+ * shift-click adds a second key, and a compound order that the URL cannot carry
+ * is an order you cannot reload into or send to anybody. One key is just a list
+ * of one.
+ *
+ * The vocabulary is validated against the columns themselves rather than a list
+ * repeated here — `sortingFromUrl` drops any id the table does not have, so a
+ * mangled link degrades to the ordinary homepage rather than to an empty sort
+ * that looks deliberate. This parser only has to get the *shape* right.
+ *
+ * `eq` is written out because `===` on two arrays is always false, and without
+ * it nuqs never recognises the default and stamps `?by=added&dir=desc` onto
+ * every link to the homepage.
  */
-export const libraryByParam = createParser<SortKey>({
-  parse: (v) => (isSortKey(v) ? v : null),
-  serialize: (v) => v,
+export const libraryByParam = createParser<string[]>({
+  parse: (v) => {
+    const ids = v.split(",").filter((s) => s !== "");
+    return ids.length ? ids : null;
+  },
+  serialize: (v) => v.join(","),
+  eq: sameList,
 })
-  .withDefault(DEFAULT_SORT)
+  .withDefault(DEFAULT_BY)
   .withOptions({ history: "push" });
 
 /**
- * Which way round — `dir=asc`.
+ * Which way round each key goes — `dir=desc,asc`, paired with `by` by position.
  *
- * Absent means "whichever way this key naturally goes" (newest first for a
- * date, longest first for a length — `SortSpec.natural`), and that is why this
- * has **no default**: a default of `desc` would be wrong for Title, and baking
- * each key's natural direction into the parser would put half of `SORTS` in
- * this file. `null` here means "the reader has not chosen", which the shelf
- * reads through `sortSpec(by).natural`.
+ * **It has no default, and that is the whole point of it.** Absent means "each
+ * key goes whichever way it naturally goes" — newest first for a date, longest
+ * first for a length, A-to-Z for a title (`sortDescFirst` on the column, read
+ * through `naturalDirections`). That is what lets `?by=title` be a link
+ * somebody can type.
+ *
+ * **This had `.withDefault(["desc"])` for about an hour and it was a real bug**:
+ * with a default, the parameter is never absent, so `sortingFromUrl`'s
+ * per-column fallback never ran and `?by=title` gave Z-to-A — the exact
+ * behaviour the fallback exists to prevent, in the exact link the fallback was
+ * written for. nuqs's `clearOnDefault` cannot express this, because the default
+ * here is *per column* rather than one value; so the shelf leaves the parameter
+ * out itself when `isAllNatural` says it would add nothing. Found by a
+ * cross-family review, 2026-08-26.
  */
-export const libraryDirParam = createParser<SortDir>({
-  parse: (v) => (v === "asc" || v === "desc" ? v : null),
-  serialize: (v) => v,
+export const libraryDirParam = createParser<("asc" | "desc")[]>({
+  parse: (v) => {
+    const parts = v.split(",");
+    return parts.every((p) => p === "asc" || p === "desc")
+      ? (parts as ("asc" | "desc")[])
+      : null;
+  },
+  serialize: (v) => v.join(","),
+  eq: sameList,
 }).withOptions({ history: "push" });
 
 /**
@@ -793,12 +838,12 @@ export const libraryViewParam = createParser<ShelfView>({
  * Everything, or only what you have never opened — `show=unread`.
  *
  * A filter rather than an end of the "last opened" sort, because a missing
- * value is not a small one — see library-sort.ts, which keeps unopened articles
- * at the foot of that sort in *both* directions precisely so this chip is the
- * only way to ask the question.
+ * value is not a small one — TanStack's `sortUndefined: "last"` keeps unopened
+ * articles at the foot of that sort in *both* directions precisely so this chip
+ * is the only way to ask the question.
  */
 export const libraryShowParam = createParser<ShelfFilter>({
-  parse: (v) => (v === "unread" ? v : v === "all" ? v : null),
+  parse: (v) => (v === "unread" || v === "all" ? v : null),
   serialize: (v) => v,
 })
   .withDefault("all")

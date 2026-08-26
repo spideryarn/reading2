@@ -97,6 +97,7 @@ import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type React
 import {
   BookA,
   ChevronUp,
+  Network,
   Info,
   Layers,
   ListOrdered,
@@ -253,6 +254,15 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     icon: Search,
     label: "Search",
     blurb: "Find a passage by the words it uses, or by what it says",
+  },
+  /* Diagram sits between the ways *into* the article and the conversation about
+     it, next to Summary rather than next to Chat, because it is the same move
+     Summary makes — the article restated — with a picture instead of prose. */
+  {
+    mode: "diagram",
+    icon: Network,
+    label: "Diagram",
+    blurb: "The article's shape as a picture: to scale, as a tree, or as a mindmap",
   },
   {
     mode: "chat",

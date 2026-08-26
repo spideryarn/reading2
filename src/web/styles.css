@@ -64,6 +64,20 @@
   --highlight-wash: color-mix(in oklab, var(--spideryarn-orange) 20%, var(--page));
   --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 85%, white);
 
+  /* **A conversation's mark, and it is a different HUE from a comment's rather
+     than a different alpha** — the rule docs/project/search.md sets out for its
+     own wash, for the reason it gives: two artefacts told apart by strength
+     read as the same thing seen more or less clearly. A comment is the orange;
+     a chat is a cool blue, which is as far from it as the palette goes while
+     staying legible on a near-black ground.
+
+     `oklch` directly rather than a mix, and mixed `in oklab` where it is mixed
+     at all: `--page` is written with an explicit hue of 0, so polar
+     interpolation drags anything mixed with it round towards pink. The long
+     note on --highlight-wash above has the diagnosis. */
+  --chat-mark: oklch(0.72 0.12 235);
+  --chat-mark-wash: color-mix(in oklab, var(--chat-mark) 18%, var(--page));
+
   /* Left-edge tints that distinguish the granularity columns at a glance.
      One hue family, so the columns read as one system rather than as a rainbow —
      but the ramp runs down BOTH lightness and chroma, coarse to fine. The
@@ -1083,6 +1097,13 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
      to rather than out of its own middle. */
 }
 
+/* The one tooltip the pointer may enter. Every other one on this page must not
+   take hover — a spine tooltip that landed under the pointer would keep itself
+   open — but the glossary term's card carries a link out to the term's page and
+   a button into the glossary band, and a link you cannot reach is a picture of
+   a link. TermTooltip.tsx. */
+.tooltip-anchor.interactive { pointer-events: auto; }
+
 /* Colour is set on the element in Tooltip.tsx, not here — see the note there.
    A stylesheet rule beats the presentation attributes FloatingArrow relies on
    and paints a seam across the arrow's mouth. */
@@ -1231,20 +1252,52 @@ mark.cmt[data-mark-end]::after {
   color: var(--highlight);
 }
 
-/* A glossary term's occurrences, while that term is selected in the panel.
-   **Transient by design** — the version this was borrowed from underlined every
-   term in every article, always, which is the prose acquiring marks the author
-   did not write on the model's initiative rather than the reader's. These
-   appear when a term is pressed and go when it is unpressed.
+/* A glossary term's occurrences. **Standing, since 2026-08-26**, and the
+   comment here used to say the opposite at length.
+
+   It said the marks were transient by design: the version this was borrowed
+   from underlined every term in every article always, which is the prose
+   acquiring marks on the model's initiative rather than the reader's, so ours
+   appeared when a term was pressed and went when it was unpressed. Greg
+   reversed it — *"Glossary entries should always be underlined in the verbatim
+   text column, even outside Glossary mode, and hover should show a rich
+   tooltip"* — and the principle moved rather than lost: what arrives on the
+   reader's initiative is now the **card** (TermTooltip.tsx). The line is just a
+   line.
+
+   Which is why the line got quieter. A 7% wash behind one pressed term is a
+   highlight; the same wash behind every term in the piece is a mottled
+   paragraph, and the reader cannot turn it off. So the standing mark is the
+   dotted rule alone, at a weight meant to be legible when looked for and
+   ignorable when not, and the wash moved to `[data-open]` below.
 
    A dotted underline where a comment gets a solid one, and no marker glyph: a
    comment is an artefact you made and can open, a term occurrence is neither.
    Same rule as `mark.cmt` about the words themselves — the author's prose does
    not change colour to advertise our annotation. */
 mark.term {
-  background: color-mix(in oklab, var(--highlight) 7%, transparent);
+  background: none;
   color: inherit;
-  border-bottom: 1px dotted color-mix(in oklab, var(--highlight) 70%, transparent);
+  border-bottom: 1px dotted color-mix(in oklab, var(--highlight) 45%, transparent);
+  /* The card is the whole point of the mark now, so the pointer should say
+     there is something here before the 320ms delay is up. `help` rather than
+     `pointer`: a click does nothing, and a pointer cursor promising one is the
+     small lie that makes people click twice. */
+  cursor: help;
+  transition: background 0.12s, border-color 0.12s;
+}
+mark.term:hover {
+  background: color-mix(in oklab, var(--highlight) 7%, transparent);
+  border-bottom-color: color-mix(in oklab, var(--highlight) 75%, transparent);
+}
+/* The term pressed in the glossary panel, of the many drawn. Being selected
+   cannot mean *having* a mark any more, so it means a heavier one — the same
+   job `mark.cmt[data-open]` and `mark.hit[data-open]` do, and for the same
+   reason: after a jump, the row in the panel and the words in the prose have to
+   be visibly the same thing. */
+mark.term[data-open] {
+  background: var(--highlight-wash);
+  border-bottom-color: var(--highlight);
 }
 /* A comment and a term over the same words are ONE <mark> carrying both
    classes (annotate.ts § MarkKind), so this is not a hypothetical pairing. The
@@ -1564,7 +1617,12 @@ td.text.has-hit[data-hues="8"] {
   max-height: min(34rem, calc(100vh - 8rem - var(--dock-h)));
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  /* **Not `auto`, and this is half of why the ✕ used to move.** The whole box
+     scrolling meant the header was content, so once an answer passed
+     `max-height` the header — and the close button in it — scrolled away out of
+     the top. Only `.cmt-body` scrolls now. See `.cmt-dialog.busy` below for the
+     other half. */
+  overflow: hidden;
   padding: 0.9rem 1.1rem 0.8rem;
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
@@ -1581,6 +1639,30 @@ td.text.has-hit[data-hues="8"] {
      anything — the transient layer belongs on top. */
   z-index: 70;
 }
+
+/* **The other half.** The box is pinned by its BOTTOM edge, so a box whose
+   height follows its content grows upward: every paragraph the model writes
+   pushes the header one line further up the screen. Holding the height constant
+   while an answer arrives is what stops that.
+
+   Only while it arrives — a permanently constant height would put a two-line
+   explanation in a 34rem box. The relax-to-fit happens when the answer settles,
+   by which point the reader is not aiming at a button. */
+.cmt-dialog.busy { height: min(34rem, calc(100vh - 8rem - var(--dock-h))); }
+
+/* The one part that scrolls. `min-height: 0` is load-bearing and silent: a flex
+   item's default `min-height: auto` refuses to shrink below its content, so
+   without it this grows past the parent's `max-height` and nothing scrolls at
+   all — the exact bug, restored, with a stylesheet that looks right. */
+.cmt-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.cmt-dialog header,
+.cmt-dialog footer,
+.cmt-dialog .cmt-followup { flex: 0 0 auto; }
 
 .cmt-dialog header {
   display: flex;
@@ -3604,6 +3686,121 @@ td.text.has-hit[data-hues="8"] {
 }
 .gloss-link a:hover { color: var(--highlight-ink); }
 
+/* -------------------------------------------------- the term hover card --
+   What a reader gets for pointing at an underlined term in the prose —
+   TermTooltip.tsx, one panel for the whole page rather than one per mark.
+
+   It reuses `.tooltip` for the surface, so it is the same object as every other
+   hover panel here and inherits the raised ground, the border and the shadow.
+   Everything below is only the inside of it.
+
+   Deliberately narrower than the panel's own rendering of the same entry is
+   wide: this floats over the prose the reader is in the middle of, so it has to
+   be readable in one glance and not cover the paragraph it is explaining. When
+   the reader wants the rest — the scores, the occurrence list, the web check —
+   the foot of the card takes them to the band, which is where all of that
+   already lives. */
+.tooltip.term-card { max-width: 21rem; }
+
+/* Two entries only where two terms overlap the same words. A rule between
+   them, because they are separate claims about separate terms and running them
+   together would read as one long entry. */
+.term-card-body + .term-card-body {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule);
+}
+
+.term-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0 0 0.35rem;
+}
+.term-card-name {
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  /* A long canonical name wraps rather than widening the card past its
+     max-width and pushing the whole panel off the flip axis. */
+  overflow-wrap: break-word;
+}
+
+/* The same left rules the panel uses, and that is the point: the difference
+   between "in this piece" and "background" is a claim about where the words
+   came from, and a reader who learned it in the band should not have to learn
+   it again here. See `.gloss-part-senseHere`. */
+.term-card-part { margin-bottom: 0.4rem; }
+.term-card-part:last-child { margin-bottom: 0; }
+.term-card-part-senseHere { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
+.term-card-part-background { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+/* Checked on a day, by a search, which is a different kind of thing from either
+   of the two above — so a ground rather than a rule, exactly as `.gloss-look`
+   does it in the band. */
+.term-card-part-looked {
+  padding: 0.35rem 0.45rem;
+  border-radius: 4px;
+  background: var(--panel);
+}
+.term-card-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0 0.15rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+.term-card-label svg { flex: none; }
+.term-card-text {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+/* The two ways out: the term's own page, and the entry in the band. Both are
+   why this tooltip takes pointer events at all — see `.tooltip-anchor.interactive`. */
+.term-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+}
+.term-card-link,
+.term-card-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: inherit;
+}
+.term-card-link:hover,
+.term-card-open:hover { color: var(--highlight-ink); }
+.term-card-link svg,
+.term-card-open svg { flex: none; }
+/* Pushed right whether or not there is a link to its left, so the button does
+   not jump about between one term and the next. */
+.term-card-open {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.term-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
 /* Where the piece uses it. The ids are `BlockRef`s, so they are real links —
    right-click gives you a URL to the paragraph, and left-click jumps. */
 .gloss-where {
@@ -5105,4 +5302,549 @@ td.text.has-hit[data-hues="8"] {
 .chat-composer .prof-use {
   flex-basis: 100%;
   margin-top: 0.1rem;
+}
+
+/* -------------------------------------------------------- § diagram mode ----
+   The article's structure as a picture, in the mode band. The shell is
+   `.mode-band` far above; everything here is what goes inside it.
+
+   Read DiagramPanel.tsx and diagram.ts before changing what is on screen. Two
+   things in particular were decided rather than skipped:
+
+   **No colour carries meaning.** The eight `--cat-*` hues are positional — one
+   per part, reused round the article — so the eye can group a column of sections
+   without reading any of them. They are the SAME eight the saved searches use
+   (docs/project/colour-scales.md), because a reader who has learnt that this
+   green is a search colour should not also have to learn that it is part 3.
+
+   **Every fill is a wash and every stroke is the hue.** On a near-black ground a
+   saturated fill at 20px tall is a shout, and thirty of them is a mess; the ramp
+   that reads is a quiet fill with a bright edge. This is the same finding
+   colour-scales.css writes up for the sequential ramp, applied to flat areas.
+
+   The picture is SVG, and SVG does not clip text. Labels are cut to fit by
+   `wrapText` in diagram.ts — so anything here that changes a font size, a font
+   family or a padding is changing arithmetic that lives in TypeScript, and the
+   two will disagree silently. `CHAR_W` there is the number to move. */
+
+.diag-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.diag-head-icon { color: var(--ink-faint); flex: none; }
+.diag-head h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The three pictures, as one control. Same shape as `.gloss-sort`, because it
+   is the same kind of thing — a small quiet row of exclusive choices under the
+   heading — and a second visual idiom for it would be a third thing to learn. */
+.diag-kinds {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.diag-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) * 0.5);
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.diag-kind:hover { color: var(--ink); border-color: var(--rule-strong); }
+.diag-kind.on {
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+  color: var(--highlight-ink);
+}
+
+.diag-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* **Load-bearing.** The picture is laid out against this element's measured
+     `clientWidth`, and `tree` gets TALLER as it gets narrower (labels wrap onto
+     more lines). Without a reserved gutter that is a loop: content just fits →
+     no scrollbar → wider → wraps to fewer lines → still fits… and on the way
+     back, content just overflows → scrollbar → narrower → wraps to more lines →
+     overflows more. On macOS overlay scrollbars take no width and it never
+     happens, which is exactly why this would have shipped. */
+  scrollbar-gutter: stable;
+  padding: 0 0.5rem;
+}
+/* The one frame before the ResizeObserver has measured. It must occupy the
+   scroller, or the scroller has no height to report and the measure never
+   settles — a blank picture that stays blank, with nothing in the console. */
+.diag-measuring { min-height: 100%; }
+.diag-quiet {
+  margin: 0.9rem 0.2rem;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.diag-svg { display: block; }
+
+/* ---- nodes ---- */
+
+.diag-node { cursor: pointer; outline: none; }
+.diag-box {
+  fill: rgb(var(--cat-rgb) / 0.16);
+  stroke: rgb(var(--cat-rgb) / 0.45);
+  stroke-width: 0.75;
+  transition: fill 90ms ease-out;
+}
+/* Depth 0 is the whole article: one rail, and it is not a part, so it takes the
+   neutral rather than a hue. Depth 1 is a solid-ish band because it is the
+   thing the eye groups by; depth 2 is quieter because there are ten times as
+   many of them and they carry the text. */
+.diag-node.diag-d0 .diag-box { fill: rgb(var(--cat-rgb) / 0.22); stroke: none; }
+.diag-node.diag-d1 .diag-box { fill: rgb(var(--cat-rgb) / 0.34); }
+.diag-node.diag-d2 .diag-box { fill: rgb(var(--cat-rgb) / 0.11); }
+
+.diag-node:hover .diag-box,
+.diag-node:focus-visible .diag-box { fill: rgb(var(--cat-rgb) / 0.42); }
+.diag-node.on .diag-box { fill: rgb(var(--cat-rgb) / 0.42); }
+
+/* Where the reader is. A ring rather than a fill: the fill already means
+   "which part", and overloading it would make the you-are-here mark change
+   colour as you read, which is exactly the property a position marker must not
+   have. Orange, because that is what "here" is everywhere else in this app. */
+.diag-node.here .diag-box,
+.diag-node.here .diag-row {
+  stroke: var(--highlight);
+  stroke-width: 1.5;
+}
+.diag-node:focus-visible .diag-box,
+.diag-node:focus-visible .diag-row {
+  stroke: var(--highlight);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+
+.diag-label {
+  fill: var(--ink);
+  font-family: var(--font-ui);
+  pointer-events: none;
+}
+.diag-node.diag-d1 .diag-label { fill: var(--ink-soft); }
+.diag-node.diag-d0 .diag-label { font-weight: 600; }
+
+/* **These nine numbers are duplicated in TypeScript and must not drift.**
+   `LABEL_PX` in diagram.ts cuts every label to fit by counting characters at
+   these sizes; this is where they are actually painted. Disagree and nothing
+   errors — too small wastes the band, too large runs the text out over the
+   article, and SVG neither wraps nor clips. tests/diagram-css.test.ts reads this
+   block and asserts it matches, so a drift is a red test rather than a
+   rendering nobody questions.
+
+   Written one rule per picture per depth, at one uniform specificity, rather
+   than as a base plus overrides — a base rule beaten by a longer selector is
+   exactly how the tree's titles ended up painted at 10px after being budgeted
+   for 12. */
+.diag-strata .diag-node.diag-d0 .diag-label { font-size: 11px; }
+.diag-strata .diag-node.diag-d1 .diag-label { font-size: 10px; }
+.diag-strata .diag-node.diag-d2 .diag-label { font-size: 11px; }
+.diag-tree .diag-node.diag-d0 .diag-label { font-size: 12px; }
+.diag-tree .diag-node.diag-d1 .diag-label { font-size: 12px; }
+.diag-tree .diag-node.diag-d2 .diag-label { font-size: 12px; }
+.diag-mindmap .diag-node.diag-d0 .diag-label { font-size: 12px; }
+.diag-mindmap .diag-node.diag-d1 .diag-label { font-size: 11.5px; }
+.diag-mindmap .diag-node.diag-d2 .diag-label { font-size: 10.5px; }
+
+/* The gist, on the one picture that draws one. It is on the <tspan> rather than
+   the <text>, so it beats the sizes above by being on the element itself —
+   inheritance, not specificity. `GIST_PX` in diagram.ts is the pair. */
+.diag-gist { fill: var(--ink-faint); font-size: 10.5px; }
+.diag-count {
+  fill: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  pointer-events: none;
+}
+
+/* ---- tree ---- */
+
+.diag-row { fill: transparent; stroke: none; }
+.diag-node:hover .diag-row,
+.diag-node.on .diag-row { fill: var(--surface-raised); }
+.diag-dot {
+  fill: rgb(var(--cat-rgb) / 0.9);
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+.diag-node.closed .diag-dot { fill: var(--panel); stroke: rgb(var(--cat-rgb) / 0.9); stroke-width: 1.5; }
+.diag-twist { color: var(--ink-faint); cursor: pointer; }
+.diag-twist:hover { color: var(--ink); }
+
+.diag-link {
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+.diag-tree .diag-link { stroke: rgb(var(--cat-rgb) / 0.4); }
+.diag-tree .diag-link.diag-d1 { stroke: rgb(var(--cat-rgb) / 0.55); }
+
+/* ---- mindmap ---- */
+
+/* The trunk is the one line in the picture that is not about a part, so it is
+   the one line that is neutral. Thicker than a stem, because everything hangs
+   off it and a spine that reads as just another branch is not a spine. */
+.diag-mindmap .diag-link.diag-d0 { stroke: var(--rule-strong); stroke-width: 2; }
+.diag-mindmap .diag-link.diag-d1 {
+  stroke: rgb(var(--cat-rgb) / 0.7);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+.diag-mindmap .diag-link.diag-d2 { stroke: rgb(var(--cat-rgb) / 0.35); }
+/* A twig has no box of its own — its dot and its label are the whole of it —
+   so the generic depth-2 fill is turned off here. **`:not(.here):not(.on)` is
+   load-bearing**: this selector is longer than `.diag-node.here .diag-box`, so
+   without the guard it also turns off the you-are-here ring and the focus ring,
+   and the deepest node the reader is standing in is the one node on the mindmap
+   with no mark at all. Found by GPT Sol, 2026-08-26. */
+.diag-mindmap .diag-node.diag-d2:not(.here):not(.on) .diag-box {
+  fill: transparent;
+  stroke: none;
+}
+.diag-mindmap .diag-node.diag-d2:hover .diag-box { fill: rgb(var(--cat-rgb) / 0.18); }
+.diag-mindmap .diag-node.diag-d2.here .diag-box,
+.diag-mindmap .diag-node.diag-d2.on .diag-box { fill: rgb(var(--cat-rgb) / 0.18); }
+.diag-mindmap .diag-node.diag-d1 .diag-label { fill: var(--ink); }
+
+/* ---- you are here, on strata ---- */
+
+line.diag-now {
+  stroke: var(--highlight);
+  stroke-width: 1.25;
+  stroke-dasharray: 2 3;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* ---- the footer card ---- */
+
+/* Fixed under the picture rather than floating over it. A hover target here can
+   be 6px tall, and a floating card over a 6px band covers its neighbours — which
+   are the thing the reader is comparing it against, and the whole point of a
+   picture that is to scale. See DiagramPanel.tsx. */
+.diag-card {
+  flex: none;
+  border-top: 1px solid var(--rule);
+  /* The fallback must be a TRIPLET, not a colour: `--ink-faint` is an
+     `oklch()` value, and `rgb(oklch(…) / 0.8)` is invalid at computed-value
+     time — which drops the whole declaration silently and leaves the card with
+     an inherited border colour. `--cat-7-rgb` is the palette's neutral. */
+  border-left: 3px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
+  padding: 0.5rem 0.65rem 0.6rem;
+  background: var(--panel);
+  /* Fixed height, so the picture above does not resize every time the pointer
+     crosses a band — a diagram that reflows under the pointer is unusable at
+     these sizes. Sized for a two-line title plus three lines of gist, which is
+     what a 288px band needs: at that width a six-word section title does not
+     fit on one line, and ellipsizing it was the thing that made the card's
+     promise ("the full title") false. Found by GPT Sol, 2026-08-26. */
+  min-height: 6.4rem;
+  max-height: 6.4rem;
+  overflow: hidden;
+}
+.diag-card.empty {
+  border-left-color: transparent;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  display: flex;
+  align-items: center;
+}
+.diag-card.empty p { margin: 0; }
+.diag-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.diag-card-live {
+  flex: none;
+  padding: 0.05rem 0.3rem;
+  border-radius: calc(var(--radius) * 0.35);
+  background: var(--highlight-wash);
+  color: var(--highlight-ink);
+  font-size: 0.62rem;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.diag-card-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  /* It WRAPS. This is the one place in the mode where a label is not cut, and
+     that is the point of the card: everything in the picture is truncated by
+     `wrapText`, so if the card truncated too there would be nowhere the full
+     name existed. Two lines is enough for a 2–6 word title at 288px; anything
+     longer still has its `title` attribute. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.diag-card-title:hover { color: var(--highlight-ink); }
+.diag-card-num { color: var(--ink-faint); margin-right: 0.35rem; font-weight: 500; }
+.diag-card-count { flex: none; color: var(--ink-faint); font-size: 0.72rem; }
+.diag-card-gist {
+  margin: 0.3rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+
+/* ---------------------------------------------- the floating chat panel -- */
+/* docs/plans/chat-as-gateway.md. Shares the slot and the geometry of
+   `.cmt-dialog` above — one of the two is ever open, decided by the overlay
+   state in App.tsx rather than by either panel noticing the other. */
+
+.chat-dialog {
+  position: fixed;
+  right: 1.25rem;
+  bottom: calc(var(--dock-h) + 0.75rem);
+  width: min(26rem, calc(100vw - 2.5rem));
+  max-height: min(34rem, calc(100vh - 8rem - var(--dock-h)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.9rem 1.1rem 0.8rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  /* Same layer as the explanation panel: above the sticky bars and the spine,
+     below the tooltip layer, for the reasons written on `.cmt-dialog`. */
+  z-index: 70;
+}
+
+/* A conversation wants a steady frame; the ask box is three controls and should
+   not open as a 34rem rectangle. */
+.chat-dialog:has(.chat-turns) { height: min(34rem, calc(100vh - 8rem - var(--dock-h))); }
+
+.chat-dialog header,
+.chat-dialog footer { flex: 0 0 auto; }
+
+.chat-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chat-dialog-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-dialog-close,
+.chat-dialog-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  padding: 0.1rem 0.2rem;
+  line-height: 1;
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.chat-dialog-close:hover { color: var(--highlight); }
+/* The destructive one, and it is deliberately not called "Stop": chat's stop
+   keeps what arrived, on purpose. Two controls a word apart, one of which
+   destroys a conversation, is how a reader loses one. */
+.chat-dialog-stop.cancel { color: var(--ink-soft); }
+.chat-dialog-stop.cancel:hover { color: var(--destructive); }
+
+.chat-dialog-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.chat-dialog-quote {
+  margin: 0.55rem 0 0.6rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--highlight);
+  font-family: var(--font-reading);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.chat-dialog-opening {
+  margin: 0.55rem 0 0.6rem;
+  font-family: var(--font-reading);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Said out loud, because the previous behaviour spent a model call here without
+   being asked, and a reader who knew that needs telling it has stopped. */
+.chat-dialog-hint {
+  margin: 0 0 0.4rem;
+  font-size: 0.66rem;
+  color: var(--ink-faint);
+}
+
+.chat-dialog-loading,
+.chat-dialog-gone {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+}
+.chat-dialog-spinner { animation: cmt-spin 0.9s linear infinite; }
+
+.chat-dialog-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.66rem;
+}
+.chat-dialog-delete { margin-left: auto; }
+.chat-dialog button.linky {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.chat-dialog button.linky:hover { color: var(--highlight); }
+/* Beaten into place at 0-4-1, for the reason `.cmt-delete` documents: the
+   general link hover above outscores a bare class selector however it is
+   ordered, so the only button here that destroys something would otherwise
+   hover the same friendly orange as the rest. */
+.chat-dialog button.linky.chat-dialog-delete:hover { color: var(--destructive); }
+
+.chat-dialog-error {
+  margin: 0.4rem 0 0;
+  font-size: 0.66rem;
+  color: var(--destructive);
+}
+
+/* ------------------------------------------------------------ chat marks -- */
+/* A conversation started from a selection. A different hue from a comment's
+   wash rather than a different alpha, so the two are told apart by kind rather
+   than by strength — the rule search.md sets out for its own wash. */
+
+mark.chat {
+  background: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--chat-mark) 60%, var(--page));
+}
+mark.chat[data-open] {
+  background: var(--chat-mark-wash);
+  border-bottom-color: var(--chat-mark);
+}
+/* Its own marker, on the final run only. A separate attribute from the
+   comment's `data-mark-end` because a run can end a chat mark without ending a
+   comment mark that overlaps it, and one attribute would put the marker in the
+   wrong place for whichever did not end there. */
+mark.chat[data-chat-end]::before {
+  content: "❞";
+  font-family: var(--font-ui);
+  font-size: 0.6em;
+  line-height: 1;
+  vertical-align: super;
+  margin-left: 0.15em;
+  color: var(--chat-mark);
+}
+
+/* ------------------------------------------------- the paragraph's door -- */
+
+.block-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-top: 0.15rem;
+  padding: 0.1rem;
+  background: none;
+  border: none;
+  line-height: 1;
+  color: var(--ink-faint);
+  cursor: pointer;
+  /* Hidden, not removed. `display: none` would take it out of the tab order and
+     hand a keyboard reader nothing — and `pointer-events` has to go with the
+     opacity, or the gutter grows an invisible target that eats clicks meant for
+     the block id above it. */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+tr:hover .block-chat,
+.block-chat:focus-visible,
+.block-chat.has {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* A block that already has conversations says so whether or not you are
+   hovering it — the only affordance a whole-block anchor gets, since it draws
+   no mark in the prose. */
+.block-chat.has { color: var(--chat-mark); }
+.block-chat:hover { color: var(--highlight); }
+.block-chat:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+}
+.block-chat-n {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
 }
