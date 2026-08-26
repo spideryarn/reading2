@@ -190,7 +190,22 @@ is what has to be registered.
 
 **And you can check it from a terminal, without a browser** — but only if the check follows the
 redirect chain, and the obvious version of it does not. See
-[§ The check that could not fail](#the-check-that-could-not-fail) below; this is the corrected one:
+[§ The check that could not fail](#the-check-that-could-not-fail) below.
+
+The short form, which is the one to use day to day. **The `-L` is the entire difference between
+this and a check that lies:**
+
+```bash
+U=$(curl -s -o /dev/null -w "%{redirect_url}" "http://127.0.0.1:54361/auth/v1/authorize?provider=google")
+curl -s -L "$U" | grep -c redirect_uri_mismatch     # 0 = accepted. Non-zero = not registered.
+```
+
+Measured 2026-08-26 against the unregistered URI: **3 with `-L`, 0 without.** Both numbers matter —
+the second is the bug, and running them side by side is how you know the check is looking at the
+page you think it is.
+
+And the long form, for when it says `REJECTED` and you want it to say *why* — Google's reason is
+base64 in the second hop's `authError` parameter, wrapped in protobuf framing and localised prose:
 
 ```bash
 U=$(curl -s -o /dev/null -w "%{redirect_url}" "http://127.0.0.1:54361/auth/v1/authorize?provider=google")
@@ -207,10 +222,9 @@ else:
 ' "$L"
 ```
 
-Two hops, because there are two: GoTrue 302s to Google, and *Google* 302s to its error page. The
-reason is base64 in the `authError` parameter of that second redirect, wrapped in protobuf framing
-and localised prose — hence the decode. On 2026-08-26 this prints
-`REJECTED - redirect_uri_mismatch`, which is also exactly what a browser sign-in shows.
+Two hops, because there are two: GoTrue 302s to Google, and *Google* 302s to its error page. On
+2026-08-26 this prints `REJECTED - redirect_uri_mismatch`, which is exactly what a browser sign-in
+shows.
 
 Google can take a few minutes to propagate a new URI, so re-run a couple of times before concluding
 anything.
