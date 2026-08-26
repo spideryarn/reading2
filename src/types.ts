@@ -502,6 +502,37 @@ export interface Meta {
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
   excerpt?: string;
   note?: string;
+
+  /* ---- PDFs only. Absent on everything Readability extracted. ---- */
+
+  /** What this article was made from. Absent means a web page. */
+  source?: "pdf";
+  /** The reader and the prompt version that transcribed it, e.g. `openai/gpt-5.6-luna/pdf-v1`. */
+  method?: string;
+  /** Pages in the source PDF. */
+  pages?: number;
+  /** SHA-256 of the PDF as fetched, so "is this the same document?" has an answer. */
+  rawSha256?: string;
+  /**
+   * **A scan, with no text layer to check the transcription against.**
+   *
+   * The reader is told so on the page, in a sentence rather than a badge, and
+   * this is the field that decides it. It is deliberately not called `verified`
+   * with a false value: two machines agreeing would still not be verification,
+   * and "verified" is exactly the word a reader would rely on.
+   * docs/plans/pdf-ingestion.md § A scan with no text layer.
+   */
+  unverified?: boolean;
+  /**
+   * Mean per-page recall against the PDF's own text layer. Absent for a scan.
+   *
+   * Read it with `pagesChecked`, always. A mean over one page of seventeen is
+   * arithmetically fine and means nothing, and the number on its own cannot
+   * tell you which it is.
+   */
+  recall?: number;
+  /** How many pages the recall above is a mean of. `0` on a scan, where nothing could be checked. */
+  pagesChecked?: number;
 }
 
 /** What GET /api/article/:slug returns — everything needed for every zoom level. */

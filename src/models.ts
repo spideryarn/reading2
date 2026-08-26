@@ -183,6 +183,32 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
  */
 export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 
+/**
+ * **The model that transcribes a PDF** — its own line, because it is its own
+ * decision and it is not on either tier above.
+ *
+ * The two tiers are about *writing*: how well a model turns an article into a
+ * gist, a thread, a glossary. This one is about *reading*, and the two do not
+ * predict each other. It was chosen by measurement rather than by argument —
+ * ninety-odd calls over three fixture PDFs, in evals/pdf/, with the result and
+ * the caveats in docs/plans/pdf-ingestion.md. It is deliberately not
+ * `QUICK_MODEL_OPENROUTER` even though it is currently the same string: they
+ * are the same by coincidence, and a future switch of the quick tier must not
+ * silently re-decide which model reads PDFs.
+ *
+ * **Why this stage gets to leave Anthropic when the rest of the app does not.**
+ * Greg's call, 2026-08-26, and the reasoning is specific to this stage: every
+ * later stage inherits its mistakes and none of them can detect one. A ToC
+ * built from a paragraph the transcriber dropped is a good ToC of the wrong
+ * article. So this is the one place accuracy is worth a second vendor.
+ *
+ * Swapping it is a one-line change *here* and nowhere else — src/pdf-read.ts
+ * reaches a model only through `PdfReader`. That seam exists because the
+ * evidence behind this string is two documents and one comparison, which is
+ * enough to start with and not enough to build around.
+ */
+export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
+
 /** The two tiers a task can be on. */
 export type Tier = "capable" | "quick";
 
