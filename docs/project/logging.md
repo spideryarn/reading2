@@ -357,12 +357,35 @@ outgoing prompts — the whole article — plus raw upstream error bodies. Both 
 [`extract.ts`](../../src/extract.ts) passes an empty `VirtualConsole`, and all six stages construct
 their client with `logLevel: "off"`.
 
-The honest status: **four declarations that this class was closed, four of them wrong.** One is
-still open and written up in [error-boundary.md](../plans/error-boundary.md) — Drizzle puts every
-bound parameter into `Error.message`, so in Postgres mode a failed comment write puts the reader's
-quote, and then the model's answer, into an error that is returned, logged, streamed and stored.
-That plan also has the rule worth adopting instead of the habit, and the one test that would have
-caught all four rounds.
+The honest status: **four declarations that this class was closed, four of them wrong.** The fifth
+round was the one written up in [error-boundary.md](../plans/error-boundary.md) — Drizzle puts every
+bound parameter into `Error.message`, so a failed comment write puts the reader's quote, and then
+the model's answer, into an error that is returned, logged, streamed and stored. **That one was
+live, not latent**: production sets `SPIDERYARN_STORE=postgres`
+([deployment.md](deployment.md#environment-variables)), so comments there are Postgres rows and the
+quote is a bound parameter.
+
+It is closed at one seam rather than at each site, which is the first of these fixes that is not a
+sweep. [`src/store/db-errors.ts`](../../src/store/db-errors.ts) wraps every Postgres store on its
+way out of [`src/store/index.ts`](../../src/store/index.ts), and **the direction is inverted the way
+`SAFE_ERROR_PROPS` is**: an allowlist of what may pass through unchanged — an error carrying a
+numeric `status`, and `ChatConflict` — and everything else is replaced with one of two sentences in
+[`src/messages.ts`](../../src/messages.ts). A store that starts interpolating a row into a message
+next year is covered without anybody adding it to a list.
+
+What survives the translation is fields rather than prose: the SQLSTATE (as `code`, so
+`SAFE_ERROR_PROPS` carries it into the line for free), and a `database call failed` line from the
+seam with the table, the constraint, the routine and which method threw. `detail`, `hint`, `where`
+and `internalQuery` are dropped, because the first two quote row values and the last two quote query
+text. The stack keeps its frames and loses its message line, so it still points at the query.
+
+The cost, said out loud: a plain bug in a Postgres store now reaches the log without its message.
+The frames are still there, which is most of what a `TypeError` was going to tell you — and the
+alternative was leaving free text on the safe side of a boundary because it is *probably* safe,
+which is the argument that has now been wrong four times.
+
+Still not built, and still the better half: the **sentinel non-interference test** in that plan,
+which is one test that replaces the habit, and the closed `PublicFailure` type at every egress.
 
 The same review found the rule broken in a second shape, which is easier to miss because the leak and
 the log are in different files. `src/toc.ts` validated a node's range and threw
@@ -808,20 +831,38 @@ actually hold.
    `tests/parse-json.test.ts`, which asserts sentinels are absent from the emitted bytes at six real
    call sites. See [§ `JSON.parse` quotes the file back at you](#jsonparse-quotes-the-file-back-at-you).
 
-### Two we know about and have not changed
+10. **A leak that has not happened yet, in code that is correct today.** The six Anthropic stages
+    threw `` `Model refused: ${JSON.stringify(message.stop_details)}` `` — a whole provider object
+    stringified into a message that `errorFields` then keeps. Checked against the SDK,
+    `RefusalStopDetails` holds a policy category and nothing else, so it leaked nothing on the day it
+    was written. The review question every other item here answers — *does this put anything private
+    in the message?* — answered **no**, correctly, and would have gone on answering *no* right up
+    until the SDK added a field. No code here would change. No test would fail. That is the
+    difference between this one and the nine above: they were wrong when written, and this one was
+    right when written and stops being right on somebody else's release day.
 
-Written down because a known gap is cheaper than a rediscovered one.
+    Closed by `MODEL_REFUSED` (see [§ sweep two](#and-then-it-was-found-twice-more-which-is-the-part-worth-keeping)),
+    and pinned by `tests/stop-details.test.ts`, which is the part worth copying. It does **not** read
+    the SDK's field list — a test pinned to today's fields goes red on a bump that changed nothing
+    and stays green for any field it did not think of. It hands the stages a refusal stream whose
+    `stop_details` **already carries the field that does not exist yet**, and then asserts only about
+    bytes: the sentinel is absent from what the logger put on fd 1, and absent from every request
+    that went back out.
 
-- **`JSON.stringify(message.stop_details)`** in the four Anthropic stages (`toc.ts`, `arc.ts`,
-  `tweets.ts`, `glossary.ts`), on a message that a failed step logs with `errorFields`. Checked
-  against the SDK: `RefusalStopDetails` currently holds a policy category and nothing else, so this
-  leaks nothing today. It is listed because the shape is the risky one — a whole provider object
-  stringified into a logged message — and it becomes a leak the day the SDK adds a field, with no
-  test failing and no code changing here. The fix is `stop_details?.type`, one line in four files,
-  and it costs whatever a future field would have told us. Not done: four stage files, and a
-  speculative harm.
-- ~~**The `${detail.slice(0, 400)}` throws**, described above. The real fix, and the bigger one.~~
-  **Done 2026-08-26** — see above. It was six sites and then seven, not three.
+    The control is the whole trick. "The sentinel is absent" is satisfied perfectly by a stream that
+    never delivered `stop_details`, by an SDK that stopped putting it on the message, and by a stage
+    that died before it called anything. So a seventh call in the same child **is the deleted code** —
+    the old message, built the old way, logged the way `jobs.ts` logs one — and its sentinel has to be
+    *present*. If that ever goes missing, the six absences became free, and the run says so.
+
+### Nothing outstanding
+
+~~**The `${detail.slice(0, 400)}` throws**, described above. The real fix, and the bigger one.~~
+**Done 2026-08-26** — see above. It was six sites and then seven, not three.
+
+~~**`JSON.stringify(message.stop_details)`** in the Anthropic stages.~~ **Done 2026-08-26** — item 10
+above. It was six stages, not the four the note claimed; the note was written from a list rather than
+from a grep, which is the mistake that section is about.
 
 ## Related docs
 
