@@ -18,32 +18,107 @@ not happened. This file is what exists now.
 
 | | |
 |---|---|
-| Vercel project | **`spideryarn`**, team `greg-detre` — a new project. `spideryarn-reading`, which serves spideryarn.com, is untouched |
-| Git | **not connected.** The repo has a remote since 2026-08-26 — [`spideryarn/reading2`](../project/version-control.md) — but this Vercel project is not wired to it, so deploys stay `vercel deploy` from a working directory and nothing rebuilds on push |
+| Vercel project | **`spideryarn-reading2`**, team `greg-detre` — a new project, [dashboard here](https://vercel.com/greg-detre/spideryarn-reading2). Created as `spideryarn` and renamed by Greg on 2026-08-26. `spideryarn-reading`, which serves spideryarn.com, is untouched |
+| Git | **connected** since 2026-08-26 to [`spideryarn/reading2`](version-control.md), production branch `main` — so a push to `main` deploys. `vercel deploy` from a working directory still works and is still useful; see [Deploying](#deploying) for why the two differ |
 | Region | `lhr1` (London), chosen to match the Supabase project in `eu-west-2`. The edge answers from wherever you are; the *function* runs in London, next to the database |
 | Node | 24.x. Greg, 2026-08-26: *"I'm happy to use Node 24 unless there's a good reason not to"* — there was one candidate reason and it turned out to be false, see [require(ESM)](#the-runtime-has-requireesm-turned-off) |
-| URL | a per-deployment `spideryarn-<hash>-greg-detre.vercel.app` |
+| URL | a per-deployment `spideryarn-<hash>-greg-detre.vercel.app`, which asks for a login — **and `spideryarn-greg-detre.vercel.app`, which does not**. See [Who can reach it](#who-can-reach-it) |
 
-**There is deliberately no `spideryarn.vercel.app`.** It existed for about twenty
-minutes and was removed, because it is the one URL the protection below does not
-cover — see [Who can reach it](#who-can-reach-it).
+**`spideryarn.vercel.app` was removed and `spideryarn-greg-detre.vercel.app` was
+not**, which is why the app is currently readable by anybody who has that second
+address. Vercel generates *two* of these, and removing one of them looks exactly
+like removing the problem — see [Who can reach it](#who-can-reach-it).
 
 ## Deploying
+
+There are now **two** ways in, and they build different code. That is the whole
+thing to understand about this section.
+
+### From git — a push to `main`
+
+Since 2026-08-26 the project is connected to
+[`spideryarn/reading2`](version-control.md), production branch `main`. **A push
+to `main` builds and deploys to production**, with no command to run.
+
+The build machine clones the repo, so what ships is **the commit** — nothing on
+anybody's disk reaches it. That is the point of connecting it: a deploy stops
+depending on whose working tree was current when somebody typed a command.
+
+### From the working tree — `vercel deploy`
 
 ```
 vercel deploy --prod --scope greg-detre
 ```
 
-That is the whole command. It uploads the working directory (minus
-[`.vercelignore`](../../.vercelignore)), installs, builds, and prints a URL.
+This uploads the working directory (minus
+[`.vercelignore`](../../.vercelignore)), installs, builds, and prints a URL. It
+is still here on purpose — it is how you ship something that is not committed
+yet, which with the database work in flight is often what you want.
 
 **It deploys your working tree, not a commit.** With several agents live in this
 directory that is worth saying out loud: whatever is on disk is what ships,
-including someone else's half-finished edit. Exporting `HEAD` instead is the
-obvious fix and did not work on 2026-08-26, because `HEAD` did not build —
-`src/routes.ts` had been committed importing two files nobody had `git add`ed.
-Check `npm test` and `npm run typecheck` before deploying and read whose errors
-they are.
+including someone else's half-finished edit. Check `npm test` and
+`npm run typecheck` before deploying and read whose errors they are.
+
+### The two do not agree, and git is the one telling the truth
+
+The first git-sourced deploy, 2026-08-26, **failed** — and the same code built
+fine from the working tree, because the working tree had files in it that git
+did not:
+
+```
+[MISSING_EXPORT] "readRaw" is not exported by "src/fetch.ts"       src/routes.ts:93
+[MISSING_EXPORT] "normaliseUrl" is not exported by "src/ingest.ts"  src/routes.ts:94
+```
+
+`src/routes.ts` had been committed importing two exports whose *definitions* were
+still sitting uncommitted in `src/fetch.ts` and `src/ingest.ts`. This is the
+second time on this page: the earlier one was committed imports of two whole
+files nobody had `git add`ed. Same cause, one level down — and it is precisely
+what the [named-pathspec commit rule](version-control.md) costs you. Naming only
+your own files is what keeps you from committing somebody else's half-finished
+work, and it is also what lets you leave your own dependency behind.
+
+**So a green `npm run build` on this laptop says nothing about whether `main`
+builds.** Before pushing anything that adds a cross-file import, check that the
+file you imported *from* has no uncommitted changes of yours left in it:
+
+```
+git status --short src/
+```
+
+Note that looking for *missing files* is not enough. That check passes here —
+both files are committed, and it is an export inside them that is missing. The
+only test that actually answers the question is a build of the committed tree,
+which is now what a push gets you.
+
+### "The repository couldn't be found" is usually not about the repository
+
+Connecting the repo failed first time with:
+
+```
+The repository "reading2" couldn't be found. Make sure there are no typos
+and that you have access to it.
+```
+
+Every word of which points at the repo, and none of it was the problem. The
+Vercel **GitHub App** was installed on the `spideryarn` org with access to all
+repositories, and Greg is an org admin — that side was fine. What was missing was
+the *account-level* GitHub login connection on the Vercel side: `GET /v2/user`
+reported `githubLogin: null`, and listing git namespaces returned GitHub's
+`401 Bad credentials`.
+
+Two different things, and Vercel needs both:
+
+| | What it is | Where to fix it |
+|---|---|---|
+| GitHub **App** installation | the org granting Vercel access to repositories | GitHub org settings |
+| GitHub **login connection** | your Vercel account knowing who you are on GitHub | `vercel.com/account/settings/authentication` |
+
+Reconnecting the second one — one button, no consent screen, since the
+authorization was already on file — made the repo visible immediately. So when
+Vercel says it cannot see a repo, check `githubLogin` before you go looking at
+permissions.
 
 ### The build is two commands, and the second one is the point
 
@@ -65,20 +140,68 @@ ESLint needed, and it removed the one Vercel's builder needs too.
 
 ## Who can reach it
 
-**Vercel Authentication, set to "production deployment URLs and all previews".**
-Every URL this project has asks for a Vercel login, and only Greg gets in. No
-code, one setting.
+**Anybody with the address can read the app right now.** That is a deliberate
+choice as of 2026-08-26, not an accident — but it was an accident first, and the
+shape of the mistake is worth keeping.
 
-The thing to understand — because it is a trap and not a detail — is what Vercel
-counts as a *production domain*. On the Pro plan those cannot be SSO-protected at
-all, and `<project>.vercel.app` **is one**. So while `spideryarn.vercel.app`
-existed it served the whole app to anybody, with the protection switched on and
-reporting itself as enabled. Removing the domain is what actually closed it.
+**Vercel Authentication is on, set to "production deployment URLs and all
+previews".** It works. Per-deployment URLs redirect to a Vercel login and only
+Greg gets in:
 
-The cost is that each deploy has a new hostname. That is the accepted trade for
-now — Greg, 2026-08-26, chose it over the alternatives. It stops being the answer
-when [the beta gate](../plans/deploy-and-repo-move.md#the-beta-gate) lands, which
-is what the real domain needs anyway.
+```
+spideryarn-123clvpp1-greg-detre.vercel.app   302 -> login    protected
+spideryarn-greg-detre.vercel.app             200 -> the app  open
+```
+
+The trap is what Vercel counts as a *production domain*. On Pro those cannot be
+covered by Vercel Authentication at all, and the auto-generated `.vercel.app`
+addresses **are** production domains. So the setting reports itself as enabled,
+and is, while the app is served to the world.
+
+**Vercel generates two of them** — `<project>.vercel.app` *and*
+`<project>-<team>.vercel.app`. Only the first was removed. This page then said
+"removing the domain is what actually closed it", and that sentence was wrong
+from the day it was written: `spideryarn-greg-detre.vercel.app` had been serving
+the whole app the entire time. Verified 2026-08-26 with an unauthenticated
+`curl` from outside — the check nobody had run, because the dashboard says
+"Protected" and the per-deployment URL really does ask for a login. A textbook
+[silent success](../reusable/silent-success.md): the obvious check shares its
+assumption with the thing it is checking.
+
+**Deleting it is not available either.** A `--prod` deploy regenerates it, and
+Vercel staff have confirmed there is no way to stop the generated production
+alias existing. The only lever is deployment-protection *scope*, and "All
+Deployments" needs the **Advanced Deployment Protection** add-on — $150/month,
+30-day minimum — on top of Pro.
+
+So the options were: pay $150/month; stop deploying to production and use
+protected preview deploys only; or accept it. Greg, 2026-08-26, chose to accept
+it: there is no database attached yet, so there is nothing behind the URL to
+leak, and the responses carry `x-robots-tag: noindex`. **Do not treat this as
+private, and do not put real reader data behind it while it stands.**
+
+The real answer is [the beta gate](../plans/deploy-and-repo-move.md#the-beta-gate),
+which is what the custom domain needs anyway — application-level auth, which no
+plan tier can take away.
+
+**The rename moved the address, and there are three of them now.** Measured
+2026-08-26, after the project became `spideryarn-reading2` and was connected to
+git:
+
+```
+spideryarn-greg-detre.vercel.app                    200   the app — last good build, pre-rename
+spideryarn-reading2-greg-detre.vercel.app           404   DEPLOYMENT_NOT_FOUND
+spideryarn-reading2-git-main-greg-detre.vercel.app  200   "Deployment has failed"
+```
+
+The new-name aliases exist the moment you connect git, and they point at
+whatever the production branch last produced — which so far is a failed build.
+So the app is still answering on its **old** address, and will keep doing so
+until `main` builds. Vercel does not guarantee a pre-rename generated URL keeps
+working, so do not write this one down anywhere that matters.
+
+The `-git-main-` one is a *branch* alias — connecting a repo adds one per
+branch, and it will track `main` from now on.
 
 ## Environment variables
 
@@ -89,7 +212,7 @@ is read by nothing.
 | | |
 |---|---|
 | `SPIDERYARN_STORE=postgres` | which store serves reads. **Unset means `files`**, and on a host with no durable disk that is an empty shelf and a 200 |
-| `DATABASE_URL` | Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two |
+| `DATABASE_URL` | **not set yet**, which is why `/api/health` is a 503 and nothing can be read in production. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off) |
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
@@ -205,39 +328,30 @@ that had one means something read it first.
 
 ## What does not work in production yet
 
-Reading an article, the shelf, and comments come from Postgres. These four still
-write to a local filesystem, which a serverless host does not have, and will
-**error** when used:
+Reading an article, the shelf, comments, **chat and meaning-search** all come
+from Postgres now — the last two since step 10 landed on 2026-08-26. What still
+writes to a local filesystem, which a serverless host does not have:
 
-- **chat** ([`src/chat.ts`](../../src/chat.ts)) — was `data/<slug>/chat.json`,
-  now a 501 from its own `save()`
-- **meaning-search** ([`src/searches.ts`](../../src/searches.ts)) — the same
-- **glossary web lookups** — refused loudly by `notMigrated` in
-  [`src/store/index.ts`](../../src/store/index.ts), which is the right failure,
-  and is now the failure all three give
 - **adding an article** ([`src/jobs.ts`](../../src/jobs.ts)) — and this one is
   more than storage: the queue assumes one long-lived process
+- **`deleteGlossary`** — still refused by `notMigrated` in
+  [`src/store/index.ts`](../../src/store/index.ts), which is the right failure.
+  It nulls the glossary on a *published* revision, and whether a published
+  revision may be mutated at all is an open decision in step 11
 
-Greg, 2026-08-26, chose to ship with these broken rather than wait for them. They
-are steps 7–10 of [postgres-migration.md](../plans/postgres-migration.md).
+Greg, 2026-08-26, chose to ship with these broken rather than wait for them.
 
-**All four now refuse rather than fail, and until 2026-08-26 two of them did
-not.** Chat and meaning-search did not check `SPIDERYARN_STORE` — they called
-`node:fs/promises` unconditionally, so what stopped them here was the host
-refusing the write rather than the app refusing to try. That was fine in
-production and quietly wrong everywhere else: on a laptop running
-`SPIDERYARN_STORE=postgres` there is a writable disk, and the same two calls
-**succeeded, reported success, and landed in a store every Postgres read
-ignores** — the outcome `src/store/index.ts` calls the worst available. Both now
-throw the same 501 as the glossary, from `save()` in each module. Two plans had
-proposed extending `notMigrated` to cover them, which cannot work, and why is
-in
-[postgres-storage-implementation.md § Step 10](../plans/postgres-storage-implementation.md#step-10-chat-searches-and-glossary-lookups-writes).
-
-Note the halves that still differ: **reads** of chat and searches answer from the
-filesystem, which on this host is empty, so the panels show nothing rather than
-erroring. That is the right answer today — nothing writes those rows to Postgres
-either — and the wrong one the moment the stores are wired.
+**Chat and meaning-search were the dangerous pair, and it is worth knowing why
+the danger did not show up here.** Until that day they did not check
+`SPIDERYARN_STORE` at all — they called `node:fs/promises` unconditionally, so
+what stopped them in production was the host refusing the write rather than the
+app refusing to try. That is fine here and was quietly wrong everywhere else: on
+a laptop running `SPIDERYARN_STORE=postgres` there is a writable disk, and the
+same two calls **succeeded, reported success, and landed in a store every
+Postgres read ignores** — the outcome `src/store/index.ts` calls the worst
+available. A read-only disk is not a guard; it just happened to be standing in
+the same doorway. `tests/store-writes-land-in-postgres.test.ts` is the guard, and
+it asserts no file appears rather than trusting the host to make one impossible.
 
 ## What the reader sees when the server fails
 
@@ -258,6 +372,11 @@ reader is told about it is the only symptom most people will ever report.
 
 ## Still to do before this is a real deployment
 
+0. **Get `main` building**, which it is not as of 2026-08-26 — see
+   [the two do not agree](#the-two-do-not-agree-and-git-is-the-one-telling-the-truth).
+   The exports it is missing are already committed *locally*; they have simply
+   not been pushed. Until that happens every git deploy fails, and the address
+   below serves the last good build from before the connection.
 1. **The database.** The Supabase project exists and is **empty** — no schema, no
    rows. [database.md § Roles](database.md#roles) is the sequence, and it is
    deliberately done from the dashboard so that the `postgres` superuser password
