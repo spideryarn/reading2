@@ -37,6 +37,7 @@ import {
   stepIsDone,
 } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
+import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
@@ -311,7 +312,7 @@ describe("what a step counts as done", () => {
 
   it("is not done when none of its files are there", async () => {
     for (const name of STEP_ORDER) {
-      expect(await stepIsDone(STEPS[name], ctx)).toBe(false);
+      expect(await stepIsDone(STEPS[name], ctx, fsArtifacts)).toBe(false);
     }
   });
 });

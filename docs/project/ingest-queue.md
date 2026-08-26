@@ -418,8 +418,19 @@ an **artefact store** ([`src/store/artifacts.ts`](../../src/store/artifacts.ts),
 It answers by **parsing**, not by `stat`ing, which is the fix for the truncation hazard this section
 used to list as unbuilt: a `writeFile` killed halfway leaves a file that exists and will not parse,
 and that used to report its step done. `stepIsDone` takes a store, so the same question will be
-asked of Postgres columns without the pipeline changing. See
+asked of Postgres columns without the pipeline changing — and the store is now a **required**
+argument rather than one that quietly defaults to the filesystem, since a Postgres caller that
+forgot it used to compile and get a confident answer about the wrong store. See
 [postgres-storage-implementation.md § Step 11](../plans/postgres-storage-implementation.md), half B.
+
+**One step asks a second question, and only one.** `extract` and `blocks` write to the same path —
+`output/<slug>.html`, first as Readability left it and then with the block ids stamped in — so the
+filesystem cannot tell the two apart, and both are "some non-empty text". After a re-extraction an
+old `blocks.json` therefore sat beside new *unstamped* HTML with every check passing, and the
+reading view served an article whose paragraphs had no anchors and whose comments pointed at
+nothing. `blocks` now checks that every id in its `blocks.json` is actually in the HTML beside it —
+exact, not a spot check, and cheap because stage 3 makes no model call and re-running it carries the
+ids over rather than minting new ones.
 
 **What is still not built, honestly.** Three things, roughly in order of value:
 
@@ -432,9 +443,21 @@ asked of Postgres columns without the pipeline changing. See
    one, which is what `toc`'s stamp is read from today even though nothing yet compares it.
 2. **Atomic artefact writes across a step's whole set.** `toc` and `labels` write temp-then-rename,
    and the store's `write` does too; the other stages still write in place, and none of it makes the
-   *pair* `extract` produces atomic. A kill between two renames leaves one artefact of two. That
-   state is caught rather than prevented — `has` requires all of `produces` — and only a database
-   transaction prevents it.
+   *pair* `extract` produces atomic. Only a database transaction prevents that.
+
+   **And the state a kill leaves is worse than "one artefact of two", which is what this said until
+   a review read the code.** `has` requiring all of `produces` catches a *missing* half. It cannot
+   catch a *replaced* one: leave a complete generation A on disk, let a rerun overwrite exactly one
+   of the step's three outputs with a perfectly good generation B and then die, and every path is
+   present, parses, and is individually beyond reproach. The step reported itself done, holding two
+   generations at once, and no amount of looking at the files could say so.
+
+   So the store records the **attempt** as well as the output —
+   [`beginStep` / `finishStep` / `interrupted`](../../src/store/artifacts.ts), a marker under
+   `data/<slug>/steps/` on the filesystem and `revision_step_runs.status` in Postgres. A marker
+   still sitting there is a run that did not finish, and a run that did not finish is not done
+   however good its files look. `finishStep` is on the success path only, so a throw, a cancel and a
+   `kill -9` all leave the same honest answer.
 3. **Automatic resume on startup**, rather than a sweep to `error` and a Retry button. Cheap once
    (1) and (2) hold, and unwise before then: automatically re-running steps against artefacts we
    cannot vouch for is how you get a tree built for the previous version of an article.

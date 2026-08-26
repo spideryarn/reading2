@@ -105,6 +105,15 @@ const NOT_MIGRATED: Record<string, string> = {
      today and would not be if the cache were the only copy of an expensive
      reading of a document nobody can re-fetch. */
   "pdf-chunks": "a cache, not an artefact — the model's raw answer per page range, replayable",
+  /* Not an artefact either, and not migrated *as a file* — but the thing it
+     records is already in the schema. One marker per step that has started and
+     not finished, which is what stops a step killed between two of its own
+     writes reporting itself done with two generations mixed (`beginStep` in
+     src/store/artifacts.ts). In Postgres that is
+     `revision_step_runs.status = 'running'`, so there is nothing here to give a
+     home to — the directory *is* the file store's rendering of that column, and
+     it disappears with the file store. */
+  steps: "revision_step_runs.status — the run marker, not an artefact",
 };
 
 describe("the artefact manifest", () => {

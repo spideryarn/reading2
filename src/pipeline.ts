@@ -18,7 +18,7 @@
  * the stage implementations belong to other agents and are reached through
  * their exported functions, never by reimplementing what they do.
  */
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { generateArc } from "./arc.js";
 import { runBlocks } from "./blocks.js";
@@ -31,7 +31,7 @@ import { generateSummaries, summariesAreCurrent } from "./summarise.js";
 import { log } from "./log.js";
 import { type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
-import { fsArtifacts, fsLocations } from "./store/artifacts-fs.js";
+import { fsLocations } from "./store/artifacts-fs.js";
 import {
   type ArtifactKind,
   type ArtifactStore,
@@ -300,9 +300,40 @@ export interface PipelineStep {
    * one `stamp` line here and one deletion there. `glossary` already exports
    * its version and has made the move.
    */
-  isDone?(ctx: StepContext): Promise<boolean>;
+  isDone?(ctx: StepContext, store: ArtifactStore): Promise<boolean>;
   /** Do the work. The returned string is the one-line summary kept on the finished step. */
   run(ctx: StepContext): Promise<string>;
+}
+
+/**
+ * Are the ids stage 3 recorded actually in the HTML beside them?
+ *
+ * **The one check that can tell `extractedHtml` from `stampedHtml`**, which the
+ * filesystem cannot: they are the same path, and both are "some non-empty
+ * text". So after a re-extraction — stage 2 overwriting the HTML with
+ * Readability's output, ids nowhere in it — an old `blocks.json` sits beside
+ * new unstamped HTML, every path exists, every path parses, and `blocks`
+ * reported itself done. The stage after it then serves an article whose
+ * paragraphs have no anchors, and every comment in it points at nothing. Found
+ * by review, 2026-08-26, as the second of three criticals in this seam.
+ *
+ * The binding is exact rather than a spot check: **every** id in `blocks.json`
+ * has to be in the HTML. Verified against the real articles in `data/` — 360
+ * blocks and 360 ids, 141 and 141 — so "all of them" is the actual invariant
+ * and not an approximation that will start failing on a long page.
+ *
+ * Cheap enough to run on every skip check: one pass of the HTML with a regex,
+ * then a set lookup per block. And the cost of being wrong is small in the
+ * direction it can be wrong — stage 3 makes no model call, and re-running it
+ * carries the ids over rather than minting new ones.
+ */
+async function htmlCarriesItsIds(ctx: StepContext, store: ArtifactStore): Promise<boolean> {
+  const file = await store.read(ctx.slug, "blocks", "blocks");
+  const html = await store.read(ctx.slug, "blocks", "stampedHtml");
+  if (!file?.blocks || !html) return false;
+  const stamped = new Set<string>();
+  for (const [, id] of html.matchAll(/\sid="(spya-[a-z0-9]{6})"/g)) stamped.add(id!);
+  return file.blocks.every((block) => stamped.has(block.id));
 }
 
 /** Stage 3's own artefact, beside the HTML. Stage 4 copies it into `data/<slug>/`. */
@@ -353,15 +384,6 @@ async function previousBlockCount(ctx: StepContext): Promise<number> {
   return countBlocksIn(path.join(ctx.dir, "blocks.json"));
 }
 
-async function exists(file: string): Promise<boolean> {
-  try {
-    await access(file);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Has this step already produced everything it produces, and is what it
  * produced still current?
@@ -382,23 +404,37 @@ async function exists(file: string): Promise<boolean> {
  * All of them, never any of them — `extract` writes the HTML *and* `meta.json`,
  * and a crash between the two must not report a finished step.
  *
- * The `store` argument is what lets this run against Postgres unchanged. It
- * defaults to the filesystem, so every caller that has one article directory in
- * mind keeps working; src/api.ts passes its own, because the metadata page
- * falls back to the `example/` fixture.
+ * **A run that started and never finished is not done, whatever it wrote.**
+ * This is asked first and it is not the same question as presence. Per-file
+ * atomic renames are not atomicity across a step: `extract` writes two
+ * artefacts and `toc` writes three, so a rerun that replaces one of them with a
+ * perfectly valid new one and then dies leaves every path present and parsing,
+ * describing two generations at once. No amount of looking at the files can
+ * tell, which is why the store records the *attempt* as well as the output —
+ * `beginStep` / `finishStep`, and `revision_step_runs.status` once this is
+ * Postgres. Found by review, 2026-08-26.
+ *
+ * **The `store` argument is required, and used to have a default.** A default
+ * meant a Postgres caller that forgot it compiled cleanly and got a confident
+ * answer about the filesystem — the silent-success shape this seam exists to
+ * remove, sitting inside the seam. There is no correct value to fall back to,
+ * so there is no fallback: src/jobs.ts passes the pipeline's store, and
+ * src/api.ts passes its own because the metadata page falls back to the
+ * `example/` fixture.
  */
 export async function stepIsDone(
   step: PipelineStep,
   ctx: StepContext,
-  store: ArtifactStore = fsArtifacts,
+  store: ArtifactStore,
 ): Promise<boolean> {
+  if (await store.interrupted(ctx.slug, step.name)) return false;
   if (!(await store.has(ctx.slug, step.name, step.produces))) return false;
   if (step.stamp) {
     const expected = await step.stamp(ctx, store);
     if (!expected) return false;
     return sameStamp(await store.stampFor(ctx.slug, step.name), expected);
   }
-  return step.isDone ? await step.isDone(ctx) : true;
+  return step.isDone ? await step.isDone(ctx, store) : true;
 }
 
 /**
@@ -422,17 +458,28 @@ async function inputHashFor(ctx: StepContext, store: ArtifactStore): Promise<str
 /**
  * Did the step that just returned actually write what it says it writes?
  *
- * `outputs` is otherwise only a hint about skipping, and a hint is exactly the
+ * `produces` is otherwise only a hint about skipping, and a hint is exactly the
  * kind of thing that drifts from the `run()` beside it without anything
  * failing. Checking it as a postcondition turns the list into a claim the step
  * has to keep — a stage that returns happily having written nothing is caught
  * here rather than three stages later, where the symptom is a missing file and
  * no clue about which step should have made it.
+ *
+ * **Through the store, and the store's rules, since 2026-08-26.** This used to
+ * `access()` each path in `outputs`, which meant a malformed artefact, one over
+ * the size ceiling this store can read back, or simply the *old* one left
+ * untouched by a forced stage that wrote nothing — all passed. The job was then
+ * marked done. Asking the same store `stepIsDone` will ask closes that: if the
+ * postcondition passes, the step really is readable.
  */
-export async function assertProduced(step: PipelineStep, ctx: StepContext): Promise<void> {
-  const missing: string[] = [];
-  for (const file of step.outputs(ctx)) {
-    if (!(await exists(file))) missing.push(path.basename(file));
+export async function assertProduced(
+  step: PipelineStep,
+  ctx: StepContext,
+  store: ArtifactStore,
+): Promise<void> {
+  const missing: ArtifactKind[] = [];
+  for (const kind of step.produces) {
+    if ((await store.read(ctx.slug, step.name, kind)) === null) missing.push(kind);
   }
   if (missing.length > 0) {
     throw new Error(`${step.name} finished without writing ${missing.join(" or ")}`);
@@ -655,6 +702,9 @@ export const STEPS: Record<StepName, PipelineStep> = {
      */
     outputs: (ctx) => [blocksPathFor(ctx), ctx.htmlFile],
     produces: ["blocks", "stampedHtml"],
+    /* Presence is not enough here, and this is the only step where that is
+       true for a reason other than cost — see `htmlCarriesItsIds`. */
+    isDone: (ctx, store) => htmlCarriesItsIds(ctx, store),
     async run(ctx) {
       // Read before the stage runs, because the stage overwrites blocks.json
       // with its own output. Afterwards there is no way to ask what was there.

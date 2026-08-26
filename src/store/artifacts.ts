@@ -218,4 +218,41 @@ export interface ArtifactStore {
    * step records nothing (`fetch`, `extract`, `blocks`) or has not run.
    */
   stampFor(slug: string, step: StepName): Promise<StepStamp | null>;
+
+  /**
+   * This step has started. Nothing it has written is to be believed until
+   * `finishStep`.
+   *
+   * **Why the store needs this at all**, since it looks like the queue's job:
+   * per-file atomic renames are not atomicity across a step. `extract` writes
+   * the HTML *and* `meta.json`; `toc` writes three files. A rerun that replaces
+   * one of them with a perfectly valid new one and then dies leaves every path
+   * present, parsing, and describing two different generations — and `has`
+   * cannot tell, because each artefact is individually fine. A review found
+   * exactly that (docs/plans/postgres-storage-implementation.md § What the
+   * review of the *built* seam found).
+   *
+   * So the store records the *attempt*, not just the output. A marker that is
+   * still there is a run that did not finish, and a run that did not finish is
+   * not done however good its files look.
+   *
+   * On the filesystem this is a small file; in Postgres it is
+   * `revision_step_runs.status = 'running'`, which already exists. Same
+   * concept, and that is the point of putting it here rather than in the queue.
+   */
+  beginStep(slug: string, step: StepName): Promise<void>;
+  /**
+   * This step finished, and what it wrote can be believed.
+   *
+   * Called only on success. A step that threw leaves its marker behind on
+   * purpose: the next run re-runs it rather than trusting whatever half of its
+   * output landed.
+   *
+   * Clearing a marker that is not there is not an error — a step can complete
+   * without this store having seen it start, which is every artefact written
+   * before this existed.
+   */
+  finishStep(slug: string, step: StepName): Promise<void>;
+  /** Did a run of this step start and never finish? */
+  interrupted(slug: string, step: StepName): Promise<boolean>;
 }

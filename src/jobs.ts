@@ -19,6 +19,14 @@ import PQueue from "p-queue";
 import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mintId } from "./ids.js";
+/* The store the pipeline reads and writes through. Named for the role rather
+   than imported under its own name, because the role is what changes: the
+   stages still write files themselves, so this is the filesystem one until
+   step 11 half B moves the writes behind the seam, at which point this is the
+   single line that picks Postgres instead. Deliberately not routed through
+   src/store/index.ts — that file is the *reader's* store, and switching the
+   pipeline over is a separate decision from switching reads over. */
+import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
 import { failureKindOf } from "./job-failure.js";
 import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { errorFields, log, since } from "./log.js";
@@ -387,7 +395,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
       ...(job.guidance !== undefined && { guidance: job.guidance }),
     };
 
-    if (!step.force && (await stepIsDone(STEPS[step.name], ctx))) {
+    if (!step.force && (await stepIsDone(STEPS[step.name], ctx, pipelineStore))) {
       step.status = "skipped";
       step.detail = "already done";
       // `debug`, not `info`. Most steps of most jobs skip — a re-run of one
@@ -409,12 +417,21 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
     await persist(job);
 
     try {
+      /* Bracketing the run, not decorating it. A step that dies between two of
+         its own writes leaves artefacts that all exist and all parse and
+         describe two different generations, and nothing about the files can
+         say so — so the marker is what says so. It is cleared only on the
+         success path below, which means a throw, a cancel or a kill all leave
+         the step honestly not-done. See `beginStep` in
+         src/store/artifacts.ts. */
+      await pipelineStore.beginStep(job.slug, step.name);
       step.detail = await STEPS[step.name].run(ctx);
-      await assertProduced(STEPS[step.name], ctx);
+      await assertProduced(STEPS[step.name], ctx, pipelineStore);
       // Checked after as well as before. A step that ignores the signal runs to
       // completion regardless, and continuing into the next one would spend a
       // model call on a job the reader has already stopped.
       if (controller.signal.aborted) throw new Error("Cancelled");
+      await pipelineStore.finishStep(job.slug, step.name);
       step.status = "done";
       step.finishedAt = new Date().toISOString();
       /* **`step.detail` is deliberately not logged**, though it is the obvious

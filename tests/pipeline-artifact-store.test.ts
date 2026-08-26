@@ -84,6 +84,24 @@ const BODY: Block = {
 
 const BLOCKS: Block[] = [HEAD, BODY];
 
+/**
+ * The article HTML **after stage 3 has stamped the ids into it**.
+ *
+ * The fixture used to be `<article><p>hi</p></article>`, which is what stage 2
+ * writes — ids nowhere in it. That made every `blocks` assertion below pass
+ * against an artefact pair that could not have come from a real run, and it is
+ * the state `blocks` now has to notice: see the `blocks` binding test.
+ */
+const STAMPED_HTML = [
+  "<article>",
+  `<h1 id="${HEAD.id}">A title</h1>`,
+  `<p id="${BODY.id}">One paragraph of something to hash.</p>`,
+  "</article>",
+].join("");
+
+/** What stage 2 leaves behind: the same prose, none of the ids. */
+const UNSTAMPED_HTML = "<article><h1>A title</h1><p>One paragraph of something to hash.</p></article>";
+
 const SOURCE_HASH = hashBlocks(BLOCKS);
 
 /** A context pointing at a temp article. Nothing here runs, so most of it is
@@ -124,7 +142,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     sha256: "0".repeat(64),
     fetchedAt: "2026-08-26T00:00:00.000Z",
   });
-  await writeFile(pathFor(at, "extract", "extractedHtml"), "<article><p>hi</p></article>", "utf-8");
+  await writeFile(pathFor(at, "extract", "extractedHtml"), STAMPED_HTML, "utf-8");
   await writeJson(pathFor(at, "extract", "meta"), { slug: SLUG, title: "A title" });
   await writeJson(pathFor(at, "blocks", "blocks"), { blocks: BLOCKS });
   await writeJson(pathFor(at, "toc", "blocks"), { blocks: BLOCKS });
@@ -237,6 +255,33 @@ describe("a half-written artefact must not report its step finished", () => {
   }
 });
 
+/**
+ * Every way `produces` and `outputs` can disagree, as a list of sentences.
+ *
+ * A function rather than assertions inline, so the test below can run it
+ * against a deliberately broken `PATHS` and watch it come back non-empty.
+ *
+ * **Ordered, and both sides checked for duplicates.** Comparing sets lets two
+ * kinds inside one step swap destinations; checking uniqueness on the declared
+ * side only lets `outputs` grow a duplicate unseen.
+ */
+function pathDisagreements(): string[] {
+  const where = fsLocations("nothing-here");
+  const ctx = ctxAt(where);
+  const problems: string[] = [];
+  for (const name of STEP_ORDER) {
+    const step = STEPS[name];
+    const declared = step.produces.map((kind) => pathFor(where, name, kind));
+    const listed = step.outputs(ctx);
+    if (declared.join("\u0000") !== listed.join("\u0000")) {
+      problems.push(`${name}: produces gives [${declared}], outputs gives [${listed}]`);
+    }
+    if (new Set(declared).size !== declared.length) problems.push(`${name}: produces repeats a path`);
+    if (new Set(listed).size !== listed.length) problems.push(`${name}: outputs repeats a path`);
+  }
+  return problems;
+}
+
 describe("what a step says it produces, and where that lands", () => {
   /**
    * The move that matters: the new declaration checked against the old one
@@ -248,18 +293,32 @@ describe("what a step says it produces, and where that lands", () => {
    * to the other is what stops the two being subtly different lists that agree
    * on the day they were written.
    */
-  it("agrees with `outputs`, step for step", () => {
-    const where = fsLocations("nothing-here");
-    const ctx = ctxAt(where);
-    for (const name of STEP_ORDER) {
-      const step = STEPS[name];
-      const declared = step.produces.map((kind) => pathFor(where, name, kind));
-      expect(new Set(declared), `${name}: produces vs outputs`).toEqual(
-        new Set(step.outputs(ctx)),
-      );
-      // Sets hide a duplicate. `outputs` has none and neither may `produces`.
-      expect(declared.length, `${name}: duplicate path`).toBe(new Set(declared).size);
+  it("agrees with `outputs`, step for step, in order", () => {
+    expect(pathDisagreements()).toEqual([]);
+  });
+
+  /**
+   * **The check proved red before it is trusted green.**
+   *
+   * The first version of this compared *sets*, and a set cannot see two kinds
+   * inside one step swapping destinations — `extract` writing the HTML to
+   * `meta.json` and the meta to `<slug>.html` agrees with `outputs` perfectly
+   * as a set, and is the drift the test exists to catch. So the test does the
+   * swap itself and asserts it is noticed. A comparison nobody has watched fail
+   * is a comparison nobody knows the shape of.
+   */
+  it("notices when two kinds inside one step swap destinations", () => {
+    const { extractedHtml, meta } = PATHS.extract;
+    try {
+      PATHS.extract.extractedHtml = meta;
+      PATHS.extract.meta = extractedHtml;
+      expect(pathDisagreements()).not.toEqual([]);
+    } finally {
+      PATHS.extract.extractedHtml = extractedHtml;
+      PATHS.extract.meta = meta;
     }
+    // And back to agreeing, so a broken restore cannot pass quietly.
+    expect(pathDisagreements()).toEqual([]);
   });
 
   it("has a path for every kind any step declares, and no orphans", () => {
@@ -329,6 +388,20 @@ describe("the file store round-trips every kind", () => {
     { step: "glossary", kind: "glossary", from: "writes", file: "data/writes/glossary.json" },
     { step: "summary", kind: "summary", from: "writes", file: "data/writes/summary.json" },
   ];
+
+  /**
+   * The table's `from` used to be decorative, and that made the round trip
+   * weaker than it reads: writing and reading through the *same* mapping
+   * round-trips perfectly even when the mapping is wrong. Pinning `pathFor`
+   * against the literal path in the table is the independent half.
+   */
+  it("puts each kind where the table says the real file is", () => {
+    for (const { step, kind, from, file } of REAL) {
+      expect(pathFor(fsLocations(from), step, kind), `${step}/${kind}`).toBe(
+        path.join(ROOT, file),
+      );
+    }
+  });
 
   for (const { step, kind, file } of REAL) {
     it(`${step}/${kind}`, async () => {
@@ -541,5 +614,119 @@ describe("a corrupt artefact does not put the article in a log line", () => {
     expect(message).not.toContain("Consciousness");
     expect(message).not.toContain("spreadsheet");
     expect(message).toMatch(/an artefact/);
+  });
+});
+
+/**
+ * The three criticals a review of this seam found on 2026-08-26, written as
+ * tests before they were fixed.
+ *
+ * See docs/plans/postgres-storage-implementation.md
+ * § What the review of the *built* seam found.
+ */
+describe("a step that started and did not finish must not report itself done", () => {
+  let at: ArtifactLocations;
+  let store: ReturnType<typeof createFsArtifactStore>;
+
+  beforeAll(async () => {
+    at = await tempArticle("interrupted");
+    store = createFsArtifactStore(() => at);
+  });
+  afterAll(async () => {
+    await rm(path.dirname(at.dir), { recursive: true, force: true });
+  });
+
+  /**
+   * **The one the review asked for first.** Per-file atomic renames are not
+   * atomicity across a step: leave a complete generation A on disk, let a rerun
+   * replace exactly one of the step's outputs with a perfectly valid generation
+   * B and then die, and every path exists and parses. Under a presence check
+   * the step reports done with A and B mixed, and the stage after it consumes
+   * a tree built from blocks nobody has.
+   */
+  it("catches a generation half-replaced by a run that died", async () => {
+    await writeWholeArticle(at);
+    expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(true);
+
+    await store.beginStep(SLUG, "toc");
+    // Generation B's tree, valid in every way, landing beside generation A's
+    // labels and blocks.
+    await writeJson(pathFor(at, "toc", "tree"), {
+      version: "toc/2",
+      generator: CAPABLE_MODEL,
+      slug: SLUG,
+      rootId: "n0000",
+      nodes: {
+        n0000: {
+          id: "n0000",
+          parent: null,
+          range: [HEAD.id, BODY.id],
+          title: "A different title",
+          gist: "A different gist.",
+          children: [],
+        },
+      },
+    });
+    expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(false);
+
+    // And it comes back once the step actually finishes.
+    await store.finishStep(SLUG, "toc");
+    expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(true);
+  });
+
+  it("says so for every step, artefacts or no artefacts", async () => {
+    await writeWholeArticle(at);
+    for (const name of STEP_ORDER) {
+      expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} before`).toBe(true);
+      await store.beginStep(SLUG, name);
+      expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} during`).toBe(false);
+      await store.finishStep(SLUG, name);
+      expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} after`).toBe(true);
+    }
+  });
+
+  it("finishing a step nobody started is not an error", async () => {
+    await expect(store.finishStep(SLUG, "arc")).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * `extractedHtml` and `stampedHtml` are one path on disk, so the filesystem
+ * cannot tell them apart — which means a re-extraction leaves stage 2's
+ * unstamped HTML sitting beside stage 3's blocks.json, and every path exists
+ * and parses. The binding, not the path, is what catches it: the ids in
+ * blocks.json have to actually be in the HTML.
+ */
+describe("blocks is only done if the HTML really carries its ids", () => {
+  let at: ArtifactLocations;
+  let store: ReturnType<typeof createFsArtifactStore>;
+
+  beforeAll(async () => {
+    at = await tempArticle("stamping");
+    store = createFsArtifactStore(() => at);
+  });
+  afterAll(async () => {
+    await rm(path.dirname(at.dir), { recursive: true, force: true });
+  });
+
+  it("not done once a re-extraction has wiped the ids out of the HTML", async () => {
+    await writeWholeArticle(at);
+    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(true);
+
+    await writeFile(pathFor(at, "extract", "extractedHtml"), UNSTAMPED_HTML, "utf-8");
+    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(false);
+    // `extract` itself is done — it wrote the HTML it was asked for. Only the
+    // step whose output the re-extraction invalidated is not.
+    expect(await stepIsDone(STEPS.extract, ctxAt(at), store)).toBe(true);
+  });
+
+  it("not done when the HTML carries only some of the ids", async () => {
+    await writeWholeArticle(at);
+    await writeFile(
+      pathFor(at, "extract", "extractedHtml"),
+      `<article><h1 id="${HEAD.id}">A title</h1><p>One paragraph of something to hash.</p></article>`,
+      "utf-8",
+    );
+    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(false);
   });
 });

@@ -30,7 +30,8 @@
  * with the ids stamped in. A `Record<ArtifactKind, path>` cannot express
  * either. See the note in src/store/artifacts.ts.
  */
-import { readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, rename, stat, unlink, writeFile } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { log } from "../log.js";
 import { parseJsonFrom } from "../parse-json.js";
@@ -213,7 +214,12 @@ function json(field: string, isRight: (v: unknown) => boolean): Decoder["decode"
 }
 
 const isArray = (v: unknown): boolean => Array.isArray(v);
-const isObject = (v: unknown): boolean => typeof v === "object" && v !== null;
+/* `!Array.isArray` is the load-bearing half. Without it `{"nodes":[]}` is a
+   perfectly good tree and `{"labels":[]}` a perfectly good labels file, which
+   is a shape neither writer has ever produced — so the check said yes to the
+   one thing it was there to say no to. Found by review, 2026-08-26. */
+const isObject = (v: unknown): boolean =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
 const isString = (v: unknown): boolean => typeof v === "string" && v.length > 0;
 
 /** Non-empty text. All we can honestly ask of HTML. */
@@ -246,13 +252,27 @@ export function pathFor(at: ArtifactLocations, step: StepName, kind: ArtifactKin
 }
 
 /**
- * Read one artefact, or `null` for every unhappy answer.
+ * Read one artefact, or `null` for the answers that mean *this cannot be used*.
  *
- * Missing, over the ceiling, unparseable, the wrong shape — all `null`. They
- * are different problems and they have the same right response here: this
- * artefact cannot be used, so the step that makes it is not done. Only the
- * distinguishable ones are logged, and only at `debug`, because a missing file
- * is the ordinary state of an article nobody has finished ingesting.
+ * **Absent, over the ceiling and unreadable are `null`; broken is thrown.**
+ * That line moved on 2026-08-26 and the old place was wrong: any `stat` failure
+ * became a silent `null`, so a permissions error, a failing disk and a file
+ * nobody has written yet were one answer. The step then reported not-done and
+ * the pipeline paid for a model call to fix a problem no model call can fix —
+ * and the metadata page fell through to the `example/` fixture for an article
+ * that was there all along. Only `ENOENT` means absent. Everything else
+ * propagates, because this project's rule is that a swallowed error is worse
+ * than a loud one (docs/reusable/silent-success.md).
+ *
+ * Corruption is different again, and stays `null`: a file that will not parse
+ * is a real state of the world that the next run genuinely does fix by
+ * rewriting it. It is logged at `debug` — a missing or half-written artefact is
+ * the ordinary state of an article nobody has finished ingesting.
+ *
+ * **One file handle for the size and the bytes**, so the two describe the same
+ * inode. `stat` then `readFile` is two lookups of a name, and an atomic
+ * replacement in between meant the ceiling was checked against a file that is
+ * no longer the file being read.
  */
 async function readOne(
   at: ArtifactLocations,
@@ -263,32 +283,38 @@ async function readOne(
   const file = pathFor(at, step, kind);
   const { maxBytes, decode } = DECODERS[kind];
 
-  let size: number;
+  let handle: FileHandle;
   try {
-    size = (await stat(file)).size;
-  } catch {
-    return null;
-  }
-
-  if (size > maxBytes) {
-    /* Warn rather than debug: this one does not resolve itself. `has` will keep
-       answering not-done, so the step re-runs every job, for ever, and the only
-       visible symptom is a stage that will not stay finished. */
-    alog.warn(
-      { slug, step, kind, size, maxBytes },
-      `artefact over its ceiling: ${kind} for ${slug} is ${size} bytes`,
-    );
-    return null;
-  }
-
-  try {
-    return decode(await readFile(file, "utf-8"));
+    handle = await open(file, "r");
   } catch (err) {
-    alog.debug(
-      { slug, step, kind, size, err: (err as Error).message },
-      `artefact unreadable: ${kind} for ${slug}`,
-    );
-    return null;
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
+
+  try {
+    const { size } = await handle.stat();
+    if (size > maxBytes) {
+      /* Warn rather than debug: this one does not resolve itself. `has` will
+         keep answering not-done, so the step re-runs every job, for ever, and
+         the only visible symptom is a stage that will not stay finished. */
+      alog.warn(
+        { slug, step, kind, size, maxBytes },
+        `artefact over its ceiling: ${kind} for ${slug} is ${size} bytes`,
+      );
+      return null;
+    }
+    const body = await handle.readFile("utf-8");
+    try {
+      return decode(body);
+    } catch (err) {
+      alog.debug(
+        { slug, step, kind, size, err: (err as Error).message },
+        `artefact unreadable: ${kind} for ${slug}`,
+      );
+      return null;
+    }
+  } finally {
+    await handle.close();
   }
 }
 
@@ -345,6 +371,24 @@ function stampOf(artefact: unknown): StepStamp {
 }
 
 /**
+ * Where the "this step started" markers live: `data/<slug>/steps/<step>.running`.
+ *
+ * A directory of one file per step rather than one file listing them all,
+ * because the alternative is read-modify-write and this has to stay correct
+ * once two processes can be advancing the same article — which is exactly what
+ * the browser-driven advance endpoint makes possible
+ * (docs/plans/job-queue-rethink.md).
+ *
+ * Under `data/<slug>/` rather than somewhere central so that deleting an
+ * article deletes its markers with it. It is not an artefact and has no home in
+ * Postgres of its own: there this is `revision_step_runs.status`, which the
+ * schema already has. tests/store-artefact-manifest.test.ts records that.
+ */
+function markerFile(at: ArtifactLocations, step: StepName): string {
+  return path.join(at.dir, "steps", `${step}.running`);
+}
+
+/**
  * An artefact store over the filesystem.
  *
  * `locate` is how the fixture gets served. Most callers want the default —
@@ -382,7 +426,24 @@ export function createFsArtifactStore(
       ][]) {
         if (value === undefined) continue;
         assertStampAgrees(slug, step, kind, value, stamp);
-        await writeAtomic(pathFor(at, step, kind), serialise(kind, value));
+        const body = serialise(kind, value);
+        /* Enforced here as well as on the way back in, and this is the side
+           that matters. The ceiling used to be checked only by `readOne`, so a
+           step could write an artefact too big to read and report success —
+           and then be permanently not-done, re-running on every job with no
+           symptom but a stage that will not stay finished. The pipeline writes
+           decoded text back as UTF-8, which can be *larger* than the bytes
+           `fetch` capped, so this is reachable rather than theoretical. */
+        const bytes = Buffer.byteLength(body, "utf-8");
+        const { maxBytes } = DECODERS[kind];
+        if (bytes > maxBytes) {
+          throw new Error(
+            `${step} for "${slug}": the ${kind} is ${bytes} bytes, over the ${maxBytes}-byte ` +
+              `ceiling this store can read back. Writing it would produce a step that never ` +
+              `reports itself done.`,
+          );
+        }
+        await writeAtomic(pathFor(at, step, kind), body);
       }
     },
 
@@ -392,6 +453,42 @@ export function createFsArtifactStore(
       const artefact = await readOne(locate(slug), slug, step, kind);
       if (artefact === null) return null;
       return stampOf(artefact);
+    },
+
+    async beginStep(slug, step) {
+      const file = markerFile(locate(slug), step);
+      await mkdir(path.dirname(file), { recursive: true });
+      /* The contents are for whoever is looking at a stuck article, not for
+         this code — nothing reads them back. Deliberately not used as a lease:
+         a pid and a timestamp invite "it has been an hour, it must be dead",
+         and that guess is how two runs end up writing one article. The marker
+         clears when a run finishes or when a run re-runs the step. */
+      await writeFile(
+        file,
+        `${JSON.stringify({ startedAt: new Date().toISOString(), pid: process.pid })}\n`,
+        "utf-8",
+      );
+    },
+
+    async finishStep(slug, step) {
+      try {
+        await unlink(markerFile(locate(slug), step));
+      } catch (err) {
+        // Not an error. A step can finish without this store having seen it
+        // start — every artefact written before markers existed is in that
+        // state, and so is a step run straight off its own CLI.
+        if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      }
+    },
+
+    async interrupted(slug, step) {
+      try {
+        await stat(markerFile(locate(slug), step));
+        return true;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+        throw err;
+      }
     },
   };
 }
