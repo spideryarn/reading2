@@ -613,6 +613,24 @@ files depend on. Found by GPT-5.6, 2026-08-26.
   and by eye and by nothing else. Adding a component test runner is a dependency decision with a
   procedure attached ([third-party-library-selection.md](../reusable/third-party-library-selection.md))
   and is bigger than this change should be making on its own.
+- **A dropped SSE stream leaves the panel on "thinking…" for ever.** Found in a browser pass on
+  2026-08-26 while [chat tools](../project/chat-tools.md) were being checked: a question hung on
+  "thinking…" for over two minutes with no error and no recovery, and a reload showed the server had
+  finished and stored the right answer in the usual ten seconds. The client had lost its stream and
+  had no way to notice.
+
+  The trigger there was almost certainly a Vite Fast-Refresh remount — four other agents were editing
+  this tree at the time, and the console carried two `server connection lost` cycles. So it is largely
+  a dev-server artefact. **But the gap it exposes is real anywhere**: nothing on the client side puts
+  a clock on a stream. A laptop that sleeps mid-answer, or a network that drops the connection without
+  closing it, produces exactly this — and the reader gets a spinner with no end, for an answer that is
+  sitting on the server complete. The server has `sweepChat` for its side of this and the client has
+  nothing for its own.
+
+  The shape of the fix is a stall timer in `run` (src/web/useChat.ts) mirroring the one
+  src/converse.ts already keeps, ending the row as an error the reader can retry — plus, ideally, a
+  reconnect that re-reads the thread rather than re-asking, since the answer usually already exists.
+  Not built.
 - **A stop the server cannot honour says nothing.** `POST /stop` answers `{ stopped: false }` when
   there was nothing to stop, and the panel ignores it — rightly, in the common case, which is a stop
   pressed on an answer that finished a moment ago. In the two-server case, though, the reader presses

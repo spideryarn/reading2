@@ -244,6 +244,45 @@ line the six above deliberately do not cross — see the security section.
 | **Generate a tweet thread** | Least valuable of the three. It is a whole pipeline stage with a page of its own ([tweet-thread-page.md](../plans/tweet-thread-page.md)), it is expensive, and "make me a thread" from inside a reading companion is a different product |
 | **`add_to_library(url)`** — offered and not taken | Would want a confirm step rather than firing on the model's say-so: it spends money and changes state. [ingest-queue.md](ingest-queue.md) |
 
+## What the browser pass found
+
+Checked in Chrome on 2026-08-26, against a stored conversation and four fresh questions. The strip
+renders above the answer, stays visually subdued against it, keeps its right-hand detail legible,
+survives two reloads with every row and detail identical (including a `nothing found`), causes no
+horizontal overflow, and logs no console error of its own.
+
+Three things it could **not** confirm, recorded rather than rounded up to a pass:
+
+- **The `running` state itself was never caught.** A `MutationObserver` armed in advance across three
+  tool calls fired zero times before the row appeared already finished — the tools are simply too
+  fast. So "no two spinners at once" is *not observed to be broken* rather than confirmed correct.
+- **No label was long enough to wrap.** The panel is ~400px and the longest label tried was
+  `searched this article for “consciousness”`. The wrapping rules in `.chat-tool` are written and
+  unverified.
+- **Dark mode was not checked** — there is no theme toggle in the app to check it with.
+
+It also found the bug in the section below, and one that is not this feature's:
+[chat-mode.md § What is still open](../plans/chat-mode.md#what-is-still-open) now records a dropped
+SSE stream leaving the panel on "thinking…" for ever with no recovery.
+
+## The model claimed a search it never ran
+
+The same pass asked "does this article discuss panpsychism?" and got an answer whose text said *"the
+search returns no matches"* — with **no tool strip above it at all**, confirmed in the DOM and again
+after a reload. The model had not searched. It had described searching.
+
+That is worse here than it would be in a plain chatbot, and the reason is the strip itself. A reader
+who compares the two sees a flat contradiction; a reader who does not compare believes a lookup
+happened. Either way the strip stops being evidence, which is the only thing it was for.
+
+The prompt now says so directly — *"Do not write 'the search returns no matches', 'I looked it up',
+'I could not find it' or anything like it unless you actually called the tool on this turn"* — and,
+just as importantly, gives it the alternative it was missing: *"the article does not discuss
+panpsychism" is a fine sentence and does not need a search behind it.* The same question afterwards
+called `search_article_words`, got `nothing found`, and said so.
+
+**The check for this is the strip against the words**, and it stays a human one. Nothing counts it.
+
 ## Still open
 
 - **Tools run one at a time.** Two web pages fetched at once would be twice as fast; what it costs is
