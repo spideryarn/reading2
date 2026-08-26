@@ -42,8 +42,9 @@ import { currentOwnerId } from "../src/owner.js";
 import { ADDED_AT } from "../src/store/pg.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
-import { fsArticleReader, fsCommentStore, fsLibrarySearch } from "../src/store/fs.js";
+import { fsArticleReader, fsCommentStore, fsLibrarySearch, fsSearchStore } from "../src/store/fs.js";
 import { pgLibrarySearch } from "../src/store/pg-shelf.js";
+import { pgSearchStore } from "../src/store/pg-searches.js";
 import { importArticle } from "../src/store/import.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import type { LibraryEntry } from "../src/types.js";
@@ -317,7 +318,16 @@ when("the filesystem and Postgres stores agree", () => {
         const mk = async (n: number, slug: string, fetchedAt: Date | null, createdAt: Date) => {
           const articleId = `00000000-0000-4000-8000-00000000000${n}`;
           const revisionId = `00000000-0000-4000-8000-00000000010${n}`;
-          await tx.insert(articles).values({ id: articleId, ownerId: owner, slug });
+          /* `createdAt` on the ARTICLE, which is the column `ADDED_AT`
+             actually coalesces to — `coalesce(article_revisions.fetched_at,
+             articles.created_at)` in src/store/pg.ts. Setting it on the
+             revision below and not here left all three articles defaulting to
+             `now()`, so the null-`fetchedAt` row coalesced to today and sorted
+             to the top — the very failure this test exists to catch, staged by
+             the fixture rather than by the ordering. It went unnoticed until
+             2026-08-26 because a missing migration had this whole file
+             skipping rather than failing. */
+          await tx.insert(articles).values({ id: articleId, ownerId: owner, slug, createdAt });
           await tx
             .insert(articleRevisions)
             .values({ id: revisionId, articleId, status: "published", fetchedAt, createdAt });
@@ -368,6 +378,39 @@ when("the filesystem and Postgres stores agree", () => {
     expect(fromPg.map((e) => e.slug).filter((slug) => onDisk.has(slug))).toEqual(
       fromFiles.filter((e) => !e.fixture && onDisk.has(e.slug)).map((e) => e.slug),
     );
+  });
+
+  /**
+   * **One article, one idea of "current".**
+   *
+   * A saved search records the fingerprint of the blocks it was answered
+   * against, and the panel compares it against the article's fingerprint now to
+   * say whether the run is out of date (docs/project/search.md § A saved search
+   * says which article it answered). Two stores computing that fingerprint two
+   * ways is the failure src/source-hash.ts was pulled out of src/tweets.ts to
+   * prevent: they can only ever disagree, and the day they do, a run written
+   * through one store reports itself current against the other's rule.
+   *
+   * Both call the same `hashBlocks`, so what this checks is that they feed it
+   * the same thing — the same blocks, in the same order, with the same text.
+   * **The order is the half that can go wrong quietly.** Block ids carry no
+   * position, so a Postgres query missing its `order by ordinal` returns rows
+   * in whatever order the planner likes, which for a small table is usually
+   * insertion order. That looks perfect in development and reorders in
+   * production, where the only symptom is every saved search claiming to be out
+   * of date with nothing saying why.
+   */
+  describe.each(slugs)("%s — the article's fingerprint", (slug) => {
+    it("is the same number in both stores", async () => {
+      const [fromFiles, fromPg] = await Promise.all([
+        fsSearchStore.sourceHash(slug),
+        pgSearchStore.sourceHash(slug),
+      ]);
+      // Not just equal — actually computed. Two `undefined`s are also equal,
+      // and would mean neither store could see the article at all.
+      expect(fromFiles).toMatch(/^[0-9a-f]{16}$/);
+      expect(fromPg).toBe(fromFiles);
+    });
   });
 
   /**
