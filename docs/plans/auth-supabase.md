@@ -1,13 +1,15 @@
 # Signing in — Supabase Auth, Google first
 
-**Status: plan, 2026-08-26. Steps 0–2 partly done; nothing in the app has changed yet.**
+**Status: plan, 2026-08-26. Google SSO is proven working against the local stack. No app code written yet — deliberately, see [§ one vertical commit](#the-sign-in-screen-and-the-server-gate-ship-in-one-commit).**
 
 | | |
 |---|---|
 | `@supabase/supabase-js@^2.112.4` | **installed** |
 | The Google credentials, under Supabase's own variable names in `.env.local` | **done** |
 | `[auth.external.google]` in `supabase/config.toml`, and a stack restart | **done** — `/auth/v1/settings` now reports `google: true` |
-| `http://127.0.0.1:54361/auth/v1/callback` registered on the Google OAuth client | **not done, and blocking.** A real browser sign-in dies on Google's `Error 400: redirect_uri_mismatch`. See [step 0](#step-0-what-greg-has-to-click-10-minutes-and-nobody-else-can-do-it) — and read [§ The check that could not fail](#the-check-that-could-not-fail) before trusting any command in this document. |
+| `http://127.0.0.1:54361/auth/v1/callback` registered on the Google OAuth client | **done** — the mismatch check read 3 before and 0 after |
+| The client secret rotated, and the old one disabled | **done** — Greg generated it; it reached `.env.local` from his clipboard without passing through a transcript |
+| **Google sign-in, end to end, by a human** | **WORKS.** 2026-08-26 18:20 UTC — a third user appeared in local auth: `greg@gregdetre.com`, provider `google`, confirmed. Nothing in the app was involved. |
 | Everything in the app — client, gate, screen, tests | **not started** |
 | **A cross-family review** | **done** — GPT Sol, and it found three high-severity problems including one that would have leaked an OAuth code to a stranger's server. [§ what it changed](#the-cross-family-review-and-what-it-changed); full text in [auth-supabase-review-sol.md](auth-supabase-review-sol.md). |
 
@@ -367,7 +369,16 @@ open this in a browser and sign in as normal:
 http://127.0.0.1:54361/auth/v1/authorize?provider=google&redirect_to=http://localhost:5273
 ```
 
-Run the count again. **A third user, with provider `google`, is the proof.** No client library, no
+Run the count again. **A third user, with provider `google`, is the proof.** Done on 2026-08-26 at
+18:20 UTC: two users became three, the new one `greg@gregdetre.com` with provider `google` and its
+email already confirmed, and Google supplied the display name as well.
+
+**And the client secret can be checked without a browser at all**, which is otherwise the one part
+of this that seems to need a human. Post a deliberately invalid code to Google's token endpoint with
+the client id and secret: `invalid_grant` ("malformed auth code") means Google accepted the
+credentials and objected only to the fake code; `invalid_client` means the secret is wrong or
+disabled. Measured both ways on 2026-08-26 — a made-up secret returned `invalid_client`, the real
+one returned `invalid_grant` — so unlike its predecessor, this check has been seen to fail. No client library, no
 sign-in screen, no `apiFetch` — if this works, everything left is React, and if it does not, no
 amount of React was ever going to help. `http://localhost:5273` is already in
 `additional_redirect_urls`, so the round trip lands somewhere real.
