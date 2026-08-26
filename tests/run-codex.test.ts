@@ -217,6 +217,25 @@ describe("authHint", () => {
     expect(authHint("ERROR: missing API key")).toMatch(/codex login/);
   });
 
+  it("catches the API-key spelling of out-of-credits, not just the subscription one", () => {
+    /* The two auth paths word the same failure differently, and the matcher only
+       knew one of them. A ChatGPT subscription says "Your workspace is out of
+       credits"; API-key billing says "You have no credits remaining", which
+       matched neither branch — so the run reported a bare `exit 1` and a path,
+       which is precisely the outcome authHint exists to prevent. Cost two
+       review runs on 2026-08-26 before anybody opened the log.
+
+       Note the shape of the miss: the phrase this matched on was chosen by
+       reading one failure rather than both, which is the same
+       written-from-a-list mistake docs/reusable/silent-success.md is about. */
+    const hint = authHint("ERROR: stream disconnected before completion: You have no credits " +
+      "remaining. Add credits to continue using the API at https://platform.openai.com/");
+    expect(hint).toMatch(/credit/i);
+    // And it must not tell somebody whose CODEX_API_KEY is the thing that ran
+    // dry to go and set CODEX_API_KEY.
+    expect(hint).toMatch(/billing|top|add credit/i);
+  });
+
   it("reads codex's own ERROR lines, not the files codex printed", () => {
     // The activity log is mostly the *contents of files codex read*. This repo's own documentation
     // contains the string "out of credits", so an unanchored search would tell someone whose run

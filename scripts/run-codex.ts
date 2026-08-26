@@ -433,9 +433,15 @@ export function authHint(log: string): string {
   // itself: this very repo documents the string "out of credits", and any failed run that happened
   // to open that doc would have been told to go and buy credits it already had.
   const errors = log.split('\n').filter((l) => /^\s*ERROR\b/i.test(l)).join('\n');
-  if (/out of credits|insufficient (credit|quota|funds)/i.test(errors)) {
-    return '\n  The account is out of credits. Set CODEX_API_KEY (in .env.local, or exported) to' +
-      ' bill pay-as-you-go instead — it takes precedence over a logged-in ~/.codex/auth.json.';
+  /* Both auth paths word this the same failure differently, and matching only one of them is
+     how a run reports a bare `exit 1` and sends the caller to read the log by hand — the exact
+     outcome this function exists to prevent. A ChatGPT subscription says "Your workspace is out
+     of credits"; API-key billing says "You have no credits remaining". */
+  if (/out of credits|no credits remaining|insufficient (credit|quota|funds)/i.test(errors)) {
+    return '\n  The account is out of credits. If CODEX_API_KEY is set, that key is the one that has' +
+      ' run dry — top it up at platform.openai.com billing. If it is not set, setting it (in' +
+      ' .env.local, or exported) bills pay-as-you-go instead, and takes precedence over a' +
+      ' logged-in ~/.codex/auth.json.';
   }
   if (/401|unauthor|not logged in|(missing|incorrect|invalid|no) api key|authentication/i.test(errors)) {
     return '\n  That looks like an auth failure. Run `codex login`, or set CODEX_API_KEY.';

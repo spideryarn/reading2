@@ -403,6 +403,16 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   load-bearing claim ("X is already implemented", "this is safe") without a second check.
 - **Cost.** A runaway high-effort run burns quota fast. The wrapper caps any single run at
   `--timeout-minutes`.
+- **The two auth paths word "out of credits" differently, and both have to be matched.** A ChatGPT
+  subscription says `Your workspace is out of credits`; API-key billing says `You have no credits
+  remaining`. The wrapper's hint originally knew only the first, having been written from one
+  observed failure rather than both — so a key that had run dry produced a bare `exit 1` and a path,
+  which is the outcome the hint exists to prevent. Fixed 2026-08-26, after it cost two review runs.
+  Worth stating because it is the same shape as the bug: a list written from one example.
+  Two further wrinkles seen in that failure — the real reason arrives *after* five
+  `ERROR: Reconnecting... n/5` lines, so the first thing in the log is not the cause; and the run
+  still exits 0 from the wrapper's own perspective when launched in the background, so a caller
+  that checks only the exit status learns nothing.
 - **Running out of credit looks like a generic non-zero exit.** `codex exec` exits 1 and the wrapper
   reports `codex exec exited 1`; the actual reason (`Your workspace is out of credits`) is in the
   activity log, which is why the failure message names its path — and why the wrapper now lifts that
