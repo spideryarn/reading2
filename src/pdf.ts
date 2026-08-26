@@ -219,7 +219,20 @@ export function repeatedLines(pages: { text: string }[]): Set<string> {
  * as a precaution. Which is the house pattern (docs/reusable/silent-success.md)
  * in its smallest form: a security option that is a comment.
  */
-export async function pass0(source: string | Uint8Array): Promise<Pass0> {
+export class TooManyPages extends Error {
+  constructor(
+    readonly pages: number,
+    readonly limit: number,
+  ) {
+    super(`This PDF has ${pages} pages and the limit is ${limit}.`);
+    this.name = "TooManyPages";
+  }
+}
+
+export async function pass0(
+  source: string | Uint8Array,
+  opts: { maxPages?: number } = {},
+): Promise<Pass0> {
   /**
    * **A copy, and it is not defensive tidiness.** pdf.js takes *ownership* of
    * the array it is given: it transfers the underlying buffer to its worker and
@@ -231,7 +244,44 @@ export async function pass0(source: string | Uint8Array): Promise<Pass0> {
    */
   const data =
     typeof source === "string" ? new Uint8Array(await readFile(source)) : new Uint8Array(source);
-  const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
+  /* The loading task is kept, not just its promise, because it is the only
+     thing that can destroy the worker — `PDFDocumentProxy.cleanup()` releases
+     page resources and leaves the worker running. The guard below needs to walk
+     away from a document it has decided not to read. */
+  const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
+  const doc = await loadingTask.promise;
+
+  /**
+   * **The cap, before a single page is read.**
+   *
+   * This check used to live in src/pdf-read.ts, over `pass.pages.length` — that
+   * is, over the array this function returns, which it can only produce by
+   * having walked every page and every text item into memory first. So the cap
+   * bounded what we spent on *models*, which is what it was written for, and
+   * bounded nothing at all about what pdf.js did before that. A small, valid
+   * file with a hundred thousand pages was fully parsed and then refused.
+   *
+   * `doc.numPages` is available the moment the document opens, from the page
+   * tree, without touching a page. Asking it here costs nothing and closes the
+   * whole gap.
+   *
+   * That gap was survivable while the only way to reach this parser was a URL
+   * we had chosen to fetch. **An upload hands it to a stranger**, which is why
+   * this moved rather than being left as a note — see
+   * docs/plans/pdf-upload-and-storage.md and docs/project/security.md.
+   *
+   * The limit is passed in rather than imported: this module has no opinion
+   * about cost, and `MAX_PAGES` belongs to the stage that pays.
+   */
+  if (opts.maxPages !== undefined && doc.numPages > opts.maxPages) {
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* Being abandoned anyway. A failure to release a worker we are throwing
+         away must not replace the error that says why we are throwing it. */
+    }
+    throw new TooManyPages(doc.numPages, opts.maxPages);
+  }
 
   const pages: PageText[] = [];
   let metaTitle: string | null = null;

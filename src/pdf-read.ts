@@ -54,7 +54,15 @@ import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
 import { stageFailure } from "./job-failure.js";
 import { PDF_READER_MODEL } from "./models.js";
-import { foldLine, type Pass0, pass0, type PdfRecord, RENDERED, type RecordType } from "./pdf.js";
+import {
+  foldLine,
+  type Pass0,
+  pass0,
+  type PdfRecord,
+  RENDERED,
+  type RecordType,
+  TooManyPages,
+} from "./pdf.js";
 import { type Check, check } from "./pdf-score.js";
 import type { Meta } from "./types.js";
 
@@ -587,19 +595,28 @@ export interface PdfExtractOptions {
  */
 export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtractResult> {
   const reader = opts.reader ?? openRouterReader();
-  const pass = await pass0(opts.bytes);
-  if (pass.pages.length > MAX_PAGES) {
+  let pass: Pass0;
+  try {
+    pass = await pass0(opts.bytes, { maxPages: MAX_PAGES });
+  } catch (err) {
     /* `blocked`, so the job card does not offer a Retry that cannot work. A
        page count is arithmetic over bytes stage 1 has already cached, and Retry
        skips the fetch that produced them — the same PDF has the same number of
        pages every time it is counted. Raising the cap is the only thing that
        changes this, and that is not something the reader can do from the card.
-       src/job-failure.ts. */
-    throw stageFailure(
-      "blocked",
-      `This PDF has ${pass.pages.length} pages and the limit is ${MAX_PAGES}. That is a cost cap, ` +
-        `not a technical one — see docs/plans/pdf-ingestion.md.`,
-    );
+       src/job-failure.ts.
+
+       The refusal now comes out of `pass0` itself, before it has read a page —
+       see the comment on the guard there. The reader-facing sentence is
+       unchanged; only the moment it arrives is. */
+    if (err instanceof TooManyPages) {
+      throw stageFailure(
+        "blocked",
+        `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
+          `not a technical one — see docs/plans/pdf-ingestion.md.`,
+      );
+    }
+    throw err;
   }
   const rawSha256 = createHash("sha256").update(opts.bytes).digest("hex");
   await keepTheOriginal(opts, rawSha256);

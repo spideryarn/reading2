@@ -532,6 +532,76 @@ by it. It belongs in the appendix's eventual design, which is where it now is, a
    a tiny PDF with a huge page count.
 8. Docs.
 
+### Greg's answers, 2026-08-26
+
+> Assuming it's the same user. If it was previously uploaded by a different user, then reuse the
+> source object, but add a new per-user article object.
+>
+> I was going to say that we keep forever, especially given my previous answer that we reuse
+> sources across articles.
+>
+> — Greg, 2026-08-26, on duplicates, retention, and the beta gate (he chose *deploy it, accept the
+> risk for now* on the third)
+
+**Sources are shared; articles are not.** One content-addressed `raw_sources` row per distinct
+SHA-256, referenced by any number of articles across any number of readers. An upload of bytes we
+already hold does not re-upload and does not re-store — it makes a new per-reader article pointing
+at the existing source. This is Sol's third option, and Greg extended it across readers as well as
+across revisions.
+
+**Kept forever.** A source is never deleted while anything references it, and retention is per
+*source* rather than per revision, so every historical revision stays reproducible at no extra
+storage cost — which is the property content-addressing buys and the reason "forever" is affordable
+here. The sweep therefore has only one job left: **abandoned uploads** — a grant minted, maybe even
+an object written, and no article ever made. It is not a general garbage collector.
+
+**This makes the object key not owner-scoped, and that is a real change.** The plan above says the
+key is `<owner>/<uploadId>.pdf`. It cannot be, if two readers share one object. The key becomes the
+content hash, ownership moves onto the `raw_sources` reference rows, and **the RLS story moves with
+it** — the bucket stays private and every read goes through us or through a signed URL we issue
+after checking that *this* reader has an article referencing *that* source. Nothing about that is
+hard, but it is not the design the section above describes, and it must not be half-changed.
+
+#### The one cost of sharing across readers, stated plainly
+
+Cross-reader deduplication leaks *existence*. If B uploads bytes that A already uploaded, the system
+now behaves differently — it is instantly ready, having transferred nothing — and that difference is
+observable. So a reader who **already holds a file** can learn whether **somebody else** has
+uploaded that exact file. This is the well-known cloud-storage dedup side channel, and it is why
+Dropbox stopped deduplicating across accounts.
+
+It does not leak content, and it cannot be used to *fetch* anything: the reference rows decide what
+you may read, and a hash is not a grant. The realistic worry is narrow — a document whose mere
+presence is sensitive, guessed by someone who already has a copy of it.
+
+**Not a blocker, and Greg's call stands.** With one reader today
+([auth.md](../project/auth.md)) it is empty of consequence. Two cheap ways to close it later, either
+of which can be added without a migration: dedupe only *within* a reader (keep the hash key, scope
+the reference check to the owner, and let a second reader re-upload their own copy), or always
+transfer the bytes and dedupe server-side after receipt, which removes the observable difference at
+the cost of the bandwidth saving. **Recommendation: build the shared-source schema as asked, and
+make the dedup decision a policy flag rather than a shape**, so closing it later is a condition and
+not a migration.
+
+#### Deploying before the gate
+
+Greg chose to deploy with the endpoint open rather than wait for
+[auth.md](../project/auth.md)'s beta gate, knowing that this is an open storage quota and an open
+model-spend budget for anyone who finds the URL — and
+[deployment.md](../project/deployment.md) records that two `.vercel.app` addresses exist and only
+one was deleted. Recorded as a decision, not an oversight.
+
+What partially bounds it, and should therefore actually be built rather than assumed: the 50 MB
+object cap, the bucket's own size and MIME limits, and — the one that bounds *spend* rather than
+storage — the page cap, **once it is moved to where it fires before the parse**. That is
+[step 1](#build-order-revised-after-the-review), and this decision is a second reason for it.
+
+Still open, and smaller than the three above: **if the same reader uploads the same PDF twice**,
+Greg specified the cross-reader case and not this one. Taking his verb literally — *"add a new
+per-user article object"* — it makes a second article sharing the one source. That is the
+consistent reading and costs nothing to change, since offering "you already have this" is a UI
+addition on top rather than a different schema.
+
 ### Questions Sol says this plan should be asking, and isn't
 
 Sol raised twelve; these are the ones that change what gets built, and they are

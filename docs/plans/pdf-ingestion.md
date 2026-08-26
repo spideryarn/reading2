@@ -379,6 +379,15 @@ encoded chunk. **Encrypted PDFs are rejected by the API** and must be refused by
 corrupt ones; the parser runs in-process on untrusted bytes, so bound pages, objects, time and
 memory, and turn off scripting and external resource loading in pdf.js.
 
+> **Update 2026-08-26 — the page bound is built, and it moved.** It was checked over
+> `pass.pages.length` *after* `pass0` returned, so it bounded model spend and bounded nothing about
+> the parse: pdf.js had already walked every page and every text item into memory. It now fires on
+> `doc.numPages` the moment the document opens, before any page is read, and destroys the worker on
+> the way out ([`src/pdf.ts`](../../src/pdf.ts), `TooManyPages`). Objects, time and memory are
+> **still unbounded.** Found by the review of
+> [pdf-upload-and-storage.md](pdf-upload-and-storage.md), because uploads are what hand this parser
+> to a stranger.
+
 **Stage 3 has two limits this plan inherits, and one of them is being fixed first.** Id carry-over
 matches **exact normalised text** ([`src/blocks.ts`](../../src/blocks.ts) `matchKey`), so a re-read
 that re-segments or corrects one word mints a new id for that paragraph — "re-read keeps ids" is
