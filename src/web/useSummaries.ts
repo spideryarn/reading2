@@ -36,6 +36,9 @@ export interface UseSummaries {
   summaries: Summaries | null;
   /** The article moved after they were written. Said out loud, never worked around. */
   stale: boolean;
+  /** Written from a reader profile, and whether that profile has changed since. */
+  profiled: boolean;
+  profileChanged: boolean;
   /** A read failure, or the reason the last request could not be started. */
   error: string | null;
   /** The job writing this article's summaries, if one is. Null otherwise. */
@@ -50,7 +53,14 @@ export interface UseSummaries {
    * it to that are in src/summarise.ts, in the constant half of the prompt.
    * Blank and absent are the same thing.
    */
-  write(force?: boolean, guidance?: string): Promise<void>;
+  /**
+   * Write them. `useProfile` defaults to true; pass false for a plain set.
+   *
+   * On the action rather than in panel state, because the artefact records what
+   * it was run with (`profileHash`) — so the next visit reads the reader's
+   * choice off the file rather than having to remember it.
+   */
+  write(force?: boolean, guidance?: string, useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -63,6 +73,8 @@ export function useSummaries(slug: string): UseSummaries {
   const [status, setStatus] = useState<SummariesStatus>("loading");
   const [summaries, setSummaries] = useState<Summaries | null>(null);
   const [stale, setStale] = useState(false);
+  const [profiled, setProfiled] = useState(false);
+  const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -80,6 +92,10 @@ export function useSummaries(slug: string): UseSummaries {
       const loaded = await readJson<SummariesResponse>(res);
       setSummaries(loaded.summaries);
       setStale(loaded.stale);
+      /* `!= null`, not truthiness: `null` and absent both mean "written without
+         a profile" and a hash means written with one. */
+      setProfiled(loaded.summaries.profileHash != null);
+      setProfileChanged(loaded.profileChanged);
       setError(null);
       setStatus("ready");
     } catch (err) {
@@ -149,7 +165,7 @@ export function useSummaries(slug: string): UseSummaries {
   }, [queue.jobs, startedId]);
 
   const write = useCallback(
-    async (force = false, guidance?: string) => {
+    async (force = false, guidance?: string, useProfile = true) => {
       setStartedId(null);
       const steer = guidance?.trim();
       const started = await queue.run({
@@ -159,6 +175,9 @@ export function useSummaries(slug: string): UseSummaries {
         // Trimmed to nothing is not sent at all, so a box the reader typed in
         // and then cleared does not become an empty instruction in the prompt.
         ...(steer ? { guidance: steer } : {}),
+        // Only when it is false, so the ordinary request is unchanged and
+        // absent goes on meaning yes — src/routes.ts § parseJobRequest.
+        ...(useProfile ? {} : { useProfile: false }),
       });
       setPostFailed(started === null);
       if (started) setStartedId(started.id);
@@ -178,6 +197,8 @@ export function useSummaries(slug: string): UseSummaries {
     status,
     summaries,
     stale,
+    profiled,
+    profileChanged,
     error,
     job,
     failed,

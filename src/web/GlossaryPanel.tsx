@@ -80,6 +80,8 @@ import { Tooltip } from "./Tooltip.js";
 import { isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
 import { JobProgress } from "./JobProgress.js";
+import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { useHasProfile } from "./useProfile.js";
 
 interface Props extends UseGlossary {
   /** The selected term, from `?term=`. Null is a list nobody has picked from. */
@@ -109,6 +111,8 @@ export function GlossaryPanel({
   glossary,
   stale,
   outdated,
+  profiled,
+  profileChanged,
   error,
   job,
   failed,
@@ -137,6 +141,21 @@ export function GlossaryPanel({
   const order = effectiveSort(all, sort);
   const groups = glossary ? groupEntries(all, order, gate) : [];
 
+  const hasProfile = useHasProfile();
+  /**
+   * Whether the next run should use the profile.
+   *
+   * Seeded from what the list on screen was written with — `profiled` — so the
+   * box is already in the state the reader last chose and nothing has to
+   * remember it between visits: the artefact does. `useState`'s initialiser
+   * rather than an effect, because it is the starting value and re-seeding it
+   * every time a poll returns would fight a reader who had just unticked it.
+   *
+   * With no glossary yet, `profiled` is false and the default is `true` — the
+   * profiled run is the one this app now offers.
+   */
+  const [withProfile, setWithProfile] = useState(() => (glossary ? profiled : true));
+
   return (
     <aside className="mode-band gloss" aria-label="Glossary">
       <div className="gloss-head">
@@ -147,6 +166,11 @@ export function GlossaryPanel({
             {glossary.entries.length} {glossary.entries.length === 1 ? "term" : "terms"}
           </span>
         )}
+        {/* A label rather than a control, and on the head line rather than in a
+            banner: it is provenance, not a warning. The glossary already made
+            this exact choice once — "a label instead of a warning triangle" —
+            and the reason holds. src/web/WrittenForYou.tsx. */}
+        {glossary && <WrittenForYou written={profiled} changed={profileChanged} />}
       </div>
 
       {/* Sorting is only a question once there is a list, and each option is
@@ -176,7 +200,25 @@ export function GlossaryPanel({
             One model call over the whole article, and it takes tens of seconds. Found once and
             kept — you will not be asked again unless the article changes.
           </p>
-          <Progress job={job} failed={failed} onRun={find} onCancel={cancel} label="Find the terms" />
+          <div className="gloss-run">
+            {/* Beside the button that spends, not in the head with the label.
+                Unticking this and pressing Find is exactly "check/uncheck and
+                it regenerates without this prompt" — it just does not pretend
+                to be free. src/web/WrittenForYou.tsx. */}
+            <UseProfile
+              checked={withProfile}
+              onChange={setWithProfile}
+              hasProfile={hasProfile}
+              disabled={job !== null}
+            />
+            <Progress
+              job={job}
+              failed={failed}
+              onRun={() => find(withProfile)}
+              onCancel={cancel}
+              label="Find the terms"
+            />
+          </div>
         </div>
       )}
 
@@ -208,13 +250,21 @@ export function GlossaryPanel({
                 <TriangleAlert size={13} />
                 These terms describe an older version of the article.
               </p>
-              <Progress
-                job={job}
-                failed={failed}
-                onRun={find}
-                onCancel={cancel}
-                label="Find them again"
-              />
+              <div className="gloss-run">
+                <UseProfile
+                  checked={withProfile}
+                  onChange={setWithProfile}
+                  hasProfile={hasProfile}
+                  disabled={job !== null}
+                />
+                <Progress
+                  job={job}
+                  failed={failed}
+                  onRun={() => find(withProfile)}
+                  onCancel={cancel}
+                  label="Find them again"
+                />
+              </div>
             </div>
           ) : outdated ? (
             <div className="gloss-stale">
@@ -223,13 +273,21 @@ export function GlossaryPanel({
                 These were written before entries said where each half came from. Finding them
                 again splits each one into what the article means and what the model knows.
               </p>
-              <Progress
-                job={job}
-                failed={failed}
-                onRun={find}
-                onCancel={cancel}
-                label="Find them again"
-              />
+              <div className="gloss-run">
+                <UseProfile
+                  checked={withProfile}
+                  onChange={setWithProfile}
+                  hasProfile={hasProfile}
+                  disabled={job !== null}
+                />
+                <Progress
+                  job={job}
+                  failed={failed}
+                  onRun={() => find(withProfile)}
+                  onCancel={cancel}
+                  label="Find them again"
+                />
+              </div>
             </div>
           ) : null}
 

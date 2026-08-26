@@ -67,6 +67,8 @@ import { FOLLOW_ATTR, useFollow } from "./follow.js";
 import { currentEntryId, rungText, type SummaryNode } from "./tree.js";
 import type { UseSummaries } from "./useSummaries.js";
 import { JobProgress } from "./JobProgress.js";
+import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { useHasProfile } from "./useProfile.js";
 
 interface Props extends UseSummaries {
   /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
@@ -105,6 +107,8 @@ export function SummaryPanel({
   status,
   summaries,
   stale,
+  profiled,
+  profileChanged,
   error,
   job,
   failed,
@@ -168,6 +172,10 @@ export function SummaryPanel({
    * the box still gets an unsteered rewrite. One variable for the two would
    * make clearing it impossible: the artefact's note would keep reappearing.
    */
+  const hasProfile = useHasProfile();
+  /* Seeded from what the artefact on screen was written with, so nothing has to
+     remember the reader's last choice between visits — the file does. */
+  const [withProfile, setWithProfile] = useState(() => (summaries ? profiled : true));
   const [steer, setSteer] = useState<string | null>(null);
   const guidance = steer ?? summaries?.guidance ?? "";
 
@@ -182,6 +190,9 @@ export function SummaryPanel({
       <div className="summ-head">
         <Layers size={14} className="summ-head-icon" />
         <h2>Summary</h2>
+        {/* Provenance, on the head line. A label rather than a control for the
+            reason src/web/WrittenForYou.tsx gives. */}
+        {summaries && <WrittenForYou written={profiled} changed={profileChanged} />}
       </div>
 
       <div className="summ-controls">
@@ -255,12 +266,24 @@ export function SummaryPanel({
               hidden while the summaries are stale, so without this the one
               article most likely to be rewritten is the one you cannot steer. */}
           <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
+          {/* Beside the steer and the button, because all three describe the
+              same forthcoming run. Two boxes about intent and one checkbox
+              about whose intent — the profile is durable and about the reader,
+              the steer is about this rewrite, and SYSTEM states that the steer
+              wins where they pull different ways.
+              docs/project/reader-profile.md. */}
+          <UseProfile
+            checked={withProfile}
+            onChange={setWithProfile}
+            hasProfile={hasProfile}
+            disabled={job !== null}
+          />
           {/* No `force` needed: the step's own freshness check already knows
               this artefact is out of date, so an ordinary run rewrites it. */}
           <Progress
             job={job}
             failed={failed}
-            onRun={() => write(false, guidance)}
+            onRun={() => write(false, guidance, withProfile)}
             onCancel={cancel}
             label="Rewrite them"
           />
@@ -305,10 +328,22 @@ export function SummaryPanel({
                 calls over the whole article and takes a minute or two — done once and kept.
               </p>
               <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
+          {/* Beside the steer and the button, because all three describe the
+              same forthcoming run. Two boxes about intent and one checkbox
+              about whose intent — the profile is durable and about the reader,
+              the steer is about this rewrite, and SYSTEM states that the steer
+              wins where they pull different ways.
+              docs/project/reader-profile.md. */}
+          <UseProfile
+            checked={withProfile}
+            onChange={setWithProfile}
+            hasProfile={hasProfile}
+            disabled={job !== null}
+          />
               <Progress
                 job={job}
                 failed={failed}
-                onRun={() => write(false, guidance)}
+                onRun={() => write(false, guidance, withProfile)}
                 onCancel={cancel}
                 label="Write the summaries"
               />
@@ -332,6 +367,18 @@ export function SummaryPanel({
                   </p>
                 )}
                 <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
+          {/* Beside the steer and the button, because all three describe the
+              same forthcoming run. Two boxes about intent and one checkbox
+              about whose intent — the profile is durable and about the reader,
+              the steer is about this rewrite, and SYSTEM states that the steer
+              wins where they pull different ways.
+              docs/project/reader-profile.md. */}
+          <UseProfile
+            checked={withProfile}
+            onChange={setWithProfile}
+            hasProfile={hasProfile}
+            disabled={job !== null}
+          />
                 <Progress
                   job={job}
                   failed={failed}

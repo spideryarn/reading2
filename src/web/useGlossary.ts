@@ -36,14 +36,34 @@ export interface UseGlossary {
   stale: boolean;
   /** The list predates the current prompt. A different fact from `stale`, with its own sentence. */
   outdated: boolean;
+  /**
+   * This list was written from a reader profile, and whether that profile is
+   * still the one they have.
+   *
+   * A third fact with a third sentence, like `outdated` beside `stale`. It
+   * matters most here of the five: a profile changes which terms get an entry
+   * at all and what `difficulty` means, so a stale one is a threshold slider
+   * filtering on somebody the reader no longer is.
+   * docs/project/reader-profile.md.
+   */
+  profiled: boolean;
+  profileChanged: boolean;
   /** A read failure, or the reason the last request could not be started. */
   error: string | null;
   /** The job writing this article's glossary, if one is. Null otherwise. */
   job: Job | null;
   /** Why the job this session started stopped, if it stopped badly. */
   failed: string | null;
-  find(): Promise<void>;
-  more(): Promise<void>;
+  /**
+   * Write the list. `useProfile` defaults to true; pass false for a plain one.
+   *
+   * The flag rides on the *action* rather than being panel state, because it is
+   * a property of the run and the artefact records what it was run with —
+   * `profileHash`, src/profile.ts. Nothing has to remember the reader's choice:
+   * the next visit reads it off the file.
+   */
+  find(useProfile?: boolean): Promise<void>;
+  more(useProfile?: boolean): Promise<void>;
   reset(): Promise<void>;
   cancel(id: string): void;
   /** Check one term on the web. Resolves when the answer is in `glossary`. */
@@ -64,6 +84,8 @@ export function useGlossary(slug: string): UseGlossary {
   const [glossary, setGlossary] = useState<Glossary | null>(null);
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
+  const [profiled, setProfiled] = useState(false);
+  const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [looking, setLooking] = useState<string | null>(null);
   const [lookFailed, setLookFailed] = useState<string | null>(null);
@@ -77,6 +99,8 @@ export function useGlossary(slug: string): UseGlossary {
         setGlossary(null);
         setStale(false);
         setOutdated(false);
+        setProfiled(false);
+        setProfileChanged(false);
         setError(null);
         setStatus("none");
         return;
@@ -85,6 +109,12 @@ export function useGlossary(slug: string): UseGlossary {
       setGlossary(loaded.glossary);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
+      /* `!= null` rather than truthiness: the field is `string | null |
+         undefined` and only `null` and absent mean "written without one". A
+         `!!` here would be right today and wrong the moment somebody stores an
+         empty string. */
+      setProfiled(loaded.glossary.profileHash != null);
+      setProfileChanged(loaded.profileChanged);
       setError(null);
       setStatus("ready");
     } catch (err) {
@@ -155,12 +185,16 @@ export function useGlossary(slug: string): UseGlossary {
   }, [queue.jobs, startedId]);
 
   const run = useCallback(
-    async (force: boolean) => {
+    async (force: boolean, useProfile = true) => {
       setStartedId(null);
       const started = await queue.run({
         slug,
         steps: ["glossary"],
         ...(force ? { force: ["glossary" as const] } : {}),
+        /* Sent only when it is `false`, so the ordinary request is the same
+           bytes it has always been and absent goes on meaning yes. The server
+           reads it the same way — src/routes.ts § parseJobRequest. */
+        ...(useProfile ? {} : { useProfile: false }),
       });
       setPostFailed(started === null);
       if (started) setStartedId(started.id);
@@ -168,8 +202,8 @@ export function useGlossary(slug: string): UseGlossary {
     [queue, slug],
   );
 
-  const find = useCallback(() => run(false), [run]);
-  const more = useCallback(() => run(true), [run]);
+  const find = useCallback((useProfile = true) => run(false, useProfile), [run]);
+  const more = useCallback((useProfile = true) => run(true, useProfile), [run]);
 
   /**
    * Throw the list away and find a new one.
@@ -252,6 +286,8 @@ export function useGlossary(slug: string): UseGlossary {
     glossary,
     stale,
     outdated,
+    profiled,
+    profileChanged,
     error,
     job,
     failed,

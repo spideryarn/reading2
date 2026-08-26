@@ -53,6 +53,16 @@ export interface ChatApi {
     question: string,
     at: string | null,
     /**
+     * Whether this answer should be written for the reader's profile.
+     *
+     * Per turn, not per thread, and composer-only: a chat answer is not an
+     * artefact anybody rewrites, so there is nothing to store a preference
+     * against and nothing to flip back to. A reader may reasonably want one
+     * plain answer in the middle of a conversation that is otherwise theirs.
+     * Absent means yes. docs/project/reader-profile.md.
+     */
+    useProfile?: boolean,
+    /**
      * Called if the server gave the thread a different id than the one sent.
      * See the `begin` frame below — it lets the caller correct `?thread=`
      * rather than leaving the URL pointing at a conversation that is not there.
@@ -1080,6 +1090,7 @@ export function useChat(slug: string): ChatApi {
       threadId: string | null,
       question: string,
       at: string | null,
+      useProfile = true,
       onThreadId?: (id: string) => void,
     ): string => {
       const id = threadId ?? mintId();
@@ -1116,7 +1127,7 @@ export function useChat(slug: string): ChatApi {
         return existing ? prev.map((t) => (t.id === id ? thread : t)) : [...prev, thread];
       });
 
-      run(id, { question, at }, pendingId, onThreadId);
+      run(id, { question, at, ...(useProfile ? {} : { useProfile: false }) }, pendingId, onThreadId);
       return id;
     },
     [run],

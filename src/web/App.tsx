@@ -708,7 +708,6 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         <Spine
           outline={outline}
           layoutKey={layoutKey}
-          narrow={fit.spine === "narrow"}
           matches={hitBlocks}
           onJump={jumpTo}
         />
@@ -1109,7 +1108,10 @@ function ChatBand({
     const handoff = takeHandoff(slug);
     if (!handoff) return;
     started.current = true;
-    const id = send(null, handoff.question, handoff.at, (real) => void setThread(real));
+    /* A hand-off from the comment dialog carries no profile choice of its own —
+       the question was framed there, and the default is the profiled answer
+       this app now gives. src/web/chat-handoff.ts. */
+    const id = send(null, handoff.question, handoff.at, true, (real) => void setThread(real));
     void setThread(id);
   }, [loaded, slug, send, setThread]);
 
@@ -1136,10 +1138,10 @@ function ChatBand({
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
-      onSend={(question) => {
+      onSend={(question, useProfile) => {
         // `send` returns the thread it went to, minted here when this is a new
         // conversation — so the URL can name it before the request lands.
-        const id = send(thread, question, at, (corrected) => void setThread(corrected));
+        const id = send(thread, question, at, useProfile, (corrected) => void setThread(corrected));
         if (id !== thread) void setThread(id);
       }}
       onRename={rename}

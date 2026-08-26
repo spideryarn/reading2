@@ -112,3 +112,42 @@ export function useProfile(): UseProfile {
 
   return { profile, draft, setDraft, flush, error, saving };
 }
+
+/**
+ * **Does this reader have a profile at all** — the one question every profile
+ * control asks before rendering anything.
+ *
+ * One shared hook rather than a field on each artefact response, and the
+ * reason is the states where there *is* no artefact. The glossary's empty
+ * state is exactly where the checkbox matters most — it is the run that has not
+ * happened yet — and chat and explain have no artefact response at all. A field
+ * on the three responses would have answered three of the six places and left
+ * the other three to a second mechanism, and two mechanisms for one boolean is
+ * how they come to disagree.
+ *
+ * It fetches `/api/reader` and reads only whether the answer is non-empty. The
+ * text never reaches these panels: they have no use for it, and the less of the
+ * reader's own words the client scatters around, the better.
+ *
+ * Defaults to **false** while loading, so nothing flashes into existence and
+ * then out again on a slow connection. The cost of being wrong that way round
+ * is a control appearing a moment late; the other way round it is a control
+ * that appears and vanishes.
+ */
+export function useHasProfile(): boolean {
+  const [has, setHas] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/reader")
+      .then((r) => readJson<{ profile: string | null }>(r))
+      .then((body) => live && setHas(Boolean(body.profile)))
+      // A reader whose profile could not be read is a reader with no profile as
+      // far as this is concerned. There is nothing useful to say about it here,
+      // and /profile will report the failure properly if they go and look.
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  return has;
+}

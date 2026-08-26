@@ -107,7 +107,7 @@
    Diagnosed by spideryarn2-c1, 2026-08-25; written up in
    docs/reusable/css-sticky-containing-block.md. */
 .reader {
-  --spine-w: 13rem;
+  --spine-w: 1.5rem;
   /* The mode band's width, set inline in pixels by App from `fit.modeW`, and
      ZERO in the table-of-contents mode. Declared here so every rule below can
      add it unconditionally: `+ 0px` is a no-op, which is what makes the default
@@ -117,8 +117,10 @@
   padding-left: calc(var(--spine-w) + var(--mode-w));
   /* min-width is set inline, in pixels, by App — see the note above. */
 }
-.reader.spine-full { --spine-w: 13rem; }
-.reader.spine-narrow { --spine-w: 1.5rem; }
+/* One rail width, since 2026-08-26: the labelled 13rem form is gone and the
+   spine is always the collapsed strip — see Spine.tsx. Mirrors SPINE_W in
+   layout.ts; change both together. */
+.reader.spine-on { --spine-w: 1.5rem; }
 .reader.spine-off { --spine-w: 0rem; }
 
 body {
@@ -160,9 +162,9 @@ body {
   padding: 1.25rem 1.5rem 0.9rem;
   /* Room for the corner wordmark, but only when there is not already room.
      This bar starts at `left: --spine-w + --mode-w`, so the logo reaches
-     `--logo-w` minus that offset into it; when the spine is at its full 13rem
-     the term is negative and the ordinary 1.5rem wins. That is the whole
-     mechanism — see HomeLogo.tsx for why the corner is otherwise free.
+     `--logo-w` minus that offset into it; once a mode band is open the term is
+     negative and the ordinary 1.5rem wins. That is the whole mechanism — see
+     HomeLogo.tsx for why the corner is otherwise free.
 
      The `+ 1.5rem` is not slack. Without it the title starts at exactly the
      wordmark's right edge, which does not overlap and still reads as broken:
@@ -888,15 +890,15 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   /* How much of the rail's width the search lanes may take, and how wide one
      lane may get when there are few of them — see § search marks below.
 
-     The cap is what makes one search a tick rather than a slab, and it was 6px
-     until a browser pass called the bars "visually delicate and easy to miss
-     with only one or two searches active, since the gutter isn't fully used
-     then" — which is the right complaint: a cap tuned for eight lanes leaves
-     two thirds of the rail's gutter empty at one. Eight is the width at which
-     three lanes fill the gutter exactly, so the common cases (one, two, three
-     searches) all get a bar you can see and nothing overflows. */
-  --spine-gutter: 24px;
-  --lane-max: 8px;
+     The cap is what makes one search a tick rather than a slab. These are the
+     numbers the collapsed rail always used; when there was also a 13rem rail
+     they were its overrides (24px / 8px there), and with the wide form gone
+     they are simply the numbers. The whole rail is 24px, so the gutter is a
+     little under two thirds of it and three lanes fill it exactly — the common
+     cases (one, two, three searches) all get a bar you can see and nothing
+     overflows. */
+  --spine-gutter: 15px;
+  --lane-max: 5px;
   z-index: 45;
   background: var(--panel);
   border-right: 1px solid var(--rule-strong);
@@ -907,30 +909,6 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 }
 
 .spine-off .spine { display: none; }
-
-/* Where you are, in words. The bands below can be a pixel tall; this never is,
-   which is what lets the rail stay strictly proportional without becoming
-   unreadable for short parts. */
-.spine-here {
-  flex: none;
-  padding: 0.5rem 0.6rem 0.55rem;
-  border-bottom: 1px solid var(--rule-strong);
-  background: var(--highlight-wash);
-}
-
-.spine-here-part {
-  font-size: 0.72rem;
-  font-weight: 650;
-  line-height: 1.25;
-  color: var(--highlight-ink);
-}
-
-.spine-here-sub {
-  margin-top: 0.15rem;
-  font-size: 0.65rem;
-  line-height: 1.25;
-  color: var(--ink-soft);
-}
 
 .spine-track {
   position: relative;
@@ -943,32 +921,25 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   left: 0;
   right: 0;
   overflow: hidden;
-  padding: 0.1rem 0.4rem 0 0.65rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.68rem;
-  line-height: 1.25;
-  color: var(--ink-faint);
-  transition: color 0.15s, background 0.15s;
+  transition: background 0.15s;
 }
 
-/* The part's tint bar, full height of its band, so the rail reads as a stack of
-   proportional blocks rather than as a list of labels. */
+/* The part's tint bar, the full width and height of its band — the rail reads
+   as a stack of proportional blocks. It was a 3px stripe beside a label when
+   there was a labelled rail to put a label on. */
 .spine-part::before {
   content: "";
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
+  inset: 0;
   background: var(--depth-1);
-  opacity: 0.45;
+  opacity: 0.3;
 }
 
 .spine-part.active {
   background: var(--highlight-wash);
-  color: var(--ink);
 }
-.spine-part.active::before { width: 4px; opacity: 1; }
+.spine-part.active::before { opacity: 0.75; }
 
 /* L2 as hairlines: the subdivision of the article stays visible even where
    there is no room for a word of it. */
@@ -1064,14 +1035,6 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   background: rgb(var(--h));
 }
 
-/* Keep the part labels clear of the lanes while there is something in them.
-   Conditional rather than permanent: the gutter is a tenth of the rail's width,
-   and paying it on every article the reader is not searching would shorten
-   every label in the app for a feature that is off. */
-.spine.marked .spine-part {
-  padding-right: calc(var(--spine-gutter) + 4px);
-}
-
 /* How much of the article is on screen, and where. Drawn over everything and
    deliberately not interactive. */
 .spine-viewport {
@@ -1084,18 +1047,6 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   border-bottom: 1px solid var(--highlight);
   background: color-mix(in oklab, var(--highlight) 12%, transparent);
 }
-
-/* Collapsed rail: bands, ticks and the viewport marker, no words. Below about
-   1100px the labels cost more width than they are worth, but "where am I" is
-   exactly as useful on a small screen as on a large one. */
-/* The collapsed rail is 24px wide in total, so the search gutter has to be a
-   smaller share of it — and the cap comes down with it, or two searches would
-   cover most of a rail that is also trying to show you where you are. */
-.spine.narrow { --spine-gutter: 15px; --lane-max: 5px; }
-.spine.narrow .spine-label { display: none; }
-.spine.narrow .spine-part { padding: 0; }
-.spine.narrow .spine-part::before { width: 100%; opacity: 0.3; }
-.spine.narrow .spine-part.active::before { opacity: 0.75; }
 
 /* --------------------------------------------------------------- tooltip --
    The hover panel — Tooltip.tsx, over Floating UI, which positions and ships no
@@ -2882,7 +2833,9 @@ td.text.has-hit[data-hues="8"] {
   border-radius: var(--radius);
 }
 .chat-thread:hover { background: var(--surface-raised); }
-.chat-thread + .chat-thread, .chat-threads li + li { margin-top: 0.1rem; }
+/* Rows are three lines now, so they need a hairline of air between them or
+   two conversations read as one. */
+.chat-threads li + li { margin-top: 0.1rem; }
 .chat-thread-open {
   flex: 1;
   display: flex;
@@ -2899,10 +2852,11 @@ td.text.has-hit[data-hues="8"] {
   cursor: pointer;
 }
 .chat-thread-open:hover { color: var(--ink); }
-/* Two lines, then cut. A title is up to ninety characters (TITLE_MAX in
-   src/chat-title.ts) and the panel is about forty across, so two lines shows
-   nearly all of one and the tooltip has the rest. `line-clamp` needs the
-   prefixed pair to work anywhere; both are still required in 2026. */
+/* Two lines, then cut. A title is up to sixty characters (`titleFrom` in
+   src/chat.ts) and the panel fits rather fewer than that on a line, so one line
+   was throwing away the end of the sentence that says what the question was
+   about; two lines shows all of it. `line-clamp` needs the prefixed pair to
+   work anywhere; both are still required in 2026. */
 .chat-thread-title {
   min-width: 0;
   overflow: hidden;
@@ -2931,17 +2885,30 @@ td.text.has-hit[data-hues="8"] {
   color: var(--ink-faint);
   font-size: 0.75rem;
 }
-/* The dot between the counts, drawn rather than typed, so it is not read out
-   as a word by a screen reader. */
+/* The dot between the facts, drawn in CSS rather than written into the markup,
+   so that adding or removing one of them cannot leave a stray separator — and
+   so that selecting the row copies the facts and not the punctuation. */
 .chat-thread-meta > * + *::before { content: "·"; margin-right: 0.4rem; }
 .chat-thread-count { white-space: nowrap; }
 .chat-thread-when { white-space: nowrap; }
 /* The icons only appear under the pointer — three lines of metadata is enough
-   in the row without two permanent buttons competing with it — but never
-   vanish for the keyboard, which cannot hover. */
-.chat-thread-actions { display: flex; gap: 0.1rem; padding-top: 0.35rem; opacity: 0; }
+   in the row without two permanent buttons competing with it — but never vanish
+   for the keyboard, which cannot hover: `:focus-within` brings them back.
+
+   `pointer-events` as well as `opacity`, and the reason is touch. A finger has
+   no hover: on a tablet the icons would sit invisible at the right edge of
+   every row, and a tap landing on one of them would delete the conversation
+   with no warning and nothing on the screen to explain it. Transparent is not
+   the same as absent. Found by GPT-5.6, 2026-08-26. */
+.chat-thread-actions {
+  display: flex;
+  gap: 0.1rem;
+  padding-top: 0.35rem;
+  opacity: 0;
+  pointer-events: none;
+}
 .chat-thread:hover .chat-thread-actions,
-.chat-thread:focus-within .chat-thread-actions { opacity: 1; }
+.chat-thread:focus-within .chat-thread-actions { opacity: 1; pointer-events: auto; }
 .chat-rename {
   flex: 1;
   min-width: 0;
@@ -5062,4 +5029,80 @@ td.text.has-hit[data-hues="8"] {
 @keyframes prof-mic-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.65; }
+}
+
+/* --------------------------------------------- profile: the two controls --
+   A label that states what a piece of generated text was written with, and a
+   checkbox that decides what the next run uses. Two jobs, two controls, and
+   they deliberately do not look alike: one is a fact and the other is a
+   decision. src/web/WrittenForYou.tsx, docs/project/reader-profile.md. */
+
+/* The label. Quiet — it is provenance, not a warning, which is the same call
+   the glossary already made when it chose "a label instead of a warning
+   triangle". It must not compete with the heading it sits beside. */
+.prof-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: help;
+}
+.prof-badge:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+/* Written for a profile the reader has since changed. Warmer, and still not a
+   warning triangle: nothing is wrong with the text, it was written for a
+   slightly different person. */
+.prof-badge.changed {
+  border-color: color-mix(in oklab, var(--highlight) 40%, transparent);
+  color: var(--highlight-ink);
+}
+
+.tip-profile { max-width: 22rem; }
+.tip-profile p { margin: 0 0 0.4rem; }
+.tip-profile p:last-child { margin-bottom: 0; }
+
+/* The checkbox, wherever a run is about to be paid for. */
+.prof-use {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  cursor: pointer;
+  user-select: none;
+}
+.prof-use input { accent-color: var(--highlight); cursor: pointer; }
+.prof-use:hover { color: var(--ink); }
+.prof-use input:disabled { cursor: default; }
+.prof-use:has(input:disabled) { opacity: 0.5; cursor: default; }
+
+/* The checkbox and the run button, on one line — glossary's empty state and
+   its two stale banners. `wrap` because the band is 400px and "Use your
+   profile" beside "Find them again" is close to the limit. */
+.gloss-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+/* In the chat composer the checkbox sits on its own line under the input. The
+   composer is `display: flex` with `align-items: flex-end`, so a third item
+   would sit beside the textarea and squeeze it; `flex-wrap` plus a full-width
+   basis puts it on the next row instead, where it reads as a note about the
+   question rather than as part of the input. */
+.chat-composer { flex-wrap: wrap; }
+.chat-composer .prof-use {
+  flex-basis: 100%;
+  margin-top: 0.1rem;
 }

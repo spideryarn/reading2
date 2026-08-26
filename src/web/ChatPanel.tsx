@@ -59,13 +59,17 @@ import type { BlockId, ChatMessage, ChatThread, ToolRun } from "../types.js";
 import { CitedText } from "./Cited.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { TooltipGroup } from "./Tooltip.js";
+import { exactly, timeAgo } from "./relative-time.js";
+import { useNow } from "./useNow.js";
+import { UseProfile } from "./WrittenForYou.js";
+import { useHasProfile } from "./useProfile.js";
 
 interface Props {
   threads: ChatThread[];
   /** The open conversation, or null for the thread list. From `?thread=`. */
   threadId: string | null;
   onThread(id: string | null): void;
-  onSend(question: string): void;
+  onSend(question: string, useProfile: boolean): void;
   onNew(): void;
   /**
    * Forget a conversation nobody ever said anything in.
@@ -280,9 +284,17 @@ export function ChatPanel({
       <div className="chat-head">
         <h2>{open ? open.title : "Chat"}</h2>
         {open ? (
-          <button type="button" className="chat-icon" title="All conversations" onClick={leave}>
-            <X size={14} />
-          </button>
+          <>
+            {/* The same delete the list offers, where the reader actually is.
+                Greg, 2026-08-26: *"Also add a Delete button within a chat."*
+                Asking twice rather than once, unlike the list — see ArmedDelete
+                — because in here the whole conversation is on the screen and
+                there is nothing to put it back. */}
+            <ArmedDelete key={open.id} onDelete={() => onDelete(open.id)} />
+            <button type="button" className="chat-icon" title="All conversations" onClick={leave}>
+              <X size={14} />
+            </button>
+          </>
         ) : (
           <button type="button" className="chat-icon" title="Start a new conversation" onClick={onNew}>
             <MessageSquarePlus size={14} />
@@ -325,11 +337,66 @@ export function ChatPanel({
 }
 
 /**
+ * Delete, but only if you say so twice.
+ *
+ * One press arms it — the icon turns red and its tooltip changes to say what
+ * the next press will do — and a second press within a few seconds deletes.
+ * Not a `window.confirm`, which blocks the tab and cannot be styled, and not an
+ * Undo strip like the shelf's, because a deleted conversation is really gone
+ * rather than archived and there would be nothing to put back.
+ *
+ * **Deliberately stricter than the same button on the list.** There, the row is
+ * one of several and its title is right beside the mouse; here, the thing you
+ * are about to destroy is the page you are reading, and a single stray click
+ * takes an hour of argument with it.
+ *
+ * The timeout disarms it, so a button left red on a panel nobody has touched
+ * for a minute cannot be pressed by accident later. Mounted with `key={id}`, so
+ * changing conversation gives it a fresh unarmed one.
+ */
+function ArmedDelete({ onDelete }: { onDelete(): void }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = setTimeout(() => setArmed(false), DISARM_MS);
+    return () => clearTimeout(timer);
+  }, [armed]);
+
+  return (
+    <button
+      type="button"
+      className={`chat-icon danger${armed ? " armed" : ""}`}
+      title={armed ? "Press again to delete this conversation" : "Delete this conversation"}
+      onClick={() => (armed ? onDelete() : setArmed(true))}
+    >
+      <Trash2 size={14} />
+    </button>
+  );
+}
+
+/** How long an armed delete stays armed. */
+const DISARM_MS = 4000;
+
+/**
  * Every conversation about this article, most recently used first.
  *
  * By `updatedAt`, not `createdAt`: coming back to an article you were arguing
  * with yesterday, the thread you want is the one you were last in, and it may
  * well be the oldest one you started.
+ *
+ * ## Why a row is three lines rather than one
+ *
+ * Greg, 2026-08-26: *"add more metadata about the chats (even if it makes each
+ * row multi-line), with a slightly longer title, hover-tooltip, recency (e.g.
+ * '3d ago')."*
+ *
+ * A one-line row said the title and a bare number, and the title is the first
+ * thing you typed — which, days later, is often the least useful sentence in
+ * the conversation. So the row now says where the conversation *got to* (the
+ * last thing said in it) and when you were last in it, and the title is allowed
+ * to wrap to two lines instead of being cut at the width of the panel. The
+ * exact timestamps stay in the row's tooltip, which is the rule the shelf
+ * follows too — see relative-time.ts.
  */
 function ThreadList({
   threads,
@@ -345,6 +412,9 @@ function ThreadList({
   onDelete(id: string): void;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null);
+  /* Read once here and passed to every row, so two rows a minute apart in the
+     same paint cannot disagree about what "now" is. useNow.ts § why. */
+  const now = useNow();
   const sorted = [...threads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   if (sorted.length === 0) {
@@ -364,50 +434,116 @@ function ThreadList({
 
   return (
     <ol className="chat-threads">
-      {sorted.map((t) => (
-        <li key={t.id}>
-          {renaming === t.id ? (
-            <RenameRow
-              initial={t.title}
-              onDone={(title) => {
-                if (title.trim() !== "") onRename(t.id, title.trim());
-                setRenaming(null);
-              }}
-              onCancel={() => setRenaming(null)}
-            />
-          ) : (
-            <div className="chat-thread">
-              <button type="button" className="chat-thread-open" onClick={() => onOpen(t.id)}>
-                <span className="chat-thread-title">{t.title}</span>
-                <span className="chat-thread-count">
-                  {/* Turns, not messages: a reader counts exchanges, and the
-                      pending assistant row would otherwise make a conversation
-                      look one longer than it is while an answer arrives. */}
-                  {Math.ceil(t.messages.length / 2)}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="chat-icon"
-                title="Rename"
-                onClick={() => setRenaming(t.id)}
-              >
-                <Pencil size={12} />
-              </button>
-              <button
-                type="button"
-                className="chat-icon danger"
-                title="Delete this conversation"
-                onClick={() => onDelete(t.id)}
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          )}
-        </li>
-      ))}
+      {sorted.map((t) => {
+        const last = lastSaid(t);
+        return (
+          <li key={t.id}>
+            {renaming === t.id ? (
+              <RenameRow
+                initial={t.title}
+                onDone={(title) => {
+                  if (title.trim() !== "") onRename(t.id, title.trim());
+                  setRenaming(null);
+                }}
+                onCancel={() => setRenaming(null)}
+              />
+            ) : (
+              <div className="chat-thread">
+                <button
+                  type="button"
+                  className="chat-thread-open"
+                  /* Everything the row had to shorten, said in full. A `title`
+                     rather than the Tooltip component, because this one is plain
+                     text over several lines and wants the browser's own delay —
+                     a tooltip that appears the instant the pointer crosses a list
+                     is a list you cannot read. */
+                  title={describe(t)}
+                  onClick={() => onOpen(t.id)}
+                >
+                  <span className="chat-thread-title">{t.title}</span>
+                  {last && <span className="chat-thread-last">{last}</span>}
+                  <span className="chat-thread-meta">
+                    <span className="chat-thread-count">{turns(t)}</span>
+                    {/* Recency, because the question a list of conversations
+                        answers is "which was I in?". The exact time is in the
+                        tooltip above. */}
+                    <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
+                  </span>
+                </button>
+                <div className="chat-thread-actions">
+                  <button
+                    type="button"
+                    className="chat-icon"
+                    title="Rename this conversation"
+                    onClick={() => setRenaming(t.id)}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-icon danger"
+                    title="Delete this conversation"
+                    onClick={() => onDelete(t.id)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
+}
+
+/** `4 turns`, or `1 turn`. */
+function turns(t: ChatThread): string {
+  /* Turns, not messages: a reader counts exchanges, and the pending assistant
+     row would otherwise make a conversation look one longer than it is while an
+     answer arrives. */
+  const n = Math.ceil(t.messages.length / 2);
+  return n === 1 ? "1 turn" : `${n} turns`;
+}
+
+/** How much of the last thing said a row shows. One line at the panel's width. */
+const LAST_MAX = 120;
+
+/**
+ * The last thing said in the conversation, for the second line of the row.
+ *
+ * The *title* is the reader's first question, which days later is often the
+ * least useful sentence in the thread — it says what they went in wanting, not
+ * what they came out with. This says where it got to.
+ *
+ * An answer still arriving has no text yet, so this falls back down the
+ * messages rather than printing a blank line; if nothing has any text — a
+ * conversation whose first answer has not started — it returns undefined and
+ * the row simply has one line fewer.
+ */
+function lastSaid(t: ChatThread): string | undefined {
+  for (let i = t.messages.length - 1; i >= 0; i--) {
+    const said = t.messages[i]?.text.replace(/\s+/g, " ").trim();
+    if (said) return said.length > LAST_MAX ? `${said.slice(0, LAST_MAX)}…` : said;
+  }
+  return undefined;
+}
+
+/**
+ * The row's hover tooltip: the title in full, and the timestamps exactly.
+ *
+ * Newlines in a `title` attribute are honoured by every browser we care about,
+ * and this is the one place the *exact* timestamps live — the row prints "3
+ * days ago" because that is the question a reader is asking, and the tooltip
+ * keeps the answer they occasionally need instead.
+ */
+function describe(t: ChatThread): string {
+  const lines = [t.title, "", `Started ${exactly(t.createdAt) ?? "at some point"}`];
+  /* Only worth a line of its own once the two differ. A conversation with one
+     question in it would otherwise print the same timestamp twice. */
+  if (t.updatedAt !== t.createdAt) lines.push(`Last message ${exactly(t.updatedAt) ?? "unknown"}`);
+  lines.push(turns(t));
+  return lines.join("\n");
 }
 
 function RenameRow({
@@ -467,7 +603,7 @@ function Conversation({
   /** See `recovering` in Props. */
   recovering: Set<string>;
   blocks: Map<string, string>;
-  onSend(question: string): void;
+  onSend(question: string, useProfile: boolean): void;
   onRetry(messageId: string): void;
   onEdit(messageId: string, question: string): void;
   onStop(messageId: string): void;
@@ -570,7 +706,7 @@ function Conversation({
           setAway(!atBottom);
         }}
       >
-        {thread.messages.length === 0 && <Suggestions onAsk={onSend} />}
+        {thread.messages.length === 0 && <Suggestions onAsk={(q) => onSend(q, true)} />}
         {thread.messages.map((m, i) => (
           <Turn
             key={m.id}
@@ -1210,7 +1346,7 @@ function Composer({
   draft,
   onDraft,
 }: {
-  onSend(question: string): void;
+  onSend(question: string, useProfile: boolean): void;
   busy: boolean;
   /** Present only while an answer is arriving. */
   onStop?: (() => void) | undefined;
@@ -1224,6 +1360,14 @@ function Composer({
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
   const box = useRef<HTMLTextAreaElement>(null);
+  const hasProfile = useHasProfile();
+  /* Per turn, and it stays where the reader left it for the rest of the
+     session rather than resetting after each question — an answer written
+     plainly is usually followed by another. There is nothing to seed it from:
+     a chat answer is not an artefact anybody rewrites, so unlike the glossary
+     and the summaries there is no file recording what the last one was written
+     with. src/web/WrittenForYou.tsx. */
+  const [withProfile, setWithProfile] = useState(true);
 
   /**
    * Take focus when a new conversation has just been started.
@@ -1255,7 +1399,7 @@ function Composer({
   const submit = () => {
     const question = value.trim();
     if (question === "" || busy) return;
-    onSend(question);
+    onSend(question, withProfile);
     setValue("");
     onDraft("");
   };
@@ -1334,6 +1478,16 @@ function Composer({
           {busy ? <LoaderCircle className="cmt-spinner" size={14} /> : <SendHorizontal size={14} />}
         </button>
       )}
+      {/* Composer-only, and absent for a reader with no profile. Chat has no
+          rewrite, so there is nothing here for a label to describe and nothing
+          to flip back to — the checkbox governs the next answer and that is
+          all it claims. */}
+      <UseProfile
+        checked={withProfile}
+        onChange={setWithProfile}
+        hasProfile={hasProfile}
+        disabled={busy}
+      />
     </form>
   );
 }

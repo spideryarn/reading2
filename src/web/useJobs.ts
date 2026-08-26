@@ -65,6 +65,15 @@ export interface UseJobs {
     force?: StepName[];
     /** A free-text steer, for the steps that take one. Only `summary` does. */
     guidance?: string;
+    /**
+     * Whether this run should use the reader's profile. Absent means yes.
+     *
+     * A boolean, never the text: the server resolves who the reader is from its
+     * own store, and a client that could supply the string could put arbitrary
+     * prose into a prompt that writes an artefact. src/routes.ts §
+     * parseJobRequest.
+     */
+    useProfile?: boolean;
   }): Promise<Job | null>;
   cancel(id: string): Promise<void>;
   retry(id: string): Promise<void>;
