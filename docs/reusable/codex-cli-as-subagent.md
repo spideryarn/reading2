@@ -48,6 +48,72 @@ because one exists — verified 2026-08-26 on 0.149.1, where a subscription that
 fine as soon as the key was set for the one command. So the two are a fallback pair, and a
 credits-exhausted subscription doesn't have to stop a run.
 
+**In this repo, put it in `.env.local`.** The wrapper loads that file itself, via the same
+[`src/env.ts`](../../src/env.ts) every other script here uses, so nothing has to be exported first
+and an agent doesn't have to know the trick. The import is dynamic, and *only* a missing module is
+ignored — anything else the loader throws is rethrown, because a half-built environment surfaces
+downstream as an auth failure pointing at the wrong thing. A real environment variable still wins
+over the file. See [setup-dev.md § Secrets](../project/setup-dev.md#secrets).
+
+### What codex is allowed to see
+
+Loading `.env.local` puts **every** secret this repo owns into the wrapper's own process, and
+`spawn` hands its whole environment to the child unless told otherwise. That matters more than it
+looks: codex runs shell commands on the model's instruction, their stdout becomes the activity log,
+and the model can quote that log back in its final answer — which we print. A single `env` in a
+debugging tool call is enough to move an unrelated production database URL into a file and then
+into the caller's context. Nothing about that needs the model to be adversarial.
+
+So the child environment is **deny-by-default on the variable's name**: anything whose
+underscore-delimited segments include `KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `CREDENTIAL`, `AUTH`,
+`SESSION`, `COOKIE`, `PRIVATE` or `DSN`, plus `DATABASE_URL`, is withheld. `CODEX_API_KEY` is then
+re-added by name, so exactly one credential crosses and it does so on purpose.
+
+Segments rather than substrings, so `AUTHOR` and `KEYBOARD_LAYOUT` survive. `SSH_AUTH_SOCK` does
+not — it is a path rather than a secret, but it hands over the ssh agent. `--pass-env NAME`
+(repeatable) brings a named variable back for an MCP server that needs a token of its own, or for a
+`workspace-write` run that has to push. Each crossing is then visible in the command line.
+
+A denylist rather than an allowlist because codex needs a large and unenumerable slice of the
+environment — `PATH`, `HOME`, `TMPDIR`, `LANG`, the npm and XDG variables, whatever a plugin wants —
+and an allowlist would break in ways nobody could predict from reading it.
+
+This was **not** a risk the `.env.local` load created out of nothing. A developer's shell routinely
+exports credentials for unrelated projects, and before this those crossed too.
+
+#### It is not sufficient, and here is the measurement
+
+Codex's shell tool runs a **login** shell, which sources `~/.zprofile` and `~/.zshrc`. If those
+export secrets — and on this machine, 2026-08-26, they export `OPENROUTER_API_KEY` and
+`OPENAI_API_KEY` — the profile puts back what the wrapper took out, and nothing the wrapper can do
+from outside prevents it:
+
+```
+env -i PATH=… HOME=… bash -lc 'env | grep -c "OPENROUTER\|OPENAI_API_KEY"'   → 0
+env -i PATH=… HOME=… zsh  -lc 'env | grep -c "OPENROUTER\|OPENAI_API_KEY"'   → 2
+```
+
+Asked to run `env | grep -c OPENROUTER`, a live codex run under the sanitised environment answered
+`1`. So the honest claim is narrow: **the wrapper stops itself from being the leak** — the
+`.env.local` it loads for `CODEX_API_KEY` does not travel — and on a machine whose shell profile is
+clean, that is the whole of it. Where the profile exports secrets, the fix is the profile. Keep
+credentials in per-project `.env` files that a tool loads deliberately, rather than exported to
+every process you or anything you run ever starts.
+
+`ZDOTDIR` pointed at an empty directory would stop zsh reading those files, and is deliberately not
+done here: it also drops the PATH edits and version-manager setup that codex needs to run anything,
+so it trades a leak for a class of failures that are much harder to diagnose.
+
+Two account-level failures — out of credits, and not logged in — arrive as a bare `exit 1` with the
+reason buried in the activity log the caller has just been told not to read. The wrapper matches
+those two and adds a one-line hint to its error, quoting none of the log around them.
+
+It matches only on codex's own `ERROR:` lines, and only on a non-zero exit. The activity log is
+mostly *the contents of files codex read*, so an unanchored search reads the repo's prose back to
+itself — this very page contains the string "out of credits", and a run that failed for some other
+reason after merely opening it would have been told to go and buy credits it already had. A
+confident wrong hint is worse than no hint.
+
 Verify with a cheap round trip:
 
 ```bash
@@ -67,7 +133,8 @@ npx tsx scripts/run-codex.ts --sandbox workspace-write \
 
 Flags: `--model` · `--prompt` / `--prompt-file` · `--sandbox` (default `read-only`) · `--effort`
 (default `high`) · `--repo-dir` · `--timeout-minutes` (default 30) · `--output` · `--activity-log` ·
-`--stream` · `--print` · `--quiet` · `--max-print-chars` (default 20,000) · `--dry-run`.
+`--stream` · `--print` · `--quiet` · `--max-print-chars` (default 20,000) · `--pass-env` ·
+`--dry-run`.
 
 ### What reaches the caller's context
 
@@ -322,11 +389,14 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   `--timeout-minutes`.
 - **Running out of credit looks like a generic non-zero exit.** `codex exec` exits 1 and the wrapper
   reports `codex exec exited 1`; the actual reason (`Your workspace is out of credits`) is in the
-  activity log, which is why the failure message names its path. Read it before assuming the wrapper
-  or the prompt is at fault.
+  activity log, which is why the failure message names its path — and why the wrapper now lifts that
+  one phrase, and an auth failure, into the error itself. Any *other* exit 1 still means reading the
+  log before assuming the wrapper or the prompt is at fault.
 - **Codex cites code as absolute `/Users/…/file.ts:148`.** Pasting a review into a repo doc
   verbatim therefore imports a pile of machine-specific paths, which a link checker will flag and a
   reader on another machine can't follow. Rewrite them repo-relative on the way in.
+- **A login shell undoes environment sanitising.** Codex's shell tool sources `~/.zprofile` and
+  `~/.zshrc`, so anything they export reaches codex whatever the wrapper passes. Measured above.
 - **Don't export `OPENAI_API_KEY`.** `codex exec` doesn't read it (it wants `CODEX_API_KEY`), so it
   buys nothing, and an exported secret lands in the environment of every subprocess an agent
   spawns — including its own transcript.

@@ -43,6 +43,19 @@ A variable already in the environment wins over the file, so
 `SPIDERYARN_CHAT_MODEL=anthropic/claude-opus-5 npm run dev` does what it looks like it does.
 The pipeline stages use the Anthropic SDK and want `ANTHROPIC_API_KEY` instead.
 
+`CODEX_API_KEY` is the odd one out: nothing in the app reads it. It is for
+[`scripts/run-codex.ts`](../../scripts/run-codex.ts), which dispatches a GPT/Codex subagent for
+cross-family review — see [codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md). That
+script loads `.env.local` through the same `src/env.ts`, so the key needs no exporting. It is
+optional (`codex login` works too) but takes precedence, which makes it the fallback when a ChatGPT
+subscription runs out of credits. Not `OPENAI_API_KEY` — `codex exec` does not read that one, so
+exporting it buys nothing and leaks a secret into every subprocess.
+
+More generally, prefer `.env.local` over `~/.zshrc` for every key here. A secret exported from a
+shell profile reaches every process you ever start, and a *login* shell re-exports it even to a
+child that was deliberately given a sanitised environment — which is measured in
+[codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md#it-is-not-sufficient-and-here-is-the-measurement).
+
 ## Which model everything uses
 
 **One file: [`src/models.ts`](../../src/models.ts).** Every in-app call is Claude Sonnet, named

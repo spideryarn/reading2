@@ -54,6 +54,19 @@ const DEFAULT_MAX_PRINT_CHARS = 20_000;
  * Codex's final message is never this big — which is exactly why an unbounded readFileSync here
  * would never fail in testing and only ever fail in the wild. */
 const MAX_ANSWER_READ_BYTES = 4 * 1024 * 1024;
+/**
+ * Environment variables whose *names* say they hold a credential. Matched on the name because the
+ * value tells you nothing — a database URL and a session cookie look like ordinary strings.
+ *
+ * Matched on underscore-delimited **segments**, not substrings, so `AUTHOR` and `KEYBOARD_LAYOUT`
+ * survive while `GITHUB_TOKEN` and `SSH_AUTH_SOCK` do not. That last one is a socket path rather
+ * than a secret, but it hands over the ssh agent, so it goes; `--pass-env SSH_AUTH_SOCK` brings it
+ * back for a run that has to push.
+ */
+const SECRET_NAME =
+  /(^|_)(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIALS?|AUTH|DSN|SESSION|COOKIE|PRIVATE)(_|$)|DATABASE_URL|_URI$/i;
+/** The one credential codex is entitled to, and the only one that crosses by default. */
+const CODEX_SECRET = 'CODEX_API_KEY';
 const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
 
 interface Args {
@@ -69,6 +82,7 @@ interface Args {
   stream: boolean;
   print: boolean;
   quiet: boolean;
+  passEnv: string[];
   maxPrintChars: number;
   dryRun: boolean;
 }
@@ -82,7 +96,7 @@ export function parseArgs(argv: string[]): Args {
   const out: Args = {
     model: DEFAULT_MODEL, sandbox: 'read-only', effort: DEFAULT_EFFORT, repoDir: process.cwd(),
     timeoutMinutes: DEFAULT_TIMEOUT_MINUTES, stream: false, print: false, quiet: false,
-    maxPrintChars: DEFAULT_MAX_PRINT_CHARS, dryRun: false,
+    maxPrintChars: DEFAULT_MAX_PRINT_CHARS, dryRun: false, passEnv: [],
   };
   const rest = [...argv];
   const value = (flag: string): string => {
@@ -106,6 +120,8 @@ export function parseArgs(argv: string[]): Args {
       case '--print': out.print = true; break;
       case '--quiet': case '-q': out.quiet = true; break;
       case '--max-print-chars': out.maxPrintChars = Number(value(flag)); break;
+      // Repeatable. Named, so every credential that reaches codex is visible in the command line.
+      case '--pass-env': out.passEnv.push(value(flag)); break;
       case '--dry-run': out.dryRun = true; break;
       default: throw new Error(`unknown flag: ${flag}`);
     }
@@ -240,9 +256,13 @@ interface RunResult {
  * clean exit, non-zero, timeout-kill, spawn failure, capture overflow — resolves to a RunResult the
  * caller classifies, so callers fail closed rather than on an unhandled throw.
  */
-export function runCodex(opts: { argv: string[]; timeoutMs: number; stream: boolean; bin?: string }): Promise<RunResult> {
+export function runCodex(opts: {
+  argv: string[]; timeoutMs: number; stream: boolean; bin?: string; env?: NodeJS.ProcessEnv;
+}): Promise<RunResult> {
   return new Promise((settle) => {
     const child = spawn(opts.bin ?? 'codex', opts.argv, {
+      // Never the implicit inherit: see childEnv.
+      env: opts.env ?? childEnv(process.env),
       // fd 0 = 'ignore' is the load-bearing anti-hang guarantee. Never inherit or pipe stdin here.
       stdio: opts.stream ? ['ignore', 'inherit', 'inherit'] : ['ignore', 'pipe', 'pipe'],
       // Own process group, so a kill reaches codex *and everything it spawned* (its MCP stdio
@@ -323,7 +343,92 @@ export function runCodex(opts: { argv: string[]; timeoutMs: number; stream: bool
   });
 }
 
+/**
+ * `.env.local` → `process.env`, so `CODEX_API_KEY` can live in the same file as every other secret
+ * in this repo and a caller doesn't have to know to export it first. Follows
+ * [`scripts/db-migrate.ts`](db-migrate.ts), which imports the same loader.
+ *
+ * Dynamic on purpose: this file is documented as portable
+ * (`docs/reusable/codex-cli-as-subagent.md`) and gets carried into other repos, where `src/env.ts`
+ * does not exist. That one failure is expected and ignored; **everything else rethrows**, because a
+ * loader that throws for any other reason has left the environment half-built, and the symptom
+ * downstream is an auth failure that points at the wrong thing entirely.
+ *
+ * Note what this does *not* do: it does not decide what codex sees. It loads the whole file into
+ * this process — every secret this repo owns — and `childEnv` below is what stops all but one of
+ * them crossing into the child.
+ */
+async function loadRepoEnv(): Promise<void> {
+  try {
+    const mod = await import('../src/env.js');
+    mod.loadEnvLocal();
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw e;
+  }
+}
+
+/**
+ * The environment codex actually gets. **Deny by default, on the variable's name.**
+ *
+ * This is the one place a secret can escape. `spawn` inherits the parent's environment unless told
+ * otherwise, codex runs shell commands on the model's instruction, and the stdout of those commands
+ * becomes the activity log — and can be quoted back in the final answer, which we print. So a bare
+ * `env` in a tool call, or a build script that echoes its config, is enough to move every key in
+ * `.env.local` into a file and possibly into the caller's context. Nothing about that requires the
+ * model to be adversarial; a debugging command is enough.
+ *
+ * That risk arrived with the `.env.local` load, but it did not start there: a developer's shell
+ * routinely exports credentials for entirely unrelated projects, and those crossed too.
+ *
+ * A denylist rather than an allowlist because codex genuinely needs a large and unenumerable slice
+ * of the environment — PATH, HOME, TMPDIR, LANG, the npm and XDG variables, whatever a plugin
+ * wants. An allowlist would break in ways nobody could predict from reading it. `--pass-env NAME`
+ * is the escape hatch for an MCP server that needs a token of its own, and it makes each crossing
+ * explicit and visible in the command.
+ */
+export function childEnv(
+  parent: NodeJS.ProcessEnv, passThrough: string[] = [],
+): NodeJS.ProcessEnv {
+  const allowed = new Set([CODEX_SECRET, ...passThrough]);
+  const out: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(parent)) {
+    if (value === undefined) continue;
+    if (SECRET_NAME.test(name) && !allowed.has(name)) continue;
+    out[name] = value;
+  }
+  // Re-added by name after the sweep: CODEX_API_KEY matches the denylist itself, so exactly one
+  // secret crosses and it does so on purpose.
+  for (const name of allowed) {
+    const value = parent[name];
+    if (value !== undefined) out[name] = value;
+  }
+  return out;
+}
+
+/**
+ * Codex reports "out of credits" and "not logged in" as a bare exit 1, with the reason buried in
+ * an activity log the caller has been told not to read. Both are about the human's account rather
+ * than anything the caller did wrong, and both are one-line fixes, so lift them out — bounded to
+ * the matched phrase, never the surrounding log.
+ */
+export function authHint(log: string): string {
+  // Anchored to codex's own `ERROR:` line, not matched anywhere in the log. The log is mostly the
+  // *contents of files codex read*, so an unanchored search reads the repo's own prose back to
+  // itself: this very repo documents the string "out of credits", and any failed run that happened
+  // to open that doc would have been told to go and buy credits it already had.
+  const errors = log.split('\n').filter((l) => /^\s*ERROR\b/i.test(l)).join('\n');
+  if (/out of credits|insufficient (credit|quota|funds)/i.test(errors)) {
+    return '\n  The account is out of credits. Set CODEX_API_KEY (in .env.local, or exported) to' +
+      ' bill pay-as-you-go instead — it takes precedence over a logged-in ~/.codex/auth.json.';
+  }
+  if (/401|unauthor|not logged in|(missing|incorrect|invalid|no) api key|authentication/i.test(errors)) {
+    return '\n  That looks like an auth failure. Run `codex login`, or set CODEX_API_KEY.';
+  }
+  return '';
+}
+
 async function main(): Promise<void> {
+  await loadRepoEnv();
   let args: Args;
   try { args = parseArgs(process.argv.slice(2)); }
   catch (e) { fail((e as Error).message); }
@@ -344,7 +449,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const run = await runCodex({ argv: codexArgs, timeoutMs: args.timeoutMinutes * 60_000, stream: args.stream });
+  const run = await runCodex({
+    argv: codexArgs, timeoutMs: args.timeoutMinutes * 60_000, stream: args.stream,
+    env: childEnv(process.env, args.passEnv),
+  });
 
   let logPath: string | undefined;
   if (!args.stream) {
@@ -363,7 +471,12 @@ async function main(): Promise<void> {
   if (run.spawnError) fail(`could not run codex (${run.spawnError.message}) — is the Codex CLI on PATH?${hint}`);
   if (run.overflowed) fail(`codex exec exceeded the 64 MiB capture cap and was killed${hint}`);
   if (run.timedOut) fail(`codex exec timed out after ${args.timeoutMinutes}m and was killed${hint}`);
-  if (run.status !== 0) fail(`codex exec exited ${run.status ?? 'null'}${run.signal ? ` [${run.signal}]` : ''}${hint}`);
+  // Only here. A timeout or a capture overflow is not an account problem, and telling someone to
+  // go and buy credits because a 30-minute run was killed sends them somewhere useless.
+  if (run.status !== 0) {
+    const why = args.stream ? '' : authHint(run.stdout + run.stderr);
+    fail(`codex exec exited ${run.status ?? 'null'}${run.signal ? ` [${run.signal}]` : ''}${hint}${why}`);
+  }
   if (!existsSync(outFile)) fail(`codex exec produced no output file${hint}`);
 
   let answerPath = outFile;
