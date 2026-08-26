@@ -556,10 +556,27 @@ by it. It belongs in the appendix's eventual design, which is where it now is, a
 > risk for now* on the third)
 
 **Sources are shared; articles are not.** One content-addressed `raw_sources` row per distinct
-SHA-256, referenced by any number of articles across any number of readers. An upload of bytes we
-already hold does not re-upload and does not re-store — it makes a new per-reader article pointing
-at the existing source. This is Sol's third option, and Greg extended it across readers as well as
-across revisions.
+SHA-256, referenced by any number of articles across any number of readers. This is Sol's third
+option, and Greg extended it across readers as well as across revisions.
+
+> **Corrected 2026-08-26, and this is the sharpest thing either review found.** The sentence here
+> used to read *"an upload of bytes we already hold does not re-upload and does not re-store — it
+> makes a new per-reader article pointing at the existing source."* That is a **privilege
+> escalation**, and it contradicts the "a hash is not a grant" line a few paragraphs below, which
+> was written on the same day.
+>
+> The hash deciding it would be the *client's claimed* one. So: learn the SHA-256 of a document —
+> which you can do by holding a copy, or by guessing a document you suspect exists — hand it to
+> `POST /api/uploads`, upload nothing at all, and receive an article referencing somebody else's
+> source. Reading your own article then serves you their bytes. **The hash stops being an
+> identifier and becomes a capability**, and the reference row we were relying on to decide who may
+> read what is one we just created for the attacker on request.
+>
+> **v1 therefore always transfers and always server-verifies, and deduplicates only afterwards, on
+> a hash we computed ourselves.** The saving that was lost is bandwidth on a repeat upload, which
+> nobody has yet measured wanting. What is gained is that the sentence below stays true — and, for
+> free, the cross-reader existence leak goes with it, because there is no longer an observable
+> difference between uploading something new and uploading something we already had.
 
 **Kept forever.** A source is never deleted while anything references it, and retention is per
 *source* rather than per revision, so every historical revision stays reproducible at no extra
@@ -583,7 +600,9 @@ uploaded that exact file. This is the well-known cloud-storage dedup side channe
 Dropbox stopped deduplicating across accounts.
 
 It does not leak content, and it cannot be used to *fetch* anything: the reference rows decide what
-you may read, and a hash is not a grant. The realistic worry is narrow — a document whose mere
+you may read, and a hash is not a grant — **which is true only because of the correction above.**
+The version of this plan that let a claimed hash skip the upload made a hash into exactly the grant
+this sentence denies it is. The realistic worry is narrow — a document whose mere
 presence is sensitive, guessed by someone who already has a copy of it.
 
 **Not a blocker, and Greg's call stands.** With one reader today
@@ -630,6 +649,287 @@ Sol raised twelve; these are the ones that change what gets built, and they are
    what does permanent deletion mean next to archive, which today is only `articles.archived_at`?
 7. **The recovery promise** — once bytes are objects, a Postgres dump is no longer a whole backup.
    Database-only restore, or coordinated restore, and what data-loss window is acceptable?
+
+## The second review — of the code, and what it changed
+
+**Ran 2026-08-26**, GPT-5.6 Sol, high effort, read-only, over the built code rather than the plan.
+Full text: [pdf-upload-code-review-sol.md](pdf-upload-code-review-sol.md); the prompt is
+[pdf-upload-code-review-prompt.md](pdf-upload-code-review-prompt.md). [AGENTS.md](../../AGENTS.md)
+says to weight this one higher than the plan review, and it earned that: a plan-stage review cannot
+find a regex that accepts thirty-six hyphens.
+
+**The finding that changed the design** is the dedup shortcut, corrected in place
+[above](#gregs-answers-2026-08-26) — a claimed hash was a capability.
+
+**Four bugs in code that was already committed**, each verified before acting on it:
+
+1. **`isStagingKey` accepted `staging/------------------------------------`** — the regex was
+   `[0-9a-f-]{36}`, the right length and alphabet and not an id. Not exploitable, because nothing
+   mints a grant from it; it was a guard that had stopped describing what it guards. Now reuses the
+   exact UUID matcher, with five staging-*shaped* strings in the test that all passed before.
+2. **A `claimed` upload could never expire.** A worker that claims and then dies left a row nothing
+   could move again. `claimed → expired` is now legal — and the recovery is deliberately a *new*
+   upload rather than a resumed one, because re-reading staging after a crash is the one sequence
+   content addressing does not cover: the grant is still live, so the bytes may no longer be the
+   ones we hashed.
+3. **`pass0` leaked a pdf.js worker on every ordinary parse.** The page-cap fix destroyed the
+   loading task; the normal and error paths called only `cleanup`, which releases page resources
+   and leaves the worker running — while a comment two hundred lines up already said so. One leak
+   per document, which is the larger of the two.
+4. **The four upload refusals were invisible to the message registry.** `kindOfMessage` returns
+   null for an unknown code and null means *offer another go*, so "that file isn't a PDF" came with
+   a Retry button that could not work — [toc-max-tokens](../postmortems/toc-max-tokens.md) again.
+   The messages have moved into [`src/messages.ts`](../../src/messages.ts) where
+   `tests/messages.test.ts` can see them, and that suite immediately rejected two of them for not
+   saying out loud that retrying will not help.
+
+**Four tests it called decorative, and it was right about all four.** They checked the shape of a
+bracketed code and its uniqueness while the codes were unregistered; they checked three transitions
+one at a time and would have passed with `claimed → pending` added; the sweep-margin test passed at
+`TTL + 1ms`. Each is now the stronger version: the whole transition matrix asserted as a set, the
+grant TTL pinned to the 7,200 seconds that were measured, and the failure kinds read back through
+`kindOfMessage`.
+
+**What it verified that I could not.** Sol checked pdf.js 6.2.108 upstream and confirmed `numPages`
+is proxy metadata available without any `getPage` call — so the page-cap fix rests on a real
+property of the library and not on the mock agreeing with itself. It also confirmed the mock
+assertion would have failed against the old implementation.
+
+**Two things I have not taken, with reasons.**
+
+- **Promotion by `copy`/`move`.** Sol is right that neither is create-only, and its ordering — put
+  the canonical object with `upsert:false`, treat `409` as a dedup hit, then commit the row — is
+  better than the `move` the design implied. That is a step-3 decision and it is recorded here
+  rather than built, because no adapter exists yet.
+- **`grant_expires_at` instead of `minted_at`.** Correct: the row's creation time can precede the
+  token's `iat`, so the sweep is counting from the wrong clock. It is a column change, and the
+  migration cannot be generated yet (below), so it is written down as owed.
+
+**Still owed, and blocked rather than forgotten:** the migration. Another agent's `ideas` column is
+uncommitted in [`src/db/schema.ts`](../../src/db/schema.ts), and `drizzle-kit generate` is a
+whole-schema operation — generating now would sweep their work into our migration and leave a
+snapshot disagreeing with the SQL. Sol's advice is the same as the instinct: **serialise it**, let
+`ideas` land first, generate uploads as the migration after. The two new tables and
+`article_revisions.raw_source_id` are written and typecheck clean, and
+`REVISION_COLUMN_POLICY` has been told about the new column — without which `carriedColumns()`
+throws at import.
+
+## Appendix: the schema, written and waiting on a migration
+
+**Written, typecheck-clean, constraint-tested against a real Postgres — and deliberately not in
+`src/db/schema.ts` right now.** It lived there for about an hour on 2026-08-26 and was taken back
+out, for a reason worth recording because the next person will hit it too.
+
+**A Drizzle schema is a shared, whole-file artefact, and its migrations must be serialised.**
+`drizzle-kit generate` diffs the entire schema against the last snapshot, so it cannot be scoped to
+one agent's tables. While another agent had an uncommitted `ideas` column in that file, generating
+would have swept their work into our migration and left a snapshot disagreeing with the SQL.
+
+Holding the TypeScript *without* the migration is worse, and this is the part that is not obvious:
+the column then exists for Drizzle and not for Postgres, so `beginRevision` renders it into its
+carry-forward `INSERT` and **every Postgres test in the repo fails** with
+`column "raw_source_id" of relation "article_revisions" does not exist` — for every session sharing
+the tree, not only the one that made the change. (`ideas` is doing exactly that as this is written,
+which is how the cost got measured rather than guessed.)
+
+So: land it when the schema file is quiet, in one go — the two tables, the column, the policy entry,
+then `npm run db:generate`. **Also apply Sol's `grant_expires_at` correction** at that point:
+`minted_at` is row-creation time and can precede the token's `iat`, so a sweep would be counting
+from the wrong clock.
+
+The constraints below were exercised against the running local Postgres before this was parked: a
+key that disagrees with its hash, a non-hex hash, a zero byte count and a duplicate document are all
+refused, with a well-formed row accepted as the positive control.
+
+```ts
+/* ----------------------------------------------------------- raw sources -- */
+
+/**
+ * **One row per distinct raw document, named after its own contents.**
+ *
+ * Greg's call, 2026-08-26: sources are shared, articles are not. Two readers
+ * uploading identical bytes converge on one row and one object; each still gets
+ * an article of their own, with their own notes, highlights and progress.
+ *
+ * **There is deliberately no `owner_id` here**, and that is the point of the
+ * table rather than an omission: ownership is a property of the things that
+ * *reference* a source, not of the source. Which reader may read one is
+ * answered by whether they have an article or an upload pointing at it — never
+ * by a column here.
+ *
+ * `sha256` is the **server-computed** hash over the bytes we actually read, and
+ * it is unique because it is the identity. The browser's claimed hash is a
+ * checksum of a transfer and lives on `uploads` instead; treating that as
+ * identity is how a verified document and an extracted document come to be two
+ * different files.
+ *
+ * The bytes themselves are never here. `object_key` names an object in the
+ * private `sources` bucket and is derived from `sha256` (`canonicalKey` in
+ * src/source.ts) rather than chosen independently — a key that could disagree
+ * with the hash is a key that can lie about what it holds.
+ *
+ * **Kept forever**, per the same decision: nothing deletes a source while
+ * anything references it, so every historical revision stays reproducible and
+ * the cost of that is one object rather than one per revision.
+ */
+export const rawSources = spideryarn.table(
+  "raw_sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Lower-case hex, 64 chars. The identity — `canonicalKey` in src/source.ts. */
+    sha256: text("sha256").notNull().unique(),
+    /** `html` or `pdf` — the media kind, never the origin. src/source.ts says why. */
+    media: text("media").notNull(),
+    /** `sha256/<hash>.<ext>` in the private `sources` bucket. Never written by a grant. */
+    objectKey: text("object_key").notNull().unique(),
+    bytes: integer("bytes").notNull(),
+    contentType: text("content_type"),
+    /** HTML only, matching `RawManifest.encoding`. `null` for a PDF. */
+    encoding: text("encoding"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check("raw_sources_media", sql`${t.media} in ('html','pdf')`),
+    check("raw_sources_sha256_format", sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
+    check("raw_sources_bytes", sql`${t.bytes} > 0`),
+    /**
+     * **The key really is derived from the hash, and the database says so.**
+     *
+     * src/source.ts argues that a canonical object cannot be substituted
+     * because its name is a claim about its contents. That argument is only
+     * worth anything if the name and the contents cannot drift apart, and a
+     * comment does not stop them: one adapter writing a key by hand, once, and
+     * the property is gone with nothing failing. This is `canonicalKey`
+     * restated in SQL, so the two would have to be changed together.
+     */
+    check(
+      "raw_sources_key_matches_hash",
+      sql`${t.objectKey} = 'sha256/' || ${t.sha256} || '.' || ${t.media}`,
+    ),
+  ],
+);
+
+/* --------------------------------------------------------------- uploads -- */
+
+/**
+ * **One browser upload attempt, from minted grant to verified source.**
+ *
+ * Short-lived state that exists so finalising an upload is *exactly once*
+ * rather than idempotent-ish. Two tabs, or one impatient double-click, would
+ * otherwise both pass the same checks and both enqueue a job that spends model
+ * money. `status` moves by conditional update — `WHERE id = $1 AND status =
+ * 'pending'` — so the database picks the winner rather than the order two
+ * requests happened to arrive in. The legal moves are `canTransition` in
+ * src/source.ts, which is where they are tested.
+ *
+ * This row is owner-scoped even though `raw_sources` is not, and the asymmetry
+ * is the design: an upload is something a particular reader did, a source is a
+ * document that exists.
+ *
+ * The object lands at `staging/<id>` and is promoted to its content-addressed
+ * key once verified. **A grant is only ever minted against the staging key**,
+ * which is what makes it safe that a Supabase grant outlives the object it
+ * created — the measurement behind that is in the header of src/source.ts.
+ */
+export const uploads = spideryarn.table(
+  "uploads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** `auth.users(id)`. FK in the custom migration, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** `pending` | `claimed` | `verified` | `rejected` | `expired` — `UploadStatus`. */
+    status: text("status").notNull().default("pending"),
+    /** What the reader called the file, cleaned by `cleanFilename`. Display only. */
+    filename: text("filename"),
+    /**
+     * What the browser said, recorded and not trusted.
+     *
+     * Worth keeping precisely because it can turn out to be wrong: a claimed
+     * size that does not match what arrived is the cheapest signal that
+     * something went wrong in transit, and a claimed hash that does not match is
+     * why an upload is refused before anything expensive reads it.
+     */
+    claimedBytes: integer("claimed_bytes").notNull(),
+    claimedSha256: text("claimed_sha256"),
+    /** Set on success — the source those bytes turned out to be, shared or new. */
+    rawSourceId: uuid("raw_source_id").references(() => rawSources.id),
+    /** Set on refusal — a `RejectReason`, so the reader's sentence has one source. */
+    rejectedReason: text("rejected_reason"),
+    /** When the grant was minted. `GRANT_TTL_MS` and `SWEEP_GRACE_MS` count from here. */
+    mintedAt: createdAt(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      "uploads_status",
+      sql`${t.status} in ('pending','claimed','verified','rejected','expired')`,
+    ),
+    check("uploads_claimed_bytes", sql`${t.claimedBytes} > 0`),
+    /**
+     * **An ending has to say how it ended.** A `verified` row without a source
+     * is an upload we said succeeded and cannot produce, and a `rejected` row
+     * without a reason is a refusal the reader cannot be given a sentence for.
+     * Both are states the code should be unable to write, so the database
+     * refuses them rather than trusting every future call site.
+     *
+     * Deliberately one-directional: it says a terminal state carries its
+     * evidence, not that a non-terminal one carries none — a `claimed` row may
+     * legitimately already know its source before it is marked verified.
+     */
+    check(
+      "uploads_verified_has_source",
+      sql`${t.status} <> 'verified' or ${t.rawSourceId} is not null`,
+    ),
+    check(
+      "uploads_rejected_has_reason",
+      sql`${t.status} <> 'rejected' or ${t.rejectedReason} is not null`,
+    ),
+  ],
+);
+```
+
+The column on `article_revisions`, beside the four `raw_*` columns it is meant to outlive:
+
+```ts
+    /**
+     * The shared source object these bytes came from — see `rawSources` below.
+     *
+     * **Nullable, and the eventual replacement for `rawBytes`.** Both exist for
+     * now: every revision written before uploads landed has bytes in the column
+     * and no source row, and backfilling is a migration rather than a default.
+     * The rule while both are here is that exactly one of them is authoritative
+     * per revision and the row says which — a revision with a `raw_source_id`
+     * reads from the object and must ignore `raw_bytes` entirely. Two answers
+     * to "what is this article made from", with nothing keeping them in step,
+     * is the failure docs/plans/pdf-upload-and-storage.md § Appendix exists to
+     * avoid.
+     */
+    rawSourceId: uuid("raw_source_id").references(() => rawSources.id),
+```
+
+And its entry in `REVISION_COLUMN_POLICY` (`src/store/pg-revisions.ts`), without which
+`carriedColumns()` throws at import — the typecheck catches this, but only when it is run over the
+whole project rather than over the files you edited, which is how it was nearly missed here:
+
+```ts
+  /**
+   * The shared source object this revision was made from.
+   *
+   * `carry`, for the same reason as the four raw columns above it: a re-run of
+   * a *later* stage is still the same document, and a draft that inherited no
+   * source would have nothing to extract from. Stage 1 — fetch, or the upload's
+   * acquisition step — overwrites it when it actually runs, which is the whole
+   * contract of `carry`.
+   *
+   * Worth saying out loud that this one is safe to copy *because sources are
+   * immutable and shared*: the row it points at is content-addressed, so
+   * inheriting the reference cannot inherit a document that has since changed
+   * underneath it. That is not true of a column like `validated_at`, which is
+   * why this map is exhaustive rather than carry-by-default.
+   */
+  rawSourceId: "carry",
+```
 
 ## See also
 

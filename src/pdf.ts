@@ -311,7 +311,26 @@ export async function pass0(
       });
     }
   } finally {
-    await doc.cleanup?.();
+    /* `cleanup` releases page resources; **`destroy` is what stops the worker**,
+       and the comment two hundred lines up already said so while this line went
+       on calling only the first. So a parse that threw, and every ordinary
+       successful parse, left a worker behind — one per document rather than one
+       per refusal, which is the larger of the two leaks. Found by the
+       cross-family review, 2026-08-26.
+
+       Both, and in this order: `cleanup` on a document whose worker has gone is
+       not something to rely on. Neither may replace the error that brought us
+       here, so each is allowed to fail on its own. */
+    try {
+      await doc.cleanup?.();
+    } catch {
+      /* Being torn down regardless. */
+    }
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* Ditto — see the guard above the page loop. */
+    }
   }
 
   const withText = pages.filter((p) => p.words >= SCAN_WORDS_PER_PAGE);
