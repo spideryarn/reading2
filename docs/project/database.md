@@ -167,6 +167,126 @@ only because `spideryarn` is not an exposed schema. The `postgres` password must
 Creating those roles is the one genuinely manual step — it needs passwords, which do not belong in a
 migration file — and it is [step 1](../plans/postgres-migration.md#the-order-of-work).
 
+## Roles
+
+`drizzle/0001_auth_fks_and_guards.sql` ends by pointing here, because creating a login role needs a
+password and a password does not belong in a migration committed to git. So this is the one step
+that is done by hand, once per project.
+
+**Run it in the Supabase dashboard's SQL editor, not from this laptop.** That is not a preference —
+it is what makes the rest of the bootstrap possible without the `postgres` superuser password
+existing anywhere. The dashboard authenticates you as *you*; the password is never involved. Which
+matters, because that password is shown exactly once at project creation and ours was never written
+down.
+
+Three roles, and the point of the split is that **none of the two we make is the superuser**:
+
+| Role | Has | Used by |
+|---|---|---|
+| `spideryarn_migrator` | DDL on `spideryarn`, `REFERENCES` on `auth.users` | `npm run db:migrate`, from a laptop, over the **session** pooler |
+| `spideryarn_app` | DML on `spideryarn` and nothing else | the running server, over the **transaction** pooler |
+| `postgres` | everything | nobody, ever, from outside the dashboard |
+
+### Step one: the roles, before any migration
+
+Invent two passwords, paste them in, and run this in the SQL editor.
+
+```sql
+create role spideryarn_migrator with login password 'MIGRATOR_PASSWORD';
+create role spideryarn_app      with login password 'APP_PASSWORD';
+
+grant connect on database postgres to spideryarn_migrator, spideryarn_app;
+
+-- The migrator creates schema `spideryarn` (migration 0000) and schema
+-- `spideryarn_migrations` (Drizzle's own bookkeeping), so it needs CREATE on
+-- the database itself, not just on a schema that does not exist yet.
+grant create on database postgres to spideryarn_migrator;
+
+-- Migrations 0001 and 0003 add foreign keys into auth.users. Supabase owns that
+-- table, so these two grants are a real bootstrap requirement and the first
+-- thing to fail on a fresh project.
+grant usage on schema auth to spideryarn_migrator;
+grant references on table auth.users to spideryarn_migrator;
+
+-- So that `alter default privileges for role spideryarn_migrator` below is
+-- allowed: you have to be a member of a role to set defaults on its behalf.
+grant spideryarn_migrator to postgres;
+
+-- pgvector lives in the `extensions` schema, and neither of these roles can see
+-- it without being told. **This is not optional and it does not fail locally.**
+-- Supabase puts `extensions` on the `postgres` role's search_path with a
+-- PER-ROLE `alter role`; the compiled-in default is only `"$user", public`, so
+-- a role we create ourselves gets nothing. Drizzle emits `vector(1024)` and
+-- `vector_cosine_ops` fully unqualified with no way to schema-qualify them, so
+-- the first migration that adds a vector column fails on the real project with
+-- `type "vector" does not exist` — while passing on a laptop, where we connect
+-- as `postgres` and inherit its search_path. See docs/plans/semantic-search.md.
+grant usage on schema extensions to spideryarn_migrator, spideryarn_app;
+alter role spideryarn_migrator set search_path = "$user", public, extensions;
+alter role spideryarn_app      set search_path = "$user", public, extensions;
+```
+
+### Step two: apply the migrations
+
+From a laptop, as the **migrator**, over the **session** pooler — port 5432, username
+`postgres.<project-ref>`. Not the transaction pooler: DDL and the migrator's own bookkeeping both
+want a real session. `scripts/db-migrate.ts` refuses a non-localhost URL unless you also say so on
+the command line, which is deliberate and is not to be moved into a file:
+
+```
+DATABASE_URL='postgresql://spideryarn_migrator...' DB_MIGRATE_ALLOW_REMOTE=yes npm run db:migrate
+```
+
+### Step three: let the app see what the migrator made
+
+Only now do the tables exist, which is why this cannot be folded into step one.
+
+```sql
+grant usage on schema spideryarn to spideryarn_app;
+grant select, insert, update, delete
+  on all tables in schema spideryarn to spideryarn_app;
+grant usage, select on all sequences in schema spideryarn to spideryarn_app;
+
+-- The same, for tables a *future* migration adds. Without this, every new table
+-- is invisible to the app until somebody remembers to come back here — and the
+-- symptom is "permission denied for table X" in production, long after the
+-- migration that looked like it worked.
+alter default privileges for role spideryarn_migrator in schema spideryarn
+  grant select, insert, update, delete on tables to spideryarn_app;
+alter default privileges for role spideryarn_migrator in schema spideryarn
+  grant usage, select on sequences to spideryarn_app;
+```
+
+### Step two and a half: the extensions the schema needs
+
+```sql
+create extension if not exists vector schema extensions;
+```
+
+**With no `schema` clause this installs into `public`**, against Supabase's own convention for
+`pgcrypto` and `uuid-ossp`. It needs no superuser, and `create extension` is transactional, so it
+can be rehearsed inside a `begin; … rollback;`.
+
+### The two things to check afterwards, because neither announces itself
+
+- **`spideryarn` must not be in the Data API's exposed schemas** (Dashboard → Settings → API). It is
+  not there by default — the default is `public, graphql_public` — so this is a confirmation rather
+  than a change. It is also the whole reason deferring RLS is survivable: PostgREST cannot serve a
+  schema it cannot see, whatever key is presented. See
+  [§ RLS and realtime](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now).
+- **`spideryarn_app` must NOT be able to read `auth.users`.** Nothing above grants it, and nothing
+  should. Worth checking by hand once, because a grant that is present by accident looks exactly
+  like a grant that is absent until the day it matters.
+
+### An owner exists before any row does
+
+`npm run db:seed-owner` deliberately refuses to run against anything but the local stack, so on the
+remote the owner is a **real** account: create `greg@gregdetre.com` in Dashboard → Authentication →
+Users, take its uuid, and set `SPIDERYARN_OWNER_ID` in the host's environment.
+[`src/owner.ts`](../../src/owner.ts) defaults to the fixed development uuid, which is the right
+default on a laptop and the wrong one in production — and it fails loudly, on the foreign key, rather
+than writing rows nobody owns.
+
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
 - **The Supabase CLI does not know about our migrations.** Ours are Drizzle's, in

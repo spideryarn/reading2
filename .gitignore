@@ -10,3 +10,7 @@ output/
 # nothing.
 .env*
 !.env.example
+.vercel
+
+# Built by vite.api.config.ts during the Vercel build. See vercel.json.
+api-dist

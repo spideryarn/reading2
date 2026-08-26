@@ -25,6 +25,9 @@
        evals/README.md. */
     "evals",
     "vite.config.ts",
+    /* The API build. Same reasoning as vite.config.ts: it runs as node ESM in
+       this project, so it is checked by this project. */
+    "vite.api.config.ts",
     "vitest.config.ts",
     "drizzle.config.ts"
   ],

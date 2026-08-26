@@ -14,12 +14,18 @@ node_modules
 
 # Secrets. Production values live in the Vercel project's environment settings,
 # never in a file that gets uploaded.
-.env
-.env.*
+#
+# `.env*`, matching .gitignore exactly, and NOT the narrower `.env` + `.env.*`
+# this used to say — that pair misses `.envrc` and `.env-production`, so the
+# first person to add one would upload it without anything saying so. GPT Sol
+# found it in review, 2026-08-26.
+.env*
 !.env.example
 
-# Built here, not shipped from here.
+# Built here, not shipped from here. api-dist is the compiled API — see
+# vite.api.config.ts — and a stale local copy must never win over a fresh build.
 dist
+api-dist
 
 # Articles on this laptop. Production reads them out of Postgres.
 data

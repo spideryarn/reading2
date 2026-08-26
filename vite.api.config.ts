@@ -1,0 +1,85 @@
+/**
+ * Compile the production API to JavaScript, so that Vercel never has to.
+ *
+ * ## Why this exists
+ *
+ * Vercel's Node builder finds the TypeScript in this repo and uses it to
+ * compile anything under `api/`. This repo is on **TypeScript 7**, whose
+ * compiler the builder does not understand — the same story
+ * docs/project/linting.md tells about ESLint, which is on TS 7's list of things
+ * that lost the API they depended on.
+ *
+ * The way it fails is the reason this file is a build step rather than a
+ * workaround. The deployment log says:
+ *
+ *     Using TypeScript 7.0.2 (local user-provided)
+ *     error TS2688: Cannot find type definition file for 'node'.
+ *
+ * and then the build **reports success**, uploads a function, and every request
+ * to it returns `FUNCTION_INVOCATION_FAILED` with no stack anywhere. A broken
+ * artefact that passed is worse than a failed build, and it is
+ * docs/reusable/silent-success.md exactly.
+ *
+ * So `api/` holds one hand-written `.js` file and nothing else. There is no
+ * TypeScript for the builder to find, no version of it to disagree with, and
+ * what runs in production is compiled by the same tool that compiles the client.
+ *
+ * ## Why SSR mode, and why everything stays external
+ *
+ * `build.ssr` targets Node rather than a browser. `external` below is a rule
+ * rather than a list — anything that is not a relative path is left as a bare
+ * import — which keeps `pg`, `jsdom` and `@anthropic-ai/sdk` out of the bundle.
+ * Bundling those is where this would break quietly: jsdom in particular reaches
+ * for files by path at runtime. Left external, Vercel's own dependency tracing
+ * walks the emitted imports and packages the real packages, which is the thing
+ * it is good at.
+ */
+
+import { defineConfig } from "vite";
+
+/**
+ * The two packages that must be bundled rather than left external.
+ *
+ * `html-encoding-sniffer` is CommonJS and `require()`s `@exodus/bytes`, which is
+ * ESM. Node refuses that combination in the deployed function:
+ *
+ *     ERR_REQUIRE_ESM: require() of ES Module .../@exodus/bytes/encoding-lite.js
+ *     from .../html-encoding-sniffer/lib/html-encoding-sniffer.js not supported
+ *
+ * It does not happen on this laptop, because the Node here is new enough to
+ * allow `require()` of an ES module and the one in the function is not. That is
+ * the whole reason this list exists rather than a version bump: the difference
+ * is in the runtime, not in the code, so nothing local will ever reproduce it.
+ *
+ * Bundling them resolves the interop at build time, where there is no `require`
+ * left to fail. Keep this list as short as it can be — every entry is a package
+ * whose own runtime file lookups stop working, which is exactly why `jsdom` and
+ * `pg` are not on it.
+ */
+const BUNDLE_ANYWAY = ["html-encoding-sniffer", "@exodus/bytes"];
+
+export default defineConfig({
+  /* `ssr.noExternal`, not just `rollupOptions.external` below. Vite decides what
+     an SSR build externalises before Rollup's own `external` hook is consulted,
+     so the hook alone left these two as bare imports and the fix did nothing —
+     the build succeeded and the function went on failing in exactly the same
+     way. Both are set: this one decides, the other documents the rule. */
+  ssr: { noExternal: BUNDLE_ANYWAY },
+  build: {
+    ssr: "src/vercel.ts",
+    outDir: "api-dist",
+    emptyOutDir: true,
+    target: "node22",
+    /* Readable on purpose. This code only ever runs on a server, so there are no
+       bytes to save, and a stack trace out of production that points at a real
+       line is worth more than any of them. */
+    minify: false,
+    rollupOptions: {
+      external: (id: string) => {
+        if (id.startsWith(".") || id.startsWith("/") || id.startsWith("\0")) return false;
+        return !BUNDLE_ANYWAY.some((name) => id === name || id.startsWith(`${name}/`));
+      },
+      output: { format: "esm", entryFileNames: "vercel.js" },
+    },
+  },
+});
