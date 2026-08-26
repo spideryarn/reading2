@@ -28,15 +28,26 @@ Done, each with the tests green before it was committed:
 | **1.3** provider-error leak (6 sites) | `e95c5de` — with **2.7** folded in, as the review advised |
 | **1.7** dead code and needless exports | `7359bdb` — minus `spineWidth`/`GUTTER_PX`, whose files another agent has open |
 
-**The most useful thing that happened while implementing:** 0.2's fix, exactly as the postmortem
-proposed it, turned an existing test red — one that sends the same id with a *different criterion*
-and requires a fresh id back, because that is what stops a stray id overwriting a saved search.
-Keying the reset on the id alone would have removed that defence silently. The criterion is the
-discriminator. The lesson is worth more than the fix: **the change that makes your new red test
-green is not automatically the right change, and the test that objects may be the one holding the
-requirement.**
+**2.7** (the provider-order constant) landed inside `e95c5de` too, as the review advised — same
+files, same invariant. `2230249` then fixed five things GPT Sol found in the work above.
 
-Still open: 1.4 (18 sites), 1.5, 1.6, 1.8, all of Tier 2, all of Tier 3.
+**The two most useful things that happened while implementing**, both the same shape:
+
+*0.2's fix, exactly as its postmortem proposed it, turned an existing test red* — one that sends the
+same id with a *different criterion* and requires a fresh id back, because that is what stops a stray
+id overwriting a saved search. **The change that makes your new red test green is not automatically
+the right change, and the test that objects may be the one holding the requirement.**
+
+*And that corrected fix was still wrong.* Same id and same criterion proves "same question", never
+"this is a retry" — a double-clicked POST, a stale tab, or a replay all match both, and would have
+reset a `pending` or `done` row, destroying an answer and paying for another call. It needed a third
+condition: the run must have **failed**. Two rounds of review to get one four-line predicate right.
+
+Sol also found a **seventh** provider-leak site after the count had already gone three → six:
+`search.ts` rethrew `response.json()`'s `SyntaxError`, and V8 quotes the first characters of the
+offending input inside that message. Rule 1 again, one level further out than anyone had looked.
+
+Still open: 1.4 (18 sites), 1.5, 1.6, 1.8, Tier 2 apart from 2.7, all of Tier 3.
 
 ## Three rules for whoever implements this
 
