@@ -377,13 +377,22 @@ reader is told about it is the only symptom most people will ever report.
    The exports it is missing are already committed *locally*; they have simply
    not been pushed. Until that happens every git deploy fails, and the address
    below serves the last good build from before the connection.
-1. **The database.** The Supabase project exists and is **empty** — no schema, no
-   rows. [database.md § Roles](database.md#roles) is the sequence, and it is
-   deliberately done from the dashboard so that the `postgres` superuser password
-   is never needed and never lands on a laptop.
-2. **An owner in `auth.users`**, then `SPIDERYARN_OWNER_ID` on the project.
+1. ~~**The database.**~~ **Done, 2026-08-26.** Schema applied to
+   `alschkahzfagtppxspfq`: 14 migrations, 14 tables, `spideryarn_app` granted and
+   verified, `spideryarn` confirmed invisible to the Data API by a real anonymous
+   request. [database.md § Roles](database.md#roles) records what was actually run,
+   which is **not** what that section used to say — the migration role the plan
+   called for cannot be granted `REFERENCES` on `auth.users`, and the grant that
+   was supposed to do it is a silent no-op.
+2. ~~**An owner in `auth.users`**~~ — `greg@gregdetre.com` →
+   `001bb7a0-7720-4f1b-8b9d-1ee6e63d132a`. Still to set `SPIDERYARN_OWNER_ID` here.
 3. **`DATABASE_URL`** — the transaction pooler, with no `ssl*` parameters in it.
-4. **Import the articles**: `npm run db:import`.
+   Written into `.env.prod`; not yet set on Vercel, along with `SPIDERYARN_STORE`
+   and `PGSSLROOTCERT`.
+4. **Import the articles**: `npm run db:import` — **currently broken in the working
+   tree**, and not by anything remote. `src/db/schema.ts` has
+   `article_revisions.raw_source_id` with no migration creating it, so the import
+   fails the same way against the local database.
 5. **[The beta gate](../plans/deploy-and-repo-move.md#the-beta-gate)**, which is
    what makes a stable URL possible and what the domain move needs.
 

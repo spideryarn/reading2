@@ -135,9 +135,14 @@ touch anything storage-shaped:
 
 ## Connecting to the remote
 
-Not needed yet — nothing in the app talks to the remote, and the schema has only ever been applied
-to [the local stack](supabase-local.md). Collected here because these four facts are the ones that
-turn a five-minute job into an afternoon, and each fails in a way that misdirects you.
+**The remote exists and has the schema**, as of 2026-08-26: project `alschkahzfagtppxspfq`,
+eu-west-2, Postgres 17.6, 14 migrations applied, 14 tables, both roles created, the owner account
+made. What it does *not* have is data — see [§ Roles](#roles) for how it was bootstrapped and
+[§ What is not done](#what-is-not-done-yet) for what is still missing. Nothing in the app points at
+it yet; `SPIDERYARN_STORE` and `DATABASE_URL` are recorded in `.env.prod`, which is read by nothing.
+
+The facts below are the ones that turn a five-minute job into an afternoon, and each fails in a way
+that misdirects you.
 
 **Which host.** Supabase offers three, and the obvious one is wrong for production:
 
@@ -169,27 +174,66 @@ migration file — and it is [step 1](../plans/postgres-migration.md#the-order-o
 
 ## Roles
 
-`drizzle/0001_auth_fks_and_guards.sql` ends by pointing here, because creating a login role needs a
-password and a password does not belong in a migration committed to git. So this is the one step
-that is done by hand, once per project.
+**Applied to the real project on 2026-08-26.** What follows is what was actually run, which is not
+what this section used to say. The plan had a dedicated migration role; the platform does not allow
+one, and the way it refuses is silent. See
+[the migration role that cannot exist](#the-migration-role-that-cannot-exist).
 
-**Run it in the Supabase dashboard's SQL editor, not from this laptop.** That is not a preference —
-it is what makes the rest of the bootstrap possible without the `postgres` superuser password
-existing anywhere. The dashboard authenticates you as *you*; the password is never involved. Which
-matters, because that password is shown exactly once at project creation and ours was never written
-down.
+Run the SQL through the **Management API**, not the dashboard's editor:
 
-Three roles, and the point of the split is that **none of the two we make is the superuser**:
+```
+supabase login                                    # once per machine, a human step
+supabase db query --linked --project-ref alschkahzfagtppxspfq -f some.sql
+```
+
+Both run as `postgres` and neither needs the database password, so the reason for preferring the
+dashboard is preserved. The CLI is better only because a file is exact and a paste is not. Use
+**only** `db query`: the Supabase CLI reads `supabase_migrations.schema_migrations` and knows nothing
+about our Drizzle history, so `supabase db push` and `supabase db reset --linked` are destructive
+here — see [the traps below](#two-traps-recorded-elsewhere-repeated-here-because-they-are-expensive).
 
 | Role | Has | Used by |
 |---|---|---|
-| `spideryarn_migrator` | DDL on `spideryarn`, `REFERENCES` on `auth.users` | `npm run db:migrate`, from a laptop, over the **session** pooler |
+| `postgres` | everything the platform allows, **but is not a superuser** | `npm run db:migrate`, from a laptop, over the **session** pooler |
 | `spideryarn_app` | DML on `spideryarn` and nothing else | the running server, over the **transaction** pooler |
-| `postgres` | everything | nobody, ever, from outside the dashboard |
+| `spideryarn_migrator` | DDL on `spideryarn`, but **not** `REFERENCES` on `auth.users` | nothing. It exists and is unused |
+
+`spideryarn_app` is the only credential that goes to Vercel, and it is the one this split was
+really for. It cannot read `auth`, cannot create objects, and is invisible to the Data API — all
+three verified after the fact rather than assumed.
+
+### The migration role that cannot exist
+
+Seven `owner_id` columns are `references auth.users(id)`. Creating those foreign keys needs
+`REFERENCES` on `auth.users`, and **no role we can reach is able to grant it**:
+
+- `auth.users` is owned by `supabase_auth_admin`, which nothing is a member of.
+- `postgres` *holds* `REFERENCES` on it but **without grant option**. Its ACL entry is
+  `postgres=ar*wdDxtm/supabase_auth_admin` — the `*` sits after `r`, so `SELECT` alone is grantable.
+- Postgres answers a `GRANT` you lack grant option for with a **warning, not an error**.
+
+So `grant references on table auth.users to spideryarn_migrator` — which this document used to
+give as step one — runs, reports success, and grants nothing. It was caught only by asking
+`has_table_privilege` afterwards. [silent-success.md](../reusable/silent-success.md); this is the
+purest example in the repo, because the statement is *correct SQL that the platform will never obey*.
+
+`grant postgres to spideryarn_migrator` would work by inheritance, and was rejected: it makes the
+migrator postgres-equivalent, which is the thing the split existed to avoid, and Supabase's
+`supautils` extension blocks reserved-role grants anyway.
+
+**GPT Sol proposed the fix worth doing later**: one table of our own, `spideryarn_identity.owners`,
+created as `postgres` and foreign-keyed to `auth.users`; every `owner_id` then references *that*,
+the migrator legitimately holds `REFERENCES` on a table we own, and seven dependencies on a
+Supabase-owned table become one. It was not done on 2026-08-26 only because it means editing
+migrations `0001`, `0003` and `0011` while several agents were appending new ones — and Drizzle does
+not re-verify the hash of an applied migration, so an edit would have left local and remote
+silently disagreeing. Do it when the tree is quiet.
 
 ### Step one: the roles, before any migration
 
-Invent two passwords, paste them in, and run this in the SQL editor.
+Invent two passwords and run this. **Note what is not here**: no
+`grant references on table auth.users`. That statement cannot work, and saying it cannot work is
+the whole of [the section above](#the-migration-role-that-cannot-exist).
 
 ```sql
 create role spideryarn_migrator with login password 'MIGRATOR_PASSWORD';
@@ -197,20 +241,10 @@ create role spideryarn_app      with login password 'APP_PASSWORD';
 
 grant connect on database postgres to spideryarn_migrator, spideryarn_app;
 
--- The migrator creates schema `spideryarn` (migration 0000) and schema
--- `spideryarn_migrations` (Drizzle's own bookkeeping), so it needs CREATE on
--- the database itself, not just on a schema that does not exist yet.
+-- Kept even though the migrator is currently unused: it is what the role would
+-- need if spideryarn_identity.owners ever lands and the migrator starts working.
 grant create on database postgres to spideryarn_migrator;
-
--- Migrations 0001 and 0003 add foreign keys into auth.users. Supabase owns that
--- table, so these two grants are a real bootstrap requirement and the first
--- thing to fail on a fresh project.
 grant usage on schema auth to spideryarn_migrator;
-grant references on table auth.users to spideryarn_migrator;
-
--- So that `alter default privileges for role spideryarn_migrator` below is
--- allowed: you have to be a member of a role to set defaults on its behalf.
-grant spideryarn_migrator to postgres;
 
 -- pgvector lives in the `extensions` schema, and neither of these roles can see
 -- it without being told. **This is not optional and it does not fail locally.**
@@ -228,16 +262,56 @@ alter role spideryarn_app      set search_path = "$user", public, extensions;
 
 ### Step two: apply the migrations
 
-From a laptop, as the **migrator**, over the **session** pooler — port 5432, username
+From a laptop, as **`postgres`**, over the **session** pooler — port 5432, username
 `postgres.<project-ref>`. Not the transaction pooler: DDL and the migrator's own bookkeeping both
 want a real session. `scripts/db-migrate.ts` refuses a non-localhost URL unless you also say so on
-the command line, which is deliberate and is not to be moved into a file:
+the command line, which is deliberate and is not to be moved into a file.
 
-```
-DATABASE_URL='postgresql://spideryarn_migrator...' DB_MIGRATE_ALLOW_REMOTE=yes npm run db:migrate
+`postgres` rather than `spideryarn_migrator` because of the `auth.users` grant that cannot be made.
+The consequence to carry forward: **`postgres` owns every object**, which changes step three.
+
+**The username carries the project ref for *every* role, not just `postgres`.** Supavisor reads the
+part after the dot to work out which project you are asking for, so `spideryarn_app` connects as
+`spideryarn_app.<project-ref>`. Get this wrong in the two available ways and the two errors say
+different things, which is the useful part:
+
+| Error | Means |
+|---|---|
+| `Tenant or user not found` | the **ref** is wrong, or you are on the wrong pooler host |
+| `user not found in the database` | the ref is right, the **role** does not exist yet |
+
+Which pooler host is not guessable, and both spellings resolve in DNS: `aws-0-eu-west-2` is this
+project's, and `aws-1-eu-west-2` answers `Tenant or user not found` for it. Copy the hostname from
+Dashboard → Connect rather than assuming.
+
+**A freshly reset database password is rejected for about a minute**, and the rejection is
+`password authentication failed` — byte-identical to the error for a password that is simply wrong.
+So the obvious conclusion ("I must have copied it wrong") is available and false. Wait a minute and
+try again before resetting it a second time. Verified 2026-08-26: the same string failed, then
+succeeded, with nothing changed but the clock.
+
+### `DATABASE_URL=… npm run db:migrate` does not do what it looks like
+
+**It migrates the laptop's container and prints `✓ migrations applied`.** `.env.local` deliberately
+beats the shell — [`src/env.ts`](../../src/env.ts), and the reason is good — so a `DATABASE_URL` set
+on the command line is *replaced* by the local one before `db-migrate.ts` ever reads it. There is a
+one-line warning on stderr, above the output you are actually watching.
+
+So the remote URL has to be set **after** `loadEnvLocal()` runs, not before it. Either export it in
+a process that has no `.env.local` to read, or wrap it:
+
+```ts
+import { loadEnvLocal } from "../src/env.js";
+loadEnvLocal();                                   // let the file win first
+process.env.DATABASE_URL = process.env.REMOTE_DATABASE_URL!;   // then override it
+await import("../scripts/db-migrate.ts");
 ```
 
-### Step three: let the app see what the migrator made
+The same trap catches `npm run db:import` and anything else pointed at the remote from this
+directory. It is [silent-success.md](../reusable/silent-success.md) exactly: the check you would
+naturally run — "did it say it worked?" — shares its assumption with the code.
+
+### Step three: let the app see what the migrations made
 
 Only now do the tables exist, which is why this cannot be folded into step one.
 
@@ -251,10 +325,25 @@ grant usage, select on all sequences in schema spideryarn to spideryarn_app;
 -- is invisible to the app until somebody remembers to come back here — and the
 -- symptom is "permission denied for table X" in production, long after the
 -- migration that looked like it worked.
-alter default privileges for role spideryarn_migrator in schema spideryarn
+--
+-- FOR ROLE postgres, because postgres is what applies the migrations and
+-- therefore what owns the tables. `alter default privileges for role X` affects
+-- only objects created by X — name the wrong role and the statement succeeds,
+-- does nothing, and you find out one migration later.
+alter default privileges for role postgres in schema spideryarn
   grant select, insert, update, delete on tables to spideryarn_app;
-alter default privileges for role spideryarn_migrator in schema spideryarn
+alter default privileges for role postgres in schema spideryarn
   grant usage, select on sequences to spideryarn_app;
+```
+
+**Prove it rather than reading it back.** `GRANT ... ON ALL TABLES` succeeds against zero tables,
+and a default-privilege rule attached to the wrong role looks identical to one attached to the right
+role until a new table appears. The check that actually settles it is a canary:
+
+```sql
+create table spideryarn.zz_canary (id int);
+select has_table_privilege('spideryarn_app','spideryarn.zz_canary','select');  -- must be true
+drop table spideryarn.zz_canary;
 ```
 
 ### Step two and a half: the extensions the schema needs
@@ -267,22 +356,62 @@ create extension if not exists vector schema extensions;
 `pgcrypto` and `uuid-ossp`. It needs no superuser, and `create extension` is transactional, so it
 can be rehearsed inside a `begin; … rollback;`.
 
-### The two things to check afterwards, because neither announces itself
+### The things to check afterwards, because none of them announces itself
 
-- **`spideryarn` must not be in the Data API's exposed schemas** (Dashboard → Settings → API). It is
-  not there by default — the default is `public, graphql_public` — so this is a confirmation rather
-  than a change. It is also the whole reason deferring RLS is survivable: PostgREST cannot serve a
-  schema it cannot see, whatever key is presented. See
+Every one of these was run against the real project on 2026-08-26 and is recorded here as a command
+rather than a claim, because the difference between "we granted that" and "that is granted" is the
+entire subject of this section.
+
+- **`spideryarn` must not be in the Data API's exposed schemas.** Do not check this in Settings →
+  API; check it with a real anonymous request, which is the thing an attacker would send:
+
+  ```
+  curl "https://<ref>.supabase.co/rest/v1/articles?select=id" \
+       -H "apikey: <anon key>" -H "Accept-Profile: spideryarn"
+  ```
+
+  The right answer is `PGRST106 — Only the following schemas are exposed: public, graphql_public`.
+  This is the whole reason deferring RLS is survivable: PostgREST cannot serve a schema it cannot
+  see, whatever key is presented. See
   [§ RLS and realtime](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now).
-- **`spideryarn_app` must NOT be able to read `auth.users`.** Nothing above grants it, and nothing
-  should. Worth checking by hand once, because a grant that is present by accident looks exactly
-  like a grant that is absent until the day it matters.
+  GPT Sol pointed out that [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) checks only
+  `anon`'s table privilege, which is a different fact and would still pass if the schema *were*
+  exposed.
+
+- **The negative matrix for `spideryarn_app`**, all of which must be `false`:
+
+  ```sql
+  select has_table_privilege ('spideryarn_app','auth.users','select'),   -- reading the user table
+         has_schema_privilege('spideryarn_app','auth','usage'),          -- seeing the auth schema
+         has_schema_privilege('spideryarn_app','spideryarn','create');   -- making its own tables
+  ```
+
+  A grant present by accident looks exactly like a grant that is absent, until the day it matters.
+
+- **`statement_timeout` is 2 minutes** for any role without one of its own (`anon` gets 3s,
+  `authenticated` 8s). That is a *database* default, so `show statement_timeout` on a fresh
+  connection is the only honest way to read it — the Management API's own session reports its own
+  value, not yours. It matters more than it sounds: a slow uplink turns a single large `INSERT` into
+  a `57014 canceling statement due to statement timeout`, and `pg_stat_activity` then shows the
+  statement `active` on `Client:ClientRead`, which means the *server is waiting for you*.
 
 ### An owner exists before any row does
 
 `npm run db:seed-owner` deliberately refuses to run against anything but the local stack, so on the
-remote the owner is a **real** account: create `greg@gregdetre.com` in Dashboard → Authentication →
-Users, take its uuid, and set `SPIDERYARN_OWNER_ID` in the host's environment.
+remote the owner is a **real** account. Created 2026-08-26 through the Auth admin API rather than the
+dashboard, because it is one request and leaves a uuid in the response:
+
+```
+curl -X POST "https://<ref>.supabase.co/auth/v1/admin/users" \
+     -H "apikey: <service_role key>" -H "Authorization: Bearer <service_role key>" \
+     -H "Content-Type: application/json" \
+     -d '{"email":"greg@gregdetre.com","email_confirm":true}'
+```
+
+`greg@gregdetre.com` → `001bb7a0-7720-4f1b-8b9d-1ee6e63d132a`, which is `SPIDERYARN_OWNER_ID` in
+`.env.prod` and must be set on Vercel. Check for triggers on `auth.users` before creating anybody —
+this project has none, but [the old one does](#two-traps-recorded-elsewhere-repeated-here-because-they-are-expensive),
+and a `SECURITY DEFINER` trigger that fails takes the signup down with it.
 [`src/owner.ts`](../../src/owner.ts) defaults to the fixed development uuid, which is the right
 default on a laptop and the wrong one in production — and it fails loudly, on the foreign key, rather
 than writing rows nobody owns.
@@ -309,6 +438,24 @@ than writing rows nobody owns.
 - **The old project has a live trigger on `auth.users`.** It is `SECURITY DEFINER` and writes
   `public.profiles`, so every future Spideryarn signup writes a row into the *old* app — and a failure
   there fails the signup. Greg's own login won't fire it, so it will not show up in testing.
+
+## What is not done yet
+
+- **No data.** `npm run db:import` is currently **broken in the working tree**, not on the remote:
+  [`src/db/schema.ts`](../../src/db/schema.ts) has `article_revisions.raw_source_id` and no migration
+  creates it, so the import fails with `42703 column "raw_source_id" does not exist` — against the
+  *local* database too. Somebody is mid-change. Once a migration for it lands, the import should run.
+- **The uplink is a real constraint.** `data/` was 25 MB on 2026-08-26 and this laptop was uploading
+  at 6–17 KB/s, which is over an hour of transfer and puts single rows past `statement_timeout`. If
+  an import dies at exactly two minutes, measure the upload before blaming the database.
+- **Vercel does not have these values yet** — `SPIDERYARN_STORE`, `DATABASE_URL`,
+  `SPIDERYARN_OWNER_ID`, `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables).
+- **`on delete restrict` is inherited, not chosen.** All seven `owner_id` foreign keys use it, which
+  means deleting the user from the Auth admin API or the dashboard will fail with `23503` while any
+  row is owned. Supabase's own guidance is `cascade` or `set null`; keeping `restrict` is defensible
+  for a reading library, but it needs an export/delete workflow rather than silence.
+- **`spideryarn_identity.owners`** — the fix for the migration role, described in
+  [§ The migration role that cannot exist](#the-migration-role-that-cannot-exist).
 
 ## See also
 
