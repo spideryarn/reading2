@@ -42,11 +42,17 @@ so. The fifth one, and it cost `MODES` one word.
    └──┴───────────┘                        └───────────────┘
 ```
 
+Six of them, in two groups. The first three draw the **tree** and are
+hand-rolled; the last three draw a **graph** and are driven by D3.
+
 | | Vertical axis is | Honest about | Not honest about |
 |---|---|---|---|
-| **Strata** (default, `?diagram=strata`) | the article, linearly in blocks | how many blocks of the piece a section *is* | names — a 6px band holds none; and *words*, see below |
+| **Strata** (default, `?diagram=strata`) | the article, linearly in **words** | how much of the piece a section *is* | names — a 6px band holds none |
 | **Tree** (`?diagram=tree`) | one row per node, sized to its own text | every name, and the nesting | size |
 | **Mindmap** (`?diagram=mindmap`) | parts down a centre trunk | shape, at a glance | size, and it stops at two levels |
+| **Arc** (`?diagram=arc`) | exact reading order, one row per section | *where* the piece returns to something | size; and it shows relatedness, not argument |
+| **Force** (`?diagram=force`) | reading order, imposed by `forceY` | *what* clusters with what | exact position — it is a physics settlement |
+| **Cluster** (`?diagram=cluster`) | the dendrogram's even spread | the shape of the nesting | size, and where you are in the article |
 
 **All three keep document order down the page.** That is the one property that
 is not negotiable, and it is what ruled out every mindmap and graph library in
@@ -62,7 +68,28 @@ holding three are identical L2 cells, which is the complaint
 previous version. Here one is thirteen times taller, and the whole shape of a
 piece — a long setup, three even middle parts, an abrupt end — is one glance.
 
-#### It is to scale in *blocks*, and that is weaker than it sounds
+#### It is to scale in words, since 2026-08-27
+
+It used to count **blocks**, which is a weaker claim than "how much of the
+piece" — eight long paragraphs and eight one-line list items came out the same
+height, and a thousand-word code block was one row. GPT Sol flagged it in review
+and this doc recorded it as the obvious next change; building the graph
+(below) made it nearly free, because a `Block` was carrying its own word count
+all along.
+
+The axis is now a prefix sum of words (`wordsBefore` in
+[`graph.ts`](../../src/web/graph.ts)), passed to `layoutStrata` as an option. It
+is still not what the **spine** measures — the spine is sized from rendered pixel
+heights, which is better again and costs a layout pass this panel has not got —
+so the two rails are close but not identical, and a search hit's position cannot
+simply be copied from one to the other.
+
+What is left of the old caveat: a section of nothing but images legitimately has
+zero words, where it could never have had zero blocks. `layoutStrata` floors
+every extent at 1 so that such a section is a thin band rather than a division by
+zero.
+
+#### The old caveat, kept for the record
 
 Worth being exact about, because "to scale" invites the stronger reading. A block
 is whatever stage 3 split out ([architecture.md](architecture.md)) — a paragraph,
@@ -101,6 +128,38 @@ is a concession to what a reader will be looking for.
 Sides alternate by part index rather than by which side has room, because a
 picture that rearranges itself when you close a section is a picture you have to
 read again.
+
+## The graph the last three are drawn from
+
+`arc`, `force` and `cluster` need more than the tree, and
+[`graph.ts`](../../src/web/graph.ts) builds it — from the article's own prose, on
+the client, with no model call and no fetch. Three kinds of edge:
+
+- **parent** — containment, straight off the tree.
+- **sequence** — one section follows another.
+- **vocabulary** — two sections talk about the same things. **This is the one a
+  tree cannot hold**, and the only reason a graph layout is worth running.
+
+A vocabulary edge is **cosine similarity between two sections' tf-idf vectors**,
+and the threshold is swept against four real articles rather than picked (the
+table is in the source). Sections need at least six distinctive terms to form an
+edge at all, and no section keeps more than four.
+
+**Say what this is: lexical recurrence, not an understanding of the argument.**
+Two sections are joined because they use the same distinctive words. That is
+often what you want — *Being honest ←→ Honesty in practice*, *Ethics as practical
+wisdom ←→ Having broadly good values* a hundred rows apart — and it is sometimes
+merely true: an article that talks about its own sections will link the passages
+where it does. So the footer card lists **the words that earned each link**, and
+the reader can dismiss one in a second. An earlier version computed those words
+and never showed them, which made the curves look more authoritative than they
+are; GPT Sol's finding, and the most important one of the round.
+
+Why not ask a model which sections relate? Same rule
+[glossary.md](glossary.md) gives for finding occurrences ourselves: **a question
+with a checkable answer should not be sent to something that can invent one.**
+Term overlap is arithmetic. It is also free and instant, which is what lets these
+pictures work on an article nobody has paid for.
 
 ## Interaction
 
@@ -192,6 +251,15 @@ saturated fill at 20px tall is a shout and thirty of them is a mess.
 - **No cross-reference arcs, yet.** The article's own internal links
   ([`internal-links.ts`](../../src/web/internal-links.ts)) would make this a real
   graph rather than a tree. The most interesting thing left, and a second feature.
+- **Cluster may not survive either, and `d3-hierarchy` goes with it.** GPT Sol's
+  round-two verdict: *"Cut Cluster and d3-hierarchy. It adds no richer
+  relationship and is less content-legible than the existing Tree. 'Comparison'
+  is not enough reason for a permanent sixth toggle."* That is probably right —
+  it draws the containment tree the hand-rolled `tree` already draws, discards
+  the vocabulary edges entirely, and needed a 12px label offset to stop
+  `cluster()` drawing parents through their own middle child. It is kept for now
+  because this round was asked to try several things, and trying includes finding
+  out. `d3-shape` goes too if it goes: one cubic connector is not a dependency.
 - **Mindmap may not survive.** Two independent reviews — GPT Sol, and a browser
   pass looking at all three side by side — picked it as the weakest and as the
   one to cut if one had to go: legible, but busier than the other two, lopsided

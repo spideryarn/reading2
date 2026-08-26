@@ -221,7 +221,7 @@ genuinely new information; Tree supplies the legible explanation of it."*
    claims across the code and docs said otherwise — including that it "shares the
    spine's axis exactly", when the spine measures rendered pixels. All three
    corrected, and the gap written up as the next change worth making
-   ([diagram.md](../project/diagram.md#it-is-to-scale-in-blocks-and-that-is-weaker-than-it-sounds)).
+   ([diagram.md](../project/diagram.md#it-is-to-scale-in-words-since-2026-08-27)).
 8. **Two documentation claims contradicted the files**: a comment said the Luna
    answer was quoted in this plan when the plan says it was kept out of git, and
    this section promised reviews "below" when there was nothing below.
@@ -357,3 +357,174 @@ which would put a genuine *graph* in the third slot rather than a third tree.
   omission — node ids are positional, so a pasted link would open the wrong
   sections on a re-ingested article. See
   [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx).
+
+---
+
+# Round two: the D3 graph pictures
+
+**Status:** built, 2026-08-27. Three more pictures, three new dependencies, and a
+data structure that did not exist in round one.
+
+Greg:
+
+> Ok, let's also try some D3 ones. Try a bunch, e.g. force-weighted graphs,
+> creating a richer data structure to lay things out, with review from GPT Sol.
+> Then commit these changes.
+
+## What actually changed, and why round one's argument still stands
+
+Round one installed nothing and the reasoning is above. It is worth being precise
+that this round does **not** overturn it: that argument was about the **data**,
+not the algorithms. With only the tree to draw, `d3-hierarchy`'s `tree()` and
+`partition()` were the only functions worth having, and both are wrong for a
+288px band — Luna talked us out of them, and it was right.
+
+What changed is [`graph.ts`](../../src/web/graph.ts), which produces something a
+tree layout could not have used:
+
+- **Words, not blocks** — a `Block` was carrying its own word count all along, so
+  a section can be measured by how much there is to read. That is GPT Sol's
+  round-one finding fixed, and it makes `strata` mean what it always claimed.
+- **Sequence** — a relation the tree records only in the order of an array.
+- **Vocabulary** — sections that talk about the same things, whether or not they
+  are siblings. **This is the one a tree cannot hold**, and the only reason a
+  graph layout is worth running.
+
+And for a graph there is no hand-rolled alternative worth writing: velocity
+Verlet with Barnes–Hut is a real algorithm and `d3-force` is a good
+implementation. That is the whole case for the dependency.
+
+## Making the vocabulary graph mean something
+
+The first attempt scored a pair by how many of their top-ten tf-idf terms
+matched. Run against real articles it was **bad**, in three ways at once, and
+none of them would have shown up in a unit test:
+
+- **Too few edges, by construction.** tf-idf selects terms *for being unique to a
+  section*; the next step then looked for terms two sections had in common.
+  Anthropic's constitution — 50 sections, 22,000 words — produced **nine** edges.
+  The Noema essay produced **one**.
+- **Every shared term counted the same.** So the strongest links in the
+  constitution joined passages whose common vocabulary was *"section, collapsed,
+  readers, default"* — the words an article uses to talk about itself. Confident,
+  precise, and about nothing.
+- **Short sections won.** Dividing by the smaller vocabulary makes two terms out
+  of two a perfect score, so the strongest links in a scanned Victorian pamphlet
+  were between its title page and its half-title.
+
+Replaced with **cosine over the whole tf-idf vector**, plus a six-term floor on
+what may form an edge at all. The edges are now checkable by eye: *Being honest ←→
+Honesty in practice* via **honesty, deceptive, false**; *Ethics as practical
+wisdom ←→ Having broadly good values*, 124 rows apart, via **ethical, moral,
+ideals**; *Brains Are Not Computers ←→ Other Games In Town* via **turing,
+computation, substrate**.
+
+Both the similarity threshold and the force row height were then **swept against
+four real articles** rather than picked, and both tables are in the source beside
+the constant they justify.
+
+## The GPT Sol review
+
+`gpt-5.6-sol`, high effort. Verdict: **NO-SHIP for that snapshot** — six medium
+findings, three low, no high. All nine acted on.
+
+**The three that were real correctness bugs, all invisible on screen:**
+
+1. **The you-are-here line was pointing at the wrong place.** `axis.rows` had
+   started counting *words* while the panel was still dividing a *block* index by
+   it. The line still drew and still moved as you read; it was simply wrong on
+   any article whose paragraphs are not all the same length. Fixed by moving the
+   conversion into the one function that knows what unit the axis is in, and
+   handing the panel a `y` instead of a ratio.
+2. **A section with no words made a 30,000-pixel diagram.** `strata` floors a
+   zero extent at one word, then asks how tall the picture must be for the
+   smallest band to be six pixels — which answers *six pixels per word of the
+   whole article*. Zero-extent nodes are now excluded from the scale, and the
+   height is capped at six viewports besides.
+3. **Two sections could never be related to each other.** Plain `log(N/df)` is
+   zero when `df === N`, so on a two-section article every shared term scored
+   nothing — and adding an unrelated third section made an edge appear at 0.52.
+   Smoothed to `log((N+1)/(df+0.5))`, which still sends a ubiquitous term to
+   ~0.01 while leaving N=2 usable.
+
+**And the one the browser and Sol found together:** the force layout was drawing
+sections out of order. `forceY` at 0.85 is a strong *preference*, and
+`forceCollide` beats a preference wherever the rows get thin — measured on the
+real constitution, **16 of 57 sections were drawn above a section that comes
+before them**. That is the exact property every graph library was rejected for in
+round one, reintroduced by the one we accepted. Fixed with `fy`, which pins the
+axis outright so the simulation solves for x alone; measured afterwards at zero
+inversions on all four articles. Sol also found that link endpoints were reading
+the *unclamped* simulation coordinates, so on a crowded picture 129 connectors
+ran off the side of the band while their bubbles sat at the edge.
+
+**The honesty one, which is the one that matters most.** `graph.ts` computed the
+shared terms behind every edge, the comment said they were "for the hover card",
+and nothing ever showed them. A curve between two sections with no way to ask
+*why* looks exactly as authoritative as one a model had reasoned about — and
+these are lexical heuristics. The footer card now lists the words that earned
+each link.
+
+**Also fixed:** the graph rebuilt its whole term index when stepping between Arc,
+Force and Cluster (100ms on a long article, for a byte-identical result); a
+comment claimed the simulation cost "under a millisecond" when Sol measured 39ms
+at 60 sections and 113ms at 150; Cluster could be closed by keyboard and never
+reopened; a test fixture cast its way past the typechecker; and three file-header
+comments still said nothing had been installed.
+
+**Sol's verdict on the pictures**, recorded rather than acted on:
+
+> Keep Arc. It is the strongest new picture: narrow, deterministic, exact reading
+> order, and it directly exposes recurrence.
+>
+> Keep `d3-force`, conditionally. It earns its dependency; twenty lines of
+> relaxation would be a worse and less testable substitute.
+>
+> Cut Cluster and `d3-hierarchy`. It adds no richer relationship and is less
+> content-legible than the existing Tree. "Comparison" is not enough reason for a
+> permanent sixth toggle.
+
+That is probably right, and Cluster also had the label-collision bug below. It is
+staying for now because Greg asked to try a bunch and the trying is the point of
+this round — but **if the six get cut to four, Cluster and Mindmap are the two**,
+and `d3-hierarchy` and `d3-shape` go with Cluster.
+
+## What the browser found
+
+Same throwaway-preview trick as round one (`diagram-preview.html`, deleted
+after — it fails `scripts/typecheck.ts`'s every-file-belongs-to-a-project guard
+while it exists), because the app's sign-in gate still stops a browser agent
+reaching `/read/`.
+
+- **Cluster drew labels through each other.** `cluster()` places a parent at the
+  mean of its children, so a parent of three lands on *exactly* the middle
+  child's row — and in the transposed view that is two labels at the same `y`,
+  one indented and one not. Not a bug in `cluster()`: a dendrogram labels its
+  leaves, and labelling every node is our requirement. Internal labels now sit
+  12px above their dot.
+- **Force used 47px of a 323px column.** Charge and centring were both too timid,
+  so the one axis the physics is allowed to decide was not being used. Retuned;
+  measured afterwards at 0.96 of the width on the constitution.
+- **Arc was empty on the example article** — which is correct: a 1,943-word
+  excerpt of eight short sections genuinely has nothing to relate. It is recorded
+  because it reads as broken, and because it is why the test on that fixture
+  asserts a *zero* rather than being satisfied by lowering the floor until noise
+  appeared.
+
+## Four tests that were passing for no reason
+
+Every one of these was written, watched to go green, and only then checked
+against the broken state — which is where they were found to be worthless:
+
+- "gives every section its own distinctive terms" passed with tf-idf replaced by
+  raw frequency, because the fixture used every term exactly once.
+- "does not link weather and cricket" passed with the edge floor set to zero,
+  because those two share no terms at all and never became a candidate.
+- Two tests passed with cosine swapped back for the set overlap it replaced,
+  because the two measures agree on any fixture not built to separate them.
+
+Replaced with fixtures that discriminate — the last one needed an article where
+counting shared terms and weighting them by distinctiveness give *opposite*
+answers, which is a pair of falconry sections sharing one rare word against a
+pair of geology sections sharing two common ones. All four now go red on the
+change they are supposed to catch.
