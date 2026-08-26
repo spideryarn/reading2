@@ -42,3 +42,31 @@ export function isWebUrl(value: string): boolean {
     return false;
   }
 }
+
+/**
+ * The hostname, with a leading `www.` dropped — or `""` if the string will not
+ * parse.
+ *
+ * The label a reader recognises. `aeon.co`, not
+ * `https://aeon.co/essays/the-hard-problem-is-a-distraction?utm_source=…`.
+ *
+ * **`""` rather than a throw, and rather than the URL itself.** Both callers use
+ * this to build something a person reads — a link's text, a line saying which
+ * page was fetched — and in both places the input has already been through
+ * `isWebUrl` or `new URL`, so an unparseable string arriving here means
+ * something upstream has changed. Returning the raw string would put the whole
+ * URL, query parameters and all, where a hostname was meant to go; returning
+ * `""` lets the caller say "that page" and move on. Throwing was the third
+ * option and it is the one this module exists to avoid — see `isWebUrl`.
+ *
+ * Three copies of this live in the client (ChatPanel, CommentDialog,
+ * GlossaryPanel). ChatPanel's now points here; the other two should follow when
+ * somebody is next in those files.
+ */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}

@@ -31,7 +31,7 @@
  *   PATCH  /api/chat/:slug/:threadId   { title }
  *   DELETE /api/chat/:slug/:threadId
  *   GET    /api/search/:slug     every saved meaning-search for the article
- *   POST   /api/search/:slug     { id?, criterion } → the finished run
+ *   POST   /api/search/:slug     { id?, criterion } → **a stream**, see `search`
  *   DELETE /api/search/:slug/:id
  *   GET    /api/jobs             every ingest job this server knows about
  *   POST   /api/jobs             { url } | { slug, steps?, force?, guidance? } → the queued job
@@ -77,7 +77,7 @@ import {
   withRetry,
 } from "./chat.js";
 import { beginRun, deleteRun, finishRun, loadRuns, update as updateRuns } from "./searches.js";
-import { findPassages } from "./search.js";
+import { findPassagesStream } from "./search.js";
 /* Through the store, so SPIDERYARN_STORE moves comments and articles together.
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
@@ -95,6 +95,7 @@ import type {
   Comment,
   LibraryEntry,
   LibrarySearchResponse,
+  SearchHit,
   SearchRun,
 } from "./types.js";
 
@@ -584,8 +585,14 @@ async function sweepChat(slug: string, threads: ChatThread[]): Promise<ChatThrea
  * Answer a question, streaming the words out as they arrive.
  *
  * **Server-sent events**, so the frames are `event: <name>` + `data: <json>`.
- * Three event names, and the contract is the same one src/converse.ts offers:
- * any number of `delta`, then exactly one of `done` or `error`.
+ * The contract is the same one src/converse.ts offers: one `begin`, then any
+ * number of `delta` and `tool` in whatever order they happen, then exactly one
+ * of `done` or `error`.
+ *
+ * A `tool` frame is `{ index, run }` and is sent **twice per tool** — once when
+ * it starts and once when it finishes, both under the same `index`, so the
+ * client assigns into an array rather than matching a start to an end. See
+ * docs/project/chat-tools.md.
  *
  * Four things here are not obvious:
  *
@@ -807,6 +814,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
            the next line: most answers use no tools, and a `"tools": []` on every
            one of them is noise in a file a person may well open. */
         ...(event.tools.length > 0 ? { tools: event.tools } : {}),
+        // Same rule again: a flag only when it is true, so an ordinary answer
+        // does not carry two `false`s into the file for the life of the thread.
+        ...(event.truncated ? { truncated: true } : {}),
         ...(event.stopped ? { stopped: true } : {}),
       };
       await finishTurn(slug, thread.id, reply.id, finished);
@@ -893,12 +903,21 @@ const MAX_QUESTION_CHARS = 4000;
 /* --------------------------------------------------------------- search --
    Finding a passage by what it says. See docs/project/search.md.
 
-   Shaped on the *comment* endpoints above rather than on the chat one, and the
-   choice is worth a sentence: a search result is a list, not prose, so there is
-   nothing to watch arrive and streaming would buy the reader a progress bar
-   they cannot read. One POST, one answer, the same three writes — `pending`
-   before the model call so a crash leaves evidence, the terminal state written
-   before the reply so the disk and the response can never disagree. */
+   Streams now, and it is worth saying what this comment used to argue and why
+   that turned out to be wrong. It said a search result is a list, not prose,
+   so there is nothing to watch arrive and streaming would buy the reader a
+   progress bar they cannot read. That mistook "not prose" for "nothing worth
+   showing as it arrives". A hit is a complete, self-contained object —
+   blockId, quote, confidence, reasoning — and src/search.ts's prompt already
+   asks the model to return them best-match-first. The moment a hit's closing
+   brace has arrived in the model's output, src/search-hits-stream.ts's
+   `hitExtractor` can hand it over, so the strongest match highlights the
+   article while the model is still composing its tenth-best guess, instead of
+   the reader watching a spinner for the whole pass. Nothing about the prompt
+   or the ranking changed to make this true — `findPassagesStream` is still one
+   call asked for one JSON object, and the eventual `done` is still the
+   authoritative, strictly-parsed answer. See that file's module docstring
+   § Streaming. */
 
 /**
  * The searches this process is running right now, as `slug/runId`.
@@ -932,21 +951,46 @@ async function sweepSearches(slug: string, runs: SearchRun[]): Promise<SearchRun
 }
 
 /**
- * Run a search, store the result, and answer with it.
+ * Run a search, streaming hits as they arrive, and store the result.
  *
- * A model failure comes back as HTTP **200** carrying a run whose status is
- * `error`, exactly as `answer` does for comments: the request succeeded at what
- * it was for, which was recording what the reader asked for. The panel shows
- * the failure and offers to try again.
+ * Shaped on `answer` above — see its docstring for the reasoning behind each
+ * decision, repeated here rather than reinvented:
  *
- * The one case that is not shared with comments is the last `if`: the reader
- * can delete a search while the model is still thinking, and `finishRun`
- * deliberately does not resurrect a run that is no longer there. Answering with
- * the run anyway would put it back on screen, so a delete that happened mid
- * search is reported as a 404 and the client — which already removed it — does
- * nothing.
+ * - **Validation happens before `beginRun`**, so a bad request is still an
+ *   ordinary JSON 400 — the thrown `httpError` never reaches a half-opened
+ *   stream.
+ * - `beginRun` writes the `pending` row **before** a header goes out, exactly
+ *   as `commentStore.create` does, so a crash mid-search leaves evidence.
+ * - Frames: one `begin` (the whole run — `beginRun` may reset an existing id
+ *   rather than mint one, see `withRun` in src/searches.ts, and `?runs=` has
+ *   to be able to name the real one from the first frame), then any number of
+ *   `hit`, then exactly one `done` — **unless the run was deleted while the
+ *   model was thinking**, see below.
+ * - A model failure is a `done` frame carrying a run whose status is `error`,
+ *   not an HTTP error: the request *did* succeed at what it was for, which was
+ *   recording the criterion. The panel shows the failure and offers to try
+ *   again.
+ * - **Nothing past `sse(res)` may throw.** The store write after the loop is
+ *   wrapped for the same reason `answer`'s is: a store that cannot record the
+ *   result is a worse thing than a failed search, and it deserves its own log
+ *   line rather than an escaped exception landing on a response whose headers
+ *   are long gone.
+ *
+ * **What's different from `answer`: the deleted-mid-search case cannot be a
+ * 404 any more.** The old JSON version threw one when `finishRun` reported the
+ * run gone — the reader had deleted it while the model was still thinking, and
+ * `finishRun` deliberately does not resurrect a row that is no longer there
+ * (see its docstring in src/searches.ts). With a stream the headers are
+ * already sent, so there is no status code left to change. The client already
+ * knows: deleting a run is a purely local act (the `deleted` tombstone in
+ * src/web/useSearch.ts), and the row is off screen before this response is
+ * even being watched. So the server's half of the contract is simply to stay
+ * quiet about a run that is not there any more — no `done` frame, just the
+ * stream ending — and the client's half is to treat a stream that ends
+ * without `done` as *expected* for a run it has already forgotten, rather than
+ * as the broken-connection failure it is for any other run.
  */
-async function search(slug: string, body: unknown): Promise<SearchRun> {
+async function search(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { id, criterion } = (body ?? {}) as Record<string, unknown>;
   if (typeof criterion !== "string" || criterion.trim() === "") {
     throw httpError(400, "Expected { criterion }");
@@ -961,23 +1005,48 @@ async function search(slug: string, body: unknown): Promise<SearchRun> {
   const run = await beginRun(slug, criterion.trim(), typeof id === "string" ? id : undefined);
   const key = `${slug}/${run.id}`;
   searching.add(key);
+
+  const { frame } = sse(res);
+  frame("begin", run);
+
   let patch: Partial<SearchRun>;
   try {
     const article = await loadArticle(slug);
-    const result = await findPassages({
+    let hits: SearchHit[] = [];
+    let model = "";
+    for await (const event of findPassagesStream({
       meta: article.meta,
       blocks: article.blocks,
       criterion: run.criterion,
-    });
-    patch = { status: "done", hits: result.hits, model: result.model };
+    })) {
+      if (event.type === "hit") {
+        frame("hit", { hit: event.hit });
+        continue;
+      }
+      hits = event.result.hits;
+      model = event.result.model;
+    }
+    patch = { status: "done", hits, model };
   } catch (err) {
     patch = { status: "error", error: (err as Error).message };
   } finally {
     searching.delete(key);
   }
-  const stored = (await finishRun(slug, run.id, patch)).find((r) => r.id === run.id);
-  if (!stored) throw httpError(404, "That search was deleted while it was running");
-  return stored;
+
+  try {
+    const stored = (await finishRun(slug, run.id, patch)).find((r) => r.id === run.id);
+    // `undefined` means the reader deleted this run while the model was still
+    // thinking — see the docstring above. Silence, not a 404: the client has
+    // already forgotten the row.
+    if (stored) frame("done", stored);
+  } catch (storeErr) {
+    log("store").error(
+      { ...errorFields(storeErr), slug, id: run.id },
+      `could not record a search result for ${slug}`,
+    );
+  } finally {
+    res.end();
+  }
 }
 
 /* ------------------------------------------------ reading the path apart --
@@ -1521,7 +1590,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       return true;
     }
     if (searches && req.method === "POST") {
-      send(res, 200, await search(slugPart(searches, 1), await readBody(req)));
+      /* The third endpoint in this file that does not answer with JSON — see
+         `answer`, which writes its own headers and ends the response. It is
+         still reached through `send` for its *failures*: validation throws
+         before a header is written, so a bad request is an ordinary 400. */
+      await search(slugPart(searches, 1), await readBody(req), res);
       return true;
     }
     if (oneRun && req.method === "DELETE") {

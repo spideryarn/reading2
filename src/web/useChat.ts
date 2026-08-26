@@ -13,7 +13,7 @@
  * every access log between here and the server.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ChatThread, Citation } from "../types.js";
+import type { ChatMessage, ChatThread, Citation, ToolRun } from "../types.js";
 import { mintId } from "../ids.js";
 import { readEvents } from "./lib/sse.js";
 import { describeFetchFailure } from "./useComments.js";
@@ -494,6 +494,8 @@ export function useChat(slug: string): ChatApi {
           }
 
           let text = "";
+          /** What the tools have done so far, kept here for the same reason `text` is. */
+          let tools: ToolRun[] = [];
           let finished = false;
           for await (const event of readEvents(response.body)) {
             if (event.name === "begin") {
@@ -522,11 +524,29 @@ export function useChat(slug: string): ChatApi {
               patchReply({ text });
               continue;
             }
+            /* A tool starting, or the same tool finishing. **Assigned by index
+               rather than appended**, which is what makes the row that says
+               "searching your library…" become the row that says what it found,
+               in place, rather than a second row underneath it.
+
+               `tools.slice()` because the array on the row is the one React has
+               already rendered; mutating it and handing back the same reference
+               is the classic way to make a list that updates on the next
+               unrelated render and not before. */
+            if (event.name === "tool") {
+              const { index, run } = event.data as { index: number; run: ToolRun };
+              tools = tools.slice();
+              tools[index] = run;
+              patchReply({ tools });
+              continue;
+            }
             if (event.name === "done") {
               const done = event.data as {
                 text: string;
                 citations: Citation[];
                 searches: number;
+                tools?: ToolRun[];
+                truncated?: boolean;
                 model: string;
                 stopped?: boolean;
               };
@@ -534,7 +554,13 @@ export function useChat(slug: string): ChatApi {
                  retry of one that *was* stopped, and a patch that omits the
                  field leaves the old `true` sitting under new text — a complete
                  answer wearing "Stopped" underneath it. */
-              patchReply({ stopped: false, ...done, status: "done" });
+              /* `stopped` and `tools` are both defaulted *before* the spread,
+                 for one reason: the server omits each of them when there is
+                 nothing to say, so a spread alone cannot clear a stale one. A
+                 retry of an answer that ran three tools would otherwise keep
+                 that answer's tool strip sitting above text those tools had
+                 nothing to do with. */
+              patchReply({ stopped: false, truncated: false, tools: [], ...done, status: "done" });
               finished = true;
               continue;
             }
@@ -633,9 +659,11 @@ export function useChat(slug: string): ChatApi {
   const retry = useCallback(
     (threadId: string, messageId: string) => {
       /* Blanked field by field, for the same reason `retryTurn` rebuilds the
-         stored row rather than spreading it: `citations`, `searches` and the
-         old `error` all belong to the answer being replaced, and any one of
-         them left behind sits under text that never mentioned it. */
+         stored row rather than spreading it: `citations`, `searches`, `tools`
+         and the old `error` all belong to the answer being replaced, and any one
+         of them left behind sits under text that never mentioned it. A stale
+         tool strip is the loudest of them — it claims a web page was read for an
+         answer that never saw one. */
       put(threadId, (t) => ({
         ...t,
         messages: t.messages.map((m) =>

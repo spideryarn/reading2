@@ -278,13 +278,38 @@ interface Annotation {
   url_citation?: { url?: string; title?: string };
 }
 
+/**
+ * One function call the model is asking for, **as it arrives** — which is to
+ * say, in pieces.
+ *
+ * `index` is the only thing that ties the pieces together and it is the whole
+ * reason this shape is awkward. The first delta for a call carries `id` and
+ * `function.name` with an empty `arguments`; every delta after it carries a
+ * fragment of the JSON argument string and nothing else. So a caller has to
+ * keep a slot per `index` and concatenate — parsing any single delta gives you
+ * `{"query": "predictive process` and a `SyntaxError`.
+ *
+ * Verified against a live streamed response on 2026-08-26 rather than taken
+ * from documentation, because the deltas after the first genuinely do omit
+ * `id`, and code that reads `tc.id` on every delta silently starts a second
+ * empty call. `accumulateToolCalls` in src/converse.ts is the one place that
+ * does this, and tests/chat-tools.test.ts pins it to the real frames.
+ */
+export interface ToolCallDelta {
+  index: number;
+  /** Only on the first delta of a call. */
+  id?: string;
+  type?: string;
+  function?: { name?: string; arguments?: string };
+}
+
 export interface StreamChunk {
   model?: string;
   error?: { message: string };
   usage?: Usage;
   choices?: {
     finish_reason?: string;
-    delta?: { content?: string; annotations?: Annotation[] };
+    delta?: { content?: string; annotations?: Annotation[]; tool_calls?: ToolCallDelta[] };
   }[];
 }
 
@@ -333,11 +358,12 @@ export const PROVIDER_ORDER = { order: ["anthropic"] } as const;
  * needed, the safe shape is structured and allowlisted — a request id header, or
  * a provider error *code* — never the prose.
  *
- * The status stays **in the sentence** on purpose. It is what a later decision
- * about telling the reader "busy, try again" apart from "this is broken" would
- * have to key on, and putting it there now means that change is a wording
- * change rather than a plumbing one. See docs/plans/simplification-audit.md § A.5
- * — the wording here is interim and Greg's to settle.
+ * The status is **mapped rather than shown**, which is the opposite of what this
+ * comment said until 2026-08-26. It used to leave the number in the sentence,
+ * arguing that a later decision about telling "busy, try again" apart from "this
+ * is broken" would need something to key on. That decision has since been made,
+ * in src/messages.ts, and it keys on the status *here* — so the reader gets the
+ * sentence and the number stays out of it.
  */
 export function providerRefused(status: number): Error {
   return new Error(providerHttpFailure(status).message);

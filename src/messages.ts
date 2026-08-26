@@ -10,11 +10,13 @@
  *
  * 1. **Say what happened, in words that do not assume any of this.** "The AI
  *    service is busy", not "HTTP 429". The reader is here to read an article.
- * 2. **Say whose problem it is.** There are three kinds and they need different
+ * 2. **Say whose problem it is.** There are four kinds and they need different
  *    behaviour from the reader: *try again* (transient), *nothing you can do*
- *    (this app's own account or configuration), and *this is a bug here*.
- *    Telling someone to try again when retrying cannot possibly work is the
- *    worst of the three, because they will do it repeatedly.
+ *    (this app's own account or configuration), *this is a bug here*, and
+ *    *refused, and it will be refused again* (a safety rule, a size limit) —
+ *    the last being the one where the reader can still get somewhere by asking
+ *    for less. Telling someone to try again when retrying cannot possibly work
+ *    is the worst mistake available here, because they will do it repeatedly.
  * 3. **Say what to do next**, when there is anything.
  * 4. **Never repeat what the provider said.** Its error body is the one place an
  *    upstream might echo the article back — see `providerRefused` in
@@ -116,13 +118,32 @@ export function kindOfMessage(message: string): FailureKind | null {
  * Should the interface offer another go under this failure?
  *
  * The one question a component asks about a stored error, so that the answer is
- * given in one place rather than three. **An unrecognised message means yes** —
- * see `kindOfMessage` for why that is the safe direction.
+ * given in one place rather than at each affordance. **An unrecognised message
+ * means yes** — see `kindOfMessage` for why that is the safe direction.
  *
  * Note what this deliberately does not do: it does not decide what to show
  * *instead* of the button. The message already says why retrying will not work
  * and what the reader can do about it; a second widget explaining the same
  * thing would be the app talking over itself.
+ *
+ * ## The two places that deliberately do not ask
+ *
+ * There are five surfaces where a failure can appear, and three consult this.
+ * The other two are not oversights:
+ *
+ * **The glossary's "Check the web".** It is the only control that term has ever
+ * had — it *is* the first attempt and the retry, because a failed lookup leaves
+ * `entry.lookup` undefined and the button simply comes back. Hiding it would
+ * take away the only route to a lookup for that term, permanently, on the
+ * strength of a failure that may have been about this app's credit an hour ago.
+ * The other three surfaces all have another way through (close and reselect,
+ * rephrase in the box, edit the question), which is exactly what makes hiding a
+ * button safe there and not here.
+ *
+ * **AddArticle's Retry**, which restarts a pipeline job. Job errors are not
+ * these strings and carry no code, so this would return `true` for all of them
+ * and change nothing. Worth revisiting when job failures get the same
+ * treatment; today it would be decoration.
  */
 export function worthRetrying(message: string | null | undefined): boolean {
   if (!message) return true;
@@ -135,8 +156,15 @@ export function worthRetrying(message: string | null | undefined): boolean {
  *
  * Next to the messages rather than in the client, so there is one file to
  * change and the round-trip test can see both halves at once.
+ *
+ * **Exported only so a test can compare it against the messages themselves.**
+ * Nothing should read a kind out of here directly — `kindOfMessage` is the way
+ * in, because it also handles the codes that are minted from a status and are
+ * therefore not in this table. The test asserts these keys are exactly the
+ * codes the file's messages carry, which is what stops this table and the
+ * messages becoming two lists maintained by memory.
  */
-const CODE_KINDS: Record<string, FailureKind> = {
+export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-busy": "retry",
   "ai-no-credit": "ours",
   "ai-key": "ours",
@@ -154,7 +182,7 @@ const CODE_KINDS: Record<string, FailureKind> = {
   "ai-stalled": "retry",
   "ai-cut-off": "retry",
   "ai-filtered": "blocked",
-  "ai-no-room": "retry",
+  "ai-no-room": "blocked",
   "ai-empty": "retry",
 };
 
@@ -187,9 +215,8 @@ export function providerHttpFailure(status: number): ReaderFacingFailure {
     return {
       kind: "ours",
       message:
-        "This app cannot sign in to the AI service — its key is missing or no longer valid. " +
-        "That is a setup problem here, not anything you did, and it needs fixing before any of the AI " +
-        "features will work. [ai-key]",
+        "This app cannot sign in to the AI service — its key is missing or no longer valid. That needs " +
+        "fixing here, and until it is, none of the AI features will work. [ai-key]",
     };
   }
   /* Deliberately *not* folded in with 401, though it is the obvious pairing and
@@ -205,35 +232,33 @@ export function providerHttpFailure(status: number): ReaderFacingFailure {
     return {
       kind: "blocked",
       message:
-        "The AI service would not answer this one. That is usually its safety filter reacting to " +
-        "something in the article or the question, or a limit on this app's account. Asking the same " +
-        "thing again will get the same answer; asking something narrower sometimes gets through. [ai-refused]",
+        "The AI service refused to answer this one, and it does not say why — that can be its safety " +
+        "rules, or a limit on this app's account. Asking the same thing again will most likely get the " +
+        "same refusal; asking something narrower sometimes gets through. [ai-refused]",
     };
   }
   if (status === 404) {
     return {
       kind: "ours",
       message:
-        "The AI model this app asked for is not available. That is a configuration problem here rather " +
-        "than a problem with your article, so trying again will not help until somebody changes a " +
-        "setting. [ai-no-model]",
+        "The AI model this app is set up to use is not available. That needs fixing here, and trying " +
+        "again will not help until it is. [ai-no-model]",
     };
   }
   if (status === 400 || status === 422) {
     return {
       kind: "bug",
       message:
-        "The AI service rejected this request as malformed. That is a bug in this app rather than " +
-        "anything about your article, and trying again will get the same result. [ai-bad-request]",
+        "The AI service rejected this request as malformed. That is a bug in this app, and trying " +
+        "again will get the same result. [ai-bad-request]",
     };
   }
   if (status === 413) {
     return {
       kind: "blocked",
       message:
-        "This was too much text for the AI service to take in one go. Trying again will send exactly " +
-        "the same thing, so it needs to be smaller — a shorter selection, or a narrower question about " +
-        "a long article. [ai-too-big]",
+        "That was more text than the AI service will take in one go, and trying again sends the same " +
+        "amount. Select a shorter passage, or ask about a smaller part of the article. [ai-too-big]",
     };
   }
   if (status === 408 || status === 504) {
@@ -316,8 +341,8 @@ export const NOT_CONFIGURED: ReaderFacingFailure = {
   kind: "ours",
   message:
     "This app has not been set up to talk to the AI service yet, so none of the AI features can " +
-    "answer. That is a setup problem here rather than anything you did, and it needs somebody with " +
-    "access to fix it — trying again will not help. [ai-not-set-up]",
+    "answer. It needs somebody with access to finish setting it up; trying again will not help. " +
+    "[ai-not-set-up]",
 };
 
 /**
@@ -404,15 +429,23 @@ export function saidNothing(finishReason: string | null): ReaderFacingFailure {
       message:
         "The AI service stopped itself answering this one — its safety filter caught something, and " +
         "it does not tell us what. Asking the same thing again will get the same result; asking about " +
-        "a smaller piece of the article often works. [ai-filtered]",
+        "a smaller piece of the article sometimes works. [ai-filtered]",
     };
   }
+  /* `blocked`, not `retry`, and the reasoning has to match 413's or one of them
+     is wrong. 413 is `blocked` because resending an unchanged request sends the
+     same too-large thing. This is the same situation arriving by another door:
+     the input ate the whole budget and nothing came out. The sentence never
+     invited a retry anyway — its only advice was to ask about less — so with
+     `retry` the button and the prose disagreed, and the button was the one the
+     reader could act on. */
   if (finishReason === "length") {
     return {
-      kind: "retry",
+      kind: "blocked",
       message:
         "The AI service ran out of room before it wrote anything, which usually means it was given " +
-        "too much at once. Asking about a shorter stretch of the article should get an answer. [ai-no-room]",
+        "too much at once. Sending the same thing again will hit the same ceiling; asking about a " +
+        "shorter stretch of the article should get an answer. [ai-no-room]",
     };
   }
   return {

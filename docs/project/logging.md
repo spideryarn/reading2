@@ -223,6 +223,12 @@ Beyond the list, three standing rules:
   reader's selected sentence is the most private thing this app holds. Ids, slugs, counts, statuses
   and timings.
 - **Slug, not URL,** wherever a slug identifies the thing. See below.
+- **Host, not URL, when the URL was not the reader's.** Chat's tools fetch pages the *model* chose
+  ([chat-tools.md](chat-tools.md)), and it chose them because of what the reader asked — so a full
+  URL in a log line is a fact about a reader's question, and a path can carry the question inside
+  it. `hostOf` in [`src/urls.ts`](../../src/urls.ts) is what those lines log. A tool's `label` is
+  worse still: it quotes the reader's own words back, which is what makes it worth putting on the
+  screen and what keeps it out of the log entirely.
 - **Nothing sensitive in the message string.** This one is a consequence of how redaction works and
   is not negotiable — see the next section.
 

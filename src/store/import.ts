@@ -516,6 +516,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
             status: message.status,
             citations: message.citations ?? null,
             searches: message.searches ?? null,
+            tools: message.tools ?? null,
             model: message.model ?? null,
             error: message.error ?? null,
             stopped: message.stopped ?? false,

@@ -712,6 +712,45 @@ export interface Citation {
 }
 
 /**
+ * One tool call, as the reader sees it and as it is stored on the message.
+ *
+ * **This is a stored type**, which is why it is this small. It goes into
+ * `chat.json` on every answer that used a tool and it is read back on every
+ * reload, so it holds what a reader needs six months later — *what was asked
+ * for, and what came back* — and not the payload, which would put a fetched web
+ * page in the reader's chat file for ever.
+ *
+ * `label` and `detail` are prose written *here* rather than in the client, and
+ * that is deliberate: the client would otherwise need a switch on `name` that
+ * has to be kept in step with this file, and the first tool added without
+ * touching it would render as a blank row. See docs/project/chat-tools.md.
+ */
+export interface ToolRun {
+  /** The function name the model asked for. */
+  name: string;
+  /**
+   * What it did, in the reader's words: `read aeon.co`, `searched your library
+   * for “predictive processing”`.
+   *
+   * **It may contain the reader's own query**, because that is the only thing
+   * that makes the row worth reading. Which means it is prose, and prose is
+   * never logged — see the header.
+   */
+  label: string;
+  /** How it went: `4 passages in 2 articles`, `nothing found`. */
+  detail?: string;
+  /**
+   * `running` is what the panel shows live. It is **never stored** — the route
+   * writes the finished array — so a `running` row read back from disk would be
+   * a bug, not a stale spinner.
+   */
+  status: "running" | "done" | "error";
+  /** Milliseconds. Absent while running. */
+  ms?: number;
+}
+
+
+/**
  * A reader's question about a stretch of prose, and the model's answer.
  *
  * Stored in `data/<slug>/comments.json` — reader state, so it lives beside the
@@ -843,6 +882,15 @@ export interface ChatMessage {
   citations?: Citation[];
   /** How many web searches it ran. 0 means it answered from the article. */
   searches?: number;
+  /**
+   * The tools this answer ran, in order. Assistant turns only.
+   *
+   * **Absent, not `[]`, on an answer that used none** — which is most of them,
+   * because the article is already in the prompt. So the panel's test is
+   * "is there anything here", never "how many", and nothing renders an empty
+   * strip above an ordinary answer.
+   */
+  tools?: ToolRun[];
   model?: string;
   error?: string;
   /**
@@ -859,6 +907,21 @@ export interface ChatMessage {
    * those words, and pretending otherwise would have it contradict itself.
    */
   stopped?: boolean;
+  /**
+   * The model ran out of room mid-sentence. Assistant turns only.
+   *
+   * `finish_reason: "length"` with text already written — which used to be
+   * stored as an ordinary `done` answer, so a paragraph that stopped halfway
+   * through a word looked like a model that had simply finished oddly. The
+   * reader had no way to tell it apart from a complete answer, and "retry"
+   * was not obviously the thing to do.
+   *
+   * A flag rather than a status, for the same reason `stopped` is one: the
+   * answer above it is real and worth keeping. Unlike `stopped`, this one **is**
+   * a failure of ours — the reader did not ask for it — so the panel says so in
+   * a way that offers the retry. See docs/project/chat-tools.md.
+   */
+  truncated?: boolean;
   /**
    * When the reader last rewrote this message. User turns only.
    *

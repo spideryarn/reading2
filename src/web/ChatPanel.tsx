@@ -37,21 +37,27 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDown,
+  BookOpen,
   Check,
   ClipboardCheck,
   Copy,
+  FileText,
+  Globe,
+  Library,
   LoaderCircle,
   MessageSquarePlus,
   Pencil,
   RotateCcw,
+  Search,
   SendHorizontal,
   Square,
   Trash2,
   X,
 } from "lucide-react";
-import type { BlockId, ChatMessage, ChatThread } from "../types.js";
+import { worthRetrying } from "../messages.js";
+import type { BlockId, ChatMessage, ChatThread, ToolRun } from "../types.js";
 import { CitedText } from "./Cited.js";
-import { isWebUrl } from "../urls.js";
+import { hostOf, isWebUrl } from "../urls.js";
 import { TooltipGroup } from "./Tooltip.js";
 
 interface Props {
@@ -156,6 +162,20 @@ export const SUGGESTIONS: { label: string; ask: string }[] = [
   {
     label: "Check my understanding",
     ask: "Ask me two questions that would show whether I have followed the argument so far. Don't answer them.",
+  },
+  /* The sixth, added 2026-08-26 with the tools. It is here for a reason the
+     other five are not: **nothing else on screen says chat can now search the
+     reader's own library.** A capability nobody knows about is a capability
+     nobody uses, and a suggestion is the cheapest way to be told.
+
+     It passes the same filter the others do — it sends the reader back into
+     reading, and it is the one suggestion here that sends them into a *different*
+     piece. It can legitimately come back with "nothing", which is a fine answer
+     on a shelf of three articles and the reason the wording asks rather than
+     promises. docs/project/chat-tools.md. */
+  {
+    label: "What else have I read about this?",
+    ask: "Search my library: have I read anything else that bears on this article's main argument? If not, say so plainly.",
   },
 ];
 
@@ -742,9 +762,14 @@ function Turn({
       </div>
     );
   }
-  const thinking = message.status === "pending" && message.text === "";
+  /* "thinking…" only while nothing at all is happening. Once a tool is running
+     the strip below says what, which is a better answer to the same question —
+     and both at once reads as two spinners for one wait. */
+  const thinking =
+    message.status === "pending" && message.text === "" && (message.tools?.length ?? 0) === 0;
   return (
     <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`}>
+      <ToolStrip tools={message.tools} searches={message.searches} />
       {thinking ? (
         <span className="chat-thinking">
           <LoaderCircle className="cmt-spinner" size={13} /> thinking…
@@ -763,6 +788,14 @@ function Turn({
       )}
       {message.status === "pending" && message.text !== "" && <span className="chat-cursor" />}
       {message.status === "error" && <p className="chat-failed">{message.error}</p>}
+      {message.truncated && (
+        /* Styled as a failure, unlike `stopped` two lines down — because it is
+           one. Nobody asked for this answer to end here, and the retry above is
+           the thing to do about it. */
+        <p className="chat-failed">
+          This answer ran out of room and stopped mid-sentence. Try again.
+        </p>
+      )}
       {message.stopped && (
         /* Not styled as a failure, because it is not one. An answer that ends
            mid-sentence with nothing to explain it is the thing that reads like
@@ -789,7 +822,13 @@ function Turn({
       {message.status !== "pending" && (
         <div className="chat-actions">
           {message.text !== "" && <CopyAnswer text={message.text} />}
-          {onRetry && (
+          {/* "Answer again" is a regenerate, not only a retry — it is offered on
+              a perfectly good answer too. So the extra condition is narrow: it
+              disappears only when this turn *failed*, and failed in a way that
+              says another go cannot work. Asking again after a refusal the
+              service will repeat costs a call and returns the same sentence.
+              src/messages.ts § worthRetrying. */}
+          {onRetry && (message.status !== "error" || worthRetrying(message.error)) && (
             <button
               type="button"
               className="chat-icon"
@@ -803,6 +842,104 @@ function Turn({
       )}
     </div>
   );
+}
+
+/**
+ * What the model did before it answered.
+ *
+ * A strip above the answer, one line per tool, in the order they ran. It appears
+ * the moment the first tool starts and stays on the finished answer for good —
+ * Greg's call, 2026-08-26, over the cheaper option of a live line that vanishes:
+ *
+ * > A live line, kept afterwards.
+ *
+ * The cost of keeping it is a `tools` array on every stored message that used
+ * one. What it buys is that a reader coming back to a thread a month later can
+ * see **why an answer said what it said** — which page it read, which of their
+ * own articles it found — rather than having to take a confident paragraph on
+ * trust. That is the same argument the block-id citations are built on, pointed
+ * at the half of an answer that does not come from the article.
+ *
+ * ## Web searches are a row here too, and they are not a `ToolRun`
+ *
+ * OpenRouter's web search runs inside the provider, so nothing on this side sees
+ * it start or finish — all that comes back is a count in `searches`. It is
+ * rendered as one synthetic row rather than left out, because from the reader's
+ * side "it searched the web twice" belongs in exactly this list; and it says
+ * only the number, because **we do not know what it searched for** and a made-up
+ * query would be the most convincing wrong thing on the screen.
+ */
+function ToolStrip({
+  tools,
+  searches,
+}: {
+  tools: ToolRun[] | undefined;
+  searches: number | undefined;
+}) {
+  const runs = tools ?? [];
+  const webSearches = searches ?? 0;
+  if (runs.length === 0 && webSearches === 0) return null;
+  return (
+    <ul className="chat-tools">
+      {webSearches > 0 && (
+        <li className="chat-tool">
+          <Globe size={12} aria-hidden />
+          <span className="chat-tool-label">
+            searched the web
+            {/* The count, not a list. See the header. */}
+            {webSearches > 1 ? ` (${webSearches} searches)` : ""}
+          </span>
+        </li>
+      )}
+      {runs.map((run, i) => (
+        <li
+          /* Indexed, and it has to be: the same tool with the same arguments can
+             legitimately run twice in one answer (two library searches with
+             different phrasings is the ordinary case), so name-plus-label is not
+             unique. The list only ever grows and only ever changes in place —
+             `useChat` assigns by index — so the index is stable for as long as
+             the row exists. */
+          // biome-ignore lint/suspicious/noArrayIndexKey: that rule is about lists which reorder or splice. This one only grows, and useChat assigns into it by index — so the index IS the row's identity, and name-plus-label is not unique.
+          key={`${i}-${run.name}`}
+          className={`chat-tool${run.status === "running" ? " running" : ""}${run.status === "error" ? " error" : ""}`}
+        >
+          {run.status === "running" ? (
+            <LoaderCircle className="cmt-spinner" size={12} aria-hidden />
+          ) : (
+            <ToolIcon name={run.name} />
+          )}
+          <span className="chat-tool-label">{run.label}</span>
+          {run.detail && <span className="chat-tool-detail">{run.detail}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The glyph for a tool, by name.
+ *
+ * A switch on the server's tool names, which is exactly the coupling
+ * src/chat-tools.ts avoids for the *words* — the label and the detail are
+ * written there so a new tool reads correctly here without anyone touching this
+ * file. An icon cannot travel that way (it is a component, not a string), so a
+ * tool this switch has not heard of falls through to a magnifying glass rather
+ * than to nothing. A slightly wrong icon beside correct words is a much smaller
+ * failure than a blank row.
+ */
+function ToolIcon({ name }: { name: string }) {
+  switch (name) {
+    case "read_web_page":
+      return <Globe size={12} aria-hidden />;
+    case "search_library":
+      return <Library size={12} aria-hidden />;
+    case "read_library_passage":
+      return <BookOpen size={12} aria-hidden />;
+    case "article_glossary":
+      return <FileText size={12} aria-hidden />;
+    default:
+      return <Search size={12} aria-hidden />;
+  }
 }
 
 /**
@@ -1020,23 +1157,6 @@ function Answer({
   );
 }
 
-/**
- * A URL's host, for a citation that arrived without a title.
- *
- * `new URL()` throws rather than returning null, and this runs during render —
- * so one malformed URL used to take the whole panel down with it, replacing the
- * conversation with a blank screen. Everything reaching here has passed
- * `isWebUrl` and therefore parses, which makes the fallback unreachable; it is
- * here because "unreachable" and "cannot happen" are different claims, and the
- * cost of being wrong about the difference is the reader's whole conversation.
- */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url;
-  }
-}
 
 /**
  * The box you type into.

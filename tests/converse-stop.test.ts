@@ -63,7 +63,7 @@ function stubFetch(make: () => Response | Promise<Response>) {
 async function run(signal: AbortSignal, stop: () => void, at: (chars: number) => boolean) {
   const events = [];
   let chars = 0;
-  for await (const event of converse({ meta, blocks, history: [], question: "why?", signal })) {
+  for await (const event of converse({ meta, blocks, history: [], question: "why?", slug: "example", signal })) {
     events.push(event);
     if (event.type === "delta") {
       chars += event.text.length;
@@ -122,6 +122,7 @@ describe("a stop ends in `done`, never in a throw", () => {
       blocks,
       history: [],
       question: "why?",
+      slug: "example",
       signal: controller.signal,
     });
     setTimeout(() => controller.abort(new Error("stopped by the reader")), 5);
@@ -134,6 +135,12 @@ describe("a stop ends in `done`, never in a throw", () => {
         searches: 0,
         model: expect.any(String),
         unknownIds: [],
+        // Empty rather than absent: `converse` always says what its tools did,
+        // and on a stop before the first byte the honest answer is "nothing".
+        tools: [],
+        // A stop is not a truncation. Nothing ran out of room; the reader
+        // ended it, which is what `stopped` beneath already says.
+        truncated: false,
         stopped: true,
       },
     ]);
@@ -151,6 +158,7 @@ describe("a stop ends in `done`, never in a throw", () => {
       blocks,
       history: [],
       question: "why?",
+      slug: "example",
       signal: controller.signal,
     })) {
       events.push(event);
@@ -236,6 +244,7 @@ describe("failures are loud", () => {
         blocks,
         history: [],
         question: "why?",
+        slug: "example",
         stallMs: 20,
       })) {
         // Draining is the point; the throw happens once the loop ends.
@@ -272,7 +281,7 @@ describe("failures are loud", () => {
     );
 
     async function run() {
-      for await (const _event of converse({ meta, blocks, history: [], question: "why?" })) {
+      for await (const _event of converse({ meta, blocks, history: [], question: "why?", slug: "example" })) {
         // Draining is the point; the throw happens on the failed response.
       }
     }

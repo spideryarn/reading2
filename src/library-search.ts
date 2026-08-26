@@ -56,7 +56,13 @@ const MIN_TERM = 2;
  * one is obviously simpler, quoted phrases are the only syntax it honours, and
  * the docs say so.
  */
-function parseQuery(query: string): { terms: string[]; phrases: string[] } {
+/* Exported, along with `fold` and `occurrences` below, for src/chat-tools.ts —
+   chat's `search_article_words` runs this same matcher over the one article the
+   reader has open. It imports them rather than reimplementing them, and that is
+   the point: a reader typing words into the library box and asking chat about
+   the same words must get the same notion of "matches", and the way to be sure
+   of that is not to have two notions. See docs/project/chat-tools.md. */
+export function parseQuery(query: string): { terms: string[]; phrases: string[] } {
   const phrases: string[] = [];
   // Pull out "quoted phrases" first, so their inner spaces don't become term
   // boundaries. Curly quotes too — the reader's keyboard may produce either.
@@ -89,7 +95,7 @@ function parseQuery(query: string): { terms: string[]; phrases: string[] } {
  * the cutting (see `LibraryHit.text`); the offsets below are used only to count
  * and to compare with each other, never to slice.
  */
-function fold(s: string): string {
+export function fold(s: string): string {
   return s
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
@@ -100,7 +106,7 @@ function fold(s: string): string {
 }
 
 /** How many times `needle` appears in `hay`. Non-overlapping. */
-function occurrences(hay: string, needle: string): number {
+export function occurrences(hay: string, needle: string): number {
   let n = 0;
   for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) n++;
   return n;

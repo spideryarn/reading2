@@ -278,6 +278,11 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
             status: row.status,
             citations: row.citations,
             searches: row.searches,
+            /* Null becomes an absent key via `compact`, which is what the
+               filesystem store writes for an answer that used no tools — and
+               those two have to agree exactly, because
+               tests/store-roundtrip.test.ts compares the bytes. */
+            tools: row.tools,
             model: row.model,
             error: row.error,
             // `false` is the default and the file simply had no key.
