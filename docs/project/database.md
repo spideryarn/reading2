@@ -75,6 +75,39 @@ nothing. `npm test` on a fresh clone reports them as skipped, not passed, so the
 visible; it was not in the first version of that file, which reported nine passes for having checked
 nothing.
 
+**Reads now come out of Postgres when you ask them to.** `SPIDERYARN_STORE=postgres npm run dev`
+serves every article, the library, the metadata page and the reader's comments from the database
+instead of from disk; `files` remains the default. The work, and what is still missing, is in
+[postgres-storage-implementation.md](../plans/postgres-storage-implementation.md).
+
+```bash
+npm run db:seed-owner   # the one auth.users row every owner_id points at
+npm run db:import       # data/<slug>/ → Postgres, idempotent
+npm run db:export -- --out /tmp/rollback   # and back out again
+```
+
+| File | What it is |
+|---|---|
+| [`src/store/contracts.ts`](../../src/store/contracts.ts) | the seam — deliberately `src/api.ts`'s surface, function for function |
+| [`src/store/index.ts`](../../src/store/index.ts) | which store is in use. **No fallback lives here**, by design |
+| [`src/store/pg.ts`](../../src/store/pg.ts) · [`pg-comments.ts`](../../src/store/pg-comments.ts) | the Postgres reader and comment store |
+| [`src/store/import.ts`](../../src/store/import.ts) · [`export.ts`](../../src/store/export.ts) | the importer, and the exporter that is the rollback |
+| [`src/owner.ts`](../../src/owner.ts) | who owns a row — the one file the beta gate has to change |
+| [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
+| [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
+
+Three rules that outrank convenience, all learned the expensive way:
+
+- **Never catch a Postgres error and fall back to files.** It hides divergence, in production, where
+  nobody is comparing. A write with no Postgres implementation yet must refuse (501) rather than
+  write a file nothing will read back.
+- **Read through the app's own loaders, not by reopening the file.** The importer read
+  `comments.json` as a `Comment[]` when it is `{"comments": [...]}`, and imported 17 KB of the
+  reader's questions as zero comments while printing a tick.
+- **A skipped test protects nothing, and a *silently* skipped one is worse.** The parity suite's
+  database probe timed out at 2s under load and opted the whole suite out inside a run that still
+  reported a green 1103 passed.
+
 Everything below is still planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —
 is in [postgres-migration.md](../plans/postgres-migration.md). The parts worth knowing before you
 touch anything storage-shaped:

@@ -69,7 +69,11 @@ import {
 } from "./chat.js";
 import { beginRun, deleteRun, finishRun, loadRuns, update as updateRuns } from "./searches.js";
 import { findPassages } from "./search.js";
-import { createComment, deleteComment, loadComments, patchComment } from "./comments.js";
+/* Through the store, so SPIDERYARN_STORE moves comments and articles together.
+   They cannot be split: a comment anchors to a block id, and leaving the
+   questions on disk while the paragraphs they point at come from Postgres puts
+   the two halves in stores nothing keeps in step. */
+import { commentStore } from "./store/index.js";
 import { converse } from "./converse.js";
 import { explain } from "./explain.js";
 import { isSlug, slugFromUrl } from "./ingest.js";
@@ -145,7 +149,7 @@ async function sweepOrphaned(slug: string, comments: Comment[]): Promise<Comment
   // `quiet`, then one line for the batch. Every orphan gets the same patch for
   // the same reason, so a line each would say one thing N times — and N is
   // unbounded while Vercel allows 256 lines for the whole request.
-  for (const orphan of orphans) latest = await patchComment(slug, orphan.id, patch, { quiet: true });
+  for (const orphan of orphans) latest = await commentStore.patch(slug, orphan.id, patch, { quiet: true });
   log("store").warn(
     { slug, orphans: orphans.length },
     `swept ${orphans.length} abandoned comment(s) for ${slug}`,
@@ -177,7 +181,7 @@ async function answer(slug: string, body: unknown): Promise<Comment> {
     throw httpError(400, `start must be a non-negative integer, got ${start}`);
   }
 
-  const comment = await createComment(slug, {
+  const comment = await commentStore.create(slug, {
     blockId,
     quote,
     start,
@@ -200,11 +204,11 @@ async function answer(slug: string, body: unknown): Promise<Comment> {
       searches: result.searches,
       model: result.model,
     };
-    await patchComment(slug, comment.id, patch);
+    await commentStore.patch(slug, comment.id, patch);
     return { ...comment, ...patch };
   } catch (err) {
     const patch = { status: "error" as const, error: (err as Error).message };
-    await patchComment(slug, comment.id, patch);
+    await commentStore.patch(slug, comment.id, patch);
     return { ...comment, ...patch };
   } finally {
     answering.delete(key);
@@ -985,7 +989,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     }
     if (comments && req.method === "GET") {
       const slug = slugPart(comments, 1);
-      send(res, 200, { comments: await sweepOrphaned(slug, await loadComments(slug)) });
+      send(res, 200, { comments: await sweepOrphaned(slug, await commentStore.load(slug)) });
       return true;
     }
     if (comments && req.method === "POST") {
@@ -995,7 +999,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     if (one && req.method === "DELETE") {
       // The slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(one, 1), part(one, 2)];
-      send(res, 200, { comments: await deleteComment(slug, id) });
+      send(res, 200, { comments: await commentStore.remove(slug, id) });
       return true;
     }
     if (chat && req.method === "GET") {

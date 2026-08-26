@@ -43,12 +43,14 @@ Legend: ✅ done · 🔵 in progress · ⬜ not started
 | 3 | Importer | ✅ |
 | 4 | Postgres reader | ✅ |
 | 5 | Parity test: both stores, API-shaped | ✅ |
-| 6 | Exporter (the rollback) | ⬜ |
-| 7 | Reads served from Postgres behind a flag | ⬜ |
-| 8 | Comments, chat, searches, lookups — writes | ⬜ |
-| 9 | Pipeline writes to draft revisions | ⬜ |
-| 10 | Jobs and claiming | ⬜ |
-| 11 | Cutover, docs, browser check, final review | ⬜ |
+| 6 | Exporter (the rollback), round-trip test | ✅ |
+| 7 | Reads served from Postgres behind `SPIDERYARN_STORE` | ✅ |
+| 8 | Artefact manifest test — the guard against the next file | ✅ |
+| 9 | Comments — writes | ✅ |
+| 10 | Chat, searches, glossary lookups — writes | ⬜ |
+| 11 | Pipeline writes to draft revisions (+ carry-forward) | ⬜ **needs coordination** |
+| 12 | Jobs and claiming | ⬜ |
+| 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ |
 
 ### Step 0 — done
 
@@ -165,6 +167,36 @@ which already know each file's real shape and already return `[]` for a missing 
 that reads files its own way can disagree with the reader about what is on disk, and that is the one
 thing an importer must never do.** See [silent-success.md](../reusable/silent-success.md).
 
+## How to run it
+
+```bash
+npm run db:start          # Docker + the Supabase stack
+npm run db:migrate        # apply drizzle/
+npm run db:seed-owner     # the one auth.users row every owner_id points at
+npm run db:import         # data/<slug>/ → Postgres, idempotent
+SPIDERYARN_STORE=postgres npm run dev
+```
+
+And back out again, which is the point of having an exporter at all:
+
+```bash
+npm run db:export -- --out /tmp/rollback     # --out is required, no default
+```
+
+## Verified, not assumed
+
+- **1131 tests pass**, including 19 parity assertions comparing the API-shaped `Article` from both
+  stores for all three real articles, and 38 round-trip assertions comparing every artefact after
+  `data/` → Postgres → `data/`.
+- **Both new suites were checked by breaking them.** Dropping `ORDER BY ordinal` from the Postgres
+  reader fails 10 of the 19 parity assertions; adding a `highlights.json` nobody has a home for
+  fails the manifest test with a message naming the file.
+- **The reading view was driven in a real browser** against `SPIDERYARN_STORE=postgres`: the library
+  lists all three articles with bylines, reading times, blurbs, word counts and comment counts; the
+  reading view renders prose in document order with its real block ids, tree labels and arc; the
+  360-block article renders; there are no console errors. Every request across the session was 200,
+  with the one deliberate 400 (traversal) and 404 (unknown slug) and **zero 5xx**.
+
 ## What is not done
 
 - **GPT Sol never reviewed this.** The Codex workspace is out of credits — confirmed on
@@ -180,4 +212,22 @@ thing an importer must never do.** See [silent-success.md](../reusable/silent-su
   stays computable exactly as today. This must land before step 9, and note that the parity test
   will *not* catch it, because parity is checked without a re-extraction in between.
 - **The `example` fixture is not in Postgres**, so the library differs by exactly one entry. The
-  parity test asserts that it is the only difference rather than excusing the gap.
+  parity test asserts that it is the only difference rather than excusing the gap. Deciding this is
+  [open question 8](postgres-migration.md#open-questions); a `fixture boolean` column on `articles`
+  plus importing `example/` is the obvious answer and was not taken unilaterally.
+- **The pipeline still writes files, and moving it needs coordination rather than nerve.** This is
+  the one remaining wide diff: `PipelineStep.outputs(ctx): string[]` across eight stage modules,
+  which other agents are actively editing right now. [AGENTS.md](../../AGENTS.md) says to stay
+  inside your stage and talk to other stages through the artefacts on disk — so rewriting all eight
+  at 3am, while their owners are mid-change, is the wrong way to do it even though it would compile.
+  Land the artefact-store seam inside each stage module first, still file-backed, with the stage's
+  owner; then the swap is one adapter rather than eight edited stages.
+- **Chat, searches and glossary lookups have tables and an importer but no Postgres store**, so in
+  `postgres` mode their writes still go to files. The two glossary writes refuse loudly (501); the
+  chat and search writes do not yet, and should be given the same treatment when their stores land.
+- **Jobs are still a p-queue and an in-memory `Map`.** The table, the fencing columns and the
+  singleton `queue_state` guard all exist and nothing uses them.
+- **One flaky failure, seen once and not reproduced.** A single test failed in a full run while the
+  dev server and a browser session were both hammering the same local database; four subsequent
+  runs were clean and the failure was not captured. The plausible cause is two test files calling
+  `importArticle` for the same slugs concurrently. Recorded rather than declared fixed.

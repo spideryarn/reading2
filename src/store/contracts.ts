@@ -33,6 +33,7 @@
  * divergence this migration is meant to make impossible.
  */
 
+import type { NewComment } from "../comments.js";
 import type {
   Article,
   ArticleMetadata,
@@ -107,18 +108,37 @@ export interface CommentStore {
   load(slug: string): Promise<Comment[]>;
 
   /**
-   * Written with `status: "pending"` BEFORE the model is called, so a crash is
-   * visible rather than silent.
+   * Store a comment as `pending`, **before** the model is called, so a crash
+   * leaves a question that never got answered rather than a selection that
+   * quietly evaporated.
    *
-   * Returns the one comment; `finish` and `remove` return the whole list. That
-   * asymmetry is inherited from `src/comments.ts` rather than tidied, because
-   * tidying it would mean changing routes.ts on the same day as the store, and
-   * then a bug afterwards could be either.
+   * **Idempotent on `input.id`.** The client mints the id so the dialog and
+   * `?note=` have a real one from the first frame; a retry sends the id it
+   * already has, and that must RESET the existing comment rather than append a
+   * second one. A second row would leave the failed original behind, drawing a
+   * second mark over the same words that nothing can clear — and would make a
+   * double-clicked POST a way to spend two model calls and orphan one.
+   *
+   * Returns the one comment. `patch` and `remove` return the whole list. That
+   * asymmetry is inherited from src/comments.ts rather than tidied: changing it
+   * would mean editing routes.ts on the same day as the store, and then a bug
+   * afterwards could be either.
    */
-  begin(slug: string, comment: Comment): Promise<Comment>;
+  create(slug: string, input: NewComment): Promise<Comment>;
 
-  /** Fill in the answer, or the error. Must not overwrite a newer attempt. */
-  finish(slug: string, id: string, patch: Partial<Comment>): Promise<Comment[]>;
+  /**
+   * Fill in the answer, or the error.
+   *
+   * `quiet` suppresses the per-comment log line, for the sweep that patches
+   * every orphan with the same reason — one line each would say one thing N
+   * times, and N is unbounded while Vercel allows 256 lines per request.
+   */
+  patch(
+    slug: string,
+    id: string,
+    patch: Partial<Comment>,
+    opts?: { quiet?: boolean },
+  ): Promise<Comment[]>;
 
   remove(slug: string, id: string): Promise<Comment[]>;
 

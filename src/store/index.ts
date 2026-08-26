@@ -30,9 +30,10 @@
 
 import { loadEnvLocal } from "../env.js";
 import { log } from "../log.js";
-import type { ArticleReader, GlossaryStore } from "./contracts.js";
+import type { ArticleReader, CommentStore, GlossaryStore } from "./contracts.js";
 import { fsArticleReader, fsCommentStore, fsGlossaryStore } from "./fs.js";
 import { pgArticleReader } from "./pg.js";
+import { pgCommentStore } from "./pg-comments.js";
 
 loadEnvLocal();
 
@@ -78,5 +79,13 @@ const glossary: GlossaryStore =
 export const lookUpTerm = glossary.lookUpTerm;
 export const deleteGlossary = glossary.deleteGlossary;
 
-/** Comments are still filesystem-backed in both modes — step 8, not yet done. */
-export const commentStore = fsCommentStore;
+/**
+ * Comments follow the same flag as the article reads, and they have to.
+ *
+ * A comment anchors to a block id, and in `postgres` mode the article those
+ * blocks came from is a set of rows. Leaving comments on the filesystem while
+ * the article came from Postgres would mean the reader's questions and the
+ * paragraphs they point at living in two stores that nothing keeps in step.
+ */
+export const commentStore: CommentStore =
+  STORE === "postgres" ? pgCommentStore : fsCommentStore;

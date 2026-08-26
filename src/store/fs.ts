@@ -28,14 +28,7 @@ import {
   loadTweets,
   lookUpTerm,
 } from "../api.js";
-import {
-  createComment,
-  deleteComment,
-  loadComments,
-  type NewComment,
-  patchComment,
-} from "../comments.js";
-import type { Comment } from "../types.js";
+import { createComment, deleteComment, loadComments, patchComment } from "../comments.js";
 import type { ArticleReader, CommentStore, GlossaryStore } from "./contracts.js";
 
 export const fsArticleReader: ArticleReader = {
@@ -53,36 +46,14 @@ export const fsGlossaryStore: GlossaryStore = {
 };
 
 /**
- * Comments, with one adaptation.
- *
- * `createComment` takes a `NewComment` — the reader's half — and mints the id,
- * the timestamp and `status: "pending"` itself. The contract takes a whole
- * `Comment` instead, because the Postgres version needs the id to be
- * **client-minted**: that is what makes creating one idempotent on retry, which
- * matters the moment there is more than one server process. So this narrows a
- * `Comment` back down to the `NewComment` the existing function wants, and the
- * id it mints is discarded in favour of the caller's.
- *
- * That is a real (small) divergence between the two stores, and it is written
- * down here rather than smoothed over, because a parity test that compares ids
- * will see it.
+ * Comments, with no adaptation at all — the contract is `src/comments.ts`'s own
+ * surface, so every method is the function itself. `count` is the one addition,
+ * and it exists because the library needs a number without the comments.
  */
 export const fsCommentStore: CommentStore = {
   load: loadComments,
-
-  async begin(slug: string, comment: Comment): Promise<Comment> {
-    const draft: NewComment = {
-      blockId: comment.blockId,
-      quote: comment.quote,
-      start: comment.start,
-    };
-    return createComment(slug, draft);
-  },
-
-  async finish(slug: string, id: string, patch: Partial<Comment>): Promise<Comment[]> {
-    return patchComment(slug, id, patch);
-  },
-
+  create: createComment,
+  patch: patchComment,
   remove: deleteComment,
 
   async count(slug: string): Promise<number> {
