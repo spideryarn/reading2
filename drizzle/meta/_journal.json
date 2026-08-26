@@ -57,6 +57,13 @@
       "when": 1787747856697,
       "tag": "0007_chat_message_tools",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787756959853,
+      "tag": "0008_pdf_provenance",
+      "breakpoints": true
     }
   ]
 }

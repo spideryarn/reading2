@@ -47,6 +47,7 @@ import {
   boolean,
   check,
   customType,
+  doublePrecision,
   foreignKey,
   index,
   integer,
@@ -208,6 +209,38 @@ export const articleRevisions = spideryarn.table(
     rawBytes: bytea("raw_bytes"),
     rawContentType: text("raw_content_type"),
     rawEncoding: text("raw_encoding"),
+    /**
+     * SHA-256 of the fetched bytes. Null for everything fetched before
+     * `raw.json` existed, and null in a *backfilled* manifest — where only the
+     * decoded string survives, and hashing that would answer a different
+     * question convincingly. docs/project/fetching.md § `RawManifest`.
+     */
+    rawSha256: text("raw_sha256"),
+
+    /**
+     * **How this revision was extracted, when the answer is not "Readability".**
+     *
+     * All six are null for a web page and that is the common case — they exist
+     * because a PDF is read by a *model*, and a reader is owed the difference.
+     * docs/plans/pdf-ingestion.md.
+     *
+     * `recall` and `pagesChecked` belong together and must be read together: a
+     * mean over one page of seventeen is arithmetically fine and means nothing,
+     * which is why a scan records no recall at all rather than the 1.0 its one
+     * checkable page would otherwise average to.
+     */
+    source: text("source"),
+    extractMethod: text("extract_method"),
+    pages: integer("pages"),
+    /**
+     * A scan: no text layer existed, so nothing checked the transcription.
+     * Deliberately not `verified` with a false value — two machines agreeing
+     * would still not be verification, and "verified" is the word a reader
+     * would rely on.
+     */
+    unverified: boolean("unverified"),
+    recall: doublePrecision("recall"),
+    pagesChecked: integer("pages_checked"),
 
     extractedHtml: text("extracted_html"),
     /** Post-sanitiser, post-id-stamping. docs/project/security.md — stage 3 owns this. */

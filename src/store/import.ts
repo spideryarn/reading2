@@ -437,6 +437,17 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       // see the header, and `recovered` above for why a backfilled one does not count.
       rawContentType: recovered?.contentType ?? null,
       rawEncoding: recovered?.encoding ?? null,
+      rawSha256: recovered?.sha256 ?? null,
+      /* PDF provenance — all null for a web page, which is most of them.
+         `meta` rather than the manifest: the manifest says what was FETCHED,
+         these say how it was READ, and only stage 2 knows that.
+         docs/plans/pdf-ingestion.md. */
+      source: meta?.source ?? null,
+      extractMethod: meta?.method ?? null,
+      pages: meta?.pages ?? null,
+      unverified: meta?.unverified ?? null,
+      recall: meta?.recall ?? null,
+      pagesChecked: meta?.pagesChecked ?? null,
       // Genuinely gone: stage 3 overwrites stage 2's file at the same path.
       extractedHtml: null,
       stampedHtml: stampedHtml ?? null,

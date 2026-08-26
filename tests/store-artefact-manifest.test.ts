@@ -54,6 +54,14 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 const HOMES: Record<string, string> = {
   "raw.html": "article_revisions.raw_bytes",
+  /* A PDF, and the record of which of the two it is. Stage 1 writes exactly one
+     of `raw.html` / `raw.pdf` plus `raw.json` naming it — a refresh can leave
+     both raw files there, and "whichever exists" then picks the stale one
+     silently (docs/plans/pdf-ingestion.md). The bytes go in the same column
+     either way; the manifest's fields are what the pipeline used to throw away,
+     and `raw_content_type` and `raw_encoding` already exist for them. */
+  "raw.pdf": "article_revisions.raw_bytes — the same column; raw.json says which arrived",
+  "raw.json": "article_revisions.{raw_content_type,raw_encoding,requested_url,final_url,fetched_at} + a raw_sha256 column that does not exist yet",
   "meta.json": "article_revisions.{title,byline,site_name,lang,excerpt,note,final_url,fetched_at}",
   "blocks.json": "revision_blocks (+ block_identities)",
   "tree.json": "article_revisions.tree",
@@ -84,6 +92,19 @@ const HOMES: Record<string, string> = {
  */
 const NOT_MIGRATED: Record<string, string> = {
   ".DS_Store": "macOS. Not ours.",
+  /* A cache, and the only one an article directory holds. One file per page
+     range, keyed on the PDF's bytes + the prompt version + the reader, holding
+     the model's raw answer so that fixing the renderer or the checker costs
+     nothing (docs/plans/pdf-ingestion.md). Deleting it costs a re-transcription
+     and nothing else, and its key is derivable from what IS migrated — so it is
+     a decision not to migrate it, not an omission.
+
+     The one thing that decision gives up, and it is worth knowing before
+     agreeing with it: a witness pass built later for scans would be re-run over
+     these cached responses rather than paid for again. That is cheap to lose
+     today and would not be if the cache were the only copy of an expensive
+     reading of a document nobody can re-fetch. */
+  "pdf-chunks": "a cache, not an artefact — the model's raw answer per page range, replayable",
 };
 
 describe("the artefact manifest", () => {

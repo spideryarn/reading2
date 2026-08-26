@@ -43,6 +43,7 @@ import {
   revisionBlocks,
   searchRuns,
 } from "../db/schema.js";
+import { blocksArtefact } from "../blocks.js";
 import { log } from "../log.js";
 import type { Block, ChatMessage, Comment, SearchRun } from "../types.js";
 
@@ -130,6 +131,13 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
     fetchedAt: revision.fetchedAt?.toISOString() ?? null,
     excerpt: revision.excerpt,
     note: revision.note,
+    source: revision.source,
+    method: revision.extractMethod,
+    pages: revision.pages,
+    rawSha256: revision.rawSha256,
+    unverified: revision.unverified,
+    recall: revision.recall,
+    pagesChecked: revision.pagesChecked,
   });
   if (revision.title) await put("meta.json", meta);
 
@@ -153,7 +161,11 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
     gistable: row.gistable,
     ...(row.note === null ? {} : { note: row.note }),
   }));
-  if (blocks.length) await put("blocks.json", { blocks });
+  /* `blocksArtefact`, for the same reason src/toc.ts uses it: the export is a
+     rollback, and a rollback that writes artefacts the pipeline would not have
+     written is not one. Without the stamp every exported article reads back
+     stale. */
+  if (blocks.length) await put("blocks.json", blocksArtefact(blocks));
 
   if (revision.tree) await put("tree.json", revision.tree);
   if (revision.arc) await put("arc.json", revision.arc);
