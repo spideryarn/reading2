@@ -43,6 +43,11 @@ Then authenticate — the calling agent can't do this for you:
   **against** `OPENAI_API_KEY` as a job-level env var in repos that run untrusted code; `codex exec`
   doesn't read it anyway.
 
+`CODEX_API_KEY` **takes precedence over a logged-in `~/.codex/auth.json`** rather than being ignored
+because one exists — verified 2026-08-26 on 0.149.1, where a subscription that was out of credits ran
+fine as soon as the key was set for the one command. So the two are a fallback pair, and a
+credits-exhausted subscription doesn't have to stop a run.
+
 Verify with a cheap round trip:
 
 ```bash
@@ -52,7 +57,7 @@ npx tsx scripts/run-codex.ts --model gpt-5.6-luna --effort low --prompt "Reply w
 ## Quick start
 
 ```bash
-# read-only investigation — the answer is left in a file whose path is printed
+# read-only investigation — the answer is printed, the activity log is not
 npx tsx scripts/run-codex.ts --prompt "Summarise how src/extract.ts assigns block ids"
 
 # delegated implementation — writes are an explicit opt-in; commit or stash first
@@ -62,17 +67,44 @@ npx tsx scripts/run-codex.ts --sandbox workspace-write \
 
 Flags: `--model` · `--prompt` / `--prompt-file` · `--sandbox` (default `read-only`) · `--effort`
 (default `high`) · `--repo-dir` · `--timeout-minutes` (default 30) · `--output` · `--activity-log` ·
-`--stream` · `--print` · `--dry-run`.
+`--stream` · `--print` · `--quiet` · `--max-print-chars` (default 20,000) · `--dry-run`.
 
-The script is quiet by default: it prints the output path and a status line, **not** Codex's answer.
-Read the output file deliberately afterwards. That is the point — see
-[context flooding](#3-context-flooding) below.
+### What reaches the caller's context
+
+The split is the whole reason the wrapper exists, so it is worth stating exactly:
+
+| | Where it goes |
+|---|---|
+| Codex's hidden reasoning | nowhere — it never leaves OpenAI |
+| The **activity log** (every command Codex ran, plus that command's full stdout) | **a file**, whose path is printed |
+| The **final answer** | **stdout**, capped at `--max-print-chars`, and a file |
+| Status (model, effort, sandbox, the two paths) | stdout, two or three lines |
+
+So a caller gets the answer and roughly a hundred tokens of overhead, and the hundreds of kilobytes
+of file dumps and grep hits stay on disk where you can go and read them if you want to. Measured on
+a stand-in run: **488 KB of activity log → 354 bytes on stdout**, and that is asserted in
+[`tests/run-codex.test.ts`](../../tests/run-codex.test.ts) rather than left as a claim.
+
+A very long answer is truncated in the middle — keeping the opening *and* the tail, since a reviewer
+puts the verdict last — with a line saying how much was cut and where the full text is. `--print`
+lifts the cap; `--quiet` prints paths alone; `--stream` sends everything to the terminal for a human
+to watch and is wrong for an orchestrated run (and is therefore rejected in combination with either
+of the other two, since neither can be honoured once both streams are inherited).
+
+**Safe by default, not by construction.** Unlike the stdin and timeout guarantees, this one has two
+deliberate ways out — `--stream` and `--print` — and both are unbounded. Everything else is capped,
+including things that aren't the answer: an answer file over 4 MiB is excerpted with two bounded
+reads rather than slurped (the `-o` file had no equivalent of the activity log's 64 MiB capture cap,
+and codex's final message being small *in practice* is exactly what would have kept that untested),
+and `--dry-run` caps the prompt it echoes, which with `--prompt-file` is unbounded text too.
 
 ## Why a wrapper
 
 Three failure modes are real, and all three are the kind a documented gotcha doesn't reliably
-prevent — an agent that has read the warning still forgets it. The wrapper makes them impossible by
-construction, because there is no unsafe knob to forget.
+prevent — an agent that has read the warning still forgets it. The first two the wrapper makes
+impossible by construction: there is no knob for them at all. The third is safe by default with two
+named escape hatches, which is the most you can do for a thing whose whole point is sometimes to be
+watched by a human.
 
 ### 1. The stdin hang
 
@@ -110,9 +142,10 @@ streams an **activity log**: every command it ran, together with that command's 
 contents, grep hits, build output. A high-effort review reading dozens of files emits tens of
 thousands of tokens of it, and an orchestrator's subprocess call swallows all of it into context.
 
-The wrapper captures that log to a file and prints only its path, so the caller ingests three lines.
-The final answer goes to Codex's `-o` file, so it isn't double-counted either. Pass `--stream` when
-a *human* is watching a terminal; leave it off for orchestrated runs.
+The wrapper captures that log to a file and prints only its path. The answer itself *is* printed —
+that's what you asked for, and making the caller shell out a second time to `cat` it buys nothing —
+but capped, so a runaway answer can't do what the activity log would have. Pass `--stream` when a
+*human* is watching a terminal; leave it off for orchestrated runs.
 
 If you ever do run raw `codex exec` from an orchestrator, redirect it
 (`codex exec … > /tmp/codex.log 2>&1`) and read only the `-o` file.
@@ -193,7 +226,9 @@ other — check `~/.codex/models_cache.json` or just try it, rather than trustin
 
 Reasoning effort is the config key `model_reasoning_effort`, values
 `minimal | low | medium | high | xhigh`. There is **no CLI flag** — it's set with `-c`, which the
-wrapper does for you via `--effort`. At `high`/`xhigh` a substantial task can run 20–40 minutes, so
+wrapper does for you via `--effort`. A misspelt value is **not** an error: `-c
+model_reasoning_effort=hgih` parses as a perfectly good TOML string and the run quietly proceeds at
+the model's own default effort, so the wrapper validates the value itself before spawning. At `high`/`xhigh` a substantial task can run 20–40 minutes, so
 expect long silences. A trivial `low` run round-trips in about 10 seconds.
 
 Defaults for the whole machine go in `~/.codex/config.toml`, per-project ones in
@@ -242,6 +277,20 @@ Flags worth knowing (verified on 0.146.0):
 - `codex exec` has **no** `-a` / `--ask-for-approval`; that's interactive-mode only. Control it with
   `-c approval_policy=…` as above.
 
+A note on the truncation itself, since three of its bugs were the kind that report success. It splits
+on **code points**, not UTF-16 code units: a `slice` on code units lands between the halves of a
+surrogate pair and emits a lone surrogate, and the "characters omitted" count is then a count of
+something else. And the tail is taken with an explicit index rather than `slice(-half)`, because at
+a cap of 1 or 2 `half` rounds down to zero and `slice(-0)` is `slice(0)` — the whole answer,
+printed under a banner claiming it had been cut. Those are the two smallest settings anyone reaches
+for when checking by hand that the cap works.
+
+The third only appeared in the *fix* for the large-file case. A byte span has to be four times the
+character cap, since that is UTF-8's worst case, so the excerpt overshoots on ASCII; the first
+version handled that by passing it through the truncator again with `maxChars * 2`, which quietly
+doubled every cap the caller asked for and restored the 1-and-2 bug by another route. The excerpt is
+now trimmed to the cap directly. Caught by GPT Sol on a second review pass, not by the first.
+
 There is also a `codex exec review` subcommand that runs a code review against the current repo, and
 `codex exec resume --last "…"` / `resume <SESSION_ID>` for multi-turn (sessions persist as JSONL
 under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` event).
@@ -271,6 +320,16 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   load-bearing claim ("X is already implemented", "this is safe") without a second check.
 - **Cost.** A runaway high-effort run burns quota fast. The wrapper caps any single run at
   `--timeout-minutes`.
+- **Running out of credit looks like a generic non-zero exit.** `codex exec` exits 1 and the wrapper
+  reports `codex exec exited 1`; the actual reason (`Your workspace is out of credits`) is in the
+  activity log, which is why the failure message names its path. Read it before assuming the wrapper
+  or the prompt is at fault.
+- **Codex cites code as absolute `/Users/…/file.ts:148`.** Pasting a review into a repo doc
+  verbatim therefore imports a pile of machine-specific paths, which a link checker will flag and a
+  reader on another machine can't follow. Rewrite them repo-relative on the way in.
+- **Don't export `OPENAI_API_KEY`.** `codex exec` doesn't read it (it wants `CODEX_API_KEY`), so it
+  buys nothing, and an exported secret lands in the environment of every subprocess an agent
+  spawns — including its own transcript.
 
 ## Sources
 
