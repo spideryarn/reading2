@@ -48,8 +48,38 @@
  * light-mode idiom that has no dark translation — depth here comes from
  * --card being *lighter* than --page, per styles.css), the difficulty badge
  * (docs/project/original-version/difficulty-and-reading-time.md), book pages,
- * per-file sizes and mtimes, and the privacy toggle and owner email, which
- * describe an app with accounts.
+ * and the privacy toggle and owner email, which describe an app with accounts.
+ * Per-file sizes and mtimes were on that list too, until 2026-08-27 — see below.
+ *
+ * ## The third pass, 2026-08-27: shut the long section, and say when
+ *
+ * Greg:
+ *
+ * > In the "Metadata" section, make "What we did to it" collapsible and
+ * > default-collapsed and add extra metadata (e.g. exact date times), perhaps
+ * > in tooltips.
+ *
+ * Three changes, and the first two are the same change seen from either end.
+ *
+ *  - **"What we did to it" is shut when the page opens.** Nine rows of file
+ *    paths is the answer to a question most visits are not asking, and it was
+ *    pushing everything about *this reader* — their purpose, their questions,
+ *    where they left off — below the fold. Shut, it costs one line; open, it is
+ *    exactly what it was. The heading keeps the two facts a shut section would
+ *    otherwise take away: how many stages have run, and when any of them last
+ *    wrote.
+ *  - **Every stage says when it last wrote, with the exact stamp on hover** —
+ *    `Wrote`, below, and `ranAt`/`bytes` on `StageState`. This reverses a
+ *    decision two paragraphs up, and the reversal is narrower than it looks:
+ *    what was wrong about mtimes was the *verdict* drawn from them, never the
+ *    number. Nothing compares two of these. The staleness question is exactly
+ *    as unanswered as it was, and a person reading "toc ran 3 days ago, arc ran
+ *    in March" can draw the conclusion this page still refuses to draw for them.
+ *  - **Where a PDF came from** — `CameFrom`, below. Their Document Information
+ *    had a "file type" row and ours never took it, because until 2026-08-26
+ *    every article was a web page. Now some are read by a model instead
+ *    (docs/project/content-extraction.md), and how well that reading was
+ *    checked is a fact about trust that nothing else on this page carries.
  *
  * ## What it deliberately does not say
  *
@@ -79,25 +109,31 @@ import { useQueryState } from "nuqs";
 import {
   ArrowLeft,
   Blocks,
+  Bot,
   BookA,
   Lightbulb,
   BookOpen,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Download,
   ExternalLink,
   FileText,
+  FileType,
+  Fingerprint,
   Layers,
   List,
   ListOrdered,
   ListTree,
   MessageCircle,
   RefreshCw,
+  ScanLine,
   Target,
   Trash2,
   TriangleAlert,
   Waypoints,
 } from "lucide-react";
-import type { Article, ArticleMetadata, StageState, StepName } from "../types.js";
+import type { Article, ArticleMetadata, Meta, StageState, StepName } from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
 import { Dock } from "./Dock.js";
@@ -173,7 +209,7 @@ const SOON: { key: string; label: string; icon: ComponentType<{ size?: number }>
     icon: Trash2,
     blurb: "Remove the article and everything the pipeline wrote for it.",
     learned:
-      "Theirs had this button. Ours would be deleting the only copy of the block ids that every question is addressed by, and there is nothing here to undo it with.",
+      "Theirs had this button, and the shelf now has half of it: Delete there archives, and the Undo strip beside it is the confirmation (Library.tsx). What is missing here is that strip — a page you can navigate away from is a bad place to put the only chance to change your mind, and a real delete would be taking the only copy of the block ids that every question is addressed by.",
   },
 ];
 
@@ -289,6 +325,29 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
 
   const backHref = readHref(slug, carriedSearch(location.search), "article");
   const facts = [meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
+
+  /**
+   * The one line that has to survive the section being shut.
+   *
+   * "What we did to it" is closed by default — Greg, 2026-08-27 — because nine
+   * rows of file paths is the answer to a question most visits are not asking,
+   * and it pushed everything about *this reader* below the fold. So the heading
+   * carries the two facts a shut section would otherwise take away: how much of
+   * the pipeline has run, and when any of it last did.
+   *
+   * The newest stamp across every stage, not the last stage's: stages run in
+   * any order and re-run one at a time, so "when did anything happen to this
+   * article" is a max rather than a lookup.
+   */
+  const pipelineLine = useMemo(() => {
+    if (!provenance) return null;
+    const ran = provenance.stages.filter((s) => s.done).length;
+    const stamps = provenance.stages
+      .map((s) => (s.ranAt ? Date.parse(s.ranAt) : Number.NaN))
+      .filter((t) => !Number.isNaN(t));
+    const newest = stamps.length ? Math.max(...stamps) : null;
+    return `${ran} of ${provenance.stages.length} stages${newest === null ? "" : ` · last wrote ${ago(new Date(newest))}`}`;
+  }, [provenance]);
 
   return (
     <>
@@ -443,12 +502,31 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
           </Section>
         )}
 
+        {/* ------------------------------------------ 3b. where it came from --
+            The one field of their Document Information we never took, because
+            when this page was built the answer was the same for every article.
+            It is not any more: since 2026-08-26 a PDF is read by a
+            model rather than by Readability
+            (docs/project/content-extraction.md), and `CameFrom` says what that
+            reading actually did. Nothing for a web page — see the component. */}
+        <CameFrom meta={meta} />
+
         {/* ------------------------------------------ 4. what we did to it --
             Which stages have run, and the two that carry a model's name. A
             stage counts as run only when *all* of its outputs are on disk —
             src/pipeline.ts owns that rule and this page borrows it rather than
             restating it. */}
-        <Section label="What we did to it">
+        {/* `collapsible` only while there is nothing wrong. The one thing this
+            section holds that the reader has to see is the error when the
+            metadata request fails — and a shut section is exactly where it
+            would have gone. So a failure makes the section ordinary: open, with
+            the error at the top of it. Found by a cross-model review,
+            2026-08-27; the first version hid it. */}
+        <Section
+          label="What we did to it"
+          collapsible={!provenanceError}
+          aside={provenanceError ? null : pipelineLine}
+        >
           {provenanceError && (
             <p
               className={`${CARD} tw:m-0 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
@@ -464,21 +542,26 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
             </p>
           )}
           {provenance && (
-            <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
-              {provenance.stages.map((stage) => (
-                <StageRow
-                  key={stage.step}
-                  stage={stage}
-                  generator={
-                    stage.step === "toc"
-                      ? `${tree.generator} · ${tree.version}`
-                      : stage.step === "arc" && arc
-                        ? `${arc.generator} · ${arc.version}`
-                        : undefined
-                  }
-                />
-              ))}
-            </div>
+            /* One group over the nine rows, same as the stat cards: once one
+               row's tooltip is open, running down the column is instant rather
+               than nine separate waits. */
+            <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+              <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+                {provenance.stages.map((stage) => (
+                  <StageRow
+                    key={stage.step}
+                    stage={stage}
+                    generator={
+                      stage.step === "toc"
+                        ? `${tree.generator} · ${tree.version}`
+                        : stage.step === "arc" && arc
+                          ? `${arc.generator} · ${arc.version}`
+                          : undefined
+                    }
+                  />
+                ))}
+              </div>
+            </TooltipGroup>
           )}
         </Section>
 
@@ -532,35 +615,18 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
                   Edit on your profile →
                 </Link>
               </div>
-              <p className="tw:mt-1 tw:mb-0 tw:font-prose tw:text-sm tw:text-muted-foreground">
-                {provenance?.profile ? (
-                  provenance.profile
-                ) : (
-                  <span className="tw:text-ink-faint">
-                    You haven't said anything about yourself yet. Everything is written for a
-                    reader we know nothing about.
-                  </span>
-                )}
-              </p>
+              <AboutYou profile={provenance?.profile ?? null} failed={Boolean(provenanceError)} />
             </div>
           </div>
 
           <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
             <Row icon={MessageCircle} label="Questions asked">
-              {provenance ? (
-                provenance.comments > 0 ? (
-                  <Link
-                    href={readHref(slug, withPanel(carriedSearch(location.search)), "article")}
-                    className="tw:text-highlight"
-                  >
-                    {provenance.comments} question{provenance.comments === 1 ? "" : "s"}
-                  </Link>
-                ) : (
-                  <span className="tw:text-muted-foreground">None yet</span>
-                )
-              ) : (
-                <span className="tw:text-muted-foreground">{slow ? "Counting…" : ""}</span>
-              )}
+              <Questions
+                count={provenance?.comments ?? null}
+                failed={Boolean(provenanceError)}
+                slow={slow}
+                href={readHref(slug, withPanel(carriedSearch(location.search)), "article")}
+              />
             </Row>
             <Row icon={Target} label="Where you left off">
               {lastRead ? (
@@ -631,6 +697,166 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
 }
 
 /**
+ * The global half of the reader profile, shown rather than edited.
+ *
+ * **The empty state is a claim about the reader, so it may only be made when we
+ * know it is true.** `provenance` is null both before the request lands and
+ * after it fails, and the first version said "You haven't said anything about
+ * yourself yet" in the second case — stating as a fact about a person something
+ * the failed request had no way to establish. Found by a cross-model review,
+ * 2026-08-27.
+ */
+function AboutYou({ profile, failed }: { profile: string | null; failed: boolean }) {
+  return (
+    <p className="tw:mt-1 tw:mb-0 tw:font-prose tw:text-sm tw:text-muted-foreground">
+      {profile ? (
+        profile
+      ) : failed ? (
+        <span className="tw:text-ink-faint">We couldn't read your profile just now.</span>
+      ) : (
+        <span className="tw:text-ink-faint">
+          You haven't said anything about yourself yet. Everything is written for a reader we know
+          nothing about.
+        </span>
+      )}
+    </p>
+  );
+}
+
+/**
+ * How many questions have been asked, linking back to where they are.
+ *
+ * `null` is "not answered yet", and it has two causes that must not read the
+ * same: still loading, and failed. This said "Counting…" forever in the second
+ * case — a page insisting it is working on something it has already given up
+ * on. The error itself is spelled out in the section above; this only has to
+ * stop claiming to be busy.
+ */
+function Questions({
+  count,
+  failed,
+  slow,
+  href,
+}: {
+  count: number | null;
+  failed: boolean;
+  slow: boolean;
+  href: string;
+}) {
+  if (count === null) {
+    return (
+      <span className="tw:text-muted-foreground">
+        {failed ? "Couldn't be counted" : slow ? "Counting…" : ""}
+      </span>
+    );
+  }
+  if (count === 0) return <span className="tw:text-muted-foreground">None yet</span>;
+  // A link, because a question is worth opening: clicking one scrolls to the
+  // passage it is about.
+  return (
+    <Link href={href} className="tw:text-highlight">
+      {count} question{count === 1 ? "" : "s"}
+    </Link>
+  );
+}
+
+/**
+ * A PDF's provenance: what it was made from, by what, and how well that was checked.
+ *
+ * **Renders nothing for a web page**, deliberately. Their Document Information
+ * had a "file type" row and ours never took it, because on the day this page
+ * was built every answer was the same. A web page's section here would be one
+ * row saying "a web page" under a URL that already said so, and a section that
+ * exists to say nothing is worse than its absence.
+ *
+ * The masthead already tells the *reader* the shape of this, in a sentence,
+ * because they are entitled to know before they trust a line of it
+ * (Masthead.tsx). This is the same fact with the numbers attached, on the page
+ * you open when you want numbers. docs/plans/pdf-ingestion.md.
+ */
+function CameFrom({ meta }: { meta: Meta }) {
+  if (meta.source !== "pdf") return null;
+  return (
+    <Section label="Where it came from">
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
+          <Row icon={FileType} label="Made from">
+            A PDF{meta.pages ? `, ${meta.pages} page${meta.pages === 1 ? "" : "s"}` : ""}
+          </Row>
+          {meta.method && (
+            <Row icon={Bot} label="Transcribed by">
+              <span className="tw:font-mono tw:text-xs tw:break-all">{meta.method}</span>
+            </Row>
+          )}
+          <Row icon={ScanLine} label="Checked">
+            {meta.unverified ? (
+              /* Not a number, because there is no number: a scan has no
+                 text layer, so nothing compared anything. The sentence is
+                 the honest form and a "0%" would be a lie in the other
+                 direction. docs/plans/pdf-ingestion.md § A scan with no
+                 text layer. */
+              <span>Nothing checked it — a scan, with no text in the file to check against</span>
+            ) : meta.recall === undefined ? (
+              <span>Not recorded</span>
+            ) : (
+              <Tooltip
+                placement="top"
+                content={
+                  <Note>
+                    The share of the words in the PDF's own text layer that turned up in the
+                    transcription, averaged over the pages that had one. Read it with the page
+                    count beside it, always: a mean over one page of seventeen is arithmetically
+                    fine and means nothing.
+                  </Note>
+                }
+              >
+                <button
+                  type="button"
+                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+                >
+                  {/* The page count only when there is one. `?? 0` on a
+                      meta.json written before `pages` existed produces "on 3 of
+                      0 pages", and a nonsense denominator undermines the number
+                      standing next to it. */}
+                  {Math.round(meta.recall * 100)}% of the words
+                  {meta.pages ? `, on ${meta.pagesChecked ?? 0} of ${meta.pages} pages` : ""}
+                </button>
+              </Tooltip>
+            )}
+          </Row>
+          {meta.rawSha256 && (
+            <Row icon={Fingerprint} label="Fingerprint">
+              <Tooltip
+                placement="top"
+                content={
+                  <Note>
+                    SHA-256 of the PDF exactly as we fetched it, so “is this the same document?”
+                    has an answer that does not depend on its filename or its URL.
+                    <br />
+                    <span className="tw:font-mono tw:break-all">{meta.rawSha256}</span>
+                  </Note>
+                }
+              >
+                {/* Twelve characters is enough to recognise one and far too
+                    few to compare two, which is what the tooltip is for — and
+                    since the other 52 are only in the tooltip, the trigger has
+                    to be reachable by keyboard. */}
+                <button
+                  type="button"
+                  className="tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:font-mono tw:text-xs tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+                >
+                  {meta.rawSha256.slice(0, 12)}…
+                </button>
+              </Tooltip>
+            </Row>
+          )}
+        </div>
+      </TooltipGroup>
+    </Section>
+  );
+}
+
+/**
  * One section: a small accent bar, an uppercase label, and whatever goes under
  * it.
  *
@@ -639,17 +865,65 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
  * and the label are three elements over there, copied into every section, and
  * one of the seven has a different gradient for no reason anybody recorded.
  */
-function Section({ label, children }: { label: string; children: ReactNode }) {
+function Section({
+  label,
+  aside,
+  collapsible,
+  children,
+}: {
+  label: string;
+  /** One line answering the section's question, on the heading row. */
+  aside?: ReactNode;
+  collapsible?: boolean;
+  children: ReactNode;
+}) {
+  /* Local state, not a URL parameter, and this page's own `at` two hundred
+     lines up is the reason that needs saying: url-state.md puts every bit of
+     view state in the address bar. A shut section is not view state in that
+     sense — it is the same kind of thing as an open drawer, which
+     `carriedSearch` deliberately strips on every navigation because a drawer
+     you left open is not a place you were. Nothing about a shut section is
+     worth linking to, and a `?stages=open` in every shared metadata URL would
+     be noise in the one place this app keeps clean. */
+  const [open, setOpen] = useState(!collapsible);
+  const head = (
+    <>
+      <span
+        aria-hidden="true"
+        className="tw:inline-block tw:h-3.5 tw:w-[3px] tw:shrink-0 tw:rounded-full tw:bg-highlight/70"
+      />
+      {label}
+    </>
+  );
   return (
     <section className="tw:mt-8">
       <h2 className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
-        <span
-          aria-hidden="true"
-          className="tw:inline-block tw:h-3.5 tw:w-[3px] tw:shrink-0 tw:rounded-full tw:bg-highlight/70"
-        />
-        {label}
+        {collapsible ? (
+          /* The heading itself is the control, so the target is the whole line
+             rather than a 12px chevron. `aria-expanded` on the button and
+             nothing on the section: the button is what opens, and the h2 stays
+             a heading so the page's outline is the same shut or open. */
+          <button
+            type="button"
+            onClick={() => setOpen((was) => !was)}
+            aria-expanded={open}
+            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+          >
+            {head}
+            {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          </button>
+        ) : (
+          head
+        )}
+        {/* Shown open or shut, and that is the point of it: shutting the
+            section must not take the answer away, only the detail. */}
+        {aside && (
+          <span className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint">
+            {aside}
+          </span>
+        )}
       </h2>
-      {children}
+      {open && children}
     </section>
   );
 }
@@ -761,6 +1035,8 @@ function Row({
  */
 function StageRow({ stage, generator }: { stage: StageState; generator: string | undefined }) {
   const { step, label, outputs, done } = stage;
+  // `stage.ranAt` / `stage.bytes` are read off the object below rather than
+  // destructured here, so a reader of `<Wrote>` can see which they are.
   const Icon = STAGE_ICONS[step];
   return (
     <div className={`tw:px-4 tw:py-3 ${done ? "" : "tw:opacity-60"}`}>
@@ -790,17 +1066,108 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
       </div>
       {/* Indented to the chip's width so the files hang under the stage name
           rather than under its icon. */}
-      <div className="tw:mt-1.5 tw:pl-9 tw:text-xs tw:text-ink-faint">
+      <div className="tw:mt-1.5 tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-3 tw:gap-y-1 tw:pl-9 tw:text-xs tw:text-ink-faint">
         {done ? (
-          <span className="tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
+          <span className="tw:min-w-0 tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
         ) : (
           // The stage's own present-tense label, which reads as the thing that
           // has not happened yet rather than as a list of missing files.
           <span>{label}</span>
         )}
+        <Wrote at={stage.ranAt} bytes={stage.bytes} done={done} />
       </div>
     </div>
   );
+}
+
+/**
+ * When this stage last wrote, and what it left behind — relative, exact on hover.
+ *
+ * Greg, 2026-08-27, asked for *"extra metadata (e.g. exact date times), perhaps
+ * in tooltips"*, and this is where most of it landed. It is deliberately the
+ * same shape as `Fetched` at the top of the page: the relative time is what you
+ * want to know, and the exact stamp is what you want the moment the relative
+ * one surprises you.
+ *
+ * **The tooltip says what the number is not.** A file's timestamp records when
+ * it was written, never what it was written *from* — a copy, a `touch` or a
+ * fresh `git clone` resets it, which is exactly why the fixture's every stage
+ * reports the minute somebody cloned this repo. Saying so in the tooltip is the
+ * difference between a fact and a verdict, and this page owes the reader the
+ * first and refuses to give them the second
+ * (see the docstring at the top of this file, and src/api.ts § articleMetadata).
+ *
+ * Renders nothing when the store cannot say — Postgres has no files, so it has
+ * no size, and a stage that has written nothing has neither.
+ */
+function Wrote({ at, bytes, done }: { at: string | null; bytes: number | null; done: boolean }) {
+  if (!at) return null;
+  const t = Date.parse(at);
+  if (Number.isNaN(t)) return null;
+  const when = new Date(t);
+  return (
+    <Tooltip
+      placement="top"
+      content={
+        <Note>
+          {exactly(when)}
+          {bytes !== null && ` · ${weight(bytes)} on disk`}
+          <br />
+          {/* The caveat is about **files**, so it is only told where there are
+              files. In Postgres this is `finished_at` — a recorded fact about a
+              run, which no checkout can reset — and repeating the mtime warning
+              there would be teaching the reader to distrust a number that
+              deserves it less. `bytes` is the honest test for which store
+              answered, because only one of them has anything to weigh. */}
+          {bytes === null
+            ? "When this stage last finished."
+            : "When the newest of this stage's files was written. A copy or a fresh checkout resets that, so it says when — never what from."}
+        </Note>
+      }
+    >
+      {/* A button, not a span, because everything in this tooltip is only in
+          this tooltip and a span cannot be reached by keyboard — `Tooltip` wires
+          up `useFocus`, so a focusable trigger is all it takes. Found by a
+          cross-model review, 2026-08-27. The `Stat` cards and `Fetched` above
+          have the same problem and the same fix; they are older than the rule
+          being noticed, and are not changed here so that this stays one change. */}
+      <button
+        type="button"
+        className="tw:ml-auto tw:shrink-0 tw:cursor-help tw:border-0 tw:border-b tw:border-dotted tw:border-rule-strong tw:bg-transparent tw:p-0 tw:text-inherit tw:focus-visible:outline-none tw:focus-visible:text-highlight"
+      >
+        {/* "last wrote" rather than "ran" for a stage that is not done: something
+            of its is on disk and the set is incomplete, which is precisely the
+            state this page gets opened to look at. */}
+        {done ? "ran" : "last wrote"} {ago(when)}
+      </button>
+    </Tooltip>
+  );
+}
+
+/**
+ * The exact stamp: date, seconds, and the zone it is in.
+ *
+ * `timeStyle: "long"` rather than `"short"` — an exact time without seconds is
+ * not exact, and without a timezone it is ambiguous the moment anybody reads it
+ * on a different machine from the one that wrote the file.
+ */
+function exactly(when: Date): string {
+  return when.toLocaleString(undefined, { dateStyle: "full", timeStyle: "long" });
+}
+
+/**
+ * Bytes, in the unit a person would use.
+ *
+ * `Intl.NumberFormat`'s `unit: "byte"` with `notation: "compact"` exists and is
+ * decimal — it calls 1,048,576 bytes "1.0MB". Everything else in this app that
+ * reports a file size is `ls`, which is not, so this is the 1024 one and says
+ * KB/MB rather than KiB/MiB, matching what the reader's file manager tells them.
+ */
+function weight(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
 }
 
 /**
@@ -817,7 +1184,7 @@ function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
   return (
     <Tooltip
       placement="bottom"
-      content={<Note>{when.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" })}</Note>}
+      content={<Note>{exactly(when)}</Note>}
     >
       <span className="tw:cursor-help">
         {lead && <span className="tw:mr-2 tw:opacity-50">·</span>}

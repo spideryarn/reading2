@@ -465,7 +465,8 @@ reads as breakage.
   lists things we mean to build, and putting this there would promise it.
 - **Book pages, per-file sizes, per-file mtimes.** Dropped in the first pass and staying dropped.
 - **The privacy toggle, the owner email, and the editable title.** They describe an app with
-  accounts, and an article whose title is stored rather than extracted.
+  accounts, and an article whose title is stored rather than extracted. *(Half of that stopped being
+  true on 2026-08-26 — see § The one still worth taking, below.)*
 
 ### The placeholders, and the convention they follow
 
@@ -494,6 +495,151 @@ drawer nobody opened. The resolution is that the *count* is not the comments: `G
 is already walking this article's directory, so it now returns `comments` too and the page gets its
 line for nothing. The number links back to the reading view with `?panel=questions`, which is where a
 question is worth opening, since clicking one scrolls to the passage it is about.
+
+## A third pass, 2026-08-27: shut the long section, and say *when*
+
+Greg:
+
+> In the "Metadata" section, make "What we did to it" collapsible and default-collapsed and add
+> extra metadata (e.g. exact date times), perhaps in tooltips.
+>
+> And look at the Metadata from `docs/project/original-version/` to see if there's anything else
+> from there worth adding.
+
+### The section that is shut when you arrive
+
+`What we did to it` is nine rows of file paths, and it sits fourth of six. Most visits are not
+asking what it answers, and while it was open it pushed everything about *this reader* — their
+purpose, their questions, where they left off — below the fold. So it is `collapsible` and starts
+shut, and [`Section`](../../src/web/Metadata.tsx) grew the two props that took: `collapsible`, and
+an `aside` shown on the heading row whether the section is open or shut.
+
+**The `aside` is the point.** Shutting a section must cost the reader the detail and not the
+answer, so the heading carries the two facts the rows would otherwise have told them — how many
+stages have run, and when any of them last wrote. `8 of 9 stages · last wrote 3 days ago`.
+
+The open/shut state is **not** in the URL, which is worth saying out loud in a repo whose
+[url-state.md](../project/url-state.md) puts every bit of view state in the address bar. A shut
+section is the same kind of thing as an open drawer, and `carriedSearch` already strips `?panel=`
+on every navigation on the grounds that a drawer you left open is not a place you were. Nothing
+about a shut section is worth linking to.
+
+### The timestamps, and a decision reversed
+
+`StageState` gained two fields: `ranAt` (ISO) and `bytes`. On the filesystem they are `stat` over
+the outputs that exist — newest mtime, sizes added up; in Postgres `ranAt` is
+`revision_step_runs.finished_at` falling back to `started_at`, and `bytes` is `null`, because there
+are no files and a row count wearing the word "bytes" would be a different measurement under the
+same label. Each stage row shows `ran 3 days ago`, with the exact stamp — `dateStyle: "full"`,
+`timeStyle: "long"`, so seconds and the timezone are both in it — and the size on hover.
+
+**This reverses § What was looked at and left there, which said per-file sizes and mtimes were
+"dropped in the first pass and staying dropped".** The reversal is narrower than it looks, and the
+distinction is the whole reason it is safe: *what was wrong about mtimes was the verdict, never the
+number*. `articleMetadata` still refuses to compare two timestamps, still has no staleness rule, and
+the tooltip says in its second sentence that a copy or a fresh checkout resets the number — which is
+exactly why every stage of the committed `example/` fixture reports the minute somebody cloned the
+repo. A person reading "toc ran 3 days ago, arc ran in March" can draw the conclusion this page
+still declines to draw for them. That is the difference between handing somebody a fact and handing
+them a red banner.
+
+`ranAt` is computed over the outputs that **exist**, whatever `stepIsDone` said about the set of
+them, and the row says `last wrote` rather than `ran` in that case. A stage that owes three files
+and wrote two is precisely the state this page gets opened to look at.
+
+### And the one thing left from theirs that was worth taking
+
+Their **Document Information** had a *file type* row. Ours never took it, and § What the original
+had marked the section **take** without it, because for as long as this app existed the answer was
+the same for every article: a web page.
+
+That stopped being true on 2026-08-26, when [PDFs](pdf-ingestion.md) arrived and stage 2 became two
+stages — Readability for a web page, a model reading the pages for a PDF
+([content-extraction.md](../project/content-extraction.md)). So `CameFrom` renders, **for PDFs
+only**, what that reading actually did: what it was made from and how many pages, the reader and
+prompt version that transcribed it (`meta.method`), what fraction of the file's own text layer
+turned up in the transcription and over how many pages, and the SHA-256 of the PDF as fetched so
+that *"is this the same document?"* has an answer that does not depend on a filename.
+
+A web page gets no section at all. One row saying "a web page", under a URL that already said so, is
+a section that exists to say nothing.
+
+[`Masthead.tsx`](../../src/web/Masthead.tsx) already tells the *reader* the shape of this in a
+sentence, because they are entitled to know before they trust a line of it. This is the same fact
+with the numbers attached, on the page you open when you want numbers. The scan case stays a
+sentence rather than a number in both places: nothing checked it, and a `0%` would be a lie in the
+other direction.
+
+### What the cross-model review found in the built code
+
+GPT Sol, on the diff, 2026-08-27. Four things were real and are fixed; two are recorded here rather
+than fixed, and one of those is the interesting one.
+
+**`ranAt` meant two different things.** The Postgres side fell back to `started_at` when
+`finished_at` was null, which is what that column exists for elsewhere — a `running` row with no
+timestamp cannot tell "still going" from "died an hour ago". But it made one field answer two
+questions, and the filesystem has no way to report a run that started and wrote nothing. One field,
+one meaning, or the single sentence the UI writes about it is false in one of the two stores. It is
+`finished_at` only now. The tooltip's mtime caveat is likewise told **only where there are files**:
+`finished_at` is a recorded fact about a run that no checkout can reset, and warning about it there
+would teach the reader to distrust the number that deserves it less.
+
+**A shut section was hiding the failure.** The metadata request's error message lives inside "What we
+did to it", so collapsing it put the one thing a reader has to see behind a chevron. The section is
+`collapsible={!provenanceError}` now: a failure makes it an ordinary open section with the error at
+the top. Two things downstream of the same request were lying about it too, and both are fixed —
+"Questions asked" said `Counting…` forever after the count had already failed, and the profile
+preview said *"You haven't said anything about yourself yet"*, which is a claim about a person that
+a failed request has no way to establish.
+
+**The tooltip-only facts could not be reached by keyboard.** The exact stamp, the size, the full
+fingerprint and the recall explanation are only in their tooltips, and their triggers were `<span>`s.
+`Tooltip` already wires up `useFocus`, so the fix is a focusable trigger. Note that `Stat` and
+`Fetched` above them have the same problem: they are older than the rule being noticed, and are left
+alone so this stays one change.
+
+**And it caught the zero denominator** — `97% of the words, on 3 of 0 pages`, from a `meta.json`
+written before `pages` existed. The page count is printed only when there is one.
+
+### The finding that is recorded rather than fixed: the two stores disagree about "run"
+
+Sol's sharpest finding is that **this page already gives a staleness verdict on Postgres, and has
+since before this change**. `StageState.done` is documented as "all of this stage's outputs are
+present". On the filesystem that is what it is. In [`src/store/pg.ts`](../../src/store/pg.ts) it is
+`status === 'done' && isCurrent(step)` — so an artefact that is present, complete and merely built
+from older blocks reports **not run**, in a pill, on the page that exists to tell you what happened
+to your article. That is a verdict, it is delivered in the wrong word, and the new heading line
+counts it (`8 of 9 stages`).
+
+It is not an oversight — the Postgres store argues for it at length, on the good grounds that
+carrying "the column is non-null" across from the filesystem would carry a known bug across with it.
+So the two halves are each defensible and the pair is not, and the fix is a third field rather than a
+choice between the two: `present` (all outputs there) alongside `current` (built from what it would
+be built from today), with this page showing the first and free to say something quieter about the
+second. Left for whoever next opens the storage seam, because changing what `done` means is a change
+to a contract three files read, not a change to this page.
+
+### One placeholder that had gone stale
+
+`Delete this article` said its lesson was that *"there is nothing here to undo it with"*. The shelf
+grew exactly that on 2026-08-26 — Delete archives, and the Undo strip is the confirmation
+([library.md](../project/library.md)) — so the row now says what is actually still missing, which is
+the strip rather than the endpoint.
+
+### The one still worth taking: an editable title
+
+§ What was looked at and left there dismissed the editable title along with the privacy toggle,
+because both *"describe an app with accounts, and an article whose title is stored rather than
+extracted"*. The second half of that reason expired on 2026-08-26, when the shelf grew a title
+override that survives re-extraction ([library.md](../project/library.md)). Sol raised it, and it is
+a fair candidate for exactly the reason this page exists: a wrong title is a thing you notice on the
+page you open when the metadata looks wrong.
+
+Not built here, and the reason is that it is not a small addition wearing a small hat.
+[`TitleEditor`](../../src/web/ShelfEntry.tsx) takes a `LibraryEntry`, which this page does not have
+and deliberately does not fetch, so taking it means either a second request or a new field on
+`ArticleMetadata` — and then a decision about whether the `<h1>` becomes editable in place, which is
+a design question rather than a plumbing one. Worth doing; worth doing on purpose.
 
 ## See also
 

@@ -587,9 +587,23 @@ async function articleDir(slug: string): Promise<string | null> {
  * page is worse than no verdict, because this is the page you open when you
  * have stopped trusting the others.
  *
- * File sizes and per-file timestamps went with it. They are operational
- * diagnostics — `ls -l` answers them, and a reader does not need to know that
- * `raw.html` is 412 KB.
+ * ## The timestamps, and why they came back
+ *
+ * File sizes and per-file timestamps were dropped with the staleness check, on
+ * the grounds that `ls -l` answers them. Greg, 2026-08-27, asked for them back:
+ * *"add extra metadata (e.g. exact date times), perhaps in tooltips"*. They are
+ * back as `ranAt` and `bytes` on each stage, and the reversal is narrower than
+ * it looks — **what was wrong was the verdict, not the number**. Nothing here
+ * compares two timestamps, and nothing infers anything from one; the page shows
+ * when a stage last wrote, says so as a plain fact, and leaves the staleness
+ * question exactly as unanswered as it was. A person reading "toc ran 3 days
+ * ago, arc ran in March" can draw their own conclusion, which is the thing this
+ * page is for and the thing a red banner takes away from them.
+ *
+ * `stat` on the outputs that exist, whatever `stepIsDone` said about the set of
+ * them: a stage that wrote two of its three files is not done, and when it
+ * wrote them is still the most useful fact on the page. `weigh`, below, is the
+ * one that does it.
  */
 export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
   // This one enumerates files for a living, which raises the stakes over a read
@@ -628,12 +642,20 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
   const store = createFsArtifactStore(() => ({ dir: ctx.dir, htmlFile: ctx.htmlFile }));
 
   const stages: StageState[] = await Promise.all(
-    STEP_ORDER.map(async (step) => ({
-      step,
-      label: STEPS[step].label,
-      outputs: STEPS[step].outputs(ctx).map((file) => path.relative(ROOT, file)),
-      done: await stepIsDone(STEPS[step], ctx, store),
-    })),
+    STEP_ORDER.map(async (step) => {
+      const files = STEPS[step].outputs(ctx);
+      const [done, written] = await Promise.all([
+        stepIsDone(STEPS[step], ctx, store),
+        weigh(files),
+      ]);
+      return {
+        step,
+        label: STEPS[step].label,
+        outputs: files.map((file) => path.relative(ROOT, file)),
+        done,
+        ...written,
+      };
+    }),
   );
 
   // `loadComments` for the same reason `describeArticle`'s caller uses it: the
@@ -659,6 +681,31 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
     comments,
     profile,
     purpose: shelf.purpose ?? null,
+  };
+}
+
+/**
+ * When these files were last written, and what they weigh together.
+ *
+ * The newest mtime rather than the oldest or the first: a stage writes its
+ * files in whatever order suits it (src/toc.ts writes the tree last on purpose),
+ * so the only one that answers "when did this stage last run" is the last one
+ * written.
+ *
+ * A missing file is skipped rather than failing the set, because half a stage
+ * is exactly the state this page is opened to look at. Nothing at all on disk
+ * gives `null` twice — which is *"we cannot say"*, and must not arrive as a zero
+ * that reads like a real measurement.
+ */
+async function weigh(files: string[]): Promise<{ ranAt: string | null; bytes: number | null }> {
+  const stats = await Promise.all(
+    files.map((file) => stat(file).catch(() => null)),
+  );
+  const found = stats.filter((s): s is NonNullable<typeof s> => s !== null);
+  if (!found.length) return { ranAt: null, bytes: null };
+  return {
+    ranAt: new Date(Math.max(...found.map((s) => s.mtimeMs))).toISOString(),
+    bytes: found.reduce((total, s) => total + s.size, 0),
   };
 }
 

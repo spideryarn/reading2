@@ -1032,8 +1032,10 @@ export interface LibrarySearchResponse {
  * read at request time by definition, and a stored copy would be the second
  * truth this repo keeps warning about.
  *
- * See docs/plans/metadata-page.md, and § What the plan got wrong for why this
- * carries no file sizes, no modification times, and **no staleness verdict**.
+ * See docs/plans/metadata-page.md. § What the plan got wrong is why this carries
+ * **no staleness verdict**; § A third pass is why it now carries sizes and
+ * timestamps after all, which is a smaller reversal than it sounds — a number
+ * is not a verdict, and nothing anywhere compares two of these.
  */
 export interface StageState {
   step: StepName;
@@ -1047,6 +1049,39 @@ export interface StageState {
    * having written the HTML and not `meta.json`.
    */
   done: boolean;
+  /**
+   * When this stage last wrote something, ISO — the newest mtime among its
+   * outputs on the filesystem, `finished_at` in Postgres. `null` when nothing it
+   * writes is there, or when the store cannot say.
+   *
+   * **Both stores answer the same question**, and it took a review to keep them
+   * that way: the Postgres side had a fallback to `started_at`, which would have
+   * put a timestamp on a run that began and wrote nothing, while the filesystem
+   * has no way to report such a thing at all. One field, one meaning, or the one
+   * sentence the UI writes about it is false in one of the two stores.
+   *
+   * **A fact, not a verdict, and the difference is the whole reason this page
+   * refused these numbers for two days and then took them.** A timestamp records when a file was written, never
+   * what it was written *from*: a copy, a `touch` or a fresh checkout resets it,
+   * and every file in the committed fixture carries the moment somebody cloned
+   * the repo. So it is shown as "ran 3 days ago" with the exact stamp on hover,
+   * and nothing anywhere compares two of these to decide anything. The
+   * staleness question is still answered by `sourceHash` or not at all —
+   * `articleMetadata` in src/api.ts § What this deliberately does not answer.
+   *
+   * Deliberately computed over the outputs that **exist**, whatever `done`
+   * says, so a stage that wrote half of what it owes still says when it did it.
+   */
+  ranAt: string | null;
+  /**
+   * What those outputs weigh, in bytes, added up. `null` where there are no
+   * files to weigh — every Postgres row, and a stage that has written nothing.
+   *
+   * Operational, and that is fine on this one page: it is the page you open
+   * when an article looks wrong, and "raw.html is 4 bytes" is the shape of
+   * answer it exists to give.
+   */
+  bytes: number | null;
 }
 
 /** What GET /api/metadata/:slug returns: which stages have run, and nothing the article payload already carries. */
@@ -1199,10 +1234,42 @@ export interface JobStep {
  * `LibraryEntry` follows above — every field a scalar or a small blob a column
  * could hold. See docs/project/ingest-queue.md#when-this-becomes-postgres.
  */
+/**
+ * A file the reader handed us, rather than an address we went and fetched.
+ *
+ * **The other half of `url`, and never both.** A job acquires its raw document
+ * one way or the other, and which way it was is the one thing the acquisition
+ * step branches on — see `fetch` in src/pipeline.ts, which is the step that
+ * does both. Everything after that stage cannot tell the difference, because
+ * both write the same `raw.json`.
+ *
+ * It carries an id and a name and nothing else on purpose. The *bytes* are in
+ * the blob store under a key derived from the id (`stagingKey`, src/source.ts),
+ * so the job never names a path; the filename is the reader's own string and is
+ * display-only. Everything we come to believe about the document — its real
+ * size, our hash of it — lives on the upload record (src/upload-records.ts) and
+ * is written there by the step that verified it.
+ */
+export interface JobUpload {
+  /** Our id for the attempt. A UUID we minted; never the client's. */
+  id: string;
+  /** What the reader called the file, cleaned. Shown, never used to build a key. */
+  filename: string;
+}
+
 export interface Job {
   id: string;
   slug: string;
   url?: string;
+  /**
+   * Present exactly when this job's document came off the reader's disk.
+   *
+   * `url` and `upload` are the two origins and a job has one of them. A job with
+   * neither is a late stage re-run on an article already on the shelf, which is
+   * why both are optional rather than a discriminated union — the pipeline's
+   * steps 3 onwards genuinely do not need either.
+   */
+  upload?: JobUpload;
   /** The article's title once extraction has found one. Until then the slug is all we have. */
   title?: string;
   steps: JobStep[];

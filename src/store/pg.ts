@@ -552,16 +552,21 @@ export const pgArticleReader: Pick<
         label: STEPS[step].label,
         outputs: STEP_STORAGE[step],
         done: run?.status === "done" && isCurrent(step),
-        /* `finished_at`, falling back to `started_at` for a run that is going
-           or died mid-way — the same reason that column exists at all
-           (src/db/schema.ts): without it a `running` row has no timestamp to
-           judge it by, and "still going" and "died an hour ago" look identical.
-           The filesystem's answer to the same question is an mtime, so both
-           stores say *when this stage last wrote*, from whatever each one has.
+        /* `finished_at` ONLY, and never `started_at`.
+
+           The first version fell back to `started_at` for a run that is going
+           or died mid-way, which is what that column is for elsewhere
+           (src/db/schema.ts). A cross-model review took it apart: `ranAt` has
+           to mean the same thing in both stores or the one sentence the UI
+           writes about it is false in one of them, and the filesystem's answer
+           is an mtime — *when this stage last wrote something*. A run that
+           started and died wrote nothing anybody should believe, and it is not
+           `done` here either, so a timestamp against it would be the store
+           answering a question the reader did not ask with the one they did.
 
            No `bytes`: there are no files here, and a row count or a jsonb
            length would be a different measurement wearing the same label. */
-        ranAt: (run?.finishedAt ?? run?.startedAt)?.toISOString() ?? null,
+        ranAt: run?.finishedAt?.toISOString() ?? null,
         bytes: null,
       };
     });
