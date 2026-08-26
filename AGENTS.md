@@ -198,6 +198,24 @@ Not descriptions of code, which the code already provides.
   [linting.md](docs/project/linting.md). What the tests cover, and what they don't, is in
   [testing.md](docs/project/testing.md); why the typecheck needs a script of its own rather than a
   bare `tsc` is in [typechecking.md](docs/project/typechecking.md).
+- **Get a cross-family review before you commit.** Every plan under `docs/plans/` goes to GPT Sol
+  before it is built, and the code built from it goes back for a second review — weight that second
+  one higher, because a plan-stage review cannot find a `PATCH` that writes one field and then
+  rejects the request. A different model family has different blind spots, and that is the whole
+  point. Read-only, in the background, and give it three quarters of an hour:
+
+  ```
+  npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45 \
+    --prompt-file <review-prompt> --output <review-answer>
+  ```
+
+  Hand it the evidence — the scoped diff, the results file, the script that produced a number —
+  rather than only the prose; the finding is often about the experiment rather than the conclusion.
+  Check each finding yourself before acting on it, since some of them are wrong, then fold what
+  survives into the plan and add its questions to the ones for Greg. **And check that a verdict
+  actually arrived** — exit 0, and read the answer file — because a review that returned nothing
+  looks exactly like a review that found nothing. Setup, the auth fallback and the traps are in
+  [codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md).
 - **Reproduce a bug with a failing test before you fix it.** Write the test first and watch it go
   red — a test that was never red proves nothing. Then fix, and check it's gone green.
 - **Root-cause every bug in a subagent, and write it up.** When you're fixing a bug, hand the
