@@ -220,6 +220,19 @@ survives, **with comments stripped first**. The effect's own explanation names `
 so a guard on the raw file would have been satisfied by prose while the call was gone — the same
 silent pass a `sanitizeStoredBlocks` guard hit on 2026-08-26. Match a call, never a mention.
 
+**Checked in a browser, 2026-08-26**, on `constitution` (22,518 words) at 1300px. A fresh load of
+`?note=` with no `?at=` scrolled from the top to the commented passage and opened the dialog on it,
+then grew `&at=` on its own. With an `?at=` that already had the passage on screen, `scrollY` was
+5073.5 on load and 5073.5 a second later — held still, which is the case that costs no movement. With
+an `?at=` pointing at the article's first block, the note won and `?at=` was overwritten. A `?note=`
+naming nothing rendered normally with no dialog and no console error. One Back went to the library
+rather than through a trail of scroll positions, which is `?at=` replacing rather than pushing.
+
+**One thing that pass could *not* establish**, recorded because a silent gap is worse than a stated
+one: whether the glide reads as travel or as a jolt. Every round trip through the automation tool
+took longer than the 200ms animation, so only "not yet arrived" and "arrived" were ever observable.
+See [browser-testing.md § An animation shorter than your round trip](browser-testing.md#short-animation).
+
 ### The web-search badge <a id="search-badge"></a>
 
 Greg, 2026-08-25: "indicate (with an icon + hover-tooltip or similar) in the dialog box whether or
@@ -274,6 +287,24 @@ rebuilt for Postgres when the question came up. What it would take is written do
 The `begin` frame carries the whole comment, and that is the point of it: `createComment` re-mints an
 id that is malformed or collides, and a stream has no response body to carry the real one back.
 Without it the client streams an answer into a row the server has never heard of.
+
+### And a stream that stops without ending <a id="stall-clock"></a>
+
+The warning above is about a stream that **ends** early. There is a third case, and until
+2026-08-26 nothing here had an answer to it: a stream that simply goes quiet. A TCP connection that
+has gone away without being closed delivers no bytes and no error, so `reader.read()` never settles
+and the `for await` over it waits for ever — the dialog spins, and nothing will ever stop it.
+
+So `readEvents` is given `stallMs` here, the same 60-second clock chat uses, and `sse(res)` beats a
+`: ping` comment down this route every 15 seconds so that silence means something. Both are
+described in [sse-stall-recovery.md](../plans/sse-stall-recovery.md); the short version is that the
+clock is on **bytes** rather than on frames, because a heartbeat is deliberately not a frame.
+
+Chat responds to a stall by going and looking for the answer, which the server usually finished
+writing anyway. **Nothing here does that**, on purpose: there is no `pending` comment row for a
+watcher to adopt, and the finished answer simply appears on the next reload. All the clock buys a
+comment is a failure the reader can see instead of a spinner that never stops — which is most of
+the value, since the bug all of this came from was a panel that said "thinking…" for ever.
 
 ## Two more ways to push back on an answer <a id="pushing-back"></a>
 

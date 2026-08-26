@@ -449,6 +449,19 @@ land, while `new MouseEvent('click', { bubbles: true })` reaches the identical R
 the real one, and reach for the synthetic when the real one will not land — noting which you used,
 since they prove different things.
 
+### An animation shorter than your round trip is invisible <a id="short-animation"></a>
+
+An agent driving Chrome cannot see a 200ms animation. Each screenshot or JS evaluation is a round
+trip, and the round trip is longer than the animation — so every sample lands either before the
+thing starts or after it has finished, and the honest report is "I saw the start state and the end
+state". Found on 2026-08-26 while checking the `?note=` arrival glide, where `SCROLL_MS` is 200.
+
+**Do not let that become "it looked fine".** A settled end state with no jump artifacts says the
+animation ended in the right place; it says nothing about what it did on the way. Either drive the
+animation by hand with the rAF shim below — which is what that section exists for — or say plainly
+that the feel was not verified. The second is a perfectly good answer, and much better than the
+first done badly.
+
 ### Driving a rAF animation by hand
 
 A suspended tab runs no `requestAnimationFrame`, which means an rAF-driven animation cannot simply be
