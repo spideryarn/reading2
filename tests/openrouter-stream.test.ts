@@ -77,7 +77,7 @@ describe("sseChunks", () => {
   });
 
   it("does not treat `[DONE]` as a malformed frame in either mode", async () => {
-    const body = sseBody(frame('{"choices":[{"delta":{"content":"a"}}]}') + "data: [DONE]\n\n");
+    const body = sseBody(`${frame('{"choices":[{"delta":{"content":"a"}}]}')}data: [DONE]\n\n`);
     const end: StreamEnd = { terminated: false };
     const chunks = await drain(sseChunks(body, new AbortController().signal, () => {}, end, true));
     expect(chunks).toHaveLength(1);

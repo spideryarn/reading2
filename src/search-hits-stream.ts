@@ -200,7 +200,6 @@ export function hitExtractor(): {
           if (stack.length === 0) {
             done = true;
           }
-          continue;
         }
       }
 

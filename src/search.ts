@@ -45,16 +45,22 @@
  * chunk at a time and hands back each hit object the instant its closing
  * brace shows up. **Every hit shown mid-stream is run through the same
  * `validateHits` as the final pass** — a single-item list, so the rule is
- * never duplicated — and the eventual `done` event, built from the strict
- * whole-text parse, is always the authoritative answer. A hit can appear in
- * the stream and be missing from `done` (rare — see `hitExtractor`'s
- * docstring on its safety property) but never the other way round: `done` is
- * a superset check, not a second opinion.
+ * never duplicated — but `done` is **not** a superset of what streamed. It is
+ * computed fresh, from an independent strict parse of the whole buffered
+ * text, and it is that computation — not a running collection of the hits
+ * already shown — that is authoritative. The interesting consequence is that
+ * a hit can be shown mid-stream and then simply never make it into a result
+ * at all: a response cut off mid-object can stream one perfectly valid hit
+ * before the JSON stops arriving, and the whole search still ends in a throw
+ * rather than a `done` with that one hit in it, because the final text is not
+ * a complete, parseable object. See "the final `done` is authoritative, not a
+ * rollup of what streamed" in tests/search-stream.test.ts for exactly that
+ * case.
  *
  * ## Logging
  *
  * One line per finished search under the `model` component — the same fields
- * explain.ts logs, plus the four counts below. **Never the criterion, never a
+ * explain.ts logs, plus the drop counts below. **Never the criterion, never a
  * quote, never the article, never the key.** A criterion is as private as a
  * selection: it is what somebody was looking for.
  */
@@ -451,6 +457,34 @@ function isBalanced(text: string): boolean {
 }
 
 /**
+ * What a hit is, for the purpose of noticing that two lists of them differ.
+ *
+ * `blockId:start` rather than the quote: the quote is article prose and must
+ * not reach a log (docs/project/logging.md), and the pair is already unique —
+ * a block cannot hold two hits beginning at the same character.
+ */
+export function hitIdentities(hits: SearchHit[]): string[] {
+  return hits.map((h) => `${h.blockId}:${h.start}`);
+}
+
+/**
+ * Did what the reader was shown differ from what got stored?
+ *
+ * **Order matters**, which is why this is not a set comparison: hits are ranked
+ * best-first and the ranking is most of the value, so the same hits in a
+ * different order is a divergence worth knowing about.
+ *
+ * Exported, and that is the whole point of it existing as a function at all.
+ * An alarm that has never been observed to fire is indistinguishable from an
+ * alarm that cannot — and this one lives in a log line, which nothing in these
+ * tests reads. Pulling the judgement out means the judgement can be tested even
+ * though the wiring cannot.
+ */
+export function disagree(streamed: string[], final: string[]): boolean {
+  return streamed.length !== final.length || streamed.some((id, i) => id !== final[i]);
+}
+
+/**
  * A hit that arrived mid-stream. Provisional: best-first, already through the
  * same per-item validation as the final pass, but the final `done` is
  * authoritative and may differ. Exactly one `done` event, last, ever — see
@@ -590,6 +624,12 @@ export async function* findPassagesStream({
 
   const extractor = hitExtractor();
   let emitted = 0;
+  /* The ordered identity of every hit shown mid-stream — blockId plus its
+     offset into the block (disambiguates two hits landing on the same
+     block) — so the mismatch alarm on the final log line can say WHICH hits
+     diverged, not just that the counts happened to differ. See its use
+     below. */
+  const emittedIds: string[] = [];
   let used = model;
   let finishReason: string | null = null;
   let usage: Usage | undefined;
@@ -620,6 +660,7 @@ export async function* findPassagesStream({
           const survivor = validateHits({ hits: [raw] }, blocks).hits[0];
           if (!survivor) continue;
           emitted++;
+          emittedIds.push(...hitIdentities([survivor]));
           yield { type: "hit", hit: survivor };
         }
       }
@@ -714,8 +755,13 @@ export async function* findPassagesStream({
     throw err;
   }
 
+  // Same identity shape as `emittedIds` above, computed from the
+  // authoritative final `hits` — used only to build the mismatch alarm below.
+  const finalIds = hitIdentities(hits);
+  const streamedMismatch = disagree(emittedIds, finalIds);
+
   /* One line per finished search.
-     The four `dropped` counts are the point of it, and each is invisible from
+     The `dropped` counts are the point of it, and each is invisible from
      the outside: a dropped hit looks exactly like a passage the model chose not
      to return, and "nothing in this article matches that" is a legitimate
      answer a reader sees. `unknownIds` climbing means the id contract has
@@ -744,15 +790,25 @@ export async function* findPassagesStream({
         tooShortToCache,
         hits: hits.length,
         /* How many hits were already shown to the reader before this strict
-           final parse ran, next to how many of those the same rule kept. The
-           two SHOULD agree — every mid-stream hit already passed validateHits.
-           A gap here means the extractor (src/search-hits-stream.ts) is
+           final parse ran. A count next to `hits` is not the alarm on its
+           own — the SAME count with different hits inside it would look
+           identical and be exactly the silent kind of wrong
+           (docs/reusable/silent-success.md), so `streamedMismatch` compares
+           the actual ordered identity (blockId + offset, which disambiguates
+           two hits landing on the same block) shown mid-stream against what
+           the authoritative pass kept, and the two lists ride along so a
+           mismatch is diagnosable rather than just detectable. They SHOULD
+           always agree — every mid-stream hit already passed validateHits —
+           and a `true` here means the extractor (search-hits-stream.ts) is
            completing an object that JSON.parse over the whole text reads
-           differently, which is otherwise invisible: the reader just sees a
-           row appear and then not be there once the run is saved, or never
-           notices because it happened to agree this time. See
-           docs/reusable/silent-success.md. */
+           differently. There is nothing sensitive in a block id or an
+           offset — see the module docstring's own privacy rule, which is
+           about the criterion, the quote and the reasoning, none of which
+           are here. */
         streamedHits: emitted,
+        streamedMismatch,
+        streamedIds: emittedIds,
+        finalIds,
         criterionChars: criterion.length,
         blocks: blocks.length,
         ...dropped,

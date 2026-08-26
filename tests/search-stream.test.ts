@@ -15,7 +15,7 @@
  * final `done` event — not whatever streamed — is what a caller can trust.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MAX_HITS, findPassages, findPassagesStream } from "../src/search.js";
+import { MAX_HITS, findPassages, findPassagesStream, disagree, hitIdentities } from "../src/search.js";
 import type { SearchRequest, SearchResult } from "../src/search.js";
 import type { Block, Meta, SearchHit } from "../src/types.js";
 
@@ -233,5 +233,197 @@ describe("a provider error mid-stream", () => {
     expect(thrown).toBeDefined();
     expect(thrown?.message).not.toMatch(/the whole article, verbatim/);
     expect(sawDone).toBe(false);
+  });
+});
+
+describe("a malformed SSE frame mid-stream", () => {
+  it("throws rather than silently dropping a piece of the hits JSON", async () => {
+    /* `sseChunks` is given `strict: true` for exactly this: a `data:` frame
+       that is not valid JSON is, for chat and explain, a few lost words of
+       prose — safe to skip. Here it can be exactly one content delta
+       carrying part of `{"hits": [...]}`, and the text either side can still
+       go on to parse as valid JSON, so a caller that skipped it could store
+       a confidently wrong answer instead of noticing anything went missing.
+       This frame is deliberately malformed at the SSE-envelope level (the
+       line itself is not valid JSON) — not to be confused with the
+       hits-JSON-inside-the-content-delta truncation the "authoritative done"
+       tests above cover, which is a different failure at a different layer. */
+    const firstPart = frame({
+      choices: [{ delta: { content: `{"hits":[${JSON.stringify(HIT1)}` } }],
+    });
+    const corruptFrame = "data: {this is not a valid SSE JSON payload\n\n";
+    fetchMock.mockResolvedValue(sse(firstPart + corruptFrame));
+
+    let thrown: Error | undefined;
+    const hits: SearchHit[] = [];
+    try {
+      for await (const e of findPassagesStream(req())) {
+        if (e.type === "hit") hits.push(e.hit);
+      }
+    } catch (err) {
+      thrown = err as Error;
+    }
+    expect(thrown).toBeDefined();
+    expect(thrown?.message).toMatch(/\[ai-unreadable\]/);
+  });
+});
+
+/**
+ * Cancellation — `signal` on `SearchRequest`.
+ *
+ * Search has no stop button (unlike chat's `converse`) and its payload is one
+ * JSON object rather than prose, so `stoppedByReader`/`readerAborted` are
+ * reused from openrouter-stream.ts (same as explain.ts) but the OUTCOME is
+ * different from either sibling, and worth pinning explicitly per contract
+ * rather than leaving it to be discovered: there is no "keep the words that
+ * had arrived" the way converse.ts's stop button does, because a half-written
+ * JSON object is not a usable partial answer the way half a sentence is.
+ */
+describe("cancellation", () => {
+  /** A `fetch` that honours the signal it is given, as the real one does — see tests/converse-stop.test.ts. */
+  function stubFetch(make: () => Response | Promise<Response>) {
+    return vi.fn((_url: string, init: RequestInit) => {
+      const signal = init.signal as AbortSignal;
+      return new Promise<Response>((resolve, reject) => {
+        if (signal.aborted) return reject(signal.reason);
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        void Promise.resolve(make()).then(resolve, reject);
+      });
+    });
+  }
+
+  /** A response body that emits `frames` and then stays open until cancelled. */
+  function hangingBody(frames: string[]): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder();
+    let sent = 0;
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent < frames.length) {
+          controller.enqueue(encoder.encode(frames[sent] as string));
+          sent++;
+          return;
+        }
+        return new Promise<void>(() => {}); // never resolves; the abort is what ends it
+      },
+    });
+  }
+
+  it("cancelling before the first byte throws — nothing was ever shown, because there was nothing to show", async () => {
+    const controller = new AbortController();
+    vi.stubGlobal("fetch", stubFetch(() => new Promise<Response>(() => {}))); // never replies
+    const events: unknown[] = [];
+    const iter = findPassagesStream({ ...req(), signal: controller.signal });
+    setTimeout(() => controller.abort(new Error("stopped by the reader")), 5);
+    await expect(
+      (async () => {
+        for await (const e of iter) events.push(e);
+      })(),
+    ).rejects.toThrow(/stopped by the reader/);
+    expect(events).toEqual([]);
+  });
+
+  it("cancelling mid-stream, after a hit already showed, throws — the preview is never promoted to a `done`", async () => {
+    /* An incomplete object is the ordinary outcome of a disconnect: the text
+       so far is missing its outer `}`, `isBalanced` correctly calls that cut
+       off, and `parseHits` refuses to treat it as a finished answer — the
+       exact mechanism tests/search.test.ts pins for `parseHits` on its own,
+       exercised here end to end through a real cancellation. */
+    const controller = new AbortController();
+    const missingOuterBrace = JSON.stringify({ hits: [HIT1] }).slice(0, -1);
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        () =>
+          ({
+            ok: true,
+            body: hangingBody([frame({ choices: [{ delta: { content: missingOuterBrace } }] })]),
+          }) as Response,
+      ),
+    );
+    const events: { type: string }[] = [];
+    let thrown: Error | undefined;
+    try {
+      for await (const e of findPassagesStream({ ...req(), signal: controller.signal })) {
+        events.push(e);
+        if (e.type === "hit") controller.abort(new Error("stopped by the reader"));
+      }
+    } catch (err) {
+      thrown = err as Error;
+    }
+    expect(events.some((e) => e.type === "hit")).toBe(true); // the preview really did stream
+    expect(events.some((e) => e.type === "done")).toBe(false); // but it was never treated as the answer
+    expect(thrown).toBeDefined();
+  });
+
+  it("cancelling once the text is already complete still produces a `done` — nothing was lost, only the wire's own [DONE] never arrived", async () => {
+    /* The interesting case, and the reason all three of these are worth
+       having rather than just the "obviously throws" one above: the model's
+       JSON can be genuinely whole — parses, validates — even though neither
+       `[DONE]` nor a `finish_reason` ever showed up, because the reader
+       walked away a moment before OpenRouter's own sentinel did. Since the
+       text itself is provably complete, this is not filed as a truncation:
+       nothing is lost, so nothing is thrown away. */
+    const controller = new AbortController();
+    const complete = JSON.stringify({ hits: [HIT1] });
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        () =>
+          ({ ok: true, body: hangingBody([frame({ choices: [{ delta: { content: complete } }] })]) }) as Response,
+      ),
+    );
+    const events: { type: string }[] = [];
+    for await (const e of findPassagesStream({ ...req(), signal: controller.signal })) {
+      events.push(e);
+      if (e.type === "hit") controller.abort(new Error("stopped by the reader"));
+    }
+    expect(events.map((e) => e.type)).toEqual(["hit", "done"]);
+  });
+});
+
+describe("the alarm that says the preview and the stored result disagreed", () => {
+  /* src/search.ts § disagree. This is the one check that would notice the
+     extractor drifting away from a real parse — the reader sees a row appear
+     and then quietly not be there once the run is saved, which has no other
+     symptom. It lives in a log line, and nothing here reads logs, so the
+     judgement is tested even though the wiring is not. Said plainly because
+     "the alarm is tested" would otherwise be more than is true. */
+  const ids = (...pairs: [string, number][]) =>
+    hitIdentities(
+      pairs.map(([blockId, start]) => ({
+        blockId,
+        start,
+        quote: "unused",
+        confidence: 50,
+        reasoning: "",
+      })),
+    );
+
+  it("stays quiet when the preview and the stored result match", () => {
+    const same = ids(["spya-k3m9qt", 0], ["spya-aaaaaa", 12]);
+    expect(disagree(same, [...same])).toBe(false);
+  });
+
+  it("fires when a previewed hit is missing from the stored result", () => {
+    expect(disagree(ids(["spya-k3m9qt", 0], ["spya-aaaaaa", 12]), ids(["spya-k3m9qt", 0]))).toBe(
+      true,
+    );
+  });
+
+  it("fires when the same hits come back in a different order", () => {
+    /* Not a set comparison, deliberately: hits are ranked best-first and the
+       ranking is most of what the reader is being given. */
+    expect(
+      disagree(ids(["spya-k3m9qt", 0], ["spya-aaaaaa", 12]), ids(["spya-aaaaaa", 12], ["spya-k3m9qt", 0])),
+    ).toBe(true);
+  });
+
+  it("fires when a hit is at a different place in the same block", () => {
+    expect(disagree(ids(["spya-k3m9qt", 0]), ids(["spya-k3m9qt", 40]))).toBe(true);
+  });
+
+  it("names a hit without putting the article in the log", () => {
+    // The identity is blockId:start. The quote is prose — see logging.md.
+    expect(ids(["spya-k3m9qt", 7])).toEqual(["spya-k3m9qt:7"]);
   });
 });
