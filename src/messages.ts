@@ -70,6 +70,96 @@ export function canRetry(kind: FailureKind): boolean {
 }
 
 /**
+ * The kind of failure a stored message describes, read back out of its code.
+ *
+ * ## Why this exists rather than a `kind` field on the wire
+ *
+ * The interface has to know whether to offer another go, and by the time it is
+ * rendering, all it has is a sentence: `providerRefused` throws an `Error`, and
+ * what gets stored — on a comment, a chat message, a search run, a glossary
+ * lookup — is `err.message` and nothing else. Threading a `kind` alongside it
+ * means a new field on four persisted types and a column on each of their
+ * Postgres tables, in the middle of the migration that is adding those tables.
+ *
+ * So the code carries it. That is a **narrow** widening of what the bracketed
+ * code is for, and worth being honest about: docs/project/copy.md introduces it
+ * as a support reference, something a reader can quote. It is now also read by
+ * one function. What makes that safe is not care, it is the test —
+ * tests/messages.test.ts round-trips every message in this file through here
+ * and fails if the answer differs from its declared `kind`. A code that stops
+ * agreeing with its message is a red test, not a wrong button.
+ *
+ * ## What it does with a message it does not recognise
+ *
+ * Returns `null`, and **every caller must treat that as "offer the retry".**
+ * Two things arrive here that this file did not write: errors stored before it
+ * existed, and failures that are not model failures at all — a dropped
+ * connection, a 500 from our own server. Guessing "permanent" for those would
+ * hide a button that would have worked, which is the worse of the two
+ * mistakes: an offered retry that fails costs a click, a withheld one costs the
+ * reader the feature.
+ */
+export function kindOfMessage(message: string): FailureKind | null {
+  const code = message.match(/\[([a-z0-9-]+)\]\s*$/)?.[1];
+  if (!code) return null;
+  const known = CODE_KINDS[code];
+  if (known) return known;
+  /* `[ai-409]` and friends — the fall-through branches, which mint a code from
+     the status. Same rule they use: a refusal we have no theory about will be
+     refused again, anything else gets the benefit of the doubt. */
+  const status = code.match(/^ai-(\d{3})$/)?.[1];
+  if (status) return Number(status) >= 400 && Number(status) < 500 ? "blocked" : "retry";
+  return null;
+}
+
+/**
+ * Should the interface offer another go under this failure?
+ *
+ * The one question a component asks about a stored error, so that the answer is
+ * given in one place rather than three. **An unrecognised message means yes** —
+ * see `kindOfMessage` for why that is the safe direction.
+ *
+ * Note what this deliberately does not do: it does not decide what to show
+ * *instead* of the button. The message already says why retrying will not work
+ * and what the reader can do about it; a second widget explaining the same
+ * thing would be the app talking over itself.
+ */
+export function worthRetrying(message: string | null | undefined): boolean {
+  if (!message) return true;
+  const kind = kindOfMessage(message);
+  return kind === null || canRetry(kind);
+}
+
+/**
+ * Every fixed code this file can produce, and what it means.
+ *
+ * Next to the messages rather than in the client, so there is one file to
+ * change and the round-trip test can see both halves at once.
+ */
+const CODE_KINDS: Record<string, FailureKind> = {
+  "ai-busy": "retry",
+  "ai-no-credit": "ours",
+  "ai-key": "ours",
+  "ai-no-model": "ours",
+  "ai-refused": "blocked",
+  "ai-too-big": "blocked",
+  "ai-bad-request": "bug",
+  "ai-timeout": "retry",
+  "ai-upstream": "retry",
+  "ai-interrupted": "retry",
+  "ai-unreadable": "retry",
+  "ai-not-set-up": "ours",
+  "ai-overflowed": "retry",
+  "ai-slow": "retry",
+  "ai-stalled": "retry",
+  "ai-cut-off": "retry",
+  "ai-filtered": "blocked",
+  "ai-no-room": "retry",
+  "ai-empty": "retry",
+};
+
+
+/**
  * A provider call that came back with an HTTP status instead of an answer.
  *
  * The status is mapped rather than shown, because a number is not an

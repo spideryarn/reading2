@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   ANSWER_OVERFLOWED,
   canRetry,
+  kindOfMessage,
   ENDED_UNFINISHED,
   NOT_CONFIGURED,
   type FailureKind,
@@ -69,6 +70,28 @@ describe("the shape every message keeps", () => {
       const sentence = f.message.replace(/\s*\[[a-z0-9-]+\]$/, "");
       expect(sentence, sentence).not.toMatch(/\b[45]\d\d\b/);
     }
+  });
+});
+
+describe("the kind survives being stored as a bare sentence", () => {
+  /* src/messages.ts § kindOfMessage: the interface only ever gets the string,
+     so the code in it has to carry the kind. This is the test that makes that
+     safe rather than merely clever — a code that stops agreeing with its own
+     message fails here instead of showing a Retry button that cannot work. */
+  it("reads every message back to the kind it was declared with", () => {
+    for (const f of EVERY) expect(kindOfMessage(f.message), f.message).toBe(f.kind);
+  });
+
+  it("says nothing about a message it did not write", () => {
+    /* Which callers must read as "offer the retry" — see the docstring. */
+    expect(kindOfMessage("The server is not running.")).toBeNull();
+    expect(kindOfMessage("Something [not-a-code] went wrong")).toBeNull();
+    expect(kindOfMessage("")).toBeNull();
+  });
+
+  it("keeps its answer for a status it has no branch for", () => {
+    expect(kindOfMessage(providerHttpFailure(451).message)).toBe("blocked");
+    expect(kindOfMessage(providerHttpFailure(599).message)).toBe("retry");
   });
 });
 

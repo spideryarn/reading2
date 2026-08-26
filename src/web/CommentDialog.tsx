@@ -18,6 +18,7 @@
  */
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
+import { worthRetrying } from "../messages.js";
 import type { ClientComment } from "./useComments.js";
 import { Tooltip } from "./Tooltip.js";
 
@@ -173,9 +174,17 @@ export function CommentDialog({
                 be told which is which. */}
             {comment.answer ? " The answer below is the one you already had." : ""}
           </p>
-          <button type="button" className="linky" onClick={onRetry}>
-            Try again
-          </button>
+          {/* Not offered when the message itself says another go cannot work —
+              out of credit, no key, a request the service will refuse again.
+              copy.md calls telling somebody to retry into a wall "the expensive
+              mistake", and a button is a more emphatic way of saying it than a
+              sentence. src/messages.ts § worthRetrying; an error this app did
+              not write still gets the button. */}
+          {worthRetrying(comment.error) && (
+            <button type="button" className="linky" onClick={onRetry}>
+              Try again
+            </button>
+          )}
         </div>
       )}
 
