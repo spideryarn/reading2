@@ -12,6 +12,7 @@ import {
   ANSWER_OVERFLOWED,
   canRetry,
   kindOfMessage,
+  worthRetrying,
   ENDED_UNFINISHED,
   NOT_CONFIGURED,
   type FailureKind,
@@ -92,6 +93,30 @@ describe("the kind survives being stored as a bare sentence", () => {
   it("keeps its answer for a status it has no branch for", () => {
     expect(kindOfMessage(providerHttpFailure(451).message)).toBe("blocked");
     expect(kindOfMessage(providerHttpFailure(599).message)).toBe("retry");
+  });
+});
+
+describe("whether the interface offers another go", () => {
+  it("offers one exactly when the message says one could work", () => {
+    for (const f of EVERY) expect(worthRetrying(f.message), f.message).toBe(canRetry(f.kind));
+  });
+
+  it("offers one for anything it does not recognise", () => {
+    /* The safe direction. A withheld retry costs the reader the feature; an
+       offered one that fails costs a click. */
+    for (const m of ["The server is not running.", "", null, undefined, "no code here"]) {
+      expect(worthRetrying(m), String(m)).toBe(true);
+    }
+  });
+
+  it("withholds one for the three failures a reader cannot retry past", () => {
+    for (const m of [
+      providerHttpFailure(402).message, // out of credit
+      providerHttpFailure(403).message, // refused
+      providerHttpFailure(413).message, // too big
+    ]) {
+      expect(worthRetrying(m), m).toBe(false);
+    }
   });
 });
 
