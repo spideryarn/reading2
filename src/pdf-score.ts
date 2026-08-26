@@ -306,17 +306,43 @@ function protectedFaults(want: string[], have: string): string[] {
 }
 
 /**
- * Every protected token on the page, plus the joins a line break made.
+ * Every protected token on the page, plus **every way two or three adjacent
+ * tokens could have been one before a line break split them.**
  *
- * A word split at a line end appears in the text layer as `rock-` and
- * `waga.html`; neither half is what a correct transcription contains, and the
- * whole is what it does. Both halves and the join are all offered.
+ * A PDF breaks a long token wherever it runs out of line, and it does not
+ * always leave a hyphen to say so. All three of these are on the `harder`
+ * fixture, and all three were reported as invented by a transcription that was
+ * exactly right:
+ *
+ *   page 3 ends "…meteorologist, 1936–"     page 4 begins "1940"
+ *   "…pp. 9–"                                "12"
+ *   "https://bildsuche."                     "digitale-sammlungen.de/…&bandnummer="
+ *                                            "bsb00081185&pimage=00443&…"
+ *
+ * The first two are split at a dash *and across a page boundary*, so the
+ * per-page hyphen mending in src/pdf.ts cannot see them. The third is split
+ * three ways at a `.` and an `=`, with no hyphen anywhere — which no rule about
+ * hyphens can ever catch.
+ *
+ * **This is the tolerance the old packed-string `includes` had, bought back
+ * without the flaw that came with it.** That version tolerated any split at all
+ * because it had no idea where tokens ended — and tolerated `2012 → 12` for
+ * exactly the same reason. Joining adjacent tokens only ever makes a haystack
+ * entry *longer*, so a truncated number still matches nothing. The test that
+ * says so sits next to the two that need the joins.
  */
 function protectedOf(text: string): string[] {
   const raw = text.normalize("NFKC").split(/\s+/);
   const all = [...raw];
   for (let i = 0; i < raw.length - 1; i++) {
-    if (/[-\u2010\u00ad]$/u.test(raw[i]!)) all.push(raw[i]!.replace(/[-\u2010\u00ad]$/u, "") + raw[i + 1]);
+    const first = raw[i]!;
+    const second = raw[i + 1]!;
+    all.push(first + second);
+    /* And with a trailing hyphen dropped, which is the ordinary case and the
+       one a reader would expect the model to have removed. */
+    all.push(first.replace(/[-\u2010\u00ad]$/u, "") + second);
+    const third = raw[i + 2];
+    if (third !== undefined) all.push(first + second + third);
   }
   return protect(all.join(" "));
 }

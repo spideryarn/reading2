@@ -198,6 +198,45 @@ describe("a short page cannot be paid for by a long one", () => {
   });
 });
 
+describe("long tokens the page broke across a line, and the page break", () => {
+  /* All three observed on the `harder` fixture, all three reported as invented
+     by a correct transcription. The whole-token matching that fixed `2012 → 12`
+     is what broke them: the old packed-string `includes` tolerated any split at
+     all, and tolerated a truncated number with it. src/pdf-score.ts. */
+  const page = (text: string): Pass0 => ({
+    pages: [{ page: 1, text, words: text.split(/\s+/).length, items: [] }],
+    metaTitle: null,
+    isScan: false,
+    furniture: new Set(),
+  });
+  const said = (text: string): PdfRecord[] => [
+    { page: 1, type: "paragraph", text, continues: false, uncertain: false },
+  ];
+
+  it("accepts a range the page broke after its dash", () => {
+    /* Page 3 ends "a British military meteorologist, 1936–" and page 4 begins
+       "1940". The model joined it, correctly. */
+    const pass = page("James Durward, a British military meteorologist, 1936–\n1940, saw one.");
+    const result = check(said("James Durward, a British military meteorologist, 1936–1940, saw one."), [1], pass);
+    expect(result.pages[0]!.invented).toEqual([]);
+  });
+
+  it("accepts a URL the page broke over three lines with no hyphen at all", () => {
+    const printed =
+      "See https://bildsuche.\ndigitale-sammlungen.de/index.html?c=viewer&bandnummer=\nbsb00081185&pimage=00443&lv=1&v=100&l=de#, last access: 2021.";
+    const joined =
+      "See https://bildsuche.digitale-sammlungen.de/index.html?c=viewer&bandnummer=bsb00081185&pimage=00443&lv=1&v=100&l=de#, last access: 2021.";
+    expect(check(said(joined), [1], page(printed)).pages[0]!.invented).toEqual([]);
+  });
+
+  it("still refuses a year the model shortened", () => {
+    /* The property the joins must not cost: joining adjacent tokens only ever
+       makes the haystack LONGER, so a truncated number still matches nothing. */
+    const pass = page("In 1843–79 the society fell from 214 members to 47.");
+    expect(check(said("In 43–79 the society fell from 214 members to 47."), [1], pass).pages[0]!.invented).toEqual(["43–79"]);
+  });
+});
+
 describe("what the check says it checked", () => {
   it("does not count a page it could not check", () => {
     /* `meta.pagesChecked` is shown to a reader. "8 of 8" for a document where a
