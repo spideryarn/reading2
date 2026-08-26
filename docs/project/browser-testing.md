@@ -165,6 +165,30 @@ call rather than by the rendering step — a fresh page load, a reload, `history
 control. That is enough to cover URL→page restore, the legacy-hash rewrite, and the history
 semantics. Continuous scroll→URL needs a genuinely visible tab.
 
+#### It can also stop a component ever drawing at all
+
+The bullets above are about *stale* values. On 2026-08-27 the same cause produced something worse in
+the new Diagram mode ([diagram.md](diagram.md)): the panel measures its scroller in a layout effect
+and draws nothing until it has a width, and that **first** measure went through `requestAnimationFrame`
+— so in a hidden tab it never measured, never laid out, and sat on its "measuring" placeholder
+forever. Two browser agents in a row reported the feature as simply broken, with correctly-sized
+elements, the right controls, and a completely clean console.
+
+Two things to take from it:
+
+- **Never gate a *first* measure on rAF.** A layout effect already runs after layout and before
+  paint, which is exactly when it is safe to read `clientWidth`; the frame buys nothing and costs the
+  whole render in a hidden tab. Keep the frame for the *resize* path, where it is genuinely needed —
+  `ResizeObserver` fires during layout, and setting state straight from it is the
+  "loop completed with undelivered notifications" warning — and where it is safe, because a resize
+  implies a visible tab. `src/web/Spine.tsx` still has the old shape.
+- **Your diagnostic inherits the bug.** A snippet that resolves a Promise from inside
+  `requestAnimationFrame` never resolves in a hidden tab, and the `Runtime.evaluate` behind
+  `javascript_tool` then times out after 45 seconds with *"The renderer may be frozen or
+  unresponsive"* — which reads like a page problem rather than a tab-visibility one. Write
+  hidden-tab probes synchronously, or on `setTimeout` (remembering the 1s clamp above). The timeout
+  is, in fact, a positive result: it is rAF telling you it is asleep.
+
 **Keyboard events are a fourth thing, and they are worse than useless — they are *intermittent*.**
 Driving `ArrowDown` / `ArrowLeft` through the extension's `computer` tool into a hidden tab on
 2026-08-26: a bare `window.addEventListener('keydown', …)` planted in the page logged **zero** events

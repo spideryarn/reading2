@@ -281,12 +281,32 @@ picture. **The first measure was gated on `requestAnimationFrame`, and rAF does
 not run in a background tab.** So a panel first rendered in a tab that was never
 focused never measured, never laid out, and never said anything was wrong.
 
-That is `silent-success` with a blank rectangle on it, and it is one of the
-failure modes [browser-testing.md](../project/browser-testing.md) tells a browser
-agent to expect — a hidden tab firing no events. The fix is not a workaround: the
-first measure belongs in the layout effect *synchronously*, which is what a
-layout effect is for, and it removes the one blank frame as well. Only the
-resize path still needs the frame, and a resize implies a visible tab.
+The measurements that settled it, read out of the page:
+
+```
+clientWidth 319 · clientHeight 460 · padding 8px each side
+ResizeObserver "function" · svgs 0 · measuring 5 · quiet 0
+```
+
+Every input the measure needed was present and correct. And the probe sent to ask
+whether `ResizeObserver` was firing — which resolved its Promise from inside a
+`requestAnimationFrame` — **never resolved, and timed out CDP after 45 seconds
+with "the renderer may be frozen or unresponsive"**. The diagnostic had inherited
+the bug it was sent to find, and that timeout is the positive result: it is rAF
+saying it is asleep.
+
+That is `silent-success` with a blank rectangle on it. Worse, it is a failure
+mode [browser-testing.md](../project/browser-testing.md) had **already written
+down** — its hidden-tab section names "the spine's re-measure" as rAF-coalesced
+and therefore dead in a background tab. The doc predicted this bug and nobody
+read it first; what has been added there now is the part it did not say, which is
+that the same cause can stop a component reaching first paint at all, rather than
+merely leaving a value stale.
+
+The fix is not a workaround: the first measure belongs in the layout effect
+*synchronously*, which is when a layout effect runs and exactly when it is safe
+to read `clientWidth`. It removes the one blank frame as well. Only the resize
+path still needs the frame, and a resize implies a visible tab.
 
 **`src/web/Spine.tsx` has the same shape** — `run()` called once and immediately
 gated on rAF — and so may have the same problem. Not changed here: different
