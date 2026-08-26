@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { throttle, useQueryState } from "nuqs";
-import type { Article, BlockId, GlossaryEntry } from "../types.js";
+import type { Article, Block, BlockId, GlossaryEntry } from "../types.js";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -19,6 +19,8 @@ import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import { type ArticleView, LIBRARY_HREF, navigate, useRoute } from "./router.js";
 import { Metadata } from "./Metadata.js";
+import { IdeasPanel } from "./IdeasPanel.js";
+import { useIdeas } from "./useIdeas.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
@@ -46,6 +48,7 @@ import {
   findLiteral,
   hitMarks as buildHitMarks,
   orderFound,
+  resolveIdea,
   keepAbove,
   PRIORITY_CONF,
   resolveHits,
@@ -71,6 +74,7 @@ import {
   rungParam,
   sortParam,
   gateParam,
+  ideaParam,
   termParam,
   findParam,
   matchParam,

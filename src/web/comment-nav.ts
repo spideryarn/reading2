@@ -38,15 +38,21 @@ export function orderComments(comments: Comment[], blocks: { id: BlockId }[]): C
 }
 
 /**
- * The comment `delta` steps away from `currentId`, or null if there is none.
+ * The item `delta` steps away from `currentId`, or null if there is none.
+ *
+ * **Generic over anything with an `id`**, since 2026-08-27, because the ideas
+ * mode needed exactly this and a second copy of a stepper is a second set of
+ * end conditions to get wrong. Only `orderComments` above stayed
+ * comment-specific — ordering really is about a comment's blockId, start and
+ * clock, where stepping is about a list.
  *
  * Stops at the ends rather than wrapping. Wrapping would make the two arrows
  * always live, which reads as "there is more this way" when there isn't — and
  * from the last comment it would fling the reader back to the top of the
  * article, which is a big move to get from a small button.
  */
-export function stepComment(
-  ordered: Comment[],
+export function stepComment<T extends { id: string }>(
+  ordered: readonly T[],
   currentId: string | null,
   delta: number,
 ): string | null {
@@ -55,7 +61,10 @@ export function stepComment(
   return ordered[at + delta]?.id ?? null;
 }
 
-/** Where the open comment sits, 1-based, for the "3 / 5" counter. */
-export function positionOf(ordered: Comment[], currentId: string | null): number {
+/** Where the open one sits, 1-based, for the "3 / 5" counter. */
+export function positionOf<T extends { id: string }>(
+  ordered: readonly T[],
+  currentId: string | null,
+): number {
   return ordered.findIndex((c) => c.id === currentId) + 1;
 }

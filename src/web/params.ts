@@ -227,7 +227,7 @@ export const panelParam = createParser<Panel>({
  * (docs/project/summaries.md). Diagram is the fifth
  * (docs/project/diagram.md), and it cost this list one word as well.
  */
-export const MODES = ["toc", "chat", "glossary", "search", "summary", "diagram"] as const;
+export const MODES = ["toc", "chat", "glossary", "search", "summary", "diagram", "ideas"] as const;
 export type Mode = (typeof MODES)[number];
 
 export const modeParam = createParser<Mode>({
@@ -272,6 +272,21 @@ export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
  * `?thread=`.
  */
 export const termParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * Which idea is selected, and therefore whose passages are marked in the prose
+ * and painted down the rail.
+ *
+ * An idea's id is minted by `mintId`, so it is a block id by construction and
+ * the same parser validates it for free — and the same "a mangled link degrades
+ * to nothing" behaviour falls out, which here means the list with nothing
+ * selected.
+ *
+ * `replace`, exactly like `?term=` beside it: stepping between ideas while you
+ * read is browsing rather than navigating, and `mode` already put one entry on
+ * the stack for the trip into the mode, which is the entry Back should use.
+ */
+export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
  * How the glossary list is ordered.

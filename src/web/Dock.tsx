@@ -96,6 +96,7 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import {
   BookA,
+  Lightbulb,
   ChevronUp,
   Network,
   Info,
@@ -237,6 +238,17 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     icon: BookA,
     label: "Glossary",
     blurb: "The terms this piece uses in a non-obvious way, defined from the piece itself",
+  },
+  /* Straight after Glossary, because the order runs outwards from the article's
+     own words and these two are the same kind of thing pointed at different
+     units: a term is a word you look up, an idea is a proposition you hold.
+     Greg set this order by hand, so a new mode goes where it belongs in his
+     reasoning rather than on the end. */
+  {
+    mode: "ideas",
+    icon: Lightbulb,
+    label: "Ideas",
+    blurb: "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That

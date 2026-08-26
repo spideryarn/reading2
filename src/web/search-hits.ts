@@ -28,7 +28,7 @@
  */
 import { renderedText, type Mark } from "./annotate.js";
 import { findQuote, snippet } from "../quote-match.js";
-import type { Block, BlockId, SearchHit } from "../types.js";
+import type { Block, BlockId, IdeaOccurrence, SearchHit } from "../types.js";
 import type { HitOrder } from "./params.js";
 
 /**
@@ -332,28 +332,145 @@ export interface ActiveRun {
  * ruler stops being a pure function of the blocks. One pass, one ruler, one
  * answer.
  */
-export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
-  const index = new Map(blocks.map((b, i) => [b.id, i]));
+/**
+ * The blocks, rendered and measured once — everything `resolveOne` needs that
+ * does not vary per passage.
+ *
+ * Built once per call and shared, for the reason the note above `resolveHits`
+ * gives: rendering every block's text is the one genuinely expensive thing in
+ * this file, and a ruler rebuilt per source would measure each result's *place*
+ * against a scale reconstructed from the same numbers.
+ */
+interface Page {
+  index: Map<BlockId, number>;
+  texts: string[];
+  scale: Ruler;
+}
+
+function page(blocks: Block[]): Page {
   const texts = blocks.map((b) => renderedText(b.html));
-  const scale = ruler(texts);
+  return { index: new Map(blocks.map((b, i) => [b.id, i])), texts, scale: ruler(texts) };
+}
+
+/**
+ * One passage — a block id plus the words somebody quoted — resolved against
+ * the prose as it is actually rendered.
+ *
+ * **Extracted so the third source could not drift from the first two.** This
+ * was the body of `resolveHits`, and when `resolveIdea` arrived the choice was
+ * to repeat it or to lift it. Repeating it would have meant two copies of the
+ * `whole` rule, and that rule has already been got wrong once here in exactly
+ * the way a second copy invites (see the comment on `located` below).
+ *
+ * `null` when the article no longer has the block. That can only happen after a
+ * re-extraction, and an id that is simply gone has nowhere to point; the
+ * alternative is a row in the list that does nothing when pressed.
+ */
+function resolveOne(
+  at: Page,
+  spec: {
+    key: string;
+    blockId: BlockId;
+    runId: string | null;
+    slot: number | null;
+    quote: string;
+    start?: number;
+    confidence: number | null;
+    reasoning: string | null;
+  },
+): Found | null {
+  const i = at.index.get(spec.blockId);
+  if (i === undefined) return null;
+  const text = at.texts[i] ?? "";
+  /* `whole` comes from whether `findQuote` found anything, and from nothing
+     else. The first version of this inferred it — a span covering the entire
+     block, plus the quote not equalling the block's text — and real data broke
+     it within the hour: a quote that genuinely *is* the whole block produces
+     exactly the shape the fallback produces, and the model had retyped a line
+     break as a space, so a perfect match was labelled "the exact words have
+     moved". A derived fact that usually agrees with a known one is the shape of
+     most of docs/reusable/silent-success.md. */
+  const located = findQuote(text, spec.quote, spec.start);
+  const whole = located === null;
+  const span = located ?? { start: 0, end: text.length };
+  return {
+    key: spec.key,
+    blockId: spec.blockId,
+    runId: spec.runId,
+    slot: spec.slot,
+    index: i,
+    ...span,
+    confidence: spec.confidence,
+    reasoning: spec.reasoning,
+    short: whole
+      ? snippet(text, { start: 0, end: 0 }, SHORT_SNIPPET)
+      : snippet(text, span, SHORT_SNIPPET),
+    long: whole
+      ? snippet(text, { start: 0, end: 0 }, LONG_SNIPPET)
+      : snippet(text, span, LONG_SNIPPET),
+    /* `span.start`, which for a fallback is 0 — the top of the block. That is
+       the honest answer: the whole paragraph is marked, so where in it the
+       source meant is exactly what we do not know. */
+    at: placeOf(at.scale, i, span.start),
+    whole,
+  };
+}
+
+/**
+ * One idea's occurrences, resolved into the same `Found[]` everything
+ * downstream reads.
+ *
+ * **The third arm, after the literal matcher and the meaning search.** Nothing
+ * below this line knows or cares which of the three produced a passage — the
+ * marks, the paragraph bar, the spine lanes and the ordering all read `Found`
+ * and nothing else — which is why an entire mode's worth of highlighting cost
+ * one function.
+ *
+ * Two things about the arguments are decisions rather than plumbing:
+ *
+ * - **`confidence: null`.** A search hit's confidence answers *is this what you
+ *   asked for*, and nobody asked the article a question here. `null` is the
+ *   value a literal word-match already carries, so the threshold, the ordering
+ *   and the wash all already know what to do with it — `keepAbove` reads it as
+ *   certain rather than as zero, which is the behaviour a passage with no
+ *   opinion attached should have.
+ * - **A real `slot`, and a real `runId`.** The lane in the rail is keyed by run
+ *   id, so an idea would get its own lane whatever its slot were; the slot is
+ *   needed for the *paragraph bar*, which deliberately drops `null` slots
+ *   (`blockHues` below). An idea with no slot would paint the rail and leave
+ *   the bar blank, which looks like a rendering bug and is not one.
+ */
+export function resolveIdea(
+  blocks: Block[],
+  idea: { id: string; slot: number; occurrences: IdeaOccurrence[] },
+): Found[] {
+  const at = page(blocks);
+  const out: Found[] = [];
+  for (const [n, o] of idea.occurrences.entries()) {
+    const one = resolveOne(at, {
+      /* Same three-part key as a search hit, and for the same reason: one idea
+         can be needed twice in the same paragraph, and `blockId:n` alone stopped
+         being unique the moment more than one source could be on screen. */
+      key: `${idea.id}:${o.blockId}:${n}`,
+      blockId: o.blockId,
+      runId: idea.id,
+      slot: idea.slot,
+      quote: o.quote,
+      ...(o.start !== undefined && { start: o.start }),
+      confidence: null,
+      reasoning: o.reasoning,
+    });
+    if (one) out.push(one);
+  }
+  return out;
+}
+
+export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
+  const at = page(blocks);
   const found: Found[] = [];
   for (const run of runs) {
     for (const [n, hit] of run.hits.entries()) {
-      const at = index.get(hit.blockId);
-      if (at === undefined) continue;
-      const text = texts[at] ?? "";
-      /* `whole` comes from whether `findQuote` found anything, and from nothing
-         else. The first version of this inferred it — a span covering the entire
-         block, plus the quote not equalling the block's text — and real data
-         broke it within the hour: a quote that genuinely *is* the whole block
-         produces exactly the shape the fallback produces, and the model had
-         retyped a line break as a space, so a perfect match was labelled "the
-         exact words have moved". A derived fact that usually agrees with a known
-         one is the shape of most of docs/reusable/silent-success.md. */
-      const located = findQuote(text, hit.quote, hit.start);
-      const whole = located === null;
-      const span = located ?? { start: 0, end: text.length };
-      found.push({
+      const one = resolveOne(at, {
         /* The run id is part of the key, and it has to be. `blockId:n` was
            unique while exactly one search could be showing; with three switched
            on, three searches that each found their second hit in the same
@@ -371,22 +488,12 @@ export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
         blockId: hit.blockId,
         runId: run.id,
         slot: run.slot,
-        index: at,
-        ...span,
+        quote: hit.quote,
+        ...(hit.start !== undefined && { start: hit.start }),
         confidence: hit.confidence,
         reasoning: hit.reasoning,
-        short: whole
-          ? snippet(text, { start: 0, end: 0 }, SHORT_SNIPPET)
-          : snippet(text, span, SHORT_SNIPPET),
-        long: whole
-          ? snippet(text, { start: 0, end: 0 }, LONG_SNIPPET)
-          : snippet(text, span, LONG_SNIPPET),
-        /* `span.start`, which for a fallback is 0 — the top of the block. That is
-           the honest answer: the whole paragraph is marked, so where in it the
-           model meant is exactly what we do not know. */
-        at: placeOf(scale, at, span.start),
-        whole,
       });
+      if (one) found.push(one);
     }
   }
   return found;

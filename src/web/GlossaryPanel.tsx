@@ -76,6 +76,7 @@ import {
 import type { BlockId, Glossary, GlossaryEntry, Job } from "../types.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
+import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { Tooltip } from "./Tooltip.js";
 import { isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
@@ -931,6 +932,23 @@ function Term({
   const scores = rowScores(entry, showScore);
   const prose = entryProse(entry);
 
+  /**
+   * Which occurrence the ‹ › stepper is on, for this term.
+   *
+   * Local to the row, so it resets when the reader selects a different term —
+   * which is right, because "3 of 5" would otherwise mean a place in a list
+   * that is no longer on screen. It survives collapsing and re-opening the same
+   * row, which is also right: coming back to a term you were part-way through
+   * should not send you to the top of the article.
+   *
+   * A block id is a usable identity **here and not in the ideas panel**, and
+   * the difference is worth knowing: `entry.blocks` is computed by
+   * `findOccurrences`, which pushes each block at most once, so the ids are
+   * unique. An idea's occurrences are quoted passages and two of them can sit
+   * in one paragraph, which is why that side keys on `Found.key` instead.
+   */
+  const [atBlock, setAtBlock] = useState<BlockId | null>(null);
+
   return (
     <li className={`gloss-term${selected ? " on" : ""}`}>
       <button
@@ -1081,6 +1099,23 @@ function Term({
               {entry.blocks.map((id) => (
                 <BlockRef key={id} id={id} onJump={onJump} />
               ))}
+              {/* Greg, 2026-08-26: *"a way in both Ideas and Glossary modes to
+                  jump to prev/next exemplifying block"*. The chips have always
+                  been able to take you to any one of them; what was missing was
+                  moving *along* without going back to the panel to aim. Returns
+                  nothing for a single occurrence. */}
+              <BlockNav
+                targets={entry.blocks.map((id) => ({ id, blockId: id }))}
+                currentId={atBlock}
+                onGo={(id, blockId) => {
+                  setAtBlock(id as BlockId);
+                  /* Nudge rather than jump: stepping between neighbours should
+                     leave a reader alone when the next one is already in front
+                     of them. Pressing a chip above still always moves. */
+                  nudgeTo(blockId, onJump);
+                }}
+                noun="use"
+              />
             </p>
           ) : (
             <p className="gloss-nowhere">

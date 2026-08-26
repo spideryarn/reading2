@@ -5856,3 +5856,118 @@ tr:hover .block-chat,
   font-family: var(--font-mono);
   font-size: 0.58rem;
 }
+
+/* ---------------------------------------------------------- § ideas mode ----
+   The sixth mode, and the smallest stylesheet section of any of them — which is
+   the point rather than an accident. `.ideas` is `.gloss` with a class beside
+   it, so the band shell, the head, the run button, the stale banner and the two
+   provenance rules all come from § glossary mode unchanged. What is here is
+   only what an idea has and a term does not: two labelled groups, a name that
+   is a sentence rather than a word, and a list of quoted passages.
+
+   docs/plans/ideas-mode.md. */
+
+.ideas-group { margin: 0.9rem 0 0; }
+.ideas-group:first-of-type { margin-top: 0.4rem; }
+.ideas-group > h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* The group's own sentence, under its heading. It is doing real work: "the
+   piece leans on these and never states them" is the whole difference between
+   the two groups, and a reader who has not read the plan has no other way to
+   know it. */
+.ideas-blurb {
+  margin: 0.15rem 0 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.ideas-list { margin: 0; padding: 0; list-style: none; }
+.ideas-item { border-top: 1px solid var(--rule); }
+.ideas-item:first-child { border-top: none; }
+
+/* **Not `white-space: nowrap`, and not truncated.** A glossary term is a word
+   and fits on one line; an idea is a proposition of three to ten words and
+   wrapping is the normal case. Truncating it would hide the half that carries
+   the claim — "Writing is a test of thought, not a…" is exactly the wrong
+   half to keep. */
+.ideas-name {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+.ideas-name:hover { color: var(--highlight-ink); }
+.ideas-item.open > .ideas-name { color: var(--highlight-ink); font-weight: 600; }
+
+.ideas-detail { padding: 0 0 0.6rem; }
+.ideas-where { margin-top: 0.55rem; }
+/* The stepper sits on the label line rather than under it — the label is short
+   and the row is otherwise empty to the right. `.cmt-nav` already pushes itself
+   over with `margin-left: auto`. */
+.ideas-where > .gloss-part-label { display: flex; align-items: center; gap: 0.3rem; }
+
+.ideas-occurrences {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: occurrence;
+}
+.ideas-occurrences > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+.ideas-occurrences > li > button {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  border-left: 2px solid var(--rule);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.ideas-occurrences > li > button:hover { border-left-color: var(--highlight); }
+/* The one the reader last landed on, so the panel and the wash in the prose
+   agree about where they are. */
+.ideas-occurrences > li.open > button {
+  border-left-color: var(--highlight);
+  background: color-mix(in oklab, var(--highlight) 8%, transparent);
+}
+.ideas-quote {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+/* The model's one line on what this passage does with the idea. For an assumed
+   idea this is the load-bearing part of the whole entry — it is where the local
+   inferential move gets named — so it is dimmer than the quote but not hidden. */
+.ideas-reason {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.ideas-again { margin-top: 1rem; }
