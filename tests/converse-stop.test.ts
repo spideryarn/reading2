@@ -142,6 +142,15 @@ describe("a stop ends in `done`, never in a throw", () => {
         // ended it, which is what `stopped` beneath already says.
         truncated: false,
         stopped: true,
+        // Four nulls, not four zeros. Nothing was asked, so the provider
+        // reported nothing — and "we were never told" has to stay tellable
+        // from "the cache read nothing", which is the alarm.
+        usage: {
+          inputTokens: null,
+          outputTokens: null,
+          cacheReadTokens: null,
+          cacheWriteTokens: null,
+        },
       },
     ]);
   });

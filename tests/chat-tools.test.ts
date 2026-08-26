@@ -513,8 +513,17 @@ describe("converse — a turn that uses a tool", () => {
     })) {
       // drained
     }
+    /* The article rides in a content *array* now, so that its `cache_control`
+       marks it and nothing after it — src/converse.ts § The breakpoint is
+       explicit. Compare the text, not the object: two rounds build two arrays
+       and identity would pass or fail for reasons that have nothing to do with
+       the bytes. */
     const article = (i: number) =>
-      ((sent[i] as { messages: { content: unknown }[] }).messages[1] as { content: string }).content;
+      (
+        (sent[i] as { messages: { content: { text: string }[] }[] }).messages[1] as {
+          content: { text: string }[];
+        }
+      ).content[0]!.text;
     expect(article(1)).toBe(article(0));
   });
 

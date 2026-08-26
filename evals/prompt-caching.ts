@@ -30,7 +30,8 @@ import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
 import { articleWithIds, estimateTokens } from "../src/article-prompt.js";
 import { findPassages } from "../src/search.js";
-import type { Block, Meta } from "../src/types.js";
+import { converse } from "../src/converse.js";
+import type { Block, ChatMessage, Meta } from "../src/types.js";
 
 /**
  * What Sonnet 5 costs, per million tokens, as of 2026-08-26.
@@ -121,6 +122,79 @@ async function searchTwice(
   return out;
 }
 
+/**
+ * Two turns of a chat, which is where the cache had quietly stopped working.
+ *
+ * **This is the call the eval used to claim it made and did not.** The header
+ * said "search / chat / explain"; the code called `findPassages` and nothing
+ * else. Chat, meanwhile, was the one request path using OpenRouter's automatic
+ * breakpoint, and that breakpoint marked the final user message — a message
+ * carrying the reader's position, which is prepended per call and never stored,
+ * so turn two could not reproduce it and paid a cold write of the whole
+ * article. docs/postmortems/chat-cache-automatic-breakpoint.md.
+ *
+ * So turn *two* is the measurement here, not turn one. A single chat call tells
+ * you nothing this feature needs to know: the bug was invisible on the first
+ * turn and total on every one after it.
+ *
+ * `useTools: false` deliberately. Tools render at position zero, ahead of both
+ * system and messages, so a turn that drops them mid-conversation invalidates
+ * the whole prefix — a real effect, and one that would show up here as a cache
+ * failure that is nothing to do with the article. One variable at a time.
+ */
+async function chatTwice(slug: string, meta: Meta, blocks: Block[]): Promise<CallResult[]> {
+  const out: CallResult[] = [];
+  const questions = ["What is this piece arguing?", "And what does it say against that?"];
+  const history: ChatMessage[] = [];
+
+  for (const [i, question] of questions.entries()) {
+    const started = Date.now();
+    let answer = "";
+    let usage: CallResult | null = null;
+    for await (const event of converse({
+      meta,
+      blocks,
+      history,
+      question,
+      /* The reader has scrolled, because a reader always has — and it is
+         precisely `at` that made the bug fire. Two different blocks across the
+         two turns, so a prefix that depends on the position cannot pass by
+         standing still. */
+      at: blocks[i === 0 ? 0 : Math.min(2, blocks.length - 1)]?.id,
+      slug,
+      useTools: false,
+    })) {
+      if (event.type === "delta") answer += event.text;
+      if (event.type === "done") {
+        usage = {
+          label:
+            i === 0 ? "chat turn #1 (cold — expect a write)" : "chat turn #2 (warm — expect a read)",
+          promptTokens: event.usage.inputTokens,
+          cacheReadTokens: event.usage.cacheReadTokens,
+          cacheWriteTokens: event.usage.cacheWriteTokens,
+          ms: Date.now() - started,
+        };
+        answer = event.text;
+      }
+    }
+    if (!usage) throw new Error("chat turn ended without a done event");
+    out.push(usage);
+
+    /* The history the next turn sends is the history the *app* would send —
+       src/routes.ts stores the bare question, not the one with the position
+       line on it. Reproducing that here is the whole point: an eval that
+       replayed the exact bytes it had sent would have passed against the bug. */
+    history.push({ id: `spya-q${i}`, role: "user", text: question, status: "done" } as ChatMessage);
+    history.push({
+      id: `spya-a${i}`,
+      role: "assistant",
+      text: answer,
+      status: "done",
+    } as ChatMessage);
+  }
+  return out;
+}
+
 function report(dir: string, calls: CallResult[], articleTokens: number): string {
   const lines: string[] = [];
   lines.push(`# Prompt caching — ${path.basename(dir)}`);
@@ -147,16 +221,34 @@ function report(dir: string, calls: CallResult[], articleTokens: number): string
   );
   lines.push("");
 
-  const cold = calls[0];
-  const warm = calls[1];
-  const read = warm?.cacheReadTokens ?? 0;
+  for (let i = 0; i + 1 < calls.length; i += 2) {
+    lines.push(...verdict(calls[i]!, calls[i + 1]!, articleTokens));
+    lines.push("");
+  }
+  return lines.join("\n");
+}
 
-  /* The first call is only "cold" if nothing warmed it. Re-running this eval
+/**
+ * Did this pair of calls actually reuse the article? Stated, not left to the table.
+ *
+ * A pair rather than the whole run, because there are two pairs now — search and
+ * chat — and one verdict over four calls would have to pick which pair it meant.
+ * Reading a number off row two and calling it "the result" is how chat's failure
+ * survived: the eval only ever had one pair, so the code that read `calls[1]`
+ * was correct and the header that said it covered three features was not.
+ */
+function verdict(cold: CallResult, warm: CallResult, articleTokens: number): string[] {
+  const lines: string[] = [];
+  const read = warm.cacheReadTokens ?? 0;
+  lines.push(`### ${warm.label}`);
+  lines.push("");
+
+  /* A pair is only "cold" if nothing warmed it. Re-running this eval
      inside the 5-minute TTL of a previous run leaves the entry in place, so call
      one reads too and the totals look better than a first-ever visit would. Said
      out loud because otherwise the saving here reads as the steady-state figure
      when it is the best case. */
-  if ((cold?.cacheReadTokens ?? 0) > 0) {
+  if ((cold.cacheReadTokens ?? 0) > 0) {
     lines.push(
       "> Note: call #1 read from cache too, so a previous run had already warmed it — " +
         "the TTL is 5 minutes. The saving above is the warm case. For a true cold start, " +
@@ -193,7 +285,7 @@ function report(dir: string, calls: CallResult[], articleTokens: number): string
         "provider: check provider pinning, and that the prefix clears the 1,024-token floor.",
     );
   }
-  return lines.join("\n");
+  return lines;
 }
 
 async function main(): Promise<void> {
@@ -217,7 +309,9 @@ async function main(): Promise<void> {
       "passages that give a concrete example",
     ]);
 
-    const text = report(dir, calls, articleTokens);
+    const chat = await chatTwice(path.basename(dir), meta, blocks);
+
+    const text = report(dir, [...calls, ...chat], articleTokens);
     console.log(text);
 
     await mkdir("evals/results", { recursive: true });
@@ -231,7 +325,9 @@ async function main(): Promise<void> {
      run back to back — expensive, and worth doing deliberately rather than as a
      side effect of this script. */
   console.log(
-    "\nNote: this checks the request-path cache (search / chat / explain).\n" +
+    "\nNote: this checks search and chat. Explain shares their article rendering\n" +
+      "and their explicit breakpoint, so it is covered by construction rather\n" +
+      "than by a call here — but say so, rather than listing it as checked.\n" +
       "The pipeline's shared block is `articleText`; to check it, run two of\n" +
       "arc, tweets or glossary back to back on one article and compare their\n" +
       "cacheReadTokens in the pipeline log.",

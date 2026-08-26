@@ -39,7 +39,7 @@ matching before the article is even reached.
 
 | Cache | Who shares it | The rendering |
 |---|---|---|
-| **request path** | search, chat, explain — one entry *each*, per article | `articleWithIds` |
+| **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
 | **pipeline** | arc and tweets — one shared entry per article. **Not glossary; see below** | `articleText` |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
@@ -145,6 +145,27 @@ is told the same thing; the article stays identical. **Do not put it back.**
 [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) goes red if anyone does, and
 that test is the only thing that would notice — see below.
 
+### And moving it out of the body is what broke chat
+
+Worth reading beside the paragraph above, because it is the same line of code and the fix for one
+bug was the cause of the other.
+
+Chat used OpenRouter's **automatic** breakpoint until 2026-08-26 — `cache_control` at the top level
+of the request body, which marks *the last cacheable block*. When the position moved out of the
+article it landed in the final user message, which is exactly the block automatic mode marks. And
+the final user message is not what gets stored: the route stores the bare question, so the next turn
+replayed it **without** the position line, the marked block was never reproduced, and — writes happen
+only at the breakpoint — there was no article-only entry underneath. Every turn after the first paid
+a cold write of the whole article, whenever the reader had scrolled, which is always.
+
+Chat now has an explicit breakpoint on the article, like the other two.
+[chat-cache-automatic-breakpoint.md](../postmortems/chat-cache-automatic-breakpoint.md) has the
+whole of it, including why all three defences on this page were blind to it.
+
+**The rule it leaves behind: automatic mode needs the last user message to be reproduced
+byte-identically on the next request, and nothing in this app guarantees that.** Prefer an explicit
+breakpoint at the boundary you actually mean.
+
 ## How to tell whether it is working
 
 **You cannot tell by looking.** A cache that has silently stopped hitting returns the same correct
@@ -158,8 +179,15 @@ Two defences, and neither substitutes for the other:
   network, runs on every change. It cannot prove anything was cached.
 - **`npm run eval:caching -- data/<slug>`** proves it is *cached*, by calling twice and reading the
   number back. Costs money, run by hand, results committed under `evals/results/`. The pass
-  condition is a non-zero `cacheReadTokens` on the second call. See
-  [testing.md](testing.md) for why the two live in different folders.
+  condition is a `cacheReadTokens` on the second call of roughly the article's own size — not merely
+  non-zero, since a hit on the system prompt alone would clear that bar while the article missed
+  entirely. See [testing.md](testing.md) for why the two live in different folders.
+
+  **It checks search and chat.** It used to say "search / chat / explain" and call `findPassages`
+  only, and that gap is how the chat bug above survived for a day: the doc repeated the eval's claim
+  rather than the eval. Explain shares the other two's article rendering and their explicit
+  breakpoint, so it is covered by construction — which is a weaker thing than being called, and is
+  written here as such.
 
 **Run 2026-08-26 against the live API: all three articles pass.** On the constitution, a cold call
 writes 47,739 tokens and costs $0.119 — *more* than the $0.096 it would have cost uncached, which is

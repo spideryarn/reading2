@@ -392,6 +392,26 @@ export type ConverseEvent =
        * which signal aborted, and finished normally with a flag on it.
        */
       stopped: boolean;
+      /**
+       * What the request cost and what the cache did, summed over the turn's
+       * rounds — the same numbers the log line below carries.
+       *
+       * On the event **and** in the log because the log is for whoever is
+       * running the server and this is for whoever is measuring. `null` means
+       * the provider reported nothing, which is a different thing from zero:
+       * `evals/prompt-caching.ts` has to be able to tell "the cache read
+       * nothing" from "we were never told", because the first is the alarm and
+       * the second is a broken pipe.
+       *
+       * Nothing stores it. The route builds the row it persists field by field
+       * (src/routes.ts § finishTurn), so this does not reach an artefact.
+       */
+      usage: {
+        inputTokens: number | null;
+        outputTokens: number | null;
+        cacheReadTokens: number | null;
+        cacheWriteTokens: number | null;
+      };
     };
 
 /**
@@ -410,6 +430,26 @@ export type ConverseEvent =
  * is untouched by it, so the cached prefix survives a long conversation even
  * though the tail does not. Putting the position line in the article message
  * would have thrown that away for nothing.
+ *
+ * ## The breakpoint is explicit, and it did not used to be
+ *
+ * This call used OpenRouter's **automatic** form until 2026-08-26 —
+ * `cache_control` at the top level of the request body, which marks the last
+ * cacheable block and advances it as the conversation grows. That reads as a
+ * perfect fit for chat's shape, and it was wrong for one reason: the block it
+ * marks is the final user message, and the final user message is not what gets
+ * stored. The position line is prepended here and nowhere else, so turn two
+ * replays the previous question *without* it, the marked block is never
+ * reproduced, and — writes happen only at the breakpoint — there is no
+ * article-only entry underneath to fall back on. Every turn after the first paid
+ * a cold write of the whole article whenever the reader had scrolled.
+ *
+ * So the article now carries its own `cache_control`, exactly as explain's does.
+ * The prefix stops before anything that varies, which is the only place a
+ * breakpoint is ever worth putting. The growing tail is uncached, and always
+ * should have been: it changes every turn by construction.
+ *
+ * docs/postmortems/chat-cache-automatic-breakpoint.md.
  */
 export function buildConverseMessages(opts: {
   meta: Meta;
@@ -423,9 +463,15 @@ export function buildConverseMessages(opts: {
     { role: "system", content: SYSTEM },
     {
       role: "user",
-      content: `Here is the whole article. Keep it in mind for everything I ask.
+      content: [
+        {
+          type: "text",
+          text: `Here is the whole article. Keep it in mind for everything I ask.
 
 ${articleWithIds(opts.meta, opts.blocks)}`,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
     },
     { role: "assistant", content: "Read it. What would you like to know?" },
     ...recentHistory(opts.history).map((m) => ({
@@ -659,14 +705,15 @@ export async function* converse({
         },
         body: JSON.stringify({
           model,
-          /* The automatic form, not an explicit breakpoint — and it fits this
-             call better than the other two. OpenRouter marks the last cacheable
-             block and advances it as the conversation grows, which is exactly
-             chat's shape: a fixed article near the front, a tail that gets longer
-             every turn. The explicit form would need the messages rebuilt as
-             content arrays for no gain here.
-             docs/research/prompt-caching-openrouter.md § How OpenRouter exposes it. */
-          cache_control: { type: "ephemeral" },
+          /* **No top-level `cache_control` here on purpose.** That is
+             OpenRouter's automatic form, which marks the *last* cacheable block —
+             the final user message. It looked like a fit for chat's shape and it
+             was not: that message carries the reader's position, which is never
+             stored and so never replayed, so the marked block could not be
+             matched on the next turn and every turn paid a cold write. The
+             breakpoint is now explicit and sits on the article, in
+             `buildConverseMessages`, where the varying part begins.
+             docs/postmortems/chat-cache-automatic-breakpoint.md. */
           provider: PROVIDER_ORDER,
           stream: true,
           // Without this the usage block never arrives on a streamed response, and
@@ -719,6 +766,14 @@ export async function* converse({
           tools: toolRuns,
           truncated: false,
           stopped: true,
+          // Nothing was asked, so there is nothing to report — and four nulls
+          // say that, where four zeros would claim a free call.
+          usage: {
+            inputTokens: null,
+            outputTokens: null,
+            cacheReadTokens: null,
+            cacheWriteTokens: null,
+          },
         };
         return;
       }
@@ -1121,6 +1176,12 @@ export async function* converse({
     tools: toolRuns,
     truncated,
     stopped,
+    usage: {
+      inputTokens: sawUsage ? inputTokens : null,
+      outputTokens: sawUsage ? outputTokens : null,
+      cacheReadTokens: sawUsage ? cacheRead : null,
+      cacheWriteTokens: sawUsage ? cacheWrite : null,
+    },
   };
 }
 

@@ -30,6 +30,7 @@ import {
   readerPositionLine,
   underCacheFloor,
 } from "../src/article-prompt.js";
+import type { TextPart } from "../src/article-prompt.js";
 import { buildSearchMessages } from "../src/search.js";
 import { buildExplainMessages } from "../src/explain.js";
 import { buildConverseMessages } from "../src/converse.js";
@@ -114,13 +115,16 @@ describe("the three request-path builders share one article", () => {
       buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote")[1]!.content,
       0,
     );
-    const fromConverse = buildConverseMessages({
-      meta,
-      blocks,
-      history: [],
-      question: "why?",
-      at: "spya-aaaaaa",
-    })[1]!.content as string;
+    const fromConverse = partText(
+      buildConverseMessages({
+        meta,
+        blocks,
+        history: [],
+        question: "why?",
+        at: "spya-aaaaaa",
+      })[1]!.content,
+      0,
+    );
 
     // Each wraps the article in its own one-line preamble, so compare the
     // article itself rather than the whole message.
@@ -196,7 +200,7 @@ describe("converse's article message is stable across a conversation", () => {
       question: "q",
       at: "spya-cccccc",
     });
-    expect(a[1]!.content).toBe(b[1]!.content);
+    expect((a[1]!.content as TextPart[])[0]!.text).toBe((b[1]!.content as TextPart[])[0]!.text);
   });
 
   it("does not change as the history grows", () => {
@@ -210,7 +214,9 @@ describe("converse's article message is stable across a conversation", () => {
       history: [turn("user", "earlier question"), turn("assistant", "earlier answer")],
       question: "q",
     });
-    expect(empty[1]!.content).toBe(busy[1]!.content);
+    expect((empty[1]!.content as TextPart[])[0]!.text).toBe(
+      (busy[1]!.content as TextPart[])[0]!.text,
+    );
   });
 
   it("puts the reader's position with the question, not in the article", () => {
@@ -221,10 +227,50 @@ describe("converse's article message is stable across a conversation", () => {
       question: "what does this mean?",
       at: "spya-bbbbbb",
     });
-    expect(m[1]!.content as string).not.toContain("spya-bbbbbb ←");
-    expect(m[1]!.content as string).not.toContain("READER IS HERE");
+    const article = m[1]!.content as TextPart[];
+    expect(article[0]!.text).not.toContain("spya-bbbbbb ←");
+    expect(article[0]!.text).not.toContain("READER IS HERE");
     expect(m[m.length - 1]!.content as string).toContain("spya-bbbbbb");
     expect(m[m.length - 1]!.content as string).toContain("what does this mean?");
+  });
+
+  it("marks the article explicitly, so the prefix survives turn two", () => {
+    /* **The bug this test was written for.** Chat used OpenRouter's *automatic*
+       breakpoint, which marks the last cacheable block — the final user message.
+       That message carries the reader's position, and the position is prepended
+       here and NOT stored (src/routes.ts stores the bare question). So turn two
+       replayed the previous question without its position line, the cached block
+       was never reproduced, and — because writes happen only at the breakpoint —
+       there was no article-only entry to fall back on. Every turn after the
+       first paid a cold write of the whole article, whenever the reader had
+       scrolled, which is always.
+
+       Nothing caught it: the automatic breakpoint is a block we never name, so
+       `cachedText` returns the whole conversation and cannot tell the two turns
+       apart, and evals/prompt-caching.ts only ever called search.
+
+       An explicit breakpoint on the article fixes it by making the cached prefix
+       stop before anything that varies — which is what the other two builders
+       have always done. docs/postmortems/chat-cache-automatic-breakpoint.md. */
+    const one = buildConverseMessages({
+      meta,
+      blocks,
+      history: [],
+      question: "what is entropy?",
+      at: "spya-aaaaaa",
+    });
+    const two = buildConverseMessages({
+      meta,
+      blocks,
+      history: [turn("user", "what is entropy?"), turn("assistant", "a measure of uncertainty")],
+      question: "and free energy?",
+      at: "spya-cccccc",
+    });
+    expect(cachedText(two)).toBe(cachedText(one));
+    // And the prefix really does stop before the question, rather than the two
+    // simply happening to agree on everything.
+    expect(cachedText(one)).not.toContain("what is entropy?");
+    expect(cachedText(one)).toContain(articleWithIds(meta, blocks));
   });
 });
 
@@ -314,13 +360,24 @@ describe("cachedText — what is really in the prefix", () => {
     expect(cachedText(m)).not.toContain("a memorable quotation");
   });
 
-  it("falls back to the whole conversation when nothing is marked", () => {
-    /* Converse uses OpenRouter's automatic mode, which marks a block we never
-       name. Returning everything errs towards "long enough", which is the safe
-       direction: the alternative is crying wolf. */
-    const m = buildConverseMessages({ meta, blocks, history: [], question: "why?" });
+  it("stops at the breakpoint for converse too", () => {
+    /* It did not, until 2026-08-26: converse used OpenRouter's automatic mode,
+       which marks a block we never name, so this function had nothing to stop
+       at and returned the whole conversation. That was written as erring
+       "towards long enough", which is the safe direction for the floor check it
+       feeds — but it also meant no test in this file could see where converse's
+       prefix actually ended, which is how the bug above survived. */
+    const m = buildConverseMessages({ meta, blocks, history: [], question: "why exactly?" });
     const prefix = cachedText(m);
     expect(prefix).toContain(articleWithIds(meta, blocks));
-    expect(prefix.length).toBeGreaterThan(0);
+    expect(prefix).not.toContain("why exactly?");
+  });
+
+  it("returns everything when a builder really does mark nothing", () => {
+    /* The fallback still exists and still errs towards "long enough" — crying
+       wolf about a cache that is fine is the costly direction to be wrong in.
+       Pinned directly rather than through a builder, now that all three of them
+       mark a breakpoint. */
+    expect(cachedText([{ role: "user", content: "unmarked" }])).toBe("unmarked");
   });
 });

@@ -50,10 +50,14 @@ import type { Block, Meta } from "./types.js";
  * start of the request through this part is the cached prefix. It is the form
  * search and explain need, because both have a long stable article followed by
  * a short varying question, and only an explicit boundary puts the line in the
- * right place. Converse uses the automatic top-level form instead — see
- * docs/research/prompt-caching-openrouter.md.
+ * right place. **All three request-path builders now use it.** Converse used
+ * OpenRouter's automatic top-level form until 2026-08-26, and that is the one
+ * documented in docs/research/prompt-caching-openrouter.md — it marked the last
+ * cacheable block, which was the final user message, which carries the reader's
+ * position and is therefore never replayed identically on the next turn. See
+ * docs/postmortems/chat-cache-automatic-breakpoint.md.
  */
-interface TextPart {
+export interface TextPart {
   type: "text";
   text: string;
   cache_control?: { type: "ephemeral" };
