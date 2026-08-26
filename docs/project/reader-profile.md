@@ -189,6 +189,61 @@ choosing and a way to put arbitrary text into a prompt that writes an artefact.
 Note this is the mirror of `deep` on explain, and the asymmetry is on purpose: deep search is an
 extra you ask for, so absent means no; the profile is the default this app now writes with.
 
+## The two controls, and why one of them is not a control
+
+Greg asked for *"a checkbox (default-true, with fully-explanatory tooltip) in
+all the places where we're taking into account that we have done so"*. Fable's
+review objected that a checkbox reads as something to *set* when what it records
+is something that *happened* — the shape the glossary already solved with
+[a label instead of a warning triangle](glossary.md) — and that flipping it means
+regenerate-and-wait, which is a model call hidden behind the lightest control in
+the interface.
+
+So the two jobs are separated ([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)):
+
+```
+  ┌─ GLOSSARY ─────────────────────────── ✓ written for you ⓘ ─┐   ← a LABEL
+  │  Threshold ▁▂▃▅▇                                            │
+  │  ⚠ You changed your profile since these were written.        │
+  │  ┌────────────────────────────────────────────────────────┐ │
+  │  │  ☑ Use your profile           [ Find them again ]       │ │   ← the CHECKBOX,
+  │  └────────────────────────────────────────────────────────┘ │      beside the spend
+  └──────────────────────────────────────────────────────────────┘
+```
+
+Unticking the box and pressing the button is exactly the "check/uncheck and it
+regenerates without this prompt" that was asked for. It just does not pretend to
+be free.
+
+**The checkbox needs no storage of its own.** It is seeded from what the
+artefact on screen was written with (`profileHash != null`), so the reader's
+last choice comes back off the file rather than out of a preference that could
+disagree with it. With no artefact yet, it starts ticked.
+
+**With no profile written, both are absent** — not disabled, not unchecked.
+
+Where each one is:
+
+| Surface | Label | Checkbox |
+|---|---|---|
+| glossary | on the head line | beside Find / Find them again |
+| summaries | on the head line | beside the steer and Rewrite them |
+| tweets | beside the counts | beside Write it again |
+| chat | — | in the composer, per turn |
+| explain | — | — |
+
+**Chat gets the checkbox and no label**, and the asymmetry is the point: an
+answer is not an artefact anybody rewrites, so there is nothing for a label to
+describe and nothing to flip back to. The checkbox governs the next answer and
+claims nothing more.
+
+**Explain gets neither, deliberately.** It has no pre-flight moment — the call
+fires when you select a sentence — so a checkbox in the dialog could only affect
+a *re-ask*, which is a control that appears after the thing it would have
+governed. And it is the call the profile helps most: a wrong pitch wastes the
+whole answer, where a wrong pitch in a glossary wastes one entry. Explain always
+uses the profile.
+
 ## What editing your profile costs
 
 **One typo fix marks every artefact in the library `profileChanged` at once.** Hash equality has no
@@ -219,6 +274,12 @@ is a "mark everything current" button, which is its own small design problem.
 - **No counter on the register yet.** The plan proposes logging profile-echo words and second-person
   pronouns, which would turn "never mention the profile" from a rule into a number the log can
   contradict. Not built.
+- **Stored answers carry no provenance.** Chat messages, comments and
+  `glossary-lookups.json` all hold model output pitched at the reader, and none
+  of them records a `profileHash`. So there is no badge beside a six-week-old
+  answer — which is the *right* absence for now, because a badge there would
+  start lying the moment the profile changed. Adding the field to those three is
+  the next piece.
 - **Instant switching between a profiled and a plain artefact** is not built. Flipping the checkbox
   and pressing "Write them again" is the whole feature minus the instant part; storing both copies is
   [deferred with reasons](../plans/reader-profile.md#storing-both-copies-is-deferred-and-the-deferral-now-has-teeth).

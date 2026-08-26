@@ -79,6 +79,8 @@ import { useJobs } from "./useJobs.js";
 import { useSlow } from "./useSlow.js";
 import { readJson } from "./lib/api.js";
 import { JobProgress } from "./JobProgress.js";
+import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { useHasProfile } from "./useProfile.js";
 
 /** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-h)_+_2rem)]";
@@ -90,7 +92,7 @@ type Loaded =
   | { status: "loading" }
   /** The article has no thread yet. A 404, and an ordinary one — most articles have none. */
   | { status: "none" }
-  | { status: "ready"; thread: TweetThread; stale: boolean }
+  | { status: "ready"; thread: TweetThread; stale: boolean; profileChanged: boolean }
   | { status: "error"; message: string };
 
 export function Tweets({ slug, article }: { slug: string; article: Article }) {
@@ -110,8 +112,8 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
         setLoaded({ status: "none" });
         return;
       }
-      const { thread, stale } = await readJson<ThreadResponse>(res);
-      setLoaded({ status: "ready", thread, stale });
+      const { thread, stale, profileChanged } = await readJson<ThreadResponse>(res);
+      setLoaded({ status: "ready", thread, stale, profileChanged });
     } catch (err) {
       setLoaded({ status: "error", message: (err as Error).message });
     }
@@ -201,12 +203,14 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * the sole step in this job — worth knowing before adding a second name to
    * the array.
    */
-  async function write(force = false) {
+  async function write(force = false, useProfile = true) {
     setStartedId(null);
     const started = await queue.run({
       slug,
       steps: ["tweets"],
       ...(force ? { force: ["tweets" as const] } : {}),
+      // Only when false, so absent goes on meaning yes — src/routes.ts.
+      ...(useProfile ? {} : { useProfile: false }),
     });
     setPostFailed(started === null);
     if (started) setStartedId(started.id);
@@ -259,6 +263,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
           <Thread
             thread={loaded.thread}
             stale={loaded.stale}
+            profileChanged={loaded.profileChanged}
             article={article}
             job={job}
             failed={failed}
@@ -351,6 +356,7 @@ function Progress({
 function Thread({
   thread,
   stale,
+  profileChanged,
   article,
   job,
   failed,
@@ -359,12 +365,17 @@ function Thread({
 }: {
   thread: TweetThread;
   stale: boolean;
+  profileChanged: boolean;
   article: Article;
   job: Job | null;
   failed: string | null;
-  onWrite(force?: boolean): Promise<void>;
+  onWrite(force?: boolean, useProfile?: boolean): Promise<void>;
   onCancel(id: string): void;
 }) {
+  const hasProfile = useHasProfile();
+  // Seeded from what the thread on screen was written with; the artefact is
+  // the memory, so nothing here has to be.
+  const [withProfile, setWithProfile] = useState(thread.profileHash != null);
   const total = thread.tweets.length;
   const over = thread.tweets.filter((t) => t.chars > thread.limit).length;
   /* Summed here rather than stored. It is the array's own arithmetic, and a
@@ -384,6 +395,9 @@ function Thread({
           A thread, {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters
           from {words.toLocaleString()} words
         </p>
+        {/* Provenance, beside the counts rather than in a banner: it describes
+            what is on screen. src/web/WrittenForYou.tsx. */}
+        <WrittenForYou written={thread.profileHash != null} changed={profileChanged} />
         <CopyButton
           text={() => threadMarkdown(thread, article)}
           label="Copy the thread"
@@ -406,13 +420,21 @@ function Thread({
             The text was re-fetched or re-extracted after the thread was written, so the posts below
             may quote something that is no longer there.
           </p>
-          <Progress
-            job={job}
-            failed={failed}
-            onWrite={onWrite}
-            onCancel={onCancel}
-            label="Write it again"
-          />
+          <div className="gloss-run">
+            <UseProfile
+              checked={withProfile}
+              onChange={setWithProfile}
+              hasProfile={hasProfile}
+              disabled={job !== null}
+            />
+            <Progress
+              job={job}
+              failed={failed}
+              onWrite={() => onWrite(false, withProfile)}
+              onCancel={onCancel}
+              label="Write it again"
+            />
+          </div>
         </div>
       )}
 
@@ -476,7 +498,22 @@ function Thread({
             two of them would be one too many, and the wrong one is the one
             further from the reason. */}
         {!stale && (
-          <Rewrite job={job} failed={failed} onWrite={onWrite} onCancel={onCancel} />
+          <>
+            {/* Beside the deliberate rewrite, which is where the spend already
+                has a confirmation of its own. src/web/WrittenForYou.tsx. */}
+            <UseProfile
+              checked={withProfile}
+              onChange={setWithProfile}
+              hasProfile={hasProfile}
+              disabled={job !== null}
+            />
+            <Rewrite
+              job={job}
+              failed={failed}
+              onWrite={(force) => onWrite(force, withProfile)}
+              onCancel={onCancel}
+            />
+          </>
         )}
       </div>
     </>
