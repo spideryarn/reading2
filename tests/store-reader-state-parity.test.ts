@@ -109,9 +109,21 @@ function normalise(value: unknown, seen = new Map<string, string>()): unknown {
   return value;
 }
 
-/** The wire form, with ids normalised. One `seen` map per snapshot. */
+/**
+ * The wire form, with ids normalised and the attempt token dropped.
+ *
+ * `attempt` is the one field the two stores are *supposed* to disagree about:
+ * Postgres mints one per model call and the filesystem has none, deliberately
+ * and permanently. It is also not wire form at all — the route holds it and it
+ * never reaches a client — so comparing it would be asserting that a documented
+ * difference is not there.
+ *
+ * Removed by name rather than by letting `JSON.stringify` drop the `undefined`
+ * side, because that would have compared "absent" against "a uuid" and passed
+ * only by accident of one of them being nullish.
+ */
 function wire(value: unknown): unknown {
-  return normalise(JSON.parse(JSON.stringify(value)));
+  return normalise(JSON.parse(JSON.stringify(value, (key, v) => (key === "attempt" ? undefined : v))));
 }
 
 /** A clock both stores are driven by, so a timestamp is a fact not a race. */
@@ -168,26 +180,35 @@ when("the filesystem and Postgres stores agree about the reader's state", () => 
           searches: 2,
           model: "a-model",
         },
-        now,
+        { now, attempt: one.attempt },
       );
       await take("finish one");
 
       const two = await store.begin(SLUG, { threadId: THREAD, question: "And a pendentive?" }, now);
       await take("begin two", two);
 
-      await store.finish(SLUG, THREAD, two.reply.id, { status: "error", error: "fell over" }, now);
+      await store.finish(SLUG, THREAD, two.reply.id, { status: "error", error: "fell over" }, {
+        now,
+        attempt: two.attempt,
+      });
       await take("finish two, badly");
 
       const retried = await store.retry(SLUG, THREAD, two.reply.id, now);
       await take("retry two", retried);
 
-      await store.finish(SLUG, THREAD, retried.reply.id, { status: "done", text: "A triangle." }, now);
+      await store.finish(SLUG, THREAD, retried.reply.id, { status: "done", text: "A triangle." }, {
+        now,
+        attempt: retried.attempt,
+      });
       await take("finish the retry");
 
       const edited = await store.edit(SLUG, THREAD, two.user.id, "And a squinch?", { now });
       await take("edit the second question", edited);
 
-      await store.finish(SLUG, THREAD, edited.reply.id, { status: "done", text: "A corner arch." }, now);
+      await store.finish(SLUG, THREAD, edited.reply.id, { status: "done", text: "A corner arch." }, {
+        now,
+        attempt: edited.attempt,
+      });
       await take("finish after the edit");
 
       await take("rename", await store.rename(SLUG, THREAD, "Vaulting"));

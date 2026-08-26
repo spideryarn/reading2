@@ -4,18 +4,22 @@
  *
  * ## The upsert is the point, not a tidier way of writing the same thing
  *
- * On disk this is one file holding a map of every lookup for the article, and
- * `saveLookup` reads it, adds a key and writes the whole thing back. The
- * read-modify-write is not the problem; the problem is *when* the read happens.
- * A lookup takes a model call, so the map a request loaded is minutes stale by
- * the time it writes — and a `glossary` job that rewrote the article's entries
- * in between has its work overwritten wholesale. No in-process lock helps,
- * because the stale window is the model call itself, and putting the read after
- * it would just move the race.
+ * On disk this is one file holding every lookup for the article, and
+ * `saveLookup` reads it, merges one key and writes the whole thing back. **That
+ * read happens inside the process-wide mutex, after the model call** — an
+ * earlier version of this note said the map was read *before* the call and held
+ * stale across it, which would have been much worse and is not what the code
+ * does. src/glossary-lookups.ts.
  *
- * One row per `(article_id, entry_id)` deletes the race rather than narrowing
- * it: two lookups for two different terms do not touch, whatever order they
- * land in and however long each one took.
+ * What is left is still real, and it is the thing Postgres changes: the mutex
+ * is process-local. Two servers on one database both read the map, both merge
+ * their own term, both write — and one reader's answer disappears, with no
+ * error anywhere, because both writes succeeded. On a filesystem that scenario
+ * needed two servers sharing a directory and so never happened; under shared
+ * Postgres it is the ordinary case.
+ *
+ * One row per `(article_id, entry_id)` deletes it rather than narrowing it: two
+ * lookups for two different terms do not touch, in any process, in any order.
  *
  * ## What may be logged from this file
  *

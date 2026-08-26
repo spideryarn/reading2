@@ -323,6 +323,21 @@ export interface SweepOptions {
  * Every method takes the clock, so a parity test can drive both stores from one
  * fixed sequence and compare the wire form at every step.
  */
+/**
+ * A turn, and the attempt now answering it.
+ *
+ * `attempt` is `undefined` from the filesystem store, which has no such thing
+ * and never will: the whole point of an attempt is to be compared across
+ * processes, and two servers sharing one `data/` directory is a thing nobody
+ * does. Under shared Postgres, multi-process is the ordinary case.
+ */
+export interface Turn {
+  readonly thread: ChatThread;
+  readonly user: ChatMessage;
+  readonly reply: ChatMessage;
+  readonly attempt: string | undefined;
+}
+
 export interface ChatStore {
   load(slug: string): Promise<ChatThread[]>;
 
@@ -334,31 +349,38 @@ export interface ChatStore {
     slug: string,
     turn: { threadId: string; question: string },
     now?: () => string,
-  ): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage }>;
+  ): Promise<Turn>;
 
   /**
    * Patch one message in place. **Never appends**, and bumps the thread's
    * `updatedAt` whenever the *thread* matches — even if the message does not,
    * which is what the filesystem does and what the panel's ordering depends on.
+   *
+   * **Pass the `attempt` this answer belongs to.** A retry keeps the message
+   * id, so identity cannot say which call is reporting: without the attempt, a
+   * model call that a sweep already buried overwrites the retry the reader is
+   * watching. The Postgres store refuses a `finish` with no attempt for exactly
+   * that reason; the filesystem store has no attempts and ignores it.
    */
   finish(
     slug: string,
     threadId: string,
     messageId: string,
     patch: Partial<ChatMessage>,
-    now?: () => string,
+    /* `| undefined` explicitly, not just `?`. `exactOptionalPropertyTypes` is
+       on, and the value a caller has is `Turn.attempt`, which IS `string |
+       undefined` because the filesystem store has no attempts. Writing
+       `attempt?: string` would force every call site to branch on a difference
+       that does not exist for them. The Postgres store is where `undefined`
+       becomes an error, which is the layer that can do something about it. */
+    opts?: { attempt?: string | undefined; now?: (() => string) | undefined },
   ): Promise<void>;
 
   /**
    * Blank the last answer so the model can have another go at the same
    * question. Throws `ChatConflict` when the client's view is stale.
    */
-  retry(
-    slug: string,
-    threadId: string,
-    messageId: string,
-    now?: () => string,
-  ): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage }>;
+  retry(slug: string, threadId: string, messageId: string, now?: () => string): Promise<Turn>;
 
   /**
    * Rewrite a question and discard everything after it.
@@ -377,12 +399,7 @@ export interface ChatStore {
     messageId: string,
     question: string,
     opts?: { expectedTailId?: string; now?: () => string },
-  ): Promise<{
-    thread: ChatThread;
-    user: ChatMessage;
-    reply: ChatMessage;
-    discarded: number;
-  }>;
+  ): Promise<Turn & { discarded: number }>;
 
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
@@ -429,7 +446,19 @@ export interface SearchStore {
     now?: () => string,
   ): Promise<{ run: SearchRun; attempt: string | undefined }>;
 
-  /** Write the answer, if this attempt is still the live one. */
+  /**
+   * Write the answer, if this attempt is still the live one.
+   *
+   * `attempt` is optional in the type because the filesystem store has none.
+   * **The Postgres store refuses a call without it** rather than silently
+   * falling back to identity, which would put back exactly the race the column
+   * exists to close — a caller that forgets to carry the token would recreate
+   * it in full, and nothing would say so.
+   *
+   * `patch.status` must be `done` or `error`. The attempt ends here either way,
+   * so a patch that leaves the run `pending` would strip the fence off a row
+   * that is still waiting for an answer.
+   */
   finish(
     slug: string,
     runId: string,
@@ -448,10 +477,10 @@ export interface SearchStore {
  *
  * Keyed by entry id, which is why the Postgres table is keyed
  * `(article_id, entry_id)` and why `save` is an upsert rather than a rewrite of
- * the map. That is not a tidiness win: the file's read-modify-write holds a
- * stale copy of every *other* lookup across the model call, so a lookup landing
- * while a `glossary` job is running is overwritten wholesale and no in-process
- * lock can help.
+ * the map. Not a tidiness win: the file's read-modify-write is serialised only
+ * *within one process*, so two servers on one database can both merge their own
+ * term into the same map and one reader's answer vanishes with both writes
+ * reporting success. A row per term cannot do that.
  */
 export interface GlossaryLookupStore {
   load(slug: string): Promise<LookupsByTerm>;

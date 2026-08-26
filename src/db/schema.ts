@@ -70,6 +70,7 @@ import type {
   JobStep,
   SearchHit,
   Summaries,
+  ToolRun,
   Tree,
   TweetThread,
 } from "../types.js";
@@ -715,6 +716,22 @@ export const chatMessages = spideryarn.table(
     citations: jsonb("citations").$type<Citation[]>(),
     /** How many web searches it ran. 0 means it answered from the article. */
     searches: integer("searches"),
+    /**
+     * The tools this answer ran, in order — see docs/project/chat-tools.md.
+     *
+     * `jsonb` rather than a `chat_message_tools` table, and that is the same
+     * call `citations` above made: a run is read only ever as *the whole list
+     * for one message*, never queried across messages, never joined to, never
+     * ordered by anything but its own position. A table would buy a foreign key
+     * over data nothing else references and cost a join on every read.
+     *
+     * Null, not `[]`, when the answer used none — matching the filesystem store,
+     * which omits the key. The two have to agree byte for byte or
+     * tests/store-roundtrip.test.ts fails, which is exactly how this column came
+     * to exist: chat grew tools, `chat.json` grew the field, and the Postgres
+     * store dropped it silently on the way through.
+     */
+    tools: jsonb("tools").$type<ToolRun[]>(),
     model: text("model"),
     error: text("error"),
     /**
@@ -729,9 +746,34 @@ export const chatMessages = spideryarn.table(
     /** When the reader last rewrote this. User turns only; the old text is not kept. */
     editedAt: timestamp("edited_at", { withTimezone: true }),
     createdAt: createdAt(),
+
+    /**
+     * **Which attempt is producing this answer.** Same rule, same reason, as
+     * `search_runs` — see the long note there.
+     *
+     * Chat needs it *more*, not less. A retry keeps the message id, because
+     * that is what makes it a retry rather than a new turn: everything already
+     * pointing at the answer goes on pointing at it. So identity cannot be the
+     * fence. Process A starts an answer, process B's sweep buries it, the
+     * reader retries into the same row, A's model call returns — and a finish
+     * matching on `(article, thread, message)` writes the dead answer over the
+     * live one while the reader watches.
+     *
+     * Null on a finished message, and on every imported one: `chat.json` never
+     * recorded an attempt.
+     */
+    attemptId: text("attempt_id"),
+    attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.threadId, t.id] }),
+    /* Both columns or neither: half an attempt is a message that can never be
+       swept (no age) or never be finished (no id), and both end as a spinner
+       nobody can clear. */
+    check(
+      "chat_messages_attempt_both",
+      sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
+    ),
     unique("chat_messages_thread_ordinal").on(t.articleId, t.threadId, t.ordinal),
     check("chat_messages_role", sql`${t.role} in ('user','assistant')`),
     check("chat_messages_status", sql`${t.status} in ('pending','done','error')`),

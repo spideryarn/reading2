@@ -11,7 +11,15 @@
  * ## The article lock is the mutex
  *
  * src/chat.ts serialises every write in the process through one promise chain.
- * Here it is `select … from articles … for update`.
+ * Here it is `select … from articles … for update`, and **every method that
+ * writes takes it** — not only the three that read-then-write.
+ *
+ * That last part was got wrong first time and is worth stating plainly. The
+ * original took the lock in `begin`, `retry` and `edit` only, on the reasoning
+ * that those are the ones that decide something from what they read. But
+ * `begin` upserts the *title* it read, so a `rename` landing in between is
+ * silently written back to the old name — a lost update the filesystem mutex
+ * makes impossible. GPT Sol found it, 2026-08-26.
  *
  * **Article-wide, not per-thread**, and that is not caution. `taken()` scans
  * ids across every thread in the article, and the schema permits the same
@@ -50,19 +58,37 @@
  * matters, and it is the same provider-echo reason here.
  */
 
-import { and, asc, eq, gt, lt, notInArray } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+
+import { and, asc, eq, gt, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { titleFrom, withEdit, withRetry, withTurn } from "../chat.js";
 import { getDb } from "../db/client.js";
 import { articles, chatMessages, chatThreads } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import type { Citation, ChatMessage, ChatThread } from "../types.js";
+import type { Citation, ChatMessage, ChatThread, ToolRun } from "../types.js";
 import type { ChatStore, SweepOptions } from "./contracts.js";
 import { CHAT_SWEPT, requireTail } from "./fs.js";
 import { notFound, requireSlug } from "./pg.js";
 
 const logger = log("store");
+
+/**
+ * The database's clock at the moment the statement runs — **not this process's,
+ * and not `now()`**.
+ *
+ * Two things are wrong with taking the time in TypeScript before the
+ * transaction. It is a different clock from the one the sweep compares against,
+ * so skew between two servers becomes a birth defect in the lease; and it is
+ * read before the wait for the article lock, so a write that queued for four
+ * seconds starts life four seconds old.
+ *
+ * `clock_timestamp()` rather than `now()` for the second reason again:
+ * `now()` is the *transaction's* start time, which is also before the lock
+ * wait. Only `clock_timestamp()` is the moment the row is actually written.
+ */
+const DB_NOW = sql`clock_timestamp()` as unknown as Date;
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -90,6 +116,7 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     status: row.status as ChatMessage["status"],
     ...(row.citations === null ? {} : { citations: row.citations as Citation[] }),
     ...(row.searches === null ? {} : { searches: row.searches }),
+    ...(row.tools === null ? {} : { tools: row.tools as ToolRun[] }),
     ...(row.model === null ? {} : { model: row.model }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.stopped ? { stopped: true } : {}),
@@ -157,6 +184,7 @@ function messageRow(
   threadId: string,
   message: ChatMessage,
   ordinal: number,
+  attempt?: string,
 ): typeof chatMessages.$inferInsert {
   return {
     articleId,
@@ -168,11 +196,13 @@ function messageRow(
     status: message.status,
     citations: message.citations ?? null,
     searches: message.searches ?? null,
+    tools: message.tools ?? null,
     model: message.model ?? null,
     error: message.error ?? null,
     stopped: message.stopped ?? false,
     editedAt: message.editedAt ? new Date(message.editedAt) : null,
     createdAt: new Date(message.createdAt),
+    ...(attempt === undefined ? {} : { attemptId: attempt, attemptStartedAt: DB_NOW }),
   };
 }
 
@@ -204,6 +234,7 @@ export const pgChatStore: ChatStore = {
     const db = getDb();
     const articleId = await articleIdFor(slug);
     const at = now();
+    const attempt = randomUUID();
 
     const out = await db.transaction(async (tx) => {
       await lockArticle(tx, articleId);
@@ -220,9 +251,10 @@ export const pgChatStore: ChatStore = {
         .insert(chatMessages)
         .values([
           messageRow(articleId, thread.id, user, base),
-          messageRow(articleId, thread.id, reply, base + 1),
+          // Only the reply carries an attempt: the question is already written.
+          messageRow(articleId, thread.id, reply, base + 1, attempt),
         ]);
-      return { thread, user, reply };
+      return { thread, user, reply, attempt };
     });
 
     logger.info(
@@ -232,12 +264,28 @@ export const pgChatStore: ChatStore = {
     return out;
   },
 
-  async finish(slug, threadId, messageId, patch, now = () => new Date().toISOString()): Promise<void> {
+  async finish(slug, threadId, messageId, patch, opts = {}): Promise<void> {
     const db = getDb();
     const articleId = await articleIdFor(slug);
-    const at = new Date(now());
+    const at = new Date((opts.now ?? (() => new Date().toISOString()))());
+
+    /* **Refused without an attempt, rather than falling back to identity.**
+
+       A retry keeps the message id — that is what makes it a retry — so
+       identity cannot say which model call is reporting. Accepting `undefined`
+       here would mean a caller that simply forgot to carry the token got the
+       old race back in full, with nothing anywhere saying so. That is the
+       failure mode this whole migration keeps meeting, so it is an error. */
+    const attempt = opts.attempt;
+    if (attempt === undefined) {
+      throw new Error(
+        `finish("${slug}") needs the attempt that begin/retry/edit returned. ` +
+          "Without it a model call the sweep already buried can overwrite the retry.",
+      );
+    }
 
     await db.transaction(async (tx) => {
+      await lockArticle(tx, articleId);
       /* **The thread's clock moves whether or not the message matched.**
 
          The filesystem does this unconditionally — its `map` rebuilds the
@@ -260,16 +308,23 @@ export const pgChatStore: ChatStore = {
           ...(patch.status === undefined ? {} : { status: patch.status }),
           ...(patch.citations === undefined ? {} : { citations: patch.citations }),
           ...(patch.searches === undefined ? {} : { searches: patch.searches }),
+          ...(patch.tools === undefined ? {} : { tools: patch.tools }),
           ...(patch.model === undefined ? {} : { model: patch.model }),
           ...(patch.error === undefined ? {} : { error: patch.error }),
           ...(patch.stopped === undefined ? {} : { stopped: patch.stopped }),
           ...(patch.editedAt === undefined ? {} : { editedAt: new Date(patch.editedAt) }),
+          // The attempt is over. Both columns or neither — the CHECK says so.
+          attemptId: null,
+          attemptStartedAt: null,
         })
         .where(
           and(
             eq(chatMessages.articleId, articleId),
             eq(chatMessages.threadId, threadId),
             eq(chatMessages.id, messageId),
+            // The fence. Three parts, exactly as for a search run.
+            eq(chatMessages.status, "pending"),
+            eq(chatMessages.attemptId, attempt),
           ),
         );
     });
@@ -281,6 +336,7 @@ export const pgChatStore: ChatStore = {
     const db = getDb();
     const articleId = await articleIdFor(slug);
     const at = now();
+    const attempt = randomUUID();
 
     const out = await db.transaction(async (tx) => {
       await lockArticle(tx, articleId);
@@ -309,9 +365,16 @@ export const pgChatStore: ChatStore = {
           createdAt: new Date(at),
           citations: null,
           searches: null,
+          // A retry that runs no tools must not keep the last attempt's strip.
+          // Same rule, same line of reasoning, as the citations above it.
+          tools: null,
           model: null,
           error: null,
           stopped: false,
+          // A new attempt on the same row. This is what stops the previous
+          // one's late answer landing here.
+          attemptId: attempt,
+          attemptStartedAt: DB_NOW,
         })
         .where(
           and(
@@ -320,7 +383,7 @@ export const pgChatStore: ChatStore = {
             eq(chatMessages.id, reply.id),
           ),
         );
-      return { thread, reply, user };
+      return { thread, reply, user, attempt };
     });
 
     logger.info(
@@ -334,6 +397,7 @@ export const pgChatStore: ChatStore = {
     const db = getDb();
     const articleId = await articleIdFor(slug);
     const at = (opts.now ?? (() => new Date().toISOString()))();
+    const attempt = randomUUID();
 
     const out = await db.transaction(async (tx) => {
       await lockArticle(tx, articleId);
@@ -387,8 +451,10 @@ export const pgChatStore: ChatStore = {
           ),
         );
 
-      await tx.insert(chatMessages).values(messageRow(articleId, thread.id, reply, kept + 1));
-      return { thread, user, reply, discarded };
+      await tx
+        .insert(chatMessages)
+        .values(messageRow(articleId, thread.id, reply, kept + 1, attempt));
+      return { thread, user, reply, discarded, attempt };
     });
 
     logger.info(
@@ -411,10 +477,17 @@ export const pgChatStore: ChatStore = {
        and the panel sorts by it — so "bump the clock on every write", which is
        a habit rather than a decision, would jump a renamed conversation to the
        top of the reader's list for no reason they could see. */
-    await db
-      .update(chatThreads)
-      .set({ title: titleFrom(title) })
-      .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+    /* The lock matters here even though this is one statement, because it is
+       not racing with itself — it is racing with `begin`, which reads the title
+       under the lock and upserts what it read. Without this, a rename that
+       lands in the middle of a turn is written back to the old name. */
+    await db.transaction(async (tx) => {
+      await lockArticle(tx, articleId);
+      await tx
+        .update(chatThreads)
+        .set({ title: titleFrom(title) })
+        .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+    });
     logger.info({ slug, threadId }, "chat thread renamed");
     return threadsFor(articleId);
   },
@@ -423,9 +496,14 @@ export const pgChatStore: ChatStore = {
     const db = getDb();
     const articleId = await articleIdFor(slug);
     // Messages go with it: `chat_messages_thread_fk` is `on delete cascade`.
-    await db
-      .delete(chatThreads)
-      .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+    // Under the lock for the same reason as `rename`: a `begin` in flight would
+    // otherwise re-create the thread it just read.
+    await db.transaction(async (tx) => {
+      await lockArticle(tx, articleId);
+      await tx
+        .delete(chatThreads)
+        .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+    });
     const remaining = await threadsFor(articleId);
     logger.info({ slug, threadId, remaining: remaining.length }, "chat thread deleted");
     return remaining;
@@ -444,12 +522,23 @@ export const pgChatStore: ChatStore = {
        The age check is for every other process. */
     await db
       .update(chatMessages)
-      .set({ status: "error", error: CHAT_SWEPT })
+      // The attempt is declared dead, so its fence goes with it — otherwise the
+      // row keeps a lease nobody holds and the CHECK's "both or neither" turns
+      // into "a buried message still names a live attempt".
+      .set({ status: "error", error: CHAT_SWEPT, attemptId: null, attemptStartedAt: null })
       .where(
         and(
           eq(chatMessages.articleId, articleId),
           eq(chatMessages.status, "pending"),
-          lt(chatMessages.createdAt, cutoff),
+          /* Age from the ATTEMPT where there is one, and from the message
+             otherwise. A retry moves `created_at` too, so either would work
+             today — but `created_at` is the reader's clock and the attempt's is
+             the server's, and only the second is the one a lease should be
+             measured against. Imported messages have no attempt at all. */
+          or(
+            and(isNull(chatMessages.attemptStartedAt), lt(chatMessages.createdAt, cutoff)),
+            lt(chatMessages.attemptStartedAt, cutoff),
+          ),
           notInArray(chatMessages.id, [...opts.keep]),
         ),
       );

@@ -25,6 +25,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articles, searchRuns } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
+import { isSpideryarnId } from "../src/ids.js";
 import { MAX_RUNS } from "../src/searches.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
 
@@ -33,6 +34,19 @@ loadEnvLocal();
 const SLUG = "store-searches-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-0000000000d0";
 const NONE: ReadonlySet<string> = new Set();
+
+/**
+ * Every literal id this file hands to the store, checked against the real
+ * alphabet.
+ *
+ * The alphabet drops `i`, `l`, `o` and `1` so an id read aloud is unambiguous —
+ * which means `spya-aaa001` **is not an id**, and a store handed one mints a
+ * different one instead of complaining. That is correct behaviour (a client's
+ * guess is a suggestion, not an instruction) and it quietly turned two tests
+ * here into tests of something else: the tie-break test compared two minted
+ * ids and passed for no reason. Asserted rather than remembered.
+ */
+const FIXTURE_IDS = ["spya-runaa2", "spya-runbb2", "spya-aaa002", "spya-zzz002"] as const;
 
 let reachable = false;
 
@@ -67,6 +81,14 @@ function clockFrom(startMs: number, stepMs = 1000): () => string {
 }
 
 when("the Postgres searches store", () => {
+  it("uses fixture ids the store will actually accept", () => {
+    for (const id of FIXTURE_IDS) {
+      expect(isSpideryarnId(id), `${id} is not a valid id, so the store would mint another`).toBe(
+        true,
+      );
+    }
+  });
+
   beforeAll(async () => {
     await getDb()
       .insert(articles)
@@ -98,7 +120,7 @@ when("the Postgres searches store", () => {
   });
 
   it("resets a failed run rather than minting a second one — all three conditions", async () => {
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "spya-run001");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "spya-runaa2");
     await pgSearchStore.finish(SLUG, run.id, { status: "error", error: "the model fell over" }, attempt);
 
     const again = await pgSearchStore.begin(SLUG, "about time", run.id);
@@ -117,7 +139,7 @@ when("the Postgres searches store", () => {
   });
 
   it("does not reset a run that is done, or one asking a different question", async () => {
-    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "spya-run002");
+    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "spya-runbb2");
     await pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }, attempt);
 
     // A double-clicked POST, or a stale tab retrying after another tab won.
@@ -130,7 +152,23 @@ when("the Postgres searches store", () => {
     expect((await pgSearchStore.load(SLUG)).find((r) => r.id === run.id)?.status).toBe("done");
   });
 
-  it("keeps the newest MAX_RUNS, and never trims the run it just inserted", async () => {
+  it("keeps exactly the newest MAX_RUNS when the clock runs forwards", async () => {
+    /* The ordinary case, and the first version of these tests did not cover it:
+       it only checked that each insertion survived its own transaction, which
+       an implementation that deletes the *previous* row every time also
+       satisfies. This pins the surviving set. */
+    const start = Date.parse("2026-08-01T00:00:00.000Z");
+    const ids: string[] = [];
+    for (let i = 0; i < MAX_RUNS + 3; i++) {
+      const at = () => new Date(start + i * 60_000).toISOString();
+      const { run } = await pgSearchStore.begin(SLUG, `criterion ${i}`, undefined, at);
+      ids.push(run.id);
+    }
+    const kept = (await pgSearchStore.load(SLUG)).map((r) => r.id);
+    expect(kept).toEqual(ids.slice(-MAX_RUNS));
+  });
+
+  it("never trims the run it just inserted, even when the clock runs backwards", async () => {
     /* The clock runs BACKWARDS, which is the case that matters. The file keeps
        the last thirty array elements; this keeps the thirty newest by
        timestamp, and a newly inserted run with an older timestamp would trim
@@ -150,10 +188,12 @@ when("the Postgres searches store", () => {
   });
 
   it("sweeps nothing, loudly, when the article has no runs at all", async () => {
-    /* `notInArray` with an empty list emits `not in ()`, which Postgres rejects
-       as a syntax error rather than treating as "matches nothing". This is the
-       first read of a quiet article, so it is also the most likely 500 in the
-       whole store. */
+    /* Raw SQL `not in ()` is a syntax error rather than "matches everything",
+       and this was expected to be the likeliest 500 in the whole store. It is
+       not: Drizzle folds `notInArray(col, [])` to the literal `true`, measured
+       by printing the SQL. The assertion stays anyway — the behaviour is worth
+       pinning whatever the reason it works, and the first read of a quiet
+       article is the commonest call this store gets. */
     await expect(pgSearchStore.sweepPending(SLUG, { keep: NONE, graceMs: 1000 })).resolves.toEqual(
       [],
     );
@@ -172,7 +212,14 @@ when("the Postgres searches store", () => {
     await pgSearchStore.sweepPending(SLUG, { keep: NONE, graceMs: 60_000 });
     expect((await pgSearchStore.load(SLUG))[0]?.status).toBe("pending");
 
-    // Old enough that nobody can still be on it.
+    /* Old enough that the lease has expired. That is NOT the same as "nobody
+       can still be on it" — an earlier version of this comment said so and was
+       wrong. There is no heartbeat: a model call that outlives `graceMs` is
+       still running somewhere, and the sweep will bury it. What the fence
+       guarantees is narrower and is the thing that matters — the buried
+       attempt cannot then overwrite the retry. Choosing a `graceMs` longer
+       than any hard model timeout is the other half, and it belongs to
+       whatever wires this up. */
     await getDb()
       .update(searchRuns)
       .set({ attemptStartedAt: new Date(Date.now() - 600_000) })
@@ -236,6 +283,31 @@ when("the Postgres searches store", () => {
     expect(good?.model).toBe("live-model");
   });
 
+  it("refuses a finish with no attempt at all", async () => {
+    /* The token is optional in the interface, because the filesystem store has
+       none. Accepting `undefined` HERE would put the whole cross-process race
+       back for any caller that forgot to carry it — silently, which is the
+       failure mode this migration keeps meeting. */
+    const { run } = await pgSearchStore.begin(SLUG, "about time");
+    await expect(
+      pgSearchStore.finish(SLUG, run.id, { status: "done", hits: [] }),
+    ).rejects.toThrow(/needs the attempt/);
+    expect((await pgSearchStore.load(SLUG))[0]?.status).toBe("pending");
+  });
+
+  it("refuses a finish that does not end the run", async () => {
+    /* The attempt is released whatever the patch says, so a patch leaving the
+       run `pending` would strip the fence off a row still waiting for an
+       answer — and anybody's late write could then land on it. */
+    const { run, attempt } = await pgSearchStore.begin(SLUG, "about time");
+    await expect(
+      pgSearchStore.finish(SLUG, run.id, { hits: [] }, attempt),
+    ).rejects.toThrow(/must end a run/);
+    await expect(
+      pgSearchStore.finish(SLUG, run.id, { status: "pending" }, attempt),
+    ).rejects.toThrow(/must end a run/);
+  });
+
   it("never lets a patch rename a run or change its question", async () => {
     const { run, attempt } = await pgSearchStore.begin(SLUG, "about time");
     await pgSearchStore.finish(
@@ -254,11 +326,15 @@ when("the Postgres searches store", () => {
        `id` tie-break these two swap places between requests, and the exporter
        and this store then disagree about array order — which shows up as the
        round-trip test failing for a reason that is not a bug. */
+    /* **Inserted in reverse id order on purpose.** The first version wrote
+       `aaa` then `bbb` — already sorted — so removing the tie-break entirely
+       still passed, in insertion order. Now insertion order and id order
+       disagree, and only the tie-break gives the right answer. */
     const fixed = () => "2026-08-01T00:00:00.000Z";
-    const a = await pgSearchStore.begin(SLUG, "first", "spya-aaa001", fixed);
-    const b = await pgSearchStore.begin(SLUG, "second", "spya-bbb001", fixed);
+    await pgSearchStore.begin(SLUG, "second", "spya-zzz002", fixed);
+    await pgSearchStore.begin(SLUG, "first", "spya-aaa002", fixed);
     const order = (await pgSearchStore.load(SLUG)).map((r) => r.id);
-    expect(order).toEqual([a.run.id, b.run.id].sort());
+    expect(order).toEqual(["spya-aaa002", "spya-zzz002"]);
   });
 
   it("404s for an article that is not there, and 400s for a non-slug", async () => {

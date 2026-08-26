@@ -113,24 +113,28 @@ when("the Postgres glossary-lookup store", () => {
   });
 
   it("leaves every other term alone — the race the row deletes", async () => {
-    /* On disk this is one file holding every lookup, read before a model call
-       and written minutes later, so a lookup landing in between is overwritten
-       wholesale. One row per term means two terms never touch, whatever order
-       they land in. */
+    /* On disk this is one file holding every lookup, merged and rewritten under
+       a mutex that only covers this process — so two servers both merge their
+       own term and one reader's answer disappears with both writes reporting
+       success. One row per term cannot do that.
+
+       Written in REVERSE key order on purpose: the first version saved
+       `term22` then `term33`, already sorted, so deleting the `order by`
+       entirely still passed. */
     const other = "spya-term33";
-    await pgGlossaryLookupStore.save(SLUG, TERM, {
-      answer: "first term",
-      citations: [],
-      searches: 0,
-      model: "m",
-      at: "2026-08-01T00:00:00.000Z",
-    });
-    const both = await pgGlossaryLookupStore.save(SLUG, other, {
+    await pgGlossaryLookupStore.save(SLUG, other, {
       answer: "second term",
       citations: [],
       searches: 0,
       model: "m",
       at: "2026-08-01T00:00:01.000Z",
+    });
+    const both = await pgGlossaryLookupStore.save(SLUG, TERM, {
+      answer: "first term",
+      citations: [],
+      searches: 0,
+      model: "m",
+      at: "2026-08-01T00:00:00.000Z",
     });
     expect(both[TERM]?.answer).toBe("first term");
     expect(both[other]?.answer).toBe("second term");

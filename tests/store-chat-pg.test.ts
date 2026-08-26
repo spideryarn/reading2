@@ -166,7 +166,10 @@ when("the Postgres chat store", () => {
     const late = () => "2026-08-01T12:00:00.000Z";
     const early = () => "2026-08-01T09:00:00.000Z";
     const first = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "One?" }, late);
-    await pgChatStore.finish(SLUG, THREAD, first.reply.id, { status: "done", text: "A1" }, late);
+    await pgChatStore.finish(SLUG, THREAD, first.reply.id, { status: "done", text: "A1" }, {
+      now: late,
+      attempt: first.attempt,
+    });
     const second = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Two?" }, early);
 
     const stored = (await pgChatStore.load(SLUG))[0]?.messages ?? [];
@@ -182,13 +185,14 @@ when("the Postgres chat store", () => {
   });
 
   it("finishes a turn without letting the patch change whose turn it was", async () => {
-    const { reply } = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Q?" });
-    await pgChatStore.finish(SLUG, THREAD, reply.id, {
-      id: "spya-zzzzzz",
-      role: "user",
-      status: "done",
-      text: "an answer",
-    } as never);
+    const { reply, attempt } = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Q?" });
+    await pgChatStore.finish(
+      SLUG,
+      THREAD,
+      reply.id,
+      { id: "spya-zzzzzz", role: "user", status: "done", text: "an answer" } as never,
+      { attempt },
+    );
     const messages = (await pgChatStore.load(SLUG))[0]?.messages ?? [];
     const stored = messages.find((m) => m.id === reply.id);
     expect(stored?.text).toBe("an answer");
@@ -202,11 +206,16 @@ when("the Postgres chat store", () => {
        The panel sorts threads by that, so an `if (rowCount)` guard here would
        look like an optimisation and be a real difference in what the reader
        sees. */
-    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Q?" }, clockFrom("2026-08-01T00:00:00.000Z"));
-    const before = (await pgChatStore.load(SLUG))[0]?.updatedAt;
-    await pgChatStore.finish(SLUG, THREAD, "spya-absent", { status: "done" }, () =>
-      "2026-08-02T00:00:00.000Z",
+    const started = await pgChatStore.begin(
+      SLUG,
+      { threadId: THREAD, question: "Q?" },
+      clockFrom("2026-08-01T00:00:00.000Z"),
     );
+    const before = (await pgChatStore.load(SLUG))[0]?.updatedAt;
+    await pgChatStore.finish(SLUG, THREAD, "spya-absent", { status: "done" }, {
+      now: () => "2026-08-02T00:00:00.000Z",
+      attempt: started.attempt,
+    });
     const after = (await pgChatStore.load(SLUG))[0]?.updatedAt;
     expect(after).not.toBe(before);
     expect(after).toBe("2026-08-02T00:00:00.000Z");
@@ -214,14 +223,24 @@ when("the Postgres chat store", () => {
 
   it("retries an answer in place, and takes the last attempt's sources with it", async () => {
     const clock = clockFrom("2026-08-01T00:00:00.000Z");
-    const { reply } = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Q?" }, clock);
-    await pgChatStore.finish(SLUG, THREAD, reply.id, {
-      status: "done",
-      text: "the first answer",
-      citations: [{ url: "https://example.com/one" }],
-      searches: 3,
-      model: "a-model",
-    });
+    const { reply, attempt } = await pgChatStore.begin(
+      SLUG,
+      { threadId: THREAD, question: "Q?" },
+      clock,
+    );
+    await pgChatStore.finish(
+      SLUG,
+      THREAD,
+      reply.id,
+      {
+        status: "done",
+        text: "the first answer",
+        citations: [{ url: "https://example.com/one" }],
+        searches: 3,
+        model: "a-model",
+      },
+      { attempt },
+    );
 
     const retried = await pgChatStore.retry(SLUG, THREAD, reply.id, clock);
     // Same row, same id — that is what a retry is.
@@ -245,9 +264,13 @@ when("the Postgres chat store", () => {
   it("edits a question, discards only what came after it, and keeps the question itself", async () => {
     const clock = clockFrom("2026-08-01T00:00:00.000Z");
     const one = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "First?" }, clock);
-    await pgChatStore.finish(SLUG, THREAD, one.reply.id, { status: "done", text: "A1" });
+    await pgChatStore.finish(SLUG, THREAD, one.reply.id, { status: "done", text: "A1" }, {
+      attempt: one.attempt,
+    });
     const two = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Second?" }, clock);
-    await pgChatStore.finish(SLUG, THREAD, two.reply.id, { status: "done", text: "A2" });
+    await pgChatStore.finish(SLUG, THREAD, two.reply.id, { status: "done", text: "A2" }, {
+      attempt: two.attempt,
+    });
 
     const edited = await pgChatStore.edit(SLUG, THREAD, two.user.id, "Second, rewritten?", {
       now: clock,
@@ -273,9 +296,13 @@ when("the Postgres chat store", () => {
   it("renames the thread when the FIRST question is edited, and not otherwise", async () => {
     const clock = clockFrom("2026-08-01T00:00:00.000Z");
     const one = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "First?" }, clock);
-    await pgChatStore.finish(SLUG, THREAD, one.reply.id, { status: "done", text: "A1" });
+    await pgChatStore.finish(SLUG, THREAD, one.reply.id, { status: "done", text: "A1" }, {
+      attempt: one.attempt,
+    });
     const two = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Second?" }, clock);
-    await pgChatStore.finish(SLUG, THREAD, two.reply.id, { status: "done", text: "A2" });
+    await pgChatStore.finish(SLUG, THREAD, two.reply.id, { status: "done", text: "A2" }, {
+      attempt: two.attempt,
+    });
 
     await pgChatStore.edit(SLUG, THREAD, two.user.id, "Not the first", { now: clock });
     expect((await pgChatStore.load(SLUG))[0]?.title).toBe("First?");
@@ -293,11 +320,15 @@ when("the Postgres chat store", () => {
        The mutex orders those writes. It does not make the result correct. */
     const clock = clockFrom("2026-08-01T00:00:00.000Z");
     const one = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "First?" }, clock);
-    await pgChatStore.finish(SLUG, THREAD, one.reply.id, { status: "done", text: "A1" });
+    await pgChatStore.finish(SLUG, THREAD, one.reply.id, { status: "done", text: "A1" }, {
+      attempt: one.attempt,
+    });
     const staleTail = one.reply.id; // what tab B last saw
 
     const two = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Second?" }, clock);
-    await pgChatStore.finish(SLUG, THREAD, two.reply.id, { status: "done", text: "A2" });
+    await pgChatStore.finish(SLUG, THREAD, two.reply.id, { status: "done", text: "A2" }, {
+      attempt: two.attempt,
+    });
 
     await expect(
       pgChatStore.edit(SLUG, THREAD, one.user.id, "rewritten", {
@@ -344,25 +375,63 @@ when("the Postgres chat store", () => {
     expect(await ordinals()).toEqual([]);
   });
 
-  it("sweeps an old pending answer, spares a young one, and spares this process's own", async () => {
-    const old = clockFrom("2026-08-01T00:00:00.000Z");
-    const stale = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Old?" }, old);
+  it("sweeps an old attempt, spares a young one, and spares this process's own", async () => {
+    /* **Age comes from the ATTEMPT, not from the message.** An earlier version
+       of this test backdated the message's `createdAt` with a fake clock and
+       expected a sweep — which is what the store used to do and is wrong:
+       `createdAt` is the reader's clock, arrives from an import, and is moved
+       by a retry. The lease is the server's, so it is `attempt_started_at`
+       that has to be old, and it is set by the database itself. */
+    const stale = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Old?" });
     const fresh = await pgChatStore.begin(SLUG, { threadId: OTHER, question: "New?" });
+    await getDb()
+      .update(chatMessages)
+      .set({ attemptStartedAt: new Date(Date.now() - 600_000) })
+      .where(and(eq(chatMessages.articleId, ARTICLE_ID), eq(chatMessages.id, stale.reply.id)));
 
     const after = await pgChatStore.sweepPending(SLUG, { keep: NONE, graceMs: 150_000 });
     const byId = new Map(after.flatMap((t) => t.messages).map((m) => [m.id, m]));
     expect(byId.get(stale.reply.id)?.status).toBe("error");
-    // Written minutes ago by a server that is plainly gone.
+    // Young enough that some other process may still be on it.
     expect(byId.get(fresh.reply.id)?.status).toBe("pending");
+  });
 
-    // And an old one this process is still streaming is left alone.
-    const spared = await pgChatStore.sweepPending(SLUG, {
-      keep: new Set([stale.reply.id]),
+  it("spares an answer this process is still streaming, however old the attempt", async () => {
+    const mine = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Slow?" });
+    await getDb()
+      .update(chatMessages)
+      .set({ attemptStartedAt: new Date(Date.now() - 600_000) })
+      .where(and(eq(chatMessages.articleId, ARTICLE_ID), eq(chatMessages.id, mine.reply.id)));
+
+    /* Asserted on the message that is IN `keep`, which the previous version of
+       this test got wrong: it put the stale id in `keep` and then checked a
+       different, fresh message, so deleting `keep` handling entirely would have
+       left it green. GPT Sol found that, 2026-08-26. */
+    const after = await pgChatStore.sweepPending(SLUG, {
+      keep: new Set([mine.reply.id]),
       graceMs: 150_000,
     });
-    expect(
-      spared.flatMap((t) => t.messages).find((m) => m.id === fresh.reply.id)?.status,
-    ).toBe("pending");
+    expect(after.flatMap((t) => t.messages).find((m) => m.id === mine.reply.id)?.status).toBe(
+      "pending",
+    );
+  });
+
+  it("sweeps a message that has no attempt at all — an imported one", async () => {
+    // `chat.json` never recorded an attempt, so a `pending` message from an
+    // import has nothing to lease and is stale by definition.
+    const started = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Q?" });
+    await getDb()
+      .update(chatMessages)
+      .set({
+        attemptId: null,
+        attemptStartedAt: null,
+        createdAt: new Date(Date.now() - 600_000),
+      })
+      .where(and(eq(chatMessages.articleId, ARTICLE_ID), eq(chatMessages.id, started.reply.id)));
+    const after = await pgChatStore.sweepPending(SLUG, { keep: NONE, graceMs: 150_000 });
+    expect(after.flatMap((t) => t.messages).find((m) => m.id === started.reply.id)?.status).toBe(
+      "error",
+    );
   });
 
   it("serialises two turns on the article, not on the thread", async () => {
@@ -417,6 +486,93 @@ when("the Postgres chat store", () => {
     // Four distinct ids across two threads, minted against one article-wide set.
     const ids = new Set([first.user.id, first.reply.id, second.user.id, second.reply.id]);
     expect(ids.size).toBe(4);
+  });
+
+  it("refuses a late answer from an attempt the sweep already buried", async () => {
+    /* **The search store's race, in chat, and it was left in.**
+
+         1. process A starts an answer
+         2. process B's sweep declares it dead
+         3. the reader retries — a NEW attempt, and `retry` REUSES the message id
+         4. A's model call finally returns and calls finish
+
+       Fenced on article + thread + message id alone, step 4 lands: the reader
+       watches their retry be replaced by the answer that already failed, and
+       nothing reports it. Reusing the id is exactly what makes a retry a retry,
+       so identity cannot be the fence. GPT Sol found this on 2026-08-26, having
+       had the identical fault fixed for searches an hour earlier. */
+    const started = await pgChatStore.begin(SLUG, { threadId: THREAD, question: "Q?" });
+    await getDb()
+      .update(chatMessages)
+      .set({ attemptStartedAt: new Date(Date.now() - 600_000) })
+      .where(and(eq(chatMessages.articleId, ARTICLE_ID), eq(chatMessages.id, started.reply.id)));
+    await pgChatStore.sweepPending(SLUG, { keep: NONE, graceMs: 150_000 });
+
+    const retried = await pgChatStore.retry(SLUG, THREAD, started.reply.id);
+    expect(retried.reply.id).toBe(started.reply.id); // same row — that is a retry
+    expect(retried.attempt).not.toBe(started.attempt);
+
+    await pgChatStore.finish(
+      SLUG,
+      THREAD,
+      started.reply.id,
+      { status: "done", text: "the answer that was already dead" },
+      { attempt: started.attempt },
+    );
+    const stale = (await pgChatStore.load(SLUG))[0]?.messages.at(-1);
+    expect(stale?.status, "a buried attempt wrote over the live retry").toBe("pending");
+    expect(stale?.text).toBe("");
+
+    // And the live attempt still lands.
+    await pgChatStore.finish(
+      SLUG,
+      THREAD,
+      started.reply.id,
+      { status: "done", text: "the real answer" },
+      { attempt: retried.attempt },
+    );
+    expect((await pgChatStore.load(SLUG))[0]?.messages.at(-1)?.text).toBe("the real answer");
+  });
+
+  it("does not let a rename be overwritten by a turn that began before it", async () => {
+    /* `begin` reads the thread under the article lock and upserts the title it
+       read. If `rename` does not take that lock, it can land in between — and
+       `begin` then writes the old title back over it. Impossible under the
+       filesystem mutex, which serialises every write in the process.
+
+       Held open by hand, because two concurrent calls are too short to overlap
+       on their own. */
+    const db = getDb();
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "First?" });
+
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holder = db.transaction(async (tx) => {
+      await tx
+        .select({ id: articles.id })
+        .from(articles)
+        .where(eq(articles.id, ARTICLE_ID))
+        .for("update");
+      await held;
+    });
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+    await settle();
+
+    let renamed = false;
+    const rename = pgChatStore.rename(SLUG, THREAD, "Chosen by the reader").then((r) => {
+      renamed = true;
+      return r;
+    });
+    await settle();
+    expect(renamed, "rename did not wait for the article lock").toBe(false);
+
+    release();
+    await holder;
+    await rename;
+    expect((await pgChatStore.load(SLUG))[0]?.title).toBe("Chosen by the reader");
   });
 
   it("sweeps a quiet article without a syntax error", async () => {

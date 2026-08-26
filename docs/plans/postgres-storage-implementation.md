@@ -375,9 +375,15 @@ the model's history from `thread.messages.slice(0, -2)`. Not negotiable. Every m
 ### Concurrency: the lock is the mutex
 
 The file stores serialise every write for the whole process through a module-global promise chain.
-Postgres replaces it with **per-thread (chat) or per-article (searches) serialisation across
-processes** — strictly stronger, and observably identical: every concurrent pair that both succeed
-today both succeed here.
+Postgres replaces it with **per-article serialisation across processes** — strictly stronger, and
+observably identical: every concurrent pair that both succeed today both succeed here.
+
+> **"Per-thread (chat)" was wrong and is corrected here**, twice over. The lock has to be
+> article-wide because minting scans every id in the article (below) — and it has to be taken by
+> **every method that writes**, not only the three that read before writing. The built version took
+> it in `begin`, `retry` and `edit` only, and `begin` upserts the *title* it read, so a concurrent
+> `rename` was silently written back to the old name: a lost update the filesystem mutex makes
+> impossible. Found by GPT Sol reviewing the implementation, 2026-08-26.
 
 The design reached for `pg_advisory_xact_lock` because **`beginTurn` may have no thread row to
 lock** — a thread is created by its first question, and `withTurn` can *overrule* the client's thread
@@ -668,6 +674,72 @@ the finish conditional on that attempt.
    files side up to it later.** See the divergence table above.
 3. **Should `deleteGlossary` be dragged into step 10 anyway?** The SQL is trivial; leaving it 501 is a
    real hole for anyone testing `postgres` mode.
+
+### What the review found in the built step 10
+
+GPT Sol reviewed the implementation on 2026-08-26 (a second pass — the first reviewed the design
+above). Verdict: **do not wire these into `src/routes.ts` yet.** Every finding below was checked
+against the code, and all of the substantial ones were real.
+
+**Two races the design had closed on one side and left open on the other:**
+
+1. **Chat had the same unfenced late answer that searches had just been fixed for.** A retry keeps
+   the message id — that is what makes it a retry — so `(article, thread, message)` cannot say which
+   model call is reporting. Sweep buries A, reader retries into the same row, A returns, A wins.
+   `chat_messages` now carries `attempt_id` / `attempt_started_at` too, `finish` **refuses a call
+   with no attempt** rather than falling back to identity, and the sweep releases the fence on the
+   attempt it buries.
+2. **`expectedTailId` was checked one layer too high on the filesystem side** — loaded, checked,
+   and *then* `editTurn` entered the mutex and read again. Two reads with a gap: a `begin` landing
+   in it passes the check and is then deleted by the edit. The guard now runs inside the same
+   `update` callback as `withEdit`. [tests/store-chat-tail-guard.test.ts](../../tests/store-chat-tail-guard.test.ts)
+   goes red three times out of three with the old placement.
+
+**Three smaller ones, all real:**
+
+- The search `finish` took the attempt as optional and dropped the predicate when it was missing,
+  so a caller who forgot to carry the token recreated the whole race. It throws now. It also
+  accepted a patch with a non-terminal status while releasing the fence regardless, which would
+  strip the lease off a run still waiting for an answer.
+- `attempt_started_at` came from the process clock, read **before** the wait for the article lock.
+  A write that queued for four seconds began life four seconds old. It comes from the database now,
+  and from `clock_timestamp()` rather than `now()` — `now()` is the transaction's start, which is
+  also before the lock wait.
+- `rename` and `remove` took no lock at all, which is what made the lost update above possible.
+
+**Four comments that claimed things the code does not do.** All corrected, and the third is the one
+worth remembering:
+
+- The chat store's header said the lock replaced serialisation for every write. It did not.
+- The filesystem tail check said it read "the list they are about to edit". It read a copy.
+- **The glossary-lookup rationale was simply false.** It said the file's map is read *before* the
+  model call and held stale across it. `saveLookup` reads inside the mutex, *after* the call — so
+  the story was scarier than the truth and pointed at the wrong mechanism. The real difference is
+  that the mutex is process-local: two servers both merge their own term and one reader's answer
+  disappears with both writes reporting success. That is still worth a row per term; it is not what
+  was written down.
+- A test comment still said an empty `notInArray` emits `not in ()`, after the source comment had
+  been corrected.
+
+**Four tests that passed for bad reasons**, all found by Sol and all now able to fail:
+
+- The chat sweep's "spares this process's own work" asserted on a *different* message from the one
+  in `keep`, so deleting `keep` handling entirely left it green.
+- Both tie-break tests inserted their ids in already-sorted order, so removing the tie-break
+  changed nothing. They insert in reverse now.
+- The trim test only checked that each insertion survived its own transaction — which an
+  implementation that deletes the previous row every time also satisfies.
+- Two fixture ids contained `1`, which is **not in the id alphabet** (`i`, `l`, `o` and `1` are
+  excluded so an id read aloud is unambiguous). A store handed a malformed id mints its own instead,
+  correctly and silently, so those tests were testing something else. There is now an assertion that
+  every literal id in the file is one the store will accept.
+
+**One thing Sol was right to leave standing.** The `MAX_RUNS` divergence is larger than the code
+claimed: with thirty future-dated rows, a backdated run is deleted by the *very next* search rather
+than thirty later, and the two stores' sets can differ in twenty-nine of thirty members. The
+guarantee is only **"at most thirty rows, and the run this `begin` returns survives this
+transaction"**, which is what the comment now says. Closing it properly needs an insertion ordinal,
+which is a column and has not been paid for.
 
 ## Step 11 — the pipeline writes revisions
 

@@ -32,12 +32,12 @@ import {
   beginTurn,
   ChatConflict,
   deleteThread,
-  editTurn,
   finishTurn,
   loadThreads,
   renameThread,
   retryTurn,
   update as updateThreads,
+  withEdit,
 } from "../chat.js";
 import { createComment, deleteComment, loadComments, patchComment } from "../comments.js";
 import { loadLookups, saveLookup } from "../glossary-lookups.js";
@@ -184,28 +184,66 @@ export const fsLibrarySearch: LibrarySearch = { searchLibrary };
  */
 export const fsChatStore: ChatStore = {
   load: loadThreads,
-  begin: beginTurn,
-  retry: retryTurn,
   rename: renameThread,
   remove: deleteThread,
 
-  async finish(slug, threadId, messageId, patch, now): Promise<void> {
+  /* `attempt: undefined` on all three, and it is not a stub. The filesystem has
+     no attempts and will not get any: the point of an attempt is to be compared
+     across processes, and two servers sharing one `data/` directory is a thing
+     nobody does. This side stays fenced by identity alone, exactly as today. */
+  async begin(slug, turn, now) {
+    return { ...(await beginTurn(slug, turn, now)), attempt: undefined };
+  },
+
+  async retry(slug, threadId, messageId, now) {
+    return { ...(await retryTurn(slug, threadId, messageId, now)), attempt: undefined };
+  },
+
+  async finish(slug, threadId, messageId, patch, opts = {}): Promise<void> {
     // The list is thrown away. Both call sites already did; saying so in the
     // type is what stops the Postgres store paying for a read nobody wants.
-    await finishTurn(slug, threadId, messageId, patch, now);
+    // `opts.attempt` is ignored here — see the note on `begin`.
+    await finishTurn(slug, threadId, messageId, patch, opts.now);
   },
 
   async edit(slug, threadId, messageId, question, opts = {}) {
-    /* `expectedTailId` is checked here rather than inside `withEdit` because it
-       is a *client* claim, not an invariant of the data: the store is the layer
-       that knows what the client last saw. Both adapters therefore have to
-       check it, and both have to check it against the list they are about to
-       edit — reading it earlier would be checking a copy. */
-    if (opts.expectedTailId !== undefined) {
-      const threads = await loadThreads(slug);
-      requireTail(threads, threadId, opts.expectedTailId);
-    }
-    return editTurn(slug, threadId, messageId, question, opts.now);
+    /* **The tail check runs inside the mutex, with the edit.**
+
+       Checking it out here — load, check, then call `editTurn`, which enters
+       the mutex and re-reads — is checking a copy. A `begin` can land, or
+       already be queued, between the two reads: the check passes against
+       Q1/A1, `begin` writes Q2/A2, and the edit then runs behind it and
+       deletes both. That is precisely the loss `expectedTailId` exists to
+       prevent, reintroduced by putting the guard one layer too high. GPT Sol
+       found it, 2026-08-26. */
+    let out!: ReturnType<typeof withEdit>;
+    await updateThreads(slug, (threads) => {
+      if (opts.expectedTailId !== undefined) {
+        requireTail(threads, threadId, opts.expectedTailId);
+      }
+      const at = (opts.now ?? (() => new Date().toISOString()))();
+      const result = withEdit(threads, threadId, messageId, question, at);
+      out = result;
+      return result.threads;
+    });
+    log("store").info(
+      {
+        slug,
+        threadId: out.thread.id,
+        messageId: out.reply.id,
+        discarded: out.discarded,
+        turns: out.thread.messages.length,
+      },
+      "chat question edited",
+    );
+    /* `threads` is dropped, not spread. `withEdit` returns the whole rewritten
+       array as well as the turn — it has to, because the filesystem writes it —
+       and spreading the lot puts a key in the response that the Postgres store
+       has no way to produce and no caller wants. Caught by
+       tests/store-reader-state-parity.test.ts, which is exactly the kind of
+       difference it exists for: nothing else would have noticed. */
+    const { threads: _written, ...turn } = out;
+    return { ...turn, attempt: undefined };
   },
 
   async sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]> {

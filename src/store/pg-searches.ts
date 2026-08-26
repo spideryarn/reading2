@@ -63,6 +63,22 @@ import { notFound, requireSlug } from "./pg.js";
 
 const logger = log("store");
 
+/**
+ * The database's clock at the moment the statement runs — **not this process's,
+ * and not `now()`**.
+ *
+ * Taking the time in TypeScript before the transaction is wrong twice over. It
+ * is a different clock from the one the sweep compares against, so skew between
+ * two servers becomes a birth defect in every lease; and it is read before the
+ * wait for the article lock, so a write that queued for four seconds starts
+ * life four seconds old and can be swept before its model call has begun.
+ *
+ * `clock_timestamp()` rather than `now()` for the second reason again: `now()`
+ * is the *transaction's* start time, which is also before the lock wait. GPT
+ * Sol raised both, 2026-08-26.
+ */
+const DB_NOW = sql`clock_timestamp()` as unknown as Date;
+
 /** What the sweep writes. Identical to src/routes.ts's string, deliberately. */
 const SWEPT = "The server stopped before this search finished.";
 
@@ -160,7 +176,7 @@ export const pgSearchStore: SearchStore = {
             model: null,
             error: null,
             attemptId: attempt,
-            attemptStartedAt: new Date(at),
+            attemptStartedAt: DB_NOW,
           })
           .where(
             and(
@@ -193,21 +209,32 @@ export const pgSearchStore: SearchStore = {
           hits: [],
           createdAt: new Date(decided.createdAt),
           attemptId: attempt,
-          attemptStartedAt: new Date(at),
+          attemptStartedAt: DB_NOW,
         })
         .returning();
 
       /* Trim to MAX_RUNS, **excluding the row just written**.
 
-         The file keeps the last thirty array elements; this keeps the thirty
-         newest by timestamp, and those are not the same list when the clock is
-         fixed, has gone backwards, or the data was imported in hand-written
-         order. The difference that actually bites is a new run with an older
-         timestamp trimming *itself* — the model call then finishes into a row
-         that is gone and the reader gets a 404 for a search they just started.
-         Excluding the new id makes that impossible, which is the cheap half of
-         the fix; the expensive half is an insertion ordinal, and it is not
-         worth a column yet. Recorded as a stated difference in
+         The file keeps the last thirty *array elements*; this keeps the thirty
+         newest *by timestamp*, and the two are the same list only while the
+         clock runs forwards. They come apart under a fixed clock, a clock that
+         has gone back, imported data in hand-written order, or ties.
+
+         **Be precise about how far apart, because the obvious summary is too
+         kind.** It is not "a backdated run is dropped thirty searches early".
+         With thirty future-dated rows in the table, a backdated run survives
+         its own insert and is then the oldest candidate, so the *very next*
+         search deletes it. Repeat that and Postgres keeps twenty-nine originals
+         plus the latest insertion while the file keeps the latest thirty — the
+         two sets can disagree on twenty-nine of their thirty members. GPT Sol
+         worked that through, 2026-08-26.
+
+         What is guaranteed, and all that is: **at most thirty rows, and the run
+         this `begin` returns survives this transaction.** That second half is
+         the one that matters to a reader — without it a model call finishes
+         into a row that is already gone and they get a 404 for a search they
+         are watching. Full behavioural parity needs an insertion ordinal, which
+         is a column and has not been paid for. Recorded in
          docs/plans/postgres-storage-implementation.md. */
       const others = await tx
         .select({ id: searchRuns.id })
@@ -244,6 +271,32 @@ export const pgSearchStore: SearchStore = {
     const db = getDb();
     const articleId = await articleIdFor(slug);
 
+    /* **Refused without an attempt, rather than falling back to identity.**
+
+       The token is optional in the interface because the filesystem store has
+       none. Letting it be optional *here* would mean a caller that simply
+       forgot to carry it through got the whole cross-process race back — A's
+       buried answer landing on B's retry — with nothing anywhere reporting it.
+       The column exists to close that; accepting `undefined` would reopen it
+       silently. GPT Sol, 2026-08-26. */
+    if (attempt === undefined) {
+      throw new Error(
+        `finish("${slug}") needs the attempt that begin() returned. ` +
+          "Without it a model call the sweep already buried can overwrite the retry.",
+      );
+    }
+
+    /* **And the status has to be one this run can end on.** The attempt is
+       released below whatever the patch says, so a patch that leaves the run
+       `pending` would strip the fence off a row that is still waiting for an
+       answer — after which anybody's late write can land on it. */
+    if (patch.status !== "done" && patch.status !== "error") {
+      throw new Error(
+        `finish("${slug}") must end a run: status was ${JSON.stringify(patch.status)}, ` +
+          "expected \"done\" or \"error\".",
+      );
+    }
+
     /* `id` and `criterion` are deliberately not settable — src/searches.ts pins
        them back after the spread, and building the SET explicitly is the same
        guarantee without depending on key order. */
@@ -271,7 +324,7 @@ export const pgSearchStore: SearchStore = {
              is watching arrive. Same rule the job lease arrives at in step 12,
              from a different direction. */
           eq(searchRuns.status, "pending"),
-          ...(attempt === undefined ? [] : [eq(searchRuns.attemptId, attempt)]),
+          eq(searchRuns.attemptId, attempt),
         ),
       )
       .returning();
