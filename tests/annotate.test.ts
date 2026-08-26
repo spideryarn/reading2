@@ -10,7 +10,14 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { describe, expect, it } from "vitest";
-import { annotateHtml, renderedText, resolveMark, termMarks } from "../src/web/annotate.js";
+import {
+  annotateHtml,
+  HUE_STRIPES,
+  renderedText,
+  resolveMark,
+  termMarks,
+  type Mark,
+} from "../src/web/annotate.js";
 
 describe("renderedText", () => {
   it("is the concatenation of text nodes, with entities decoded", () => {
@@ -375,5 +382,90 @@ describe("search hits — the third kind of mark", () => {
   it("marks the pressed hit as open, the way an open comment is", () => {
     const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit", open: true }]);
     expect(host(out).querySelector("mark.hit")?.hasAttribute("data-open")).toBe(true);
+  });
+});
+
+describe("annotateHtml — the colours of the searches that found the words", () => {
+  const HTML = "<p>the mind is software running on wet hardware</p>";
+
+  const hitMark = (over: Partial<Mark> = {}): Mark => ({
+    id: "h1",
+    start: 4,
+    end: 8,
+    kind: "hit",
+    strength: 1,
+    ...over,
+  });
+
+  it("names the palette slot rather than a colour", () => {
+    /* The seam this whole design rests on: annotate.ts knows which *search*,
+       styles/colourscales.css knows which *hue*, and a hex value appearing here
+       would put a colour beyond the reach of the theme. */
+    const out = annotateHtml(HTML, [hitMark({ slot: 3 })]);
+    expect(out).toContain("--h0:var(--cat-3-rgb)");
+    expect(out).toContain('data-hues="1"');
+    expect(out).not.toMatch(/#[0-9a-f]{3,6}/i);
+  });
+
+  it("stacks one stripe per search over the same words, in slot order", () => {
+    const out = annotateHtml(HTML, [
+      hitMark({ id: "h1", slot: 5 }),
+      hitMark({ id: "h2", slot: 2 }),
+    ]);
+    expect(out).toContain('data-hues="2"');
+    /* Sorted, so the same pair of searches draws the same pair of rules
+       wherever they meet — rather than in whatever order the results list
+       happened to be sorted into. */
+    expect(out).toContain("--h0:var(--cat-2-rgb)");
+    expect(out).toContain("--h1:var(--cat-5-rgb)");
+  });
+
+  it("counts one search that found the same words twice as one stripe", () => {
+    const out = annotateHtml(HTML, [
+      hitMark({ id: "h1", slot: 4 }),
+      hitMark({ id: "h2", slot: 4 }),
+    ]);
+    expect(out).toContain('data-hues="1"');
+  });
+
+  it("draws no more than HUE_STRIPES of them", () => {
+    /* Past four the band would push into the line below. The reader loses the
+       knowledge that a fifth search matched *here*, not that it matched. */
+    const out = annotateHtml(
+      HTML,
+      [0, 1, 2, 3, 4, 5].map((slot) => hitMark({ id: `h${slot}`, slot })),
+    );
+    expect(out).toContain(`data-hues="${HUE_STRIPES}"`);
+    expect(out).not.toContain("--h4:");
+  });
+
+  it("gives a literal match no stripe attribute at all", () => {
+    /* `slot: null` is a words-mode hit. `data-hues` must be ABSENT rather than
+       "0", because the stylesheet falls back to the one fixed search hue on
+       `:not([data-hues])` — and a slot of 0 would paint every literal match in
+       the first categorical colour instead. */
+    const out = annotateHtml(HTML, [hitMark({ slot: null })]);
+    expect(out).toContain("mark");
+    expect(out).not.toContain("data-hues");
+    expect(out).not.toContain("--h0");
+  });
+
+  it("ignores a slot that is not a whole number", () => {
+    /* The slot is interpolated into a custom-property *name*, so a NaN would
+       emit `var(--cat-NaN-rgb)` — a reference to a property nobody defined,
+       which is not an error and simply paints nothing. Silent, so it is pinned.
+       @ts-expect-error is not needed: NaN is a number. */
+    const out = annotateHtml(HTML, [hitMark({ slot: Number.NaN })]);
+    expect(out).not.toContain("data-hues");
+    expect(out).not.toContain("NaN");
+  });
+
+  it("still carries the confidence alongside the colours", () => {
+    /* Two channels on one mark, and the split is the point: the wash says how
+       sure, the stripes say which search. Losing either would look like the
+       other still working. */
+    const out = annotateHtml(HTML, [hitMark({ slot: 1, strength: 0.42 })]);
+    expect(out).toContain("--hit-a:0.420");
+    expect(out).toContain("--h0:var(--cat-1-rgb)");
   });
 });

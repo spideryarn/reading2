@@ -8,7 +8,7 @@ is missing is listed at the bottom, honestly, rather than left for you to discov
 Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 [tooltips.md](tooltips.md). This is the map; those are the territory.
 
-## The four files, in load order
+## The five files, in load order
 
 `main.tsx` imports **one** stylesheet, and it is not the one you would guess.
 
@@ -18,6 +18,7 @@ Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 | 2 | `tailwindcss/theme.css` + `utilities.css` | Tailwind v4, prefixed `tw`, in layers `theme` and `utilities`. **Preflight is deliberately not imported** |
 | 3 | [`src/web/styles.css`](../../src/web/styles.css) | every hand-written rule, ~1200 lines, imported by *file 1* so it lands in `@layer app` |
 | 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the four font stacks, imported in turn by *file 3* |
+| 5 | [`styles/colourscales.css`](../../styles/colourscales.css) | the three palettes that are **not** the brand — categorical, sequential, diverging — imported by *file 4*. See [colour-scales.md](colour-scales.md) |
 
 The nesting is the load-bearing part. Importing `styles.css` from `main.tsx` alongside
 `tailwind.css` **does not work** — it lands unlayered, outranks every utility, and Tailwind
@@ -85,6 +86,15 @@ It is held as **three space-separated numbers rather than as a colour**, because
 is `rgb(var(--hit-rgb) / <alpha>)` and that form is the one that takes a variable alpha. `--hit` is
 the ordinary-colour alias beside it. Anything else that needs a second meaning on the prose should
 add a token here rather than reach for another alpha of the orange.
+
+**Since 2026-08-26 that sentence needs a second half.** Several saved searches can be showing at
+once, each in its own hue, so the search mark had to split into two channels: a low-chroma slate
+wash (`--hit-wash-rgb`) carrying the model's confidence, and one coloured rule per search underneath
+it carrying *which* search. `--hit-rgb` is now the panel's chrome colour rather than the wash's. The
+eight hues are in [`colourscales.css`](../../styles/colourscales.css) and the reasoning is in
+[colour-scales.md](colour-scales.md) — including the two things that make a published palette wrong
+on this page, and the fact that slot 6 sits close enough to the brand orange to be worth knowing
+about.
 
 One trap worth repeating here because it is invisible: **mix colours in `oklab`, not `oklch`.**
 `--page` is written `oklch(0.145 0 0)`, a hue explicitly specified as 0 rather than missing, so
@@ -188,6 +198,8 @@ eventually have to decide whether they are a system or an accident:
 
 - [web-client.md](web-client.md) — the view all of this styles, and its constraints
 - [icons.md](icons.md) — Lucide, one stroke weight, and two ways an SVG breaks a layout quietly
+- [colour-scales.md](colour-scales.md) — the three palettes that are not the brand, and why every
+  published one is upside down on a black page
 - [tooltips.md](tooltips.md) — the one component whose appearance is entirely ours
 - [original-version/overview.md](original-version/overview.md) — where the palette and the typography came from
 - [browser-testing.md](browser-testing.md) — **do not judge colour from a screenshot**

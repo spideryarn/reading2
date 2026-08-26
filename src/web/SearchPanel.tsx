@@ -31,16 +31,48 @@
  * points at the prose, it does not stand in for it. Hence the two snippet
  * lengths rather than one: enough in the row to recognise a passage, enough on
  * hover to judge it, and never enough to save you the trip.
+ *
+ * ## Several searches at once, each with a colour — 2026-08-26
+ *
+ * Greg: *"assign a categorical colour to each of the Search highlights. And
+ * then add a checkbox by each of them (default-false), and allow multiple to be
+ * active, showing their results overlaid somehow. And a box at the top of the
+ * Search column for select/deselect-all."*
+ *
+ * Three things follow, and each of them removed something rather than adding to
+ * it.
+ *
+ * **There is no "open" search any more.** A saved search used to be a thing you
+ * opened, which replaced the list with its results; `?run=` named the one that
+ * was open. Now every saved search is on screen all the time with a box beside
+ * it, and the results of every ticked one are in a single list underneath. So
+ * the state is a *set* — `?runs=` (params.ts) — and the list-or-results ternary
+ * this component used to be built around is gone. The rule the merged list has
+ * to keep is the one the colour is for: every row says which question found it.
+ *
+ * **The box is now only ever a draft.** With no open search there is no
+ * criterion arriving from the server to put into it, so the effect that did
+ * that, and the `dirty` ref that guarded the effect against a fetch landing
+ * while the reader typed, are both gone. The feature they existed for is not:
+ * the ↺ button on a saved row puts its question back in the box, and it does it
+ * from a click rather than from an effect, so there is nothing left to race.
+ *
+ * **Default-false is the same rule the glossary and the summaries follow.** A
+ * reader who opens search mode sees an unmarked article until they say
+ * otherwise. Asking a *new* question is the one thing that ticks a box for you,
+ * because a search you just paid for and cannot see is not a result.
  */
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   AlertTriangle,
   LoaderCircle,
+  RotateCcw,
   Search as SearchIcon,
   Sparkles,
   Trash2,
   Type,
 } from "lucide-react";
+import { worthRetrying } from "../messages.js";
 import type { BlockId, SearchRun } from "../types.js";
 import type { Found } from "./search-hits.js";
 import { MIN_FIND_CHARS } from "./search-hits.js";
@@ -57,13 +89,17 @@ interface Props {
   onFind(next: string | null): void;
   /** Every saved meaning-search for this article. */
   runs: SearchRun[];
-  /** The one that is open, or null for the list of them. */
-  runId: string | null;
-  onRun(id: string | null): void;
+  /** Which of them are switched on — `?runs=`. Possibly none, which is the default. */
+  active: string[];
+  /** Its palette slot, for every saved run. `assignSlots` in hit-colours.ts. */
+  slots: Map<string, number>;
+  onToggle(id: string, on: boolean): void;
+  /** Every box at once — the control at the top of the list. */
+  onToggleAll(on: boolean): void;
   onAsk(criterion: string): void;
   onRetry(id: string): void;
   onDelete(id: string): void;
-  /** The results of whichever matcher is running, already ordered. */
+  /** The results of whichever matcher is running, already ordered and merged. */
   found: Found[];
   order: HitOrder;
   onOrder(next: HitOrder): void;
@@ -80,8 +116,10 @@ export function SearchPanel({
   find,
   onFind,
   runs,
-  runId,
-  onRun,
+  active,
+  slots,
+  onToggle,
+  onToggleAll,
   onAsk,
   onRetry,
   onDelete,
@@ -92,8 +130,32 @@ export function SearchPanel({
   onOpen,
   error,
 }: Props) {
-  const open = runs.find((r) => r.id === runId) ?? null;
-  const searching = open?.status === "pending";
+  /**
+   * The draft question, lifted out of `Box`.
+   *
+   * It lives here rather than in the input because two things now write it: the
+   * reader typing, and the ↺ on a saved row. Keeping it in `Box` and pushing the
+   * second one in through a prop would need an effect to notice the prop
+   * changed — which is the shape of the bug this component used to carry, where
+   * a criterion arriving from a fetch overwrote what the reader was typing. A
+   * click is not a race; an effect watching a value is.
+   */
+  const [draft, setDraft] = useState("");
+  const box = useRef<HTMLInputElement>(null);
+
+  /** Put a saved question back in the box, ready to be edited into the next one. */
+  function reuse(criterion: string) {
+    setDraft(criterion);
+    /* Focus, because the only reason to press ↺ is to change the words. Without
+       it the text appears somewhere the reader is not, and they have to click
+       into it before they can do the thing they asked for. */
+    box.current?.focus();
+  }
+
+  /* Whether *any* switched-on search is still out. In words mode there is
+     nothing to wait for, so the spinner never shows: a literal match is
+     already done by the time you have finished the keystroke. */
+  const searching = runs.some((r) => active.includes(r.id) && r.status === "pending");
 
   return (
     <aside className="mode-band srch" aria-label="Search this article">
@@ -103,34 +165,49 @@ export function SearchPanel({
       </div>
 
       <Box
+        ref={box}
         matcher={matcher}
         onMatcher={onMatcher}
         find={find}
         onFind={onFind}
-        runId={runId}
-        criterion={open?.criterion ?? ""}
-        busy={searching}
+        draft={draft}
+        onDraft={setDraft}
+        busy={matcher === "meaning" && searching}
         onAsk={onAsk}
-        onClear={() => onRun(null)}
       />
 
       {error && <p className="srch-error">{error}</p>}
 
-      {matcher === "meaning" && open === null ? (
-        <Saved runs={runs} onOpen={onRun} onDelete={onDelete} />
-      ) : (
-        <Results
-          found={found}
-          order={order}
-          onOrder={onOrder}
-          openKey={openKey}
-          onOpen={onOpen}
-          matcher={matcher}
-          run={open}
-          typed={(find ?? "").trim().length}
+      {/* The saved list and the results are on screen together now, rather than
+          one replacing the other. That is the whole of the multi-search change
+          seen from here: the ticks are the control and the list below is what
+          they add up to, so a reader can watch one appear as they tick it.
+          Words mode has no saved searches to tick, so it gets the results
+          alone. */}
+      {matcher === "meaning" && (
+        <Saved
+          runs={runs}
+          active={active}
+          slots={slots}
+          onToggle={onToggle}
+          onToggleAll={onToggleAll}
+          onReuse={reuse}
           onRetry={onRetry}
+          onDelete={onDelete}
         />
       )}
+      <Results
+        found={found}
+        order={order}
+        onOrder={onOrder}
+        openKey={openKey}
+        onOpen={onOpen}
+        matcher={matcher}
+        slots={slots}
+        runs={runs}
+        active={active}
+        typed={(find ?? "").trim().length}
+      />
     </aside>
   );
 }
@@ -173,66 +250,44 @@ export function SearchPanel({
  * be a parameter nothing is reading — and, worse, it is exactly the shape
  * `resolveMatcher` reads as "this URL is a words search" (params.ts).
  *
- * ## And the thing that can still take the text away: the fetch
+ * ## The effect that used to be here, and is not any more
  *
- * A saved run's criterion arrives from the server, not from the first render.
- * Land on `?mode=search&run=<id>` and for the length of one request `runs` is
- * `[]`, so `criterion` is `""` — and the box is focused, so the reader can
- * already be typing when the answer lands. An unconditional "put the criterion
- * in the box" effect then deletes what they wrote.
+ * A saved run's criterion arrived from the server, not from the first render,
+ * so this component carried an effect that put it in the box when it landed —
+ * and a `dirty` ref to stop that effect deleting what the reader had typed in
+ * the meantime, because landing on `?mode=search&run=<id>` focuses the box a
+ * whole request before the criterion exists. That was a real race and the guard
+ * was a real fix (found by a GPT Sol review, 2026-08-26).
  *
- * `dirty` is the guard: once the reader has touched the box, the criterion stops
- * being allowed to overwrite it. Opening a *different* run clears the flag,
- * because that is a deliberate act that plainly means "show me this one". Found
- * by a GPT Sol review of this change, 2026-08-26 — it is the autofocus that made
- * a latent race into a reachable one.
+ * Both are gone as of the multi-search change, because the thing they were
+ * guarding stopped existing: no search is "open", so nothing arrives from the
+ * server that wants to be in the box. Putting a saved question back is now the
+ * ↺ button on its row, which is a click, and a click cannot arrive while the
+ * reader is halfway through a word. Worth writing down rather than deleting
+ * silently — the guard looked like defensive coding and was not, and the reason
+ * it is safe to remove is that its cause went, not that it was unnecessary.
  */
-function Box({
-  matcher,
-  onMatcher,
-  find,
-  onFind,
-  runId,
-  criterion,
-  busy,
-  onAsk,
-  onClear,
-}: {
-  matcher: Matcher;
-  onMatcher(next: Matcher): void;
-  find: string | null;
-  onFind(next: string | null): void;
-  /** Which saved run the criterion belongs to — the reset signal for `dirty`. */
-  runId: string | null;
-  criterion: string;
-  busy: boolean;
-  onAsk(criterion: string): void;
-  onClear(): void;
-}) {
-  const [draft, setDraft] = useState(criterion);
+const Box = forwardRef<
+  HTMLInputElement,
+  {
+    matcher: Matcher;
+    onMatcher(next: Matcher): void;
+    find: string | null;
+    onFind(next: string | null): void;
+    /** The meaning-mode draft, owned by `SearchPanel` — see the note there. */
+    draft: string;
+    onDraft(next: string): void;
+    busy: boolean;
+    onAsk(criterion: string): void;
+  }
+>(function Box({ matcher, onMatcher, find, onFind, draft, onDraft, busy, onAsk }, ref) {
+  /* The parent needs this to focus the box from ↺, and the input needs it for
+     the focus-on-mount below and for `switchTo`. `useImperativeHandle` would
+     hand back a narrowed object; there is nothing to narrow, so the ref is
+     simply shared. */
   const box = useRef<HTMLInputElement>(null);
+  useImperativeHandle(ref, () => box.current as HTMLInputElement, []);
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
-  /** Has the reader typed since the box was last filled for them? */
-  const dirty = useRef(false);
-
-  /* Opening a different saved search is a deliberate "show me this one", so it
-     hands the box back to the criterion. Declared before the effect below and
-     therefore run before it, which is the order that matters: clear the flag,
-     then fill the box. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads nothing, and opening a different run is exactly when the reader stops owning the box
-  useEffect(() => {
-    dirty.current = false;
-  }, [runId]);
-
-  /* Re-opening a saved search puts its criterion back in the box, so the reader
-     can see what they asked and edit it into the next question rather than
-     retyping it. Keyed on the criterion rather than on the run id because that
-     is what is actually being shown — and skipped once the reader has typed,
-     because the criterion can arrive a whole request after they started. */
-  useEffect(() => {
-    if (dirty.current) return;
-    setDraft(criterion);
-  }, [criterion]);
 
   /* The box takes focus when the mode opens. A search panel you have to click
      into before typing is a search panel that costs two actions instead of one,
@@ -245,6 +300,7 @@ function Box({
      Same distinction, and the same `e.detail` test, as Dock.tsx § DockModes. */
   useEffect(() => box.current?.focus(), []);
 
+  const setDraft = onDraft;
   const value = matcher === "words" ? (find ?? "") : draft;
   const ready = matcher === "meaning" && draft.trim().length > 0 && !busy;
 
@@ -259,9 +315,6 @@ function Box({
     if (next !== matcher) {
       if (next === "meaning") {
         setDraft(value);
-        /* The reader's own words, carried across — so the criterion must not be
-           allowed to overwrite them when a pending fetch lands. */
-        if (value.trim() !== "") dirty.current = true;
         onFind(null);
       } else {
         onFind(draft.trim() === "" ? null : draft);
@@ -308,7 +361,6 @@ function Box({
           placeholder={matcher === "words" ? "find these words…" : "describe what to look for…"}
           aria-label={matcher === "words" ? "Find these words" : "Describe what to look for"}
           onChange={(e) => {
-            dirty.current = true;
             if (matcher === "words") onFind(e.target.value || null);
             else setDraft(e.target.value);
           }}
@@ -323,14 +375,12 @@ function Box({
                nobody trusts. */
             if (e.key === "Escape") {
               e.preventDefault();
-              /* An emptied box is the reader's too: a criterion landing after it
-                 would refill a box they had just deliberately cleared. */
-              dirty.current = true;
+              /* It empties the box and nothing else. It used to also close the
+                 open search, back when there was one; now the ticks own what is
+                 showing, and a key that silently unticked them would undo work
+                 the reader can see they did. */
               if (matcher === "words") onFind(null);
-              else {
-                setDraft("");
-                onClear();
-              }
+              else setDraft("");
             }
           }}
         />
@@ -408,25 +458,57 @@ function Box({
       </div>
     </div>
   );
-}
+});
 
 /**
- * The saved meaning-searches, most recent first.
+ * The saved meaning-searches, most recent first, each with a box and a colour.
  *
  * This list is the answer to the criticism the version this is borrowed from
  * earned: *theirs vanished on reload, which quietly makes the feature a toy —
  * nothing you produce with it can be returned to*
- * (docs/project/original-version/highlighting.md). Pressing a row here repaints
+ * (docs/project/original-version/highlighting.md). Ticking a row here repaints
  * the whole article with no model call and no wait, because the answer is on
  * disk.
+ *
+ * ## Three targets on a row, and why that is not two too many
+ *
+ * The box and the label are one `<label>`, so clicking either toggles — which
+ * is what a checkbox and its text have always done, and getting it wrong is the
+ * kind of thing a reader blames on themselves. Then ↺, which puts the question
+ * back in the box so it can be edited into the next one, and 🗑, which deletes.
+ *
+ * The row is deliberately **not** one big target with buttons inside it. That
+ * arrangement is what library.md § What you can do to a card describes giving
+ * up, for the reason that applies here too: a nested button inside a clickable
+ * row is a hit area that does two things depending on a few pixels, and on a
+ * touchscreen those pixels are not something anybody can aim at.
+ *
+ * ## The dot is not the only thing saying which colour this is
+ *
+ * It is a dot **and** the row's own left edge, in the same hue. One is easy to
+ * miss at 11px, and colour discrimination in a small field is exactly where
+ * this fails first — the same reason the granularity columns' tints run down
+ * lightness as well as chroma (styles.css § --depth-0). Neither is load-bearing
+ * on its own: the criterion is printed in full beside them, so a reader who
+ * cannot tell two hues apart has still lost nothing but a shortcut.
  */
 function Saved({
   runs,
-  onOpen,
+  active,
+  slots,
+  onToggle,
+  onToggleAll,
+  onReuse,
+  onRetry,
   onDelete,
 }: {
   runs: SearchRun[];
-  onOpen(id: string): void;
+  active: string[];
+  slots: Map<string, number>;
+  onToggle(id: string, on: boolean): void;
+  onToggleAll(on: boolean): void;
+  onReuse(criterion: string): void;
+  onRetry(id: string): void;
   onDelete(id: string): void;
 }) {
   const sorted = [...runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -438,43 +520,159 @@ function Saved({
         <p className="srch-empty-hint">
           Describe what you are after — <em>arguments against the main claim</em>, <em>anywhere he
           gives numbers</em> — and the passages that match get marked in the article, strongest
-          first. Searches are kept, so coming back to one costs nothing.
+          first. Searches are kept, so coming back to one costs nothing, and you can switch several
+          on at once — each gets a colour of its own.
         </p>
       </div>
     );
   }
 
+  const on = sorted.filter((r) => active.includes(r.id)).length;
+
   return (
-    <ul className="srch-saved">
-      {sorted.map((run) => (
-        <li key={run.id} className="srch-saved-row">
-          <button type="button" className="srch-saved-open" onClick={() => onOpen(run.id)}>
-            <span className="srch-saved-criterion">{run.criterion}</span>
-            <span className="srch-saved-meta">
-              {run.status === "pending" ? (
-                <>
-                  <LoaderCircle size={11} className="srch-spin" /> searching…
-                </>
-              ) : run.status === "error" ? (
-                <>
-                  <AlertTriangle size={11} /> failed
-                </>
-              ) : (
-                `${run.hits.length} passage${run.hits.length === 1 ? "" : "s"}`
-              )}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="srch-icon danger"
-            title="Delete this search"
-            onClick={() => onDelete(run.id)}
-          >
-            <Trash2 size={13} />
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div className="srch-saved-wrap">
+      <AllBox count={sorted.length} on={on} onToggleAll={onToggleAll} />
+      <ul className="srch-saved">
+        {sorted.map((run) => {
+          const checked = active.includes(run.id);
+          const slot = slots.get(run.id);
+          return (
+            <li
+              key={run.id}
+              className={`srch-saved-row${checked ? " on" : ""}`}
+              /* The hue, as a slot reference rather than a colour — the same
+                 seam annotate.ts keeps, and for the same reason: a palette
+                 change should be one edit in colourscales.css. `undefined`
+                 rather than a fallback colour when a run somehow has no slot,
+                 so the row falls back to the neutral rule in styles.css instead
+                 of to a hue that means a different search. */
+              style={
+                slot === undefined
+                  ? undefined
+                  : ({ "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties)
+              }
+            >
+              <label className="srch-saved-tick">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => onToggle(run.id, e.target.checked)}
+                />
+                <span className="srch-saved-body">
+                  <span className="srch-saved-criterion">{run.criterion}</span>
+                  <span className="srch-saved-meta">
+                    {run.status === "pending" ? (
+                      <>
+                        <LoaderCircle size={11} className="srch-spin" /> searching…
+                      </>
+                    ) : run.status === "error" ? (
+                      <>
+                        <AlertTriangle size={11} /> failed
+                      </>
+                    ) : (
+                      `${run.hits.length} passage${run.hits.length === 1 ? "" : "s"}`
+                    )}
+                  </span>
+                </span>
+              </label>
+              {/* Retry lives on the row now rather than in the results area.
+                  It had to move: the results area is shared by every switched-on
+                  search, so it can no longer show one run's error with one run's
+                  button under it. A failure belongs to the search that failed,
+                  and this is where that search is. */}
+              {/* Two shapes, and which one appears is decided by the stored
+                  message: a button while running it again could work, and the
+                  same warning sign as plain text when it could not. The mark
+                  stays either way — the reader still needs to see that this
+                  search failed and to be able to read why. What goes is the
+                  invitation to spend another model call on the same refusal.
+                  src/messages.ts § worthRetrying. */}
+              {run.status === "error" &&
+                (worthRetrying(run.error) ? (
+                  <button
+                    type="button"
+                    className="srch-icon"
+                    title={run.error ?? "This search failed. Try it again."}
+                    onClick={() => onRetry(run.id)}
+                  >
+                    <AlertTriangle size={13} />
+                  </button>
+                ) : (
+                  <span className="srch-icon" title={run.error ?? "This search failed."}>
+                    <AlertTriangle size={13} />
+                  </span>
+                ))}
+              <button
+                type="button"
+                className="srch-icon"
+                title="Put this question back in the box"
+                onClick={() => onReuse(run.criterion)}
+              >
+                <RotateCcw size={13} />
+              </button>
+              <button
+                type="button"
+                className="srch-icon danger"
+                title="Delete this search"
+                onClick={() => onDelete(run.id)}
+              >
+                <Trash2 size={13} />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The box at the top of the list — Greg's *"select/deselect-all"*.
+ *
+ * One checkbox rather than two buttons, because it is the same question every
+ * row below is asking and it should look like it. Three states, and the third
+ * is the one that earns the element: `indeterminate` when *some* are on, which
+ * is a thing a checkbox can say and a pair of buttons cannot.
+ *
+ * **`indeterminate` is a DOM property with no HTML attribute**, so React cannot
+ * set it from JSX and there is no prop for it. A ref callback is the whole fix,
+ * and it is a ref callback rather than an effect because it has to run on every
+ * render that changes the count — an effect with the right dependency array
+ * would do the same thing later and cost a second paint.
+ *
+ * What it does when pressed is decided by whether *everything* is on, not by
+ * its own visual state: from indeterminate it switches the rest on, which is
+ * the reading of a half-filled box that nobody is surprised by. Deselect-all is
+ * then one more press.
+ */
+function AllBox({
+  count,
+  on,
+  onToggleAll,
+}: {
+  count: number;
+  on: number;
+  onToggleAll(next: boolean): void;
+}) {
+  const all = on === count;
+  return (
+    <div className="srch-all">
+      <label className="srch-all-tick">
+        <input
+          type="checkbox"
+          checked={all}
+          ref={(el) => {
+            if (el) el.indeterminate = on > 0 && !all;
+          }}
+          onChange={() => onToggleAll(!all)}
+        />
+        <span>
+          {on === 0
+            ? `${count} saved search${count === 1 ? "" : "es"}`
+            : `${on} of ${count} showing`}
+        </span>
+      </label>
+    </div>
   );
 }
 
@@ -494,9 +692,10 @@ function Results({
   openKey,
   onOpen,
   matcher,
-  run,
+  slots,
+  runs,
+  active,
   typed,
-  onRetry,
 }: {
   found: Found[];
   order: HitOrder;
@@ -504,11 +703,44 @@ function Results({
   openKey: string | null;
   onOpen(key: string, blockId: BlockId): void;
   matcher: Matcher;
-  run: SearchRun | null;
+  slots: Map<string, number>;
+  runs: SearchRun[];
+  active: string[];
   typed: number;
-  onRetry(id: string): void;
 }) {
-  if (run?.status === "pending") {
+  /* Empty in words mode, whatever is ticked. The ticks deliberately survive a
+     trip to the words matcher and back (App.tsx § onMatcher), so `active` is
+     very often non-empty here while the results on screen came from `find` —
+     and every state below that reasons about saved searches has to be scoped
+     to the matcher that has them. Without this, typing two letters into the
+     words box while a meaning search happened to be running showed "Reading the
+     article for you…" over a literal search that had already finished. */
+  const switchedOn = matcher === "meaning" ? runs.filter((r) => active.includes(r.id)) : [];
+  const waiting = switchedOn.filter((r) => r.status === "pending");
+
+  /* Sixth state, and it is new with the ticks: searches exist, none is on. The
+     article is unmarked and that is *correct*, so this says why rather than
+     saying "nothing matched" — which would be a lie about an article nobody has
+     asked a question of yet. Only when there is a list to tick: with no saved
+     searches at all, `Saved` above is already explaining that, and two empty
+     states stacked is one too many. */
+  if (matcher === "meaning" && runs.length > 0 && switchedOn.length === 0) {
+    return (
+      <div className="srch-empty">
+        <p className="srch-empty-hint">
+          Tick a search above to mark its passages in the article. Several at once is fine — each
+          one has a colour, and a passage that two of them found wears both.
+        </p>
+      </div>
+    );
+  }
+
+  /* Something is still out, and nothing has come back yet. Once *one* of
+     several has answered the results are worth showing, so this is only the
+     all-pending case; the partial case falls through to the list, which carries
+     the spinner in its count line instead. Waiting on an answer you already
+     have half of is not waiting. */
+  if (waiting.length > 0 && found.length === 0) {
     return (
       <div className="srch-empty">
         <p className="srch-working">
@@ -522,15 +754,24 @@ function Results({
     );
   }
 
-  if (run?.status === "error") {
+  /* A failure is reported on the row that failed, with its own retry button
+     (see `Saved`), because with several searches on there is no longer one
+     failure for this area to be about. What is left here is the case where
+     every switched-on search failed — in which case there is nothing to list
+     and the reader deserves to be told that the emptiness has a cause. */
+  const broken = switchedOn.filter((r) => r.status === "error");
+  if (broken.length > 0 && broken.length === switchedOn.length) {
     return (
       <div className="srch-empty">
         <p className="srch-failed">
-          <AlertTriangle size={13} /> {run.error ?? "The search failed."}
+          <AlertTriangle size={13} />{" "}
+          {broken.length === 1
+            ? (broken[0]?.error ?? "The search failed.")
+            : `All ${broken.length} of these searches failed.`}
         </p>
-        <button type="button" className="srch-retry" onClick={() => onRetry(run.id)}>
-          Try again
-        </button>
+        <p className="srch-empty-hint">
+          The ⚠ on each row above tries it again.
+        </p>
       </div>
     );
   }
@@ -565,6 +806,20 @@ function Results({
       <div className="srch-sort">
         <span className="srch-count">
           {found.length} passage{found.length === 1 ? "" : "s"}
+          {/* One search of three has answered and two are still out: the count
+              is real but it is not final, and a list that grows under the
+              reader with no warning reads as a bug. Same honesty rule as the
+              five empty states above — the emptiness, or the partialness, has
+              to say which one it is. */}
+          {waiting.length > 0 && (
+            <>
+              {" "}
+              <LoaderCircle size={11} className="srch-spin" aria-hidden />{" "}
+              <span className="srch-count-more">
+                {waiting.length} still searching
+              </span>
+            </>
+          )}
         </span>
         {/* Only offered where there is something to order by. In words mode
             every result has the same (absent) confidence, so a confidence sort
@@ -591,11 +846,26 @@ function Results({
           </>
         )}
       </div>
-      <Legend matcher={matcher} />
+      <Legend matcher={matcher} coloured={switchedOn.length > 1} />
       <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={400}>
         <ul className="srch-hits">
           {found.map((f) => (
-            <Hit key={f.key} found={f} open={f.key === openKey} onOpen={onOpen} />
+            <Hit
+              key={f.key}
+              found={f}
+              slot={f.runId === null ? undefined : slots.get(f.runId)}
+              /* The question that found it, for the hover card. Only worth
+                 saying when more than one search is on: with one, the criterion
+                 is in the box three inches above and repeating it on every row
+                 is noise. */
+              criterion={
+                switchedOn.length > 1
+                  ? (runs.find((r) => r.id === f.runId)?.criterion ?? null)
+                  : null
+              }
+              open={f.key === openKey}
+              onOpen={onOpen}
+            />
           ))}
         </ul>
       </TooltipGroup>
@@ -647,9 +917,23 @@ function Place({ at, decorative }: { at: number; decorative?: boolean }) {
  * has not thought to hover it. It is drawn from the same components as the rows
  * themselves, so it cannot drift from what it is describing.
  */
-function Legend({ matcher }: { matcher: Matcher }) {
+function Legend({ matcher, coloured }: { matcher: Matcher; coloured: boolean }) {
   return (
     <p className="srch-legend">
+      {/* Only when there is more than one colour on screen. With a single
+          search on, "which search found it" is a question with one answer, and
+          a legend for it would be explaining a distinction that is not being
+          drawn. */}
+      {coloured && (
+        <span className="srch-legend-item">
+          <span className="srch-swatches" aria-hidden>
+            <i style={{ "--cat-rgb": "var(--cat-0-rgb)" } as React.CSSProperties} />
+            <i style={{ "--cat-rgb": "var(--cat-1-rgb)" } as React.CSSProperties} />
+            <i style={{ "--cat-rgb": "var(--cat-2-rgb)" } as React.CSSProperties} />
+          </span>
+          which search found it
+        </span>
+      )}
       {matcher === "meaning" && (
         <span className="srch-legend-item">
           <span className="srch-conf" aria-hidden>
@@ -686,12 +970,21 @@ function Legend({ matcher }: { matcher: Matcher }) {
  * model's difficulty scores — offer them, label them, never present them as
  * fact.
  */
-function HitCard({ found }: { found: Found }) {
+function HitCard({ found, criterion }: { found: Found; criterion: string | null }) {
   const pct = Math.round(Math.min(1, Math.max(0, found.at)) * 100);
   return (
     <>
       <p>{found.long}</p>
       <p className="tip-hit-meta">
+        {/* Which question found it, in words. The dot on the row is the glance
+            version and this is the one that actually answers it — a hue is a
+            handle for something you already know, not a way of learning it. */}
+        {criterion !== null && (
+          <>
+            Found by <b>{criterion}</b>.
+            <br />
+          </>
+        )}
         {found.confidence !== null && (
           <>
             <b>{found.confidence} out of 100</b> — how strongly the model thinks this passage
@@ -732,23 +1025,62 @@ function HitCard({ found }: { found: Found }) {
  */
 function Hit({
   found,
+  slot,
+  criterion,
   open,
   onOpen,
 }: {
   found: Found;
+  /** The palette slot of the search that found it; absent for a literal match. */
+  slot: number | undefined;
+  /** The question that found it, when there is more than one to tell apart. */
+  criterion: string | null;
   open: boolean;
   onOpen(key: string, blockId: BlockId): void;
 }) {
   return (
     <li className="srch-hit">
-      <Tooltip placement="right" className="tip-hit" content={<HitCard found={found} />}>
+      <Tooltip
+        placement="right"
+        className="tip-hit"
+        content={<HitCard found={found} criterion={criterion} />}
+      >
         <button
           type="button"
           className={`srch-hit-btn${open ? " on" : ""}`}
           onClick={() => onOpen(found.key, found.blockId)}
           aria-current={open ? "true" : undefined}
+          /* The row wears its search's hue: a left edge, and the dot in the
+             gutter below. Both from one custom property, so a slot that somehow
+             does not resolve leaves the row plainly uncoloured rather than
+             half-coloured.
+
+             `data-hue` beside it is what the stylesheet *selects* on. The
+             custom property alone would have meant a `[style*="--cat-rgb"]`
+             attribute selector — matching a substring of an inline style
+             attribute, which is a rule that depends on how React chooses to
+             serialise it and would break silently if that ever changed. An
+             attribute is a fact; a substring of another attribute is a guess. */
+          {...(slot === undefined
+            ? {}
+            : {
+                "data-hue": slot,
+                style: { "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties,
+              })}
         >
           <span className="srch-gutter">
+            {/* Named, not left to colour alone. WCAG 1.4.1 is the rule and it is
+                the right rule here for an ordinary reason too: eight hues is at
+                the edge of what anybody can hold in their head, so the row has
+                to be able to say which search it came from to a reader who has
+                stopped trying to remember. The visible answer is the hover card;
+                this is the same answer for a screen reader. */}
+            {slot !== undefined && criterion !== null && (
+              <span className="srch-hit-dot" role="img" aria-label={`Found by: ${criterion}`} />
+            )}
+            {slot !== undefined && criterion === null && (
+              <span className="srch-hit-dot" aria-hidden />
+            )}
             {found.confidence !== null && (
               <span
                 className="srch-conf"

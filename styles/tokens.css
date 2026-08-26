@@ -31,6 +31,8 @@
  *   - Names match the original app where they exist there, so anything copied across keeps working.
  */
 
+@import "./colourscales.css";
+
 :root {
     /* Tells the browser to paint its own furniture dark too — scrollbars, form controls, and the
        canvas behind the page. index.html says the same in a <meta> so it applies before CSS loads. */
@@ -51,6 +53,19 @@
        <alpha>)` and the space-separated form is the one that takes a variable alpha. */
     --hit-rgb: 96 178 214;
     --hit: rgb(var(--hit-rgb));
+    /* And the wash behind the words, which since 2026-08-26 is NOT --hit-rgb.
+       With several searches showing at once, each in its own categorical hue
+       (styles/colourscales.css), the two channels had to be split: the wash
+       carries the model's confidence and the rules under it carry which search
+       found the words. A coloured wash would then be a third thing competing
+       with eight — and worse, a *blue* wash is one of the eight, so a reader
+       would have to learn that this particular blue means something different
+       from the blue two lines up.
+
+       So it is deliberately low-chroma: a slate that reads as "marked" without
+       reading as any of the palette's answers to "marked by which". Alpha is
+       always applied to it, hence the triplet — see the note above. */
+    --hit-wash-rgb: 148 158 168;
 
     /* ---- surfaces and text (dark only; see the header) ---------------- */
     /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,

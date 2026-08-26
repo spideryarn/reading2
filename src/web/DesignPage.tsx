@@ -89,6 +89,73 @@ const SWATCHES: { group: string; names: string[] }[] = [
     names: ["--background", "--card", "--popover", "--secondary", "--accent", "--border", "--input"],
   },
   { group: "States", names: ["--ring", "--destructive", "--primary", "--primary-foreground"] },
+  {
+    group: "The search mark (the wash is a slate; the colour is in the rules)",
+    names: ["--hit", "--hit-wash-rgb"],
+  },
+];
+
+/**
+ * The three colour scales — docs/project/colour-scales.md.
+ *
+ * On this page rather than only in a stylesheet because **a colour scale cannot
+ * be reviewed one value at a time.** What is wrong with a ramp is always a
+ * relationship: two steps that look the same, a lightness that stops climbing,
+ * a middle that is louder than its ends. Every one of those is invisible in a
+ * list of hex codes and obvious in a row of chips against the real ground —
+ * which is also why browser-testing.md says not to judge colour from a
+ * screenshot.
+ *
+ * Names rather than values, so the page can only ever show what the stylesheet
+ * actually defines. A scale rendered from a copy of the numbers is a scale that
+ * can quietly disagree with the one the app is using, which would make this
+ * section worse than not having it.
+ */
+const SCALES: { name: string; tokens: string[]; note: string }[] = [
+  {
+    name: "Categorical — one per saved search",
+    tokens: ["--cat-0", "--cat-1", "--cat-2", "--cat-3", "--cat-4", "--cat-5", "--cat-6", "--cat-7"],
+    note:
+      "Okabe–Ito, with three colours lifted for a black page and its black replaced by a light " +
+      "neutral. Look for two that you cannot tell apart at this size — the marks in the prose are " +
+      "2px rules, which is smaller than these chips, and small-field colour discrimination is the " +
+      "worst case for any palette.",
+  },
+  {
+    name: "Sequential — inferno, dark to hot",
+    tokens: [
+      "--heat-0", "--heat-1", "--heat-2", "--heat-3",
+      "--heat-4", "--heat-5", "--heat-6", "--heat-7", "--heat-8",
+    ],
+    note:
+      "The property to check is monotonic lightness: every step lighter than the one before, no " +
+      "bright band in the middle. Squint, or take a greyscale screenshot — if the order survives " +
+      "losing the colour, the ramp is doing its job. The first two stops are darker than the page " +
+      "and are not to be painted on it.",
+  },
+  {
+    name: "Diverging — blue to red, dark middle",
+    tokens: [
+      "--div-0", "--div-1", "--div-2", "--div-3",
+      "--div-4", "--div-5", "--div-6", "--div-7", "--div-8",
+    ],
+    note:
+      "The middle is the quietest step, not the loudest — which is the one change from every " +
+      "published diverging scale, all of which pivot on white because they were drawn for paper. " +
+      "Lightness should climb toward both ends.",
+  },
+  {
+    name: "Diverging — red to green (use the one above instead)",
+    tokens: [
+      "--div-rg-0", "--div-rg-1", "--div-rg-2", "--div-rg-3",
+      "--div-rg-4", "--div-rg-5", "--div-rg-6", "--div-rg-7", "--div-rg-8",
+    ],
+    note:
+      "Here because it is what people ask for. Red–green confusion is what colour blindness " +
+      "overwhelmingly is, so to a deuteranope this is a scale that gets darker in the middle and " +
+      "says nothing about which side you are on. Only use it where something other than the hue " +
+      "already tells the reader which end is which.",
+  },
 ];
 
 /** The four type stacks, and what each is allowed to be used for. */
@@ -330,6 +397,33 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         ))}
       </section>
 
+      {/* ---- the scales ------------------------------------------------- */}
+      <section>
+        <h2>Colour scales</h2>
+        <p className="design-note">
+          The three palettes that are not the brand — see{" "}
+          <code className="design-token">docs/project/colour-scales.md</code>. No contrast ratios
+          here, deliberately: none of these is ever text, and a ratio against{" "}
+          <code className="design-token">--page</code> would be a number that looks like a verdict
+          on a question nobody asked. What these are reviewed for is whether the steps are
+          distinguishable from each other, which is a thing only an eye can answer.
+        </p>
+        {SCALES.map((scale) => (
+          <div key={scale.name}>
+            <h3>{scale.name}</h3>
+            <p className="design-note">{scale.note}</p>
+            <div className="design-scale">
+              {scale.tokens.map((token) => (
+                <div key={token} className="design-scale-step">
+                  <div className="design-scale-chip" style={{ background: `var(${token})` }} />
+                  <code className="design-token">{token.replace("--", "")}</code>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+
       {/* ---- components ------------------------------------------------- */}
       <section>
         <h2>Buttons</h2>
@@ -473,7 +567,7 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <p className="design-note">
           Lucide at stroke 1.75. The scale is 10 / 13 / 14 / 16 / 20 — sized at the call site, never
           in CSS. <code className="design-token">LoaderCircle</code>, not{" "}
-          <code className="design-token">Loader2</code>: one open arc, still legible at 10px.
+          <code className="design-token">LoaderCircle</code>: one open arc, still legible at 10px.
         </p>
         <div className="design-row design-icons">
           {[10, 13, 14, 16, 20].map((n) => (

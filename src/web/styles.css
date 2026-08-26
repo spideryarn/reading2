@@ -1808,9 +1808,16 @@ td.text.has-hit[data-hues="4"] {
      Greg, 2026-08-26: "it's not using the full vertical height to display as
      much information as it could be."
 
-   At one line this is exactly what it replaced: `-webkit-line-clamp: 1` gives
-   the same single line with the same ellipsis that `nowrap` + `text-overflow`
-   did, so the long levels are untouched.
+   **Not the same mechanism at one line, and the difference is real.** This
+   replaced `nowrap` + `text-overflow: ellipsis`, which ellipsizes *inline* at
+   the box's right edge; line-clamp wraps first and then ellipsizes the last
+   permitted *line*, so at one line it can cut at an earlier word boundary and
+   show fewer words. `text-overflow` no longer applies at all, which is why
+   `overflow-wrap: anywhere` is here: a single unbreakable string — a URL in a
+   gist — would otherwise be hard-clipped with nothing to say it had been. The
+   line height went 1.3 → 1.4 in the same change, because four lines of prose
+   need the leading that one line did not. Claimed as "visually identical" here
+   for an hour; GPT Sol's review, 2026-08-26, was right that it is not.
 
    Still a landmark and not a thing to read: the reading face, small, faint,
    and always a step quieter than the title above it. `-webkit-` prefixed
@@ -1828,6 +1835,7 @@ td.text.has-hit[data-hues="4"] {
   margin-top: 0.15rem;
   font-weight: 400;
   overflow: hidden;
+  overflow-wrap: anywhere;
 }
 /* The tiers' step down carries into the gist, not only the title: a far
    landmark's words must not out-shout a near one's. Sizes, never a gradient —
@@ -2456,6 +2464,32 @@ td.text.has-hit[data-hues="4"] {
 }
 .design-chip-fill { height: 100%; }
 
+/* A colour scale, drawn as one unbroken strip.
+   Butted together with no gap and no radius, because the thing being reviewed
+   is the *boundary* between two steps: a gap between the chips would separate
+   every pair by the page's own colour and hide exactly the two-steps-that-look-
+   the-same problem this section exists to catch. The labels underneath keep
+   their spacing instead. */
+.design-scale {
+  display: flex;
+  margin: 0.4rem 0 1rem;
+  overflow-x: auto;
+}
+.design-scale-step {
+  flex: 1 0 3.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+.design-scale-chip {
+  width: 100%;
+  height: 3rem;
+  /* A hairline so the palest step of a ramp does not appear to bleed into the
+     page. Inset, so it does not add width and pull the strip apart. */
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+
 .design-table { border-collapse: collapse; width: 100%; }
 /* `border-right: 0` is not redundant. The bare `td` rule far above gives EVERY
    cell in the app a right border in --rule-strong, for the zoom table's column
@@ -2803,6 +2837,12 @@ td.text.has-hit[data-hues="4"] {
 /* Only the row that is actually running. The finished ones above it must stop
    pulsing, or the strip reads as though everything is still in flight. */
 .chat-tool.running .chat-tool-label { color: var(--ink); }
+
+/* A tool that threw. The same fallback chain `.dock-question-state.error` uses,
+   and deliberately only on the *detail* — a failed tool is a footnote to an
+   answer that still arrived, not a failed answer, and colouring the whole row
+   would make it read as the latter. */
+.chat-tool.error .chat-tool-detail { color: var(--danger, var(--highlight)); }
 
 .chat-sources {
   margin: 0.4rem 0 0;
@@ -3306,11 +3346,9 @@ td.text.has-hit[data-hues="4"] {
 .gloss-btn.primary { color: var(--ink); border-color: var(--highlight); }
 .gloss-btn.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
 
-.gloss-spin { flex: none; color: var(--highlight); animation: gloss-spin 1s linear infinite; }
-@keyframes gloss-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .gloss-spin { animation: none; }
-}
+/* `.gloss-spin` was here. The panel uses `.cmt-spinner` now, which is the one
+   recipe docs/project/icons.md describes — 0.7s rather than 1s, and it pulses
+   under prefers-reduced-motion instead of freezing, which this one did. */
 
 .gloss-provenance {
   margin: 0.45rem 0 0;
@@ -3671,7 +3709,7 @@ td.text.has-hit[data-hues="4"] {
    colour, so a literal result (which has no search and no slot) simply has no
    edge rather than borrowing one that would mean something. */
 .srch-hit-btn { border-left: 2px solid transparent; }
-.srch-hit-btn[style*="--cat-rgb"] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
+.srch-hit-btn[data-hue] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
 /* The row whose passage is marked as open in the prose. */
 .srch-hit-btn.on {
   border-color: rgb(var(--hit-rgb) / 0.45);
@@ -3925,9 +3963,12 @@ td.text.has-hit[data-hues="4"] {
 /* ---- the outline ---- */
 /* The reader's own scroller, and also the one the panel moves itself to follow
    the reading position (follow.ts). Deliberately **no `scroll-behavior: smooth`
-   here**: the code passes `behavior` on each call, because the first placement
-   and a reader who has asked for reduced motion both want the instant one, and
-   a stylesheet rule would animate those too with nothing to switch it off. */
+   here**: that rule would animate every write to `scrollTop`, including the ones
+   that must be instant — the first placement, and every frame of the panel's own
+   animation, which sets `scrollTop` sixty times a second and would be smoothed
+   into treacle. follow.ts decides the motion per move, which is also the only
+   way `prefers-reduced-motion` can be honoured for a scroll that is sometimes
+   wanted instantly anyway. */
 .summ-scroll {
   flex: 1;
   min-height: 0;

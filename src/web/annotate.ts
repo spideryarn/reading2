@@ -69,6 +69,23 @@ import type { Block, BlockId } from "../types.js";
  */
 export type MarkKind = "cmt" | "term" | "hit";
 
+/**
+ * How many coloured rules one phrase can wear before we stop drawing them.
+ *
+ * Four, and the number is set by the stylesheet rather than by taste: the rules
+ * are drawn inside the mark's own box, in the leading below the text, and that
+ * space is finite. `styles.css § stacked hues` has the arithmetic — the band is
+ * capped in height and the stripes inside it get thinner as they multiply, so
+ * a fifth would be a sub-pixel line that no display can show and every reader
+ * would take for a rendering fault.
+ *
+ * Five searches finding the *same phrase* is not a case anybody has hit; the
+ * palette only holds eight in total. If it ever happens the reader loses the
+ * knowledge that a fifth search matched **here**, not that it matched at all —
+ * the results list still lists it, in its own colour.
+ */
+export const HUE_STRIPES = 4;
+
 export interface Mark {
   /** The comment, or the glossary term, this mark belongs to. */
   id: string;
@@ -98,6 +115,23 @@ export interface Mark {
    * nobody made.
    */
   strength?: number;
+  /**
+   * Which saved search this hit belongs to, as a **palette slot** — `hit` marks
+   * only, and `null` for a literal match, which belongs to no saved search.
+   *
+   * A number rather than a colour, for the reason the line above `strength`
+   * gives about `--hit-a` and for one more: the slot is a fact about *which
+   * question was asked*, and the hue that stands for it is a fact about the
+   * palette. src/web/hit-colours.ts decides the first, styles/colourscales.css
+   * decides the second, and neither has to know about the other.
+   *
+   * Where several hits cover the same words their slots do **not** collapse
+   * the way `strength` does. That is the whole point of the colour: two
+   * searches finding the same sentence is exactly the thing worth showing, and
+   * a winner-takes-all rule here would hide it. See `annotateHtml` for what the
+   * markup does with more than one.
+   */
+  slot?: number | null;
 }
 
 /** A comment's stored anchor, before it has been matched against the block. */
@@ -240,7 +274,46 @@ export function annotateHtml(html: string, marks: Mark[]): string {
            string goes into an attribute on every marked run of every marked
            block, and 17 digits of float noise is real bytes for no gain. */
         const strength = Math.max(...hits.map((m) => clamp(m.strength ?? 1, 0, 1)));
-        el.setAttribute("style", `--hit-a:${strength.toFixed(3)}`);
+        const style = [`--hit-a:${strength.toFixed(3)}`];
+        /* And which searches found these words, as one rule each stacked under
+           the wash — Greg's call on 2026-08-26, over blending the washes
+           together. Blending is prettier for two and turns to mud at three, and
+           the mud is a colour that is not in the palette, so the reader cannot
+           look it up; stacked rules stay identifiable however many there are,
+           and the text's contrast never changes at all.
+
+           Sorted ascending and de-duplicated, so the same pair of searches
+           draws the same pair of rules in the same order wherever they meet.
+           Two hits from *one* search covering one phrase is one rule, which is
+           right: the question was asked once.
+
+           Only the slot number crosses this seam; `--h0` … `--h3` name palette
+           entries, and styles.css turns them into a stripe of the right height
+           at the right offset. See `HUE_STRIPES` for why four. */
+        /* `Number.isInteger` and the range check, not just `typeof number`.
+           The slot is interpolated straight into a custom-property *name*
+           (`--cat-3-rgb`), so a `NaN` or a `2.5` arriving here would emit
+           `var(--cat-NaN-rgb)` — which is not an error anywhere, it is a
+           reference to a property nobody defined, so the declaration is invalid
+           at computed-value time and the stripe simply does not paint. A search
+           whose marks quietly stop being coloured is precisely the failure mode
+           docs/reusable/silent-success.md is about, and the guard costs a
+           comparison. `assignSlots` already promises an integer in range; this
+           is here because *this* is the line that would be silent about it. */
+        const usable: number[] = [];
+        for (const m of hits) {
+          const slot = m.slot;
+          if (typeof slot !== "number" || !Number.isInteger(slot) || slot < 0) continue;
+          usable.push(slot);
+        }
+        const slots = [...new Set(usable)].sort((a, b) => a - b).slice(0, HUE_STRIPES);
+        if (slots.length > 0) {
+          el.setAttribute("data-hues", String(slots.length));
+          for (const [i, slot] of slots.entries()) {
+            style.push(`--h${i}:var(--cat-${slot}-rgb)`);
+          }
+        }
+        el.setAttribute("style", style.join(";"));
       }
       // A hit the reader has pressed in the panel gets the same treatment as
       // the comment whose dialog is open, and for the same reason: after a jump

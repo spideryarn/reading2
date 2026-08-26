@@ -15,6 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  blockHues,
   blockStrength,
   findLiteral,
   hitMarks,
@@ -24,6 +25,16 @@ import {
   type Found,
 } from "../src/web/search-hits.js";
 import type { Block, SearchHit } from "../src/types.js";
+
+/**
+ * One switched-on search, wrapping a bare list of hits.
+ *
+ * `resolveHits` takes several searches at once since 2026-08-26 — see its own
+ * note on why that is one pass and not three calls. Most of the tests below
+ * predate that and are about one search, so they say `one(...)` and stay about
+ * what they were about; the merging itself gets tests of its own at the end.
+ */
+const one = (hits: SearchHit[], slot = 0, id = "spya-run2aa") => [{ id, slot, hits }];
 
 const block = (id: string, html: string, text?: string): Block => {
   const stripped = text ?? html.replace(/<[^>]+>/g, "");
@@ -106,7 +117,7 @@ describe("resolveHits", () => {
   });
 
   it("finds the model's quote in the rendered prose", () => {
-    const [found] = resolveHits(BLOCKS, [hit()]);
+    const [found] = resolveHits(BLOCKS, one([hit()]));
     expect(found!.whole).toBe(false);
     expect(found!.confidence).toBe(85);
     expect(found!.end - found!.start).toBe("mind is software".length);
@@ -120,7 +131,7 @@ describe("resolveHits", () => {
    * whitespace difference; marking the wrong words is worse than either.
    */
   it("marks the whole block when the quote cannot be found, and says so", () => {
-    const [found] = resolveHits(BLOCKS, [hit({ quote: "words that are not there" })]);
+    const [found] = resolveHits(BLOCKS, one([hit({ quote: "words that are not there" })]));
     expect(found!.whole).toBe(true);
     expect(found!.start).toBe(0);
     expect(found!.end).toBeGreaterThan(0);
@@ -141,11 +152,12 @@ describe("resolveHits", () => {
    * the bugs in docs/reusable/silent-success.md.
    */
   it("does not call a whole-block quote a fallback just because it covers the block", () => {
-    const one = [block("spya-k3m9qt", "<p>Not anymore. AI has blown this\nworld open.</p>")];
-    const [found] = resolveHits(one, [
+    const solo = [block("spya-k3m9qt", "<p>Not anymore. AI has blown this\nworld open.</p>")];
+    const [found] = resolveHits(
+      solo,
       // As the model retypes it: the newline has become a space.
-      hit({ quote: "Not anymore. AI has blown this world open." }),
-    ]);
+      one([hit({ quote: "Not anymore. AI has blown this world open." })]),
+    );
     expect(found!.whole).toBe(false);
     expect(found!.start).toBe(0);
   });
@@ -154,18 +166,121 @@ describe("resolveHits", () => {
     // Only reachable after a re-extraction. An id that is simply gone has
     // nowhere to point, and a row that does nothing when pressed is worse than
     // no row.
-    expect(resolveHits(BLOCKS, [hit({ blockId: "spya-zzzzzz" })])).toEqual([]);
+    expect(resolveHits(BLOCKS, one([hit({ blockId: "spya-zzzzzz" })]))).toEqual([]);
   });
 
   it("keeps two hits that quote the same words apart", () => {
-    const found = resolveHits(BLOCKS, [hit(), hit({ reasoning: "a different reason" })]);
+    const found = resolveHits(BLOCKS, one([hit(), hit({ reasoning: "a different reason" })]));
     expect(found).toHaveLength(2);
     expect(found[0]!.key).not.toBe(found[1]!.key);
   });
 
   it("carries the model's reasoning through untouched", () => {
-    const [found] = resolveHits(BLOCKS, [hit({ reasoning: "States the position rejected." })]);
+    const [found] = resolveHits(BLOCKS, one([hit({ reasoning: "States the position rejected." })]));
     expect(found!.reasoning).toBe("States the position rejected.");
+  });
+});
+
+/**
+ * Several switched-on searches merged into one list — the 2026-08-26 change.
+ *
+ * The property under every test here is that **a result can say which question
+ * found it**. That is what the colour is for, and it is what a merged list
+ * costs if it is got wrong: nine passages from three searches, and no way to
+ * tell which is which.
+ */
+describe("resolveHits over several searches", () => {
+  const hit = (over: Partial<SearchHit> = {}): SearchHit => ({
+    blockId: "spya-k3m9qt",
+    quote: "mind is software",
+    confidence: 85,
+    reasoning: "why",
+    ...over,
+  });
+
+  it("tags every result with the search and the slot it came from", () => {
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 3, hits: [hit()] },
+      { id: "spya-bbb2bb", slot: 5, hits: [hit({ quote: "wet hardware" })] },
+    ]);
+    expect(found.map((f) => [f.runId, f.slot])).toEqual([
+      ["spya-aaa2aa", 3],
+      ["spya-bbb2bb", 5],
+    ]);
+  });
+
+  /**
+   * The bug this whole change would otherwise have shipped with.
+   *
+   * A key was `blockId:n` while only one search could be showing. With three on,
+   * three searches that each found their second hit in the same paragraph all
+   * produce `spya-k3m9qt:1` — React renders one and drops the rest, `openKey`
+   * matches whichever comes first, and the mark in the prose belongs to a
+   * different search from the row the reader pressed. Every one of those is
+   * silent, which is why it is pinned rather than left to a rendering warning.
+   */
+  it("keeps the same hit in two different searches apart", () => {
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 0, hits: [hit()] },
+      { id: "spya-bbb2bb", slot: 1, hits: [hit()] },
+    ]);
+    expect(found).toHaveLength(2);
+    expect(new Set(found.map((f) => f.key)).size).toBe(2);
+  });
+
+  it("measures place against one ruler however many searches are on", () => {
+    /* One pass, one ruler. Calling this three times and concatenating would
+       build the scale three times from the same numbers — identical today, and
+       a trap the moment the ruler stops being a pure function of the blocks. */
+    const alone = resolveHits(BLOCKS, [{ id: "spya-aaa2aa", slot: 0, hits: [hit()] }]);
+    const together = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 0, hits: [hit()] },
+      { id: "spya-bbb2bb", slot: 1, hits: [hit({ blockId: "spya-p7w2dn", quote: "thermostat" })] },
+    ]);
+    expect(together[0]!.at).toBeCloseTo(alone[0]!.at, 10);
+  });
+
+  it("is empty when nothing is switched on", () => {
+    /* Default-false: a reader who opens search mode has an unmarked article
+       until they tick something. The same rule the glossary and the summaries
+       follow, and here it is one empty array. */
+    expect(resolveHits(BLOCKS, [])).toEqual([]);
+  });
+});
+
+describe("blockHues", () => {
+  const hit = (blockId: string, quote: string): SearchHit => ({
+    blockId,
+    quote,
+    confidence: 80,
+    reasoning: "",
+  });
+
+  it("lists every search that matched anywhere in a block, once each", () => {
+    /* Coarser than the marks on purpose: two hits from one search in one
+       paragraph is one segment, because the bar answers "is any of my searches
+       in here" rather than "which of them is in this clause". */
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 6, hits: [hit("spya-k3m9qt", "mind is software"), hit("spya-k3m9qt", "wet hardware")] },
+      { id: "spya-bbb2bb", slot: 2, hits: [hit("spya-k3m9qt", "mind is software")] },
+    ]);
+    expect(blockHues(found).get("spya-k3m9qt")).toEqual([2, 6]);
+  });
+
+  it("sorts the slots, so one pair of searches draws one bar everywhere", () => {
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-bbb2bb", slot: 7, hits: [hit("spya-k3m9qt", "mind is software")] },
+      { id: "spya-aaa2aa", slot: 1, hits: [hit("spya-k3m9qt", "wet hardware")] },
+    ]);
+    expect(blockHues(found).get("spya-k3m9qt")).toEqual([1, 7]);
+  });
+
+  it("gives a literal match no hue at all", () => {
+    /* A words search has no saved search behind it and no colour, and the
+       stylesheet falls back to the one fixed search hue when `data-hues` is
+       absent. A slot of 0 here would silently paint every literal match in the
+       first categorical colour instead. */
+    expect(blockHues(findLiteral(BLOCKS, "thermostat")).size).toBe(0);
   });
 });
 
@@ -270,9 +385,10 @@ describe("where in the article", () => {
 
   it("gives a resolved model hit the same measure as a literal one", () => {
     const [literal] = findLiteral(BLOCKS, "thermostat");
-    const [resolved] = resolveHits(BLOCKS, [
-      modelHit({ blockId: "spya-p7w2dn", quote: "thermostat has no interior" }),
-    ]);
+    const [resolved] = resolveHits(
+      BLOCKS,
+      one([modelHit({ blockId: "spya-p7w2dn", quote: "thermostat has no interior" })]),
+    );
     expect(resolved!.at).toBeCloseTo(literal!.at, 2);
   });
 
@@ -282,9 +398,10 @@ describe("where in the article", () => {
   it("does not produce NaN for an empty article", () => {
     const found = findLiteral([block("spya-k3m9qt", "<p></p>", "")], "ab");
     expect(found).toEqual([]);
-    const resolved = resolveHits([block("spya-k3m9qt", "<p></p>", "")], [
-      modelHit({ blockId: "spya-k3m9qt", quote: "gone" }),
-    ]);
+    const resolved = resolveHits(
+      [block("spya-k3m9qt", "<p></p>", "")],
+      one([modelHit({ blockId: "spya-k3m9qt", quote: "gone" })]),
+    );
     expect(Number.isNaN(resolved[0]!.at)).toBe(false);
   });
 });
@@ -363,9 +480,10 @@ describe("hitMarks", () => {
    * indistinguishable from a bug.
    */
   it("keeps a weak match visible rather than letting it fade to nothing", () => {
-    const weak = resolveHits(BLOCKS, [
-      { blockId: "spya-k3m9qt", quote: "mind is software", confidence: 0, reasoning: "" },
-    ]);
+    const weak = resolveHits(
+      BLOCKS,
+      one([{ blockId: "spya-k3m9qt", quote: "mind is software", confidence: 0, reasoning: "" }]),
+    );
     const [mark] = hitMarks(weak, null).get("spya-k3m9qt")!;
     expect(mark!.strength).toBeGreaterThan(0.3);
     expect(mark!.strength).toBeLessThan(0.5);
@@ -374,9 +492,10 @@ describe("hitMarks", () => {
   it("scales strength with confidence", () => {
     const make = (confidence: number) =>
       hitMarks(
-        resolveHits(BLOCKS, [
-          { blockId: "spya-k3m9qt", quote: "mind is software", confidence, reasoning: "" },
-        ]),
+        resolveHits(
+          BLOCKS,
+          one([{ blockId: "spya-k3m9qt", quote: "mind is software", confidence, reasoning: "" }]),
+        ),
         null,
       ).get("spya-k3m9qt")![0]!.strength!;
     expect(make(100)).toBeGreaterThan(make(50));
@@ -403,7 +522,7 @@ describe("blockStrength", () => {
       { blockId: "spya-k3m9qt", quote: "mind is software", confidence: 40, reasoning: "" },
       { blockId: "spya-k3m9qt", quote: "wet hardware", confidence: 90, reasoning: "" },
     ];
-    expect(blockStrength(resolveHits(BLOCKS, hits)).get("spya-k3m9qt")).toBeCloseTo(0.9);
+    expect(blockStrength(resolveHits(BLOCKS, one(hits))).get("spya-k3m9qt")).toBeCloseTo(0.9);
   });
 
   it("names only the blocks that actually matched", () => {

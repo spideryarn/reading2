@@ -56,6 +56,12 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
    ▂    the wash, over the words the model actually quoted
 ```
 
+**Chat can now run both of these matchers as tools** — `search_article_meaning` is `findPassages`,
+and `search_article_words` is the library box's literal matcher pointed at one article. The three
+share `parseQuery`/`fold`/`occurrences` from [`src/library-search.ts`](../../src/library-search.ts)
+rather than each having its own idea of what "matches" means, which is what stops the panel and the
+model disagreeing about whether the word is in the piece. See [chat-tools.md](chat-tools.md).
+
 ## The one decision everything else follows from
 
 **Two matchers, one box, one results list.** The reader types, and a toggle says whether we match
@@ -384,19 +390,124 @@ cheaper than the read.
 
 `MAX_RUNS` is 30, oldest dropped first.
 
+## Several searches at once, each with a colour
+
+> assign a categorical colour to each of the "Search" highlights. And then add a checkbox by each of
+> them (default-false), and allow multiple to be active, showing their results overlaid somehow. And
+> a box at the top of the "Search" column for select/deselect-all.
+>
+> — Greg, 2026-08-26
+
+Before this, a saved search was a thing you *opened*: pressing it replaced the list with its results
+and `?run=` named the one that was open. Now every saved search is on screen all the time with a box
+beside it, several can be on at once, and their results are one list.
+
+Four decisions, all Greg's, taken together as one design.
+
+**The colour belongs to the search, not to the passage.** One hue per saved question, so a mark in
+the prose answers *which of my questions found this*. Eight hues, from
+[colour-scales.md](colour-scales.md) — that page has the palette, the colour-blindness argument and
+the honest ceiling on how many anyone can tell apart.
+
+**Overlap is stacked rules, not blended washes.** Where two searches cover the same words, the words
+get one wash and *two* thin coloured rules under it, stacked. The alternative — each search painting
+its own translucent wash, mixing where they meet — is prettier for two and turns to mud at three,
+and the mud is a colour that **is not in the palette**, so a reader cannot look it up. Worse, each
+extra layer eats the text's contrast. Stacked rules stay identifiable however many there are, and
+the contrast of the prose underneath never changes at all.
+
+That forced a split that turns out to be the good part of the design: **the wash carries confidence,
+the rules carry identity.** The wash is now a deliberately low-chroma slate (`--hit-wash-rgb`) so it
+can never be mistaken for one of the eight; the rules are at full strength, so a low-confidence match
+is still unmistakably *blue* rather than fading toward grey. Before this the wash carried both and
+the two would have fought: a 35%-confidence blue and a 35%-confidence pink are both nearly the same
+faint nothing.
+
+The rules are drawn as a gradient inside the mark's own box, in `padding-bottom` — which grows the
+mark's background downward into the leading **without touching the line box**, so switching a search
+on cannot reflow the article. The band caps at 6px and the stripes inside it get thinner rather than
+the band growing; past four they are not drawn at all (`HUE_STRIPES` in
+[`annotate.ts`](../../src/web/annotate.ts)). One thing there is load-bearing and easy to lose:
+`box-decoration-break: clone`. The default, `slice`, positions a background against the box the mark
+*would* have had if it had never wrapped — so a bottom-anchored stripe on a phrase that breaks across
+two lines is drawn once, on the second line, with the first bare. Invisible until an article happens
+to wrap a match.
+
+**The bar down the left of the paragraph is divided too**, and it answers a coarser question on
+purpose: *is any of my searches in this paragraph*, which is the thing you catch while scrolling
+past at speed. So a paragraph where one search matched the first sentence and another matched the
+last gets two segments in its bar and one rule under each phrase, and both are true. `blockHues` in
+[`search-hits.ts`](../../src/web/search-hits.ts).
+
+**Default-false**, which is the rule the glossary and the summaries already follow: *the article
+acquires marks when the reader asks for them and at no other time.* Asking a new question is the one
+exception — it ticks its own box, because a search you just paid for and cannot see is not a result.
+
+**One merged list.** Every ticked search's passages in a single list, sorted by place or confidence
+across the lot, each row wearing its search's colour on a dot and its left edge. The alternative —
+a sub-list per search — keeps provenance obvious but makes "the strongest match anywhere" a question
+the panel can no longer answer. So provenance moves into the row instead: the dot, the edge, the
+criterion in the hover card, and the criterion in the row's accessible name.
+
+### What this removed
+
+Worth recording, because each of these looked like a feature and was a consequence.
+
+- **The list-or-results ternary** `SearchPanel` was built around. Both are on screen now.
+- **The `dirty` ref in `Box`**, and the effect it guarded. That effect existed because a saved run's
+  criterion arrived from the server a whole request after the box was focused, so it could overwrite
+  what the reader was typing — a real race, found by a GPT Sol review. With no search "open", nothing
+  arrives from the server wanting to be in the box. Putting a saved question back is now the ↺ button
+  on its row, which is a click, and a click cannot land mid-word. The guard is gone because its
+  *cause* went, not because it was unnecessary.
+- **The retry button in the results area.** A failure belongs to the search that failed, and with
+  several on there is no longer one failure for a shared area to be about. It is now a ⚠ on the row.
+
+### The bug the key change prevented
+
+A result's key was `blockId:n`, which was unique while exactly one search could be showing. With
+three on, three searches that each found their second hit in the same paragraph all produce
+`spya-k3m9qt:1`. React renders one and drops the rest with a warning nobody reads, `openKey` matches
+whichever comes first, and **the mark in the prose belongs to a different search from the row the
+reader pressed**. Every part of that is silent. The key is now `runId:blockId:n`, and it is pinned in
+[`tests/search-hits.test.ts`](../../tests/search-hits.test.ts).
+
 ## The URL
 
-Four parameters, which is more than any other mode wants, because search mode has two matchers in it
+Five parameters, which is more than any other mode wants, because search mode has two matchers in it
 rather than one feature. The division: `match` says which matcher, and then exactly one of `find` and
-`run` is the thing being matched.
+`runs` is the thing being matched. (`run` is the sixth and is legacy — read on load, never written.)
 
 | Parameter | Values | History | Why |
 |---|---|---|---|
 | `mode` | `search` | push | A mode is where you are, not a glance |
 | `match` | `words`, `meaning` (default) | **push** | It changes what the article looks like, like a column toggle. Back should undo it |
 | `find` | any string | replace, debounced 200ms | Written on every keystroke. A Back button that walked back through a half-typed word one letter at a time would be useless — same call `?at=` makes |
-| `run` | a minted id | replace | Stepping between saved searches is browsing; `mode` already put the entry on the stack Back should use |
+| `runs` | comma-separated minted ids | replace | Which saved searches are switched on. Ticking one while you read is browsing; `mode` already put the entry on the stack Back should use |
+| `run` | a minted id | replace | **Read, never written.** The single-search spelling from before 2026-08-26, kept so the links already in the world still open the search they name |
 | `order` | `document` (default), `confidence` | push | Changing the order of a list is a deliberate act on the view |
+
+### `runs` and the singular `run` it replaced
+
+Same shape as `match` below, and the same reason: **absence has to stay visible**, so `runsParam` has
+no `withDefault` and `resolveRuns` decides.
+
+```
+  ?runs= says something   →  those
+  ?runs= absent, ?run= set   →  just that one   ← the URLs already in the world
+  ?runs= absent, no ?run=    →  none            ← default-false
+```
+
+Comma-separated and spelled out, exactly like `?cols=` and for the reason given there: these URLs get
+pasted to people, and a reader should be able to see what a link is going to show them. Ids are
+URL-safe by construction ([block-ids.md](block-ids.md)), so nothing needs encoding.
+
+Two differences from `?cols=`, both deliberate. **Order is preserved rather than sorted** — sorting a
+set of ids would order the reader's searches by a random six characters, which is not an order, so
+what is kept is the order they switched them on in. And **one bad id drops only itself**, where
+`?cols=` rejects the whole value: a depth list is short and hand-written, but a run list is
+machine-written and long-lived, and the id most likely to be wrong in one is a search deleted on
+another machine. Throwing away the other four because of it would be the worst available answer.
 
 ### `match` defaults to `meaning`, and used to default to `words`
 
@@ -556,6 +667,46 @@ Greg on 2026-08-26. The research is in [postgres-search.md](../research/postgres
 short version is that Supabase gives you `ts_rank` rather than BM25, `pgvector` is available but not
 enabled, and Anthropic has no embeddings API so it would mean a second vendor.
 
+**When it stops being deferred, the embedding model is already chosen and it was measured rather
+than argued.** Four candidates reachable through OpenRouter — `baai/bge-m3`, `voyageai/voyage-4-lite`,
+`voyageai/voyage-4` and `openai/text-embedding-3-small` — were run against **this shelf's own 495
+paragraphs** with 18 reader-style questions, judged blind on a pooled union so every arm was scored
+against identical judgements, and judged twice by two different models to check the verdict was not
+one judge's opinion.
+
+Two findings, and only one of them is a difference. **`bge-m3` is genuinely behind** — every measure,
+both judges, no interval near zero, and nothing relevant at all in its top five on three of the
+eighteen queries where the others fail on at most one. That was the cheapest option and the
+originally preferred one. **`voyage-4` and `3-small` cannot be separated**: identical precision@5,
+six per-query wins each, every bootstrap interval straddling zero. At this sample size the harness
+says "too close to call", and it is written to be able to say that.
+
+So the tie-break decides, and it is stated rather than implied: `voyage-4` is 1024 dims against 1536
+and bills to OpenRouter credits, where Greg wanted the billing, against `3-small`'s BYOK to a
+separate OpenAI account. **`voyage-4`** — with one prerequisite, below.
+
+Numbers, method and the honest caveats — 18 queries, 221 judged pairs, three English articles, why
+absolute scores may not be quoted across runs with different arm sets, and what happens to the
+multilingual argument if the shelf stops being English — are in
+[evals/results/embedding-retrieval-2026-08-26.md](../../evals/results/embedding-retrieval-2026-08-26.md);
+the eval is `npm run eval:embeddings`.
+
+**The prerequisite, and it is not a detail.** Voyage's models 404 on one of the two OpenRouter keys
+in play here — *"No endpoints available matching your guardrail restrictions and data policy"*, which
+looks like a bad model id and is actually that account's privacy settings refusing every upstream
+that serves Voyage. `baai/bge-m3` and `openai/text-embedding-3-small` work on both keys; Voyage works
+only on the one in `.env.local`. Whichever account's key reaches production has to have Voyage's
+providers allowed at <https://openrouter.ai/settings/privacy>, or the choice falls back to `3-small`
+and its billing comes with it. Note also that [`src/env.ts`](../../src/env.ts) lets an exported
+`OPENROUTER_API_KEY` beat the file, so which key is in play is not always the one you are looking at.
+
+The same run puts a number on what semantic search is *for*, which is the question this whole
+document keeps circling. `searchLibrary` as it ships ANDs every term, so on those eighteen
+sentence-shaped questions it returns **nothing at all — zero hits on all eighteen**. Even a
+deliberately generous word matcher (OR over content words, ranked) finds under a quarter of the
+relevant passages. That is the gap the embeddings are buying, stated as a measurement rather than as
+a hope.
+
 ## What is still open
 
 - **No keyboard shortcut** opens search, and nothing steps between results with the arrow keys. The
@@ -587,6 +738,9 @@ enabled, and Anthropic has no embeddings API so it would mean a second vendor.
   [Q6](open-questions.md#q6) is where "how would we know we are failing at this" lives.
 
 ## See also
+
+- [colour-scales.md](colour-scales.md) — the eight hues a saved search can wear, where they came
+  from, and the honest ceiling on how many anyone can tell apart
 
 - [original-version/highlighting.md](original-version/highlighting.md) — the feature this is borrowed
   from, the overlapping-marks wall, and the confidence-unit bug

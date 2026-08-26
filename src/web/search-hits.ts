@@ -65,6 +65,25 @@ export interface Found {
   /** Unique within one result set — `blockId` alone is not, blocks repeat. */
   key: string;
   blockId: BlockId;
+  /**
+   * The saved search this came from, or `null` for a literal match.
+   *
+   * Several searches can be switched on at once (SearchPanel.tsx § Saved), and
+   * from `orderFound` onwards their results are **one list**. So every result
+   * has to be able to say which question found it — otherwise the merged list
+   * is a pile of passages with no provenance, which is precisely the failure
+   * the colour exists to prevent.
+   */
+  runId: string | null;
+  /**
+   * Which palette slot that search wears — `null` for a literal match.
+   *
+   * Assigned by src/web/hit-colours.ts, resolved to an actual hue by
+   * styles/colourscales.css, and never turned into a colour anywhere in
+   * between. A literal match has no slot because it belongs to no saved search:
+   * it wears the one fixed search hue, the way it always did.
+   */
+  slot: number | null;
   /** The block's position in the article. What `document` order sorts on. */
   index: number;
   /** Inclusive, in the block's rendered-text offset space. */
@@ -206,6 +225,11 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
       found.push({
         key: `${block.id}:${span.start}`,
         blockId: block.id,
+        /* No saved search behind it, and therefore no colour of its own: a
+           literal match is what you typed, and what you typed is in the box.
+           styles.css paints a slotless hit in the one fixed search hue. */
+        runId: null,
+        slot: null,
         index,
         ...span,
         confidence: null,
@@ -220,8 +244,17 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
   return found;
 }
 
+/** A saved search that is switched on, reduced to what drawing it needs. */
+export interface ActiveRun {
+  id: string;
+  /** Its palette slot — `assignSlots` in src/web/hit-colours.ts. */
+  slot: number;
+  hits: SearchHit[];
+}
+
 /**
- * The stored hits of a meaning-search, resolved against the prose they name.
+ * The stored hits of every switched-on meaning-search, resolved against the
+ * prose they name, as **one list**.
  *
  * The resolution is the part that matters. A hit arrives as a block id and the
  * words the model quoted; where those words *are* on this page is a question
@@ -235,46 +268,75 @@ export function findLiteral(blocks: Block[], find: string | null): Found[] {
  * only happen if the article was re-extracted since the search was saved, and
  * an id that is simply gone has nowhere to point; the alternative is a row in
  * the list that does nothing when pressed.
+ *
+ * ## Several runs, one pass — and it is not only about speed
+ *
+ * This took a list of hits until 2026-08-26, and the obvious way to switch on
+ * three searches at once would have been to call it three times and concatenate.
+ * That is wrong twice. It renders every block's text once per run, which is the
+ * one genuinely expensive thing in this file; and it builds a `ruler` per run,
+ * so each result's *place* would be measured against a scale rebuilt from the
+ * same numbers — identical today, and a trap the moment anything about the
+ * ruler stops being a pure function of the blocks. One pass, one ruler, one
+ * answer.
  */
-export function resolveHits(blocks: Block[], hits: SearchHit[]): Found[] {
+export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   const texts = blocks.map((b) => renderedText(b.html));
   const scale = ruler(texts);
   const found: Found[] = [];
-  hits.forEach((hit, n) => {
-    const at = index.get(hit.blockId);
-    if (at === undefined) return;
-    const text = texts[at] ?? "";
-    /* `whole` comes from whether `findQuote` found anything, and from nothing
-       else. The first version of this inferred it — a span covering the entire
-       block, plus the quote not equalling the block's text — and real data
-       broke it within the hour: a quote that genuinely *is* the whole block
-       produces exactly the shape the fallback produces, and the model had
-       retyped a line break as a space, so a perfect match was labelled "the
-       exact words have moved". A derived fact that usually agrees with a known
-       one is the shape of most of docs/reusable/silent-success.md. */
-    const located = findQuote(text, hit.quote, hit.start);
-    const whole = located === null;
-    const span = located ?? { start: 0, end: text.length };
-    found.push({
-      // `n` and not the offset: two hits can legitimately quote the same words
-      // with different reasoning, and the stored order is the only thing that
-      // separates them.
-      key: `${hit.blockId}:${n}`,
-      blockId: hit.blockId,
-      index: at,
-      ...span,
-      confidence: hit.confidence,
-      reasoning: hit.reasoning,
-      short: whole ? snippet(text, { start: 0, end: 0 }, SHORT_SNIPPET) : snippet(text, span, SHORT_SNIPPET),
-      long: whole ? snippet(text, { start: 0, end: 0 }, LONG_SNIPPET) : snippet(text, span, LONG_SNIPPET),
-      /* `span.start`, which for a fallback is 0 — the top of the block. That is
-         the honest answer: the whole paragraph is marked, so where in it the
-         model meant is exactly what we do not know. */
-      at: placeOf(scale, at, span.start),
-      whole,
-    });
-  });
+  for (const run of runs) {
+    for (const [n, hit] of run.hits.entries()) {
+      const at = index.get(hit.blockId);
+      if (at === undefined) continue;
+      const text = texts[at] ?? "";
+      /* `whole` comes from whether `findQuote` found anything, and from nothing
+         else. The first version of this inferred it — a span covering the entire
+         block, plus the quote not equalling the block's text — and real data
+         broke it within the hour: a quote that genuinely *is* the whole block
+         produces exactly the shape the fallback produces, and the model had
+         retyped a line break as a space, so a perfect match was labelled "the
+         exact words have moved". A derived fact that usually agrees with a known
+         one is the shape of most of docs/reusable/silent-success.md. */
+      const located = findQuote(text, hit.quote, hit.start);
+      const whole = located === null;
+      const span = located ?? { start: 0, end: text.length };
+      found.push({
+        /* The run id is part of the key, and it has to be. `blockId:n` was
+           unique while exactly one search could be showing; with three switched
+           on, three searches that each found their second hit in the same
+           paragraph produce three results all called `spya-k3m9qt:1`. React
+           renders the first and drops the rest with a duplicate-key warning
+           nobody reads, `openKey` opens whichever it matches first, and the
+           mark in the prose belongs to a different search from the row the
+           reader pressed. Every one of those is silent.
+
+           `n` and not the offset within the run, for the reason it always was:
+           two hits can legitimately quote the same words with different
+           reasoning, and the stored order is the only thing that separates
+           them. */
+        key: `${run.id}:${hit.blockId}:${n}`,
+        blockId: hit.blockId,
+        runId: run.id,
+        slot: run.slot,
+        index: at,
+        ...span,
+        confidence: hit.confidence,
+        reasoning: hit.reasoning,
+        short: whole
+          ? snippet(text, { start: 0, end: 0 }, SHORT_SNIPPET)
+          : snippet(text, span, SHORT_SNIPPET),
+        long: whole
+          ? snippet(text, { start: 0, end: 0 }, LONG_SNIPPET)
+          : snippet(text, span, LONG_SNIPPET),
+        /* `span.start`, which for a fallback is 0 — the top of the block. That is
+           the honest answer: the whole paragraph is marked, so where in it the
+           model meant is exactly what we do not know. */
+        at: placeOf(scale, at, span.start),
+        whole,
+      });
+    }
+  }
   return found;
 }
 
@@ -335,6 +397,7 @@ export function hitMarks(found: Found[], openKey: string | null): Map<BlockId, M
       start: f.start,
       end: f.end,
       kind: "hit",
+      slot: f.slot,
       strength:
         f.confidence === null
           ? 1
@@ -367,4 +430,35 @@ export function blockStrength(found: Found[]): Map<BlockId, number> {
     byBlock.set(f.blockId, Math.max(byBlock.get(f.blockId) ?? 0, strength));
   }
   return byBlock;
+}
+
+/**
+ * Which searches matched anywhere in each block, as palette slots — the colours
+ * the bar down the left of the paragraph is divided into.
+ *
+ * The bar and the marks answer two different questions and that is why they are
+ * scoped differently. A mark says *these words matched, and these searches found
+ * them*; the bar says *there is something in this paragraph*, which is the
+ * signal you catch while scrolling past at speed (`blockStrength` above has the
+ * borrowed reasoning). So a paragraph where one search matched the first
+ * sentence and another matched the last gets **two** segments in its bar and
+ * **one** rule under each phrase — and both are true.
+ *
+ * Sorted and de-duplicated for the reason `annotateHtml` sorts its stripes: the
+ * same pair of searches must draw the same bar in every paragraph they share,
+ * or the reader is reading an order that came out of the result list's sort.
+ *
+ * `null` slots — literal matches — are dropped rather than given a segment,
+ * because a words search has no colour and cannot be one of several: the two
+ * matchers are never on at the same time.
+ */
+export function blockHues(found: Found[]): Map<BlockId, number[]> {
+  const byBlock = new Map<BlockId, Set<number>>();
+  for (const f of found) {
+    if (f.slot === null) continue;
+    const set = byBlock.get(f.blockId) ?? new Set<number>();
+    set.add(f.slot);
+    byBlock.set(f.blockId, set);
+  }
+  return new Map([...byBlock].map(([id, set]) => [id, [...set].sort((a, b) => a - b)]));
 }

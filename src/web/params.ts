@@ -43,7 +43,7 @@ import { isSpideryarnId } from "../ids.js";
  * the reader to settle also means the URL records where they *landed*, not
  * every section they flew over on the way.
  */
-const POSITION_SETTLE_MS = 300;
+export const POSITION_SETTLE_MS = 300;
 
 /**
  * A block id, validated on the way in.
@@ -455,6 +455,82 @@ export const findParam = createParser<string>({
  * `?thread=` and `?term=`.
  */
 export const runParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * **Which saved meaning-searches are switched on** — `runs=k3m9qt,p7x2vb`.
+ *
+ * The plural is the parameter that matters now; `?run=` above is kept only so
+ * that a link written before 2026-08-26 still opens the search it names. The
+ * reconciliation is `resolveRuns`, one function below, and it is the same shape
+ * as `resolveMatcher`: a rule about what an *absent* parameter means, written
+ * once, rather than a default that would erase the distinction.
+ *
+ * Comma-separated and spelled out, exactly like `?cols=`, and for the reason
+ * given there — these URLs get pasted to people, and a reader should be able to
+ * see what a link is going to show them. Ids are already URL-safe by
+ * construction (docs/project/block-ids.md), so nothing needs encoding.
+ *
+ * **Order is preserved rather than sorted.** `?cols=` sorts because a set of
+ * depths has a natural order and two spellings of one view should be one
+ * string; a set of ids does not. Sorting them would order the reader's searches
+ * by a random six characters, which is not an order — so the order kept is the
+ * one thing here that means anything, which is the order they switched them on
+ * in. Nothing downstream depends on it (the marks stack by palette slot, and
+ * the results list sorts by place or confidence), so this is about the URL
+ * being readable rather than about the view.
+ *
+ * Duplicates are dropped, because two ticks of one box is one tick, and the
+ * empty set serializes to `null` — a removed parameter rather than `runs=`,
+ * which nothing downstream would be able to tell from a mangled one.
+ *
+ * `replace`, like `?run=` before it and for the same reason: switching a saved
+ * search on while you read is browsing, not navigating, and `?mode=` already
+ * put the entry on the stack that Back should use.
+ */
+export const parseAsIdList = createParser<string[]>({
+  parse(value) {
+    const parts = value.split(",").filter((p) => p !== "");
+    /* Every id validated, and a single bad one drops **only itself**. `?cols=`
+       takes the opposite view and rejects the whole value, which is right there
+       because a depth list is short and hand-written; a run list is machine-
+       written and long-lived, and the id most likely to be wrong in one is a
+       search the reader deleted on another machine. Throwing away the other
+       four searches because of it would be the worst available answer. */
+    const ids = [...new Set(parts.filter((p) => isSpideryarnId(p)))];
+    return ids.length === 0 ? null : ids;
+  },
+  serialize: (value) => [...new Set(value)].join(","),
+  eq: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]),
+});
+
+export const runsParam = parseAsIdList.withOptions({ history: "replace" });
+
+/**
+ * Which saved searches a URL is asking to switch on, when it may not say.
+ *
+ * **No `withDefault`, because absence has to stay visible** — the same sentence
+ * `resolveMatcher` above is built on, and the same reason. A URL carrying
+ * `?run=<id>` and no `?runs=` was written when a search panel could show
+ * exactly one search at a time, and it means *switch that one on*. There are
+ * such URLs in messages and bookmarks and browser histories; flipping to the
+ * plural without this would open every one of them on an article with no marks
+ * on it and a parameter nothing reads, which is the quiet kind of wrong rather
+ * than the loud kind.
+ *
+ * It is safe in the other direction because **`?run=` is never written any
+ * more**: the panel serializes the plural only, so a live URL that has one can
+ * only have got it from an old link.
+ *
+ * The default is the **empty** set, which is Greg's ask on 2026-08-26 that the
+ * boxes start unticked. Landing on an article in search mode therefore paints
+ * nothing until the reader says so — the rule the glossary and the summaries
+ * both already follow: *the article acquires marks when the reader asks for
+ * them and at no other time.*
+ */
+export function resolveRuns(runs: string[] | null, run: string | null): string[] {
+  if (runs !== null) return runs;
+  return run !== null ? [run] : [];
+}
 
 /**
  * How the results list is ordered.

@@ -23,7 +23,9 @@ import { SummaryPanel } from "./SummaryPanel.js";
 import { useSummaries } from "./useSummaries.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
+import { assignSlots } from "./hit-colours.js";
 import {
+  blockHues,
   blockStrength,
   findLiteral,
   hitMarks as buildHitMarks,
@@ -56,6 +58,8 @@ import {
   resolveMatcher,
   orderParam,
   runParam,
+  runsParam,
+  resolveRuns,
   spineParam,
   textParam,
   threadParam,
@@ -441,6 +445,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
      TableView.tsx. */
   const hitMarks = useMemo(() => buildHitMarks(found, openHit), [found, openHit]);
   const hitStrength = useMemo(() => blockStrength(found), [found]);
+  const hitHues = useMemo(() => blockHues(found), [found]);
 
   /**
    * The bottom drawer — see Dock.tsx, and docs/plans/bottom-bar.md for why the
@@ -746,6 +751,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         openComment={note}
         term={term}
         hitMarks={hitMarks}
+        hitHues={hitHues}
         hitStrength={hitStrength}
         onSelect={(anchor) => {
           if (!anchor) return;
@@ -1137,26 +1143,46 @@ function SearchBand({
      nothing else still opens on the words matcher it was written for. The rule
      lives in params.ts § resolveMatcher; here it is one line. */
   const matcher = resolveMatcher(match, find);
-  const [runId, setRunId] = useQueryState("run", runParam);
+  /* `?run=` is read and never written — the one-search URLs that existed before
+     2026-08-26 seed the set, and from then on it is `?runs=`. params.ts §
+     resolveRuns has the why. */
+  const [run1] = useQueryState("run", runParam);
+  const [runIds, setRunIds] = useQueryState("runs", runsParam);
+  const active = useMemo(() => resolveRuns(runIds, run1), [runIds, run1]);
   const [order, setOrder] = useQueryState("order", orderParam);
 
-  const run = runs.find((r) => r.id === runId) ?? null;
+  /**
+   * Which colour each saved search wears.
+   *
+   * Over **every** saved run, not just the switched-on ones, and that is the
+   * point rather than an oversight: a search's colour must not change when the
+   * reader unticks the search above it. Assigning over the active set would do
+   * exactly that, and it would be the kind of wrong that looks like a rendering
+   * glitch — the same three passages, a different colour, every time you touch
+   * a box. hit-colours.ts § What the assignment has to be.
+   */
+  const slots = useMemo(() => assignSlots(runs), [runs]);
 
-  /* One list, two producers. Note that a `pending` or failed run resolves to
-     nothing rather than to stale results: a run that has not answered yet has
-     no hits, and showing the previous run's marks under this run's criterion
-     would be the panel and the prose saying different things. */
+  /* One list, two producers, and on the meaning side several searches merged.
+     Note that a `pending` or failed run contributes nothing rather than stale
+     results: a run that has not answered yet has no hits, and showing an older
+     run's marks under a newer run's colour would be the panel and the prose
+     saying different things. */
+  const answered = useMemo(
+    () =>
+      runs
+        .filter((r) => active.includes(r.id) && r.status === "done")
+        .map((r) => ({ id: r.id, slot: slots.get(r.id) ?? 0, hits: r.hits })),
+    [runs, active, slots],
+  );
+
   const results = useMemo(
     () =>
       orderFound(
-        matcher === "words"
-          ? findLiteral(blocks, find)
-          : run?.status === "done"
-            ? resolveHits(blocks, run.hits)
-            : [],
+        matcher === "words" ? findLiteral(blocks, find) : resolveHits(blocks, answered),
         order,
       ),
-    [matcher, blocks, find, run, order],
+    [matcher, blocks, find, answered, order],
   );
 
   /* Push the results up to `Reader`, which owns the prose. `onFound` is a plain
@@ -1181,12 +1207,16 @@ function SearchBand({
       matcher={matcher}
       onMatcher={(next) => {
         void setMatcher(next);
-        // Switching matcher clears the *other* one's selection rather than
-        // leaving it addressed in a URL nothing is reading. Without this,
-        // flipping to words and back re-opens a saved run the reader had
-        // visibly left, which looks like the toggle undoing itself.
+        /* The selection goes with the matcher, because the row it names belongs
+           to the list that is about to be replaced. The ticks do **not**: they
+           are the reader's own answer to "what should be marked", and switching
+           to words to look something up and back again should return them to
+           the article they left rather than to a blank one. That is a change
+           from the single-`?run=` version, which cleared it — because there
+           "which search is open" was a view state that words mode plainly did
+           not have, and a set of ticks is a preference that survives a look
+           elsewhere. */
         onOpenHit(null);
-        if (next === "words") void setRunId(null);
       }}
       find={find}
       onFind={(next) => {
@@ -1194,22 +1224,35 @@ function SearchBand({
         onOpenHit(null);
       }}
       runs={runs}
-      runId={runId}
-      onRun={(id) => {
-        void setRunId(id);
+      active={active}
+      slots={slots}
+      onToggle={(id, on) => {
+        void setRunIds(on ? [...active, id] : active.filter((x) => x !== id));
+        /* Whatever row was open may have belonged to the search just switched
+           off, and a highlighted row pointing at a mark that is no longer drawn
+           is the panel and the prose disagreeing. Cheap to clear, and the
+           reader loses only a highlight. */
+        onOpenHit(null);
+      }}
+      onToggleAll={(on) => {
+        void setRunIds(on ? runs.map((r) => r.id) : []);
         onOpenHit(null);
       }}
       onAsk={(criterion) => {
-        // `ask` mints the id, so `?run=` can name the search before the model
-        // has said anything — the same trick `?note=` and `?thread=` use.
-        void setRunId(ask(criterion));
+        /* `ask` mints the id, so `?runs=` can name the search before the model
+           has said anything — the same trick `?note=` and `?thread=` use.
+
+           And it switches itself on, which is the one exception to
+           default-false: a search the reader just paid for and cannot see is
+           not a result. */
+        void setRunIds([...active, ask(criterion)]);
         onOpenHit(null);
       }}
       onRetry={retry}
       onDelete={(id) => {
         remove(id);
-        // Back to the list rather than to a search that is not there.
-        if (id === runId) void setRunId(null);
+        void setRunIds(active.filter((x) => x !== id));
+        onOpenHit(null);
       }}
       found={results}
       order={order}

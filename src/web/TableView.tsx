@@ -14,12 +14,13 @@
  *    navLabels belong: navigation chrome, never shown in place of prose that
  *    could be displayed (granularity-zoom.md#node-shape).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import type { Article, BlockId, Comment, NodeId } from "../types.js";
 import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
 import {
   annotateHtml,
+  HUE_STRIPES,
   renderedText,
   resolveMark,
   termMarks,
@@ -73,6 +74,24 @@ interface Props {
    * marked only while a term is selected.
    */
   term?: TermSelection | null;
+  /**
+   * The search results' marks, already resolved and grouped by block, and the
+   * strongest match in each block for the bar down its left.
+   *
+   * Passed in rather than computed here — unlike comments and unlike terms —
+   * because the *panel* and the *prose* have to agree about which results
+   * exist, and the panel is the one that ordered and filtered them. Computing
+   * them twice from the same inputs would work until the day one side gained a
+   * filter, at which point the list and the highlights would quietly disagree.
+   * See search-hits.ts, which produces both from one pass.
+   *
+   * Optional for the same reason `term` is: nothing else on this page had to
+   * learn that search exists.
+   */
+  hitMarks?: Map<BlockId, Mark[]> | undefined;
+  hitStrength?: Map<BlockId, number> | undefined;
+  /** The palette slots of every search that matched in each block — `blockHues`. */
+  hitHues?: Map<BlockId, number[]> | undefined;
   /** The sections, for the live "which cell am I in" — see useColumnContext.ts. */
   sections: Section[];
   /** Same key as the `?at=` tracker: re-measure when the columns change. */
@@ -93,6 +112,9 @@ export function TableView({
   onSelect,
   onOpenComment,
   term,
+  hitMarks,
+  hitStrength,
+  hitHues,
   sections,
   layoutKey,
 }: Props) {
@@ -433,7 +455,50 @@ export function TableView({
                 // below so a heading groups with the section it introduces
                 // (styles.css § td.text.kind-heading). Emitted for every kind
                 // so the next rule that needs one does not have to change JSX.
-                className={`text pin-right kind-${block.kind} ${!block.gistable ? "opaque" : ""}`}
+                className={`text pin-right kind-${block.kind} ${!block.gistable ? "opaque" : ""}${
+                  hitStrength?.has(block.id) ? " has-hit" : ""
+                }`}
+                /* The bar down the left of a matched paragraph — Greg's call,
+                   2026-08-25, so a match is findable while scrolling past at
+                   speed. Its intensity is scaled *harder* than the wash by the
+                   stylesheet, which is the one piece of the borrowed
+                   implementation worth copying verbatim: a wash faint enough to
+                   keep text readable is too faint to notice, so the border
+                   carries the signal and the fill carries the extent.
+                   (docs/project/original-version/highlighting.md) */
+                style={
+                  hitStrength?.has(block.id)
+                    ? ({
+                        "--hit-a": hitStrength.get(block.id),
+                        /* And which searches matched anywhere in this paragraph,
+                           so the bar is divided into their colours — the glance
+                           version of the rules under the individual phrases. The
+                           slot numbers become hues in styles.css, never here;
+                           see annotate.ts for the same seam and why it is kept.
+
+                           Scoped to the paragraph rather than to the phrase on
+                           purpose: this is the mark you catch out of the corner
+                           of your eye, so it answers "is any of my searches in
+                           here" rather than "which of them is in this clause".
+                           blockHues() in search-hits.ts. */
+                        ...Object.fromEntries(
+                          (hitHues?.get(block.id) ?? [])
+                            .slice(0, HUE_STRIPES)
+                            .map((slot, i) => [`--h${i}`, `var(--cat-${slot}-rgb)`]),
+                        ),
+                      } as CSSProperties)
+                    : undefined
+                }
+                /* The count the stylesheet keys its gradient off. Absent rather
+                   than `0` when a literal search is running, which is the case
+                   with no colours at all: `[data-hues]` then never matches and
+                   the bar falls back to the one fixed search hue it has always
+                   been. */
+                data-hues={
+                  hitHues?.get(block.id)?.length
+                    ? Math.min(hitHues.get(block.id)?.length ?? 0, HUE_STRIPES)
+                    : undefined
+                }
               >
                 <BlockRef className="block-id" id={block.id} onJump={onJump} />
                 <div
@@ -447,6 +512,7 @@ export function TableView({
                     __html: annotateHtml(block.html, [
                       ...(marksByBlock.get(block.id) ?? []),
                       ...(termMarksByBlock.get(block.id) ?? []),
+                      ...(hitMarks?.get(block.id) ?? []),
                     ]),
                   }}
                 />
@@ -467,6 +533,7 @@ export function TableView({
           entries={entries}
           rect={live.rects.get(d) ?? null}
           viewportH={live.viewportH}
+          stableH={live.stableH}
           clipLeft={live.clipLeft}
           pinned={d === pinLeft}
           activeChain={activeChain}

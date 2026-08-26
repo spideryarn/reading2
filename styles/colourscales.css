@@ -1,0 +1,200 @@
+/*
+ * Colour scales — three of them, and only one is in use today.
+ *
+ * The reasoning, the sources and the honest list of what is weak about each
+ * live in docs/project/colour-scales.md. This file is the values.
+ *
+ * Imported by styles/tokens.css, which is imported by src/web/styles.css inside
+ * `@layer app` — see docs/project/design-css-overview.md § The four files. It is
+ * a file of its own rather than more of tokens.css because tokens.css is the
+ * palette this app *wears* and these are palettes it *uses*: one hue means "the
+ * brand", eight mean "these are different things", nine mean "this much of it".
+ * Different jobs, and mixing them would make the brand file look like a set of
+ * options.
+ *
+ * Three rules hold across all three scales.
+ *
+ * **Dark ground, unconditionally.** Every value here is picked against
+ * `--background` (`oklch(0.145 0 0)`), which is near-black, and several of them
+ * are lifted well above their published lightness because of it. A scale
+ * designed for paper puts its quietest colour at white; here the quietest
+ * colour has to be near-black, and a scale used the other way up is not merely
+ * ugly, it inverts what the reader is being told. Where a value departs from
+ * its published source the departure is written down beside it.
+ *
+ * **Triplets, not colours, wherever an alpha is wanted.** `--cat-3-rgb` is
+ * `86 180 233`, and `--cat-3` is `rgb(var(--cat-3-rgb))` beside it. Only the
+ * space-separated form takes a variable alpha — `rgb(var(--cat-3-rgb) / 0.3)` —
+ * and the search wash needs one because it carries the model's confidence. That
+ * is the same reason `--hit-rgb` is written that way in tokens.css, and the
+ * same failure if it is not: the colour resolves, the alpha is silently
+ * dropped, and every mark paints at full strength with the confidence gone.
+ *
+ * **Nothing here is `color-mix`ed at runtime.** A ramp built by interpolating
+ * two endpoints in CSS is one line shorter and wrong in two ways that do not
+ * announce themselves: `oklch` interpolation takes the *long way round* the hue
+ * circle for endpoints more than 180° apart (which is every diverging scale),
+ * and out-of-gamut intermediates are clipped per-channel, which flattens
+ * exactly the middle of the ramp where the reader is trying to tell two steps
+ * apart. tokens.css already carries a scar from the first of those — see the
+ * note on `--highlight-wash`. Stops it is.
+ */
+
+:root {
+    /* ==================================================================
+       CATEGORICAL — eight hues that mean "these are different things"
+
+       In use: one per saved search (docs/project/search.md). Assigned by
+       src/web/hit-colours.ts, which hands out slot *numbers* and never touches
+       a colour; this file is the only place the two meet.
+
+       **Okabe–Ito, lifted for a black page.** The source is Masataka Okabe and
+       Kei Ito's "Color Universal Design" set (2002, revised 2008), which is the
+       most-used colour-blind-safe qualitative palette there is. Two changes,
+       both forced by the ground:
+
+         - Its eighth colour is **black**, which on this page is the page. It
+           has become a light neutral (slot 7). That is the weakest slot in the
+           set and it is deliberately the one an eighth search reaches.
+         - Three of its colours sit at L* below 0.65 and disappear into a
+           near-black ground. They are lifted, keeping hue and chroma: the
+           blue, the bluish green and the vermilion. The published hex is
+           recorded beside each so the change is visible rather than inferred.
+
+       **What is honestly still weak.** Okabe–Ito varies lightness as well as
+       hue precisely so that a dichromat has a second channel, and it works —
+       but eight is at the top of the range anyone claims is distinguishable,
+       and under deuteranopia the two warm slots (1 and 6) converge toward each
+       other, separated only by their ~9 points of lightness. That is a real
+       cost and it is mitigated in the only way that actually works: **the
+       criterion is printed in full beside every dot, and named in every result
+       row's hover card and accessible label.** Colour here is a shortcut for
+       something the reader can always read; it is never the only carrier.
+       WCAG 1.4.1, and it is the right rule rather than a box to tick.
+
+       One more constraint peculiar to this app: slot 6 is close to the brand
+       orange (`--spideryarn-orange`, #DB8A45), which on this page means
+       "highlight" and draws comment underlines. They are different marks in
+       different places — a 2px rule at the foot of a wash against an underline
+       on the text — so they are told apart by position rather than by hue, and
+       that is worth knowing before anyone moves either.
+       ================================================================== */
+
+    --cat-0-rgb: 86 180 233;    /* sky blue      — Okabe–Ito #56B4E9, unchanged */
+    --cat-1-rgb: 232 112 58;    /* vermilion     — from #D55E00, lifted for the dark ground */
+    --cat-2-rgb: 47 191 149;    /* bluish green  — from #009E73, lifted */
+    --cat-3-rgb: 240 228 66;    /* yellow        — Okabe–Ito #F0E442, unchanged */
+    --cat-4-rgb: 92 143 232;    /* blue          — from #0072B2, lifted hard (it was the darkest) */
+    --cat-5-rgb: 222 143 188;   /* reddish purple— from #CC79A7, lifted */
+    --cat-6-rgb: 232 163 59;    /* orange        — Okabe–Ito #E69F00, unchanged */
+    --cat-7-rgb: 201 201 201;   /* light neutral — replaces Okabe–Ito's black */
+
+    --cat-0: rgb(var(--cat-0-rgb));
+    --cat-1: rgb(var(--cat-1-rgb));
+    --cat-2: rgb(var(--cat-2-rgb));
+    --cat-3: rgb(var(--cat-3-rgb));
+    --cat-4: rgb(var(--cat-4-rgb));
+    --cat-5: rgb(var(--cat-5-rgb));
+    --cat-6: rgb(var(--cat-6-rgb));
+    --cat-7: rgb(var(--cat-7-rgb));
+
+    /* ==================================================================
+       SEQUENTIAL — nine steps that mean "this much of it"
+
+       Not in use yet. Built now because the alternative is that the first
+       feature to need one invents a ramp inline, and by the time there are two
+       of those nobody can change either.
+
+       **Inferno**, from matplotlib — Nathaniel Smith and Stéfan van der Walt's
+       set, presented at SciPy 2015 and designed with `viscm` against CAM02-UCS.
+       Chosen over viridis for the reason Greg's framing asks for: the axis he
+       described is *hotness*, and inferno is the blackbody ramp — dark, red,
+       orange, yellow, white — so the cultural reading and the perceptual one
+       agree. Viridis would be the choice for a quantity with no temperature in
+       it, and is worth adding beside this when one turns up.
+
+       The property that matters is **monotonic lightness**: every step is
+       lighter than the one before it, which is what makes the ramp survive
+       greyscale, dichromacy and a bad projector without any of them needing to
+       be thought about. It is also the property `jet` and every other rainbow
+       ramp lacks, which is the whole of why they are wrong — a rainbow has
+       bright bands in the middle, so it invents boundaries the data does not
+       have and hides differences it does. Borland and Taylor put the case in
+       "Rainbow Color Map (Still) Considered Harmful" (IEEE CG&A, 2007), and
+       Crameri, Shephard and Heron restated it for a wider audience in "The
+       misuse of colour in science communication" (Nature Communications, 2020).
+
+       **Do not use `--heat-0` and `--heat-1` on `--page`.** They are darker
+       than the page is, so a value near zero would be drawn as a hole. Whatever
+       uses this ramp should either start at `--heat-2` or paint it on a lighter
+       surface; the two dark stops are kept so that the ramp is the published
+       one and can be sampled correctly if it is ever drawn on white.
+       ================================================================== */
+
+    --heat-0: #000004;
+    --heat-1: #1b0c41;
+    --heat-2: #4a0c6b;
+    --heat-3: #781c6d;
+    --heat-4: #a52c60;
+    --heat-5: #cf4446;
+    --heat-6: #ed6925;
+    --heat-7: #fb9a06;
+    --heat-8: #fcffa4;
+
+    /* ==================================================================
+       DIVERGING — nine steps with a middle that means "neither"
+
+       Not in use yet. Two of them, and which is the default is the one opinion
+       in this file worth arguing about.
+
+       **The midpoint is dark, and that is the change from every published
+       diverging scale.** ColorBrewer's RdBu, matplotlib's coolwarm and every
+       other one you might reach for pivot on *white*, because they were built
+       for paper: the neutral value is the quietest thing on the page. Dropped
+       onto a near-black ground, the pivot becomes the loudest thing on the
+       page, and a scale whose middle shouts is not a diverging scale, it is a
+       diverging scale read upside down. So both of these pivot on a dark
+       neutral a little above `--background`, and lightness climbs toward *both*
+       ends. Same shape as the published ones, turned the right way up for this
+       page.
+
+       **`--div-*` is blue ↔ red, and it is the one to use.** Red and green is
+       what people ask for, because red-bad/green-good is a convention almost
+       everybody holds. It is also the single worst pair available: red–green
+       confusion is what colour blindness overwhelmingly *is*, at roughly 8% of
+       men and 0.5% of women, and to a deuteranope a red–green diverging scale
+       is a scale that gets darker in the middle and tells them nothing about
+       which side they are on. Blue against red keeps the warm/cool opposition
+       that makes the convention work, keeps the "hot" end hot, and survives
+       every common dichromacy — which is why ColorBrewer's own colour-blind-safe
+       filter keeps RdBu and drops RdYlGn.
+
+       **`--div-rg-*` is red ↔ green, and it is here because it was asked for.**
+       Use it where the reader already knows which end is which from something
+       other than the colour — a printed number, a label, a position — so that
+       the hue is a shortcut rather than the message. Do not use it as the only
+       carrier of a good/bad judgement.
+       ================================================================== */
+
+    /* Blue (0) through neutral (4) to red (8). */
+    --div-0: #7fb3ff;
+    --div-1: #5a8fe0;
+    --div-2: #3e6bb0;
+    --div-3: #2c4878;
+    --div-4: #4f4f52;
+    --div-5: #7a3846;
+    --div-6: #b04a54;
+    --div-7: #de6a6a;
+    --div-8: #ff9090;
+
+    /* Red (0) through neutral (4) to green (8). Read the note above first. */
+    --div-rg-0: #ff9090;
+    --div-rg-1: #de6a6a;
+    --div-rg-2: #b04a54;
+    --div-rg-3: #7a3846;
+    --div-rg-4: #4f4f52;
+    --div-rg-5: #3a6b46;
+    --div-rg-6: #4a9159;
+    --div-rg-7: #62b872;
+    --div-rg-8: #86e39a;
+}
