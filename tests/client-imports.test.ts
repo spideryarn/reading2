@@ -63,6 +63,13 @@ const SHARED = new Set([
   // so the rule lives in one place rather than being spelled out at the
   // button. See docs/postmortems/toc-max-tokens.md.
   "job-failure.js",
+  // What counts as a PDF worth uploading, and how big is too big. The picker
+  // asks (src/web/UploadPicker.tsx) and `POST /api/uploads` will ask when it
+  // exists, which is the whole reason it is a module rather than a constant in
+  // the component — the two disagreeing is invisible until a file is accepted
+  // in one place and refused in the other. Imports nothing.
+  // See docs/plans/pdf-upload-and-storage.md.
+  "uploads.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

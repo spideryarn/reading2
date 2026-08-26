@@ -303,6 +303,17 @@ from the diagram:
 
 ### 6. The file picker
 
+> **The inert half of this is built, 2026-08-26** — out of order, on Greg's instruction, and
+> knowingly. [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) puts an Upload button and
+> a drop zone under the URL box on the shelf; [`src/uploads.ts`](../../src/uploads.ts) holds the
+> cap and the pre-byte checks, shared so `POST /api/uploads` can use the same ones. It takes a
+> file, refuses what it can refuse without the bytes, and then **says plainly that uploading is not
+> built and that the file has not left the reader's machine** — rather than a disabled button or a
+> spinner over nothing, either of which would be a
+> [silent success](../reusable/silent-success.md). No route was added, no bytes are read, and
+> nothing in steps 0–5 was started. What is still owed here is the wiring and the progress bar.
+> See [ingest-queue.md § The picker that cannot send anything yet](../project/ingest-queue.md#the-picker-that-cannot-send-anything-yet).
+
 A drop zone and a "choose a file" button beside the URL field in
 [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), and a progress bar on
 [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) — a real one, since a 50 MB upload on a domestic
@@ -526,7 +537,8 @@ by it. It belongs in the appendix's eventual design, which is where it now is, a
 3. The source/upload store and its state machine, with both adapters and their tests. No routes.
 4. `POST /api/uploads`, and `POST /api/jobs` enqueuing a job whose first step is `verify-source`.
 5. The pipeline's URL assumptions — **the big one**, scoped as above.
-6. The file picker and the progress bar.
+6. The file picker and the progress bar. **The picker itself landed early and inert, 2026-08-26 —
+   see [§ 6](#6-the-file-picker). What is left of this step is the wiring and the progress bar.**
 7. The 11.5 MB fixture end to end, in a browser, plus the failure cases Sol lists — double and
    concurrent finalisation, cancellation mid-download, object missing, Storage 5xx, expired upload,
    a tiny PDF with a huge page count.

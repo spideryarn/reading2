@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
 import { jobWorthRetrying } from "../job-failure.js";
 import { addHref, navigate } from "./router.js";
+import { UploadPicker } from "./UploadPicker.js";
 import type { Job, JobStep } from "../types.js";
 import type { UseJobs } from "./useJobs.js";
 
@@ -163,6 +164,13 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
           <code className="tw:font-mono tw:text-foreground">{slug}</code>.
         </p>
       )}
+
+      {/* Under the URL box rather than beside it. They are two ways to start
+          the same thing, and the reader will nearly always be doing the first —
+          a row of two equal halves would give a rarely-used control half the
+          section. See docs/plans/pdf-upload-and-storage.md for what is behind
+          it, which today is nothing. */}
+      <UploadPicker />
 
       {queue.error && (
         <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive">{queue.error}</p>

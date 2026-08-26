@@ -26,6 +26,46 @@ the progress list.
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | `/add/<a whole URL>` — [§ The add page](#the-add-page) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
+| [`src/web/UploadPicker.tsx`](../../src/web/UploadPicker.tsx) | the file picker and the drop zone — [§ The picker that cannot send anything yet](#the-picker-that-cannot-send-anything-yet) |
+| [`src/uploads.ts`](../../src/uploads.ts) | what counts as a PDF worth uploading, and how big is too big |
+
+## The picker that cannot send anything yet
+
+**Added 2026-08-26, and it is deliberately inert.** There is an Upload button and a drag-and-drop
+area under the URL box on the shelf. It takes a file, checks what can be checked without reading
+the bytes, shows you what you chose — and then says, in as many words, that uploading is not built
+and the file has not left your machine.
+
+That is the whole of it on purpose. The upload path behind it — the `sources` bucket, the blob
+store seam, `POST /api/uploads`, a `verify-source` step, and the pipeline's several assumptions
+that every article has a URL — is planned in full and built not at all:
+[pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md), which is *step 5* of that plan's
+build order arriving before steps 0–4.
+
+**Why ship the front half early rather than wait.** The picker is the part of an upload that has
+nothing to do with storage: the drop target, the drag counter, the refusals, and the question of
+what we will accept. None of it changes when the back half lands. What *would* have been wrong is
+either of the two obvious ways to hide the gap — a disabled button with no explanation, or a
+spinner over a file that is going nowhere. Both are the failure this repo keeps writing up
+([silent-success.md](../reusable/silent-success.md)): something that looks like it worked.
+
+**The checks are the cheap ones, and they are not the real ones.** `uploadProblem` in
+[`src/uploads.ts`](../../src/uploads.ts) reads a name, a browser-guessed MIME type and a size,
+every one of which is a claim by whoever chose the file. The check that decides anything is the
+`%PDF-` magic over the bytes that actually arrived, on the server, before anything expensive. The
+module is shared rather than inlined in the component for exactly the reason
+[`src/ingest.ts`](../../src/ingest.ts) is: `POST /api/uploads` will ask the same question, and a
+browser and a server disagreeing about what counts as a PDF is invisible until a file is taken in
+one place and refused in the other.
+
+Two smaller things in it that are easy to get wrong and are worth not rediscovering:
+
+- **The drag highlight counts, it does not toggle.** `dragleave` fires every time the pointer
+  crosses into a child element, so a boolean cleared on leave makes the zone flicker as you move
+  across it. Enters minus leaves is the fix that survives nested children.
+- **`dragover` must call `preventDefault`.** Its default action is *"this is not a drop target"*,
+  and without cancelling it the browser opens the PDF in the tab instead — which looks exactly
+  like a drop handler that never ran.
 
 ## The add page
 
@@ -658,6 +698,9 @@ function, leave everything else alone — and no stage's behaviour or artefacts 
 ## See also
 
 - [library.md](library.md) — the homepage this box sits on
+- [pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md) — the upload the picker is the
+  front half of, and the object store under it
+- [pdf-ingestion.md](../plans/pdf-ingestion.md) — how a PDF becomes an article once we have one
 - [architecture.md](architecture.md) — the pipeline, the storage layout, and who owns which stage
 - [content-extraction.md](content-extraction.md) — stages 1–2, and what `meta.json` is for
 - [setup-dev.md](setup-dev.md) — the commands, for when you want to run a stage by hand
