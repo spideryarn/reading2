@@ -28,23 +28,15 @@
  * in conflict, and the session pooler is what satisfies both.
  */
 
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
+import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 
 loadEnvLocal();
-
-/**
- * Supabase's CA certificate, downloaded from the dashboard
- * (Settings -> Database -> SSL Configuration) and committed. Deliberately NOT
- * under `supabase/`, which `supabase init --force` rewrites — see
- * docs/project/supabase-local.md.
- */
-const DEFAULT_CA = path.resolve(import.meta.dirname, "../certs/supabase-ca.crt");
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -61,7 +53,7 @@ if (!url) {
  * There is no remote project yet, so today this only ever fires by accident —
  * which is exactly when you want it to.
  */
-const isLocal = /@(127\.0\.0\.1|localhost)[:/]/.test(url);
+const isLocal = isLocalDatabaseUrl(url);
 if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
   const shown = url.replace(/:\/\/[^@]*@/, "://***@");
   console.error(
@@ -72,23 +64,8 @@ if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
 }
 
 /**
- * SSL, which `pg` does NOT turn on by default.
- *
- * The remote project has "Enforce SSL on incoming connections" ON (Greg's call,
- * 2026-08-25), so a plain connection is refused there. Local Postgres is a
- * container on 127.0.0.1 with no certificate at all, so requiring SSL there
- * fails the other way. Hence: keyed off the same `isLocal` test as above, not a
- * flag somebody has to remember.
- *
- * Two levels, and the difference matters:
- *
- * - With a CA certificate (`PGSSLROOTCERT`, the path to Supabase's downloadable
- *   cert), the server is **verified** — the connection is encrypted *and* we
- *   know who we are talking to.
- * - Without one, `rejectUnauthorized: false` still **encrypts**, but accepts
- *   whatever certificate it is handed. That defeats man-in-the-middle
- *   protection while looking exactly like a secure connection, which is why it
- *   warns rather than doing it quietly.
+ * SSL, decided in src/db/ssl.ts so that the migrator and the running app cannot
+ * disagree about whether the server gets verified.
  *
  * **Verified against the real host, 2026-08-25.** A run at
  * `db.alschkahzfagtppxspfq.supabase.co:5432` with a deliberately wrong password
@@ -96,32 +73,18 @@ if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
  * TLS handshake completes, so the certificate really does verify Supabase's
  * server. That is the useful shape for this kind of check: an error from the
  * layer *above* the one you are testing is proof the layer under it worked.
+ *
+ * A CLI warns and carries on; a server should be louder. That choice is the
+ * caller's, which is why `sslDecisionFor` returns a decision rather than
+ * applying one.
  */
-function sslConfig(): false | { rejectUnauthorized: boolean; ca?: string } {
-  if (isLocal) return false;
-
-  // PGSSLROOTCERT wins if set; otherwise the committed certificate is used
-  // automatically, so a verified connection is what you get by default rather
-  // than something to remember. Supabase's CA is public — the same file for
-  // every customer — so committing it is safe and makes this work on a fresh
-  // clone with no setup step.
-  const caPath = process.env.PGSSLROOTCERT ?? DEFAULT_CA;
-  if (existsSync(caPath)) return { rejectUnauthorized: true, ca: readFileSync(caPath, "utf8") };
-  if (process.env.PGSSLROOTCERT) {
-    console.error(`PGSSLROOTCERT is set but there is no file at ${caPath}`);
-    process.exit(1);
-  }
-  console.warn(
-    "\u26a0 Connecting over SSL without a CA certificate: encrypted, but the " +
-      "server is not verified.\n  Download the certificate from the Supabase " +
-      "dashboard (Settings -> Database -> SSL Configuration)\n  and set " +
-      "PGSSLROOTCERT to its path.",
-  );
-  return { rejectUnauthorized: false };
+const ssl = sslDecisionFor(url);
+if (ssl.mode === "encrypted-unverified") {
+  console.warn(`\u26a0 ${ssl.why}`);
 }
 
 /** One connection, used once. `max: 1` because a migrator has no concurrency. */
-const pool = new Pool({ connectionString: url, max: 1, ssl: sslConfig() });
+const pool = new Pool({ connectionString: url, max: 1, ssl: ssl.ssl });
 
 try {
   const db = drizzle(pool);

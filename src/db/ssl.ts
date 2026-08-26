@@ -1,0 +1,130 @@
+/**
+ * Whether a Postgres connection uses TLS, and whether it *verifies* the server.
+ *
+ * This began as a function inside scripts/db-migrate.ts. It moved here the
+ * moment the runtime needed to connect too, for the reason src/source-hash.ts
+ * gives about `hashBlocks`: two callers computing "the same" answer two ways
+ * can only ever disagree, and the disagreement here would be that migrations
+ * verify the server and the app does not — which nothing would report.
+ *
+ * The decision is returned as a value rather than applied, so the caller
+ * chooses how to complain. A CLI can print a warning and carry on; a server
+ * ought to be louder. Making that a `SslDecision` also makes it testable
+ * without a database — tests/db-ssl.test.ts.
+ *
+ * See docs/project/database.md § Connecting to the remote.
+ */
+
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+/**
+ * Supabase's CA certificate, downloaded from the dashboard
+ * (Settings → Database → SSL Configuration) and committed. Deliberately NOT
+ * under `supabase/`, which `supabase init --force` rewrites — see
+ * docs/project/supabase-local.md. certs/README.md says why committing a
+ * certificate is right here.
+ */
+export const DEFAULT_CA_PATH = path.resolve(import.meta.dirname, "../../certs/supabase-ca.crt");
+
+/** What `pg` wants in its `ssl` option, in the three shapes we ever produce. */
+export type SslDecision =
+  | {
+      /** Local container: no certificate exists, so requiring TLS fails. */
+      readonly mode: "disabled";
+      readonly ssl: false;
+      readonly why: string;
+    }
+  | {
+      /** Encrypted *and* we know who we are talking to. The goal. */
+      readonly mode: "verified";
+      readonly ssl: { readonly rejectUnauthorized: true; readonly ca: string };
+      readonly why: string;
+    }
+  | {
+      /**
+       * Encrypted, but any certificate is accepted. Defeats machine-in-the-
+       * middle protection **while looking exactly like a secure connection**,
+       * which is why this is a distinct mode rather than a flag — a caller has
+       * to handle the case by name to end up here.
+       */
+      readonly mode: "encrypted-unverified";
+      readonly ssl: { readonly rejectUnauthorized: false };
+      readonly why: string;
+    };
+
+/**
+ * Is this URL pointing at the Docker stack on this laptop?
+ *
+ * Used for two separate decisions — whether to use TLS, and whether a
+ * destructive command is allowed to run — and they are keyed off the same test
+ * on purpose, so "local" cannot mean one thing to the migrator and another to
+ * the guard in front of it.
+ *
+ * Deliberately strict: only the two loopback spellings count. A hostname that
+ * resolves to a loopback address is not local for this purpose, because the
+ * question being asked is "is this the throwaway container", not "where do the
+ * packets go".
+ */
+export function isLocalDatabaseUrl(url: string): boolean {
+  return /@(127\.0\.0\.1|localhost)[:/]/.test(url);
+}
+
+/**
+ * Injection points, and they exist for one reason: the **unverified** branch is
+ * the dangerous one, and it can only be reached when the committed certificate
+ * is absent. A test cannot delete a committed file, so without these the one
+ * branch worth guarding is the one branch nothing covers.
+ *
+ * Production passes neither.
+ */
+export interface SslOptions {
+  /** Stands in for `PGSSLROOTCERT`. */
+  readonly configuredCaPath?: string;
+  /** Stands in for the committed `certs/supabase-ca.crt`. */
+  readonly defaultCaPath?: string;
+}
+
+/**
+ * `pg` does **not** use TLS by default, and the remote project has "Enforce SSL
+ * on incoming connections" turned on — so a plain connection there is refused
+ * with an error that reads like a credentials problem. Hence this is keyed off
+ * `isLocalDatabaseUrl` rather than off a flag someone has to remember.
+ *
+ * Throws when `PGSSLROOTCERT` names a file that is not there: an explicitly
+ * configured certificate that silently degrades to unverified is the worst of
+ * both worlds — you asked for verification and got a warning you will not read.
+ */
+export function sslDecisionFor(url: string, options: SslOptions = {}): SslDecision {
+  if (isLocalDatabaseUrl(url)) {
+    return {
+      mode: "disabled",
+      ssl: false,
+      why: "local Postgres is a container with no certificate",
+    };
+  }
+
+  const configured = options.configuredCaPath ?? process.env.PGSSLROOTCERT;
+  const caPath = configured ?? options.defaultCaPath ?? DEFAULT_CA_PATH;
+
+  if (existsSync(caPath)) {
+    return {
+      mode: "verified",
+      ssl: { rejectUnauthorized: true, ca: readFileSync(caPath, "utf8") },
+      why: `verified against ${caPath}`,
+    };
+  }
+
+  if (configured) {
+    throw new Error(`PGSSLROOTCERT is set but there is no file at ${caPath}`);
+  }
+
+  return {
+    mode: "encrypted-unverified",
+    ssl: { rejectUnauthorized: false },
+    why:
+      `no CA certificate at ${DEFAULT_CA_PATH} — the connection is encrypted ` +
+      "but the server is not verified. Download it from the Supabase dashboard " +
+      "(Settings → Database → SSL Configuration).",
+  };
+}

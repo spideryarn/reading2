@@ -56,7 +56,17 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { ID_PATTERN } from "../ids.js";
-import type { Arc, Citation, Glossary, JobStep, Tree, TweetThread } from "../types.js";
+import type { LabelsFile } from "../labels.js";
+import type {
+  Arc,
+  Citation,
+  Glossary,
+  JobStep,
+  SearchHit,
+  Summaries,
+  Tree,
+  TweetThread,
+} from "../types.js";
 
 export const spideryarn = pgSchema("spideryarn");
 
@@ -198,6 +208,30 @@ export const articleRevisions = spideryarn.table(
      * day entry ids become a promise rather than an implementation detail.
      */
     glossary: jsonb("glossary").$type<Glossary>(),
+
+    /**
+     * The article at whichever length you ask for — `Summaries`, stage 5e.
+     *
+     * The WHOLE artefact, like the three above. `guidance` and `missing` are
+     * exactly the provenance that must travel with it: a summary written to a
+     * reader's steer has to *say so* or the reader cannot weigh it, and
+     * `missing` is what stops a half-empty artefact reading as a complete one.
+     */
+    summary: jsonb("summary").$type<Summaries>(),
+
+    /**
+     * The tree's navigation labels — `LabelsFile`, stage 4's second model pass.
+     *
+     * **Not a `nav_label` column on `revision_blocks`, even though the key
+     * would fit.** That would give stage 4b write access to stage 3's rows, and
+     * a re-run of labels would mutate rows that are otherwise immutable once
+     * the revision is published. `labels.json` is one of the `toc` step's
+     * OUTPUTS (src/pipeline.ts), so its currency rides with the `toc` row in
+     * `revisionStepRuns` and `labels` is deliberately NOT a step name of its
+     * own. Checked against the code, not assumed — an earlier draft of this
+     * work had it as a step and would have added a CHECK value for it.
+     */
+    labels: jsonb("labels").$type<LabelsFile>(),
 
     /**
      * The library's scalars, computed once here instead of by a directory walk
@@ -381,6 +415,18 @@ export const jobs = spideryarn.table(
     title: text("title"),
     /** Ordered, and small. The UI renders these directly. */
     steps: jsonb("steps").$type<JobStep[]>().notNull(),
+    /**
+     * A free-text steer for the steps that take one. Only `summary` does today.
+     *
+     * **This column was missing, and its absence was a real defect** — the type
+     * has carried `guidance` all along and its own doc comment says why: a job
+     * resumed from disk with the steer dropped runs the plain prompt and
+     * reports success, with a green tick over a summary the reader did not ask
+     * for. `sameWork` in src/jobs.ts also uses it to tell two jobs apart, so
+     * without it a differently-steered request would be answered with the
+     * first one's job. Found in review, 2026-08-26.
+     */
+    guidance: text("guidance"),
     status: text("status").notNull(),
     error: text("error"),
     /** Stop was pressed and the abort has not landed yet. */
@@ -473,13 +519,28 @@ export const revisionStepRuns = spideryarn.table(
     promptVersion: text("prompt_version"),
     model: text("model"),
     status: text("status").notNull(),
+    /**
+     * When the run began. Without it a crashed `running` row has no timestamp
+     * to judge it by, so "still going" and "died an hour ago" look identical.
+     */
+    startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.revisionId, t.stepName] }),
     check(
       "revision_step_runs_step",
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','arc','tweets','glossary')`,
+      /**
+       * Every name in `StepName` (src/types.ts), and `'summary'` was missing —
+       * it is a step, it writes `summary.json`, and a step run recorded for it
+       * would have been rejected by this CHECK.
+       *
+       * `labels` is deliberately NOT here. `labels.json` is one of the `toc`
+       * step's OUTPUTS rather than a step of its own, so its currency rides
+       * with the `toc` row. Verified against src/pipeline.ts rather than
+       * inferred from the file existing.
+       */
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','arc','tweets','glossary','summary')`,
     ),
     check(
       "revision_step_runs_status",
@@ -518,3 +579,197 @@ export const aiCalls = spideryarn.table("ai_calls", {
   rawResponse: jsonb("raw_response"),
   createdAt: createdAt(),
 });
+
+/* ------------------------------------------------------------------ chat -- */
+
+/**
+ * One conversation about one article. Reader state, so it hangs off the
+ * ARTICLE and not off a revision — a re-extraction must not delete a
+ * conversation, for the same reason it must not delete a comment.
+ *
+ * Keyed `(article_id, id)` like comments, because thread ids are minted per
+ * article by the same `mintId()` and are not promised to be globally unique.
+ */
+export const chatThreads = spideryarn.table(
+  "chat_threads",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration. */
+    ownerId: uuid("owner_id").notNull(),
+    /** Derived from the reader's first message rather than demanded up front. */
+    title: text("title").notNull(),
+    createdAt: createdAt(),
+    /** Bumped on every stored message, so the list can show recent first. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("chat_threads_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+  ],
+);
+
+/**
+ * One turn of a conversation. **A row, not an element of a JSONB array**, and
+ * this is the clearest "a feature owns a row" in the codebase: a message is
+ * individually created, retried, edited and stopped.
+ *
+ * `ordinal` IS conversation order, written from the array index — for exactly
+ * the reason `revisionBlocks.ordinal` exists. `createdAt` cannot do the job:
+ * a user turn and the pending assistant turn that answers it are written
+ * together and collide within the millisecond. It is also what makes "editing a
+ * question discards every turn after it" a `delete where ordinal > n` rather
+ * than a scan.
+ *
+ * **No foreign key from the block ids this message cites**, and that is
+ * deliberate. Those ids live inside prose, and they are the *model's claims*
+ * about blocks rather than an anchor our code wrote. `src/web/ChatPanel.tsx`
+ * already renders a citation the article does not have as plain text rather
+ * than a chip. An FK would turn a wrong id into a rejected write that loses the
+ * whole answer — the failure shape the summaries' partial salvage exists to
+ * prevent. Contrast `comments`, whose `blockId` IS the anchor and IS keyed.
+ */
+export const chatMessages = spideryarn.table(
+  "chat_messages",
+  {
+    articleId: uuid("article_id").notNull(),
+    threadId: text("thread_id").notNull(),
+    id: text("id").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    role: text("role").notNull(),
+    text: text("text").notNull(),
+    /** Written before the model is called, so a crash leaves a visible unfinished turn. */
+    status: text("status").notNull(),
+    citations: jsonb("citations").$type<Citation[]>(),
+    /** How many web searches it ran. 0 means it answered from the article. */
+    searches: integer("searches"),
+    model: text("model"),
+    error: text("error"),
+    /**
+     * The reader pressed stop, so this answer is short on purpose.
+     *
+     * A flag rather than a fourth status, and the distinction is the whole
+     * point: a stopped answer is `done`. Nothing went wrong, so it must not
+     * render as a failure, be swept, or be retried — but it does need to say
+     * so, because an answer ending mid-sentence reads exactly like a bug.
+     */
+    stopped: boolean("stopped").notNull().default(false),
+    /** When the reader last rewrote this. User turns only; the old text is not kept. */
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.threadId, t.id] }),
+    unique("chat_messages_thread_ordinal").on(t.articleId, t.threadId, t.ordinal),
+    check("chat_messages_role", sql`${t.role} in ('user','assistant')`),
+    check("chat_messages_status", sql`${t.status} in ('pending','done','error')`),
+    check("chat_messages_ordinal", sql`${t.ordinal} >= 0`),
+    foreignKey({
+      name: "chat_messages_thread_fk",
+      columns: [t.articleId, t.threadId],
+      foreignColumns: [chatThreads.articleId, chatThreads.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/* ---------------------------------------------------------------- search -- */
+
+/**
+ * One saved meaning-search: what the reader asked for, and what came back.
+ *
+ * Reader state, article-scoped, `(article_id, id)` — the same shape as comments
+ * and chat threads for the same reasons.
+ *
+ * **`hits` stays JSONB.** A run's hits are one model call's wholesale output:
+ * generated together, replaced together, never edited one at a time. Splitting
+ * them into rows would buy only a foreign key onto `block_identities`, and that
+ * is a key we specifically do not want — see the note on `chatMessages`. A
+ * `SearchHit.blockId` is the model's claim about a block, and `src/quote-match.ts`
+ * already re-finds the quote rather than trusting it. Rejecting the write
+ * because one hit of ten named a block that is not there would be much worse
+ * than rendering nine.
+ *
+ * Only the *meaning* half of search has a stored shape at all. Matching on the
+ * letters you typed happens in the browser and is fully described by `?find=`
+ * in the URL; a stored one would be a cache of an instant computation.
+ */
+export const searchRuns = spideryarn.table(
+  "search_runs",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration. */
+    ownerId: uuid("owner_id").notNull(),
+    /** What the reader typed, in their own words. **Never logged** — it is prose. */
+    criterion: text("criterion").notNull(),
+    /** Written before the model is called, so a crash leaves a visible unfinished run. */
+    status: text("status").notNull(),
+    hits: jsonb("hits").$type<SearchHit[]>().notNull().default([]),
+    model: text("model"),
+    error: text("error"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.id] }),
+    check("search_runs_status", sql`${t.status} in ('pending','done','error')`),
+    check("search_runs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+  ],
+);
+
+/* ------------------------------------------------------ glossary lookups -- */
+
+/**
+ * "Check this term on the web" — the model's answer about one glossary entry.
+ *
+ * **A table, and article-scoped rather than revision-scoped.** Both halves
+ * matter. Article-scoped because a lookup is reader state that must survive the
+ * glossary being regenerated, which is the whole subject of
+ * src/glossary-lookups.ts. A table rather than one JSONB map because the map
+ * has a read-modify-write race — two lookups finishing close together, or one
+ * landing while a glossary job is writing — and a row upsert deletes that race
+ * for free rather than carrying the file's bug into Postgres.
+ *
+ * **No foreign key on `entryId`**, because there is no entries table to point
+ * at and there should not be: the glossary stays a document. A lookup whose
+ * entry was deduped away on a regeneration is simply not attached at read time,
+ * exactly as today.
+ *
+ * What this table does change is the status of an entry id. The comment on
+ * `articleRevisions.glossary` used to call them an implementation detail; they
+ * are a promise now, because this row and the `?term=` URL both address one.
+ */
+export const glossaryLookups = spideryarn.table(
+  "glossary_lookups",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /** A `GlossaryEntry.id`, minted by the same `mintId()` as everything else. */
+    entryId: text("entry_id").notNull(),
+    /** `auth.users(id)`. FK in the custom migration. */
+    ownerId: uuid("owner_id").notNull(),
+    answer: text("answer").notNull(),
+    /** Every URL passed `safeUrl` before it was stored. */
+    citations: jsonb("citations").$type<Citation[]>().notNull().default([]),
+    /**
+     * How many web searches the model chose to run — **`0` is a real answer**,
+     * not a missing one, so this is `not null` rather than nullable.
+     */
+    searches: integer("searches").notNull(),
+    model: text("model").notNull(),
+    /** ISO 8601 on the artefact: an answer is about the web on the day it was asked. */
+    at: timestamp("at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.entryId] }),
+    check(
+      "glossary_lookups_entry_id_format",
+      sql`${t.entryId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`,
+    ),
+    check("glossary_lookups_searches", sql`${t.searches} >= 0`),
+  ],
+);

@@ -15,6 +15,20 @@
       "when": 1787672856050,
       "tag": "0001_auth_fks_and_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787702006732,
+      "tag": "0002_reader_state_and_missing_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787702007732,
+      "tag": "0003_reader_state_owner_fks",
+      "breakpoints": true
     }
   ]
 }
