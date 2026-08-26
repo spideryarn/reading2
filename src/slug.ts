@@ -57,19 +57,42 @@
  * than by forcing one answer onto both. What was actually wrong was five copies
  * of the read rule, and that is what this file fixed.
  *
- * `data/_jobs/` never reaches either: it is a hardcoded `JOBS_DIR` constant in
- * src/jobs.ts. There is a test pinning that.
+ * ## The one name that is refused outright
+ *
+ * `_jobs` is reserved, because `data/_jobs/` is the job queue.
+ *
+ * An earlier version of this comment said the queue "never reaches either"
+ * rule, on the grounds that `JOBS_DIR` is a hardcoded constant in src/jobs.ts.
+ * That is true and it is the wrong direction. Nothing was going to arrive
+ * *from* the queue; the risk was arriving *at* it — `loadComments("_jobs")`
+ * builds `data/_jobs/comments.json`, and `loadFromDisk` in jobs.ts reads every
+ * `.json` in that directory as a queued job. So reader state could be written
+ * into the queue's own directory and then parsed as a job.
+ *
+ * Not reachable today: the HTTP routes screen slugs through the stricter
+ * `slugPart` in routes.ts before this ever sees them, and that refuses a
+ * leading underscore. So this is a false invariant rather than a live hole —
+ * which is exactly the kind worth closing, because the next caller to reach a
+ * reader-state module by some other path inherits the assumption without the
+ * screening. Found by review, 2026-08-26.
  */
 
 /** The rule, in one place. Private, so there is nothing to import and diverge. */
 const SLUG = /^[\w.-]+$/;
 
 /**
+ * Names that are a directory under `data/` belonging to something other than an
+ * article. `.` and `..` are handled below rather than here, because they are
+ * about climbing out rather than about landing somewhere already taken.
+ */
+const RESERVED = new Set(["_jobs"]);
+
+/**
  * A slug is a path segment. Anything that isn't one is refused outright rather
  * than sanitised, because sanitising invites arguing about whether it worked.
  */
 export function assertSlug(slug: string): void {
-  if (!SLUG.test(slug) || slug === "." || slug === "..") {
+  if (!SLUG.test(slug) || slug === "." || slug === ".." || RESERVED.has(slug)) {
     throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
   }
 }

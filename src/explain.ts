@@ -69,7 +69,7 @@ import {
   stoppedByReader,
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
-import { ENDED_UNFINISHED, saidNothing } from "./messages.js";
+import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
 import { isWebUrl } from "./urls.js";
 import {
   type OpenRouterMessage,
@@ -424,14 +424,12 @@ export async function* explainStream({
   loadEnvLocal();
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
-    // Two audiences, two sentences. The thrown message tells the reader (and
-    // whoever is setting the project up) what to do; this line tells whoever is
-    // running the server that explanations are failing for a configuration
-    // reason rather than a model one, which is a different thing to go and fix.
+    /* Two audiences, two sentences, and the split runs the way logging.md says:
+       the name of the variable and the file it goes in are useful only to
+       whoever runs the server, so they go in the log. The reader gets a sentence
+       that does not ask them to edit a repository they have not got. */
     line.error("OPENROUTER_API_KEY is not set — every explain request will fail");
-    throw new Error(
-      "OPENROUTER_API_KEY is not set. Put it in .env.local — see docs/project/setup-dev.md.",
-    );
+    throw new Error(NOT_CONFIGURED.message);
   }
 
   const messages = buildExplainMessages(meta, blocks, blockId, quote, deep);

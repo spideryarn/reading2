@@ -68,7 +68,7 @@ import {
   ExternalLink,
   Globe,
   Info,
-  Loader2,
+  LoaderCircle,
   RotateCcw,
   Search,
   TriangleAlert,
@@ -1091,7 +1091,7 @@ function Looked({
           title="One model call, with a web search if it decides it needs one. Kept afterwards."
           onClick={() => void look(entry.id)}
         >
-          {looking ? <Loader2 size={12} className="gloss-spin" /> : <Globe size={12} />}
+          {looking ? <LoaderCircle size={12} className="cmt-spinner" /> : <Globe size={12} />}
           {looking ? "Checking…" : "Check the web"}
         </button>
         {/* The wait needs saying, not just spinning through. This call sends the
@@ -1099,6 +1099,12 @@ function Looked({
             better part of a minute — long enough that a bare spinner reads as
             stuck. The search panel already had this and this did not, which is
             the only reason they differed.
+
+            "Up to a minute", not "a few seconds", which is what this said for
+            about an hour. The comment directly above already said "the better
+            part of a minute" — so the code and the copy disagreed in the same
+            screenful, and the copy was the optimistic one. Under-promising a
+            wait is the version that makes a reader think it has hung.
 
             Both sentences earn their place: the first says why it is slow, so
             the wait is expected rather than suspicious; the second says the
@@ -1112,8 +1118,8 @@ function Looked({
             was being rebuilt on the day this was written. */}
         {looking && (
           <p className="gloss-look-wait">
-            The whole piece goes to the model, and it may search the web as well, so this takes a
-            few seconds. You can carry on reading — the answer is saved against this term either
+            The whole piece goes to the model, and it may search the web as well, so this can take
+            up to a minute. You can carry on reading — the answer is saved against this term either
             way.
           </p>
         )}

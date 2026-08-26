@@ -216,8 +216,10 @@ bug:
 - [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) — the client's reader loop.
 
 `explain()` did not become a second implementation: `explainStream` is the only one, and `explain`
-drains it. The glossary's per-term lookup uses the waiting version, because its panel has nowhere to
-put a half-written answer.
+drains it. The glossary's per-term lookup still uses the waiting version — not because streaming it
+is impossible, but because the answer has to be persisted through a store contract that was being
+rebuilt for Postgres when the question came up. What it would take is written down in
+[streaming-the-slow-two.md](../plans/streaming-the-slow-two.md).
 
 > [!WARNING]
 > **A stream can end by simply stopping, and that looks exactly like finishing.** `[DONE]` is the

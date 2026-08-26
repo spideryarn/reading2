@@ -20,7 +20,7 @@
  * See docs/project/ingest-queue.md.
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Circle, Loader2, Plus, RotateCw, X } from "lucide-react";
+import { AlertCircle, Check, ChevronRight, Circle, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
 import type { Job, JobStep } from "../types.js";
@@ -265,7 +265,7 @@ function StepIcon({ status }: { status: JobStep["status"] }) {
   // docs/project/icons.md on why one stroke weight is a rule rather than taste.
   switch (status) {
     case "running":
-      return <Loader2 size={13} className="tw:animate-spin tw:text-highlight" />;
+      return <LoaderCircle size={13} className="cmt-spinner" />;
     case "done":
       return <Check size={13} className="tw:text-highlight" />;
     case "skipped":

@@ -270,8 +270,19 @@ describe("failures are loud", () => {
   });
 
   it("refuses a 200 with no text rather than storing a blank answer", async () => {
+    /* `finish_reason: "length"` has its own code. It used to share `[ai-empty]`
+       with every other empty answer, which meant the one case the reader can do
+       something about — ask about less — read the same as the one they cannot.
+       See src/messages.ts § saidNothing. */
     fetchMock.mockResolvedValue(
       sse(`${frame({ choices: [{ finish_reason: "length", delta: { content: "" } }] })}data: [DONE]\n\n`),
+    );
+    await expect(ask()).rejects.toThrow(/\[ai-no-room\]/);
+  });
+
+  it("says plainly when an empty answer has no explanation at all", async () => {
+    fetchMock.mockResolvedValue(
+      sse(`${frame({ choices: [{ finish_reason: "stop", delta: { content: "" } }] })}data: [DONE]\n\n`),
     );
     await expect(ask()).rejects.toThrow(/\[ai-empty\]/);
   });

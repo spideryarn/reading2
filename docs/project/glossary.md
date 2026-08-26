@@ -390,16 +390,6 @@ POST /api/glossary/:slug/:id/lookup   →  { entry }   (~10s, one model call)
 **Its answers live in their own file**, `data/<slug>/glossary-lookups.json`, keyed by entry id
 ([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. A lookup
 is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and
-sharing the file with the generating stage is unfixable rather than merely racy, because that stage
-holds its read across a minute-long model call. Worse, `glossary.json` is written with a bare
-`writeFile`, and a truncated one reads as `null`, which the panel reports as *"Nobody has found the
-terms for this one yet"* — the whole glossary gone, silently. The sidecar is temp-and-rename and
-serialised, both copied from [`src/comments.ts`](../../src/comments.ts). `loadGlossary` attaches them
-at read time, so the panel still just sees `entry.lookup`.
-
-**Its answers live in their own file**, `data/<slug>/glossary-lookups.json`, keyed by entry id
-([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. A lookup
-is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and
 sharing a file with the generating stage is unfixable rather than merely racy, because that stage
 holds its read across a minute-long model call. Worse, `glossary.json` is written with a bare
 `writeFile`, and a truncated one reads as `null` — which the panel reports as *"Nobody has found the

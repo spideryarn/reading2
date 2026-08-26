@@ -46,16 +46,23 @@ describe("assertSlug", () => {
   });
 
   it("never lets the jobs directory be reached through a slug", () => {
-    /* data/_jobs/ is the ingest queue's directory. The guarantee is not that a
-       slug guard refuses the name — under the read rule it does not, and it does
-       not need to — but that the path is never *built* from one. src/jobs.ts
-       joins a hardcoded JOBS_DIR. Pinned by reading the source, because the
-       failure mode if it changed is the queue's files becoming addressable as
-       an article's reader state. */
+    /* data/_jobs/ is the ingest queue's directory, and this has to hold in both
+       directions. The version of this test written on 2026-08-26 only checked
+       one of them — that src/jobs.ts builds its own path from a hardcoded
+       JOBS_DIR and never consults a slug — and called the invariant proved.
+
+       It was checking that nothing arrives *from* the queue. The direction that
+       mattered was arriving *at* it: `loadComments("_jobs")` joins
+       data/<slug>/comments.json, and jobs.ts reads every .json in its directory
+       as a queued job, so reader state could be written into the queue and then
+       parsed as work. `assertSlug` reserves the name now. Caught by review. */
+    expect(() => assertSlug("_jobs")).toThrow(/Not a valid slug/);
+    // And it could never be minted, which is the half that was always a rule.
+    expect(isSlug("_jobs")).toBe(false);
+
+    // The other direction, still worth pinning: the queue builds its own path.
     const jobs = readFileSync(new URL("../src/jobs.ts", import.meta.url), "utf8");
     expect(jobs).toMatch(/const JOBS_DIR = path\.join\(ROOT, "data", "_jobs"\)/);
     expect(jobs).not.toMatch(/assertSlug/);
-    // And it could never be minted, which is the half that is a rule.
-    expect(isSlug("_jobs")).toBe(false);
   });
 });

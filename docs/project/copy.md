@@ -67,14 +67,19 @@ Every message ends with a short code in square brackets: `[ai-busy]`,
 
 It is **last** so a reader who does not want it can stop at the full stop, and
 **bracketed** so it reads as a reference rather than as part of the sentence. It
-exists so that a person reporting a problem can quote four characters instead of
-paraphrasing a sentence, and so that whoever is helping them can find the exact
-branch without guessing.
+exists so that a person reporting a problem can quote a handful of characters
+instead of paraphrasing a sentence, and so that whoever is helping them can find
+the exact branch without guessing.
 
 **Tests match on the code, not the prose.** That is the other reason it exists:
 copy should be freely rewritable without turning a test suite red, and a test
 that pins a sentence quietly makes the sentence permanent. If you are writing a
 test about a failure, match `/\[ai-stalled\]/`.
+
+**A code names a branch, not a status.** 500, 502 and 503 all answer to
+`[ai-upstream]`, because there is one thing to say about all three. What must
+never happen is two *different* sentences sharing a code, which
+[`tests/messages.test.ts`](../../tests/messages.test.ts) checks.
 
 Codes are stable once shipped. Reword the sentence as often as you like; changing
 the code orphans every support conversation that quoted it.

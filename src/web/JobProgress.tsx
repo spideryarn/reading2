@@ -30,8 +30,30 @@
  * The thread already used shadcn here, and
  * [web-client.md § Tailwind and shadcn](../../docs/project/web-client.md#tailwind-and-shadcn-components)
  * records shadcn as the house style for chrome. This is chrome.
+ *
+ * ## The running row wraps, and the detail gets its own line
+ *
+ * The two rows this replaced disagreed here, so unifying them had to pick one.
+ * The glossary kept its detail inline; the summary gave it a full-width second
+ * line in the mono face. **The summary was right**, and it is what this does:
+ * a step detail is arbitrary-length progress text ("batch 3 of 9", a model
+ * name) sitting in a band about twenty characters wide, so inline means it
+ * shoulders the label out or overflows.
+ *
+ * `flex-wrap` is load-bearing rather than defensive — both originals had it,
+ * and the first version of this component dropped it, which put the label, the
+ * detail and Stop on one unwrappable row.
+ *
+ * ## The spinner is the house one, and that is not a style preference
+ *
+ * `LoaderCircle` with `.cmt-spinner`, per
+ * [icons.md § the loading spinner](../../docs/project/icons.md#reduced-motion).
+ * Tailwind's `animate-spin` is **specifically rejected there** — it is 1s where
+ * this wants 0.7s, and it has no `prefers-reduced-motion` behaviour at all. The
+ * first version of this component used `animate-spin`, so consolidating three
+ * spinners that each honoured reduced motion produced one that ignored it.
  */
-import { Loader2, X } from "lucide-react";
+import { LoaderCircle, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { Job, StepName } from "../types.js";
@@ -64,12 +86,19 @@ export function JobProgress({
   if (job) {
     const current = job.steps.find((s) => s.name === step);
     return (
-      <div className="tw:flex tw:items-center tw:gap-2 tw:text-xs tw:text-foreground">
-        <Loader2 size={13} className="tw:animate-spin tw:text-highlight" />
+      <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:text-xs tw:text-foreground">
+        <LoaderCircle size={13} className="cmt-spinner" />
         <span>
           {job.status === "queued" ? "Waiting for the queue…" : (current?.label ?? runningLabel)}
         </span>
-        {current?.detail && <span className="tw:text-ink-faint">— {current.detail}</span>}
+        {/* `w-full` is what makes the wrap happen rather than merely allowing
+            it: a flex item at full width cannot share a line, so the detail
+            always lands below and Stop always follows it. */}
+        {current?.detail && (
+          <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
+            {current.detail}
+          </span>
+        )}
         <Button
           type="button"
           variant="ghost"
