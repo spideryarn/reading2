@@ -167,14 +167,39 @@ in the repo was written in ASCII.
 
 ## What is still open
 
-**The Retry button still appears under a permanent failure.** `TooLongForOnePass` cannot succeed on
-a second attempt — it is arithmetic, not weather — and the card offers Retry anyway, because a job
-step records its failure as a string and nothing downstream can tell a permanent one from a
-transient one. The misleading half is gone (the message no longer *tells* the reader to retry), but
-the button is still a lie in that one case. Fixing it properly means a `permanent` flag on the step,
-through [`src/types.ts`](../../src/types.ts) and [`src/jobs.ts`](../../src/jobs.ts) to
-[`AddArticle.tsx`](../../src/web/AddArticle.tsx) — small, but three files, two of them somebody
-else's stage.
+**~~The Retry button still appears under a permanent failure.~~ Fixed, 2026-08-26.** A job now
+carries `failureKind` beside the message it already copied off the failing step, and the card asks
+`jobWorthRetrying(job)` before drawing the button. `TooLongForOnePass` says `blocked`, so the button
+that started this is gone.
+
+Three things about the fix are worth keeping, because each went against the obvious version:
+
+- **Not the `permanent` flag this paragraph used to propose.** Wrong concept, not merely a coarse
+  one: configuration changes, providers change their policies, websites change what they serve.
+  Nothing here is permanent. The answerable question is *should this unchanged attempt be offered
+  again now?*, which is what `FailureKind` in [`src/messages.ts`](../../src/messages.ts) already
+  means — and three of its four members answer no. `TooLongForOnePass` is `blocked`, the kind that
+  means a request cannot pass a size or policy boundary. A fifth kind would have bought no new
+  reader action.
+- **A field, not a bracketed code.** The codes in `src/messages.ts` exist because a stored comment or
+  chat turn keeps `err.message` and has nowhere else to put anything. A job is a struct with room for
+  a field, so it does not inherit a workaround it does not need.
+- **Not just this one case.** Fixing `TooLongForOnePass` alone would have been the same bug with a
+  mechanism on top making it look handled. Four other failures cannot come out differently either,
+  and all four are permanent for one reason: `forceForRetry` forces from the first step that did not
+  finish, so **a retry never re-runs a step that succeeded** and therefore re-reads the identical
+  artefact. A missing source URL, a page Readability has already refused over cached bytes, a tree
+  that does not contain its own root, a PDF over the page cap. Model-output failures — malformed
+  JSON, the wrong number of arc sentences, an empty answer — keep the button, because the next call
+  is a fresh draw.
+
+The mechanism is [`src/job-failure.ts`](../../src/job-failure.ts); the design is written up in
+[ingest-queue.md § The failures Retry is not offered under](../project/ingest-queue.md#the-failures-retry-is-not-offered-under).
+One trap is worth naming here. A `failureKind` read off a thrown object is a value from outside the
+type system — a JSON round-trip, or an error built by a version of this code that knew a kind this
+one does not — and handing that straight to `canRetry` looks it up in a `Record`, misses, and
+returns `undefined`. Which is falsy. An unrecognised kind would have **hidden** the button, which is
+the wrong direction and would have looked exactly like the feature working.
 
 **~~Section-by-section generation is still not built~~ — built, 2026-08-26.** The batching lands in
 [`src/labels.ts`](../../src/labels.ts) and the plan is

@@ -29,6 +29,7 @@
  *
  * See docs/project/table-of-contents.md#the-budget.
  */
+import type { FailureKind } from "./messages.js";
 
 /**
  * The ceiling on a single streamed response.
@@ -93,6 +94,22 @@ export const THINKING_HEADROOM = 40_000;
  * fix.
  */
 export class TooLongForOnePass extends Error {
+  /**
+   * `blocked`, so the job card does not offer a Retry that cannot work.
+   *
+   * This is the failure docs/postmortems/toc-max-tokens.md was written about:
+   * the button was there, Greg pressed it, and it made the identical call.
+   * Nothing about the second attempt is different — the block count comes off a
+   * `blocks.json` that a completed step already wrote, and Retry never re-runs a
+   * step that finished — so the arithmetic lands in exactly the same place.
+   *
+   * `blocked` rather than a fifth kind of its own, and the reason is that
+   * `FailureKind` is a list of things a *reader* can do next: this is a request
+   * that cannot pass a size boundary, which is the same next step as a provider
+   * refusing an over-long prompt. See src/job-failure.ts.
+   */
+  readonly failureKind: FailureKind = "blocked";
+
   constructor(
     readonly stage: string,
     readonly answerTokens: number,

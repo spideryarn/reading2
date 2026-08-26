@@ -19,6 +19,7 @@ import PQueue from "p-queue";
 import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mintId } from "./ids.js";
+import { failureKindOf } from "./job-failure.js";
 import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { errorFields, log, since } from "./log.js";
 import {
@@ -33,6 +34,7 @@ import {
   type StepContext,
   urlForSlug,
 } from "./pipeline.js";
+import type { FailureKind } from "./messages.js";
 import type { Job, JobStep, StepName } from "./types.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
@@ -286,6 +288,23 @@ function ready(): Promise<void> {
 
 /* ------------------------------------------------------------------ running -- */
 
+/**
+ * Say what kind of failure stopped this job, or say nothing.
+ *
+ * What kind of failure it was is what decides whether the card offers Retry —
+ * `jobWorthRetrying` in src/job-failure.ts, and
+ * docs/postmortems/toc-max-tokens.md for the failure that started it.
+ *
+ * **Deleted rather than left alone when there is no kind**, so the field always
+ * describes *this* failure. A retry is a new job today, so nothing can carry a
+ * kind over — but nothing in the shape of a `Job` promises that, and a stale
+ * kind would hide a button rather than merely be untidy.
+ */
+function recordFailureKind(job: Job, kind: FailureKind | undefined): void {
+  if (kind) job.failureKind = kind;
+  else delete job.failureKind;
+}
+
 function newStep(name: StepName, force: boolean): JobStep {
   return { name, label: STEPS[name].label, status: "pending", ...(force ? { force: true } : {}) };
 }
@@ -445,6 +464,9 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
       step.finishedAt = new Date().toISOString();
       job.status = controller.signal.aborted ? "cancelled" : "error";
       job.error = message;
+      /* Not on a cancel: the reader stopped it, and a stopped job is always
+         worth starting again. */
+      recordFailureKind(job, controller.signal.aborted ? undefined : failureKindOf(err));
       job.finishedAt = new Date().toISOString();
       delete job.cancelling;
       await persist(job);

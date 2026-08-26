@@ -25,6 +25,7 @@ import { runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchDocument, readRaw, writeRaw } from "./fetch.js";
 import { generateGlossary, PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "./glossary.js";
+import { stageFailure } from "./job-failure.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { generateSummaries, summariesAreCurrent } from "./summarise.js";
 import { log } from "./log.js";
@@ -461,15 +462,47 @@ export function contextPaths(slug: string): { dir: string; htmlFile: string } {
   return fsLocations(slug);
 }
 
-/** The URL a step needs, or a clear error rather than a fetch of `undefined`. */
+/**
+ * The URL a step needs, or a clear error rather than a fetch of `undefined`.
+ *
+ * `ours`, because a retry cannot find a URL that is not there. `retryJob`
+ * (src/jobs.ts) copies `old.url` when there is one and `enqueue` otherwise
+ * reads `meta.json` — the two places this already looked — so the second
+ * attempt asks the same two questions and gets the same two answers.
+ *
+ * `ours` rather than `blocked`: nothing refused anything, this installation
+ * simply has an article with no address recorded for it.
+ */
 function requireUrl(ctx: StepContext): string {
   if (!ctx.url) {
-    throw new Error(
+    throw stageFailure(
+      "ours",
       `No source URL for "${ctx.slug}". Its meta.json has none, and none was given.`,
     );
   }
   return ctx.url;
 }
+
+/**
+ * What stage 2 says when Readability finds no article in the page.
+ *
+ * **Matched on its sentence, which is the one place here that does that, and it
+ * is worth saying why.** Every other permanent failure in the pipeline is
+ * tagged where it is thrown (`stageFailure`, src/job-failure.ts). This one is
+ * thrown in src/extract.ts, which belongs to stage 2, so the tag is applied at
+ * the seam instead — and a sentence is all the seam has to go on.
+ *
+ * A match on prose is exactly the kind of thing that rots quietly, so it does
+ * not rest on care: tests/job-failure.test.ts runs the real extractor over a
+ * page Readability refuses and asserts the classification, which goes red the
+ * day that sentence changes.
+ *
+ * The claim itself is about a **retry** rather than a re-run, and it holds
+ * because Retry never re-runs a step that finished: `forceForRetry` forces from
+ * the first unfinished step, which is this one, so `fetch` stays done and stage
+ * 2 re-reads byte-for-byte the page it has already refused.
+ */
+const READABILITY_REFUSED = /^Readability could not parse this page\./;
 
 /**
  * The pipeline.
@@ -548,8 +581,18 @@ export const STEPS: Record<StepName, PipelineStep> = {
          one would fail loudly on the read below rather than quietly. */
       if (manifest?.kind !== "pdf") {
         const html = await readFile(path.join(ctx.dir, manifest?.file ?? "raw.html"), "utf8");
-        const result = await runExtract({ html, url, outFile: ctx.htmlFile, dataDir: ctx.dir });
-        return result.meta.title;
+        try {
+          const result = await runExtract({ html, url, outFile: ctx.htmlFile, dataDir: ctx.dir });
+          return result.meta.title;
+        } catch (err) {
+          /* Only the one sentence. Everything else this can throw — a full
+             disk, a directory that vanished — is ordinary bad luck, and hiding
+             a Retry that would have worked is the costlier way to be wrong. */
+          if (READABILITY_REFUSED.test((err as Error).message)) {
+            throw stageFailure("blocked", (err as Error).message);
+          }
+          throw err;
+        }
       }
 
       const bytes = new Uint8Array(await readFile(path.join(ctx.dir, manifest.file)));

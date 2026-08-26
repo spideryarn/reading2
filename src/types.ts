@@ -10,7 +10,13 @@
  * the thirty-five files reading it agree about its shape.
  *
  * `TreeNode` must stay in sync with docs/project/granularity-zoom.md#node-shape.
+ *
+ * The one import, and it is a type: `FailureKind` belongs to src/messages.ts,
+ * where the four kinds are defined and where `canRetry` decides what each one
+ * means. Writing the union out a second time here would let the two drift, and
+ * the drift would show up as a Retry button under a failure that cannot succeed.
  */
+import type { FailureKind } from "./messages.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -868,6 +874,29 @@ export interface Job {
   finishedAt?: string;
   /** The failure that stopped the job, repeated from the step that raised it. */
   error?: string;
+  /**
+   * What kind of failure that was — set only when the failure said.
+   *
+   * **This is what decides whether the card offers Retry.** Without it, every
+   * failure got the button, including the ones that are arithmetic: the article
+   * that needs more output tokens than one response holds got a Retry that made
+   * the identical call and failed identically (docs/postmortems/toc-max-tokens.md).
+   *
+   * A field on the job rather than a code parsed back out of the sentence,
+   * which is what the stored messages in src/messages.ts have to do because
+   * `err.message` is all they keep. A job is a struct with room for a field, so
+   * it does not inherit that workaround. `jobWorthRetrying` in
+   * src/job-failure.ts is the one place that reads it.
+   *
+   * **Absent means nobody said, and that offers the retry.** Every job written
+   * before this field existed is in that state, and so is one the restart sweep
+   * marked, which really is worth another go.
+   *
+   * On the job and not on `JobStep`: Retry is a job-level action, and the
+   * runner can fail with no step having failed at all. Put it on the step too
+   * the day something renders it there.
+   */
+  failureKind?: FailureKind;
   /** Stop has been pressed and the abort has not landed yet. */
   cancelling?: boolean;
   /**
@@ -1039,4 +1068,20 @@ export interface SearchRun {
   hits: SearchHit[];
   model?: string;
   error?: string;
+  /**
+   * Fingerprint of the blocks this run was answered against — `hashBlocks`,
+   * src/source-hash.ts. The same field, the same function and the same word for
+   * it as `TweetThread`, `Glossary` and `Summaries` carry.
+   *
+   * It is what lets the panel say the run is out of date. Without it a saved
+   * search survives a re-extraction still presenting itself as an answer about
+   * *this* article, while its hits point into a text that has moved — see
+   * docs/project/search.md § A saved search says which article it answered.
+   *
+   * Optional because a run written before 2026-08-26 has none, and because the
+   * blocks can be unreadable at the moment a run is started. Absent counts as
+   * stale (`isStale`, src/searches.ts): not knowing is not the same as knowing
+   * it is fine, and this is the safe way round to be wrong.
+   */
+  sourceHash?: string;
 }

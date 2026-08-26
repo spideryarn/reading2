@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, ChevronRight, Circle, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
+import { jobWorthRetrying } from "../job-failure.js";
 import { addHref, navigate } from "./router.js";
 import type { Job, JobStep } from "../types.js";
 import type { UseJobs } from "./useJobs.js";
@@ -223,8 +224,22 @@ export function JobCard({
           <>
             {/* A cancelled job offers Retry too. You stopped it, which is not
                 the same as not wanting it — and Retry skips whatever finished
-                before you did, so restarting costs only what is left. */}
-            {(job.status === "error" || job.status === "cancelled") && (
+                before you did, so restarting costs only what is left. A
+                cancelled job never carries a `failureKind`, so the second test
+                passes it through.
+
+                And **a failed one does not always get the button.** Some
+                failures cannot come out differently on a second attempt — an
+                article that needs more output tokens than one model response
+                holds, a page Readability has already refused over bytes that
+                are still in the cache — and a button under one of those is
+                worse than a badly worded sentence, because the reader can act
+                on it. `jobWorthRetrying` is the one place that decides; see
+                src/job-failure.ts and docs/postmortems/toc-max-tokens.md.
+
+                Nothing takes its place when it is hidden. The failed step's own
+                message is already on the card and already says why. */}
+            {(job.status === "error" || job.status === "cancelled") && jobWorthRetrying(job) && (
               <Button
                 type="button"
                 variant="ghost"

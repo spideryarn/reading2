@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
+import { stageFailure } from "./job-failure.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -102,7 +103,13 @@ Exactly one string per part, in order.`;
 /** The parts — depth-1 nodes in document order, per the tree's own child list. */
 export function partsOf(tree: Tree): TreeNode[] {
   const root = tree.nodes[tree.rootId];
-  if (!root) throw new Error(`rootId "${tree.rootId}" is not in nodes`);
+  /* `bug`, so the job card does not offer a Retry that cannot work. The tree
+     comes off disk from a `toc` step that already finished, and Retry skips
+     every step that finished — so a second attempt reads the identical
+     tree.json and fails in the same line. A tree that names a root it does not
+     contain is stage 4 having written something malformed, which is a defect
+     here rather than anything the reader can act on. src/job-failure.ts. */
+  if (!root) throw stageFailure("bug", `rootId "${tree.rootId}" is not in nodes`);
   return root.children.map((id) => tree.nodes[id]).filter((n): n is TreeNode => !!n);
 }
 

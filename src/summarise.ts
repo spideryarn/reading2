@@ -74,6 +74,7 @@ import { fileURLToPath } from "node:url";
 import { CAPABLE_MODEL } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
+import { stageFailure } from "./job-failure.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -981,7 +982,12 @@ export async function generateSummaries(opts: {
 
   const targets = targetsOf(tree, blocks);
   if (targets.length === 0) {
-    throw new Error("No node in this tree covers enough text to summarise.");
+    /* `bug`, so the job card does not offer a Retry that cannot work. The root
+       always earns a summary, so an empty list means the tree does not contain
+       its own root — and that tree came off disk from a step that finished,
+       which Retry skips. A second attempt reads the same file and counts the
+       same zero. src/job-failure.ts. */
+    throw stageFailure("bug", "No node in this tree covers enough text to summarise.");
   }
   const batches = batchesOf(tree, targets);
   const started = Date.now();
