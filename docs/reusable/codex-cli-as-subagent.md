@@ -52,8 +52,26 @@ credits-exhausted subscription doesn't have to stop a run.
 [`src/env.ts`](../../src/env.ts) every other script here uses, so nothing has to be exported first
 and an agent doesn't have to know the trick. The import is dynamic, and *only* a missing module is
 ignored — anything else the loader throws is rethrown, because a half-built environment surfaces
-downstream as an auth failure pointing at the wrong thing. A real environment variable still wins
-over the file. See [setup-dev.md § Secrets](../project/setup-dev.md#secrets).
+downstream as an auth failure pointing at the wrong thing. See
+[setup-dev.md § Secrets](../project/setup-dev.md#secrets).
+
+> **This paragraph used to end "a real environment variable still wins over the file". In this repo
+> it no longer does, and that closes the fallback pair above.** `src/env.ts` was reversed on
+> 2026-08-26 at Greg's request — `.env.local` now beats anything the shell exported, because two
+> profile files were exporting a *different* OpenRouter key and silently overriding the one the repo
+> names. Deliberate and right for that problem, and it has a consequence here: **a
+> `CODEX_API_KEY` in `.env.local` that has run out of credits cannot be got round from the calling
+> shell.** `CODEX_API_KEY= npx tsx scripts/run-codex.ts …` prints
+> `[env] .env.local overrode CODEX_API_KEY from the shell environment` and uses the dead key anyway,
+> so the wrapper never reaches a perfectly good `codex login` sitting in `~/.codex/auth.json`.
+> Observed 2026-08-26, on a review that had to be re-run by hand.
+>
+> Until the wrapper grows a flag for it, the way through is the
+> [escape hatch](#raw-codex-exec-the-escape-hatch) with the variable stripped from the child —
+> `env -u CODEX_API_KEY codex exec …` — which does fall back to the subscription. Take the wrapper's
+> three guarantees with you by hand: `< prompt.md` (a finite file that EOFs), a `timeout`, and
+> `> some.log 2>&1` so the activity log lands in a file and only the `-o` answer is read. Verified
+> working on a `gpt-5.6-sol` review the same day.
 
 ### What codex is allowed to see
 
@@ -413,6 +431,20 @@ under `~/.codex/sessions/`; capture the id from the `--json` `thread.started` ev
   `ERROR: Reconnecting... n/5` lines, so the first thing in the log is not the cause; and the run
   still exits 0 from the wrapper's own perspective when launched in the background, so a caller
   that checks only the exit status learns nothing.
+- **A dead key in `.env.local` cannot be overridden from the shell**, so the documented
+  key-or-subscription fallback does not work here. See [above](#setup-once-per-machine).
+- **Raw `codex exec` runs out of credit and exits _zero_, having written no `-o` file at all.**
+  The wrapper's exit-1-plus-hint is a courtesy of the wrapper; the escape hatch has none. Observed
+  2026-08-26 on 0.149.1: a `--sandbox read-only` review read ~279,000 tokens, compacted its
+  context, hit `ERROR: Your workspace is out of credits`, and ended `exit=0` with the answer path
+  never created. A caller checking only the status code learns nothing, and a caller that
+  `cat`s a missing file into a doc records silence as agreement. **Always test that the answer
+  file exists and is non-empty**, not just that the command succeeded.
+- **The two credentials can both be dry at once, and they fail in different words.** The pair is a
+  fallback only while one of them has credit: `CODEX_API_KEY` said `You have no credits remaining`
+  and the ChatGPT subscription underneath it said `Your workspace is out of credits` on the same
+  afternoon. Unsetting the key to fall back is worth trying — it costs one command — but confirm a
+  verdict arrived rather than assuming the fallback worked.
 - **Running out of credit looks like a generic non-zero exit.** `codex exec` exits 1 and the wrapper
   reports `codex exec exited 1`; the actual reason (`Your workspace is out of credits`) is in the
   activity log, which is why the failure message names its path — and why the wrapper now lifts that

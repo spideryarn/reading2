@@ -1,6 +1,8 @@
 # URL state
 
-Everything about *how you are looking at an article* lives in the query string. Nothing the reader
+Everything about *how you are looking at an article* lives in the query string — and, since
+2026-08-26, everything about how you are looking at **the shelf** does too
+([§ The library's own five](#the-librarys-own-five)). Nothing the reader
 can change lives in `useState`, and nothing lives in `localStorage`. Which article you are looking at
 is the **path** — see [§ Which article is the path](#which-article-is-the-path).
 
@@ -44,6 +46,41 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `conf` | the bar `prioritised` hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
 | `len` | which rung of the length ladder summary mode is showing, absent for `gist` — [summaries.md](summaries.md) | push | `?len=long` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
+
+Those are all `/read/<slug>`. The five below are `/`.
+
+### The library's own five
+
+The homepage was the one page not keeping this rule: until 2026-08-26 its search box was `useState`
+and its order was whatever the server had sent, so neither survived a reload and neither could be
+sent to anybody. Now:
+
+| Param | Meaning | History | Example |
+|---|---|---|---|
+| `q` | what is in the shelf's search box — [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one) | **replace**, debounced | `?q=seth` |
+| `by` | which key the shelf is ordered by: `added`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length` |
+| `dir` | `asc` or `desc`. **Absent means this key's own natural end** — newest first for a date, longest first for a length, A-to-Z for a title | push | `?dir=asc` |
+| `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
+| `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |
+
+**`dir` has no default, and that is the same call `?spine=` and `?gate=` make.** A default of `desc`
+would be right for every key except Title, where it means Z-to-A; and putting each key's natural
+direction into the parser would move half of [`library-sort.ts`](../../src/web/library-sort.ts) into
+`params.ts`. Absent means "the reader has not chosen", which the shelf resolves through
+`SortSpec.natural`. So `?by=title` on its own is a sensible link.
+
+**They are not called `sort` and `order`, and that turns out to be load-bearing.** Those two names
+are taken, by the glossary's ordering and the search results' ordering, both on `/read/<slug>`. An
+ordinary link off the shelf is a bare path (`readHref`) and `carriedSearch` only runs between one
+article's own views — but the superseded `/?slug=x` spelling is rewritten to `/read/x` **keeping
+every other parameter it arrived with** ([`main.tsx`](../../src/web/main.tsx)), so
+`/?slug=x&by=length` really does land on an article page carrying `by=length`. Distinct names are
+what make that harmless. A cross-family review found the first version of this paragraph claiming
+the boundary was sealed, 2026-08-26. Beyond that: a URL should be readable without knowing which
+page it is for, and a table with two rows called `sort` is a table apologising for itself.
+
+The reasoning, including the three sorting rules that fail silently, is in
+[library-sorting.md](../plans/library-sorting.md).
 
 **Two superseded spellings, both still working.** `?about=1` was the masthead's details disclosure
 and `?panel=about` was the drawer panel that replaced it. Both are gone: the article's details are a

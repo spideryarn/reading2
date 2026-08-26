@@ -256,6 +256,81 @@ typo-tolerant titles (available, useful, but matcher one already handles titles 
 enabled, Anthropic has no embeddings API so it means a second vendor, and Greg deferred it
 explicitly.
 
+## Sorting the shelf
+
+> Make the set of docs on the homepage nicely sortable (e.g. by when added, when last opened, how
+> many words, how many actions/interactions performed) … Maybe it's misleading to call this tabular,
+> because I kind of like the rich cards that we have right now, so look for a best of all worlds.
+>
+> — Greg, 2026-08-26
+
+The answer to the last sentence is one line, and it is the whole design:
+
+**One sort state, two renderers.**
+
+Six chips above the shelf — **Added**, **Last opened**, **Title**, **Length**, **Times opened**,
+**Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
+identically, so switching between them keeps your place in the order: there is only one order.
+Clicking the key you are already on reverses it; clicking a key you are not on starts at *that key's*
+natural end, so going from "newest first" to Title gives you A-to-Z rather than Z-to-A. All of it is
+in the URL — [url-state.md § The library's own five](url-state.md#the-librarys-own-five).
+
+The two views are not a real one and a decoration. **The card is a decision aid** — what the piece
+says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article
+stands against the rest of the shelf — and gives the blurb up for six columns you can run your eye
+down. Neither is a fallback for the other.
+
+Two of the six keys are Greg's "actions/interactions performed", and they are the only two we can
+honestly count: opens and questions are the only reader interactions stored as numbers. Chat threads
+and saved searches are deliberately not counted, for the same reason [the tooltip](#the-tooltip)
+won't say them.
+
+### The card says what it is sorted by
+
+This is the "best of all worlds" half, and it is the bit a table library would not have given us. A
+card sorted by something it does not show is a list in an order the reader cannot check — *why is
+this one at the top?* has to be answerable from the card. So the date on the right of the meta line
+becomes the sort key's own value: **Last opened** makes it "opened 25 Aug", **Questions** makes it
+"3 questions". **Added** and **Length** change nothing, because the card already carries both.
+
+That is `SortSpec.note` in [`library-sort.ts`](../../src/web/library-sort.ts), and it is why the
+sorts are a table of data rather than a map of comparators — the comparator is the smallest thing a
+sort key needs to know about itself.
+
+### Three rules a browser cannot check
+
+The sort moved from the server into the client, and three things came with it that look right on
+screen and are wrong. All three are pinned in
+[`tests/library-sort.test.ts`](../../tests/library-sort.test.ts):
+
+- **The fixture stays at the foot of every sort, both directions.** The server has always kept it
+  there. Sort by Length in the browser without carrying that rule over and a committed demo excerpt
+  sits above the reader's own library.
+- **A missing value sorts last in *both* directions** — that one comparison is deliberately *not*
+  multiplied by the direction. Ascending by "last opened" would otherwise fill the top of the shelf
+  with everything you have never opened. That is a useful thing to want, and it is what the Unread
+  chip is for; smuggling it into the low end of a sort makes it unavailable in the other direction
+  and unexplained in both.
+- **Every comparison ends in a total order** — ties fall through to title and then slug. Without the
+  last step, equal rows keep whatever order the server sent, and a reload can quietly reshuffle the
+  shelf.
+
+Two smaller ones, same file: an **unparseable** date is absent rather than zero (`Date.parse("soon")`
+is `NaN`, and `NaN` in a subtraction makes every comparison return `NaN` — a sort that does nothing
+at all), and **`0` is a value, not absent** (a falsy check would put every unopened article below
+every opened one in both directions).
+
+### No table library
+
+Researched per [third-party-library-selection.md](../reusable/third-party-library-selection.md) and
+declined. TanStack Table v8 ranked first — headless, ~15 kB, and what shadcn's own data-table recipe
+wraps — but the same research put the hand-rolled version at 60–120 lines and called it *"arguably
+the more boring choice"* at this scale, with no grouping, pinning, virtualisation or column
+resizing wanted. The deciding argument is that the thing a headless table would have given us free is
+sorted rows, and the feature we actually wanted is the card that says what it is sorted by, which is
+our own markup either way. The full comparison, the v8-not-v9 reasoning, and what would make us
+revisit are in [library-sorting.md](../plans/library-sorting.md).
+
 ## What a card says, and why
 
 A card is a **decision aid**, not a summary. You are choosing what to read next, and what decides it
@@ -272,6 +347,9 @@ is what the piece says and how long it will take you.
 │ 📄 12,431 words        3 ⌾        25 Aug 2026│
 └──────────────────────────────────────────────┘
 ```
+
+The date at bottom-right is the one thing on the card that moves: it says whatever the shelf is
+currently sorted by — see [§ The card says what it is sorted by](#the-card-says-what-it-is-sorted-by).
 
 The blurb is **the tree root's `gist`** — one sentence about the whole article, from the same pass
 that fills the L0 column ([granularity-zoom.md](granularity-zoom.md)). That is this product's own
@@ -386,7 +464,11 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 
 | File | What it does |
 |---|---|
-| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the cards |
+| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the fetch, the URL state, and the four narrowings that turn a list of articles into the list on screen |
+| [`src/web/library-sort.ts`](../../src/web/library-sort.ts) | **the sorts as data**, and the three rules above — pure, and the reason they are testable |
+| [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the chips: sort key, direction, Unread, cards-or-table |
+| [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the card, the five buttons, rename-in-place, the details tooltip — shared by both views |
+| [`src/web/ShelfTable.tsx`](../../src/web/ShelfTable.tsx) | the dense table: the same list, painted the other way |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the add box and the progress list — [ingest-queue.md](ingest-queue.md) |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | where Add takes you: `/add/<a whole URL>` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
@@ -405,6 +487,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`tests/library.test.ts`](../../tests/library.test.ts), [`tests/router.test.ts`](../../tests/router.test.ts), [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | the shelf, the routes, the slugs |
 | [`tests/shelf.test.ts`](../../tests/shelf.test.ts), [`tests/library-search.test.ts`](../../tests/library-search.test.ts) | archive, rename, opens — and the search that must survive a re-extraction |
 | [`tests/library-hits.test.ts`](../../tests/library-hits.test.ts), [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) | the link's parameters; and the Postgres half, which had never had a query run against it |
+| [`tests/library-sort.test.ts`](../../tests/library-sort.test.ts) | the sorting rules, including the two that make a sort silently do nothing |
 
 Styling is Tailwind utilities, not a block in [`styles.css`](../../src/web/styles.css). That is the
 rule rather than a preference: this page is chrome, and chrome is what shadcn and Tailwind were
@@ -425,6 +508,7 @@ collide with the real thing. `loadArticle("example")` resolves by falling throug
 ## See also
 
 - [url-state.md](url-state.md) — the query string half of a link, and why position replaces history
+- [library-sorting.md](../plans/library-sorting.md) — the plan behind the sort, the chips and the table
 - [web-client.md](web-client.md) — the page the cards lead to
 - [architecture.md](architecture.md) — the pipeline that fills the shelf, and the storage layout
 - [ingest-queue.md](ingest-queue.md) — what happens after you press Add

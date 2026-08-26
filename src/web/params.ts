@@ -709,15 +709,21 @@ export const deepParam = createParser<number>({
 /* -------------------------------------------------------- the library --- */
 
 /**
- * The shelf's own four parameters — `/?q=seth&by=opened&dir=desc&view=table`.
+ * The shelf's own five parameters — `/?q=seth&by=opened&dir=desc&view=table`.
  *
- * These live on `/`, and every parameter above lives on `/read/<slug>`. The two
- * sets never meet: nothing carries a query string across that boundary
- * (`readHref` mints a bare path, and `carriedSearch` in router.ts only runs
- * between an article's own views). They are still given names of their own
- * rather than reusing `sort` and `order` — a URL should be readable without
- * knowing which page it is for, and a doc table with two rows called `sort`
- * meaning different things is a doc that has to apologise for itself.
+ * These live on `/`, and every parameter above lives on `/read/<slug>`.
+ *
+ * **They are given names of their own rather than reusing `sort` and `order`,
+ * and that turns out to be load-bearing rather than tidy.** An ordinary link
+ * off the shelf is a bare path (`readHref`) and `carriedSearch` only runs
+ * between one article's own views — but `main.tsx` rewrites the superseded
+ * `/?slug=x` spelling to `/read/x` **keeping every other parameter it arrived
+ * with**, so `/?slug=x&by=length` really does land on an article page carrying
+ * `by=length`. Distinct names are what make that harmless. A cross-family
+ * review found the first version of this comment claiming the boundary was
+ * sealed, 2026-08-26. Beyond that: a URL should be readable without knowing
+ * which page it is for, and a doc table with two rows called `sort` meaning
+ * different things is a doc that has to apologise for itself.
  *
  * The rule they are here at all is the one this file exists for: reload the
  * homepage, or send somebody the link, and you get the same shelf back.
