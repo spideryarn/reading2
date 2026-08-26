@@ -575,6 +575,29 @@ describe("running a job", () => {
     expect(jobWorthRetrying(finished)).toBe(false);
   });
 
+  /**
+   * The marker, through the real runner rather than through the store on its
+   * own.
+   *
+   * A step that threw did not finish, and the next run must re-run it rather
+   * than believe whatever half of its output landed. `fetch` here fails for a
+   * reason that has nothing to do with the marker — the fixture has no source
+   * URL — which is what makes it a fair test of the failure path.
+   */
+  it("leaves the marker behind when a step fails, so the step is not done", async () => {
+    const job = await enqueue({ slug: SLUG, steps: ["fetch"] });
+    expect((await settle(job.id)).status).toBe("error");
+    expect(await fsArtifacts.interrupted(SLUG, "fetch")).toBe(true);
+
+    // And it is what `stepIsDone` reads, not merely a file sitting there.
+    const at = contextPaths(SLUG);
+    const ctx = { ...at, slug: SLUG, report: () => undefined, signal: new AbortController().signal, cacheArticle: false };
+    expect(await stepIsDone(STEPS.fetch, ctx, fsArtifacts)).toBe(false);
+
+    await fsArtifacts.finishStep(SLUG, "fetch");
+    expect(await fsArtifacts.interrupted(SLUG, "fetch")).toBe(false);
+  });
+
   it("writes a readable record, still, after all that", async () => {
     const job = await enqueue({ slug: SLUG, steps: ["fetch"] });
     await settle(job.id);

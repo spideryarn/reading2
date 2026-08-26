@@ -427,11 +427,16 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
       await pipelineStore.beginStep(job.slug, step.name);
       step.detail = await STEPS[step.name].run(ctx);
       await assertProduced(STEPS[step.name], ctx, pipelineStore);
+      /* **Before the abort check, not after.** A cancel here is about the job,
+         not about this step: `run` returned and its postcondition passed, so
+         the work is real and paid for. Clearing the marker after the throw
+         would leave a completed step looking interrupted, and the Retry that
+         follows a cancel would buy the same model call twice. */
+      await pipelineStore.finishStep(job.slug, step.name);
       // Checked after as well as before. A step that ignores the signal runs to
       // completion regardless, and continuing into the next one would spend a
       // model call on a job the reader has already stopped.
       if (controller.signal.aborted) throw new Error("Cancelled");
-      await pipelineStore.finishStep(job.slug, step.name);
       step.status = "done";
       step.finishedAt = new Date().toISOString();
       /* **`step.detail` is deliberately not logged**, though it is the obvious
