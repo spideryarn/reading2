@@ -468,12 +468,24 @@ export async function loadSummaries(slug: string): Promise<SummariesFound> {
    Kept behind this seam like everything else here, because a directory walk is
    exactly the sort of thing that has to be. See docs/plans/metadata-page.md. */
 
+/**
+ * Is this file there — **and only that question**.
+ *
+ * `ENOENT` is absence. Every other `stat` failure is a real problem and is
+ * thrown: a permissions error or a failing disk used to answer "not there",
+ * which is how the metadata page fell through to the `example/` fixture and
+ * returned a confident 200 describing somebody else's article, and how the
+ * library reported an article's optional stages unbuilt when they were sitting
+ * right there. Same rule as `readOne` in src/store/artifacts-fs.ts; this was
+ * the copy of it that the 2026-08-26 review found still swallowing everything.
+ */
 async function exists(file: string): Promise<boolean> {
   try {
     await stat(file);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
   }
 }
 

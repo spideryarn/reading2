@@ -425,7 +425,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
          success path below, which means a throw, a cancel or a kill all leave
          the step honestly not-done. See `beginStep` in
          src/store/artifacts.ts. */
-      await pipelineStore.beginStep(job.slug, step.name);
+      const attempt = await pipelineStore.beginStep(job.slug, step.name);
       step.detail = await STEPS[step.name].run(ctx);
       await assertProduced(STEPS[step.name], ctx, pipelineStore);
       /* **Before the abort check, not after.** A cancel here is about the job,
@@ -433,11 +433,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
          the work is real and paid for. Clearing the marker after the throw
          would leave a completed step looking interrupted, and the Retry that
          follows a cancel would buy the same model call twice. */
-      await pipelineStore.finishStep(job.slug, step.name);
-      // Checked after as well as before. A step that ignores the signal runs to
-      // completion regardless, and continuing into the next one would spend a
-      // model call on a job the reader has already stopped.
-      if (controller.signal.aborted) throw new Error("Cancelled");
+      await pipelineStore.finishStep(job.slug, step.name, attempt);
       step.status = "done";
       step.finishedAt = new Date().toISOString();
       /* **`step.detail` is deliberately not logged**, though it is the obvious
@@ -459,6 +455,31 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
       // is the moment the progress card can stop calling the article by its slug.
       if (step.name === "extract") job.title = step.detail;
       await persist(job);
+
+      /* Checked after as well as before — a step that ignores the signal runs
+         to completion regardless, and starting the next one would spend a
+         model call on a job the reader has already stopped.
+         **And checked here, after this step is recorded done, rather than by
+         throwing.** Unwinding a finished step through the catch below marked it
+         `error`, and `forceForRetry` then forces the first step that is not
+         done — so pressing Stop as `toc` finished, then Retry, bought that
+         model call a second time. Moving `finishStep` earlier did not fix that
+         on its own, because the *job record*, not the marker, is what Retry
+         reads. Found by review, 2026-08-26; the first fix for it was
+         incomplete. */
+      if (controller.signal.aborted) {
+        jlog.debug(
+          { step: step.name },
+          `job cancelled after ${step.name} — ${job.slug}`,
+        );
+        job.status = "cancelled";
+        job.error = "Cancelled";
+        job.finishedAt = new Date().toISOString();
+        delete job.cancelling;
+        await persist(job);
+        finished("cancelled");
+        return;
+      }
     } catch (err) {
       const message = (err as Error).message;
       /* A cancel unwinds through here too — the `throw new Error("Cancelled")`

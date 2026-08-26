@@ -24,6 +24,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CAPABLE_MODEL } from "../src/models.js";
+import { PROMPT_VERSION as GLOSSARY_VERSION } from "../src/glossary.js";
+import { PROMPT_VERSION as SUMMARY_VERSION } from "../src/summarise.js";
+import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { parseJsonFrom } from "../src/parse-json.js";
@@ -68,7 +71,7 @@ const HEAD: Block = {
     level: 1,
     text: "A title",
     words: 2,
-    html: "<h1>A title</h1>",
+    html: `<h1 id="spya-aaaaaa">A title</h1>`,
     gistable: true,
 };
 
@@ -78,7 +81,7 @@ const BODY: Block = {
     kind: "text",
     text: "One paragraph of something to hash.",
     words: 6,
-    html: "<p>One paragraph of something to hash.</p>",
+    html: `<p id="spya-bbbbbb">One paragraph of something to hash.</p>`,
     gistable: true,
 };
 
@@ -121,12 +124,13 @@ function ctxAt(at: ArtifactLocations): StepContext {
  * A complete, current article on disk: every step's outputs, stamped so that
  * the three steps with a freshness check pass it.
  *
- * The prompt versions are written out here rather than imported, because
- * `tweets.ts` and `summarise.ts` keep theirs private. That would be a drift
- * hazard if the tests only asserted `false`; each truncation case therefore
- * asserts the **intact** artefact reports done first, so a version that moves
- * fails loudly at the setup rather than passing the real assertion for the
- * wrong reason.
+ * **The prompt versions are imported, not written out.** They used to be
+ * literals here, with the intact-first assertion as the safety net — and that
+ * net worked exactly once, on 2026-08-26, when all three versions moved in one
+ * afternoon and five tests went red for a reason that had nothing to do with
+ * what they test. A net that catches the drift is worse than not having the
+ * drift: `tweets.ts` and `summarise.ts` now export their version the way
+ * `glossary.ts` already did.
  */
 async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
   const stamped = { version: "", generator: CAPABLE_MODEL, slug: SLUG, sourceHash: SOURCE_HASH };
@@ -180,7 +184,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
   });
   await writeJson(pathFor(at, "tweets", "tweets"), {
     ...stamped,
-    version: "tweets/1",
+    version: TWEETS_VERSION,
     limit: 280,
     tweets: [{ text: "One post.", chars: 9 }],
     generatedAt: new Date().toISOString(),
@@ -188,7 +192,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
   });
   await writeJson(pathFor(at, "glossary", "glossary"), {
     ...stamped,
-    version: "glossary/2",
+    version: GLOSSARY_VERSION,
     entries: [],
     passes: 1,
     generatedAt: new Date().toISOString(),
@@ -196,7 +200,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
   });
   await writeJson(pathFor(at, "summary", "summary"), {
     ...stamped,
-    version: "summary/2",
+    version: SUMMARY_VERSION,
     entries: [],
     missing: 0,
     generatedAt: new Date().toISOString(),
@@ -308,7 +312,9 @@ describe("what a step says it produces, and where that lands", () => {
    * is a comparison nobody knows the shape of.
    */
   it("notices when two kinds inside one step swap destinations", () => {
-    const { extractedHtml, meta } = PATHS.extract;
+    const extractedHtml = PATHS.extract.extractedHtml;
+    const meta = PATHS.extract.meta;
+    if (!extractedHtml || !meta) throw new Error("extract lost one of its two paths");
     try {
       PATHS.extract.extractedHtml = meta;
       PATHS.extract.meta = extractedHtml;
@@ -497,7 +503,7 @@ describe("glossary currency, through the stamp rather than a function", () => {
   let store: ReturnType<typeof createFsArtifactStore>;
 
   const glossaryOf = (over: Record<string, unknown>) => ({
-    version: "glossary/2",
+    version: GLOSSARY_VERSION,
     generator: CAPABLE_MODEL,
     slug,
     sourceHash: SOURCE_HASH,
@@ -648,7 +654,7 @@ describe("a step that started and did not finish must not report itself done", (
     await writeWholeArticle(at);
     expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(true);
 
-    await store.beginStep(SLUG, "toc");
+    const attempt = await store.beginStep(SLUG, "toc");
     // Generation B's tree, valid in every way, landing beside generation A's
     // labels and blocks.
     await writeJson(pathFor(at, "toc", "tree"), {
@@ -669,24 +675,57 @@ describe("a step that started and did not finish must not report itself done", (
     });
     expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(false);
 
-    // And it comes back once the step actually finishes.
-    await store.finishStep(SLUG, "toc");
+    /* And the marker is the *only* thing holding it back — clearing it says
+       done again, over exactly the mixed generation above.
+
+       That is the honest limit of this mechanism and the reason it is asserted
+       rather than left implied: the store is not inspecting the artefacts and
+       concluding they disagree, it is being told a run finished. What it buys
+       is that nothing tells it that unless a run really did return. A review
+       read the first version of this test as claiming more than that, which it
+       did. */
+    await store.finishStep(SLUG, "toc", attempt);
     expect(await stepIsDone(STEPS.toc, ctxAt(at), store)).toBe(true);
+  });
+
+  /**
+   * The six-step sequence a review took the first version apart with.
+   *
+   * Two runners, one slug. The second overwrites the first's marker; the first
+   * finishes and — in the first version — removed *the second's*; the second
+   * then dies half-way through its writes and the step reports done holding two
+   * generations with nothing left to say so. The token is what stops step four.
+   */
+  it("will not let one runner's success clear another runner's attempt", async () => {
+    await writeWholeArticle(at);
+
+    const first = await store.beginStep(SLUG, "toc");
+    const second = await store.beginStep(SLUG, "toc"); // overwrites the marker
+
+    await store.finishStep(SLUG, "toc", first);
+    expect(await store.interrupted(SLUG, "toc"), "the second attempt is still live").toBe(
+      true,
+    );
+
+    await store.finishStep(SLUG, "toc", second);
+    expect(await store.interrupted(SLUG, "toc")).toBe(false);
   });
 
   it("says so for every step, artefacts or no artefacts", async () => {
     await writeWholeArticle(at);
     for (const name of STEP_ORDER) {
       expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} before`).toBe(true);
-      await store.beginStep(SLUG, name);
+      const attempt = await store.beginStep(SLUG, name);
       expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} during`).toBe(false);
-      await store.finishStep(SLUG, name);
+      await store.finishStep(SLUG, name, attempt);
       expect(await stepIsDone(STEPS[name], ctxAt(at), store), `${name} after`).toBe(true);
     }
   });
 
   it("finishing a step nobody started is not an error", async () => {
-    await expect(store.finishStep(SLUG, "arc")).resolves.toBeUndefined();
+    // Every artefact written before markers existed is in this state, and so is
+    // a stage run straight off its own CLI.
+    await expect(store.finishStep(SLUG, "arc", "spya-nobody")).resolves.toBeUndefined();
   });
 });
 
@@ -729,4 +768,47 @@ describe("blocks is only done if the HTML really carries its ids", () => {
     );
     expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(false);
   });
+});
+
+/**
+ * The decoders are shallow on purpose, and shallow is not the same as absent.
+ *
+ * `{"nodes":[]}` was a perfectly good tree until 2026-08-26 and `{"labels":[]}`
+ * a perfectly good labels file, because the check was `typeof v === "object"`
+ * and an array passes that. Neither writer has ever produced either shape, so
+ * the one thing the check existed to say no to was the one thing it said yes to.
+ */
+describe("valid JSON of the wrong shape is not an artefact", () => {
+  let at: ArtifactLocations;
+  let store: ReturnType<typeof createFsArtifactStore>;
+
+  beforeAll(async () => {
+    at = await tempArticle("shapes");
+    store = createFsArtifactStore(() => at);
+  });
+  afterAll(async () => {
+    await rm(path.dirname(at.dir), { recursive: true, force: true });
+  });
+
+  const wrong: { step: StepName; kind: ArtifactKind; body: unknown }[] = [
+    { step: "toc", kind: "tree", body: { nodes: [] } },
+    { step: "toc", kind: "labels", body: { labels: [] } },
+    { step: "blocks", kind: "blocks", body: { blocks: {} } },
+    { step: "arc", kind: "arc", body: { entries: {} } },
+    { step: "extract", kind: "meta", body: { slug: "" } },
+    { step: "fetch", kind: "raw", body: { file: null } },
+  ];
+
+  for (const { step, kind, body } of wrong) {
+    it(`${step}/${kind}: ${JSON.stringify(body)}`, async () => {
+      await writeWholeArticle(at);
+      // Readable to start with, so a failure below is about the shape rather
+      // than about the fixture.
+      expect(await store.read(SLUG, step, kind)).not.toBeNull();
+
+      await writeJson(pathFor(at, step, kind), body);
+      expect(await store.read(SLUG, step, kind)).toBeNull();
+      expect(await store.has(SLUG, step, [kind])).toBe(false);
+    });
+  }
 });

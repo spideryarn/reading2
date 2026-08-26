@@ -529,6 +529,7 @@ describe("parseJobRequest", () => {
 
 const JOBS_DIR = path.resolve(import.meta.dirname, "..", "data", "_jobs");
 const SLUG = "test-jobs-fixture-no-such-article";
+const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
 
 /* Remove only this suite's records. `data/_jobs/` is a real directory a reader
    may have jobs in — the test must not tidy away theirs. */
@@ -538,6 +539,10 @@ afterAll(async () => {
     const job = JSON.parse(await readFile(full, "utf8")) as { slug?: string };
     if (job.slug === SLUG) await rm(full, { force: true });
   }
+  // And the run markers those failed jobs left behind. Not tidiness: a marker
+  // surviving into the next run of this suite would make the fixture's `fetch`
+  // not-done for a reason that has nothing to do with what is being tested.
+  await rm(path.join(ROOT_DATA, SLUG, "steps"), { recursive: true, force: true });
 });
 
 /** Poll until the job stops moving, or give up. */
@@ -594,8 +599,16 @@ describe("running a job", () => {
     const ctx = { ...at, slug: SLUG, report: () => undefined, signal: new AbortController().signal, cacheArticle: false };
     expect(await stepIsDone(STEPS.fetch, ctx, fsArtifacts)).toBe(false);
 
-    await fsArtifacts.finishStep(SLUG, "fetch");
+    /* Removed with `rm`, not with `finishStep`. The marker belongs to the
+       runner's attempt and the test never saw that token — which is the point
+       of the token, and is also why a test that leaves one behind has to clean
+       up by hand. A stray marker here would make the *next* run of this suite
+       start from a slug whose `fetch` is already not-done for the wrong
+       reason. */
+    await rm(path.join(ROOT_DATA, SLUG, "steps"), { recursive: true, force: true });
     expect(await fsArtifacts.interrupted(SLUG, "fetch")).toBe(false);
+    // Cleared again in `afterAll` as well as here: every job this suite runs
+    // fails, so every one of them leaves a marker, not only this test's.
   });
 
   it("writes a readable record, still, after all that", async () => {

@@ -239,20 +239,36 @@ export interface ArtifactStore {
    * On the filesystem this is a small file; in Postgres it is
    * `revision_step_runs.status = 'running'`, which already exists. Same
    * concept, and that is the point of putting it here rather than in the queue.
+   *
+   * **Returns an attempt token, and `finishStep` will not accept another's.**
+   * The first version returned nothing and cleared a shared marker, which a
+   * review took apart in six steps: two runners both start, the second
+   * overwrites the first's marker, the first finishes and removes *the
+   * second's*, the second then dies half-way through its writes, and the step
+   * reports done holding two generations with no marker to say so. Ownership is
+   * what closes that. It is the same token
+   * `docs/plans/postgres-migration.md#the-traps` fences the Postgres output
+   * write with, and it should end up being literally the same value.
+   *
+   * **This is not a lock, and must not be read as one.** It does not stop a
+   * second runner starting — that is the queue's job, and in Postgres the
+   * `jobs_only_one_running` index's. What it stops is one runner's `finishStep`
+   * speaking for another runner's attempt.
    */
-  beginStep(slug: string, step: StepName): Promise<void>;
+  beginStep(slug: string, step: StepName): Promise<string>;
   /**
    * This step finished, and what it wrote can be believed.
    *
-   * Called only on success. A step that threw leaves its marker behind on
-   * purpose: the next run re-runs it rather than trusting whatever half of its
-   * output landed.
+   * Called only on success, and only with the token `beginStep` returned. A
+   * step that threw leaves its marker behind on purpose: the next run re-runs
+   * it rather than trusting whatever half of its output landed.
    *
-   * Clearing a marker that is not there is not an error — a step can complete
-   * without this store having seen it start, which is every artefact written
-   * before this existed.
+   * Clearing a marker that is not there, or that belongs to somebody else, is
+   * not an error and is not a no-op worth logging: a step can complete without
+   * this store having seen it start — which is every artefact written before
+   * this existed, and every stage run from its own CLI.
    */
-  finishStep(slug: string, step: StepName): Promise<void>;
+  finishStep(slug: string, step: StepName, attempt: string): Promise<void>;
   /** Did a run of this step start and never finish? */
   interrupted(slug: string, step: StepName): Promise<boolean>;
 }

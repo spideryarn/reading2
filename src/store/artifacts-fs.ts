@@ -30,9 +30,10 @@
  * with the ids stamped in. A `Record<ArtifactKind, path>` cannot express
  * either. See the note in src/store/artifacts.ts.
  */
-import { mkdir, open, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import path from "node:path";
+import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { parseJsonFrom } from "../parse-json.js";
 import type { StepName } from "../types.js";
@@ -458,25 +459,47 @@ export function createFsArtifactStore(
     async beginStep(slug, step) {
       const file = markerFile(locate(slug), step);
       await mkdir(path.dirname(file), { recursive: true });
-      /* The contents are for whoever is looking at a stuck article, not for
-         this code — nothing reads them back. Deliberately not used as a lease:
-         a pid and a timestamp invite "it has been an hour, it must be dead",
-         and that guess is how two runs end up writing one article. The marker
-         clears when a run finishes or when a run re-runs the step. */
+      const attempt = mintId();
+      /* The timestamp and pid are for whoever is looking at a stuck article;
+         nothing reads them back. The **attempt** is read back, by `finishStep`,
+         and is the whole reason this file has contents at all.
+
+         Deliberately not a lease: a pid and a timestamp invite "it has been an
+         hour, it must be dead", and that guess is how two runs end up writing
+         one article. */
       await writeFile(
         file,
-        `${JSON.stringify({ startedAt: new Date().toISOString(), pid: process.pid })}\n`,
+        `${JSON.stringify({ attempt, startedAt: new Date().toISOString(), pid: process.pid })}\n`,
         "utf-8",
       );
+      return attempt;
     },
 
-    async finishStep(slug, step) {
+    async finishStep(slug, step, attempt) {
+      const file = markerFile(locate(slug), step);
+      let held: string | undefined;
       try {
-        await unlink(markerFile(locate(slug), step));
+        held = (JSON.parse(await readFile(file, "utf-8")) as { attempt?: string }).attempt;
       } catch (err) {
-        // Not an error. A step can finish without this store having seen it
-        // start — every artefact written before markers existed is in that
-        // state, and so is a step run straight off its own CLI.
+        // Absent, or unreadable. Neither is an error. A step can finish without
+        // this store having seen it start — every artefact written before
+        // markers existed is in that state, and so is a stage run from its own
+        // CLI.
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+        if (!(err instanceof SyntaxError)) throw err;
+      }
+      /* **Somebody else's attempt is left alone.** Clearing it is what let one
+         runner's success speak for another runner's half-finished writes — the
+         first critical of the 2026-08-26 review, in six steps.
+
+         Honest limit: read-then-unlink is not atomic, so a marker overwritten
+         in the gap is still removed by the wrong owner. Narrower than before
+         and not zero, and a filesystem has nothing better; the Postgres adapter
+         does this as one fenced `UPDATE … WHERE attempt_id = $attempt`. */
+      if (held !== undefined && held !== attempt) return;
+      try {
+        await unlink(file);
+      } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
       }
     },

@@ -333,10 +333,21 @@ export interface PipelineStep {
  * paragraphs have no anchors, and every comment in it points at nothing. Found
  * by review, 2026-08-26, as the second of three criticals in this seam.
  *
- * The binding is exact rather than a spot check: **every** id in `blocks.json`
- * has to be in the HTML. Verified against the real articles in `data/` — 360
- * blocks and 360 ids, 141 and 141 — so "all of them" is the actual invariant
- * and not an approximation that will start failing on a long page.
+ * **Every** id in `blocks.json` has to be in the HTML — all of them, not a
+ * sample. Verified against the real articles in `data/` — 360 blocks and 360
+ * ids, 141 and 141 — so that is the actual invariant rather than an
+ * approximation that starts failing on a long page.
+ *
+ * **What it does not prove**, said plainly because the first version of this
+ * comment claimed more: it is a membership test, not a binding. Two ids swapped
+ * between elements, an id parked on an unrelated wrapper, or a duplicate id all
+ * pass. It catches the case it was built for — a re-extraction wiping every id —
+ * and not a corrupted stamping. The stronger version is a generation token
+ * written by stage 3 into both `blocks.json` and the HTML, which is cheap here
+ * *because* both files have one writer: the reason a token was rejected for
+ * `extract` (a later step legitimately rewrites its HTML) does not apply.
+ * Raised by review 2026-08-26 and not built; see
+ * docs/plans/postgres-storage-implementation.md.
  *
  * Cheap enough to run on every skip check: one pass of the HTML with a regex,
  * then a set lookup per block. And the cost of being wrong is small in the
@@ -482,11 +493,19 @@ async function inputHashFor(ctx: StepContext, store: ArtifactStore): Promise<str
  * no clue about which step should have made it.
  *
  * **Through the store, and the store's rules, since 2026-08-26.** This used to
- * `access()` each path in `outputs`, which meant a malformed artefact, one over
- * the size ceiling this store can read back, or simply the *old* one left
- * untouched by a forced stage that wrote nothing — all passed. The job was then
- * marked done. Asking the same store `stepIsDone` will ask closes that: if the
- * postcondition passes, the step really is readable.
+ * `access()` each path in `outputs`, so a malformed artefact or one over the
+ * size ceiling this store can read back passed, and the job was marked done.
+ * Asking the store closes that: if the postcondition passes, every artefact the
+ * step declares is at least readable.
+ *
+ * **It still cannot tell that *this run* wrote them.** A forced stage that
+ * returns having quietly left one old output untouched passes here, because an
+ * old readable artefact reads exactly like a new one — and this does not run
+ * `stamp` or `isDone` either, so for `blocks` it does not ask whether the HTML
+ * carries the ids. An earlier version of this comment claimed the untouched-old
+ * case was caught; a review found it was not. Closing it properly means one
+ * validation used both after a run and at the skip decision, which is
+ * docs/plans/postgres-storage-implementation.md § Step 11 half B, stage 5.
  */
 export async function assertProduced(
   step: PipelineStep,
