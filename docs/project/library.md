@@ -374,11 +374,13 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | the same two things, in SQL |
 | [`src/web/useShelf.ts`](../../src/web/useShelf.ts) | the shelf and its verbs, client side, including Undo |
 | [`src/web/useLibrarySearch.ts`](../../src/web/useLibrarySearch.ts) | the debounced half of the box, and dropping late responses |
+| [`src/web/library-hits.ts`](../../src/web/library-hits.ts) | **the four parameters a hit's link must carry**, the browser's fold, and the query-term rule |
 | [`src/reading-time.ts`](../../src/reading-time.ts) | `~54 min`, said once for both the card and the masthead |
 | [`src/routes.ts`](../../src/routes.ts) | `GET /api/library`, and the six job routes |
 | [`src/extract.ts`](../../src/extract.ts) | stage 2, now writing `meta.json` |
 | [`tests/library.test.ts`](../../tests/library.test.ts), [`tests/router.test.ts`](../../tests/router.test.ts), [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | the shelf, the routes, the slugs |
 | [`tests/shelf.test.ts`](../../tests/shelf.test.ts), [`tests/library-search.test.ts`](../../tests/library-search.test.ts) | archive, rename, opens — and the search that must survive a re-extraction |
+| [`tests/library-hits.test.ts`](../../tests/library-hits.test.ts), [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) | the link's parameters; and the Postgres half, which had never had a query run against it |
 
 Styling is Tailwind utilities, not a block in [`styles.css`](../../src/web/styles.css). That is the
 rule rather than a preference: this page is chrome, and chrome is what shadcn and Tailwind were

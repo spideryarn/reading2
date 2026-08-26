@@ -54,6 +54,7 @@ import {
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { Link } from "./Link.js";
+import { fold, foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import { DESIGN_HREF, readHref } from "./router.js";
 import { Tooltip } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
@@ -163,82 +164,6 @@ export function Library() {
 }
 
 /* ------------------------------------------------------------- searching -- */
-
-/**
- * Fold for comparison: case, accents, curly punctuation.
- *
- * The browser twin of `fold` in src/library-search.ts, and it must stay its
- * twin — a reader who finds "Gödel" by typing "godel" in the passage results
- * and *not* in the card filter would reasonably conclude the box is broken.
- * Kept as two small functions rather than one shared module because this one
- * runs in the browser and that one imports node:fs.
- */
-function fold(s: string): string {
-  return foldWithMap(s).folded;
-}
-
-/**
- * The same fold, plus **where every folded character came from**.
- *
- * Needed because a snippet has to be cut out of the *original* paragraph — the
- * reader should see the article's real curly quotes and accents, not our
- * flattened copy — while the match is found in the folded one. And folding is
- * not length-preserving: NFKD expands `ﬁ` to `fi` and `½` to `1⁄2`, and
- * `toLowerCase` lengthens `İ`. So an offset carried straight across drifts by a
- * character per ligature earlier in the paragraph, with no error and nothing to
- * grep for — every ASCII test passes and one article looks subtly wrong.
- *
- * src/library-search.ts carries the same warning for the same reason.
- */
-function foldWithMap(s: string): { folded: string; starts: number[]; ends: number[] } {
-  let folded = "";
-  const starts: number[] = [];
-  const ends: number[] = [];
-  /* Iterated by code POINT, not by code unit, so an emoji or any astral
-     character is folded once rather than as two broken halves. */
-  for (const ch of s) {
-    const from = starts.length === 0 ? 0 : (ends[ends.length - 1] as number);
-    const to = from + ch.length;
-    for (const out of foldChar(ch)) {
-      folded += out;
-      /* **Every folded character gets the WHOLE source character's span**, and
-         both ends of it. An earlier version stored only the start, so matching
-         `af` inside `aﬁ` produced an end offset *before* the ligature and the
-         snippet cut it off — the exact silent drift this function exists to
-         prevent, reintroduced by recording half the answer. Caught by a
-         cross-family review, 2026-08-26. */
-      starts.push(from);
-      ends.push(to);
-    }
-  }
-  return { folded, starts, ends };
-}
-
-/** One character, folded. May come back empty (a combining mark) or longer (a ligature). */
-function foldChar(ch: string): string {
-  return ch
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[‘’‛]/g, "'")
-    .replace(/[“”„]/g, '"')
-    .replace(/[–—]/g, "-")
-    .toLowerCase();
-}
-
-/**
- * The terms of a query, folded, ignoring the syntax neither matcher shares.
- *
- * Quotes are stripped rather than honoured, `or` is dropped, and an excluding
- * `-term` is left out: this is used for *filtering cards* and for
- * *highlighting*, not for the real match, and a third implementation of
- * `websearch_to_tsquery`'s grammar would be a third thing to keep in step with
- * the other two.
- */
-function queryTerms(query: string): string[] {
-  return fold(query.replace(/["\u201c\u201d]/g, " "))
-    .split(/\s+/)
-    .filter((t) => t.length >= 2 && t !== "or" && !t.startsWith("-"));
-}
 
 /**
  * The cards whose visible words contain every term typed.
@@ -364,40 +289,12 @@ function Passages({
 const SNIPPET_CHARS = 200;
 
 function Passage({ hit, query }: { hit: LibraryHit; query: string }) {
-  /* The link carries `?at=`, `?find=` and `?match=`, and all three are
-     load-bearing. `at` scrolls to the paragraph; `find` hands the words to the
-     in-article search so the same passage is highlighted when you land. Reusing
-     the existing vocabulary rather than inventing a third one is the whole
-     reason the handoff works — see docs/project/url-state.md and
-     docs/project/search.md.
-
-     `match=words` is said out loud rather than left to the default, because on
-     2026-08-26 the default became `meaning` (params.ts § matchParam) and a
-     meaning-mode panel has nothing to do with a literal `?find=`. This is the
-     one link in the app that produces a bare `?find=`; everywhere else the
-     reader has pressed `words` and pushed the parameter themselves. */
-  /* **One term, not the whole query**, and that is a fix rather than a
-     simplification. In-article search matches `?find=` as a single literal
-     substring (`findLiteral` in search-hits.ts), so handing it
-     `writing OR "hard problem"` — or even two plain words — matched nothing,
-     and the reader landed on the right paragraph with nothing highlighted. The
-     term used is the first one that actually appears in THIS hit, so the
-     highlight is always something the reader can see. Caught by a cross-family
-     review, 2026-08-26. */
-  const term = queryTerms(query).find((t) => fold(hit.text).includes(t));
-  /* **`mode=search` is load-bearing, not decoration.** The reading view mounts
-     `SearchBand` — the thing that turns `?find=` into marks on the prose — only
-     while the band is in search mode (App.tsx), and the default mode is `toc`.
-     So a link carrying `at`, `find` and `match` but not `mode` landed on
-     exactly the right paragraph and highlighted nothing at all, with every
-     parameter present and correct. Found in a browser pass, 2026-08-26; it is
-     the kind of thing no unit test would have caught, because each half works.
-
-     Set only when there is a term to find: a bare `mode=search` would open the
-     search panel on an article with nothing to search for. */
-  const href =
-    `${readHref(hit.slug)}?at=${encodeURIComponent(hit.blockId)}` +
-    (term ? `&mode=search&find=${encodeURIComponent(term)}&match=words` : "");
+  /* The four parameters this link must carry, and why dropping any one of them
+     fails silently, are documented on `libraryHitHref` — a pure function in a
+     module of its own precisely so that rule can be tested. It lost one of the
+     four while it lived inline here, and the symptom was a link whose every
+     present parameter was correct and which highlighted nothing. */
+  const href = libraryHitHref(hit, query);
 
   return (
     <Link

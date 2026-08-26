@@ -427,6 +427,19 @@ tell you — both cases where every part worked and the whole did not:
 Both are the same shape as the plan's own [§ How this could fail while reporting
 success](#how-this-could-fail-while-reporting-success) list, and neither was on it.
 
+**The first one changed where that code lives.** A missing query parameter should not need a browser
+and a person to find, but it did: `libraryHitHref` was three lines inside a React component, in a
+repo with no React test runner and a `node` test environment, so the one rule that matters about it —
+*which parameters the link must carry* — could not be pinned by anything. Adding a component test
+runner to catch it would have been framework churn ([AGENTS.md](../../AGENTS.md)); making the rule a
+pure function was not. It now lives in [`src/web/library-hits.ts`](../../src/web/library-hits.ts)
+with [a test](../../tests/library-hits.test.ts) that asserts all four parameters by name.
+
+That move also did the review's last CONSIDER — *"extract folding into a browser-safe shared module;
+the duplicated Unicode implementation is already divergent"* — so the browser's fold, the query-term
+rule and the link are one module with eleven tests, including one that pins the ligature end-mapping
+the review found.
+
 One transient React error was seen and is **not** an app bug: it coincided exactly with another
 agent's HMR reload of `SearchPanel.tsx` mid-keystroke, and did not recur. Worth knowing that several
 agents sharing one dev server can produce that.
