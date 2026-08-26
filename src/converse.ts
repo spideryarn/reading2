@@ -9,8 +9,16 @@
  *
  * ## It streams, and that changes where failure lives
  *
- * `explain` either returns an answer or throws, and the caller writes one of
- * two outcomes. A stream has a third state: **it succeeded partly.** Sixty
+ * This section was written when `explain` either returned an answer or threw,
+ * and the caller wrote one of two outcomes. **That is no longer true** —
+ * explain.ts streams now too (`explainStream`), which is why the two files have
+ * grown so alike and why they are scheduled to share a transport
+ * (docs/plans/simplification-audit.md § 3.4). What follows is still the reason
+ * this file is an async generator; it just no longer distinguishes it from its
+ * sibling.
+ *
+ * A stream has a third state a function returning a string does not:
+ * **it succeeded partly.** Sixty
  * words arrived and then the connection died. So this is an async generator
  * rather than a function returning a string — the caller gets the text as it
  * comes, and when something goes wrong it already holds everything that landed
@@ -559,6 +567,36 @@ export async function* converse({
      through `converse` rather than constructing the row by hand — which is the
      whole reason that test exists. */
   if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+
+  /* **And our own clocks can end it cleanly too**, for the same reason and with
+     a worse consequence. When the stall timer fires, `sseChunks` cancels the
+     reader; if that cancel wins the race against the pending read's rejection,
+     the loop exits with no error at all — and the check immediately below then
+     files a 45-second silence as "the answer stopped arriving before it was
+     finished". Both sentences end in "try again", so the reader never notices;
+     what is lost is the log line, which says `ended without finishing` instead
+     of `stalled: true`, and that is the line somebody reads when chat starts
+     failing and they want to know whether to blame the network or the provider.
+
+     explain.ts has had this guard since it became a stream. This file did not,
+     although explain.ts's comment on the guard above says to come here for the
+     account of how it was found — drift documented in the wrong direction, and
+     the reason docs/plans/simplification-audit.md § 3.4 now schedules a shared
+     transport rather than leaving these two to agree by hand. Full account:
+     docs/postmortems/converse-stall-misfiled-as-incomplete.md. */
+  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
+    line.error(
+      {
+        model: used,
+        ms: since(started),
+        timedOut: deadline.aborted,
+        stalled: stall.signal.aborted,
+        chars: text.length,
+      },
+      `stream from ${used} was cut off`,
+    );
+    throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
+  }
 
   /* **The stream stopped; did it finish?**
 

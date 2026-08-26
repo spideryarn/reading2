@@ -203,3 +203,45 @@ describe("stoppedByReader — was that actually the reader?", () => {
     expect(stoppedByReader(new Error("x"), undefined, fresh().signal, fresh().signal)).toBe(false);
   });
 });
+
+describe("failures are loud", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("says a silence is a silence, not a slow answer", async () => {
+    /* Mirrors tests/explain.test.ts § "says a silence is a silence" — the one
+       failure a mock made of whole SSE frames cannot produce: a body that opens
+       and then sends nothing at all, so only the stall clock ends the stream.
+       `sseChunks` cancels the reader when the stall fires, and a cancelled read
+       resolves `{ done: true }` rather than throwing — so the loop exits
+       cleanly, with neither `[DONE]` nor a `finish_reason`, and it is the
+       post-loop guards' job to tell that apart from a connection that merely
+       stopped.
+
+       explain.ts had a guard for exactly this and converse.ts did not, so this
+       threw the generic "before it was finished" and logged `ended without
+       finishing` where it should have said `stalled: true` — the one line
+       somebody reads to decide whether to blame the network or the provider.
+       docs/postmortems/converse-stall-misfiled-as-incomplete.md. */
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: new ReadableStream<Uint8Array>({ pull() {} }), // opens, then says nothing
+      } as unknown as Response),
+    );
+
+    async function run() {
+      for await (const _event of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "why?",
+        stallMs: 20,
+      })) {
+        // Draining is the point; the throw happens once the loop ends.
+      }
+    }
+
+    await expect(run()).rejects.toThrow(/stopped arriving after/);
+  });
+});
