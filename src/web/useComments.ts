@@ -1,23 +1,25 @@
 /**
  * The client half of comments — see docs/project/comments.md.
  *
- * One rule shapes this file: **the id is minted here, not on the server.** The
- * dialog opens the instant the reader lets go of the mouse, and `?note=` has to
- * name something; if the server minted the id, the dialog would spend the whole
- * model call attached to a placeholder that then had to be swapped out under
- * the URL. Minting client-side costs nothing (ids are random anyway —
- * docs/project/block-ids.md) and the id is real from the first frame.
+ * **Closed to new arrivals since 2026-08-26.** Selecting text used to create a
+ * comment here and spend a model call on the spot; it now opens a conversation
+ * instead — docs/plans/chat-as-gateway.md. So this hook reads the explanations
+ * a reader already has, and offers the two ways to ask one again: `retry` for a
+ * model call that failed, `deepen` for an answer they have read and judged thin.
  *
- * The POST is therefore also the answer: it returns the finished comment, so
- * there is nothing to poll.
+ * That is why there is no longer an `ask`, and why the id is no longer minted
+ * here: both re-ask paths send an id the server already knows, and the server
+ * refuses one it does not. The rule lives there rather than here, because
+ * deleting a function closes the React path and nothing else.
+ *
+ * The POST is also the answer: it streams, and the terminal frame carries the
+ * finished comment, so there is nothing to poll.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Comment } from "../types.js";
-import { mintId } from "../ids.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { wentQuiet } from "../messages.js";
-import type { SelectionAnchor } from "./selection.js";
-import { failure, readJson } from "./lib/api.js";
+import { apiFetch, failure, readJson } from "./lib/api.js";
 
 /**
  * What to say when the request never reached the server.
@@ -67,8 +69,15 @@ export interface ClientComment extends Comment {
 
 export interface CommentsApi {
   comments: ClientComment[];
-  /** Ask about a selection. Returns the id it minted, so the caller can open it. */
-  ask(anchor: SelectionAnchor): string;
+  /* **No `ask`.** Selecting text used to create a comment and spend a model
+     call on the spot; since 2026-08-26 it opens a conversation instead
+     (docs/plans/chat-as-gateway.md), so nothing creates a new explanation and
+     this hook is a reader of old ones plus the two ways to re-ask them.
+
+     The rule is not enforced here. `POST /api/comments/:slug` refuses an id it
+     has not already stored, because deleting a function closes the React path
+     and nothing else — a stale tab in another window would still have bought
+     one. See `answer` in src/routes.ts. */
   /** Ask the same question again — for a comment whose model call failed. */
   retry(id: string): void;
   /**
@@ -108,7 +117,7 @@ export function useComments(slug: string): CommentsApi {
   useEffect(() => {
     let live = true;
     setComments([]);
-    fetch(`/api/comments/${encodeURIComponent(slug)}`)
+    apiFetch(`/api/comments/${encodeURIComponent(slug)}`)
       .then((r) => readJson<{ comments?: Comment[]; error?: string }>(r))
       .then((body) => {
         if (!live) return;
@@ -134,8 +143,7 @@ export function useComments(slug: string): CommentsApi {
   const forget = useCallback(
     async (id: string) => {
       try {
-        const r = await fetch(
-          `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+        const r = await apiFetch(`/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
           { method: "DELETE" },
         );
         // A DELETE that 500s used to remove the comment from the screen and say
@@ -194,7 +202,7 @@ export function useComments(slug: string): CommentsApi {
 
       void (async () => {
         try {
-          const r = await fetch(`/api/comments/${encodeURIComponent(slug)}`, {
+          const r = await apiFetch(`/api/comments/${encodeURIComponent(slug)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -312,21 +320,6 @@ export function useComments(slug: string): CommentsApi {
     [slug, put, forget],
   );
 
-  const ask = useCallback(
-    (anchor: SelectionAnchor) => {
-      const id = mintId();
-      send({
-        id,
-        blockId: anchor.blockId,
-        quote: anchor.quote,
-        start: anchor.start,
-        createdAt: new Date().toISOString(),
-        status: "pending",
-      });
-      return id;
-    },
-    [send],
-  );
 
   /**
    * Re-ask a question whose model call failed.
@@ -378,5 +371,5 @@ export function useComments(slug: string): CommentsApi {
     [forget],
   );
 
-  return { comments, ask, retry, deepen, remove, error };
+  return { comments, retry, deepen, remove, error };
 }

@@ -1,112 +1,76 @@
 /**
- * A question handed from the explanation dialog to chat mode.
+ * The first message of a conversation started from a passage.
  *
- * Greg, 2026-08-26, on the follow-up box in the dialog:
+ * ## What used to be here, and why it has gone
  *
- * > Add a follow-up text-input box, but if the user enters text into it, it
- * > should automatically open up as a new chat (rather than making the
- * > [explanation dialog] itself too complex).
+ * This file was a module-level cell that carried a question from the
+ * explanation dialog into chat *mode*, because the two could not talk: chat
+ * lived behind a component boundary that only existed in its own mode, and the
+ * question could not go in the URL — it is arbitrary length and it is the
+ * reader's private text, which would then be in every access log between here
+ * and the server.
  *
- * Which is what keeps a comment at one question and one answer. The dialog does
- * not grow a transcript; the reader is moved to the thing that already is one.
+ * Since 2026-08-26 the conversation floats over the article
+ * (docs/plans/chat-as-gateway.md), so the dialog and the chat are on screen at
+ * the same time and the reader's follow-up is handed across as a prop. The cell
+ * had nothing left to carry.
  *
- * ## Why a module-level cell and not a query parameter
- *
- * The obvious implementation is `?ask=…`, and it is wrong for a reason
- * `useChat.ts` already writes down about its own POST:
- *
- * > the question does not belong in a URL — it is arbitrary length and it is the
- * > reader's private text, which would then be in every access log between here
- * > and the server.
- *
- * A parameter would also put it in browser history and in any link the reader
- * shared. So it travels in memory, and is lost on reload, which is the correct
- * trade: the cost of losing it is retyping one sentence.
- *
- * The other candidate was lifting `useChat` into `Reader` so the dialog could
- * call `send` directly. That charges every reader of every article a chat fetch
- * they will not use, which is precisely what the `ChatBand` component boundary
- * exists to avoid (see App.tsx).
- *
- * ## The three ways a cell like this goes wrong
- *
- * All three were found in review before any of them shipped, and each is a
- * silent failure — nothing errors, the question simply does the wrong thing.
- *
- *  - **It outlives its article.** Set it on article A, navigate to B, open chat,
- *    and A's question arrives in B's conversation with A's quote attached. Hence
- *    `slug` in the cell, and a `take` that refuses a mismatch.
- *  - **It outlives the moment.** The reader types a question, presses Escape,
- *    and goes to the glossary instead. Without an expiry the cell sits there for
- *    the life of the tab and fires days later, next time they open chat. Hence
- *    `HANDOFF_TTL_MS`.
- *  - **It fires twice, or into a thread list that is about to be replaced.**
- *    React StrictMode double-invokes effects at mount, so `take` clears as it
- *    reads — one caller gets it, ever. And the caller must wait for `loaded`:
- *    sending into an unloaded `useChat` inserts optimistic rows that the
- *    in-flight GET then overwrites, after which every delta is dropped on the
- *    floor with no error anywhere.
- *
- * See docs/plans/explain-deeper-answers.md § 4, and `ChatBand` in App.tsx for
- * the receiving end — including why it must latch `started` before it sends.
+ * It is worth saying what went with it, because all three were real and are now
+ * simply not reachable: a question outliving its article, a question outliving
+ * the moment (hence a two-minute expiry), and a question firing twice under
+ * React StrictMode. A prop has none of those problems, which is the argument
+ * for the change rather than a happy accident.
  */
-
-interface Handoff {
-  slug: string;
-  /** Exactly what to send, quote and all. Built by `askAboutQuote`. */
-  question: string;
-  /** The reading position, so the answer knows where "here" is. */
-  at: string | null;
-  createdAt: number;
-}
 
 /**
- * How long a handed-off question stays worth sending.
+ * How much of a paragraph to show when the reader has not picked out a phrase.
  *
- * Two minutes: long enough for the mode switch and the chat fetch, far too
- * short to still be there when the reader wanders into chat later on. A
- * question that has expired is dropped silently, because the alternative —
- * asking something the reader typed ten minutes ago and has forgotten — is
- * worse than asking nothing.
+ * Enough to recognise which paragraph you pressed, short enough that the
+ * composer is still somewhere you type rather than somewhere you scroll.
  */
-export const HANDOFF_TTL_MS = 120_000;
-
-let pending: Handoff | null = null;
-
-/** Hand a question to chat mode. Overwrites anything not yet taken. */
-export function handOffToChat(slug: string, question: string, at: string | null): void {
-  pending = { slug, question, at, createdAt: Date.now() };
-}
+const OPENING_CHARS = 60;
 
 /**
- * Take the question waiting for this article, if there is one.
+ * The first message of a conversation started from a block.
  *
- * **Clears as it reads**, so a double-invoked effect cannot send twice.
- */
-export function takeHandoff(slug: string): { question: string; at: string | null } | null {
-  const held = pending;
-  if (!held) return null;
-  if (held.slug !== slug) return null; // a different article's question; leave it for its own tab
-  pending = null;
-  if (Date.now() - held.createdAt > HANDOFF_TTL_MS) return null;
-  return { question: held.question, at: held.at };
-}
-
-/** Throw away anything waiting. For a reader who plainly changed their mind. */
-export function clearHandoff(): void {
-  pending = null;
-}
-
-/**
- * The reader's follow-up, with the passage it is about.
+ * Greg's call, 2026-08-26: the id **and** the opening words, not the bare id —
+ * "a six-character code in a text box is not something you can check you
+ * clicked correctly". The id earns its place too: the model cites block ids
+ * back, so having it here is what makes *"as you said in k3m9qt"* resolvable
+ * when the reader reads the transcript afterwards.
  *
- * The quote goes in because the conversation has to stand on its own: chat is
- * given the whole article, but "what did he mean by that?" resolves to nothing
- * without the sentence in front of it. Written as the reader's own words rather
- * than as an instruction to the model, because that is what the transcript will
- * show them afterwards — see `SUGGESTIONS` in ChatPanel.tsx, which sends its
- * canned questions verbatim for the same reason.
+ * ## This is not how the model is told
+ *
+ * It looks like it is, and an earlier draft of the plan assumed so. The
+ * conversation's anchor is stored on the **thread**, and `converse` renders it
+ * into every turn — because `recentHistory` drops the oldest turns, so a
+ * passage that lives only in the first message stops being sent once the
+ * conversation passes twenty turns, while the panel and the database go on
+ * saying the thread is anchored to it. See src/converse.ts § anchorSection.
+ *
+ * So this text is **for the human**. It is the reader's own words, editable
+ * before they send and shown back to them in the transcript, and nothing
+ * downstream parses it.
  */
-export function askAboutQuote(quote: string, question: string): string {
-  return `About this passage:\n\n"${quote.trim()}"\n\n${question.trim()}`;
+export function askAboutBlock(opts: {
+  blockId: string;
+  /** The selection, or the paragraph's opening words. Absent for neither. */
+  quote?: string | undefined;
+  /** What the reader typed. Empty means "just explain it". */
+  question?: string | undefined;
+}): string {
+  const short = opts.blockId.replace(/^spya-/, "");
+  const opening = opts.quote?.trim();
+  const trimmed =
+    opening && opening.length > OPENING_CHARS
+      ? `${opening.slice(0, OPENING_CHARS).trimEnd()}…`
+      : opening;
+  const head = trimmed
+    ? `About block ${short} ("${trimmed}"):`
+    : `About block ${short}:`;
+  /* An empty box means "explain this passage", which is Greg's call and is what
+     keeps the old one-press behaviour a keystroke away rather than gone. The
+     sentence is the reader's, phrased as they would phrase it. */
+  const asked = opts.question?.trim() || "Explain this passage.";
+  return `${head}\n\n${asked}`;
 }

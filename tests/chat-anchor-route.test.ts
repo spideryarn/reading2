@@ -26,6 +26,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { loadArticle } from "../src/api.js";
 import { loadThreads } from "../src/chat.js";
 import { handleApi } from "../src/routes.js";
+import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 /* An unknown slug falls through to the committed fixture article, so the turn
    has real blocks to anchor to without this test owning an article. The chat
@@ -64,7 +65,7 @@ async function post(pathname: string, body: unknown): Promise<Result> {
     (async function* () {
       yield* payload;
     })(),
-    { method: "POST", url: pathname },
+    { method: "POST", url: pathname , headers: AUTHED_HEADERS },
   ) as unknown as IncomingMessage;
 
   let written = "";
@@ -88,7 +89,7 @@ async function post(pathname: string, body: unknown): Promise<Result> {
     },
   } as unknown as ServerResponse;
 
-  await handleApi(req, res);
+  await handleApi(req, res, acceptAny);
 
   const frames = written
     .split("\n\n")

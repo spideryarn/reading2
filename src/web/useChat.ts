@@ -13,12 +13,12 @@
  * every access log between here and the server.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage, ChatThread, Citation, ToolRun } from "../types.js";
+import type { ChatAnchor, ChatMessage, ChatThread, Citation, ToolRun } from "../types.js";
 import { mintId } from "../ids.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../messages.js";
 import { describeFetchFailure } from "./useComments.js";
-import { failure, readJson } from "./lib/api.js";
+import { apiFetch, failure, readJson } from "./lib/api.js";
 
 export interface ChatApi {
   threads: ChatThread[];
@@ -68,6 +68,12 @@ export interface ChatApi {
      * rather than leaving the URL pointing at a conversation that is not there.
      */
     onThreadId?: (id: string) => void,
+    /**
+     * The passage this conversation is about — **only on the send that creates
+     * the thread**. The server 409s an anchor for a thread that already has a
+     * different one, rather than quietly ignoring it.
+     */
+    anchor?: ChatAnchor,
   ): string;
   /**
    * Answer the same question again, replacing the answer in place.
@@ -94,6 +100,18 @@ export interface ChatApi {
    * server has never heard of and quietly doing nothing.
    */
   stop(threadId: string, messageId: string): void;
+  /**
+   * Stop the first answer of a conversation and throw the conversation away.
+   *
+   * For the reader who selected a sentence, saw an answer start, and changed
+   * their mind — Greg's call, 2026-08-26. Not the same button as `stop`, and
+   * deliberately not the same word in the panel either: `✕ Cancel` against
+   * `⏹ Stop`, because one destroys and one does not.
+   *
+   * One request. Stopping and then deleting is a race that eats a question
+   * arriving in the gap — see `cancelChat` in src/routes.ts.
+   */
+  cancelAndDiscard(threadId: string, messageId: string): void;
   /** Start an empty conversation locally. Nothing is stored until you send. */
   begin(): string;
   /**
@@ -296,7 +314,7 @@ async function settledAnswer(
   const timer = setTimeout(() => giveUp.abort(new Error("poll timed out")), POLL_TIMEOUT_MS);
   try {
     const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
-      await fetch(`/api/chat/${encodeURIComponent(slug)}`, { signal: giveUp.signal }),
+      await apiFetch(`/api/chat/${encodeURIComponent(slug)}`, { signal: giveUp.signal }),
     );
     const found = body.threads
       ?.find((t) => t.id === threadId)
@@ -454,6 +472,17 @@ export function useChat(slug: string): ChatApi {
    */
   const gone = useRef(new Set<string>());
 
+  /**
+   * The current `threads`, readable outside a render.
+   *
+   * Only `cancelAndDiscard` needs it, and it needs it for one reason: to keep a
+   * copy of the conversation it is optimistically removing, so a 409 can put it
+   * back. Reading that from inside a `setThreads` updater would be the obvious
+   * alternative and is forbidden — an updater must be pure, React StrictMode
+   * invokes it twice, and this file has already been bitten by exactly that.
+   */
+  const latest = useRef<ChatThread[]>([]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — switching article is exactly when the tombstones stop meaning anything, and the effect deliberately reads nothing
   useEffect(() => {
     const forgotten = gone.current;
@@ -503,7 +532,7 @@ export function useChat(slug: string): ChatApi {
       const mine = slug;
       try {
         const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
-          await fetch(`/api/chat/${encodeURIComponent(mine)}`),
+          await apiFetch(`/api/chat/${encodeURIComponent(mine)}`),
         );
         if (showing.current !== mine) return;
         if (body.error) {
@@ -596,6 +625,16 @@ export function useChat(slug: string): ChatApi {
   const stopWanted = useRef(new Set<string>());
 
   /**
+   * The same wish, for the button that throws the whole conversation away.
+   *
+   * A separate set from `stopWanted` rather than a flag on it, because the two
+   * do different things to the same row and running both would stop an answer
+   * and then delete the thread it was in — which is the stop-then-delete race
+   * a GPT-5.6 review took apart. One of them fires, ever.
+   */
+  const cancelWanted = useRef(new Set<string>());
+
+  /**
    * Which attempt each assistant row is currently on, from its `begin` frame.
    *
    * A retry reuses the row, so the id names a place rather than an answer. Sent
@@ -628,8 +667,7 @@ export function useChat(slug: string): ChatApi {
   const askToStop = useCallback(
     async (threadId: string, messageId: string) => {
       try {
-        const r = await fetch(
-          `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/stop`,
+        const r = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/stop`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -659,6 +697,73 @@ export function useChat(slug: string): ChatApi {
       void askToStop(threadId, messageId);
     },
     [askToStop],
+  );
+
+  /**
+   * Stop the first answer of a conversation, and throw the conversation away.
+   *
+   * Greg's call, 2026-08-26: a reader who selects a sentence, watches an answer
+   * start and changes their mind wants the whole thing gone — panel, mark and
+   * all. Distinct from `stop`, which keeps what arrived and is what they mean
+   * further into a real conversation. The two are labelled differently in the
+   * panel for that reason: `✕ Cancel` against `⏹ Stop`.
+   *
+   * **One request, not two.** Calling `/stop` and then `DELETE` was the first
+   * design and it is a destructive race: `DELETE` has no expected-tail guard,
+   * so a second question arriving in the gap is deleted along with the first.
+   * The server does the check and the delete together — see `cancelChat` in
+   * src/routes.ts.
+   *
+   * The row is tombstoned in `gone` **before** the request leaves. That is what
+   * stops the still-open stream's frames from putting the conversation back on
+   * screen while the delete is in flight: `setThreads` and the frame loop both
+   * already consult it. Removing it from `threads` alone would not — the reader
+   * would watch the answer they just cancelled carry on typing itself.
+   */
+  const askToCancel = useCallback(
+    async (threadId: string, messageId: string, restore: ChatThread | undefined) => {
+      try {
+        const r = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/cancel`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messageId,
+              attempt: attempts.current.get(messageId),
+              /* The client names the answer it believes is last. The server
+                 refuses if the conversation has moved on since — which is the
+                 whole point of doing this in one request. */
+              expectedTailId: messageId,
+            }),
+          },
+        );
+        if (!r.ok) throw await failure(r);
+      } catch (e) {
+        /* **Put it back.** A 409 means the server refused because the
+           conversation has moved on — another tab asked something else — and
+           the reader must not be left believing they discarded a conversation
+           that is still there. This is the one place in this hook that reverts
+           an optimistic change, and it does so because the server said the
+           premise was wrong, not merely because a request failed. */
+        gone.current.delete(threadId);
+        if (restore) {
+          setThreads((prev) => (prev.some((t) => t.id === threadId) ? prev : [...prev, restore]));
+        }
+        setError(`Couldn't discard that conversation: ${describeFetchFailure(e as Error)}`);
+      }
+    },
+    [slug],
+  );
+
+  const cancelAndDiscard = useCallback(
+    (threadId: string, messageId: string) => {
+      cancelWanted.current.add(messageId);
+      gone.current.add(threadId);
+      const before = latest.current.find((t) => t.id === threadId);
+      setThreads((prev) => prev.filter((t) => t.id !== threadId));
+      void askToCancel(threadId, messageId, before);
+    },
+    [askToCancel],
   );
 
   /**
@@ -957,6 +1062,21 @@ export function useChat(slug: string): ChatApi {
           // conversation that does not exist.
           onThreadId?.(begun.threadId);
         }
+        /* A cancel pressed before this frame arrived. Checked FIRST and
+           returns: cancel and stop must never both fire at the same row, and
+           the cancel is the stronger wish — it stops the answer and removes
+           the conversation, so a stop as well would be aborting something
+           that is about to cease to exist. `cancelAndDiscard` cannot have
+           sent anything real yet, because until this frame there was no id
+           the server would accept. */
+        if (
+          cancelWanted.current.delete(pendingId) ||
+          cancelWanted.current.delete(begun.messageId)
+        ) {
+          stopWanted.current.delete(begun.messageId);
+          void askToCancel(current, begun.messageId, undefined);
+          return;
+        }
         // A stop pressed before this frame arrived. Now there is an id
         // for it, so it happens rather than being dropped on the floor.
         if (wanted) void askToStop(current, pendingId);
@@ -974,7 +1094,7 @@ export function useChat(slug: string): ChatApi {
         try {
           let response: Response;
           try {
-            response = await fetch(`/api/chat/${encodeURIComponent(slug)}`, {
+            response = await apiFetch(`/api/chat/${encodeURIComponent(slug)}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ threadId: id, ...payload }),
@@ -1092,6 +1212,7 @@ export function useChat(slug: string): ChatApi {
       at: string | null,
       useProfile = true,
       onThreadId?: (id: string) => void,
+      anchor?: ChatAnchor,
     ): string => {
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -1127,7 +1248,23 @@ export function useChat(slug: string): ChatApi {
         return existing ? prev.map((t) => (t.id === id ? thread : t)) : [...prev, thread];
       });
 
-      run(id, { question, at, ...(useProfile ? {} : { useProfile: false }) }, pendingId, onThreadId);
+      /* The anchor rides only on the request, never into the optimistic thread
+         above. The row on screen is a guess until the `begin` frame replaces it
+         with the server's, and inventing an `anchor` for it would put a mark in
+         the prose for a conversation that might yet be minted under another id.
+         The mark is drawn from `useChatAnchors`, which is told once the server
+         has agreed. */
+      run(
+        id,
+        {
+          question,
+          at,
+          ...(useProfile ? {} : { useProfile: false }),
+          ...(anchor ? { anchor } : {}),
+        },
+        pendingId,
+        onThreadId,
+      );
       return id;
     },
     [run],
@@ -1215,8 +1352,7 @@ export function useChat(slug: string): ChatApi {
   const write = useCallback(
     async (threadId: string, init: RequestInit, what: string) => {
       try {
-        const r = await fetch(
-          `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
+        const r = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
           init,
         );
         if (!r.ok) throw await failure(r);
@@ -1255,11 +1391,17 @@ export function useChat(slug: string): ChatApi {
     [write],
   );
 
+  /* Mirrored on every render rather than written at each `setThreads`. There
+     are a dozen of those and one of this, and a mirror that is updated at
+     twelve call sites is a mirror that is stale at the thirteenth. */
+  latest.current = threads;
+
   return {
     threads,
     loaded,
     recovering,
     send,
+    cancelAndDiscard,
     retry,
     edit,
     stop,

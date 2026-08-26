@@ -34,7 +34,9 @@ import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./con
 import { ContextPanel } from "./ContextPanel.js";
 import { useColumnContext } from "./useColumnContext.js";
 import { BlockRange, BlockRef } from "./BlockRef.js";
+import { MessageSquare } from "lucide-react";
 import { SWIPE_ATTR } from "./swipe.js";
+import type { AnchoredThread } from "./useChatAnchors.js";
 
 interface Props {
   article: Article;
@@ -67,14 +69,35 @@ interface Props {
   /** An existing mark was clicked. */
   onOpenComment(id: string): void;
   /**
-   * The glossary term the reader has selected, or nothing.
+   * Conversations anchored to a selection, so the prose can mark them.
    *
-   * Absent for every reader who has not opened the glossary, which is why it is
-   * optional rather than nullable-and-required: nothing else on this page had
-   * to learn about the feature. See GlossaryPanel.tsx for why the prose is
-   * marked only while a term is selected.
+   * Summaries rather than threads, and that is the point: chat's real state
+   * changes on every streamed token, and holding it here would re-render — and
+   * re-`annotateHtml` — every paragraph of the article while one answer
+   * arrives. See useChatAnchors.ts.
    */
-  term?: TermSelection | null;
+  chats: AnchoredThread[];
+  /** How many conversations each block has, marked or not. Drives the gutter button. */
+  chatCounts: Map<string, number>;
+  /** The conversation the floating panel is open on, so its mark can say so. */
+  openChat: string | null;
+  /** A chat mark was clicked. */
+  onOpenChat(id: string): void;
+  /** The reader pressed the chat button beside a paragraph. */
+  onChatAbout(blockId: BlockId): void;
+  /**
+   * Every glossary term this article has, so every one can be underlined.
+   *
+   * **A list since 2026-08-26, and it used to be the one the reader had
+   * pressed.** The prose now carries the whole glossary in every mode — Greg's
+   * call, and the reasoning is on `termMarks` in annotate.ts. The pressed one
+   * is still distinguishable: it arrives with `open` set, which becomes
+   * `mark.term[data-open]`.
+   *
+   * Optional, so an article with no glossary and every test that renders this
+   * table without one go on working unchanged.
+   */
+  terms?: readonly TermSelection[] | undefined;
   /**
    * The search results' marks, already resolved and grouped by block, and the
    * strongest match in each block for the bar down its left.
@@ -112,7 +135,12 @@ export function TableView({
   openComment,
   onSelect,
   onOpenComment,
-  term,
+  chats,
+  chatCounts,
+  openChat,
+  onOpenChat,
+  onChatAbout,
+  terms,
   hitMarks,
   hitStrength,
   hitHues,
@@ -239,22 +267,42 @@ export function TableView({
    * openable; what it must never do is underline whatever text now happens to
    * sit at that offset. See annotate.ts § Why the offsets are DOM offsets.
    */
+  /* Indexed once. The loop below used to do `blocks.find` per comment, which is
+     O(comments x blocks) plus a DOM parse each time — and folding every anchored
+     conversation into the same pass would have multiplied a cost that was
+     already the expensive half of this memo. */
+  const byId = useMemo(() => new Map(blocks.map((b) => [b.id, b])), [blocks]);
+
   const marksByBlock = useMemo(() => {
     const byBlock = new Map<BlockId, Mark[]>();
+    const push = (blockId: BlockId, mark: Mark) => {
+      const list = byBlock.get(blockId) ?? [];
+      list.push(mark);
+      byBlock.set(blockId, list);
+    };
     for (const c of comments) {
-      const block = blocks.find((b) => b.id === c.blockId);
+      const block = byId.get(c.blockId);
       if (!block) continue;
       const found = resolveMark(renderedText(block.html), c);
       if (!found) continue;
-      const list = byBlock.get(c.blockId) ?? [];
-      list.push({ id: c.id, ...found, open: c.id === openComment });
-      byBlock.set(c.blockId, list);
+      push(c.blockId, { id: c.id, ...found, open: c.id === openComment });
+    }
+    /* Chats and comments share one map rather than living in two, because they
+       are resolved the same way against the same prose and change on the same
+       clock — a reader asking a question. The glossary's marks are a second map
+       precisely because they change on a different one. */
+    for (const t of chats) {
+      const block = byId.get(t.anchor.blockId);
+      if (!block) continue;
+      const found = resolveMark(renderedText(block.html), t.anchor);
+      if (!found) continue;
+      push(t.anchor.blockId, { id: t.id, ...found, kind: "chat", open: t.id === openChat });
     }
     return byBlock;
-  }, [comments, blocks, openComment]);
+  }, [comments, chats, byId, openComment, openChat]);
 
   /**
-   * The selected glossary term's occurrences, as marks.
+   * Every glossary term's occurrences, as marks.
    *
    * A second map rather than entries folded into the one above, because the two
    * change on completely different clocks: comments change when the reader asks
@@ -263,10 +311,11 @@ export function TableView({
    * every term press, for an article's worth of blocks, and comment resolution
    * is the expensive half.
    *
-   * Null whenever the glossary mode is closed or nothing is selected, which is
-   * almost always — see `termMarks` in annotate.ts.
+   * Empty whenever the article has no glossary — see `termMarks` in
+   * annotate.ts, which also says why this is the whole list now rather than the
+   * one entry the reader pressed.
    */
-  const termMarksByBlock = useMemo(() => termMarks(blocks, term ?? null), [blocks, term]);
+  const termMarksByBlock = useMemo(() => termMarks(blocks, terms ?? []), [blocks, terms]);
 
   // Whether the end columns need to read as a layer depends on whether the
   // table actually outruns the window — which App knows exactly, because it
@@ -390,6 +439,16 @@ export function TableView({
              one click, in that order. Following the link is the one the reader
              asked for. */
           if ((e.target as Element).closest?.("a[href]")) return;
+          /* **Chat first.** One `<mark>` can carry both classes — a reader can
+             have asked about a sentence they had already had explained — and
+             only one of them can win a click. The chat is the living artefact;
+             comments have been closed to new arrivals since 2026-08-26, so the
+             overlap is always an older explanation. The comment does not become
+             unreachable: the Dock's drawer lists every one and opens it. It
+             loses a shortcut. See annotate.ts § MarkKind. */
+          const chatMark = (e.target as Element).closest?.("mark.chat");
+          const chatId = chatMark?.getAttribute("data-chat")?.split(" ")[0];
+          if (chatId) return onOpenChat(chatId);
           const mark = (e.target as Element).closest?.("mark.cmt");
           const first = mark?.getAttribute("data-comment")?.split(" ")[0];
           if (first) onOpenComment(first);
@@ -557,6 +616,38 @@ export function TableView({
                 }
               >
                 <BlockRef className="block-id" id={block.id} onJump={onJump} />
+                {/* A door into chat beside every paragraph — Greg, 2026-08-26:
+                    "a Chat button next to each paragraph … perhaps underneath
+                    the block-id". Anchored to the block rather than to a
+                    selection, which is the other half of what an anchor can be.
+
+                    Hidden until the row is hovered, and never `display: none`:
+                    that would take it out of the tab order and hand a keyboard
+                    reader nothing. `pointer-events` goes with the opacity in
+                    styles.css, or the gutter grows an invisible target that
+                    eats clicks meant for the id above it. */}
+                <button
+                  type="button"
+                  className={`block-chat${chatCounts.get(block.id) ? " has" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChatAbout(block.id);
+                  }}
+                  title={
+                    chatCounts.get(block.id)
+                      ? `Chat about this paragraph (${chatCounts.get(block.id)} already)`
+                      : "Chat about this paragraph"
+                  }
+                  aria-label="Chat about this paragraph"
+                >
+                  <MessageSquare size={12} aria-hidden="true" />
+                  {/* Every conversation anchored to this block, selections
+                      included — counting only the whole-block ones would make
+                      the number disagree with the marks sitting beside it. */}
+                  {!!chatCounts.get(block.id) && (
+                    <span className="block-chat-n">{chatCounts.get(block.id)}</span>
+                  )}
+                </button>
                 <div
                   className="prose"
                   dangerouslySetInnerHTML={{

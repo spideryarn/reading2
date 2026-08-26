@@ -40,8 +40,12 @@ interface Props {
   /** Ask again and search properly — for an answer the reader has judged thin. */
   onDeepen(): void;
   /**
-   * The reader typed a follow-up. Takes them to chat rather than growing a
-   * transcript in here — Greg's call, see chat-handoff.ts.
+   * The reader typed a follow-up.
+   *
+   * Opens a conversation rather than growing a transcript in here — Greg's
+   * call, see chat-handoff.ts. Since 2026-08-26 that conversation is the
+   * floating panel rather than chat mode, and it carries this comment's anchor,
+   * so the passage keeps its mark and the new chat is tied to the same words.
    */
   onDiscuss(question: string): void;
 }
@@ -119,7 +123,20 @@ export function CommentDialog({
 
   return (
     <aside
-      className={`cmt-dialog${dodging ? " dodging" : ""}`}
+      /* `busy` holds the box at a constant height while an answer is arriving.
+         Two separate things used to move the ✕ under the reader's finger — the
+         box is pinned by its BOTTOM edge so it grew upward with every paragraph,
+         and the whole box scrolled so the header then left out of the top — and
+         fixing either alone leaves it moving. This is the first half; the
+         `.cmt-body` wrapper below is the second. Greg, 2026-08-26: "the cross in
+         the top-right keeps moving as the text streams in."
+
+         Not a permanently constant height, which would put a two-line
+         explanation in a 34rem box. The relax-to-fit happens when the answer
+         settles, by which time the reader is no longer aiming at a button. */
+      className={`cmt-dialog${dodging ? " dodging" : ""}${
+        comment.status === "pending" ? " busy" : ""
+      }`}
       role="dialog"
       aria-label="Explanation"
     >
@@ -144,6 +161,7 @@ export function CommentDialog({
         </button>
       </header>
 
+      <div className="cmt-body">
       {/* The reader's own selection, quoted back. Without it the panel is an
           answer to a question you can no longer see, once the page has scrolled
           or you have stepped to a comment somewhere else entirely. */}
@@ -226,10 +244,13 @@ export function CommentDialog({
         </div>
       )}
 
-      {/* Between the answer and the footer, so the footer keeps being the row of
-          small controls it is, and the header — with its prev/next — is
-          untouched. The panel scrolls, so this scrolls with the answer rather
-          than pinning to the bottom of a long one. */}
+      </div>
+
+      {/* Outside `.cmt-body`, so it is pinned rather than scrolling away with a
+          long answer. It used to scroll with it, deliberately — but that was
+          when the whole panel scrolled and the footer was the only fixed thing.
+          Now that the transcript is the only part that moves, a composer that
+          slid off the bottom would be the same complaint as the moving ✕. */}
       {comment.status !== "pending" && (
         <form
           className="cmt-followup"

@@ -84,7 +84,6 @@ import {
   textParam,
   threadParam,
 } from "./params.js";
-import { askAboutQuote, handOffToChat, takeHandoff } from "./chat-handoff.js";
 import { arrivalTarget, isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
@@ -1087,10 +1086,10 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
                 start: openComment.start,
               },
               opening: openComment.quote,
+              question,
             });
             void setNote(null);
             void setThread(null);
-            setFollowUpDraft(question);
           }}
           onDelete={() => {
             // Step to the neighbour rather than closing outright: deleting one
@@ -1307,32 +1306,6 @@ function ChatBand({
     started.current = false;
   }, [slug]);
 
-  /**
-   * A question handed over from the explanation dialog — see chat-handoff.ts.
-   *
-   * **Above the auto-start effect, and that alone is not enough.** Both run in
-   * the same commit when `loaded` flips, and the effect below reads
-   * `threads.length` from the render that scheduled it — so `send` scheduling a
-   * `setThreads` does not stop it seeing zero, opening a second empty
-   * conversation and pointing `?thread=` at that instead. The latch has to be
-   * set *synchronously*, here, before `send` is called. Ordering alone is a bug.
-   *
-   * Gated on `loaded` for the reason chat-handoff.ts gives: sending into an
-   * unloaded `useChat` inserts optimistic rows the in-flight GET then replaces,
-   * after which every delta lands on a thread that no longer exists and is
-   * dropped without an error.
-   */
-  useEffect(() => {
-    if (!loaded) return;
-    const handoff = takeHandoff(slug);
-    if (!handoff) return;
-    started.current = true;
-    /* A hand-off from the comment dialog carries no profile choice of its own —
-       the question was framed there, and the default is the profiled answer
-       this app now gives. src/web/chat-handoff.ts. */
-    const id = send(null, handoff.question, handoff.at, true, (real) => void setThread(real));
-    void setThread(id);
-  }, [loaded, slug, send, setThread]);
 
   useEffect(() => {
     if (!loaded || started.current) return;
