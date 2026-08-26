@@ -13,7 +13,7 @@
  * | | src/explain.ts | src/converse.ts | here |
  * |---|---|---|---|
  * | what the reader gives | a selection | a question | a criterion |
- * | what comes back | prose | streamed prose | **a list of ids** |
+ * | what comes back | prose | streamed prose | **a streamed list of ids** |
  * | web search | yes | yes | **no** |
  *
  * Those last two rows are the whole design.
@@ -33,6 +33,24 @@
  * model a way to spend the reader's money confirming background it does not
  * need to have.
  *
+ * ## Streaming, without changing what is asked for
+ *
+ * `findPassagesStream` is the one implementation, same shape as
+ * `explainStream` in src/explain.ts: `stream: true`, the same deadline and
+ * stall clocks, `sseChunks`. `findPassages` below is a thin drainer of it.
+ *
+ * The model is still asked for exactly one JSON object — nothing about the
+ * prompt changes, so nothing about ranking does either. What changes is that
+ * `src/search-hits-stream.ts`'s `hitExtractor` watches the same text arrive a
+ * chunk at a time and hands back each hit object the instant its closing
+ * brace shows up. **Every hit shown mid-stream is run through the same
+ * `validateHits` as the final pass** — a single-item list, so the rule is
+ * never duplicated — and the eventual `done` event, built from the strict
+ * whole-text parse, is always the authoritative answer. A hit can appear in
+ * the stream and be missing from `done` (rare — see `hitExtractor`'s
+ * docstring on its safety property) but never the other way round: `done` is
+ * a superset check, not a second opinion.
+ *
  * ## Logging
  *
  * One line per finished search under the `model` component — the same fields
@@ -47,11 +65,23 @@ import { modelForOpenRouter } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import {
   PROVIDER_ORDER,
+  type StreamEnd,
+  type Usage,
+  explainAbort,
   providerFailedMidAnswer,
   providerRefused,
-  providerSpokeNonsense,
+  readerAborted,
+  sseChunks,
+  stoppedByReader,
 } from "./openrouter-stream.js";
-import { saidNothing } from "./messages.js";
+import { hitExtractor } from "./search-hits-stream.js";
+import {
+  ANSWER_OVERFLOWED,
+  ENDED_UNFINISHED,
+  NOT_CONFIGURED,
+  PROVIDER_UNREADABLE,
+  saidNothing,
+} from "./messages.js";
 import {
   type OpenRouterMessage,
   articleWithIds,
@@ -75,6 +105,18 @@ const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
  * open.
  */
 export const SEARCH_TIMEOUT_MS = 60_000;
+
+/**
+ * How long a *silent* stream is allowed to stay silent.
+ *
+ * Shorter than explain.ts's forty-five seconds because there is no web search
+ * here to wait through — the whole call is one straight pass over an article
+ * already sitting in the prompt, with no tool round-trip to leave a gap. A
+ * separate clock from the deadline above for the same reason explain.ts keeps
+ * one: "slow" and "dead" are different failures, and a connection that died
+ * mid-answer should not sit on the full sixty seconds before anyone is told.
+ */
+export const SEARCH_STALL_MS = 30_000;
 
 /**
  * The most passages one search may return.
@@ -147,7 +189,10 @@ export interface SearchRequest {
   criterion: string;
   model?: string;
   signal?: AbortSignal;
+  /** Overridable so a test can use a deadline it can actually wait for. */
   timeoutMs?: number;
+  /** Overridable for the same reason as `timeoutMs`. */
+  stallMs?: number;
 }
 
 export interface SearchResult {
@@ -309,47 +354,85 @@ export function validateHits(
  * empty result that looks exactly like "nothing in this article matches".
  * That is the silent-success shape (docs/reusable/silent-success.md) and it is
  * the one failure a reader could not possibly diagnose.
+ *
+ * Three outcomes, not two, and the third is the one worth naming: an object
+ * that starts and never finishes is a response cut off by `max_tokens`, and it
+ * gets its own reader-facing sentence — `ANSWER_OVERFLOWED`, which says the
+ * lever the reader actually has ("ask for something narrower") — rather than
+ * sending them hunting for a JSON object that was never going to be there. It
+ * is also the most likely real failure here, because the answer's size grows
+ * with the number of hits and nothing else.
+ *
+ * The other two outcomes — no object at all, and an object that is there but
+ * malformed — read identically to a reader who did not write this code, so
+ * both throw `PROVIDER_UNREADABLE` (docs/project/copy.md: every reader-facing
+ * sentence lives in src/messages.ts). The distinction between them is still
+ * real and still worth a log reader having, so it is not thrown away — it
+ * rides on the Error's `cause`, and `findPassagesStream` logs it before
+ * rethrowing. See the `catch` around this function's call site.
  */
 export function parseHits(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const from = trimmed.indexOf("{");
   const to = trimmed.lastIndexOf("}");
-  /* Three outcomes, not two, and the third is the one worth naming: an object
-     that starts and never finishes is a response cut off by `max_tokens`, and
-     saying "the model did not return a JSON object" would send whoever reads
-     the error hunting through the prompt rather than at the token ceiling. It
-     is the most likely real failure here, because the answer's size grows with
-     the number of hits and nothing else. */
   if (from !== -1 && to <= from) {
-    throw new Error("The model's answer was cut off before it finished.");
+    throw new Error(ANSWER_OVERFLOWED.message, { cause: "cut-off" });
   }
   if (from === -1) {
-    throw new Error("The model did not return a JSON object of passages.");
+    throw new Error(PROVIDER_UNREADABLE.message, { cause: "no-object" });
   }
   try {
     return JSON.parse(trimmed.slice(from, to + 1));
   } catch {
-    throw new Error("The model's list of passages was not valid JSON.");
+    throw new Error(PROVIDER_UNREADABLE.message, { cause: "malformed-json" });
   }
 }
 
-export async function findPassages({
+/**
+ * A hit that arrived mid-stream. Provisional: best-first, already through the
+ * same per-item validation as the final pass, but the final `done` is
+ * authoritative and may differ. Exactly one `done` event, last, ever — see
+ * the module docstring § Streaming.
+ */
+export type SearchEvent =
+  | { type: "hit"; hit: SearchHit }
+  | { type: "done"; result: SearchResult };
+
+/**
+ * Search a whole article, a few hits at a time.
+ *
+ * This is the whole implementation; `findPassages` below drains it. Modelled
+ * line for line on `explainStream` in src/explain.ts, including the two
+ * clocks and the checks after the loop — see that file for why each one is
+ * there and what broke before it was.
+ *
+ * **What's different from `explainStream`:** no tools, so no annotations to
+ * collect; and the payload is not prose to show as it arrives, it's one JSON
+ * object, so `hitExtractor` (src/search-hits-stream.ts) sits between the raw
+ * text and what gets yielded. `validateHits` runs on every candidate the
+ * extractor completes, one item at a time, and only a survivor is yielded —
+ * so a hit shown mid-stream has already passed the exact check the final
+ * pass will run again on the whole text.
+ */
+export async function* findPassagesStream({
   meta,
   blocks,
   criterion,
   model = process.env.SPIDERYARN_SEARCH_MODEL || DEFAULT_MODEL,
   signal,
   timeoutMs = SEARCH_TIMEOUT_MS,
-}: SearchRequest): Promise<SearchResult> {
+  stallMs = SEARCH_STALL_MS,
+}: SearchRequest): AsyncGenerator<SearchEvent> {
   const line = log("model");
 
   loadEnvLocal();
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
+    // Two audiences, two sentences — see NOT_CONFIGURED in src/messages.ts.
+    // This one is for whoever runs the server; the thrown message is for the
+    // reader, and does not name an environment variable or a dotfile.
     line.error("OPENROUTER_API_KEY is not set — every search will fail");
-    throw new Error(
-      "OPENROUTER_API_KEY is not set. Put it in .env.local — see docs/project/setup-dev.md.",
-    );
+    throw new Error(NOT_CONFIGURED.message);
   }
 
   const messages = buildSearchMessages(meta, blocks, criterion);
@@ -362,17 +445,31 @@ export async function findPassages({
   const tooShortToCache = underCacheFloor(cachedText(messages));
 
   const deadline = AbortSignal.timeout(timeoutMs);
+  /* A separate clock from the deadline, restartable on every chunk — see
+     SEARCH_STALL_MS and explain.ts's EXPLAIN_STALL_MS for why a stall timer
+     has to be its own controller rather than another `AbortSignal.timeout`. */
+  const stall = new AbortController();
+  let stallTimer: NodeJS.Timeout | undefined;
+  const touch = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+  };
+
   /* Our own clock rather than anything the provider reports — see explain.ts
      for the outage that rule came from. It starts before the request and stops
-     after the body is parsed, because that whole span is what the reader
-     spends watching the spinner. */
+     after the stream ends, because that whole span is what the reader spends
+     watching the spinner (or, now, watching hits arrive). */
   const started = Date.now();
+  const composite = AbortSignal.any(
+    signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],
+  );
 
   let response: Response;
+  touch();
   try {
     response = await fetch(ENDPOINT, {
       method: "POST",
-      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+      signal: composite,
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
@@ -387,6 +484,11 @@ export async function findPassages({
            a parse error — which `parseHits` reports as one rather than as an
            empty result. */
         max_tokens: 4000,
+        stream: true,
+        // Without this a streamed response carries no `usage` at all — see the
+        // same note in explain.ts. The token counts, the cache counts, all of
+        // it comes back null and the log line reads as a free call.
+        stream_options: { include_usage: true },
         // No tools. See the header: the question is always "where in this
         // piece", and no page on the web can answer it.
         provider: PROVIDER_ORDER,
@@ -394,19 +496,22 @@ export async function findPassages({
       }),
     });
   } catch (err) {
+    clearTimeout(stallTimer);
     line.error(
-      { ...errorFields(err), model, ms: since(started), timedOut: deadline.aborted },
+      {
+        ...errorFields(err),
+        model,
+        ms: since(started),
+        timedOut: deadline.aborted,
+        stalled: stall.signal.aborted,
+      },
       `no reply from ${model}${deadline.aborted ? " — deadline fired" : ""}`,
     );
-    if (deadline.aborted) {
-      throw new Error(
-        `The model did not answer within ${Math.round(timeoutMs / 1000)}s. Try again.`,
-      );
-    }
-    throw err;
+    throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
   }
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
+    clearTimeout(stallTimer);
     /* Drained and dropped without being looked at. The body has to be
        consumed or the connection leaks, but nothing here wants to know
        what it said — see `providerRefused`. */
@@ -421,36 +526,123 @@ export async function findPassages({
     throw providerRefused(response.status);
   }
 
-  let body: OpenRouterResponse;
+  const extractor = hitExtractor();
+  let emitted = 0;
+  let used = model;
+  let finishReason: string | null = null;
+  let usage: Usage | undefined;
+  const end: StreamEnd = { terminated: false };
+  let stopped = false;
+
   try {
-    body = (await response.json()) as OpenRouterResponse;
-  } catch {
-    /* The parse error itself is not logged and not rethrown: V8 quotes the
-       first characters of the input in the message, so a mangled provider
-       response would put a prefix of it — and possibly of our own prompt — into
-       the log line and into what the client is shown. See
-       `providerSpokeNonsense`. The status and the model are what a reader of
-       this line actually needs. */
-    line.error(
-      { model, ms: since(started), status: response.status },
-      `unreadable reply from ${model}`,
-    );
-    throw providerSpokeNonsense();
-  }
-  if (body.error) {
-    line.error({ model, ms: since(started) }, `${model} returned an error`);
-    throw providerFailedMidAnswer();
+    for await (const chunk of sseChunks(response.body, composite, touch, end)) {
+      if (chunk.model) used = chunk.model;
+      // A 200 that carries an error in the stream — a mid-generation provider
+      // failure. It arrives as data, not as a broken connection.
+      if (chunk.error) throw providerFailedMidAnswer();
+      const choice = chunk.choices?.[0];
+      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      const piece = choice?.delta?.content;
+      if (typeof piece === "string" && piece.length > 0) {
+        // Fed unconditionally, cap or no cap — `text()` has to stay complete
+        // for the final strict parse below regardless of how much has already
+        // been shown to the reader.
+        for (const raw of extractor.push(piece)) {
+          if (emitted >= MAX_HITS) break; // MAX_HITS respected while streaming too.
+          // The one rule, run on a single candidate. Not a copy of validateHits
+          // — see the module docstring § Streaming.
+          const survivor = validateHits({ hits: [raw] }, blocks).hits[0];
+          if (!survivor) continue;
+          emitted++;
+          yield { type: "hit", hit: survivor };
+        }
+      }
+      // Held for the log line and the return value after the loop: the usage
+      // chunk is normally the last of all and carries no choices, so it would
+      // otherwise be seen and dropped.
+      if (chunk.usage) usage = chunk.usage;
+    }
+  } catch (err) {
+    if (stoppedByReader(err, signal, deadline, stall.signal)) {
+      /* The caller gave up — see explain.ts's note on the same check. Not an
+         error, and not logged as one. What's left in the extractor's buffer is
+         whatever text arrived before that, and the checks below decide what to
+         do with it. */
+      stopped = true;
+      clearTimeout(stallTimer);
+      line.info(
+        { model: used, ms: since(started), chars: extractor.text().length },
+        `search from ${used} was abandoned`,
+      );
+    } else {
+      line.error(
+        {
+          ...errorFields(err),
+          model: used,
+          ms: since(started),
+          timedOut: deadline.aborted,
+          stalled: stall.signal.aborted,
+          chars: extractor.text().length,
+        },
+        `stream from ${used} broke off`,
+      );
+      throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
+    }
+  } finally {
+    clearTimeout(stallTimer);
   }
 
-  const answer = body.choices?.[0]?.message?.content?.trim();
-  const finishReason = body.choices?.[0]?.finish_reason ?? "?";
-  if (!answer) {
-    line.error({ model, ms: since(started), finishReason }, `${model} returned no text`);
+  /* An abort can also end the loop cleanly — see the long comment on the same
+     two checks in explain.ts, which is where the bugs behind both of them were
+     found. */
+  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+
+  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
+    line.error(
+      {
+        model: used,
+        ms: since(started),
+        timedOut: deadline.aborted,
+        stalled: stall.signal.aborted,
+        chars: extractor.text().length,
+      },
+      `stream from ${used} was cut off`,
+    );
+    throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
+  }
+
+  if (!stopped && !end.terminated && finishReason === null) {
+    line.error(
+      { model: used, ms: since(started), chars: extractor.text().length },
+      `stream from ${used} ended without finishing`,
+    );
+    throw new Error(ENDED_UNFINISHED.message);
+  }
+
+  const rawText = extractor.text();
+  if (rawText.trim() === "") {
+    line.error({ model: used, ms: since(started), finishReason }, `${used} returned no text`);
     throw new Error(saidNothing(finishReason).message);
   }
 
-  const { hits, dropped } = validateHits(parseHits(answer), blocks);
-  const used = body.model ?? model;
+  // The authoritative pass — a strict whole-text parse, not the extractor's
+  // best-effort one. See the module docstring § Streaming.
+  let parsed: unknown;
+  try {
+    parsed = parseHits(rawText);
+  } catch (err) {
+    /* `parseHits`'s "no object at all" and "malformed JSON" branches share one
+       reader-facing sentence, PROVIDER_UNREADABLE — see its docstring — but
+       the distinction between them is real and worth keeping for whoever
+       reads this log, so it travels on the Error's `cause` rather than being
+       lost when the messages were merged. */
+    line.error(
+      { model: used, ms: since(started), reason: (err as Error).cause ?? "?" },
+      `${used}'s answer could not be parsed`,
+    );
+    throw err;
+  }
+  const { hits, dropped } = validateHits(parsed, blocks);
 
   /* One line per finished search.
      The four `dropped` counts are the point of it, and each is invisible from
@@ -467,17 +659,30 @@ export async function findPassages({
       {
         model: used,
         ms: since(started),
-        inputTokens: body.usage?.prompt_tokens ?? null,
-        outputTokens: body.usage?.completion_tokens ?? null,
+        inputTokens: usage?.prompt_tokens ?? null,
+        outputTokens: usage?.completion_tokens ?? null,
         /* The only alarm there is. A cache that has silently stopped hitting
            looks exactly like one that is working — same response, no error,
            just a bigger bill. `cacheReadTokens` sitting at 0 across repeated
            searches of one article is the signal, and `tooShortToCache` says
            whether that 0 is expected. docs/reusable/silent-success.md. */
-        cacheReadTokens: body.usage?.prompt_tokens_details?.cached_tokens ?? null,
-        cacheWriteTokens: body.usage?.prompt_tokens_details?.cache_write_tokens ?? null,
+        cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+        // Two spellings of the write count — see the `Usage` type in
+        // openrouter-stream.ts for why both are read.
+        cacheWriteTokens:
+          usage?.prompt_tokens_details?.cache_write_tokens ?? usage?.cache_write_tokens ?? null,
         tooShortToCache,
         hits: hits.length,
+        /* How many hits were already shown to the reader before this strict
+           final parse ran, next to how many of those the same rule kept. The
+           two SHOULD agree — every mid-stream hit already passed validateHits.
+           A gap here means the extractor (src/search-hits-stream.ts) is
+           completing an object that JSON.parse over the whole text reads
+           differently, which is otherwise invisible: the reader just sees a
+           row appear and then not be there once the run is saved, or never
+           notices because it happened to agree this time. See
+           docs/reusable/silent-success.md. */
+        streamedHits: emitted,
         criterionChars: criterion.length,
         blocks: blocks.length,
         ...dropped,
@@ -489,38 +694,36 @@ export async function findPassages({
     // Nothing worth failing a reader's search over.
   }
 
-  return {
-    hits,
-    model: used,
-    usage: {
-      promptTokens: body.usage?.prompt_tokens ?? null,
-      completionTokens: body.usage?.completion_tokens ?? null,
-      cacheReadTokens: body.usage?.prompt_tokens_details?.cached_tokens ?? null,
-      cacheWriteTokens: body.usage?.prompt_tokens_details?.cache_write_tokens ?? null,
+  yield {
+    type: "done",
+    result: {
+      hits,
+      model: used,
+      usage: {
+        promptTokens: usage?.prompt_tokens ?? null,
+        completionTokens: usage?.completion_tokens ?? null,
+        cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+        cacheWriteTokens:
+          usage?.prompt_tokens_details?.cache_write_tokens ?? usage?.cache_write_tokens ?? null,
+      },
     },
   };
 }
 
-interface OpenRouterResponse {
-  model?: string;
-  error?: { message: string };
-  choices?: { finish_reason?: string; message?: { content?: string } }[];
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    /* What the cache actually did. **Both live inside `prompt_tokens_details`**
-       — `cached_tokens` for reads, `cache_write_tokens` for writes.
-
-       Worth stating because the first version of this read the write count from
-       `usage.cache_write_tokens`, one level too high. The research had it right
-       (docs/research/prompt-caching-openrouter.md § Pricing); it was read
-       carelessly. The wrong path is `undefined` forever, so every log line said
-       `cacheWriteTokens: null` while the reads beside it were real — and `null`
-       here means "we were not told", which is exactly what a provider that had
-       genuinely not sent the field would look like. Nothing was red: the unit
-       tests never see a response. It was caught by running
-       evals/prompt-caching.ts against the live API and asking why a number was
-       missing. docs/reusable/silent-success.md. */
-    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
-  };
+/**
+ * The same search, waited for rather than watched.
+ *
+ * A thin drain of `findPassagesStream`, so there is one implementation of the
+ * request, the clocks and the end-of-stream invariants rather than two.
+ * Everything that called `findPassages` before streaming existed keeps
+ * working unchanged.
+ */
+export async function findPassages(req: SearchRequest): Promise<SearchResult> {
+  for await (const event of findPassagesStream(req)) {
+    if (event.type === "done") return event.result;
+  }
+  /* Unreachable by the generator's own contract — it yields `done` or throws —
+     and here so that a future edit which breaks that contract fails loudly
+     instead of returning `undefined` as a result. */
+  throw new Error("The search ended without a result.");
 }

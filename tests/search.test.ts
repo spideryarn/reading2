@@ -63,13 +63,31 @@ describe("parseHits", () => {
    * Returning `{hits: []}` for either would store an empty result that looks
    * exactly like "nothing in this article matches" — the one failure a reader
    * could not possibly diagnose, and the one this whole file is about.
+   *
+   * Matched on the bracketed code rather than the sentence, same rule as
+   * tests/explain.test.ts: the wording is reader-facing copy that lives in
+   * src/messages.ts and is expected to be revised (docs/project/copy.md); the
+   * code is the stable part.
    */
   it("throws rather than returning nothing when there is no object at all", () => {
-    expect(() => parseHits("I could not find anything.")).toThrow(/JSON object/);
+    expect(() => parseHits("I could not find anything.")).toThrow(/\[ai-unreadable\]/);
   });
 
   it("throws on an object that is there but malformed", () => {
-    expect(() => parseHits('{"hits": [oops]}')).toThrow(/not valid JSON/);
+    expect(() => parseHits('{"hits": [oops]}')).toThrow(/\[ai-unreadable\]/);
+  });
+
+  it("distinguishes the two on the thrown Error's `cause`, for whoever reads the log", () => {
+    // Both share PROVIDER_UNREADABLE's sentence — a reader cannot tell them
+    // apart and does not need to — but the distinction is real and still
+    // worth keeping, so it rides on `cause` for the log line src/search.ts
+    // writes around this call rather than being lost.
+    expect(() => parseHits("I could not find anything.")).toThrow(
+      expect.objectContaining({ cause: "no-object" }),
+    );
+    expect(() => parseHits('{"hits": [oops]}')).toThrow(
+      expect.objectContaining({ cause: "malformed-json" }),
+    );
   });
 
   it("says a truncated answer was cut off, not that there was no answer", () => {
@@ -77,7 +95,7 @@ describe("parseHits", () => {
     // it stops. It is the most likely real failure here, because the answer's
     // size grows with the hit count and nothing else — so it gets its own
     // sentence rather than being reported as a missing object.
-    expect(() => parseHits('{"hits":[{"blockId":"spya-k3m9qt","quo')).toThrow(/cut off/);
+    expect(() => parseHits('{"hits":[{"blockId":"spya-k3m9qt","quo')).toThrow(/\[ai-overflowed\]/);
   });
 });
 
