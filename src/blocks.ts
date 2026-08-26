@@ -16,6 +16,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { sanitizeInPlace } from "./sanitize.js";
+/* `Block` and `BlockKind` come from types.ts rather than being declared here.
+   This file *writes* blocks.json — the spine every later stage addresses text
+   through (docs/project/block-ids.md) — so a second declaration of its shape is
+   the one place a silent divergence costs most. There was one until
+   2026-08-26: field-for-field identical to types.ts, and nothing checking that
+   it stayed so, because pipeline.ts reads only `run.stats` and there is no
+   assignment point where the two would ever be compared.
+
+   An `import type` is erased, so this does not put jsdom in anyone's bundle —
+   the reason types.ts gives for staying declaration-only still holds. */
+import type { Block, BlockKind } from "./types.js";
 
 /**
  * Blocks are the *finest* unit a reader takes in as one thing, so a `<li>` is a
@@ -46,9 +57,6 @@ const CONTAINERS = new Set([
  */
 const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "FORM", "BUTTON"]);
 
-export type BlockKind =
-  | "heading" | "text" | "quote" | "code" | "media" | "caption" | "other";
-
 /**
  * Captions that sit *beside* a figure rather than inside it, so they arrive as
  * ordinary paragraphs. They belong to the image, not to the argument, and a ToC
@@ -61,25 +69,6 @@ const CAPTION_MARKER = /^(figure|fig\.?|table|chart|diagram|image|photo|plate)\s
 
 /** Standalone boilerplate labels acting as headings: "Credits", "Sources". */
 const BOILERPLATE_LABEL = /^(credits?|sources?|notes?|references?|photo credits?)$/i;
-
-export interface Block {
-  id: string;
-  tag: string;
-  kind: BlockKind;
-  /** Depth 1–6 for headings, else undefined. Real headings only. */
-  level?: number;
-  text: string;
-  words: number;
-  html: string;
-  /**
-   * False for anything the ToC must not write a row about: images, rules, and
-   * pull-quotes that repeat body text verbatim. These still get ids — the ToC
-   * may want to *point* at a diagram — they just carry no gist.
-   */
-  gistable: boolean;
-  /** Why gistable is false, for debugging the splitter. */
-  note?: string;
-}
 
 const normalize = (s: string) =>
   s.replace(/\s+/g, " ").replace(/[^a-z0-9 ]/gi, "").toLowerCase().trim();

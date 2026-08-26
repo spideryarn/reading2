@@ -23,13 +23,18 @@ export interface Block {
   id: BlockId;
   tag: string;
   kind: BlockKind;
-  /** Heading depth 1–6, on headings only. */
+  /** Heading depth 1–6, on headings only. Real headings only. */
   level?: number;
   text: string;
   words: number;
   html: string;
-  /** False for media, rules, code — blocks with no prose to summarise. */
+  /**
+   * False for anything the ToC must not write a row about: images, rules, and
+   * pull-quotes that repeat body text verbatim. These still get ids — the ToC
+   * may want to *point* at a diagram — they just carry no gist.
+   */
   gistable: boolean;
+  /** Why gistable is false, for debugging the splitter. */
   note?: string;
 }
 
