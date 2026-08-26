@@ -19,7 +19,7 @@ not happened. This file is what exists now.
 | | |
 |---|---|
 | Vercel project | **`spideryarn`**, team `greg-detre` — a new project. `spideryarn-reading`, which serves spideryarn.com, is untouched |
-| Git | **none.** This repo has no remote, so deploys are `vercel deploy` from a working directory. Nothing rebuilds on push, because there is nothing to push to |
+| Git | **not connected.** The repo has a remote since 2026-08-26 — [`spideryarn/reading2`](../project/version-control.md) — but this Vercel project is not wired to it, so deploys stay `vercel deploy` from a working directory and nothing rebuilds on push |
 | Region | `lhr1` (London), chosen to match the Supabase project in `eu-west-2`. The edge answers from wherever you are; the *function* runs in London, next to the database |
 | Node | 24.x. Greg, 2026-08-26: *"I'm happy to use Node 24 unless there's a good reason not to"* — there was one candidate reason and it turned out to be false, see [require(ESM)](#the-runtime-has-requireesm-turned-off) |
 | URL | a per-deployment `spideryarn-<hash>-greg-detre.vercel.app` |
