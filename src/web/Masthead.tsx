@@ -108,6 +108,46 @@ export function Masthead({ article }: Props) {
           ))}
         </p>
 
+        {/* **Where this article came from, when the answer is not "a web page".**
+            A PDF was read by a model, and the reader is entitled to know that
+            before they trust a sentence in it.
+
+            Two states, and the difference between them is the whole point. A
+            born-digital PDF has its own text layer, so every page was checked
+            against it and the number says how well — that is a fact, and it is
+            stated quietly. A scan has no text layer at all, so nothing checked
+            anything, and saying so needs a sentence rather than a badge: a
+            reader who sees a word like "unverified" and no explanation will
+            either ignore it or over-read it.
+
+            The link is the part that matters most. A second machine's opinion
+            would not be verification; a person looking at the ink is. So the
+            original is one click away. docs/plans/pdf-ingestion.md § A scan
+            with no text layer. */}
+        {meta.source === "pdf" && (
+          <p className="provenance">
+            {meta.unverified ? (
+              <>
+                Transcribed by a machine from a scanned image. There was no text in the file to
+                check it against, so nothing has verified it.{" "}
+                <a href={`/api/source/${meta.slug}`} target="_blank" rel="noreferrer noopener">
+                  View the scanned pages
+                </a>
+                .
+              </>
+            ) : (
+              <>
+                Transcribed by a machine from a PDF, and checked against the file's own text on{" "}
+                {meta.pagesChecked ?? 0} of {meta.pages ?? 0} pages.{" "}
+                <a href={`/api/source/${meta.slug}`} target="_blank" rel="noreferrer noopener">
+                  View the original
+                </a>
+                .
+              </>
+            )}
+          </p>
+        )}
+
         {/* The whole piece in one sentence — the coarsest thing there is, and
             constant, so it belongs here rather than in a column. */}
         {root?.gist && <p className="root-gist">{root.gist}</p>}
