@@ -342,11 +342,18 @@ export function existingFor(onDisk: Glossary | null, sourceHash: string): Glossa
  * The ids an older list already spent, keyed by every name it answers to.
  *
  * **This is the half that was missing**, and its absence is what made refusing
- * to append look like a data-loss bug. Refusing was right; doing it without
- * carrying the identity across was not.
+ * to append look like a data-loss bug. Refusing was right: a `glossary/1` entry
+ * holds one blended field that no `glossary/2` label can honestly describe, and
+ * *appending* to it means the model is handed a FORBIDDEN list naming that term
+ * — so it never rewrites it, `buildGlossary` stamps the result `glossary/2`,
+ * the outdated banner goes away, and the original weak entry survives wearing a
+ * "background" label whose tooltip says the article did not say it. The bad
+ * entry gets certified rather than replaced. That is worse than the badge it
+ * replaced, and it is exactly what "Find them again" promises not to do.
  *
- * A fresh entry that answers to a name the old list knew keeps the old id,
- * which is what a `?term=` link addresses and what a stored lookup is keyed by
+ * So: regenerate the prose, and inherit the **identity**. A fresh entry that
+ * answers to a name the old list knew keeps the old id, which is what a
+ * `?term=` link addresses and what a stored lookup is keyed by
  * (src/glossary-lookups.ts). Names are display, ids are identity — the same
  * rule `merge` follows.
  *
@@ -414,16 +421,31 @@ function merge(incumbent: GlossaryEntry, challenger: GlossaryEntry): GlossaryEnt
     aliases.push(alias);
   }
 
-  /* **Field by field, winner first, loser as the fallback** — and this is the
-     line that changed when one required prose field became two optional ones.
-     The old rule took `gloss` from the winner outright, which was safe only
-     because every entry had one. Doing that to `senseHere` would silently
-     delete the loser's, in exactly the case where it is the only one there: two
-     entries for the same thing where the richer *name* came back with the
-     background and the poorer one with what the article means by it. The whole
-     point of this dedup is that nothing is thrown away. */
-  const senseHere = winner.senseHere ?? loser.senseHere;
-  const background = winner.background ?? loser.background;
+  /* **The prose moves as a bundle, not field by field**, and this is the third
+     rule this line has had. Two reviewers argued against the second one and
+     they were right.
+
+     Field-by-field `winner.x ?? loser.x` threw nothing away, which is why it
+     looked right, and it broke the design in two ways. The prompt now makes
+     **absence a signal** — "LEAVE THIS FIELD OUT rather than restate the page.
+     An absent field is a real answer" — so filling a gap the winner left on
+     purpose overrides a judgment with a hole. And it could pair the loser's
+     `senseHere` with the winner's `background`, so the "in this piece" section
+     described a different entry from the heading above it. With one blended
+     `gloss` neither was possible.
+
+     Taking the whole bundle from whichever entry has any prose keeps an entry
+     internally coherent: one voice, one judgment about what was worth saying.
+     The cost is real and is the reason this was argued about — when the winner
+     has only a `background` and the loser has the only `senseHere`, that
+     `senseHere` goes. It goes because the alternative is an entry that claims
+     the article means something, in a section labelled as coming from the
+     article, on the authority of a name that lost. */
+  const hasProse = (e: GlossaryEntry) =>
+    e.senseHere !== undefined || e.background !== undefined;
+  const prose = hasProse(winner) ? winner : hasProse(loser) ? loser : winner;
+  const senseHere = prose.senseHere;
+  const background = prose.background;
   const url = winner.url ?? loser.url;
   const difficulty = winner.difficulty ?? loser.difficulty;
   const centrality = winner.centrality ?? loser.centrality;
@@ -725,6 +747,13 @@ piece's use is plain once you know what the term is — a person simply quoted, 
 work simply named — LEAVE THIS FIELD OUT rather than restate the page. An absent
 field is a real answer.
 
+This field is where a description of the page is most tempting and does the most
+damage, because it is the line the reader sees first. If your sentence would
+begin "Cited as ...", "Quoted for ...", "Referenced as ...", "Used as an example
+of ...", "Invoked to ...", or "The article's ..." — you are describing the page.
+Leave the field out. It is only a "senseHere" if the author has given the term a
+meaning it would not otherwise have.
+
 "background" — what the reader needs to bring TO the piece: who this person is,
 what this work or event is, what the term ordinarily means outside this article.
 This is your knowledge, not the article's, and the reader will be told so, so
@@ -732,6 +761,12 @@ write it as knowledge rather than as hedged commentary on the article. Pick the
 two or three facts that make THIS article's use of it land — for a person quoted
 as an authority, the facts that say why the author reached for that name — and
 stop. A biography is padding, and so is any fact the piece does not lean on.
+
+That is a rule about which facts to CHOOSE, not a licence to state the
+connection. Do not end with "which is why the article quotes him", "making him
+the article's example of ...", "used here to argue that ...". The reader can see
+what the article does with it; they cannot see who this person is. Choose the
+facts this article makes relevant, then write only the facts.
 
 A coinage of the author's usually needs only "senseHere". A person named without
 introduction usually needs only "background". A borrowed term the author bends
@@ -752,9 +787,12 @@ That describes the page the reader is looking at. It is the whole failure.
 
 GOOD — "background": "Turing Award-winning computer scientist, known for
 distributed systems and for writing LaTeX. A byword for the view that precise
-writing is the test of precise thought, which is what his line is being borrowed
-for."
-That is what makes the quotation land, and it is not on the page.
+writing is the test of precise thought."
+That is what makes the quotation land, and it is not on the page. Note where it
+STOPS: it does not go on to say what the article does with him. Which facts you
+choose is governed by this article — those two are here because they are the
+ones that make the quotation carry weight — but the sentence you write is about
+the term, not about the page.
 
 NAMES AND ALIASES
 
@@ -951,8 +989,8 @@ export async function generateGlossary(opts: {
      no current label can honestly describe.
 
      **Inherit** the ids of a list we are replacing rather than appending to.
-     That is the half whose absence made the refusal look like a data-loss bug —
-     without it, `taken` is empty, every id is re-minted, every `?term=` link
+     That is the half whose absence made the refusal look like a data-loss bug
+     — without it, `taken` is empty, every id is re-minted, every `?term=` link
      goes dead and every stored lookup is orphaned.
 
      The attempt in between was worse than either, and is worth knowing about
@@ -961,7 +999,8 @@ export async function generateGlossary(opts: {
      list naming every term already present, so it never rewrites them — and the
      result is stamped `glossary/2`, the outdated banner disappears, and the
      original weak entry survives wearing a "background" label whose tooltip
-     says the article did not say it. Certified rather than replaced. */
+     says the article did not say it. The bad entry certified rather than
+     replaced, which is the opposite of what the button promises. */
   const existing = existingFor(onDisk, sourceHash);
   /* Nothing to append to, but a list to replace: same article, older prompt.
      The prose is regenerated — that is what the banner offering "Find them

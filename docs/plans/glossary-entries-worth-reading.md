@@ -268,6 +268,50 @@ whose id it still has, and cheap to fix later by pruning on read. **`serialised`
 two server processes could still lose one of two concurrent writes; that is a real limit of a
 filesystem store and one of the things [the Postgres migration](postgres-migration.md) settles.
 
+### The two findings I argued with, and then lost
+
+**The merge rule.** Both reviewers said `winner.x ?? loser.x` per prose field was wrong, and I kept
+it twice on the grounds that a resurrected weak line is *visible* to the reader while a deleted good
+one is invisible. Sol supplied the argument that settles it, and it is not either of the two options
+that were being compared:
+
+- filling a gap the winner left is not filling a gap. **The prompt now makes absence a signal** —
+  *"an absent field is a real answer"* — so `??` overrides a judgment with a hole;
+- and it could pair the **loser's** `senseHere` with the **winner's** `background`, so the section
+  labelled "in this piece" described a different entry from its own heading. With one blended `gloss`
+  that was not possible.
+
+So the prose moves as a **bundle**: whichever entry has any prose supplies both fields, or neither.
+An entry stays internally coherent — one voice, one judgment about what was worth saying. The cost
+is real and is why it was argued about: when the winner has only a `background` and the loser has the
+only `senseHere`, that `senseHere` goes. It goes because the alternative is claiming the article
+means something, in a section labelled as coming from the article, on the authority of a name that
+lost.
+
+**The prompt contradicted itself, and the fix taught it a worse trick first.** `WHAT AN ENTRY
+SUPPLIES` bans describing what the article does with a term — and the GOOD example then ended
+*"which is what his line is being borrowed for"*. Every generated entry duly ended the same way:
+*"making him the article's example of ..."*, *"which is why ... used here"*.
+
+The distinction that fixes it is one this doc already draws twice: **which facts you choose is
+governed by the article; the sentence you write is about the term.** A selection rule, not a licence
+to state the connection. The example now stops early and says so, and there is an explicit list of
+banned openers.
+
+**What happened when that first ran is the part worth recording.** The trailing clause vanished from
+`background` — and reappeared as a `senseHere` reading *"Cited as the clearest statement of the idea
+that ..."*. Which is worse, because `senseHere` **leads the closed row**: the original complaint,
+restored, by a change meant to prevent it. Squeezing a register out of one field pushed it into the
+next one along.
+
+The fix was to give `senseHere` the same explicit ban, in the field where it does the most damage,
+naming the openers: *"Cited as", "Quoted for", "Referenced as", "Used as an example of", "Invoked
+to", "The article's"*. After that, all five entries came back clean and in the right fields — the
+coinages with `senseHere` only, the three people with `background` only.
+
+**The general shape, worth carrying elsewhere: a prompt ban does not delete a register, it relocates
+it.** Check the neighbouring field after every one.
+
 ### Checked in a browser
 
 All eleven checks pass: the two labelled sections render with the solid and dotted rules that tell

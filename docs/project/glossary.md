@@ -352,6 +352,20 @@ markup inside a stored string would reverse the plain-text stance below; and sti
 in an 18rem band is noise. Field granularity *forces* the separation that sentence granularity would
 have to detect.
 
+### A prompt ban relocates a register, it does not delete one
+
+Worth knowing before touching `SYSTEM`, because it cost a round trip to find. The prompt bans
+describing what the article does with a term — and its own GOOD example ended *"which is what his
+line is being borrowed for"*, so every entry ended the same way: *"making him the article's example
+of ..."*. Removing that clause from the example worked, and the register **moved into `senseHere`**,
+which is worse: that field leads the closed row, so the original complaint came back through a change
+meant to prevent it.
+
+Both fields now carry the ban explicitly, and `senseHere` carries the list of openers that give it
+away — *"Cited as", "Quoted for", "Referenced as", "Used as an example of", "Invoked to", "The
+article's"*. The distinction that makes it coherent is the same one the selection rules use: **which
+facts you choose is governed by this article; the sentence you write is about the term.**
+
 ### Name the thing, not the topic
 
 One guard added after watching the first run: the model came back with **"JFK speechwriting"** and

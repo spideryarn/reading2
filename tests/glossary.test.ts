@@ -853,16 +853,20 @@ describe("what an entry says — the glossary/2 field split", () => {
     expect(g.entries[0]?.fromOutside).toBeUndefined();
   });
 
-  it("keeps both entries' prose through a merge, not just the winner's", () => {
-    /* The line that had to change when one required field became two optional
-       ones. `merge` used to take `gloss` from the winner outright, which was
-       safe only because every entry had one. Here the richer name came back
-       with the background and the poorer one with what the article means by it
-       — taking the winner's outright would silently delete the only senseHere
-       in the pair, in a dedup whose whole promise is that nothing is thrown
-       away. */
+  it("takes the winner's prose as a bundle, never one field from each", () => {
+    /* The third rule this line has had, and the one two reviewers argued for.
+       Field-by-field `winner.x ?? loser.x` threw nothing away and broke the
+       design twice over: it filled gaps the winner had left ON PURPOSE — the
+       prompt now says an absent field is a real answer — and it could pair the
+       loser's `senseHere` with the winner's `background`, so the "in this
+       piece" section described a different entry from its own heading.
+
+       The cost is visible here and is the reason it was argued about: the
+       loser's `senseHere` is dropped. It is dropped because the alternative is
+       claiming the article means something, in a section labelled as coming
+       from the article, on the authority of a name that lost. */
     const out = dedupe([
-      without(entry({ name: "nonreductive", senseHere: "Seth's narrowed sense." }), "background"),
+      without(entry({ name: "nonreductive", senseHere: "The loser's reading." }), "background"),
       without(
         entry({
           name: "nonreductive explanation",
@@ -873,10 +877,24 @@ describe("what an entry says — the glossary/2 field split", () => {
       ),
     ]);
     expect(out).toHaveLength(1);
-    // The richer name won, as it always did.
     expect(out[0]?.name).toBe("nonreductive explanation");
-    expect(out[0]?.senseHere).toBe("Seth's narrowed sense.");
     expect(out[0]?.background).toBe("The ordinary philosophical use.");
+    expect(out[0]?.senseHere).toBeUndefined();
+  });
+
+  it("falls back to the loser's bundle when the winner has no prose at all", () => {
+    // Having nothing to say is not the same as judging that nothing needed
+    // saying. An entry with neither field is not overriding anything.
+    const out = dedupe([
+      entry({ name: "nonreductive", senseHere: "The only reading there is." }),
+      without(
+        without(entry({ name: "nonreductive explanation", aliases: ["nonreductive"] }), "senseHere"),
+        "background",
+      ),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.name).toBe("nonreductive explanation");
+    expect(out[0]?.senseHere).toBe("The only reading there is.");
   });
 });
 
@@ -942,17 +960,27 @@ describe("which prose a merge puts in front of the reader", () => {
     expect(entryProse(out[0]!).lead).toBe("The winner's line.");
   });
 
-  it("fills a gap from the loser rather than dropping it — and that then leads", () => {
+  it("cannot resurrect a senseHere the winner deliberately left out", () => {
+    /* The failure both reviewers named, and the reason the rule changed. The
+       model is told to omit `senseHere` for a person simply quoted; a second
+       entry under a shorter name might not have obeyed. Field-by-field merging
+       took the disobedient one and `entryProse` put it on the closed row —
+       which is the exact entry this whole rewrite exists to eliminate,
+       arriving through the merge path. */
     const out = dedupe([
-      without(entry({ name: "Lamport", aliases: ["Leslie Lamport"], senseHere: "Only line." }), "background"),
+      without(
+        entry({
+          name: "Lamport",
+          aliases: ["Leslie Lamport"],
+          senseHere: "Quoted for the line about writing and thinking.",
+        }),
+        "background",
+      ),
       without(entry({ name: "Leslie Lamport", background: "Turing Award." }), "senseHere"),
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0]?.senseHere).toBe("Only line.");
-    expect(out[0]?.background).toBe("Turing Award.");
-    // Documented consequence, pinned so it is a decision rather than a surprise:
-    // the merged-in senseHere takes the closed row.
-    expect(entryProse(out[0]!).lead).toBe("Only line.");
+    expect(out[0]?.senseHere).toBeUndefined();
+    expect(entryProse(out[0]!).lead).toBe("Turing Award.");
   });
 });
 
