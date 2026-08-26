@@ -15,6 +15,11 @@
   "include": [
     "src",
     "scripts",
+    /* evals/ runs the same way these do — tsx, node ESM — and reads the same
+       artefacts, so it belongs to this project rather than to tests/. It is not
+       part of the test suite: an eval calls a model and costs money. See
+       evals/README.md. */
+    "evals",
     "vite.config.ts",
     "vitest.config.ts",
     "drizzle.config.ts"

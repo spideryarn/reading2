@@ -4,10 +4,10 @@
  *
  *   npm run toc -- output/noema-mythology-of-conscious-ai.blocks.json
  *
- * The model proposes INTERNAL nodes only, and writes a navLabel for each
- * gistable block. Leaves are generated here, mechanically, one per block —
- * which removes the whole class of partition errors that come from asking a
- * model to tile a document exactly. Validate the result with:
+ * The model proposes INTERNAL nodes only. Leaves are generated here,
+ * mechanically, one per block — which removes the whole class of partition
+ * errors that come from asking a model to tile a document exactly. Validate the
+ * result with:
  *
  *   npm run validate-tree -- <dir with blocks.json + tree.json>
  *
@@ -15,41 +15,56 @@
  * architecture.md draws as stage 5. A tree without gists has nothing to render
  * at its coarse levels and fails validation, and both stages write the same
  * artefact, so splitting them into two model passes buys nothing today.
+ *
+ * **The nav labels are NOT in this call.** They are one per gistable block, so
+ * they were the only output in the pipeline that grew with the article without a
+ * bound — 73% of this stage's answer on a 360-block article — and they took the
+ * whole stage over the 128,000-token ceiling on a single response. They now live
+ * in src/labels.ts, batched along this tree's own section boundaries and run in
+ * parallel. `generateToc` still drives both and still writes one set of
+ * artefacts, so the pipeline sees one step. docs/plans/toc-scaling.md.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODEL } from "./models.js";
+import { isSpideryarnId } from "./ids.js";
+import { generateLabels, mergeLabels } from "./labels.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
+import { parseJsonFrom } from "./parse-json.js";
 
-const PROMPT_VERSION = "toc/1";
+/* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
+   longer asks for them, and a tree written by toc/1 is a different artefact. */
+const PROMPT_VERSION = "toc/2";
 
 /**
  * How hard the model thinks before it starts writing.
  *
- * **`"medium"`, and this is the one setting in the file with a run behind it.**
- * The first attempt at fixing this stage's budget raised `max_tokens` from
- * 32,000 to 77,100 and the call failed again — having emitted 40,000 characters
- * of JSON, about 13,000 tokens of answer, which leaves roughly 64,000 tokens of
- * thinking inside a budget that had reserved 40,000 for it.
+ * **Back to `"high"`, and getting it back is the point of the split.**
  *
- * That is the lesson the first fix missed: at `"high"`, adaptive thinking
- * **expands into whatever room it is given**. Raising the ceiling raises the
- * thinking with it, so the two never converge and no headroom constant is safe
- * on its own. The dial has to move too.
+ * The history is worth keeping, because this setting has been wrong in both
+ * directions. It was `"high"` originally, by default rather than by decision.
+ * The max_tokens postmortem forced it down to `"medium"`: the first attempt at
+ * fixing the budget raised `max_tokens` from 32,000 to 77,100 and failed again,
+ * having spent roughly 64,000 tokens on thinking, because at `"high"` adaptive
+ * thinking **expands into whatever room it is given**. `max_tokens` is a
+ * ceiling, not a leash; `effort` is the leash.
  *
- * `"medium"` is where it moves to, and stage 4 is the stage that can most afford
- * it: the reasoning it needs is finding topic shifts and balancing the levels —
- * real work, but done once — while the bulk of what it writes is one mechanical
- * label per paragraph, which does not get better for being brooded over. The
- * sibling stages keep `"high"`, because their answers are short enough that
- * their reasoning is nearly all of what they do. See src/token-budget.ts and
+ * That was a real quality concession and it was made under duress — the reasoning
+ * this stage needs is finding topic shifts and balancing the levels, which is
+ * exactly the part worth thinking about. It was affordable only because the
+ * other 73% of the answer was one mechanical label per paragraph, which does not
+ * improve for being brooded over.
+ *
+ * Those labels now live in src/labels.ts, generated in batches at `"low"`. What
+ * is left here is ~7,000 tokens of structure on a 360-block article, with room
+ * to think about it properly. See docs/plans/toc-scaling.md and
  * docs/postmortems/toc-max-tokens.md.
  */
-const EFFORT = "medium" as const;
+const EFFORT = "high" as const;
 
 const SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.
@@ -87,29 +102,12 @@ GISTS (internal nodes)
 - It must be a CLAIM or a MOVE, not a topic label.
 - Write a parent's gist from its children, not from the raw text.
 
-NAV LABELS (one per gistable block)
-
-- 6-20 words. Longer than a title on purpose: a paragraph has no name of its
-  own, and its neighbours are numerous and similar, so it needs enough words to
-  tell itself apart from them.
-- A navLabel must be a CLAIM or a MOVE, not a topic label.
-    good: "Seth rejects substrate independence because feeling is metabolic"
-    bad:  "Discusses substrate independence"
-- Reuse the author's distinctive vocabulary verbatim. Those words are the
-  reader's handholds when they arrive at the passage.
-- For a heading block, the navLabel is just the heading's own text.
-- Emit NOTHING for a block marked NOT-GISTABLE.
-- Never introduce a fact that is not in the block.
-- No meta-narration. Never write "this section explores", "the author then
-  turns to", "we are told that".
-
 OUTPUT
 
 JSON only, no prose, no code fence:
 
 {"root": {"title": "...", "gist": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
-          "sourceHeading": "...", "children": [ ... ]},
- "navLabels": {"<blockId>": "...", ...}}
+          "sourceHeading": "...", "children": [ ... ]}}
 
 Use only block ids that appear in the input. Do not invent ids.`;
 
@@ -133,63 +131,101 @@ function renderBlocks(blocks: Block[]): string {
 /**
  * How many tokens of JSON this stage is asking the model for.
  *
- * Stage 4 is the one stage whose answer grows with the article without bound:
- * it writes a nav label for **every** gistable block, so a piece with three
- * times the paragraphs wants three times the answer. That is why `max_tokens`
- * here is computed rather than typed — see src/token-budget.ts for the other
- * half of the arithmetic, and why the number it produces is mostly headroom.
+ * **This used to be the unbounded one.** It charged for a nav label per gistable
+ * block on top of the tree, so the estimate — and the answer — grew at N, and
+ * an article long enough could not be described in one response at all. The
+ * labels moved to src/labels.ts; what is left grows at roughly N/7, because
+ * that is how many blocks a section holds.
  *
- * **The constants are measured, not guessed** — and the first draft of them
- * was guessed, and was wrong in both directions. Rebuilding three finished
- * trees back into the JSON the model emits and running each through
- * `count_tokens` gives:
+ * **The constants are measured, not guessed** — and the first draft of them was
+ * guessed, and was wrong in both directions. Rebuilding three finished trees
+ * back into the JSON the model emits and counting gives, for the structure half
+ * alone:
  *
- * | tree | labels | tokens/label | internal nodes | tokens/node |
+ * | tree | blocks | internal nodes | tokens | per block |
  * |---|---|---|---|---|
- * | `example/` (34 blocks) | 29 | 42.5 | 11 | 167.5 |
- * | the test article (141 blocks) | 117 | 39.5 | 33 | 116.6 |
- * | a short post (29 blocks) | 18 | 35.9 | 10 | 106.1 |
+ * | a short post | 19 | 10 | 944 | 49.7 |
+ * | the test article | 141 | 33 | 3,556 | 25.2 |
+ * | the constitution | 360 | 52 | 6,370 | 17.7 |
  *
- * So a label costs about 40 tokens — the label itself is only a dozen words,
- * and the rest is the block id and JSON punctuation around it — and an internal
- * node costs three to four times that, because it carries a title, a gist, a
- * range and often a `sourceHeading`. The 55 and 175 below are those worst cases
- * with half again on top. Every real tree above comes out between 1.5x and 2.3x
- * under the estimate, which is the margin we want: an underestimate costs a
- * six-minute call and a failed ingest, an overestimate costs nothing at all,
- * because `max_tokens` is a ceiling and allowance the model doesn't spend is
- * not billed. tests/token-budget.test.ts holds the `example/` figure to this.
+ * Per-block cost *falls* with length, because a long article's sections hold
+ * more blocks each. The short post's 49.7 is fixed overhead, not a trend — which
+ * is why the estimate is built from a node count and a flat constant rather than
+ * from a rate per block.
  *
- * The node count is a guess about a tree that does not exist yet. The prompt
- * asks for 5–9 children per node over three levels, which works out near
- * blocks/6; the three real trees came out at blocks/2.9, blocks/3.1 and
- * blocks/4.3, denser than that because a short article's sections hold only a
- * few blocks each. `blocks/4 + 6` covers both ends — the constant is what keeps
- * a 30-block article honest, the divisor is what keeps a 400-block one from
- * being refused for a tree it would never have grown.
+ * A node costs 120–175 tokens: a title, a gist, a range and often a
+ * `sourceHeading`. 175 is the worst case observed. The node count is the guess:
+ * the three real trees came out at blocks/2.9, blocks/3.1 and blocks/6.9, and
+ * `blocks/4 + 6` covers both ends — the constant keeps a 20-block article
+ * honest, the divisor keeps a 2,000-block one from being refused for a tree it
+ * would never have grown.
+ *
+ * Every real tree comes out 1.5x–2.3x under the estimate, which is the margin we
+ * want: an underestimate costs a multi-minute call and a failed ingest, an
+ * overestimate costs nothing at all, because `max_tokens` is a ceiling and
+ * allowance the model doesn't spend is not billed.
+ * tests/token-budget.test.ts holds this to the committed fixture.
  */
 export function estimateTocTokens(blocks: Block[]): number {
-  const labelled = blocks.filter((b) => b.gistable).length;
   const internal = Math.ceil(blocks.length / 4) + 6;
-  return 500 + labelled * 55 + internal * 175;
+  return 500 + internal * 175;
 }
 
 /**
- * The floor on how much of the article the labels have to reach.
+ * How much of the article the labels have to reach. **All of it.**
  *
- * Not 100%, because the design allows the model to skip a genuinely trivial
- * block — an unlabelled gistable leaf is a *warning* in
- * [validate-tree.ts](./validate-tree.ts), deliberately, as the escape hatch for
- * a transition sentence that would only clutter the sidebar
- * (docs/project/table-of-contents.md).
+ * This was 0.95 when one model call wrote the whole tree, and the missing 5%
+ * was an escape hatch: the model was allowed to skip a trivial transition
+ * sentence, and an unlabelled gistable leaf is still only a *warning* in
+ * [validate-tree.ts](./validate-tree.ts) for that reason
+ * (docs/project/table-of-contents.md). The floor existed to tell a used escape
+ * hatch apart from an answer that had quietly stopped early.
  *
- * 95% is where that escape hatch stops being a plausible reading. Every real
- * tree we have — `example/`, the test article, a short post — came back at
- * 100%: 29 of 29, 117 of 117, 18 of 18. The model has never once used the
- * escape hatch, so a run that leaves a twentieth of the article unlabelled is
- * not exercising editorial judgement, it is an answer that stopped early.
+ * The split removes the ambiguity. src/labels.ts asks for an exact set of
+ * numbered paragraphs per call and refuses a response returning any other set,
+ * so a batch is complete or it throws; and `planBatches` puts every gistable
+ * block in exactly one batch. There is no longer a path by which a block is
+ * legitimately unlabelled, so anything under 100% is a bug in the batching
+ * rather than a judgement by the model — and a floor that tolerated it would be
+ * hiding the one failure this design can have.
+ *
+ * Every real tree came back at 100% under the old rule anyway: 29 of 29, 117 of
+ * 117, 18 of 18. The escape hatch was never once used.
  */
-const COVERAGE_FLOOR = 0.95;
+const COVERAGE_FLOOR = 1;
+
+/**
+ * How to name a value from the model in an error message — and when not to.
+ *
+ * **An error thrown in this file is a value that travels.** A step that throws
+ * is logged by src/jobs.ts through `errorFields`, and src/log.ts's serialiser
+ * keeps the error's `message` *and* its `stack`, which contains the message
+ * again. So anything interpolated here is written into the log twice, from a
+ * file that never calls the logger at all, and `redact` matches paths in the
+ * object rather than text in a string, so it reaches neither copy. See
+ * docs/project/logging.md § An error is not a safe thing to log whole.
+ *
+ * What makes stage 4 the awkward case is that its inputs are `JSON.parse` of
+ * the model's response with a TypeScript cast in front of them, and **the cast
+ * proves nothing at runtime**. Nothing stops the model writing
+ * `"range": ["Feeling is metabolic, not computational", "spya-k3m9qt"]`, and
+ * that is precisely the input that reaches the branches below — a sentence of
+ * the article is never in `blocks.json`, so the lookup misses and we throw. The
+ * message would then carry the article's own prose into the log exactly when
+ * the model misbehaves.
+ *
+ * The one value that is safe to quote is one that has passed `isSpideryarnId`:
+ * `spya-` plus six characters drawn from a fixed 32-character alphabet
+ * (src/ids.ts, docs/project/block-ids.md), which cannot spell a word of
+ * anybody's article. Everything else is described by its shape and withheld —
+ * a length and a type are enough to tell a truncated id from a paragraph.
+ */
+function nameValue(value: unknown): string {
+  if (typeof value === "string" && isSpideryarnId(value)) return `"${value}"`;
+  if (value === null) return "not a block id (null)";
+  if (typeof value !== "string") return `not a block id (a ${typeof value})`;
+  return `not a block id (a ${value.length}-character string, withheld)`;
+}
 
 /**
  * Did the answer actually cover the article?
@@ -221,32 +257,146 @@ export function checkCoverage(
 ): void {
   const known = new Set(blocks.map((b) => b.id));
   const gistable = blocks.filter((b) => b.gistable);
-  const labelled = Object.values(tree.nodes).filter((n) => n.navLabel);
+  /* Blocks, not leaf nodes. Counting nodes was a real bug: an overlap in the
+     model's ranges grows two leaves for one paragraph while a gap elsewhere
+     grows none, so the node count comes out right while the article comes out
+     short — and the ratio hit exactly 1.0 with two paragraphs unlabelled.
+     `buildTree` now refuses a tree that does not tile, so this can no longer
+     happen; a set is what should have been compared either way. */
+  const labelledBlocks = new Set(
+    Object.values(tree.nodes)
+      .filter((n) => n.navLabel && n.children.length === 0)
+      .map((n) => n.range[0]),
+  );
 
   const invented = Object.keys(navLabels).filter((id) => !known.has(id));
   if (invented.length > 0) {
+    /* Naming only the keys that are well-formed ids. `navLabels` is a
+       `JSON.parse` result cast to `Record<string, string>` and nothing has
+       checked that its keys are block ids, so a key that fails `isSpideryarnId`
+       may be a phrase from the article — see `nameValue` for why that must not
+       reach the message. The count is what tells you the scale and it is
+       reported in full either way. */
+    const named = invented.filter((id) => isSpideryarnId(id));
+    const withheld = invented.length - named.length;
+    const detail = [
+      ...(named.length > 0 ? [named.slice(0, 3).join(", ")] : []),
+      ...(withheld > 0 ? [`${withheld} of them not block ids at all, withheld`] : []),
+    ].join("; ");
     throw new Error(
       `The table of contents labelled ${invented.length} block(s) that are not in this article ` +
-        `(${invented.slice(0, 3).join(", ")}). The model was not working from the input it was given.`,
+        `(${detail}). The model was not working from the input it was given.`,
     );
   }
 
   if (gistable.length === 0) return;
-  const covered = labelled.length / gistable.length;
+  const missing = gistable.filter((b) => !labelledBlocks.has(b.id));
+  const covered = (gistable.length - missing.length) / gistable.length;
   if (covered < COVERAGE_FLOOR) {
-    const missing = gistable.length - labelled.length;
     throw new Error(
-      `The table of contents came back covering ${labelled.length} of ${gistable.length} ` +
-        `paragraphs — ${missing} have no row. The response was not truncated, so the model ` +
-        `stopped early on its own; nothing has been written. Retrying may well work.`,
+      `The table of contents covers ${gistable.length - missing.length} of ${gistable.length} ` +
+        `paragraphs — ${missing.length} have no row (${missing.slice(0, 3).map((b) => b.id).join(", ")}). ` +
+        `Every nav label is asked for by number and every batch is checked against the exact set ` +
+        `it was given, so this is not a model that stopped early. Look at planBatches in ` +
+        `src/labels.ts, and at whether the tree tiles the article. Nothing has been written.`,
     );
   }
 }
 
-/** Strip a stray code fence if the model wraps its JSON despite instructions. */
-function parseJson(raw: string): { root: ModelNode; navLabels: Record<string, string> } {
+/**
+ * Strip a stray code fence if the model wraps its JSON despite instructions.
+ *
+ * The parse goes through src/parse-json.ts, and the reason is that **nothing in
+ * this file logs**. A step that throws is logged by src/jobs.ts with
+ * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
+ * quotes the first characters of whatever it was handed. So a plain
+ * `JSON.parse` here writes part of the model's writing about the article into
+ * the log, from a file that never calls the logger at all. An error is a value
+ * that travels, and where it is thrown is not where it is written down.
+ */
+function parseJson(raw: string): { root: ModelNode } {
   const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  return JSON.parse(text);
+  return parseJsonFrom(text, "the table-of-contents response");
+}
+
+/**
+ * A node's children must exactly tile it: in order, no gaps, no overlaps.
+ *
+ * **This is the invariant the prompt asks for, and until now nothing enforced
+ * it at the point of parsing.** [`validate-tree.ts`](./validate-tree.ts) checks
+ * it, but that is a CLI somebody runs by hand — the ingest queue never does. So
+ * a model that overlapped two sections produced a tree in which some blocks grew
+ * *two* leaves and others grew none, and every downstream check was happy: the
+ * partition was never tested, and `checkCoverage` counted labelled leaves rather
+ * than labelled blocks, so a duplicate on one side cancelled a gap on the other
+ * and the ratio came out at exactly 1.0.
+ *
+ * Found by an adversarial review of the label split, 2026-08-26, with a worked
+ * example: twelve blocks, children `[0..6]` and `[5..9]`, coverage reported
+ * complete, two paragraphs with no sidebar row and two rendered twice.
+ *
+ * Checking here rather than further down is the difference between a fault and
+ * a symptom. `planBatches` in src/labels.ts catches the consequence and says so
+ * loudly, but by then the cause is three files away and its error has to guess
+ * which of several things went wrong. This one knows.
+ */
+function assertChildrenPartition(
+  node: TreeNode,
+  nodes: Record<NodeId, TreeNode>,
+  index: Map<string, number>,
+  where: string,
+): void {
+  const span = (id: NodeId): [number, number] | null => {
+    const child = nodes[id];
+    if (!child) return null;
+    const lo = index.get(child.range[0]);
+    const hi = index.get(child.range[1]);
+    return lo === undefined || hi === undefined ? null : [lo, hi];
+  };
+
+  const parent = span(node.id);
+  if (!parent) {
+    /* An internal node with an endpoint that is not a block id. The leaf-growing
+       branch below reports this for a *lowest-level* node, and only for one —
+       an internal node never reaches it, so returning here on the grounds that
+       "something else will catch it" was false, and an invented endpoint with
+       valid descendants survived into the stored tree. Caught by GPT-5.6-sol,
+       2026-08-26. `nameValue` is what keeps the message from quoting a phrase of
+       the article back into a log. */
+    throw new Error(
+      `The node at ${where} has a range not in blocks.json: ` +
+        `start ${nameValue(node.range[0])}; end ${nameValue(node.range[1])}`,
+    );
+  }
+
+  let cursor = parent[0];
+  for (const [i, childId] of node.children.entries()) {
+    const child = span(childId);
+    if (!child) {
+      const bad = nodes[childId];
+      throw new Error(
+        `Child ${i + 1} of the node at ${where} has a range not in blocks.json: ` +
+          `start ${nameValue(bad?.range[0])}; end ${nameValue(bad?.range[1])}`,
+      );
+    }
+    if (child[0] !== cursor) {
+      const what = child[0] > cursor ? "leaves a gap of" : "overlaps the one before it by";
+      const size = Math.abs(child[0] - cursor);
+      throw new Error(
+        `The children of the node at ${where} do not tile it: child ${i + 1} ${what} ` +
+          `${size} block(s). Children must cover their parent in order, with no gaps and no ` +
+          `overlaps — an overlap grows two leaves for one paragraph, and a gap grows none.`,
+      );
+    }
+    cursor = child[1] + 1;
+  }
+  if (cursor !== parent[1] + 1) {
+    const short = parent[1] + 1 - cursor;
+    throw new Error(
+      `The children of the node at ${where} stop ${short} block(s) before it ends. Those ` +
+        `paragraphs would appear nowhere in the table of contents.`,
+    );
+  }
 }
 
 /**
@@ -265,36 +415,70 @@ export function buildTree(
   let counter = 0;
   const nextId = () => `n${String(++counter).padStart(4, "0")}`;
 
-  const visit = (mn: ModelNode, parent: NodeId | null, depth: number): NodeId => {
+  /* `where` is the node's position in the model's own proposal — "root",
+     "root > child 2 > child 4". It is derived from the shape of the answer
+     rather than from anything in it, so it is always safe to put in a message,
+     and it is what tells you which node to go and look at. */
+  const visit = (mn: ModelNode, parent: NodeId | null, depth: number, where: string): NodeId => {
     const id = nextId();
+    /* Shape before anything indexes it. `mn.range` is model output behind a
+       cast, so it need not be a pair at all: `"range": "spya-a…spya-b"` used to
+       reach the lookup below with `range[0] === "s"`, miss, and then fail
+       inside `mn.range.join` with "mn.range.join is not a function" — an error
+       that named the bug in our code rather than the fault in the answer. */
+    const raw: unknown = mn.range;
+    const pair = Array.isArray(raw) && raw.length === 2 ? (raw as unknown[]) : [];
+    const [start, end] = pair;
+    if (typeof start !== "string" || typeof end !== "string") {
+      throw new Error(`The node at ${where} has no [start, end] block range.`);
+    }
+    const range: [string, string] = [start, end];
     const node: TreeNode = {
       id,
       depth,
       parent,
       children: [],
-      range: mn.range,
+      range,
       title: mn.title,
       ...(mn.gist ? { gist: mn.gist } : {}),
       ...(mn.sourceHeading ? { sourceHeading: mn.sourceHeading } : {}),
     };
     nodes[id] = node;
 
+    const lo = index.get(range[0]);
+    const hi = index.get(range[1]);
+    if (lo !== undefined && hi !== undefined && lo > hi) {
+      /* A range that runs backwards. Both ends are real block ids, so every
+         lookup succeeds and nothing below objects — the leaf loop simply runs
+         zero times and the node becomes an internal node with no children,
+         holding a stretch of the article that then exists in no leaf at all.
+         The article comes out short and the tree looks well-formed. */
+      throw new Error(
+        `The node at ${where} has a range that runs backwards — its start block ` +
+          `comes ${lo - hi} block(s) after its end block in the article.`,
+      );
+    }
+
     if (mn.children?.length) {
-      node.children = mn.children.map((c) => visit(c, id, depth + 1));
+      node.children = mn.children.map((c, i) => visit(c, id, depth + 1, `${where} > child ${i + 1}`));
+      assertChildrenPartition(node, nodes, index, where);
       return id;
     }
 
     // Deepest internal node — grow its leaves.
-    const lo = index.get(mn.range[0]);
-    const hi = index.get(mn.range[1]);
     if (lo === undefined || hi === undefined) {
-      // The range, not the title. `mn.title` is a label the model wrote about a
-      // section of the article, and this error travels: a step that throws is
-      // logged by src/jobs.ts with its message AND its stack, so the title would
-      // land in the log twice, and redaction is path-based and can reach neither
-      // (docs/project/logging.md). The range is also the more useful half — it
-      // is the pair of block ids you would go and look up.
-      throw new Error(`Node range not in blocks.json: ${mn.range.join("…")}`);
+      /* Position and shape, never the value itself unless it proved to be an
+         id. `mn.title` is out for the obvious reason — it is a sentence the
+         model wrote about a section of the article — but so is the range,
+         which is why the first version of this fix was only half of one: both
+         ends are model output behind a cast, and an end that is a phrase of the
+         article is exactly what lands here, since a phrase is never a key in
+         `index`. `nameValue` is where the rule lives. */
+      const bad = [
+        ...(lo === undefined ? [`start ${nameValue(range[0])}`] : []),
+        ...(hi === undefined ? [`end ${nameValue(range[1])}`] : []),
+      ];
+      throw new Error(`Node range not in blocks.json — at ${where}: ${bad.join("; ")}`);
     }
     for (let i = lo; i <= hi; i++) {
       // In range: lo and hi both came out of `index`, which is built over
@@ -316,7 +500,28 @@ export function buildTree(
     return id;
   };
 
-  const rootId = visit(root, null, 0);
+  const rootId = visit(root, null, 0, "root");
+
+  /* The root has to span the whole article, and nothing else checks it.
+     `assertChildrenPartition` verifies that a node's children tile *it*, which
+     says nothing about whether the root itself starts at the first block and
+     ends at the last; and `checkCoverage` further down counts only *gistable*
+     blocks, so a root that drops a leading image or a trailing rule passes
+     everything while breaking the contract that every block gets exactly one
+     leaf (docs/project/table-of-contents.md). Every id resolver in the reading
+     view then finds no leaf for those blocks. Caught by GPT-5.6-sol,
+     2026-08-26. */
+  const rootNode = nodes[rootId]!;
+  if (rootNode.range[0] !== blocks[0]?.id || rootNode.range[1] !== blocks.at(-1)?.id) {
+    const missingStart = index.get(rootNode.range[0]) ?? 0;
+    const missingEnd = blocks.length - 1 - (index.get(rootNode.range[1]) ?? blocks.length - 1);
+    throw new Error(
+      `The tree does not cover the whole article: it skips ${missingStart} block(s) at the ` +
+        `start and ${missingEnd} at the end. Every block gets exactly one leaf, so a block ` +
+        `outside the root's range has no row anywhere and nothing can resolve its id.`,
+    );
+  }
+
   return { version: PROMPT_VERSION, generator: MODEL, slug, rootId, nodes };
 }
 
@@ -334,22 +539,60 @@ export interface TocRun {
   gistable: number;
   labelled: number;
   internal: number;
+  /** How many model calls the labels took. See src/labels.ts. */
+  labelBatches: number;
   inputTokens: number;
   outputTokens: number;
+  /* From the label pass only — the structure call is one call per article and
+     is deliberately not cached, so there is nothing for it to read. See
+     docs/plans/prompt-caching.md on why a prefix used once is worth 1.25× and
+     no more. */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   elapsedMs: number;
 }
 
 /**
- * Stage 4 over a blocks.json on disk: one model call, then `tree.json` and a
- * copy of `blocks.json` beside it.
+ * Write JSON so that it is either wholly there or not there at all.
+ *
+ * `writeFile` truncates its target before it writes, so a process killed at the
+ * wrong moment leaves a file that exists and is not valid JSON — and existence
+ * is exactly what src/pipeline.ts uses to decide a step is done. Writing beside
+ * the target and renaming closes that window: `rename` within a directory is
+ * atomic, so no reader ever sees a partial file.
+ *
+ * The temp name carries the process id so two runs over one directory cannot
+ * write to the same scratch file. That should not happen — the queue serialises
+ * jobs per slug — but a `.tmp` collision would corrupt both, silently, and the
+ * pid costs nothing.
+ */
+async function writeAtomic(file: string, value: unknown): Promise<void> {
+  const tmp = `${file}.${process.pid}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+  await rename(tmp, file);
+}
+
+/**
+ * Stage 4 over a blocks.json on disk: the structure in one call, the nav labels
+ * in parallel batches after it, then `tree.json`, `labels.json` and a copy of
+ * `blocks.json`.
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
  *
- * `onProgress` is called as the model streams. There is nothing useful to say
- * about *what* it has written — the JSON is unparseable until it is complete —
- * so what it reports is that something is still arriving, which is the question
- * a reader watching a two-minute step is actually asking.
+ * **Two model passes, one pipeline step, and nothing written until both are
+ * done.** The split exists so the unbounded half can be batched
+ * (docs/plans/toc-scaling.md), not so it can be published separately — a tree on
+ * disk with a third of its labels missing is a valid-looking artefact that quietly
+ * describes part of an article, which is docs/reusable/silent-success.md exactly.
+ * Deferring the labels so a reader can start sooner is a real option and a
+ * deliberate later one; it needs a state that says "still arriving" rather than
+ * an absence that says nothing.
+ *
+ * `onProgress` reports what is arriving. For the structure call there is nothing
+ * useful to say about *what* has been written — the JSON is unparseable until it
+ * is complete — so it reports that something is still coming. The label pass can
+ * do better, and counts finished sections.
  */
 export async function generateToc(opts: {
   blocksPath: string;
@@ -358,7 +601,14 @@ export async function generateToc(opts: {
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
 }): Promise<TocRun> {
-  const { blocks } = JSON.parse(await readFile(opts.blocksPath, "utf-8")) as { blocks: Block[] };
+  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
+     own parse error quotes the first characters of what it was handed. Nothing
+     in this file logs, but a step that throws is logged by src/jobs.ts with
+     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
+    await readFile(opts.blocksPath, "utf-8"),
+    "blocks.json",
+  );
   const slug = slugForBlocksPath(opts.blocksPath);
   const outDir = opts.outDir ?? path.join("data", slug);
   const gistable = blocks.filter((b) => b.gistable).length;
@@ -413,13 +663,45 @@ export async function generateToc(opts: {
     );
   }
 
-  const { root, navLabels } = parseJson(raw);
-  const tree = buildTree(root, navLabels, blocks, slug);
-  checkCoverage(navLabels, tree, blocks);
+  const { root } = parseJson(raw);
+  const structure = buildTree(root, {}, blocks, slug);
 
+  /* Pass two. The tree has to exist first: the batches are cut along its own
+     section boundaries, so that every label a reader compares with another was
+     written in the same call. src/labels.ts says why that is the rule. */
+  const labelRun = await generateLabels({
+    tree: structure,
+    blocks,
+    slug,
+    ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+    ...(opts.signal ? { signal: opts.signal } : {}),
+  });
+
+  const tree = mergeLabels(structure, labelRun.labels);
+  checkCoverage(labelRun.labels, tree, blocks);
+
+  /* Each file is written to a temporary name and renamed into place, and the
+     tree goes last.
+     **Ordering alone was not enough, and the first version of this claimed it
+     was.** The queue decides a step is done by whether its output files exist
+     (src/pipeline.ts), so "write the tree last" only helps if a half-written
+     tree does not exist — and `writeFile` creates and truncates its target
+     before it has anything to put in it. A process killed mid-write leaves a
+     truncated `tree.json` that is very much present, the step reports itself
+     finished, and a retry skips it. On a forced regeneration it is worse: the
+     *old* tree is on disk throughout, so a crash can leave new labels and new
+     blocks beside last week's tree, all three present and mutually
+     inconsistent.
+     `rename` within a directory is atomic on every filesystem this runs on, so
+     each file appears whole or not at all, and the tree — the one every reader
+     starts from — appears only after the other two are already whole. Raised by
+     GPT-5.6-sol, 2026-08-26; see docs/plans/toc-scaling.md for what this still
+     does not give us, which is a way to tell a *stale* complete set from a
+     current one. */
   await mkdir(outDir, { recursive: true });
-  await writeFile(path.join(outDir, "tree.json"), JSON.stringify(tree, null, 2), "utf-8");
-  await writeFile(path.join(outDir, "blocks.json"), JSON.stringify({ blocks }, null, 2), "utf-8");
+  await writeAtomic(path.join(outDir, "labels.json"), labelRun.file);
+  await writeAtomic(path.join(outDir, "blocks.json"), { blocks });
+  await writeAtomic(path.join(outDir, "tree.json"), tree);
 
   return {
     tree,
@@ -429,8 +711,13 @@ export async function generateToc(opts: {
     gistable,
     labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
-    inputTokens: message.usage.input_tokens,
-    outputTokens: message.usage.output_tokens,
+    labelBatches: labelRun.batches,
+    /* Both passes together. What this number answers is "what did a tree cost",
+       and a structure figure alone would now understate it by most of the bill. */
+    inputTokens: message.usage.input_tokens + labelRun.inputTokens,
+    outputTokens: message.usage.output_tokens + labelRun.outputTokens,
+    cacheReadTokens: labelRun.cacheReadTokens,
+    cacheWriteTokens: labelRun.cacheWriteTokens,
     elapsedMs: Date.now() - started,
   };
 }
@@ -453,11 +740,12 @@ async function main(): Promise<void> {
 
   console.log(`\n${run.blocks} blocks (${run.gistable} gistable) → ${MODEL}`);
   console.log(`\nNodes:     ${Object.keys(run.tree.nodes).length} (${run.internal} internal)`);
-  console.log(`Labelled:  ${run.labelled} / ${run.gistable} gistable blocks`);
+  console.log(`Labelled:  ${run.labelled} / ${run.gistable} gistable blocks, in ${run.labelBatches} calls`);
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`\nWrote:     ${path.resolve(run.outDir)}/tree.json`);
   console.log(`Validate:  npm run validate-tree -- ${run.outDir}`);
+  console.log(`Eval:      npm run eval:toc -- ${run.outDir}`);
 }
 
 /* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`

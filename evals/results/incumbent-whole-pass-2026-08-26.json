@@ -1,0 +1,42 @@
+[
+  {
+    "slug": "constitution",
+    "blocks": 360,
+    "gistable": 360,
+    "labelled": 359,
+    "coverage": 0.9972222222222222,
+    "batched": false,
+    "batches": 0,
+    "length": {
+      "mean": 15.380804953560371,
+      "min": 2,
+      "max": 23,
+      "outsideRange": 22
+    },
+    "headings": 36,
+    "templateRepetition": 0.30919220055710306,
+    "vocabularyRetention": 0.7609892272886258,
+    "seam": null,
+    "cost": null
+  },
+  {
+    "slug": "noema-mythology-of-conscious-ai",
+    "blocks": 141,
+    "gistable": 117,
+    "labelled": 117,
+    "coverage": 1,
+    "batched": false,
+    "batches": 0,
+    "length": {
+      "mean": 11.675925925925926,
+      "min": 7,
+      "max": 15,
+      "outsideRange": 0
+    },
+    "headings": 9,
+    "templateRepetition": 0.05128205128205128,
+    "vocabularyRetention": 0.7492300908967577,
+    "seam": null,
+    "cost": null
+  }
+]

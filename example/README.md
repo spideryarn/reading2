@@ -14,6 +14,7 @@ A **hand-authored stand-in** for the pipeline's output, so the reading view
 | `blocks.json` | **Real.** Genuine stage-3 output from [`src/blocks.ts`](../src/blocks.ts), with real `spya-` ids. Just sliced. |
 | `meta.json` | Real, hand-transcribed. |
 | `tree.json` | **Placeholder.** Hand-authored to the documented [Node shape](../docs/project/granularity-zoom.md#node-shape). Replace with stage 4+5 output. |
+| `labels.json` | **Derived, not generated.** Stage 4 splits into a structure call plus batched nav-label calls ([toc-scaling.md](../docs/plans/toc-scaling.md)) and writes this beside the tree; this fixture predates that, so it was rebuilt from the `navLabel`s already in `tree.json`. Its `batches` is empty and honestly so — no call ever produced these — which is why the eval skips its seam test rather than inventing boundaries. |
 
 ## What it covers
 

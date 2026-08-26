@@ -127,6 +127,104 @@ describe("buildTree", () => {
     expect(() => buildTree(bad, NAV, BLOCKS, "test")).toThrow(/not in blocks\.json/);
   });
 
+  /**
+   * The partition. Found by an adversarial review of the label split,
+   * 2026-08-26, and it is the best kind of finding: nothing threw, nothing was
+   * red, and the article came out short.
+   *
+   * The prompt asks for children that exactly tile their parent, and until this
+   * `buildTree` took the model's word for it. `validate-tree.ts` checks it —
+   * but that is a CLI somebody runs by hand, and the ingest queue never does.
+   */
+  describe("the partition the prompt asks for", () => {
+    it("refuses children that overlap, which would grow two leaves for one block", () => {
+      // The worked example from the review: 12 blocks, children [0..6] and
+      // [5..9]. Two blocks got two leaves, two got none, and `checkCoverage`
+      // divided one count by the other and reported exactly 1.0.
+      const overlapping: ModelNode = {
+        ...ROOT,
+        children: [
+          { title: "First", range: ["spya-aaaaaa", "spya-cccccc"] },
+          { title: "Second", range: ["spya-bbbbbb", "spya-dddddd"] },
+        ],
+      };
+      expect(() => buildTree(overlapping, NAV, BLOCKS, "test")).toThrow(/overlaps the one before/);
+    });
+
+    it("refuses children that leave a gap, which would grow no leaf at all", () => {
+      const gapped: ModelNode = {
+        ...ROOT,
+        children: [
+          { title: "First", range: ["spya-aaaaaa", "spya-aaaaaa"] },
+          { title: "Second", range: ["spya-cccccc", "spya-dddddd"] },
+        ],
+      };
+      expect(() => buildTree(gapped, NAV, BLOCKS, "test")).toThrow(/leaves a gap of 1 block/);
+    });
+
+    it("refuses children that stop before their parent ends", () => {
+      const short: ModelNode = {
+        ...ROOT,
+        children: [{ title: "Only", range: ["spya-aaaaaa", "spya-bbbbbb"] }],
+      };
+      expect(() => buildTree(short, NAV, BLOCKS, "test")).toThrow(/stop 2 block\(s\) before it ends/);
+    });
+
+    it("refuses a range that runs backwards instead of silently covering nothing", () => {
+      // Both ends are real ids, so every lookup succeeds. The leaf loop just
+      // runs zero times: the node becomes a childless internal node and the
+      // blocks it was supposed to hold exist in no leaf anywhere.
+      const backwards: ModelNode = {
+        ...ROOT,
+        children: [
+          { title: "Backwards", range: ["spya-bbbbbb", "spya-aaaaaa"] },
+          { title: "Rest", range: ["spya-cccccc", "spya-dddddd"] },
+        ],
+      };
+      expect(() => buildTree(backwards, NAV, BLOCKS, "test")).toThrow(/runs backwards/);
+    });
+
+    it("refuses a root that does not span the whole article", () => {
+      // Nothing else catches this. assertChildrenPartition checks that a node's
+      // children tile *it*, which says nothing about the root's own extent; and
+      // checkCoverage counts only gistable blocks, so a root that drops a
+      // leading image or a trailing rule passes both while leaving those blocks
+      // with no leaf and no resolvable id.
+      const short: ModelNode = {
+        ...ROOT,
+        range: ["spya-aaaaaa", "spya-cccccc"],
+        children: [
+          { title: "First", range: ["spya-aaaaaa", "spya-bbbbbb"] },
+          { title: "Second", range: ["spya-cccccc", "spya-cccccc"] },
+        ],
+      };
+      expect(() => buildTree(short, NAV, BLOCKS, "test")).toThrow(/does not cover the whole article/);
+    });
+
+    it("names an invented range on an internal node, which used to slip through", () => {
+      // The partition check returned early on an unresolvable range, on the
+      // grounds that the leaf-growing branch would report it. That branch only
+      // runs for a lowest-level node, so an internal node with an invented
+      // endpoint and valid descendants reached the stored tree.
+      const invented: ModelNode = {
+        ...ROOT,
+        children: [
+          {
+            title: "First",
+            range: ["spya-zzzzzz", "spya-bbbbbb"],
+            children: [{ title: "Inner", range: ["spya-aaaaaa", "spya-bbbbbb"] }],
+          },
+          { title: "Second", range: ["spya-cccccc", "spya-dddddd"] },
+        ],
+      };
+      expect(() => buildTree(invented, NAV, BLOCKS, "test")).toThrow(/not in blocks\.json/);
+    });
+
+    it("still accepts the tree the model is supposed to write", () => {
+      expect(() => buildTree(ROOT, NAV, BLOCKS, "test")).not.toThrow();
+    });
+  });
+
   it("ignores a navLabel the model wrote for a block that isn't gistable", () => {
     const sneaky = { ...NAV, "spya-cccccc": "A label for an image, which must be dropped" };
     const t = buildTree(ROOT, sneaky, BLOCKS, "test");
@@ -166,11 +264,16 @@ describe("checkCoverage", () => {
     expect(() => check(labelsFor(twenty.map((b) => b.id)))).not.toThrow();
   });
 
-  it("allows the one skipped label the design deliberately permits", () => {
-    // An unlabelled gistable leaf is a warning in validate-tree.ts on purpose —
-    // the escape hatch for a trivial transition sentence. This must not become
-    // an error by accident.
-    expect(() => check(labelsFor(twenty.slice(1).map((b) => b.id)))).not.toThrow();
+  it("refuses even a single missing label, now that there is no honest way to skip one", () => {
+    // This used to pass. The 95% floor existed because one model call wrote the
+    // whole tree and was allowed to skip a trivial transition sentence — an
+    // unlabelled gistable leaf is still only a *warning* in validate-tree.ts for
+    // that reason. The split removed the ambiguity: src/labels.ts asks for an
+    // exact set of paragraph numbers and refuses any other set, and planBatches
+    // puts every gistable block in exactly one batch. So a gap is a batching
+    // bug, and a floor that tolerated one would hide the only failure this
+    // design has. See docs/plans/toc-scaling.md.
+    expect(() => check(labelsFor(twenty.slice(1).map((b) => b.id)))).toThrow(/19 of 20/);
   });
 
   it("refuses a tree that quietly describes half the article", () => {
@@ -181,7 +284,7 @@ describe("checkCoverage", () => {
     // The check runs before the artefacts are written. A message that left that
     // ambiguous would send someone hunting for a half-written tree.
     expect(() => check(labelsFor(twenty.slice(0, 2).map((b) => b.id)))).toThrow(
-      /nothing has been written/,
+      /nothing has been written/i,
     );
   });
 
@@ -197,5 +300,109 @@ describe("checkCoverage", () => {
     // so an invented id is never asked for and leaves no trace in the tree.
     const labels = { ...labelsFor(twenty.map((b) => b.id)), "spya-zzzzzz": "A label from nowhere" };
     expect(() => check(labels)).toThrow(/not in this article/);
+  });
+});
+
+/**
+ * **An error thrown here is a value that travels.** A pipeline step that throws
+ * is logged by src/jobs.ts through `errorFields(err)`, and src/log.ts's error
+ * serialiser keeps the `message` *and* the `stack` — which contains the message
+ * again. So anything interpolated into a message in src/toc.ts is written into
+ * the log twice, from a file that never calls the logger at all, and `redact`
+ * matches paths in the object rather than text in a string, so it can reach
+ * neither copy. See docs/project/logging.md § An error is not a safe thing to
+ * log whole.
+ *
+ * What makes stage 4 the dangerous case: both functions below are handed the
+ * result of `JSON.parse` cast to a TypeScript type, and **the cast proves
+ * nothing at runtime**. The model can put a sentence of the article where a
+ * block id belongs — and that is precisely the input that reaches the throwing
+ * branches, because a sentence is never in `blocks.json`. Quoting the value
+ * back would therefore log article prose exactly when the model misbehaves.
+ *
+ * The line these tests hold: a value that has passed `isSpideryarnId` may be
+ * named, because it is `spya-` plus six characters from a fixed alphabet and
+ * cannot spell a word of anyone's article. Nothing else may be.
+ */
+describe("errors never carry article prose out of the stage", () => {
+  /** Stands in for a phrase of the article arriving where an id belongs. */
+  const PROSE = "Feeling is metabolic, not computational, and that is the whole argument";
+
+  const messageOf = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (err) {
+      return (err as Error).message;
+    }
+    throw new Error("expected a throw, got none");
+  };
+
+  describe("buildTree", () => {
+    const withRange = (range: [string, string]): ModelNode => ({
+      ...ROOT,
+      children: [{ title: "A title the model wrote", range }],
+    });
+
+    it("withholds a range start that is not a block id", () => {
+      const message = messageOf(() => buildTree(withRange([PROSE, "spya-dddddd"]), NAV, BLOCKS, "t"));
+      expect(message).not.toContain(PROSE);
+      expect(message).toMatch(/not a block id/);
+    });
+
+    it("withholds a range end that is not a block id", () => {
+      const message = messageOf(() => buildTree(withRange(["spya-aaaaaa", PROSE]), NAV, BLOCKS, "t"));
+      expect(message).not.toContain(PROSE);
+      expect(message).toMatch(/not a block id/);
+    });
+
+    it("still names a range value that is a well-formed block id", () => {
+      // The point is not a vague message. An id that passed `isSpideryarnId` is
+      // safe to quote and is the one thing worth knowing, so it must survive.
+      const message = messageOf(() => buildTree(withRange(["spya-zzzzzz", "spya-zzzzzz"]), NAV, BLOCKS, "t"));
+      expect(message).toContain("spya-zzzzzz");
+      expect(message).toMatch(/not in blocks\.json/);
+    });
+
+    it("says which node in the tree the bad range belongs to", () => {
+      // Position is derived from the shape of the model's own proposal, so it
+      // is always safe to report — and it is what tells you where to look.
+      const bad: ModelNode = {
+        ...ROOT,
+        children: [ROOT.children![0]!, { title: "A title", range: [PROSE, PROSE] }],
+      };
+      expect(messageOf(() => buildTree(bad, NAV, BLOCKS, "t"))).toContain("child 2");
+    });
+
+    it("refuses a range that is not a pair of strings, rather than failing inside .join()", () => {
+      // `"range": "spya-a…spya-b"` used to reach the id lookup with range[0]
+      // === "s", miss, and then blow up in `mn.range.join` with a TypeError
+      // that said nothing about what the model had done wrong.
+      const bad = { ...ROOT, children: [{ title: "X", range: PROSE as unknown as [string, string] }] };
+      const message = messageOf(() => buildTree(bad, NAV, BLOCKS, "t"));
+      expect(message).not.toContain(PROSE);
+      expect(message).toMatch(/\[start, end\] block range/);
+    });
+  });
+
+  describe("checkCoverage", () => {
+    const tree = buildTree(ROOT, NAV, BLOCKS, "t");
+
+    it("withholds an invented navLabel key that is not a block id", () => {
+      const message = messageOf(() => checkCoverage({ ...NAV, [PROSE]: "x" }, tree, BLOCKS));
+      expect(message).not.toContain(PROSE);
+      expect(message).toMatch(/not block ids at all/);
+    });
+
+    it("still names an invented key that is a well-formed block id", () => {
+      const labels = { ...NAV, "spya-zzzzzz": "A label from nowhere" };
+      expect(messageOf(() => checkCoverage(labels, tree, BLOCKS))).toContain("spya-zzzzzz");
+    });
+
+    it("counts every invented key, including the ones it will not name", () => {
+      const labels = { ...NAV, [PROSE]: "x", "spya-zzzzzz": "y" };
+      const message = messageOf(() => checkCoverage(labels, tree, BLOCKS));
+      expect(message).toContain("2 block(s)");
+      expect(message).not.toContain(PROSE);
+    });
   });
 });

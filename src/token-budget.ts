@@ -74,6 +74,12 @@ export const MODEL_MAX_TOKENS = 128_000;
  * measurements at one article length are not enough to fit a line to. A flat
  * reservation that is too generous costs nothing — `max_tokens` is a ceiling,
  * not a purchase, and unused allowance is not billed.
+ *
+ * **This is the reservation for a call that reads the whole article**, which is
+ * what all three stages did when it was measured. A call that reads one section
+ * and writes a dozen labels does not need it and should pass its own, smaller
+ * figure to `budgetFor` — see `LABEL_HEADROOM` in src/labels.ts. Inheriting
+ * 40,000 onto every small batch would be the wrong lesson from this number.
  */
 export const THINKING_HEADROOM = 40_000;
 
@@ -114,11 +120,18 @@ export class TooLongForOnePass extends Error {
  * 300 tokens, and 300 + headroom is still the right budget, because the
  * headroom is the part that was never about the answer.
  */
-export function budgetFor(stage: string, answerTokens: number): number {
+export function budgetFor(
+  stage: string,
+  answerTokens: number,
+  headroom: number = THINKING_HEADROOM,
+): number {
   if (!Number.isFinite(answerTokens) || answerTokens < 0) {
     throw new Error(`${stage}: answerTokens must be a non-negative number, got ${answerTokens}`);
   }
-  const wanted = Math.ceil(answerTokens) + THINKING_HEADROOM;
+  if (!Number.isFinite(headroom) || headroom < 0) {
+    throw new Error(`${stage}: headroom must be a non-negative number, got ${headroom}`);
+  }
+  const wanted = Math.ceil(answerTokens) + Math.ceil(headroom);
   if (wanted > MODEL_MAX_TOKENS) throw new TooLongForOnePass(stage, Math.ceil(answerTokens));
   return wanted;
 }
@@ -137,6 +150,7 @@ export function truncatedMessage(
   maxTokens: number,
   answerTokens: number,
   spent: { outputTokens: number; answerChars: number },
+  headroom: number = THINKING_HEADROOM,
 ): string {
   /* The subtraction is done here rather than left to the reader, because doing
      it by hand is what took two runs to work out the first time. `output_tokens`
@@ -151,7 +165,7 @@ export function truncatedMessage(
   return (
     `The ${stage} ran past its ${maxTokens.toLocaleString()}-token budget and came back ` +
     `unfinished. It was sized for an answer of about ${answerTokens.toLocaleString()} tokens plus ` +
-    `${THINKING_HEADROOM.toLocaleString()} for reasoning. What it actually spent: about ` +
+    `${headroom.toLocaleString()} for reasoning. What it actually spent: about ` +
     `${answerSpent.toLocaleString()} tokens of answer and ${thinkingSpent.toLocaleString()} of ` +
     `reasoning. Whichever of those two overran is the one to change — see src/token-budget.ts. ` +
     `Retrying will fail the same way until it does.`

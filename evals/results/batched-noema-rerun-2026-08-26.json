@@ -1,0 +1,33 @@
+[
+  {
+    "slug": "noema-mythology-of-conscious-ai",
+    "blocks": 141,
+    "gistable": 117,
+    "labelled": 117,
+    "coverage": 1,
+    "batched": true,
+    "batches": 3,
+    "length": {
+      "mean": 13.407407407407407,
+      "min": 7,
+      "max": 18,
+      "outsideRange": 0
+    },
+    "headings": 9,
+    "templateRepetition": 0.06837606837606838,
+    "vocabularyRetention": 0.7390501216890101,
+    "seam": {
+      "seamPairs": 2,
+      "interiorPairs": 16,
+      "seamSimilarity": 0,
+      "interiorSimilarity": 0.014797294209058915,
+      "seamSameOpening": 0,
+      "interiorSameOpening": 0
+    },
+    "cost": {
+      "inputTokens": 22814,
+      "outputTokens": 4319,
+      "ms": 23010
+    }
+  }
+]

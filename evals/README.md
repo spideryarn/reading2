@@ -1,0 +1,159 @@
+# Evals
+
+Not tests. [`tests/`](../tests) holds the deterministic ones — same input, same answer, run on every
+change ([testing.md](../docs/project/testing.md)). An eval calls a model, costs money, takes minutes,
+and gives a slightly different answer each time. It is run by hand when a decision needs it, and its
+results are committed so the next change can be compared against a number rather than against
+somebody's memory of last week.
+
+## `prompt-caching.ts` — is the article actually being cached?
+
+```
+npm run eval:caching -- data/noema-mythology-of-conscious-ai
+```
+
+**This one calls a model**, unlike `toc-labels.ts`, and that is the whole point of it. Everything
+deterministic about prompt caching is already pinned in
+[`tests/article-prompt.test.ts`](../tests/article-prompt.test.ts): that the cached prefix is
+byte-identical across two questions, two selections, two reading positions, a growing conversation.
+None of that proves a cache was *read*. Only the provider can say, and the only way to ask is to call
+twice and look at the number.
+
+It searches one article twice with two different criteria, back to back, and prints
+`cacheReadTokens` / `cacheWriteTokens` and the cost against uncached. **The pass condition is a
+non-zero read on the second call.** Results land in `results/` so the next change is compared against
+a number.
+
+Worth having as an eval rather than a test because the failure is invisible: a cache that has stopped
+hitting returns the right answer, raises no error, and only costs more
+([silent-success.md](../docs/reusable/silent-success.md)). There is also a public report of cache
+reads sitting at zero through OpenRouter with Claude, so "no error" is specifically not evidence.
+See [docs/project/prompt-caching.md](../docs/project/prompt-caching.md).
+
+## `reorder-quality.ts` — did putting the article first change the writing?
+
+```
+npm run eval:reorder -- data/constitution data/noema-mythology-of-conscious-ai
+```
+
+Calls no model — it measures artefacts already on disk, like `toc-labels.ts`. It exists because
+prompt caching required the arc, thread and glossary prompts to put the article *ahead* of each
+stage's instructions, and models weight recency. The direction of the move matches Anthropic's own
+long-context guidance, which is a reason to expect it to be fine rather than evidence that it is.
+
+Measures mean length, opening-bigram repetition, and **vocabulary retention** — the proxy for the
+model still working from the author's own words. A fall of more than a couple of points means the
+reorder cost something, and the right response is to put that stage's prompt back and leave it
+uncached: bytes serve the prompts, not the other way round.
+
+The incumbent numbers are committed at
+[`results/reorder-quality-before.md`](results/reorder-quality-before.md), captured before anything
+was regenerated. **They stop being obtainable once the artefacts are rebuilt**, which is why they are
+in the repo rather than left to be re-derived.
+
+## `toc-labels.ts` — are batched nav labels as good as whole-pass ones?
+
+Written for [toc-scaling.md](../docs/plans/toc-scaling.md), which splits stage 4 into one
+whole-document structure call plus parallel label batches. The worry that split has to answer is
+coherence: labels written in separate calls, each blind to the others, might not read as a series.
+
+```
+npm run eval:toc -- data/constitution data/noema-mythology-of-conscious-ai
+```
+
+It reads `tree.json`, `blocks.json` and — when the labels were generated in batches —
+`labels.json`, which records which blocks went in which call. It calls no model itself: it measures
+artefacts that already exist, so it is cheap to re-run and can be pointed at an old tree as easily
+as a new one.
+
+### The texts
+
+Two, and deliberately not more. Each costs a real ingest to regenerate.
+
+| | blocks | why this one |
+|---|---|---|
+| `data/constitution` | 360, all gistable | the article that broke the stage; dense authored headings; long enough that batching actually happens |
+| `data/noema-mythology-of-conscious-ai` | 141, 117 gistable | has non-gistable media blocks, so it exercises the "no label here" path; short enough to be a fast check |
+
+`data/writes` (19 blocks) is too short to batch and is not part of the eval.
+
+### What it measures
+
+Everything here is mechanical. None of it is a proxy for "is this a good label" — they are proxies
+for the specific ways this design could go wrong.
+
+- **Coverage** — labelled over gistable. Has to be 100%. A gap here is not a quality question, it is
+  [silent success](../docs/reusable/silent-success.md).
+- **Length** — against the documented 6–20 words, **excluding headings**. A heading's label is
+  required to be its heading copied exactly, which is usually two to six words, so counting them
+  measures how many headings the article has. The first version did count them: 30 of the
+  constitution's 39 "outside range" labels were compliant headings, and all 9 of the other article's
+  were. What is left is the real signal — drifting short is the first sign the model has less context.
+- **Template repetition** — the share of labels sharing an opening bigram, headings excluded for the
+  same reason. "The author then turns to" is the failure the prompt is written against, and a model
+  with fewer neighbours in front of it is likelier to fall back on a formula.
+- **Vocabulary retention** — the share of a label's content words that appear in its own block,
+  headings excluded for the same reason (a copied heading scores ~1.0 and is not evidence of
+  anything). The cheap proxy for *"reuse the author's distinctive vocabulary"*, and for not
+  inventing. It uses `contentWords` imported from [`src/labels.ts`](../src/labels.ts) — the same
+  function the stage uses to *refuse* a batch whose labels match the neighbouring paragraphs better
+  than their own, so the measure and the gate cannot drift apart.
+- **The seam test** — the one aimed at the coherence question. See below.
+- **Tree/labels agreement** — do `tree.json` and `labels.json` say the same thing? Nothing made them,
+  so a re-run that wrote one and died before the other would leave a reading view and a provenance
+  record describing different articles, with nothing red.
+- **Label cost, and the slowest single call.** Named for what it is: it is *not* the stage's
+  wall-clock, because the structure call, the queue's waves and any retried first attempt are all
+  outside what `labels.json` records.
+
+**A measure that excludes something is asserting a fact about it**, and this one got that wrong once
+already: headings were excluded on the premise that their labels are the heading copied exactly, and
+the model was not copying them exactly — on 9 of 36 labels for one article. The exclusion hid the
+bug that justified it. A heading's label is now taken from the block rather than asked for
+([`src/labels.ts`](../src/labels.ts)), so the premise is true because code makes it true.
+
+### The seam test
+
+Naively you would compare labels either side of a batch boundary against labels next to each other
+inside a batch. That comparison is rigged: a batch boundary is also a *section* boundary, so the two
+labels are about different things and would look less alike however they were generated.
+
+So the control is matched. Both groups are pairs of adjacent labels that **cross a sibling-set
+boundary**; the only difference is whether that boundary is also a call boundary.
+
+- **seam pairs** — adjacent labels whose blocks were in different calls
+- **matched interior pairs** — adjacent labels whose blocks were in different sibling sets but the
+  *same* call
+
+If the two groups score the same, batching left no trace. If seams are worse, that is the number to
+fix.
+
+**There is no verdict line, and removing it was the point.** The first version printed "seams look
+worse" off a 15% ratio band. The second kept that and added a floor of twenty pairs, which looked
+like rigour and was not: at similarities around 0.02, one extreme observation among twenty moves the
+mean by ~0.05 — far outside the band the verdict was reading — and the pairs are not independent
+anyway, coming from one article, one run, one model. A floor cannot rescue a statistic with no error
+bar, and printing a threshold implies one.
+
+So the numbers are printed and nothing is concluded from them. A directional claim about seams needs
+a blinded comparison across several texts and several runs with its uncertainty stated, which this
+harness does not do. Until then the coherence claim rests on the mechanism — labelling synthesises
+nothing across chunks, and sibling batching keeps every compared pair inside one call — and
+[toc-scaling.md](../docs/plans/toc-scaling.md) says so too.
+
+### What it cannot do
+
+The direct test of a label's job needs a person: show a label with its 5–9 sibling paragraphs
+shuffled, and ask which paragraph it points to. Measure correct identification, time, and whether
+distinctive terms survived. `--shuffle` prints those sets ready to hand to someone.
+
+## Results
+
+`results/` holds one JSON per run, named by slug and timestamp to the minute, committed. The minute
+matters: the point of writing these out is to compare a run against the one before it, and a name
+that collided on the same day would overwrite the "before" you re-ran in order to have.
+
+They are the record, not a formality — the numbers quoted in
+[toc-scaling.md](../docs/plans/toc-scaling.md) come from these files, and a later change should be
+argued against them rather than against a paragraph of prose.
+[`results/README.md`](results/README.md) says which is which, and which one is no longer obtainable.

@@ -54,9 +54,15 @@ describe("articleMetadata", () => {
   it("names the real files each stage writes, not a prettier version of them", async () => {
     const m = await articleMetadata("example");
     const toc = m.stages.find((s) => s.step === "toc");
-    // Both of them: stage 4 writes the tree AND copies the blocks beside it, so
-    // a caller checking only the first would call a half-finished run done.
-    expect(toc?.outputs).toEqual(["example/tree.json", "example/blocks.json"]);
+    // All three: stage 4 writes the tree, the nav labels its second model pass
+    // produced, AND copies the blocks beside them, so a caller checking only
+    // the first would call a half-finished run done. src/toc.ts writes the tree
+    // last for the same reason — docs/plans/toc-scaling.md.
+    expect(toc?.outputs).toEqual([
+      "example/tree.json",
+      "example/labels.json",
+      "example/blocks.json",
+    ]);
     // Extract's HTML lands in output/, not in the data directory. The plan's
     // sketch had it as `data/<slug>/article.html`, which does not exist.
     const extract = m.stages.find((s) => s.step === "extract");

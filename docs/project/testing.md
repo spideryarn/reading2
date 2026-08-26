@@ -240,9 +240,16 @@ author's "technorati" into "technologists", which every other check was happy wi
 
 Two habits it made explicit and worth carrying to the next eval:
 
-- **A verdict line is read as a conclusion, so do not print one until there is something to
-  conclude.** The first version announced "seams look worse" off eight pairs differing by half a
-  percentage point. It now says how few there are instead.
+- **A verdict line is read as a conclusion, so do not print one at all unless the numbers support
+  one.** The first version announced "seams look worse" off eight pairs differing by half a
+  percentage point. The second added a minimum sample below which it said "too few to tell", which
+  looked like rigour and was not — a floor cannot rescue a statistic with no error bar, and printing
+  a threshold implies one. The verdict is gone; the numbers are printed and the reader is told that
+  is all they are.
+- **Excluding something from a measure asserts a fact about it.** The eval stopped counting heading
+  labels in its length and vocabulary numbers because a heading's label is *required* to be the
+  heading copied exactly — and the model was not copying it exactly, on 9 of 36 labels. The exclusion
+  hid the bug it was justified by. When you exclude a population because of a rule, check the rule.
 - **Keep the incumbent.** The previous whole-pass trees were the only baseline available, and they
   only existed because they were on disk before the change ran. Snapshot before you overwrite.
 

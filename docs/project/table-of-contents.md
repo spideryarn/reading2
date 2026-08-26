@@ -286,16 +286,59 @@ levels and no zoom axis worth having.
 
 Of those 139 leaves, 116 carry a `navLabel` and 23 do not.
 
+## Two passes: the structure, then the labels <a id="two-passes"></a>
+
+Stage 4 used to ask for the whole tree in one model call, and that is what broke it. One `navLabel`
+per gistable block means a piece with three times the paragraphs asks for three times the JSON, so
+this was the only answer in the pipeline that **grew with the article without a bound** — measured at
+**73%** of the answer on a 360-block article, against 27% for the entire tree. One model response
+holds 128,000 tokens including the model's own reasoning, and nothing raises that, so past some
+length the stage simply could not work.
+
+So it is two passes now, and one pipeline step:
+
+1. **The structure**, in one whole-document call ([`src/toc.ts`](../../src/toc.ts)) — the internal
+   nodes, their titles, their gists, their ranges, `sourceHeading`. Roughly 7,000 tokens of answer on
+   a 360-block article, and it grows at about one node per seven blocks rather than one per block.
+2. **The nav labels**, in parallel batches ([`src/labels.ts`](../../src/labels.ts)), cut along the
+   tree's own section boundaries once it exists.
+
+The rule the split turns on:
+
+> **Generate siblings together; generate disjoint sibling groups in parallel.**
+
+A label's job is to tell its paragraph apart from *its neighbours*
+([entry length](#granularity)), so every pair a reader compares has to have been written in the same
+call. `planBatches` packs whole sibling sets until adding the next one would pass 60 blocks, and
+never splits one. Batching on a token window instead would break exactly that and nothing else,
+which is why it would be hard to notice.
+
+**A heading's label is taken from the block, not asked for.** The prompt says to copy the heading
+exactly; the model does not. On the two committed articles, 9 of 36 heading labels and 3 of 9
+differed — curly apostrophes flattened to straight, authored numbering ("2: Other Games In Town")
+quietly dropped. The apostrophe half is the *same failure* as
+[the one that broke `sourceHeading` validation](#the-apostrophe-that-failed-eleven-headings), which
+was patched by comparing more loosely. This one is patched by not asking: a heading's label is
+knowable without a model, so `parseLabels` overwrites it from `block.text` and a drifting prompt
+cannot bring it back. The model is still asked for one, so that a batch skipping its headings still
+fails the paragraph-number check.
+
+Two things this bought beyond the ceiling. `effort` went **back to `"high"`** on the structure call —
+the postmortem had forced it down to `"medium"`, which was a real quality concession on the one part
+of the work where reasoning matters. And `COVERAGE_FLOOR` went from 0.95 to **1**: each batch is
+asked for an exact set of numbered paragraphs and refuses any other set, so there is no longer a path
+by which a block is legitimately unlabelled.
+
+The whole design, the alternatives weighed against it, and what it does not yet do are in
+[docs/plans/toc-scaling.md](../plans/toc-scaling.md).
+
 ## The budget <a id="the-budget"></a>
 
-Stage 4 is the only stage whose **answer grows with the article without a bound**. It writes one
-`navLabel` per gistable block, so a piece with three times the paragraphs asks the model for three
-times the JSON. Every other model call in the pipeline writes something roughly fixed — a sentence
-per part, a thread of a dozen posts.
-
-That is why [`estimateTocTokens`](../../src/toc.ts) exists, and why `max_tokens` here is computed
-from `blocks.json` rather than typed in. The arithmetic on top of it — and the reason most of the
-number is not the answer at all — is in [`src/token-budget.ts`](../../src/token-budget.ts):
+`max_tokens` is still computed from `blocks.json` rather than typed in — the split moved the ceiling,
+it did not remove the need to know where it is. [`estimateTocTokens`](../../src/toc.ts) does the
+structure call's estimate; [`src/labels.ts`](../../src/labels.ts) does a batch's. The arithmetic on
+top of both — and the reason most of the number is not the answer at all — is in
+[`src/token-budget.ts`](../../src/token-budget.ts):
 
 > **`max_tokens` is not an output cap. It is an output-plus-reasoning cap.**
 
@@ -308,18 +351,25 @@ exactly, and a flat reservation for reasoning, which it cannot.
 `max_tokens: 32000`, of which roughly 26,000 had gone on thinking. Recomputing the budget as
 77,100 and running it again failed *too*, with about 64,000 of thinking that time: adaptive thinking
 at `effort: "high"` expands into whatever room it is given, so raising the ceiling raises the
-thinking with it and the two never converge. That is why stage 4 runs at `effort: "medium"` while
-its siblings stay at `"high"` — it is the stage whose output is mostly mechanical labelling, and the
-only one where lowering the dial is close to free.
+thinking with it and the two never converge. `max_tokens` is a ceiling; `effort` is the leash.
 [docs/postmortems/toc-max-tokens.md](../postmortems/toc-max-tokens.md) has the whole account.
+
+**The reservation is per call, not per stage.** 40,000 was measured on a call that reads a whole
+article and thinks about its structure. A label batch reads one section and writes a dozen labels,
+and reserves 16,000. Inheriting the big number onto every small call would cost no money — an
+allowance the model does not spend is not billed — but it would hide a batch that had started
+thinking far more than it should, which is the failure that took two six-minute runs to find.
 
 Two failures, deliberately kept distinct, because they are not the same problem:
 
 - **Too long to attempt.** `budgetFor` throws *before* the call when the estimated answer plus the
-  reasoning reservation exceeds what one response can hold — currently around 876 blocks. Nothing is
-  spent and the message says the article needs [section-by-section
-  processing](#long-articles). Clamping to the ceiling instead would be friendlier-looking and
-  wrong: the call would run for minutes, cost money, and come back truncated anyway.
+  reasoning reservation exceeds what one response can hold — **1,976 blocks**, roughly 123,500 words,
+  since the labels moved out; it was 876 before. Nothing is spent, and the message says the article
+  needs [section-by-section structure](#long-articles). Clamping to the ceiling instead would be
+  friendlier-looking and wrong: the call would run for minutes, cost money, and come back truncated
+  anyway. `tests/token-budget.test.ts` pins that boundary exactly, because the boundary *is* the
+  feature — if it drops, a term that scales with paragraphs has crept back into the structure call,
+  and it would come back as a slightly worse ceiling rather than as anything red.
 - **The estimate was wrong.** `stop_reason: "max_tokens"` still throws, and the message now carries
   the budget and the estimate so the constants can be re-tuned from the failure. It does **not**
   suggest retrying, because the Retry button makes the identical call.
@@ -330,17 +380,37 @@ it. A table of contents that silently describes two thirds of an article is exac
 
 ## The generation prompt
 
-A ~10k-word article fits comfortably in one pass, so the model sees the whole document and can keep
-sibling titles consistent with each other.
+The structure call sees the whole document in one pass, which is what lets it keep sibling titles
+consistent with each other and makes the [partition invariant](#the-partition-invariant) something
+the model can satisfy rather than something we have to stitch together. That holds up to about
+123,500 words.
+
+Each label batch sees: the whole article's outline, its own sections' crumbs and gists, its
+paragraphs numbered, and one block of context either side marked `CONTEXT` so it can feel the flow
+without labelling it. Blocks whose tag is a heading are marked `HEADING` — the first live run came
+back with `"Title: The Mythology Of Conscious AI"`, because `<h1>` alone was not enough signal that
+the rule is *copy this exactly*.
+
+The vocabulary rule earns its example. *"Reuse the author's distinctive vocabulary verbatim"* on its
+own let the batch prompt turn the author's `technorati` into `technologists` — a synonym is not
+merely as good, it is worse, because the reader is scanning for the word they read. Naming that
+substitution in the prompt is what fixed it.
 
 ### Longer pieces <a id="long-articles"></a>
 
-Longer pieces need section-by-section processing against a shared style contract — **not yet built**,
-and now the thing that stands between us and an article of a few hundred thousand words. The
-[budget](#the-budget) refuses those out loud rather than half-doing them. Whoever builds it should
-know what it has to preserve: sibling titles that are consistent with each other across a boundary
-the model never sees at once, and the [partition invariant](#the-partition-invariant), which is
-currently guaranteed by the model seeing the whole block list in one go.
+Past ~1,976 blocks the **structure** call is what no longer fits, and generating it section by
+section is **not yet built**. The [budget](#the-budget) refuses those out loud rather than half-doing
+them.
+
+The shape it should take, from GPT-5.6-sol's review and written up in
+[toc-scaling.md § D](../plans/toc-scaling.md): build the authored-heading skeleton mechanically;
+make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
+assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with
+the whole global outline in front of it. Never blind subtree calls with independently invented
+sibling roots — that is where four sections all end up meaning "Background".
+
+Note what is *no longer* on that list: the labels. They are already batched, and they are the half
+that scaled worst.
 
 **The model emits nested JSON; stage 4 converts it to the flat map** and assigns `NodeId`s, `parent`
 pointers and `depth`. Asking a model to emit a self-consistent map of cross-referencing ids is
@@ -386,33 +456,24 @@ TITLES (internal nodes)
   "Background", "Part Two"). Rewriting should be rare.
 - No trailing punctuation.
 
-NAV LABELS (one per gistable block)
-
-- 6–20 words. Longer than a title on purpose: a paragraph has no name of its
-  own, and its neighbours are numerous and similar, so it needs enough words to
-  tell itself apart from them.
-- A navLabel must be a CLAIM or a MOVE, not a topic label.
-    good: "Seth rejects substrate independence because feeling is metabolic"
-    bad:  "Discusses substrate independence"
-- Reuse the author's distinctive vocabulary verbatim. Those words are the
-  reader's handholds when they arrive at the passage.
-- For a heading block, the navLabel is just the heading's own text.
-- Emit NOTHING for a block marked NOT-GISTABLE. No navLabel, no entry.
-- Never introduce a fact that is not in the block.
-- No meta-narration. Never write "this section explores", "the author then
-  turns to", "we are told that".
-
 OUTPUT
 
 JSON only:
 
 {"root": {"title": "...", "range": ["<firstBlockId>", "<lastBlockId>"],
-          "sourceHeading": "...", "children": [ ... ]},
- "navLabels": {"<blockId>": "...", ...}}
+          "sourceHeading": "...", "children": [ ... ]}}
 
 Use only block ids that appear in the input. Do not invent ids. Do not write a
 `gist` field — that is a later stage.
 ````
+
+**The nav labels are not in this response.** They were, and it is what took the stage over the
+128,000-token ceiling — one per gistable block is the only output in the pipeline that grows with the
+article without a bound. They are now a second pass with a prompt of its own, in
+[`src/labels.ts`](../../src/labels.ts): 6–20 words, a claim or a move rather than a topic label, the
+author's distinctive vocabulary verbatim, nothing for a NOT-GISTABLE block, and no meta-narration.
+See [Two passes](#two-passes) above; the live prompt is the one in the source, and this block is the
+structure half only.
 
 ### Verify, always
 

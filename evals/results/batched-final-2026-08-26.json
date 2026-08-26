@@ -1,0 +1,66 @@
+[
+  {
+    "slug": "constitution",
+    "blocks": 360,
+    "gistable": 360,
+    "labelled": 360,
+    "coverage": 1,
+    "batched": true,
+    "batches": 7,
+    "treeAgreesWithLabels": true,
+    "length": {
+      "mean": 11.99074074074074,
+      "min": 2,
+      "max": 18,
+      "outsideRange": 12
+    },
+    "headings": 36,
+    "templateRepetition": 0.30864197530864196,
+    "vocabularyRetention": 0.7747389013592716,
+    "seam": {
+      "seamPairs": 6,
+      "interiorPairs": 43,
+      "seamSimilarity": 0.02207977207977208,
+      "interiorSimilarity": 0.01965041622324364,
+      "seamSameOpening": 0,
+      "interiorSameOpening": 0
+    },
+    "cost": {
+      "inputTokens": 50784,
+      "outputTokens": 11844,
+      "slowestBatchMs": 21063
+    }
+  },
+  {
+    "slug": "noema-mythology-of-conscious-ai",
+    "blocks": 141,
+    "gistable": 117,
+    "labelled": 117,
+    "coverage": 1,
+    "batched": true,
+    "batches": 3,
+    "treeAgreesWithLabels": true,
+    "length": {
+      "mean": 13.175925925925926,
+      "min": 6,
+      "max": 18,
+      "outsideRange": 0
+    },
+    "headings": 9,
+    "templateRepetition": 0.07407407407407407,
+    "vocabularyRetention": 0.7274368121590343,
+    "seam": {
+      "seamPairs": 2,
+      "interiorPairs": 16,
+      "seamSimilarity": 0,
+      "interiorSimilarity": 0.005208333333333333,
+      "seamSameOpening": 0,
+      "interiorSameOpening": 0
+    },
+    "cost": {
+      "inputTokens": 22800,
+      "outputTokens": 4310,
+      "slowestBatchMs": 23102
+    }
+  }
+]

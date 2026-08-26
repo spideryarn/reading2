@@ -87,6 +87,18 @@ describe("budgetFor", () => {
     // estimate would silently shrink the budget below the headroom.
     expect(() => budgetFor("toc", Number.NaN)).toThrow(/non-negative/);
     expect(() => budgetFor("toc", -1)).toThrow(/non-negative/);
+    expect(() => budgetFor("toc", 100, Number.NaN)).toThrow(/non-negative/);
+    expect(() => budgetFor("toc", 100, -1)).toThrow(/non-negative/);
+  });
+
+  it("takes a smaller reservation from a call that reads less than the whole article", () => {
+    // 40,000 was measured on a call that read a whole article and thought about
+    // its structure. A label batch reads one section. Inheriting the big number
+    // onto every small call would cost no money — max_tokens is a ceiling — but
+    // it would hide a batch that had started thinking far more than it should,
+    // which is the failure that took two six-minute runs to find last time.
+    expect(budgetFor("nav labels", 4_400, 16_000)).toBe(20_400);
+    expect(budgetFor("nav labels", 4_400, 16_000)).toBeLessThan(budgetFor("nav labels", 4_400));
   });
 });
 
@@ -136,42 +148,39 @@ describe("estimateTocTokens", () => {
     expect(estimateTocTokens(blocks(400))).toBeGreaterThan(estimateTocTokens(blocks(40)) * 5);
   });
 
-  it("charges for a label only where a label will be written", () => {
-    // Non-gistable blocks get no navLabel (table-of-contents.md), so they cost
-    // the tree that tiles them and nothing more.
-    expect(estimateTocTokens(blocks(100, false))).toBeLessThan(estimateTocTokens(blocks(100)));
+  it("no longer cares which blocks are gistable, because it no longer pays for labels", () => {
+    // This test used to assert the opposite: a non-gistable block cost less,
+    // because it got no navLabel. The labels moved to src/labels.ts, and what is
+    // left is the tree — which tiles every block regardless. If this ever starts
+    // differing again, a label estimate has crept back into the structure call.
+    expect(estimateTocTokens(blocks(100, false))).toBe(estimateTocTokens(blocks(100)));
   });
 
   /**
    * The regression that matters, measured against a real tree rather than
    * against the estimator's own arithmetic.
    *
-   * `example/tree.json` is committed, and the JSON the model emitted to produce
-   * it is recoverable: the internal nodes, plus one navLabel per labelled leaf.
-   * Counted with the Opus 5 tokenizer that payload is 3,112 tokens over 8,255
-   * characters — 2.65 characters per token, which is what JSON full of random
-   * block ids costs. The 2.5 below is that measurement rounded against us, so
-   * the check is computed from the fixture and moves if the fixture does.
+   * `example/tree.json` is committed, and the JSON the structure call emits to
+   * produce it is recoverable: the internal nodes, and now **only** those — the
+   * navLabels this used to include are a separate stage's answer, and counting
+   * them here would keep the old ceiling alive in the one place that would not
+   * announce itself. 2.5 characters per token is the measured cost of JSON full
+   * of random block ids, rounded against us. Computed from the fixture, so it
+   * moves if the fixture does.
    */
-  it("clears what a real tree actually cost, with margin", () => {
+  it("clears what a real tree's structure actually cost, with margin", () => {
     const tree = read<Tree>("example/tree.json");
     const { blocks: fixtureBlocks } = read<{ blocks: Block[] }>("example/blocks.json");
-    const nodes = Object.values(tree.nodes);
 
     const payload = JSON.stringify(
-      {
-        internal: nodes
-          .filter((n) => n.children.length > 0)
-          .map((n) => ({
-            title: n.title,
-            gist: n.gist,
-            range: n.range,
-            sourceHeading: n.sourceHeading,
-          })),
-        navLabels: Object.fromEntries(
-          nodes.filter((n) => n.navLabel).map((n) => [n.range[0], n.navLabel]),
-        ),
-      },
+      Object.values(tree.nodes)
+        .filter((n) => n.children.length > 0)
+        .map((n) => ({
+          title: n.title,
+          gist: n.gist,
+          range: n.range,
+          sourceHeading: n.sourceHeading,
+        })),
       null,
       1,
     );
@@ -191,5 +200,20 @@ describe("estimateTocTokens", () => {
     // Not a number worth pinning — what matters is that some length is refused
     // out loud, before the call, instead of producing half a table of contents.
     expect(() => budgetFor("toc", estimateTocTokens(blocks(5_000)))).toThrow(TooLongForOnePass);
+  });
+
+  it("fits a book, which is the point of taking the labels out", () => {
+    // The whole justification for the split. Before it, the estimate charged for
+    // a label per block and refused anything past 876 blocks — about 55,000
+    // words. The structure call alone takes 1,976, which at the 62.5 words a
+    // block that our three real articles average is roughly 123,500 words: a
+    // full-length nonfiction book, in one call.
+    //
+    // Pinned exactly, because this boundary IS the feature. If it drops, the
+    // structure call has grown a term that scales with paragraphs again — which
+    // is the bug this whole change exists to remove, and it would come back
+    // silently as a slightly worse ceiling rather than as a failure.
+    expect(() => budgetFor("toc", estimateTocTokens(blocks(1_976)))).not.toThrow();
+    expect(() => budgetFor("toc", estimateTocTokens(blocks(1_977)))).toThrow(TooLongForOnePass);
   });
 });

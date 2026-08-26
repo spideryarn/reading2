@@ -176,18 +176,32 @@ through [`src/types.ts`](../../src/types.ts) and [`src/jobs.ts`](../../src/jobs.
 [`AddArticle.tsx`](../../src/web/AddArticle.tsx) — small, but three files, two of them somebody
 else's stage.
 
-**Section-by-section generation is still not built**, so any article past ~876 blocks is refused
-rather than read. GPT-5.6-sol reviewed this bug and recommended that as the real long-term shape:
-one whole-article call for the structure (titles, gists, ranges — the part where reasoning actually
-matters, kept at high effort), and the nav labels generated in section-sized batches at lower effort,
-in parallel, with exact block-id coverage checked before anything is published. What is here is the
-bridge it recommended shipping first, and the coverage check above is the piece of that design that
-was worth having immediately, whether or not the batching ever lands.
+**~~Section-by-section generation is still not built~~ — built, 2026-08-26.** The batching lands in
+[`src/labels.ts`](../../src/labels.ts) and the plan is
+[toc-scaling.md](../plans/toc-scaling.md). Exactly the shape GPT-5.6-sol recommended when it reviewed
+this bug: one whole-article call for the structure, and the nav labels in section-sized batches at
+lower effort, in parallel, with exact coverage checked before anything is published. The ceiling went
+from 876 blocks to 1,976 — about 55,000 words to about 123,500.
 
-**Effort has not been swept.** `output_config.effort` is `"high"` on all three stages because it was
-`"high"` when they were written, not because anyone compared. Most of stage 4's output is mechanical
-labelling; `"medium"` may cost nothing and would cut both the money and the six minutes. That needs a
-few articles judged side by side, which is not a deterministic test and so is not in the suite.
+Two things that only showed up once it ran, and both belong in this file because both are this bug's
+family. First, the labels are 73% of what this stage was asking for, measured off the tree: **the
+thing that broke was mostly the thing that is invisible in reading mode**, which nobody had counted
+before the split forced the question. Second, at `effort: "medium"` a label batch returned 41 labels
+for the 42 paragraphs it was asked about — twice — well-formed, untruncated, and silent. The
+`(ordinal, label)` wire format caught it. That is the same failure as this postmortem's, one order of
+magnitude smaller and with the loud half removed, and it is the reason the exact-set check is not
+optional.
+
+**~~Effort has not been swept.~~ Partly swept, 2026-08-26.** The structure call is back at
+`"high"` — with the labels gone it has room to think, and boundaries and titles are the part worth
+thinking about. The label batches were compared at `"low"` against `"medium"` on the 141-block
+article: `"low"` returned every label twice over, `"medium"` dropped one twice, and the eval's
+numbers were identical on the batches that came back whole. `"low"` stays. `src/arc.ts` and
+`src/tweets.ts` are still `"high"` by inheritance rather than by comparison.
+
+The sweep is now possible because there is somewhere to record it: [`evals/`](../../evals) holds a
+mechanical eval over committed artefacts, and `evals/results/` holds the numbers, so the next such
+question gets answered against a file rather than against a memory.
 
 ## The general shape
 
