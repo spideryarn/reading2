@@ -935,6 +935,21 @@ it is tested in the first hour, not the last, and against the alternative.
    run at all. That is the next thing to build or drop.
 3. Build **pass 0 and the check** against the saved responses — no model call needed to test them.
    Build the scorer and its synthetic tests at the same time ([the eval](#the-eval-evalspdf)).
+
+   **Pass 0 has landed** — [`src/pdf.ts`](../../src/pdf.ts), eight tests over the three committed
+   fixtures, no model and no network. Page count, per-page text, the scan test and the furniture
+   list. Two things in it are worth knowing before reading it:
+
+   - **The scan test asks about the content pages, not all of them.** Wellcome generates its own
+     rights page with 95 words on it, and that is the only text in a 17-page scan — so "every page
+     is empty" answers that the scan is not a scan.
+   - **The furniture fold drops digits as well as punctuation**, because the page number is the part
+     of a running header that changes, and keeping it means the header never repeats and is never
+     recognised. A line has to appear on three or more *pages*, counted once per page, so an
+     author's refrain three times on one page stays in the baseline where it belongs.
+
+   The check and the scorer are still to build, and their shape is the open question — see
+   [what is still open](#what-is-still-open-after-the-bake-off).
 4. Build chunking, rendering, stitching and the chunk cache.
 5. Define the raw manifest, the `Meta` fields and pipeline freshness.
 6. Integrate URL PDFs through `STEPS`. Make the easy eval PDF pass tier 1.
@@ -1093,6 +1108,28 @@ With the caveat `easy` page 1 wrote in blood: **a low recall can be a defensible
 than a loss**, so the recorded exclusion list is load-bearing rather than decorative. A page that
 fails only on recall, and only by the length of a notice the model was told to drop, is a prompt
 problem and not a transcription one.
+
+### What is still open after the bake-off
+
+Two design questions the measurements raised rather than settled. Both are being reviewed as this
+is written — GPT Sol on the method, Fable on the shape — and both will be answered here.
+
+**1. The page attribution is circular.** Records are grouped for checking by *the page number the
+model itself claimed*, so a model that mislabels pages is scored against the wrong baseline. That is
+load-bearing in a useful way — it is exactly how the document-first bug showed up, as recall 0.05 —
+but it means a reader that reads well and labels badly looks catastrophic, a reader that labels well
+and reads badly might look fine, and **the score alone cannot tell them apart.** Options: leave it,
+because a mislabelled page *is* a failure and every later feature addresses text by page; assert the
+set of pages first and check content second, so the two failures report differently; or align output
+to baseline pages by content and report the disagreement as its own error.
+
+**2. Whether the scan witness is buildable, let alone worth it.** Mistral OCR works and costs
+$0.002 a page — and returns two pages as one flat markdown string with no page boundaries, so the
+per-page check cannot run against it without reconstructing pages ourselves. The independence the
+whole scheme rests on is also still a hypothesis: both readers are learned systems with language
+priors, and nobody has shown they fail differently on the cases that matter. The already-agreed
+alternative is to show the scan marked visibly unverified and pay for nothing, which is
+[Greg's first answer](#gregs-answers-2026-08-26).
 
 ## Greg's answers (2026-08-26)
 
