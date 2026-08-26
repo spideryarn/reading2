@@ -1195,15 +1195,117 @@ mark.hit {
      invisible one — the failure of a missing custom property should be a mark
      you can see, not a mark you cannot. */
   --hit-a: 1;
-  background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.3));
+  /* The wash carries confidence and NOTHING ELSE, and it is a deliberately
+     low-chroma slate so that it can never be mistaken for one of the eight
+     categorical hues below. Greg's call, 2026-08-26, when the choice was put to
+     him as "blend the washes" against "stack the rules": the mixture of two
+     translucent washes is a colour that is not in the palette, so a reader
+     cannot look it up, and a third layer takes it to mud while eating the
+     text's contrast. Splitting the two channels — confidence into the wash,
+     identity into the rules — is what makes it true that adding a fifth
+     overlapping search cannot make the words underneath it any harder to read
+     than one does. */
+  background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.3));
   color: inherit;
   border-radius: 2px;
+  /* Room for the rules, taken out of the **leading** rather than out of the
+     layout: padding on an inline box grows its background downward without
+     changing the line box, so switching a search on cannot reflow the article.
+     A `border-bottom` or a margin would; a `box-shadow` would escape the box
+     and land on the line below. */
+  --hue-band: 2px;
+  padding-bottom: var(--hue-band);
+  /* **Load-bearing, and the default is wrong here.** `slice` — the initial
+     value — positions the background against the box the mark *would* have had
+     if it had never wrapped, so a bottom-anchored stripe on a phrase that
+     breaks across two lines is drawn once, at the bottom of the second line,
+     with the first line bare. `clone` gives each fragment its own box, its own
+     padding and its own stripe. The failure without it is not subtle but it is
+     conditional on the line break, so it is invisible until an article happens
+     to wrap a match. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* ------------------------------------------------------- stacked hues ----
+   Which searches found these words, as one coloured rule each under the wash.
+   `--h0` … `--h3` are set inline by annotate.ts and hold *palette references*
+   (`var(--cat-3-rgb)`), never colours — the slot belongs to the search and the
+   hue belongs to styles/colourscales.css, and neither half should be able to
+   change the other. See docs/project/colour-scales.md.
+
+   **One gradient with hard stops, not one layer per stripe.** Four background
+   layers would need four matching `background-position` values and a
+   `background-size` that divides correctly, which is four numbers per rule that
+   have to agree; a single `linear-gradient` with hard stops is one declaration
+   whose stops are the only thing that changes. It also cannot half-paint: a
+   mistyped stop shifts a boundary, where a mistyped position drops a stripe
+   entirely and leaves a colour that simply is not drawn.
+
+   The band grows with the count and then stops. Two searches over one phrase is
+   common enough to want room for; five is not a case anybody has reached, and
+   growing without limit would push the rules into the line below. So the band
+   caps at 6px and the stripes inside it get thinner instead — see `HUE_STRIPES`
+   in annotate.ts for what happens past four, which is that they are not drawn.
+
+   The band is repeated on the confidence chip in the panel and on the bar down
+   the left of the paragraph, from the same `--h*` properties, so the three
+   places a search's colour appears cannot disagree. */
+mark.hit[data-hues] {
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% var(--hue-band);
+}
+mark.hit[data-hues="1"] {
+  background-image: linear-gradient(rgb(var(--h0)), rgb(var(--h0)));
+}
+mark.hit[data-hues="2"] {
+  --hue-band: 4px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 50%,
+    rgb(var(--h1)) 50%
+  );
+}
+mark.hit[data-hues="3"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 33.34%,
+    rgb(var(--h1)) 33.34% 66.67%,
+    rgb(var(--h2)) 66.67%
+  );
+}
+mark.hit[data-hues="4"] {
+  --hue-band: 6px;
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 25%,
+    rgb(var(--h1)) 25% 50%,
+    rgb(var(--h2)) 50% 75%,
+    rgb(var(--h3)) 75%
+  );
+}
+/* A literal match has no saved search behind it and therefore no colour of its
+   own, so it wears the one fixed search hue — which is what every hit wore
+   before the palette existed. Written as its own rule rather than as a
+   fallback value on `--h0`, so that the words matcher does not depend on a
+   custom property resolving to something sensible when it is absent. */
+mark.hit:not([data-hues]) {
+  background-image: linear-gradient(var(--hit), var(--hit));
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 100% var(--hue-band);
 }
 /* The one the reader pressed in the panel, so the list and the passage are
-   visibly the same thing after a jump. Same job `mark.cmt[data-open]` does. */
+   visibly the same thing after a jump. Same job `mark.cmt[data-open]` does.
+   The ring is in the neutral wash colour rather than in any of the hues: it
+   means *this is the row you pressed*, which is a different fact from which
+   search found it, and a ring that borrowed a hue would be a fourth thing
+   wearing a colour that already means something. */
 mark.hit[data-open] {
-  background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.55));
-  box-shadow: 0 0 0 1px rgb(var(--hit-rgb) / 0.8);
+  background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.55));
+  box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
 }
 /* A comment over a hit keeps its underline: it is the one you can click, and
    losing the affordance to a wash would make it look inert. Same call
@@ -1226,6 +1328,48 @@ mark.cmt.hit {
 td.text.has-hit {
   --hit-a: 1;
   box-shadow: inset 3px 0 0 rgb(var(--hit-rgb) / calc(min(1, var(--hit-a) * 1.5)));
+}
+/* Divided into the colours of the searches that matched **anywhere in the
+   paragraph** — which is a coarser question than the rules under each phrase
+   answer, deliberately: this is the mark you catch while scrolling, so it says
+   "one of yours is in here" rather than "this clause". `blockHues` in
+   search-hits.ts is where the two scopes are set out.
+
+   A background rather than the inset shadow above, because a shadow cannot be
+   divided into segments. The shadow stays for the literal matcher, which has no
+   colours; the two never apply at once, because the two matchers never do. */
+td.text.has-hit[data-hues] {
+  box-shadow: none;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 3px 100%;
+}
+td.text.has-hit[data-hues="1"] {
+  background-image: linear-gradient(rgb(var(--h0)), rgb(var(--h0)));
+}
+td.text.has-hit[data-hues="2"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 50%,
+    rgb(var(--h1)) 50%
+  );
+}
+td.text.has-hit[data-hues="3"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 33.34%,
+    rgb(var(--h1)) 33.34% 66.67%,
+    rgb(var(--h2)) 66.67%
+  );
+}
+td.text.has-hit[data-hues="4"] {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(var(--h0)) 25%,
+    rgb(var(--h1)) 25% 50%,
+    rgb(var(--h2)) 50% 75%,
+    rgb(var(--h3)) 75%
+  );
 }
 
 .cmt-dialog {
@@ -1656,19 +1800,48 @@ td.text.has-hit {
 .ctx-item.active { background: var(--highlight-wash); }
 .ctx-item.active .ctx-title { color: var(--highlight-ink); }
 
-/* The arc column has no titles, so a non-current entry is its sentence,
-   clamped to one line. A landmark, not a thing to read. */
+/* A landmark's gist, clamped to as many lines as the column can afford.
+   `--ctx-lines` is set per entry from `landmarkLines` (context.ts § how much
+   fits): one line where the level is long, up to four where it is short and
+   the panel would otherwise be four fifths blank —
+
+     Greg, 2026-08-26: "it's not using the full vertical height to display as
+     much information as it could be."
+
+   At one line this is exactly what it replaced: `-webkit-line-clamp: 1` gives
+   the same single line with the same ellipsis that `nowrap` + `text-overflow`
+   did, so the long levels are untouched.
+
+   Still a landmark and not a thing to read: the reading face, small, faint,
+   and always a step quieter than the title above it. `-webkit-` prefixed
+   because that is what every engine actually ships; the unprefixed `line-clamp`
+   is written beside it for the day they honour it. */
 .ctx-clamp {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--ctx-lines, 1);
+  line-clamp: var(--ctx-lines, 1);
   font-family: var(--font-reading);
   font-size: 0.72rem;
+  line-height: 1.4;
   color: var(--ink-faint);
   margin-top: 0.15rem;
   font-weight: 400;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
+/* The tiers' step down carries into the gist, not only the title: a far
+   landmark's words must not out-shout a near one's. Sizes, never a gradient —
+   see context.ts.
+
+   **Size and colour, and deliberately no opacity.** `.ctx-item.before` is
+   already 0.6, and `.tier-far .ctx-title` another 0.6 on top of it — a far,
+   already-read entry is at 0.36. That was survivable while a landmark was one
+   line; three or four lines of gist at 0.36 is a grey smear down the half of
+   the panel above the reader, which is the half they have read and the half
+   they are most likely to be scanning back over. Caught by Fable's review of
+   this change, 2026-08-26, before it reached a screen. */
+.ctx-item.tier-near .ctx-clamp { font-size: 0.74rem; color: var(--ink-soft); }
+.ctx-item.tier-far .ctx-clamp { font-size: 0.68rem; }
 
 /* ---- Group headings: where one part's sections stop and the next begin --
    Greg, 2026-08-25: "can we make it clearer where the higher-level boundaries
@@ -2409,8 +2582,16 @@ td.text.has-hit {
   color: var(--ink-faint);
   cursor: pointer;
 }
-.chat-icon:hover { background: var(--surface-raised); color: var(--ink); }
-.chat-icon.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+.chat-icon:not(:disabled):hover { background: var(--surface-raised); color: var(--ink); }
+.chat-icon.danger:not(:disabled):hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+/* Matches `.chat-send:disabled` below, and it was missing here — so the one
+   icon button that is ever disabled (Ask again, while an answer arrives) kept
+   its pointer cursor and still lit up under the mouse. It looked and felt
+   exactly like a button that works, and did nothing. Found the long way round:
+   a browser pass reported it could not visually confirm the disabled state,
+   which was the right observation and the wrong conclusion — there was nothing
+   to see. 2026-08-26. */
+.chat-icon:disabled { opacity: 0.4; cursor: default; }
 
 .chat-error {
   margin: 0;
@@ -2574,6 +2755,54 @@ td.text.has-hit {
   border-color: var(--highlight);
   color: var(--highlight-ink);
 }
+
+/* ---- what the model did before it answered ----
+   A strip ABOVE the answer, not below it. Sources sit below because they are
+   where the answer came from and you want them after reading it; this is what
+   happened while you waited, and by the time the answer is written it is already
+   read. Putting it above also means the strip does not move when the text
+   streams in underneath — a list that shuffles down the panel one line at a time
+   is the most distracting thing on the screen.
+
+   Muted throughout and one step smaller than the sources list. It is provenance,
+   not content, and it must never compete with the answer for the eye. */
+.chat-tools {
+  margin: 0 0 0.45rem;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+}
+.chat-tool {
+  display: flex;
+  /* Not `center`: a long label wraps to two or three lines in a 400px panel and
+     a centred icon then floats in the middle of them. */
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.chat-tool svg {
+  flex: none;
+  /* Nudged down to sit on the first line's baseline rather than its box top. */
+  margin-top: 0.18em;
+  opacity: 0.75;
+}
+.chat-tool-label {
+  min-width: 0;
+  /* The label carries the reader's own query, which can be long and can be one
+     unbroken string. Without this it pushes the panel wider than the band. */
+  overflow-wrap: anywhere;
+}
+.chat-tool-detail {
+  flex: none;
+  margin-left: 0.35rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+/* Only the row that is actually running. The finished ones above it must stop
+   pulsing, or the strip reads as though everything is still in flight. */
+.chat-tool.running .chat-tool-label { color: var(--ink); }
 
 .chat-sources {
   margin: 0.4rem 0 0;
@@ -3046,7 +3275,7 @@ td.text.has-hit {
   padding: 0.5rem 0.7rem;
   border-top: 1px solid var(--rule);
 }
-.gloss-actions, .gloss-confirm, .gloss-running {
+.gloss-actions, .gloss-confirm {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3255,27 +3484,95 @@ td.text.has-hit {
   border-bottom: 1px solid var(--rule);
 }
 
-/* ---- the saved searches ---- */
+/* ---- the saved searches ----
+   Since 2026-08-26 every one of them is on screen at once with a box beside it,
+   rather than one being "open". The two halves of the panel therefore share the
+   height: the list is capped and scrolls, the results below take what is left.
+   `40%` rather than a fixed height so that a reader with two saved searches is
+   not looking at an empty box the size of eight. */
 
-.srch-saved { flex: 1; margin: 0; padding: 0.35rem; list-style: none; overflow-y: auto; }
-.srch-saved-row { display: flex; align-items: stretch; gap: 0.15rem; border-radius: var(--radius); }
+.srch-saved-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 40%;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Select/deselect-all — Greg's ask. Reads as a header for the list rather than
+   as another row of it: the count is the label, and it changes to say how many
+   are showing the moment any are. */
+.srch-all {
+  flex: none;
+  padding: 0.35rem 0.5rem 0.25rem;
+}
+.srch-all-tick, .srch-saved-tick {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  cursor: pointer;
+}
+.srch-all-tick {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+}
+.srch-all-tick:hover { color: var(--ink-soft); }
+/* The native box, restyled rather than replaced. `accent-color` is the whole of
+   it: one property, the browser keeps the tick, the focus ring, the
+   indeterminate dash and every keyboard behaviour, and there is no hidden input
+   with a faked `::before` to get wrong. `color-scheme: dark` on :root
+   (tokens.css) is what makes the unchecked box dark rather than a white square
+   on a black page — without it this needs a filter, and the filter is what
+   people mean when they say the native control cannot be styled. */
+.srch-all-tick input, .srch-saved-tick input {
+  flex: none;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+/* Each row's box takes the search's own colour, so the control and the mark it
+   draws are visibly the same thing. `--cat-rgb` is set inline by SearchPanel and
+   holds a palette reference; the fallback is the neutral wash, which is what a
+   row with no slot should look like rather than an orange one. */
+.srch-saved-tick input {
+  accent-color: rgb(var(--cat-rgb, var(--hit-wash-rgb)));
+}
+
+.srch-saved { flex: 1; margin: 0; padding: 0 0.35rem 0.35rem; list-style: none; overflow-y: auto; }
+.srch-saved-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  border-radius: var(--radius);
+  /* The second place the hue appears on a row, because an 11px dot is easy to
+     miss and small-field colour discrimination is the worst case for any
+     palette — the same reason the granularity tints run down lightness as well
+     as chroma (§ --depth-0 at the top of this file). Faint until the search is
+     switched on: an unticked row is a search that is drawing nothing, and a
+     full-strength edge on it would be the panel claiming otherwise. */
+  border-left: 2px solid rgb(var(--cat-rgb, var(--rule)) / 0.3);
+}
+.srch-saved-row.on { border-left-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
 .srch-saved-row:hover { background: var(--surface-raised); }
-.srch-saved-open {
+.srch-saved-tick {
   flex: 1;
+  padding: 0.4rem 0.45rem;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+}
+.srch-saved-row.on .srch-saved-tick { color: var(--ink-soft); }
+.srch-saved-tick:hover { color: var(--ink); }
+.srch-saved-body {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-  padding: 0.4rem 0.45rem;
-  border: none;
-  background: none;
-  color: var(--ink-soft);
-  font-family: var(--font-ui);
-  font-size: 0.82rem;
-  text-align: left;
-  cursor: pointer;
 }
-.srch-saved-open:hover { color: var(--ink); }
 .srch-saved-criterion {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3369,6 +3666,12 @@ td.text.has-hit {
   cursor: pointer;
 }
 .srch-hit-btn:hover { background: var(--surface-raised); color: var(--ink); }
+/* The row's own left edge in its search's hue — the same pairing the saved rows
+   use, and for the same reason: one small mark is one too few. No fallback
+   colour, so a literal result (which has no search and no slot) simply has no
+   edge rather than borrowing one that would mean something. */
+.srch-hit-btn { border-left: 2px solid transparent; }
+.srch-hit-btn[style*="--cat-rgb"] { border-left-color: rgb(var(--cat-rgb) / 0.75); }
 /* The row whose passage is marked as open in the prose. */
 .srch-hit-btn.on {
   border-color: rgb(var(--hit-rgb) / 0.45);
@@ -3463,6 +3766,28 @@ td.text.has-hit {
   line-height: 1.4;
 }
 .srch-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
+/* Three of the palette's hues as a specimen, drawn from the same tokens the
+   marks use so the legend cannot show a colour the article does not. Which
+   three is arbitrary — it is a picture of "there are colours and they mean
+   something", not a key, because a key to eight hues in a 0.7rem line would be
+   unreadable and the answer for any one row is in its hover card. */
+.srch-swatches { display: inline-flex; gap: 1px; flex: none; }
+.srch-swatches i {
+  width: 0.3rem;
+  height: 0.7rem;
+  border-radius: 1px;
+  background: rgb(var(--cat-rgb));
+}
+/* The dot on a result row, in the colour of the search that found it. */
+.srch-hit-dot {
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: rgb(var(--cat-rgb, var(--hit-wash-rgb)));
+}
+/* "2 still searching", beside a count that is real but not final. */
+.srch-count-more { font-style: italic; }
 /* Sized down and pinned to a width, so the two specimens sit on the text
    baseline rather than stretching to whatever the flex row is. */
 .srch-legend .srch-conf { flex: none; opacity: 0.75; }
@@ -3598,6 +3923,11 @@ td.text.has-hit {
 .summ-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---- the outline ---- */
+/* The reader's own scroller, and also the one the panel moves itself to follow
+   the reading position (follow.ts). Deliberately **no `scroll-behavior: smooth`
+   here**: the code passes `behavior` on each call, because the first placement
+   and a reader who has asked for reduced motion both want the instant one, and
+   a stylesheet rule would animate those too with nothing to switch it off. */
 .summ-scroll {
   flex: 1;
   min-height: 0;
@@ -3623,6 +3953,30 @@ td.text.has-hit {
    deepest visible node would leave the panel with nothing lit at all. */
 .summ-entry.here > .summ-body > .summ-title-row > .summ-title { color: var(--highlight-ink); }
 .summ-entry.here > .summ-children { border-left-color: var(--highlight); }
+
+/* And the one row of that chain the reader is actually *in*, which is the row
+   the panel scrolls to. Two marks rather than one: `here` draws the path down
+   to the reader, `now` says where the path ends. One mark strong enough to find
+   at a glance, repeated on every ancestor, is a stripe down the panel and no
+   answer.
+
+   The wash goes on `.summ-body`, which is the same box the hover already tints,
+   so the two must stay apart: hover is `--surface-raised`, a neutral lift, and
+   this is `--highlight-wash`, the orange the pressed pills use. The bar down
+   the left is what actually finds the row in peripheral vision — a background
+   alone reads as "hovered" on a panel the pointer is sitting over.
+
+   `box-shadow: inset`, not a `border-left`: `.summ-body` carries a negative
+   margin so the tint reaches into the panel's gutter, and a border would add a
+   pixel to the box and shift every line of the row's text sideways as the
+   reader crossed into it. An inset shadow paints inside the box it already has. */
+.summ-entry.now > .summ-body {
+  background: var(--highlight-wash);
+  box-shadow: inset 2px 0 0 var(--highlight);
+}
+.summ-entry.now > .summ-body:hover { background: var(--highlight-wash); }
+.summ-entry.now > .summ-body > .summ-title-row > .summ-title { color: var(--highlight-ink); }
+.summ-entry.now > .summ-body > .summ-text { color: var(--ink); }
 
 /* The click target, and the reason it exists: the title alone was a line of
    0.82rem text as wide as the heading happened to be, inside a panel four times
