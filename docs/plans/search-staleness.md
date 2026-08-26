@@ -61,14 +61,35 @@ schema somebody is still designing, and would also generate their new profile ta
 to land. `npm run db:migrate` will not help — there is nothing to apply until `npm run db:generate`
 runs.
 
+## What the migration and the review changed, 2026-08-26 (later)
+
+The `purpose` migration landed, so the Postgres half runs at last. Two things followed.
+
+**The parity fixture was comparing two different situations**, and `sourceHash` was the first field
+to notice: `currentSourceHash` falls through to `example/` for a slug with no directory — mirroring
+what `articleDir` serves the reader — while Postgres has no fixture fallback. Neither store was
+wrong. `tests/store-reader-state-parity.test.ts` now builds a real article on both sides, and the
+comparison is load-bearing: making `sourceHashFor` return `undefined` turns it red.
+
+**GPT Sol found a correctness bug that is not about tests.** The article lock in
+`src/store/pg-searches.ts` covers hashing and creating the pending run, and is released *before*
+`src/routes.ts` loads the article the model actually reads. A publication landing between the two
+means **the stored hash describes different blocks from the answer beside it** — which is the one
+thing this number must never do, in the words of `hashDir`'s own comment. The fix Sol names is to
+hash the exact `article.blocks` handed to `findPassagesStream` and persist that with the result,
+rather than hashing separately and earlier. That is a design change, not a wiring one, and it is why
+this is still uncommitted.
+
 ## What is left
 
 1. Land the `purpose` migration (not this work's to do).
-2. Run `tests/store-searches-pg.test.ts` and the parity suite. **Nothing about the Postgres half has
-   been observed** — it is written to match the filesystem half and typechecks, and that is all.
+2. ~~Run `tests/store-searches-pg.test.ts` and the parity suite.~~ Done — the reader-state parity
+   suite now covers `sourceHash` across both stores, and was mutation-checked.
 3. `GET /api/search/:slug` must return the article's current hash beside the runs. One field on the
    `send` in `src/routes.ts`, agreed but not confirmed landed.
 4. Break the fix and watch each test go red. The filesystem tests have not been mutation-checked.
+5. **Hash what the model actually read**, per the review above. Until then the number can be wrong in
+   exactly the way it exists to prevent.
 5. Strike the open item in [search.md](../project/search.md) § What is still open.
 
 ## See also
