@@ -40,6 +40,18 @@
     --spideryarn-orange: #DB8A45;
     --highlight: var(--spideryarn-orange);   /* alias: say this when you mean "the orange" */
 
+    /* The search wash — and it is deliberately NOT the orange.
+       docs/project/original-version/highlighting.md records the exact mistake this avoids: that
+       app drew search hits, glossary terms and semantic highlights all in #DB8A45, separated only
+       by opacity, and got away with it only because it could never show two at once. We can — a
+       comment, a selected term and a search hit can all land on one sentence — so the third mark
+       needs a different hue rather than a different alpha. On a near-black page that matters twice
+       over: a low-alpha orange here is not subtle, it is invisible.
+       Held as three numbers, not as a colour, because the confidence wash is `rgb(var(--hit-rgb) /
+       <alpha>)` and the space-separated form is the one that takes a variable alpha. */
+    --hit-rgb: 96 178 214;
+    --hit: rgb(var(--hit-rgb));
+
     /* ---- surfaces and text (dark only; see the header) ---------------- */
     /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,
        because pure white on pure black haloes at reading sizes. That was first noticed in Georgia,

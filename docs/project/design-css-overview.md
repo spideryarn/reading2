@@ -64,6 +64,19 @@ The semantic layer at the top of `styles.css` (`--ink`, `--page`, `--panel`, `--
 shadcn surface names. On a dark ground the greys run the other way: *soft* and *faint* are darker,
 not lighter.
 
+**There is exactly one colour that is not the orange, and it is `--hit-rgb`** — the wash over search
+results ([search.md](search.md)). It exists because a comment, a glossary term and a search hit can
+all cover the same sentence, and three meanings separated only by opacity is one hue too few. That
+is not a guess: the version this project is an offshoot of drew all three in `#DB8A45` and got away
+with it only because it could never show two at once
+([original-version/highlighting.md](original-version/highlighting.md)). On a near-black ground the
+failure is worse than muddled, it is invisible.
+
+It is held as **three space-separated numbers rather than as a colour**, because the confidence wash
+is `rgb(var(--hit-rgb) / <alpha>)` and that form is the one that takes a variable alpha. `--hit` is
+the ordinary-colour alias beside it. Anything else that needs a second meaning on the prose should
+add a token here rather than reach for another alpha of the orange.
+
 One trap worth repeating here because it is invisible: **mix colours in `oklab`, not `oklch`.**
 `--page` is written `oklch(0.145 0 0)`, a hue explicitly specified as 0 rather than missing, so
 polar interpolation drags a mix round to 11.7° and the result is quietly pink instead of warm.
