@@ -72,6 +72,8 @@ import {
   renameThread,
   retryTurn,
   update as updateThreads,
+  withEdit,
+  withRetry,
 } from "./chat.js";
 import { beginRun, deleteRun, finishRun, loadRuns, update as updateRuns } from "./searches.js";
 import { findPassages } from "./search.js";
@@ -397,9 +399,69 @@ interface Live {
    * for the writer to let go. See `settleThread`.
    */
   done: Promise<void>;
+  /**
+   * Which *attempt* at this row this is.
+   *
+   * The key of `streaming` names a row, and a retry deliberately reuses the
+   * row — see `withRetry` in src/chat.ts. So the key alone cannot tell one
+   * attempt from the next, and a stop is a request about one particular
+   * attempt: the reader pressed it while watching *those* words arrive. Press
+   * stop, have the answer finish before the request lands, press retry, and the
+   * stop would arrive to find a different answer under the name it was given
+   * and abort that one instead. Rare in one tab, ordinary across two.
+   *
+   * So `/stop` carries the number back and `stopChat` refuses a mismatch. A
+   * request with no number at all still stops whatever is there, which is what
+   * a client older than this field would send.
+   */
+  attempt: number;
 }
 
 const streaming = new Map<string, Live>();
+/** Counts every attempt this process starts. Never reused, never reset. */
+let attempts = 0;
+
+/**
+ * One turn at a time per conversation, across deciding *and* writing it.
+ *
+ * `settleThread` below stops the streams a retry or an edit is about to write
+ * over, and waits for them. What it could not do is stop a *new* turn arriving
+ * during that wait — and one that did was appended by `beginTurn`, streamed
+ * happily, and was then truncated away by the edit that had been waiting. Its
+ * `finishTurn` found no row and, by design, wrote nothing at all; the tab that
+ * asked watched a complete answer arrive that was not anywhere. Found by a
+ * GPT-5.6 review, 2026-08-26.
+ *
+ * The lock is held for the settle and the write and **released before the model
+ * is called**, so two conversations never wait on each other and a long answer
+ * blocks nothing. It cannot deadlock against `settleThread`: the streams that
+ * wait for are past this lock already.
+ *
+ * Per process, like everything else here. Two servers on one `data/` directory
+ * remains the unfixed problem in docs/plans/chat-mode.md § What is still open.
+ */
+const turnOrder = new Map<string, Promise<void>>();
+
+async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const before = turnOrder.get(key) ?? Promise.resolve();
+  /* `fn` runs whether the turn in front succeeded or failed. A rejection must
+     not break the chain — every later turn in this conversation would reject
+     with a stranger's error — so the tail swallows both outcomes and only the
+     caller sees what happened to its own. */
+  const mine = before.then(fn, fn);
+  const tail = mine.then(
+    () => {},
+    () => {},
+  );
+  turnOrder.set(key, tail);
+  try {
+    return await mine;
+  } finally {
+    // Only the last writer clears the key, or the map grows one entry per
+    // conversation for the life of the process.
+    if (turnOrder.get(key) === tail) turnOrder.delete(key);
+  }
+}
 
 /**
  * How long a `pending` answer is left alone before a sweep calls it abandoned.
@@ -425,8 +487,17 @@ const CHAT_ORPHAN_GRACE_MS = 150_000;
  *
  * Called before an edit or a retry, both of which rewrite rows a live stream
  * may be about to write to. Aborting alone leaves the interleaving open — see
- * `Live.done` — so this awaits, and the wait is bounded by the same deadline
- * every answer has.
+ * `Live.done` — so this awaits.
+ *
+ * **Nothing here bounds that wait**, and an earlier version of this comment
+ * claimed otherwise. What bounds it in practice is inside the answer being
+ * waited for: converse.ts gives every stream a 120s deadline and a 45s stall
+ * timer, and `streamChat`'s `finally` resolves `done` on every path out. A body
+ * that neither yields nor errors would hang the reader's stop or edit here with
+ * nothing to say why. A timeout would not fix it — proceeding anyway is exactly
+ * the interleaving this function exists to prevent — so the honest answer is
+ * that this depends on those two timers, and they are where to look if a stop
+ * ever hangs.
  *
  * Like `streaming` itself this only knows about **this process**; a second
  * server streaming into the same file is the unfixed problem recorded in
@@ -535,17 +606,42 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   // 404 rather than an `error` frame inside a 200 stream.
   const article = await loadArticle(slug);
 
-  /* Both of these rewrite rows that a live answer in this thread may be halfway
-     through writing, so the live one is stopped and *waited for* first. Not
-     needed for an ordinary send: that appends, and appending beside a stream is
-     already ordered correctly by the serialised queue in src/chat.ts. */
-  if (wantsRetry || wantsEdit) await settleThread(slug, threadId);
+  /* Deciding and writing the turn happen together, under the conversation's
+     turn order — see `inTurnOrder`. Everything after it is one answer streaming
+     and needs no lock at all. */
+  const begun = await inTurnOrder(`${slug}/${threadId}`, async () => {
+    if (wantsRetry || wantsEdit) {
+      /* **Refuse a stale request before anything is aborted.**
 
-  const begun = wantsRetry
-    ? await retryTurn(slug, threadId, retry as string)
-    : wantsEdit
-      ? await editTurn(slug, threadId, edit as string, (question as string).trim())
-      : await beginTurn(slug, { threadId, question: (question as string).trim() });
+         `settleThread` below stops the live answer in this conversation, and it
+         used to run first — so a second tab retrying a turn that is no longer
+         the last one aborted the answer the reader in the *first* tab was
+         watching, stored it as stopped, and only then answered 409. That reader
+         pressed nothing and was told they had stopped it, and no replacement
+         came. Found by a GPT-5.6 review, 2026-08-26.
+
+         The check is the real rule rather than a copy of it: `withRetry` and
+         `withEdit` are pure, so they can be run against a snapshot and thrown
+         away. Whatever they would refuse, they refuse here, for free, before
+         the destructive part. The authoritative run is still the one inside
+         `retryTurn` / `editTurn` — this is a gate, not a substitute. */
+      const snapshot = await loadThreads(slug);
+      if (wantsRetry) withRetry(snapshot, threadId, retry as string, "");
+      else withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
+
+      /* Both of these rewrite rows that a live answer in this thread may be
+         halfway through writing, so the live one is stopped and *waited for*
+         first. Not needed for an ordinary send: that appends, and appending
+         beside a stream is already ordered correctly by the serialised queue in
+         src/chat.ts. */
+      await settleThread(slug, threadId);
+    }
+    return wantsRetry
+      ? await retryTurn(slug, threadId, retry as string)
+      : wantsEdit
+        ? await editTurn(slug, threadId, edit as string, (question as string).trim())
+        : await beginTurn(slug, { threadId, question: (question as string).trim() });
+  });
   const { thread, reply, user } = begun;
   /* **The question that was stored is the question that gets asked** — one rule
      for all three kinds of turn, rather than "the request's text, except on a
@@ -555,6 +651,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      something else, with nothing on screen to show the two had parted. */
   const asked = user.text;
   const key = `${slug}/${thread.id}/${reply.id}`;
+  const attempt = ++attempts;
   const stop = new AbortController();
   let release!: () => void;
   const done = new Promise<void>((resolve) => {
@@ -593,7 +690,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
 
   let text = "";
   try {
-    streaming.set(key, { stop, done });
+    streaming.set(key, { stop, done, attempt });
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -628,7 +725,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          the same session. One rule — the frame always says what both rows are
          called — is cheaper to be sure of than three. */
       questionId: user.id,
-
+      /* Which attempt at that row this is, so a stop can name the answer it was
+         pressed on rather than whatever is under the id when it arrives. See
+         `Live.attempt`. */
+      attempt,
     });
 
     for await (const event of converse({
@@ -708,7 +808,7 @@ async function stopChat(
   threadId: string,
   body: unknown,
 ): Promise<{ stopped: boolean }> {
-  const { messageId } = (body ?? {}) as Record<string, unknown>;
+  const { messageId, attempt } = (body ?? {}) as Record<string, unknown>;
   if (typeof messageId !== "string") throw httpError(400, "Expected { messageId }");
   const live = streaming.get(`${slug}/${threadId}/${messageId}`);
   /* Not an error. The answer finished a moment ago, or the other dev server is
@@ -716,6 +816,12 @@ async function stopChat(
      stopped. `false` says "there was nothing to stop", which is all the client
      needs and is true in every one of those cases. */
   if (!live) return { stopped: false };
+  /* And the same answer for a stop that names an attempt this row has moved on
+     from — see `Live.attempt`. It is "there was nothing to stop" in the only
+     sense the reader cares about: the words they were watching are already
+     finished. Aborting what is there instead would stop an answer nobody asked
+     to stop. */
+  if (typeof attempt === "number" && attempt !== live.attempt) return { stopped: false };
   live.stop.abort(new Error("stopped by the reader"));
   await live.done;
   return { stopped: true };

@@ -499,7 +499,18 @@ function Conversation({
       stick.current = true;
       setAway(false);
     }
-  }, [chars, thread.messages.length]);
+    /* `last?.status` is in here for a reason that is easy to leave out and was.
+       The frame that ends an answer usually changes neither of the other two —
+       `done` carries the same text the deltas already built, and adds no row —
+       while adding the action row and, if the model searched, the whole list of
+       sources. So the one commit that reliably grows the transcript by more
+       than the 60px slack was the one commit this effect did not run on: the
+       reader was pinned to the bottom, the answer finished, and they were left
+       above the sources with no Latest button either, because `away` is only
+       ever cleared in here. That is the *same* bug the note above describes,
+       surviving its own fix in the dependency array. Found by a GPT-5.6 review,
+       2026-08-26. */
+  }, [chars, thread.messages.length, last?.status]);
 
   const toBottom = () => {
     const el = scroller.current;
@@ -655,6 +666,27 @@ function Turn({
   /** Turns an edit here would discard. */
   discards: number;
 }) {
+  /**
+   * Where the caret goes when an edit box closes.
+   *
+   * The editor takes focus when it opens, so cancelling it — Escape, or the X —
+   * unmounts the focused element and leaves focus on `document.body`. For a
+   * reader using the keyboard that is not a small thing: they lose their place
+   * in the transcript entirely and have to Tab back from the top. Putting it on
+   * the pencil they opened it from is the least surprising place, and it is
+   * where they were. Found by a GPT-5.6 review, 2026-08-26.
+   *
+   * Nothing happens after a *submitted* edit: the pencil is withdrawn while the
+   * new answer arrives, so there is nothing to focus and the caret falls back to
+   * the body as before.
+   */
+  const pencil = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(editing);
+  useEffect(() => {
+    if (wasEditing.current && !editing) pencil.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+
   if (message.role === "user") {
     if (editing) {
       return (
@@ -662,6 +694,13 @@ function Turn({
           text={message.text}
           discards={discards}
           onCancel={() => onEditing(false)}
+          /* The pencil is withdrawn while an answer is arriving and an editor
+             already open is deliberately left alone — closing it would destroy
+             a half-typed rewrite. But left alone it could still be *submitted*,
+             which discards the row being streamed into and contradicts the rule
+             the pencil is enforcing. So the editor stays, and its Ask-again is
+             what waits. Found by a GPT-5.6 review, 2026-08-26. */
+          canAsk={canEdit}
           onDone={(next) => {
             onEditing(false);
             // An edit to the same words is not an edit. Re-running would throw
@@ -687,6 +726,7 @@ function Turn({
         {canEdit && (
           <div className="chat-actions">
             <button
+              ref={pencil}
               type="button"
               className="chat-icon"
               title="Rewrite this question"
@@ -796,6 +836,15 @@ function CopyAnswer({ text }: { text: string }) {
     const timer = setTimeout(() => setState("idle"), 1600);
     return () => clearTimeout(timer);
   }, [state]);
+  /* The outcome is announced as well as drawn.
+
+     A tick replacing a clipboard is the whole feedback this button gives, and a
+     glyph swap inside a button is not an event: a screen reader is told nothing
+     at all, so a copy that *failed* is indistinguishable from one that worked —
+     the silent-success shape, with the reader's clipboard still holding whatever
+     was in it. The live region says which. It also survives the 1.6s timer
+     resetting the icon, because it has already been spoken by then. Found by a
+     GPT-5.6 review, 2026-08-26. */
   return (
     <button
       type="button"
@@ -823,6 +872,13 @@ function CopyAnswer({ text }: { text: string }) {
       ) : (
         <Copy size={12} />
       )}
+      <span className="sr-only" aria-live="polite">
+        {state === "copied"
+          ? "Answer copied."
+          : state === "failed"
+            ? "Copy refused by the browser."
+            : ""}
+      </span>
     </button>
   );
 }
@@ -844,11 +900,14 @@ function CopyAnswer({ text }: { text: string }) {
 function EditQuestion({
   text,
   discards,
+  canAsk,
   onDone,
   onCancel,
 }: {
   text: string;
   discards: number;
+  /** False while an answer is arriving — see the call site. */
+  canAsk: boolean;
   onDone(next: string): void;
   onCancel(): void;
 }) {
@@ -875,7 +934,7 @@ function EditQuestion({
           if (e.key === "Escape") onCancel();
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            onDone(value);
+            if (canAsk) onDone(value);
           }
         }}
       />
@@ -885,7 +944,13 @@ function EditQuestion({
         </p>
       )}
       <div className="chat-actions">
-        <button type="button" className="chat-icon" title="Ask again (Enter)" onClick={() => onDone(value)}>
+        <button
+          type="button"
+          className="chat-icon"
+          title={canAsk ? "Ask again (Enter)" : "Wait for the answer above to finish"}
+          disabled={!canAsk}
+          onClick={() => onDone(value)}
+        >
           <Check size={12} />
         </button>
         <button type="button" className="chat-icon" title="Cancel (Esc)" onClick={onCancel}>
@@ -1059,11 +1124,20 @@ function Composer({
         }}
         onKeyDown={(e) => {
           /* Every key press in here is stopped from bubbling, and that is not
-             tidiness. The article's ↑/↓ navigation listens on the window
+             tidiness: the article's ↑/↓ navigation listens on the window
              (keynav.ts) and would scroll the page while the reader was moving
-             the caret through their own question; Dock.tsx listens for Escape
-             in the capture phase. Neither should hear anything typed into a
-             text box. */
+             the caret through their own question.
+
+             It does **not** hold against Dock.tsx, and an earlier version of
+             this comment claimed it did. That listener is registered on
+             `window` in the *capture* phase, so it has already run and called
+             `stopImmediatePropagation` before React's root listener — and
+             therefore this handler — is reached at all. While the drawer is
+             open, Escape closes the drawer and the ladder below never runs.
+             That is the right order (the drawer is over everything, and closing
+             the thing in front of you is what Escape is for), but it is the
+             drawer winning rather than this stopping it. Found by a GPT-5.6
+             review, 2026-08-26. */
           e.stopPropagation();
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();

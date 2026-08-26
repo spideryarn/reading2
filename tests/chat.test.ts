@@ -574,6 +574,29 @@ const conversation = (): ChatThread =>
 
 const NOW = "2026-08-26T12:00:00.000Z";
 
+/**
+ * A generator that makes `mintId` produce exactly these ids, in this order.
+ *
+ * `mintId` takes six characters off `random()`, so each id is six numbers
+ * chosen to land on the character it wants — see `pick` in src/ids.ts. Anything
+ * asked for after the list runs out comes back as a zero, which is a valid id
+ * and not one of these.
+ */
+const offering = (...ids: string[]): (() => number) => {
+  const ALPHABET = "abcdefghjkmnpqrstuvwxyz023456789";
+  const LETTERS = ALPHABET.slice(0, 23);
+  const draws: number[] = [];
+  for (const id of ids) {
+    const body = id.slice("spya-".length);
+    for (const [i, ch] of [...body].entries()) {
+      const chars = i === 0 ? LETTERS : ALPHABET;
+      draws.push(chars.indexOf(ch) / chars.length);
+    }
+  }
+  let at = 0;
+  return () => draws[at++] ?? 0;
+};
+
 describe("withRetry — answering the same question again", () => {
   it("blanks the answer in place, keeping its id", () => {
     const before = conversation();
@@ -680,16 +703,38 @@ describe("withEdit — rewriting a question", () => {
   });
 
   it("never reuses an id it just discarded", () => {
-    const before = conversation();
-    const { reply } = withEdit([before], before.id, "u1", "rephrased", NOW);
     /* The tempting optimisation is to mint against the surviving ids, which
-       frees `a1`, `u2` and `a2`. A stream still finishing its write finds its
-       row by id, so handing one straight back puts a stopped half-sentence
-       under a question nobody asked. Within one process the route's
-       `settleThread` already rules that out; this covers the second server,
-       which cannot see the first one's streams. And it holds within one call
-       only — a discarded id leaves the file and the next mint may reuse it. */
-    expect(["u1", "a1", "u2", "a2"]).not.toContain(reply.id);
+       frees the three rows this edit throws away. A stream still finishing its
+       write finds its row by id, so handing one straight back puts a stopped
+       half-sentence under a question nobody asked. Within one process the
+       route's `settleThread` already rules that out; this covers the second
+       server, which cannot see the first one's streams. And it holds within one
+       call only — a discarded id leaves the file and the next mint may reuse it.
+
+       **The generator is rigged, and it has to be.** This test used to hand
+       `withEdit` a real `Math.random` and assert the new id was none of the
+       discarded ones — which passes at odds of 771 million to one whether the
+       rule is there or not, and passed all the more surely because the fixture's
+       ids ("a1", "u2") are not in the id alphabet at all and could never have
+       been minted. It read as coverage and was worth nothing. Pointed out by a
+       GPT-5.6 review, 2026-08-26. Now the first thing the generator offers *is*
+       a discarded id, so a `taken` set that had forgotten it would hand it
+       straight back. */
+    const before = thread([
+      message({ id: "spya-uuuuuu", role: "user", text: "why is it like that?" }),
+      message({ id: "spya-aaaaaa", role: "assistant", text: "because." }),
+      message({ id: "spya-vvvvvv", role: "user", text: "and the other one?" }),
+      message({ id: "spya-bbbbbb", role: "assistant", text: "differently." }),
+    ]);
+    const { reply } = withEdit(
+      [before],
+      before.id,
+      "spya-uuuuuu",
+      "rephrased",
+      NOW,
+      offering("spya-bbbbbb", "spya-cccccc"),
+    );
+    expect(reply.id).toBe("spya-cccccc");
   });
 
   it("refuses to edit an answer, an unknown message, or an unknown thread", () => {

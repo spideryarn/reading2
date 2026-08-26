@@ -670,6 +670,81 @@ The key's value was never there; the system prompt and request shape were. `src/
 because of it, and [`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) now fails the
 build for the whole class.
 
+### The second cross-family pass, run a day late
+
+The review above was of the *plan*. A second one, of the five affordances as built, was written the
+same morning and could not run: the Codex workspace was out of credits, and stayed out through three
+attempts. It ran on 2026-08-26 once Greg refilled, against code that had moved on twice since the
+brief was written — the verdict was **NO-SHIP**, with two High findings, and both were real.
+
+**A refusal used to cost somebody else their answer.** A retry or an edit stops the live stream in
+the conversation and waits for it (`settleThread`) *before* checking whether the request is one it
+will accept. So a second tab retrying a turn that is no longer the last one aborted the answer the
+reader in the first tab was watching, stored it as `stopped`, and only then returned 409. That
+reader pressed nothing and was told they had stopped it, and no replacement came. Two tabs on one
+conversation is the exact case `ChatConflict` exists for, so this was not exotic.
+
+The fix costs one file read: `withRetry` and `withEdit` are pure, so the route runs the real rule
+against a snapshot and throws it away. Whatever they would refuse is refused before anything
+destructive happens. The authoritative run is still the one inside the store's queue — this is a
+gate, not a substitute for it.
+
+**A turn could be appended into the gap.** `settleThread` stopped the streams it could see when it
+started and had no way to stop a *new* one arriving during the wait. One that did was appended by
+`beginTurn`, streamed to the tab that asked for it, and was then truncated away by the edit that had
+been waiting — and its `finishTurn`, finding no row, wrote nothing at all, by design. A complete
+answer on screen that was not anywhere. Deciding and writing a turn now happen under a per-conversation
+lock (`inTurnOrder`), released before the model is called, so two conversations never wait on each
+other and a long answer blocks nothing.
+
+**And a stop could stop the wrong answer.** The `streaming` key names a *row*, and a retry
+deliberately reuses the row — so a stop pressed on one attempt, arriving after that attempt finished
+and a retry started, aborted the retry. Every `Live` now carries an attempt number, the `begin` frame
+carries it to the client, and `/stop` refuses a mismatch with the same `{stopped: false}` it already
+returns for "that finished a moment ago", which is true in the only sense the reader means it.
+
+Three of the Mediums and Lows were the same shape as each other — **a screen that is confidently
+wrong**:
+
+- A **409 left the optimistic edit on screen**: the question rewritten, the turns below it gone, and
+  only the answer marked failed. It looked exactly like a successful edit until a reload put the
+  conversation back. The client now refetches on 409, so the reader gets their conversation *and* a
+  line saying why nothing happened.
+- The **auto-follow effect could not see the frame that ends an answer** — `done` changes neither the
+  character count nor the number of rows, while adding the action row and the whole source list. So
+  the one commit that reliably grows the transcript past the 60px slack was the one commit the effect
+  did not run on: pinned to the bottom, answer finishes, reader ends up above the sources with no
+  Latest button either. That is [the same bug](#what-a-browser-pass-found-that-neither-review-did)
+  as before, surviving its own fix in the dependency array.
+- **Copy said nothing to a screen reader.** A tick replacing a clipboard icon is not an event, so a
+  copy that failed was indistinguishable from one that worked — with the reader's clipboard still
+  holding whatever was in it. A live region now says which.
+- **An open editor ignored `busy`.** The pencil is withdrawn while an answer arrives and an editor
+  already open is deliberately left alone; nothing stopped it being *submitted*, which discarded the
+  row being streamed into. The editor still stays; its Ask-again is what waits.
+- **Cancelling an edit dropped focus to the body**, losing a keyboard reader their place in the
+  transcript. It goes back to the pencil.
+
+**And one finding was about a test, which is the one worth repeating.** "Never reuses an id it just
+discarded" handed `withEdit` a real `Math.random` and asserted the new id was none of the discarded
+ones — odds of 771 million to one, whether or not the rule existed. It was worse than that: the
+fixture's ids were `"u1"`, `"a2"` and so on, which are not in the id alphabet and could never have
+been minted at all. The assertion could not fail. `withEdit` now takes an optional generator, for the
+same reason `mintId` and `mintUniqueId` already do, and the rigged one offers a discarded id first.
+Two reviews running have now found a test that pinned nothing; the tell both times was a test whose
+inputs came from the same assumption as the code.
+
+Two comments were corrected rather than any code: the `settleThread` wait is **not** bounded here
+(what bounds it is the deadline and stall timer inside `converse`), and the composer does **not**
+keep Escape from Dock.tsx — that listener is on `window` in the capture phase and has already called
+`stopImmediatePropagation` before React's handler runs. The drawer wins, which is the right order,
+but it wins rather than being stopped.
+
+What was **not** fixed: the per-conversation lock has no test, because making a send land inside an
+edit's settle window on purpose is not something this harness can do deterministically. The two High
+findings do have one — [`tests/chat-live-turn.test.ts`](../../tests/chat-live-turn.test.ts) drives
+the real route with a body that says one word and then hangs, which is what a live answer is.
+
 ### What was deliberately not fixed
 
 - **Two servers on one `data/` directory can lose a message.** The read-modify-write queue is

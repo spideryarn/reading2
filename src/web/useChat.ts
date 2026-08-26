@@ -105,6 +105,15 @@ export interface Begun {
   messageId: string;
   /** The question above it. Absent from older servers; see `withServerIds`. */
   questionId?: string;
+  /**
+   * Which attempt at that row this is.
+   *
+   * A retry writes into the same row, so the id alone does not say *which*
+   * answer a stop was pressed on. Sent back with the stop so the server can
+   * refuse one aimed at an answer that has already finished — see `Live.attempt`
+   * in src/routes.ts.
+   */
+  attempt?: number;
 }
 
 /**
@@ -197,29 +206,50 @@ export function useChat(slug: string): ChatApi {
     return () => forgotten.clear();
   }, [slug]);
 
+  /**
+   * Which article's conversations these are.
+   *
+   * Read by `refresh` after its `await`, so a load that comes back for the
+   * article the reader has just left cannot write its threads over the new
+   * one's. The effect below sets it synchronously, before anything is fetched.
+   */
+  const showing = useRef(slug);
+
+  /**
+   * Ask the server what this article's conversations actually are.
+   *
+   * Used on arrival, and again whenever the server has refused something the
+   * client had already done optimistically — see the 409 in `run`. In that case
+   * the screen is not merely out of date, it is *wrong*: it is showing an edit
+   * that did not happen, with the turns it would have discarded already gone.
+   */
+  const refresh = useCallback(async (): Promise<void> => {
+    const mine = slug;
+    try {
+      const body = (await (await fetch(`/api/chat/${encodeURIComponent(mine)}`)).json()) as {
+        threads?: ChatThread[];
+        error?: string;
+      };
+      if (showing.current !== mine) return;
+      if (body.error) setError(body.error);
+      else setThreads(body.threads ?? []);
+    } catch (e) {
+      if (showing.current === mine) setError(describeFetchFailure(e as Error));
+    }
+  }, [slug]);
+
   useEffect(() => {
-    let live = true;
+    showing.current = slug;
     setThreads([]);
     setLoaded(false);
-    fetch(`/api/chat/${encodeURIComponent(slug)}`)
-      .then((r) => r.json())
-      .then((body: { threads?: ChatThread[]; error?: string }) => {
-        if (!live) return;
-        if (body.error) setError(body.error);
-        else setThreads(body.threads ?? []);
-      })
-      .catch((e: Error) => live && setError(describeFetchFailure(e)))
-      // `loaded` even when the fetch failed. It means "we have asked", not "it
-      // worked" — a reader whose server is down should still be able to open a
-      // conversation and see the send fail with a reason, rather than face a
-      // panel that never resolves into anything.
-      .finally(() => {
-        if (live) setLoaded(true);
-      });
-    return () => {
-      live = false;
-    };
-  }, [slug]);
+    // `loaded` even when the fetch failed. It means "we have asked", not "it
+    // worked" — a reader whose server is down should still be able to open a
+    // conversation and see the send fail with a reason, rather than face a
+    // panel that never resolves into anything.
+    void refresh().finally(() => {
+      if (showing.current === slug) setLoaded(true);
+    });
+  }, [slug, refresh]);
 
   /** Rewrite one thread in place, or append it if it is new. Deletions win. */
   const put = useCallback((id: string, edit: (t: ChatThread) => ChatThread) => {
@@ -271,6 +301,17 @@ export function useChat(slug: string): ChatApi {
   const stopWanted = useRef(new Set<string>());
 
   /**
+   * Which attempt each assistant row is currently on, from its `begin` frame.
+   *
+   * A retry reuses the row, so the id names a place rather than an answer. Sent
+   * with the stop so the server can tell "stop the answer I am watching" from
+   * "stop whatever happens to be there when this arrives" — see `Live.attempt`
+   * in src/routes.ts. Missing means the server did not say, and the stop then
+   * behaves as it always did.
+   */
+  const attempts = useRef(new Map<string, number>());
+
+  /**
    * Ask the server to stop one answer.
    *
    * The reply is `{ stopped }`, and `false` is not a failure — it means the
@@ -287,7 +328,7 @@ export function useChat(slug: string): ChatApi {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messageId }),
+            body: JSON.stringify({ messageId, attempt: attempts.current.get(messageId) }),
           },
         );
         if (!r.ok) {
@@ -378,7 +419,25 @@ export function useChat(slug: string): ChatApi {
             // slug, a question over the size cap. After it starts, failures
             // arrive as an `error` frame inside a 200, and are handled below.
             const body = (await response.json().catch(() => ({}))) as { error?: string };
-            throw new Error(body.error ?? response.statusText);
+            const why = body.error ?? response.statusText;
+            /* **409 is the one status the screen cannot survive being wrong
+               about.** It means the server refused a retry or an edit that this
+               client had already performed on screen — and an edit performs by
+               *destroying*: the question is rewritten and every turn below it is
+               gone. Left alone, the panel shows a conversation that does not
+               exist, and it looks exactly like a successful edit until the next
+               reload puts the missing turns back.
+
+               So the server's copy is fetched and replaces it. The reader gets
+               their conversation back and a line saying why nothing happened,
+               which is the only honest pair. Found by a GPT-5.6 review,
+               2026-08-26. */
+            if (response.status === 409) {
+              setError(why);
+              await refresh();
+              return;
+            }
+            throw new Error(why);
           }
 
           let text = "";
@@ -389,6 +448,9 @@ export function useChat(slug: string): ChatApi {
               setThreads((prev) => withServerIds(prev, current, pendingId, begun));
               const wanted =
                 stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
+              if (begun.attempt !== undefined) {
+                attempts.current.set(begun.messageId, begun.attempt);
+              }
               pendingId = begun.messageId;
               if (begun.threadId !== current) {
                 current = begun.threadId;
@@ -453,10 +515,14 @@ export function useChat(slug: string): ChatApi {
           // Whatever happened, nobody is waiting to stop this any more.
           stopWanted.current.delete(replyId);
           stopWanted.current.delete(pendingId);
+          /* The attempt number outlives the stream on purpose. A stop pressed
+             in the frame between the last token and the row repainting still
+             has to name the right attempt, and the next `begin` for this row
+             overwrites it anyway. */
         }
       })();
     },
-    [slug, put, askToStop],
+    [slug, put, askToStop, refresh],
   );
 
   const send = useCallback(
