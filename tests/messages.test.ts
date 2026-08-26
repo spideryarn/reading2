@@ -124,12 +124,20 @@ describe("the sentence must agree with the kind", () => {
   /* The bug this catches: `kind` says "do not retry" and the prose says "try
      again", or the reverse. Either way the reader is told two things and the
      interface acts on the one they cannot see. */
-  it("only invites another go when retrying can actually work", () => {
+  it("always gives a retryable failure something to do", () => {
+    /* Required, not conditional. The first version of this asked "if the message
+       invites another go, is it retryable?" — and matched a hand-written list of
+       phrases, so rewording a message quietly dropped it out of the check and
+       the test went on passing. A test that stops testing and stays green is the
+       silent-success shape this repo has a whole document about.
+
+       So: state the requirement, and let a message that meets it in some new
+       wording widen the pattern deliberately rather than fall out of it. */
     for (const f of EVERY) {
-      const invites = /trying again is worth a go|trying again often works|try\s+again then|and trying again usually works|should get an answer/i.test(
-        f.message,
+      if (!canRetry(f.kind)) continue;
+      expect(f.message, `nothing for the reader to do: ${f.message}`).toMatch(
+        /again|narrower|shorter/i,
       );
-      if (invites) expect(canRetry(f.kind), f.message).toBe(true);
     }
   });
 

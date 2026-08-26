@@ -1303,14 +1303,6 @@ function Foot({
 }
 
 /**
- * The button, or the running job in its place.
- *
- * The step's own `label` and `detail` come off the server, so the text here is
- * the same text the add box shows — "Step 1 of 1" would tell you neither what
- * is slow nor what is about to fail. Same component shape as the thread page's,
- * and for the same reasons.
- */
-/**
  * The glossary's run button. Everything but the three constants below is in
  * `JobProgress`, which the summary panel and the thread page share.
  */

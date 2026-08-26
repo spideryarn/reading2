@@ -29,17 +29,35 @@ not
 > OpenRouter 429: rate limit exceeded
 
 An HTTP status is not an explanation. Neither is a provider's name the reader has
-never heard of — this app calls it "the AI service" throughout, because which
-company is answering is our business and not theirs.
+never heard of, so **failures call it "the AI service"** — which company is
+answering is our business and not theirs.
+
+Note the limit of that rule, because an earlier draft of this line said
+"throughout" and that was not true even on the day it was written: the *waiting*
+copy says "the whole piece goes to the model". Two nouns for the same thing, and
+nobody has decided which. Failures are the half that is settled.
 
 **2. Say whose problem it is.** This is the rule that earns its keep, and the one
-`messages.ts` encodes as a type. There are exactly three kinds:
+`messages.ts` encodes as a type. There are four kinds:
 
 | Kind | Means | The reader should |
 |---|---|---|
 | `retry` | transient — busy, slow, a blip | try again |
 | `ours` | this app's account or configuration — no credit, bad key | stop, and tell somebody |
 | `bug` | a defect here | stop, and tell somebody |
+| `blocked` | the service refused *this request* and will refuse it again unchanged — a safety filter, a size limit | ask for less, or accept the no |
+
+`blocked` was added on 2026-08-26, after review found 403 being reported as a
+broken API key. It is worth having as its own kind rather than folded into
+`ours`, because it is the only one of the three non-retryable kinds where **the
+reader can still get an answer** — by asking about a shorter stretch, or a
+narrower question. Nothing is misconfigured and nothing is broken.
+
+Its messages share a sentence pattern worth copying, because it states the
+futility and the way out in one breath:
+
+> Asking the same thing again will get the same answer; asking something
+> narrower sometimes gets through.
 
 Getting this wrong in the `ours` direction is the expensive mistake: **telling
 someone to try again when retrying cannot possibly work**, so they do it, four or
@@ -100,7 +118,14 @@ itself does not need to apologise.
 
 ## What this does not cover yet
 
-Only the model-call failures are written down here. The rest of the interface —
+**One near-miss first**, because it is the kind of thing this section exists to
+stop being invisible: `"Couldn't start the job."` lives in `Tweets.tsx`,
+`useGlossary.ts` and `useSummaries.ts`, three times over. It is a failure
+message the reader sees, so by the rule above it belongs here — it says nothing
+about what happened, nothing about whose problem it is, and has no code. It has
+not moved yet.
+
+Otherwise: only the model-call failures are written down here. The rest of the interface —
 empty states, button labels, the panel headings — is still written wherever it is
 used, and has not been through this. That is a gap rather than a decision; when
 somebody rewrites a batch of it, the messages should move here too.

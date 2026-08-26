@@ -322,13 +322,6 @@ function Empty({
 }
 
 /**
- * The button, or the running job in its place.
- *
- * The step's own `label` and `detail` come off the server, so the text here is
- * the same text the add box shows — "Step 1 of 1" would tell you neither what
- * is slow nor what is about to fail (see AddArticle.tsx).
- */
-/**
  * The thread page's run button. `onWrite` rather than `onRun` because that is
  * what this page's callers already call it; the shared component underneath
  * does not care.

@@ -81,6 +81,20 @@
 const SLUG = /^[\w.-]+$/;
 
 /**
+ * Longer than any filesystem will take as one path segment.
+ *
+ * Not a traversal question — a 300-character slug is a single segment and goes
+ * nowhere it should not. It is about *where the refusal happens*: without this,
+ * an absurd name passes every check here and dies inside `mkdir` as an
+ * unmapped `ENAMETOOLONG`, which reaches the reader as a bare 500. 255 bytes is
+ * the common limit (ext4, APFS, NTFS all sit at or above it); this counts
+ * characters rather than bytes, so a name of multi-byte characters could still
+ * exceed it — the point is that the ordinary case fails here, with a sentence,
+ * rather than three layers down without one.
+ */
+const MAX_SLUG = 255;
+
+/**
  * Names that are a directory under `data/` belonging to something other than an
  * article. `.` and `..` are handled below rather than here, because they are
  * about climbing out rather than about landing somewhere already taken.
@@ -92,7 +106,13 @@ const RESERVED = new Set(["_jobs"]);
  * than sanitised, because sanitising invites arguing about whether it worked.
  */
 export function assertSlug(slug: string): void {
-  if (!SLUG.test(slug) || slug === "." || slug === ".." || RESERVED.has(slug)) {
+  if (
+    slug.length > MAX_SLUG ||
+    !SLUG.test(slug) ||
+    slug === "." ||
+    slug === ".." ||
+    RESERVED.has(slug)
+  ) {
     throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
   }
 }

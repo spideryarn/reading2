@@ -240,16 +240,16 @@ export function providerHttpFailure(status: number): ReaderFacingFailure {
     return {
       kind: "retry",
       message:
-        "The AI service took too long to answer and gave up. Trying again often works, especially on a " +
-        "shorter piece. [ai-timeout]",
+        "The AI service took too long to answer and gave up. Trying again often works, and asking " +
+        "something narrower works more often still. [ai-timeout]",
     };
   }
   if (status >= 500) {
     return {
       kind: "retry",
       message:
-        "The AI service is having trouble at its end. This is usually over in a minute or two — try " +
-        "again then. [ai-upstream]",
+        "The AI service is having trouble at its end. Nothing here can fix it, and it usually passes " +
+        "on its own — waiting a little and trying again is the thing to do. [ai-upstream]",
     };
   }
   /* An unrecognised 4xx is a refusal, and a refusal repeated unchanged is
@@ -273,22 +273,30 @@ export function providerHttpFailure(status: number): ReaderFacingFailure {
 /**
  * A call that started answering and then failed part-way.
  *
- * Kept separate from the HTTP cases because the reader may be looking at half an
- * answer, and the sentence has to make sense underneath one.
+ * Kept separate from the HTTP cases because the reader **may** be looking at half
+ * an answer, and the sentence has to make sense underneath one.
+ *
+ * "May", not "is", and that is the correction: this used to say *"Anything above
+ * this point is what arrived before it stopped"*, which assumes the reader
+ * watched the text arrive. Comments and chat stream, so they do. **The glossary
+ * lookup does not** — it drains `explain()` and shows a spinner, so "above this
+ * point" was an empty space and the sentence described a screen the reader was
+ * not looking at. A message in one file, used by callers with different
+ * interfaces, has to survive all of them. Found by review, 2026-08-26.
  */
 export const PROVIDER_FAILED_MID_ANSWER: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "The AI service hit a problem part-way through answering. Anything above this point is what " +
-    "arrived before it stopped. Trying again starts a fresh answer. [ai-interrupted]",
+    "The AI service began answering and then hit a problem, so whatever arrived is all there is. " +
+    "Trying again starts a fresh answer. [ai-interrupted]",
 };
 
 /** A reply that was not the shape we can read at all. */
 export const PROVIDER_UNREADABLE: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "The AI service sent something this app could not make sense of. That is usually a blip — trying " +
-    "again is worth a go. [ai-unreadable]",
+    "The AI service sent back something this app could not read at all. That is usually a one-off, " +
+    "so asking again generally works. [ai-unreadable]",
 };
 
 /**
@@ -348,12 +356,38 @@ export function wentQuiet(seconds: number): ReaderFacingFailure {
   };
 }
 
-/** The connection ended mid-answer, with no sign it had finished. */
+/**
+ * The connection ended mid-answer, with no sign it had finished.
+ *
+ * Same correction as `PROVIDER_FAILED_MID_ANSWER` above, for the same reason:
+ * not every caller has been showing the reader words as they land.
+ */
 export const ENDED_UNFINISHED: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "The answer stopped arriving before it was finished — the connection ended early. What is above " +
-    "this point is real, it is just not all of it. Trying again starts a fresh answer. [ai-cut-off]",
+    "The answer stopped arriving before it was finished — the connection ended early. What did " +
+    "arrive is real, it is just not all of it. Trying again starts a fresh answer. [ai-cut-off]",
+};
+
+/**
+ * The model asked for a tool and the request for it arrived in pieces we could
+ * not put back together.
+ *
+ * Its own message rather than `ENDED_UNFINISHED`, because the two send a reader
+ * to different places. That one is a connection dying, which is the network. This
+ * is a well-formed response whose tool call did not survive reassembly — nothing
+ * is wrong with the reader's connection, and a retry genuinely is likely to work
+ * because the next stream will be framed differently.
+ *
+ * It exists at all because the alternative was storing whatever preamble had
+ * arrived ("Let me check that for you.") as a finished answer. See
+ * docs/project/chat-tools.md.
+ */
+export const TOOL_CALL_LOST: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The AI service started to look something up and the request for it arrived garbled, so this " +
+    "app stopped rather than answer from half of it. Trying again usually works. [ai-tool-lost]",
 };
 
 /** The call succeeded and the model said nothing. */
@@ -383,6 +417,6 @@ export function saidNothing(finishReason: string | null): ReaderFacingFailure {
   }
   return {
     kind: "retry",
-    message: "The AI service answered without saying anything. Trying again is worth a go. [ai-empty]",
+    message: "The AI service finished without saying anything at all. Asking again usually gets an answer. [ai-empty]",
   };
 }

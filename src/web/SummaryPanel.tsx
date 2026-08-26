@@ -671,13 +671,6 @@ function Steer({
 }
 
 /**
- * The button, or the job that button started.
- *
- * The same component the glossary panel has, and the same reasoning: a run may
- * have been started in another tab or from the CLI, so this shows whatever the
- * queue is actually doing rather than what this session remembers clicking.
- */
-/**
  * The summary panel's run button. `icon` is the one thing that varies here:
  * "write these" and "write them again" are the same action with different
  * intent, and the glyph is what says which.

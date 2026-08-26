@@ -13,13 +13,18 @@
  * is actually doing rather than what this session remembers pressing. Which is
  * why the only thing it takes about a running job is the `Job` itself.
  *
+ * The step's own `label` and `detail` come off the server too, so the words a
+ * reader sees here are the words the add box shows for the same step. A local
+ * "Step 1 of 1" would say neither what is slow nor what is about to fail.
+ *
  * ## The two failures it distinguishes
  *
  * `failed` is a message, not a boolean, and it can arrive from two different
  * places: the POST that should have started a job never landed, or the job it
  * did start came back failed. They read the same to a reader and are diagnosed
  * differently, which is why the hooks work them out rather than this component
- * (see `useJobArtefact`'s `stopped`/`postFailed` in the panels' hooks).
+ * (see `stopped` and `postFailed` in useGlossary.ts, useSummaries.ts, and the
+ * hook inside Tweets.tsx).
  *
  * ## Styling
  *

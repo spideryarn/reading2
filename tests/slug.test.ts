@@ -45,6 +45,13 @@ describe("assertSlug", () => {
     }
   });
 
+  it("refuses a name no filesystem would take, with a sentence rather than a 500", () => {
+    /* Not a traversal — a long name is still one path segment. The point is that
+       it fails here instead of inside mkdir as an unmapped ENAMETOOLONG. */
+    expect(() => assertSlug("a".repeat(256))).toThrow(/Not a valid slug/);
+    expect(() => assertSlug("a".repeat(255))).not.toThrow();
+  });
+
   it("never lets the jobs directory be reached through a slug", () => {
     /* data/_jobs/ is the ingest queue's directory, and this has to hold in both
        directions. The version of this test written on 2026-08-26 only checked
