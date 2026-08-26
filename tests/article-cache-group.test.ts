@@ -9,7 +9,7 @@
  * See docs/project/prompt-caching.md and docs/plans/prompt-caching-sol-review.md.
  */
 import { describe, expect, it } from "vitest";
-import { effortFor, STAGE_EFFORT } from "../src/models.js";
+import { ARTICLE_RENDERER, effortFor, STAGE_EFFORT } from "../src/models.js";
 import { DEFAULT_INGEST_STEPS, sharesArticleCache } from "../src/pipeline.js";
 import type { StepName } from "../src/types.js";
 
@@ -30,9 +30,39 @@ describe("the article cache group", () => {
     expect(sharesArticleCache("glossary", ["arc", "tweets"])).toBe(false);
   });
 
+  it("keeps ideas out of it even though its effort MATCHES arc and tweets", () => {
+    /* **The case that made the predicate read two tables instead of one.**
+       `ideas` thinks at `high`, exactly like arc and tweets, so an
+       effort-only grouping says all three share — and they cannot. `ideas`
+       answers with block ids, so it sends `articleWithIds` where the other
+       three send `articleText`; the two renderings of one article agree on the
+       head and on nothing after it.
+
+       What that would have cost is not an error: it is `arc` marking the
+       article on a job that has `ideas` behind it, paying the 1.25x write
+       premium, and collecting no read at all. Nothing throws, nothing looks
+       wrong, and the bill goes up. GPT Sol, 2026-08-27. */
+    expect(STAGE_EFFORT.ideas).toBe(STAGE_EFFORT.arc);
+    expect(ARTICLE_RENDERER.ideas).not.toBe(ARTICLE_RENDERER.arc);
+    expect(sharesArticleCache("arc", ["ideas"])).toBe(false);
+    expect(sharesArticleCache("ideas", ["arc", "tweets"])).toBe(false);
+    expect(sharesArticleCache("ideas", ["glossary"])).toBe(false);
+  });
+
+  it("agrees with itself about which renderer every article stage uses", () => {
+    /* The table is the claim; this is the check that it still describes the
+       code. A stage added to `STAGE_EFFORT` and forgotten here would be
+       `undefined` in the renderer table and would then share a cache with every
+       other forgotten stage — which is the same shape of accident as the one
+       above, one level further out. */
+    for (const stage of Object.keys(STAGE_EFFORT) as (keyof typeof STAGE_EFFORT)[]) {
+      expect(ARTICLE_RENDERER[stage]).toBeDefined();
+    }
+  });
+
   it("treats a stage that does not read the article as sharing nothing", () => {
     for (const step of ["fetch", "extract", "blocks", "toc", "summary"] as StepName[]) {
-      expect(sharesArticleCache(step, ["arc", "tweets", "glossary"])).toBe(false);
+      expect(sharesArticleCache(step, ["arc", "tweets", "glossary", "ideas"])).toBe(false);
       expect(sharesArticleCache("arc", [step])).toBe(false);
     }
   });
