@@ -1,9 +1,15 @@
 # Chat as the gateway — selections and paragraphs start conversations
 
-Status: **planned, reviewed, being built.** Written 2026-08-26 from Greg's brief and four design
+Status: **built, 2026-08-26/27.** Written 2026-08-26 from Greg's brief and four design
 calls he made the same day, then rewritten after a GPT-5.6 Sol review
 ([chat-as-gateway-sol-review.md](chat-as-gateway-sol-review.md)) that found four blocking problems.
 The review is kept beside this file; where the two disagree, this file is what was built.
+
+**What is not built yet**, so nobody has to reverse-engineer the gap: the hover tooltip on a chat
+mark (the summary carries `title`, `turns` and `lastLine` for it, and nothing reads them yet); a
+`docs/project/chat.md`, which chat still does not have; and the browser pass. The `?summary=1`
+endpoint, the anchor, the cancel route, the floating panel, the ask box, the paragraph button and
+the marks are all in.
 
 Today, letting go of the mouse over a sentence in the prose column spends a model call. The answer
 lands in a floating "Explanation" panel, and that panel is the end of the road: one question, one

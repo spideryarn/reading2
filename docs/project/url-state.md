@@ -35,7 +35,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
 | `mode` | which **mode** owns the band between the spine and the prose, absent for the table-of-contents columns that are the default — [chat-mode.md](../plans/chat-mode.md) | push | `?mode=chat` |
-| `thread` | which conversation is open in chat mode, absent for the list of them | **replace** | `?thread=spya-k3m9qt` |
+| `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
 | `gate` | how high the prioritised order's bar is — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `0.30` | **replace**, debounced | `?gate=0.45` |
@@ -112,6 +112,29 @@ reader's question. And absent still means derived, which is why this one has no 
 `cols=none` exists because the empty list would otherwise serialize to an empty string, which is
 indistinguishable from the parameter being absent — and absent means *automatic*, which is the
 opposite of "the reader turned every column off".
+
+
+### One conversation id, two ways of drawing it <a id="one-thread-id"></a>
+
+`?thread=` names the open conversation and **`mode` says where it is drawn**:
+
+| `?thread=` | `mode=chat` | what you see |
+|---|---|---|
+| set | yes | the conversation in the band, full width |
+| set | no | the same conversation floating over the article |
+| unset | either | no conversation open |
+
+So "open in full chat" from the floating panel is `setMode("chat")` and nothing else — the id is
+already right — and leaving chat mode puts the panel back where the reader left it, for free.
+
+A second parameter was drafted for the floating panel and rejected in review: it would have carried
+nothing `mode` does not already carry, and two ids that can disagree is a bug waiting to be written.
+See [chat-as-gateway.md](../plans/chat-as-gateway.md).
+
+**The passage a *new* conversation is about is not in the URL.** Before the reader sends anything
+there is no conversation to link to, and the quote is the article's words sitting in their selection
+— which [logging.md](logging.md) keeps out of logs, and this keeps out of browser history and out of
+any link they share. It lives in component state and is lost on reload, which costs one re-selection.
 
 ## Which article is the path
 

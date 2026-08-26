@@ -1,5 +1,19 @@
 # Comments — asking the model about a passage
 
+> **Closed to new arrivals, 2026-08-26.** Selecting a sentence no longer creates one of these. It
+> opens a **conversation** instead, anchored to the same words and floating over the article —
+> [chat-as-gateway.md](../plans/chat-as-gateway.md). Greg's call: *"I think I'm trying to turn the
+> 'Questions' interface into more of a gateway to the general 'Chat' interface."*
+>
+> Everything below is still true of the explanations a reader already has. They keep their mark,
+> they still open, and both ways of asking again — *Try again* for a failed model call, *Search the
+> web* for an answer judged thin — still work. What has gone is the way to make a new one, and it
+> has gone from the **server**: `POST /api/comments/:slug` refuses an id it has not already stored,
+> because deleting the client call closes the React path and nothing else. The follow-up box now
+> opens the floating chat carrying this comment's anchor, rather than switching to chat mode.
+>
+> Read the rest of this file in the past tense where it describes what a selection does.
+
 Select a sentence in the verbatim column and the model explains it, researching the web first if it
 needs to. The answer arrives in a floating dialog, and both the mark in the prose and the answer
 survive a reload.
