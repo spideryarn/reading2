@@ -102,6 +102,34 @@ screenshot taken a moment later showed sitting correctly. Take a screenshot (whi
 frame) between the scroll and the read, or use a real wheel scroll. And note the pair interacts:
 the same session saw a screenshot *between* `scrollTo` calls revert `scrollY` to 0.
 
+## Signed out is not signed out, in a browser you have used before
+
+Since 2026-08-27 the app has a gate ([auth.md](auth.md)): signed out, there is nothing to look at
+but a sign-in screen. Which makes the first line of every browser pass a question you did not used
+to have to ask.
+
+**A tab that has been used for this app before is signed in**, and will stay signed in across a
+reload, a restart and a week. The session lives in `localStorage` under `sb-<host>-auth-token`. So
+"I loaded the page and got the shelf" is not evidence the gate is broken — it is the commonest way
+to *think* it is. Found the hard way on the first browser pass of the gate itself.
+
+```js
+localStorage.clear()   // then reload. Now you are signed out.
+```
+
+Two consequences for a run:
+
+- **Test "signed out" first, and clear storage before you do.** Afterwards you have to sign in
+  again, which is slower, so it is worth ordering the pass around it.
+- **`localStorage` is per origin, and the port is part of the origin.** A session on `:5273` is not
+  a session on `:5275`. If several agents are running `npm run dev` in this one tree, you may be
+  signed in on one port and out on another, which reads as flakiness.
+
+To sign in without a Google round trip, use email and password — the local stack has
+`mailer_autoconfirm` on, so "create an account" lands you straight in the app with no email to
+click. Google needs the port to be on the local redirect allow-list; see
+[setup-dev.md](setup-dev.md#signing-in-needs-four-more) for the two ways that goes quietly wrong.
+
 ## The URLs and widths worth checking
 
 The view has two modes and the second is easy to forget:

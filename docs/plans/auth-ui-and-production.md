@@ -162,6 +162,27 @@ byte-identical to a copy taken before. A gate test that has never been seen to f
 twenty-odd characters that make it an actual key. Checking the hit rather than trusting it is the
 whole reason to write these down.
 
+**The browser pass: 7 of 7.** A Sonnet subagent drove a real Chrome tab
+([browser-testing.md](../project/browser-testing.md) first, as the working agreements require).
+Signed out gives the sign-in screen and not the shelf; email-and-password sign-up lands straight in
+the app with no email to click; `/api/library` and `/api/jobs` answer 200 while a raw
+unauthenticated `fetch('/api/library')` from the same page gets 401; a reload keeps you signed in
+with no visible flash; the account block reads *"Signed in as browsertest@spideryarn.local · via
+email"* and signing out returns you to the sign-in screen and keeps you there. Google's button was
+checked against the brand rules by eye — dark pill, legible, mark not stretched.
+
+`/auth/callback?code=FAKE123` resolved in well under the deadline to
+*"That sign-in could not be completed…  [auth-exchange]"*, with `code=FAKE123` stripped from the
+address bar. **That is the case the first design could not have handled at all** — the SDK reports a
+failed exchange to nobody, so a callback waiting on an auth event would have sat on "Signing you
+in…" for ever, and the single test first proposed for it would have passed throughout.
+
+**And it found a trap in the testing rather than in the code.** The first check showed the *shelf*,
+not the sign-in screen — because the tab had a session in `localStorage` from earlier in the day. A
+signed-out check in a browser you have used before is not signed out until you clear storage. Now
+written up in [browser-testing.md](../project/browser-testing.md#signed-out-is-not-signed-out-in-a-browser-you-have-used-before),
+because it is the commonest way to conclude a working gate is broken — or a broken one is working.
+
 **Checked against a genuinely signed token, which is the one thing the unit tests mock.** A
 password grant from the local stack gives a real 928-character ES256 token; the gate was then asked
 five questions through the running dev server:
