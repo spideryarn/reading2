@@ -5,6 +5,7 @@ London: W. Tweedie, between 1873 and 1879.
 Digitised by **Wellcome Collection**, 183 Euston Road, London NW1 2BE.
 
 Persistent URL: <https://wellcomecollection.org/works/a5aaj99u>
+PDF: <https://iiif.wellcomecollection.org/pdf/b30472854> (b-number `b30472854`)
 
 ```
 sha256  dc66ec70acf8216e4d0bb3f096b25af690924b9dd8107f88d09670feb9f37aca
@@ -32,7 +33,9 @@ attribution Wellcome asks for.
 ## Provenance
 
 Downloaded 2026-08-26. The persistent URL, the rights statement and the citation are all printed on
-page 1 of the document, so this one verifies itself.
+page 1 of the document, so this one verifies itself. **Re-downloaded and hashed 2026-08-26**: the
+file at the IIIF URL above is byte-identical to the one committed here. The b-number that URL is
+built from comes from Wellcome's catalogue API for work `a5aaj99u`.
 
 **Internet Archive's mirror of the same pamphlet was deliberately rejected.** IA bakes in an ABBYY
 OCR text layer — roughly 3,000 legible characters a page — which would have handed the extractor the

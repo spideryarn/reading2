@@ -16,9 +16,13 @@ the fixtures and their provenance, so that the first-hour bake-off had something
 | [`harder/`](harder/) | Alexander G. Keul, *A brief history of ball lightning observations by scientists and trained professionals*, **History of Geo- and Space Sciences** (Copernicus), 2021 — 14pp | Genuinely two-column — verified by x-position histogram *and* by rendering the page and looking at it. Three tables, five captioned figures, running headers, footnote-size type. At 11.5 MB it is also, for free, the fixture that proves the upload path cannot go through a Vercel function. |
 | [`much-harder/`](much-harder/) | L. N. Fowler, *Utility of Phrenology: A Lecture* (London: W. Tweedie, c. 1873–79), **Wellcome Collection** — 17pp | **Zero extractable characters on every content page.** A real photographic scan: foxing, toning, hyphenation across line-ends. It forces image reading and it disables v1's principal check, which is the point of the slot. |
 
-Each directory holds `source.pdf` and `LICENCE.md`. The licence file carries the sha256 — **a hash
-mismatch is a new fixture version, never a quietly updated hash**, because a gold is written against
-particular pixels.
+Each directory holds `source.pdf` and `LICENCE.md`. The licence file carries the source URL, the
+licence quoted off the document itself, and the sha256 — **a hash mismatch is a new fixture version,
+never a quietly updated hash**, because a gold is written against particular pixels.
+
+All three were **re-downloaded from those URLs and hashed on 2026-08-26**, and all three came back
+byte-identical. That is the provenance check worth running, and it is worth more than a URL somebody
+wrote down at the time.
 
 Measured with pdf.js, 2026-08-26 — the free baseline every check is built on:
 

@@ -4,6 +4,9 @@
 *Coolabah*, Vol. 3, 2009, pp. 60–67. ISSN 1988-5946.
 Observatori: Centre d'Estudis Australians / Australian Studies Centre, Universitat de Barcelona.
 
+<https://revistes.ub.edu/index.php/coolabah/article/view/15725>
+PDF: <https://revistes.ub.edu/index.php/coolabah/article/download/15725/18841/30977>
+
 ```
 sha256  5e0eba41258f984bad95d164f0b37bea4a62163efe1c096cb77a5bd23b6fd2b6
 bytes   144,779
@@ -28,10 +31,13 @@ is printed on the work.
 
 ## Provenance
 
-Downloaded 2026-08-26 while choosing eval fixtures. **The retrieval URL was not recorded at the
-time**, which is a small process failure worth admitting rather than papering over with a plausible
-guess: everything above is read off the document itself. To re-find it, search the journal's own
-site for the title and check the sha256 above before replacing anything.
+Downloaded 2026-08-26 while choosing eval fixtures. The retrieval URL was not written down at the
+time and had to be found again — so it was **re-downloaded and hashed on 2026-08-26**, and the file
+at the URL above is byte-identical to the one committed here. That is the check worth running on any
+of these three, and it is worth more than a URL somebody remembered.
+
+The journal's article page also carries a CC BY 4.0 notice. The printed notice above is the more
+specific of the two and is on the work itself, so it is the one this file relies on.
 
 Nothing about the file has been altered — no pages removed, no re-compression, no OCR layer added.
 

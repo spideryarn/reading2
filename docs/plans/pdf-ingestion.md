@@ -116,6 +116,9 @@ draft's weaker choices are recorded there so nobody re-proposes them.)
     │
     ├─► CHECK   per PAGE, before anything is kept
     │           ├─ stop_reason must be end_turn        (max_tokens = silently truncated — the original's bug)
+    │           ├─ COVERAGE:  every requested page has records, and no record claims a page
+    │           │              outside the document      → THE FIRST CHECK, and a hard failure:
+    │           │                                          a page emitted nowhere must not pass by absence
     │           ├─ recall:    text-layer tokens (minus furniture pass 0 named) found in the output
     │           ├─ precision: output tokens found in the text layer          → invention
     │           ├─ ordered samples: rare words, numbers, sentence windows    → a summarised paragraph
@@ -271,7 +274,15 @@ to repair. So each chunk gets the **previous page itself**, with the instruction
 costs one page of input tokens per chunk and buys visual evidence of what's continuing. Very short
 PDFs (≤ 6 pages) are one chunk.
 
-**The check, per page, against a baseline that has been told the same things.** The first draft
+**Page coverage first, and it is a different kind of check.** Before a token is scored: every
+requested page has substantive records, and no record claims a page the document does not have. Both
+reviewers found the same hole independently — a scorer that iterates over the pages the *model*
+claimed gives an omitted page no row rather than a bad row, so **a dropped page passes by absence**.
+That is the failure this bake-off actually found, and the scoring did not catch it; a person counting
+records did. Details and the failure messages in
+[what the bake-off raised](#what-the-bake-off-raised-and-what-fable-said-about-it).
+
+**Then the check, per page, against a baseline that has been told the same things.** The first draft
 proposed a two-sided word ratio in [0.6, 1.15] per chunk. GPT's objection: that band is
 indefensible when the model is *told* to drop footnotes, references and covers, which can be
 20–40% of an academic paper's words — a good output fails, and a summarised paragraph balanced by a
@@ -885,7 +896,7 @@ it is tested in the first hour, not the last, and against the alternative.
    bake-off is a scratch script that never touches stage 3. What must not happen is the PDF scorer
    being written against `splitIntoBlocks` while `splitIntoBlocks` is still wrong — the eval would
    then be calibrated against the bug. That is now safe.
-1. ~~**First hour: the bake-off.**~~ **Done, 2026-08-26 — [the findings and the decision](#the-bake-off-and-what-it-decided-2026-08-26).**
+1. ~~**First hour: the bake-off.**~~ **Done 2026-08-26, then re-run after review — [the findings and the decision](#the-bake-off-and-what-it-decided-2026-08-26).**
    The design below is what was run, kept because the eval re-runs it. Four pages each of three hard documents — a scan with running
    headers and hyphenation, a two-column paper, and a scan with no text layer at all — through:
 
@@ -910,7 +921,10 @@ it is tested in the first hour, not the last, and against the alternative.
    - **Include the easy eval PDF.** As first drafted the bake-off was two scans and a paper, with
      nothing representing the document the release gate is actually set on.
    - **Use production settings** — real page chunks, the real schema, streaming, the real routing —
-     not a simplified prompt. Half of what we are measuring is the plumbing.
+     not a simplified prompt. Half of what we are measuring is the plumbing. *(Partly done: the
+     Anthropic calls streamed, the OpenRouter ones did not. A pipeline call nobody is waiting on
+     does not need streaming to be correct, but it does mean the OpenRouter streaming path is still
+     unexercised.)*
    - **Choose the pages deliberately**: first page, a dense middle page, a page whose paragraph
      continues across the break, and the worst layout in the document.
    - **Blind the reader names while judging**, and keep a small error ledger — missing spans,
@@ -926,8 +940,9 @@ it is tested in the first hour, not the last, and against the alternative.
    or a consistent 20% cost or latency win with no new failure class.
 
 2. ~~From those outputs, set the fidelity, latency and cost thresholds; choose the model, the vendor
-   and the schema.~~ **Done** — Gemini 3.7 Flash through OpenRouter, thresholds and the numbers that
-   argued against the choice all in [the findings](#the-bake-off-and-what-it-decided-2026-08-26).
+   and the schema.~~ **Done, provisionally** — Gemini 3.7 Flash through OpenRouter **behind a
+   replaceable reader seam**, with a smoke-test threshold rather than a gate, and the numbers that
+   argued against the choice, all in [the findings](#the-bake-off-and-what-it-decided-2026-08-26).
    **Still open from this step:** whether the OCR cross-check for scans earns its place. Mistral OCR
    works and costs $0.002 a page to parse, but its output arrives flattened with no page boundaries
    (confirmed by running it), so the comparison recipe in
@@ -949,7 +964,7 @@ it is tested in the first hour, not the last, and against the alternative.
      author's refrain three times on one page stays in the baseline where it belongs.
 
    The check and the scorer are still to build, and their shape is the open question — see
-   [what is still open](#what-is-still-open-after-the-bake-off).
+   [what is still open](#what-the-bake-off-raised-and-what-fable-said-about-it).
 4. Build chunking, rendering, stitching and the chunk cache.
 5. Define the raw manifest, the `Meta` fields and pipeline freshness.
 6. Integrate URL PDFs through `STEPS`. Make the easy eval PDF pass tier 1.
@@ -959,62 +974,81 @@ it is tested in the first hour, not the last, and against the alternative.
 
 ## The bake-off, and what it decided (2026-08-26)
 
-Step 1 of the build order, done. Forty-two calls, twelve judged pages across the three eval PDFs,
-three runs on the pages that mattered. Every number below is in
-[`evals/pdf/baselines/bakeoff-2026-08-26.json`](../../evals/pdf/baselines/bakeoff-2026-08-26.json),
-scores and metadata only — no transcribed prose.
+Step 1 of the build order, done, then re-run after
+[GPT Sol's review of it](#gpt-sols-review-of-the-bake-off-2026-08-26) opened *"the decision needs
+more evidence."* Ninety calls, five auditable runs on each of the two chunks that mattered, and one
+control experiment. Everything is in
+[`evals/pdf/baselines/bakeoff-2026-08-26.json`](../../evals/pdf/baselines/bakeoff-2026-08-26.json) —
+scores, usage and page lists, no transcribed prose.
 
-**How it was scored.** Per page, against the pdf.js text layer minus the lines repeating on three or
-more pages: **recall** (baseline tokens found in the output), **precision** (output tokens found in
-the baseline) and **order** (longest common subsequence ÷ baseline, which is what catches two
-columns interleaved). Multisets throughout, so a duplicated paragraph cannot pay for a dropped one.
+**Read the caveats in that file before the numbers.** The short version, because it governs how much
+any of this is worth:
+
+- **The score is a catastrophe detector, not a fidelity measure.** The fold discards case,
+  punctuation and symbols — which the prompt demands *exactly* — and ignores record type, paragraph
+  boundaries, `continues` and `uncertain` entirely. Gemini's byline-as-paragraph regression is
+  invisible to it.
+- **Scores are grouped by the page the model claimed**, so a page emitted nowhere produces no row
+  rather than a bad row. `pagesEmitted` has to be read before any score. This is the hole both
+  reviewers found independently — [see below](#what-the-bake-off-raised-and-what-fable-said-about-it).
+- **The scan has no text layer, so every score for it is null.** Its conclusions come from reading
+  records, not from numbers.
 
 ### The finding that mattered most had nothing to do with the model
 
 **Putting the `document` block before the instruction text made Haiku skip a page and misnumber the
-rest — reproducibly, three runs out of three.**
+rest.** Five runs of each on `harder` pages 7–8 (page 6 attached as context, marked "do not emit"),
+with the chunk memoised and its sha256 recorded so both readers provably got the same bytes:
 
 ```
-  harder, pages 7–8 (page 6 attached as context, marked "do not emit")
-
   document first, then the instruction      instruction first, then the document
   ────────────────────────────────────      ────────────────────────────────────
-  said "page 7"  → actually page 8          said "page 7"  → page 7    ✓
-  recall 0.496  precision 0.331             recall 0.938  precision 0.978
-  order  0.169                              order  0.950
+  9, 9, 10, 11, 16 records                  16, 16, 16, 16, 16 records
+  said "page 7" → actually page 8           said "page 7" → page 7    ✓
+  recall 0.496 / precision 0.331            recall 0.938–0.941 / precision 0.978
   page 8: recall 0.055, 0.211               page 8: recall 0.950, 0.952
 ```
 
-Same model, same prompt, same schema, same PDF bytes, same chunk. `stop_reason: end_turn`, valid
-JSON against the schema, fluent English, and a page of the article gone. On chunks with no context
-page it was fine, which is how a bug like this survives casual testing — and on `easy` it failed on
-one run and passed on the next, so it is not even consistently wrong.
+`stop_reason: end_turn`, valid JSON against the schema, fluent English, and a page of the article
+gone. On chunks with no context page it was fine, which is how a bug like this survives casual
+testing — and on `easy` it failed on one run and passed the next, so it is not even consistently
+wrong.
 
-**So: the instruction goes first, and the document block second.** Written down here because it is
-invisible in the code, invisible in the response, and the natural way to write the call is the wrong
-way round.
+**So: the instruction goes first, and the document block second.** GPT Sol is right that this is a
+safe default and a regression test rather than an established API law — one model, one context-page
+chunk, model randomness uncontrolled. But the failure is repeated, one-sided, and free to avoid, and
+the natural way to write the call is the wrong way round.
 
-### The scan decided the vendor
+*(The first version of this experiment could not have supported even that. Each reader called `cut()`
+separately, and pdf-lib stamps a fresh document id and creation date into every save — so "same PDF
+bytes" was false, as Sol found by hashing two cuts. The chunk is now memoised with fixed dates, hashes
+identically across processes, and its hash is recorded on every call.)*
 
-`much-harder` chunk 0 is pages 2–3 of the Fowler pamphlet — no text layer, no context page, nothing
-subtle about it. Three runs:
+### The scan decided the vendor, and the obvious innocent explanation was tested and refuted
 
-| Reader | Records | Pages it actually transcribed |
-|---|---|---|
-| `haiku-native` | 5, 5, 5 | page 3 only |
-| `haiku-native-textfirst` | 5, 5, 5 | page 3 only |
-| `haiku-via-openrouter` | 5, 5, 5 | page 3 only |
-| `gemini-flash-native` | 12, 12, 12 | pages 2 **and** 3 |
+`much-harder` chunk 0 is pages 2–3 of the Fowler pamphlet: no text layer, no context page. Page 2
+carries the title, the byline **and four paragraphs of the lecture itself**.
 
-**Every Haiku variant silently dropped the first page of the chunk, every time.** That page carries
-the pamphlet's title, its byline and its opening four paragraphs. Mistral OCR, run as an independent
-witness, confirms what is on it — and confirms Gemini's transcription of it almost word for word.
+| Reader | Runs | Records | Pages actually transcribed |
+|---|---|---|---|
+| `haiku-native` | 5 | 5 every time | page 3 only |
+| `haiku-native-textfirst` | 5 | 5 every time | page 3 only |
+| `haiku-via-openrouter` | 5 | 5 four times, 6 once | page 3 only; once a fragment of the other |
+| **`haiku-native-nocover`** (control) | 3 | 5 every time | page 3 only |
+| `gemini-flash-native` | 5 | 12 every time | pages 2 **and** 3 |
 
-This is the one class of document where v1 has no baseline to check against, so a reader that drops
-a page there drops it in silence forever. That is not a tie, so the tie-break rule
-([build order](#build-order), step 1) never came into play.
+**The control is the point.** The prompt tells the model to leave out "a cover or rights page that is
+not part of the piece", and a Victorian title page is exactly what that clause might overfire on — in
+which case the headline finding would be about a sentence we wrote rather than about a model, and the
+vendor decision would rest on nothing. So the clause was removed and replaced with *"Transcribe a
+title page in full — it is part of the piece"*, and the run repeated three times. **Identical
+output: five records, page 3 only.** Haiku is not obeying an instruction here; it is not reading the
+page.
 
-### On born-digital pages the two are level, and the metric nearly said otherwise
+Chunk 1 of the same document corroborates it — Gemini emits both pages, both Haiku routes emit one.
+Still one document, which is the limit Sol names and which stands.
+
+### On born-digital pages the two are close on words, and not on everything else
 
 | Page | `gemini-flash-native` | `haiku-native-textfirst` | `haiku-via-openrouter` | `haiku-text-only` |
 |---|---|---|---|---|
@@ -1025,7 +1059,7 @@ a page there drops it in silence forever. That is not a tie, so the tie-break ru
 | harder 7 | 0.943 | 0.938 / 0.941 | 0.938 / 0.941 | 0.949 / 0.979 |
 | harder 8 | 0.952 | 0.950 / 0.952 | 0.950 | 0.895 / 0.989 |
 
-(recall; two figures where the page was run twice)
+(recall; two figures where the page was run more than once)
 
 **The one visible gap is not a reading failure.** Every one of the 52 baseline tokens Haiku "missed"
 on `easy` page 1 is the copyright and redistribution notice, which Haiku classed as furniture and
@@ -1037,99 +1071,245 @@ So the score would have ranked Gemini first on that page for a reason that has n
 quality. GPT Sol's warning that a character-level metric can reject a loser but not choose a winner
 is exactly right, and this is the page that proves it.
 
-### Cost, measured rather than quoted
+**And Gemini has a page-labelling failure of its own.** On one of five runs of `harder` chunk 1 it
+returned sixteen well-formed records numbered **pages 49 and 50** — of a fourteen-page document. The
+transcription was fine; the numbers were invented. Nothing in the score would catch that, and the
+page-set assertion described below is what does.
 
-| Reader | $/page | Input tokens (7 calls) | Output tokens | s/call | Errors |
-|---|---|---|---|---|---|
-| `gemini-flash-native` | **$0.0051** | 11,714 | 30,597 | 40.2 | 1 in 7 |
-| `haiku-text-only` | $0.0060 | 21,004 | 12,726 | 19.1 | 0 |
-| `haiku-native` | $0.0079 | 48,754 | 12,260 | 27.7 | 0 |
-| `haiku-native-textfirst` | $0.0086 | 48,747 | 14,404 | 32.4 | 0 |
-| `haiku-via-openrouter` | $0.0086 | 48,747 | 14,262 | 36.4 | 0 |
-| `mistral-ocr` (parse only) | $0.0020 | — | — | 5.8 | 1 rate-limit in 3 |
+### Cost — one figure measured, one estimated, and neither reconciled against a bill
 
-**1.7× cheaper, not the 2.5× the price list implied**, and for a different reason than the price
-list gives: Gemini bills a PDF page at roughly a quarter of Haiku's input tokens and then spends
-twice as many output tokens. Two price-per-token numbers would have predicted the wrong ratio.
+Across the six chunks, using one successful call per reader per chunk and **dividing by the twelve
+pages requested rather than the pages each reader chose to emit** — otherwise a reader is rewarded
+for dropping pages:
 
-The plan's own estimate of $0.007–0.010 a page for Haiku with the image was right — $0.0086
-measured. So was "13–29% more than text-only": $0.0086 against $0.0060 is 43% here, on
-denser-than-average pages.
+| Reader | $/page requested | Basis |
+|---|---|---|
+| `gemini-flash-native` | **$0.0054** | OpenRouter's reported `usage.cost` |
+| `haiku-native-textfirst` | $0.0079 | **list-price estimate** from token counts at $1/$5 per MTok |
+| `haiku-via-openrouter` | $0.0079 | OpenRouter's reported `usage.cost` |
 
-### Three things the bake-off settled that were open
+**About 1.5×, not the 2.5× two price-per-token numbers predict** — Gemini bills a PDF page at roughly
+a quarter of Haiku's input tokens and then spends about twice as many output tokens.
 
-- **OpenRouter is not lossy for this.** `haiku-via-openrouter` and `haiku-native-textfirst` returned
-  677 and 677 tokens on one page, 1,057 and 1,057 on another — the same model reaching the same
-  answer through the proxy. That is the direct-against-proxied comparison GPT Sol asked for, and it
-  passed.
+Three honesty notes, all Sol's. The Anthropic figure is **not a measured cost**; it is arithmetic on
+token counts. Neither figure has been reconciled against an invoice. And **Mistral's price is quoted
+nowhere in this plan**, because one of its calls came back `is_byok: true` and a BYOK call is not
+evidence of what the thing costs.
+
+The plan's own earlier estimate of $0.007–0.010 a page for Haiku with the image was right.
+
+### Two things the bake-off settled that were arguments before
+
+- **The proxy matched direct output on the pages compared** — which is weaker than "OpenRouter is
+  not lossy", and the weaker sentence is the one the data supports.
+  `haiku-via-openrouter` and `haiku-native-textfirst` returned 677 and 677 tokens on one page,
+  1,057 and 1,057 on another. But on `harder` page 2 they diverge — 0.923 recall direct against
+  0.865 proxied — which is either ordinary non-determinism or the proxy, and this sample cannot tell
+  you which. Note also that the OpenRouter calls here were **not streamed**, so that path is still
+  unexercised.
 - **The finish-reason normalisation is real, and now observed rather than cited.** Every OpenRouter
   call returned `finish_reason: "stop"` with the provider's own reason alongside it —
   `native_finish_reason: "end_turn"` from Anthropic, `"STOP"` from Google. Retry logic that reads
   only the first field cannot tell a refusal from a completion.
 - **Mistral OCR through OpenRouter returns one flat blob with no page boundaries** — confirmed by
-  running it, not inferred from the docs. Two pages came back as a single markdown string in a file
-  annotation. It also misread the library stamp on the scan as "NELLOGNE LIBRARY INSTITUTE", which
-  is the sort of thing a witness is for: visible, checkable, and not a hallucinated sentence.
+  running it. Two pages came back as a single markdown string in a file annotation. It misread the
+  library stamp on the scan as "NELLOGNE LIBRARY INSTITUTE", which is the encouraging kind of error:
+  visible, checkable, and furniture rather than an invented sentence — the easy case. Its
+  independence from the reader remains a hypothesis. A second call within seconds was refused:
+  *"The document parsing engine is currently rate limited."*
 
-### The decision
+### The decision, and how firmly
 
 **v1 reads PDFs with `google/gemini-3.7-flash` through OpenRouter, `file-parser` engine `native`,
-with the instruction text before the file.** Written down with what would reverse it:
+with the instruction text before the file — provisionally, behind a replaceable reader seam.**
 
-- It read a page of the scan that all three Haiku variants dropped, three times out of three.
-- It is level with Haiku on born-digital pages and 1.7× cheaper.
-- **What it is worse at is structure** — bylines and inline labels come back as paragraphs. The
-  prompt has to push harder on headings, and the eval's gold has to score structure separately from
-  characters, or this regression ships invisibly.
-- **It failed one call in seven**, with no error body and 92 seconds on the clock, where no Haiku
-  call failed. One in seven is a small sample and a large number; the retry path is not optional.
-- Reverse it if the structure gap survives a better prompt, or if the error rate holds up over more
-  calls. The comparison is a script and three PDFs — re-running it is an hour, not a project.
+"Provisional" is GPT Sol's word and it is the right one. The evidence is strong about *what happened*
+and thin about *how general it is*: one scan document, one model pair, no human gold for the scan
+pages, no blind structural adjudication. What is settled is that a confirmed whole-page omission
+defeats the pre-registered tie-break — that is plainly a clear fidelity failure, not a tie — so
+Haiku does not win by incumbency. What is not settled is that this is a stable model-level
+difference rather than this pamphlet.
 
-**Not chosen, and why not:** direct Anthropic Haiku (the incumbent, and the tie-break's default)
-loses on the one document class v1 cannot check. Text-layer-only Haiku is genuinely competitive on
-born-digital pages — 0.979 and 0.989 recall on the two hardest — and it is 30% cheaper, but it
-returns nothing at all for a scan, which makes it a second reader for a subset rather than the
-reader. Both stay in the eval so the decision can be re-run.
+For it:
 
-### The thresholds, from the data rather than from a guess
+- It read a page of the scan that every Haiku route dropped, five runs out of five, with the obvious
+  innocent explanation tested and refuted.
+- It is level with Haiku on born-digital word content and about 1.5× cheaper.
 
-Every good page scored **≥ 0.865 recall, ≥ 0.88 precision, ≥ 0.86 order**. Every bad one scored
-**≤ 0.50 recall, ≤ 0.60 precision, ≤ 0.17 order**. There is nothing in between, which is the happiest
-shape a threshold can have.
+Against it, recorded so nobody has to rediscover it:
+
+- **Structure is worse.** Bylines and inline labels come back as paragraphs. The prompt has to push
+  harder on headings, and the eval's gold must score structure separately from characters, or this
+  regression ships invisibly.
+- **It invented page numbers once in five runs** (49 and 50 of a fourteen-page paper) and failed one
+  call in seven early on. Neither is caught by any score.
+- The reader goes behind a seam so that swapping it is a config change, not a rewrite.
+
+**What would settle it**, and what the eval is for: several independent scans, at least two chunks
+from each, three separately saved runs of both finalists, human gold for the scan pages, and blind
+structural adjudication. Sol's recommendation — more scan *documents* before more runs of this one —
+is adopted.
+
+**Not chosen, and why not:** direct Anthropic Haiku, the incumbent and the tie-break default, loses
+on the one document class v1 cannot check. Text-layer-only Haiku is genuinely competitive on
+born-digital pages — 0.979 and 0.989 recall on the two hardest — and cheaper again, but returns
+nothing at all for a scan, so it is a second reader for a subset rather than the reader. Both stay in
+the eval.
+
+### The thresholds, and why they are not yet a gate
+
+Every good page scored **≥ 0.865 recall, ≥ 0.88 precision, ≥ 0.86 order**; every bad one **≤ 0.50,
+≤ 0.60, ≤ 0.17**. Nothing in between.
+
+**That gap is a property of the sample, not of the world.** The sample contains near-verbatim
+successes and catastrophic page-attribution failures and almost nothing else, so choosing a number
+inside the gap measures no false-positive or false-negative rate at all. Sol's arithmetic is the part
+that stings: **recall 0.85 permits 15% omission and precision 0.80 permits 20% unmatched output**,
+which is nowhere near the "essentially perfect" that
+[`evals/pdf/README.md`](../../evals/pdf/README.md) demands of the easy PDF. The likely production
+failure — one omitted sentence, an altered number, a wrong heading type, one invented line — passes
+comfortably.
+
+So the starting point, explicitly labelled as a smoke test rather than a gate:
 
 ```
-  recall ≥ 0.85  AND  precision ≥ 0.80  AND  order ≥ 0.80   →  pass
+  recall ≥ 0.85  AND  precision ≥ 0.80  AND  order ≥ 0.80   →  no catastrophe detected
   anything below                                            →  fail the step, name the page
-  0.85 – 0.92 with all three above the line                 →  pass, but log the page
 ```
 
-With the caveat `easy` page 1 wrote in blood: **a low recall can be a defensible exclusion rather
-than a loss**, so the recorded exclusion list is load-bearing rather than decorative. A page that
-fails only on recall, and only by the length of a notice the model was told to drop, is a prompt
-problem and not a transcription one.
+and **before any of it runs, the page-coverage assertion below**, which is the check that would
+actually have caught the failure this bake-off found. The real gate is set from held-out pages and
+deliberately seeded failures — a sentence deleted, a number changed, a heading demoted — and
+validated on documents it was not tuned on. With the caveat `easy` page 1 wrote in blood: **a low
+recall can be a defensible exclusion rather than a loss**, so the recorded exclusion list is
+load-bearing rather than decorative.
 
-### What is still open after the bake-off
+### GPT Sol's review of the bake-off (2026-08-26)
 
-Two design questions the measurements raised rather than settled. Both are being reviewed as this
-is written — GPT Sol on the method, Fable on the shape — and both will be answered here.
+Verdict: **"the decision needs more evidence."** Eight findings, run against the plan, the committed
+JSON and the three scratch scripts. What each one changed:
 
-**1. The page attribution is circular.** Records are grouped for checking by *the page number the
-model itself claimed*, so a model that mislabels pages is scored against the wrong baseline. That is
-load-bearing in a useful way — it is exactly how the document-first bug showed up, as recall 0.05 —
-but it means a reader that reads well and labels badly looks catastrophic, a reader that labels well
-and reads badly might look fine, and **the score alone cannot tell them apart.** Options: leave it,
-because a mislabelled page *is* a failure and every later feature addresses text by page; assert the
-set of pages first and check content second, so the two failures report differently; or align output
-to baseline pages by content and report the disagreement as its own error.
+| It found | Now |
+|---|---|
+| The scorer iterates over pages the **model emitted**, so an omitted page produces no row rather than a zero — the exact failure the gate most needs | Page coverage is a hard assertion *before* scoring ([below](#what-the-bake-off-raised-and-what-fable-said-about-it)). Fable found this independently, which is why it is written up there |
+| "Same PDF bytes" was **false**: `cut()` ran per reader and pdf-lib stamps a new id and date each save. Sol hashed two cuts to prove it | The chunk is memoised with fixed dates, hashes identically across processes, and its `chunkSha256` is on every call |
+| "Three runs out of three" was **not auditable** — two of the three had overwritten each other | Five separately named runs of each decisive chunk, all in the JSON |
+| The vendor rests on one document, and nothing ruled out "behaviour on this particular scan" | Downgraded to **provisional, behind a seam**, with what would settle it written down. A control experiment was added and refuted the one innocent explanation available |
+| "OpenRouter is not lossy for this" | "The proxy matched direct output on the pages compared" — with the `harder` page 2 divergence (0.923 vs 0.865) quoted against it |
+| Anthropic cost called **measured** when it is arithmetic on tokens; averages mixed different page sets; Mistral quoted while a call was BYOK | Relabelled, recomputed per **page requested** on matched chunks (1.48×, not 1.7×), and Mistral's price removed from the plan |
+| Thresholds are in-sample separators; 0.85 recall permits 15% omission | Labelled a smoke test, not a gate, with the arithmetic quoted and the real method named |
+| The build order claims production streaming; the OpenRouter calls did not stream | Corrected in both places |
 
-**2. Whether the scan witness is buildable, let alone worth it.** Mistral OCR works and costs
-$0.002 a page — and returns two pages as one flat markdown string with no page boundaries, so the
-per-page check cannot run against it without reconstructing pages ourselves. The independence the
-whole scheme rests on is also still a hypothesis: both readers are learned systems with language
-priors, and nobody has shown they fail differently on the cases that matter. The already-agreed
-alternative is to show the scan marked visibly unverified and pay for nothing, which is
-[Greg's first answer](#gregs-answers-2026-08-26).
+Sol also details how the token scorer can score bad output highly — case and punctuation discarded
+though the prompt demands them exactly; record type, paragraph boundaries, `continues` and
+`uncertain` ignored; LCS confounding omission with order; and the baseline still containing the
+footnotes and references the prompt says to drop. **That is the specification for the real scorer**,
+and it is why the numbers above carry a warning at the top rather than a ranking.
+
+Its four questions, with the answers taken:
+
+1. *Keep Gemini as the working choice while downgrading "decided" to "provisional"?* **Yes** — done,
+   behind a reader seam.
+2. *Should every requested page require substantive output or an explicit blank record before token
+   scoring?* **Yes** — a hard failure, independent of any score.
+3. *More scan documents, or deeper repetition of this one?* **More documents first.** Both reviewers
+   said so; the eval's fixture list grows before its run count does.
+4. *Keep the cost figures?* **Only with labels** — done, and Mistral's is gone.
+
+### What the bake-off raised, and what Fable said about it
+
+Two design questions the measurements produced rather than settled. Both went to
+`claude-fable-5` as a design question rather than a research one, and both of its answers are
+adopted.
+
+#### 1. The page attribution is circular — keep it, and add the assertion it was standing in for
+
+Records are grouped for checking by *the page number the model itself claimed*, so a model that
+mislabels pages is scored against the wrong baseline. That is how the document-first bug showed up,
+as recall 0.05.
+
+**Fable's answer starts from something the framing had missed: this check has no automated
+consumer.** There is no retry and no fallback, so nothing downstream ever acts on *which kind* of
+failure it was — the only reader of a failure is a person deciding what to fix. So the circularity
+is not a correctness problem for the gate, only a diagnostic problem for the error message. And the
+false-pass being worried about mostly cannot happen: a page that reads badly fails on recall and
+precision against its own baseline, and correct labels buy a bad reading nothing.
+
+**The real hole is a different one, and it is in the scorer as written:**
+
+> which set of pages does the checker iterate over? If it iterates over the pages the model claimed,
+> a page the model dropped entirely […] produces no group and may never be scored. The bake-off's
+> skipped page was caught because *something* claimed page 7 and scored 0.05 against it; a cleaner
+> failure that emits nothing for page 8 must not pass by absence.
+>
+> — Fable, 2026-08-26
+
+That is exactly right, and it is exactly what the bake-off's scoring script does. The Haiku scan
+failure — five records, one page, nothing at all for the other — **produced no low score. It
+produced no row.** It was caught by a human counting records, which does not scale to a gate.
+
+So, three things, in this order:
+
+```
+  1. ASSERT the page set, before any content is scored
+       every baseline page with meaningful text has records   → else "no records for page 8"
+       no record claims a page outside the document           → else "records claim page 19 of 17"
+  2. SCORE per page, as designed, against the claimed page's baseline
+  3. ON FAILURE ONLY, re-score the failing page's records against the ±1 neighbouring baselines
+       and put it in the error: "records claiming page 7 match page 8's baseline at 0.94"
+```
+
+Step 1 is a dozen lines and converts "recall 0.05, mysterious" into a sentence naming the fault.
+Step 3 is the cheap half of content-based alignment: it separates *read well, labelled badly* from
+*read badly* instantly. **Full content-based alignment on the pass path is not built** — alignment
+is only worth its cost if you intend to *rescue* mislabelled output, and this design fails loudly
+instead.
+
+One correction to this plan's own account, worth keeping: "the circularity is load-bearing" was half
+luck. It caught that bug because misnumbering happened to produce a huge mismatch. The set assertion
+is the principled catcher of that class, and it names the failure correctly.
+
+#### 2. The scan witness is not built for v1
+
+**Decision: no witness in v1. The scan is shown, marked visibly unverified, and we pay for nothing.**
+That is [Greg's first answer](#gregs-answers-2026-08-26), and the bake-off did not produce the
+evidence that would have overturned it.
+
+Three reasons, in Fable's order of weight:
+
+- **The plan wrote down its own decision rule and the evidence has not arrived.** Greg's call was to
+  put it in the bake-off and wire it up *if its disagreements land on the model's real mistakes*.
+  What the bake-off produced is Mistral **confirming a page Gemini read correctly** — the witness
+  agreeing with a pass. Nobody has yet seen it catch a miss. By the plan's own rule, the answer
+  today is no.
+- **The flat blob changes the cost.** It is no longer "run the existing check against a second
+  baseline"; it is "build a page-reconstruction aligner, then check against its output" — and the
+  aligner is itself an unverified inference step, so we would be certifying the reader with a
+  witness we had to guess into shape. It inherits every failure mode
+  [the scan section](#a-scan-with-no-text-layer) already lists, plus its own.
+- **The independence is asserted, not measured.** Both readers are learned systems with language
+  priors. Mistral's one visible error — "NELLOGNE LIBRARY INSTITUTE" — is *furniture*, not body
+  text, which is the easy case.
+
+**Where this plan was fooling itself**, plainly: on the independence of the two readers, and on
+"$0.002 a page is cheap". The money is trivial; the aligner and the meaning of "cross-checked" are
+the price.
+
+**What "unverified" has to do instead**, so it is a state rather than a shrug — all three of these
+are v1:
+
+1. **Say what it means, once, in a sentence** on the page: *transcribed by a machine from a scanned
+   image; no independent text existed to check it against.* Not a bare badge.
+2. **Hand the reader the human cross-check.** The raw PDF is stored and every record carries its
+   page number even though v1's reader does not show it, so a "view the scanned page" link is nearly
+   free — and a person looking at the ink is the *actual* verification path, worth more than a
+   second machine's opinion.
+3. **Render the model's own confessed uncertainty** — `⟦illegible⟧` and the `uncertain` flag, visible
+   in the text. On a scan it is the one free signal there is.
+
+**And the upgrade path is already paid for.** Raw model responses are cached per chunk, so a witness
+built in v2 can be run retroactively over scans already ingested. Saying that here is what removes
+the pressure to build it now.
 
 ## Greg's answers (2026-08-26)
 

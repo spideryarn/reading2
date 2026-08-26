@@ -5,6 +5,8 @@ professionals."** *History of Geo- and Space Sciences*, 12, 43–56, 2021.
 Copernicus Publications. Received 12 Aug 2020, accepted 15 Jan 2021, published 1 Mar 2021.
 
 <https://doi.org/10.5194/hgss-12-43-2021>
+Article: <https://hgss.copernicus.org/articles/12/43/2021/>
+PDF: <https://hgss.copernicus.org/articles/12/43/2021/hgss-12-43-2021.pdf>
 
 ```
 sha256  18d0d66a7f975d865b224cf27d9f2c489ddf670975d72d91d380e1db69597318
@@ -26,7 +28,8 @@ the file has been altered.
 ## Provenance
 
 Downloaded 2026-08-26. The DOI, the citation and the licence line are all read off page 1 of the
-document, so this one needs no external source to verify — resolve the DOI and compare the sha256.
+document, so this one needs no external source to verify. **Re-downloaded and hashed 2026-08-26**:
+the file at the URL above is byte-identical to the one committed here.
 
 ## Why this document
 
