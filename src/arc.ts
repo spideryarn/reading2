@@ -34,7 +34,7 @@ import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
-import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
@@ -329,14 +329,12 @@ export async function generateArc(opts: {
     throw new Error(MODEL_REFUSED.message);
   }
   if (message.stop_reason === "max_tokens") {
-    throw new Error(
-      truncatedMessage("arc", maxTokens, answerTokens, {
-        outputTokens: message.usage.output_tokens,
-        answerChars: message.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .reduce((n, b) => n + b.text.length, 0),
-      }),
-    );
+    throw truncationFailure("arc", maxTokens, answerTokens, {
+      outputTokens: message.usage.output_tokens,
+      answerChars: message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .reduce((n, b) => n + b.text.length, 0),
+    });
   }
 
   const raw = message.content

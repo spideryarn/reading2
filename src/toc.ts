@@ -32,9 +32,10 @@ import { fileURLToPath } from "node:url";
 import { CAPABLE_MODEL } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
+import { blocksArtefact } from "./blocks.js";
 import { isSpideryarnId } from "./ids.js";
 import { generateLabels, mergeLabels } from "./labels.js";
-import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
 
@@ -689,12 +690,10 @@ export async function generateToc(opts: {
     throw new Error(MODEL_REFUSED.message);
   }
   if (message.stop_reason === "max_tokens") {
-    throw new Error(
-      truncatedMessage("table of contents", maxTokens, answerTokens, {
-        outputTokens: message.usage.output_tokens,
-        answerChars: raw.length,
-      }),
-    );
+    throw truncationFailure("table of contents", maxTokens, answerTokens, {
+      outputTokens: message.usage.output_tokens,
+      answerChars: raw.length,
+    });
   }
 
   const { root } = parseJson(raw);
@@ -744,7 +743,16 @@ export async function generateToc(opts: {
      does not give us, which is a way to tell a *stale* complete set from a
      current one. */
   await writeAtomic(path.join(outDir, "labels.json"), labelRun.file);
-  await writeAtomic(path.join(outDir, "blocks.json"), { blocks });
+  /* Through `blocksArtefact`, not `{ blocks }`. Stage 3 stamps the sanitiser
+     version into `output/<slug>.blocks.json`; this line rewrites the copy the
+     reading view actually opens, and writing the bare array here dropped the
+     stamp on every article. Not unsafe — an absent stamp reads as stale, and
+     stale means re-sanitise — but it made the stamp worthless: every article
+     paid the re-clean on every load and fired the "predates the sanitiser"
+     warn every time, which is how a warning stops being read. Note the check
+     anybody would run, "is stage 3 writing the stamp?", answers yes. It is,
+     into a different file. See docs/project/security.md. */
+  await writeAtomic(path.join(outDir, "blocks.json"), blocksArtefact(blocks));
   await writeAtomic(path.join(outDir, "tree.json"), tree);
   /* The working state is only now safe to throw away — see
      src/labels.ts § `LabelRun.clearCheckpoint`. */

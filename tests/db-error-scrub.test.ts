@@ -71,7 +71,11 @@ const SLUG = "db-error-scrub-fixture";
    just removed underneath it. It passed alone, which is what made it look like
    a flake in somebody else's work. tests/fixture-ids.test.ts now refuses a
    duplicate. */
-const ARTICLE_ID = "00000000-0000-4000-8000-0000000000e1";
+/* `e5`, and it has moved twice. `e0` is tests/store-chat-pg.test.ts's, and
+   `e1` is tests/store-writes-land-in-postgres.test.ts's — both collisions were
+   found by tests/fixture-ids.test.ts rather than by the 404s they cause twenty
+   lines away in somebody else's file. Read that test before picking one. */
+const ARTICLE_ID = "00000000-0000-4000-8000-0000000000e5";
 
 /** One unmistakable string, standing in for the article and the reader's quote. */
 const SENTINEL = "SENTINEL-e7f2-the-readers-own-words";
@@ -161,12 +165,28 @@ function everyStringIn(value: unknown, depth = 0): string[] {
 
 when("a failed query in the Postgres store", () => {
   beforeAll(async () => {
-    await getDb()
+    const db = getDb();
+    await db
       .insert(articles)
       // No `currentRevisionId`, so the library cannot see it and the parity
       // test cannot be made flaky by it. Same trick as tests/store-comments.
       .values({ id: ARTICLE_ID, ownerId: currentOwnerId(), slug: SLUG })
       .onConflictDoNothing();
+
+    /* Checked rather than trusted — see the same block in
+       tests/store-writes-land-in-postgres.test.ts for what `onConflictDoNothing`
+       hides when two files share a fixture id. These two files did. */
+    const [row] = await db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.slug, SLUG))
+      .limit(1);
+    if (row?.id !== ARTICLE_ID) {
+      throw new Error(
+        `The fixture article for "${SLUG}" is ${row?.id ?? "missing"}, not ${ARTICLE_ID}. ` +
+          "Another test file is probably using the same id with a different slug.",
+      );
+    }
   });
 
   afterEach(async () => {

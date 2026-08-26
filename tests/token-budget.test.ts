@@ -114,6 +114,16 @@ describe("truncatedMessage", () => {
     expect(message).not.toMatch(/raise it and retry/i);
   });
 
+  it("does not claim a certainty it has not got", () => {
+    // It used to end "Retrying will fail the same way until it does", which is
+    // a proof rather than a reading of the evidence. Unlike `TooLongForOnePass`
+    // this is NOT arithmetic — adaptive output varies between calls, and two
+    // observations on one article is evidence, not a law. Raised by GPT Sol.
+    const message = truncatedMessage("table of contents", 77_100, 37_100, secondRun);
+    expect(message).not.toMatch(/will fail the same way/i);
+    expect(message).toMatch(/unlikely/i);
+  });
+
   it("splits the spend, because which half overran is the whole question", () => {
     // Working this out by hand from a progress line is what cost the first fix
     // a second six-minute run. 40,000 characters is ~13,300 tokens of answer,

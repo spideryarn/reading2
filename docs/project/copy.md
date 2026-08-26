@@ -173,6 +173,24 @@ message the reader sees, so by the rule above it belongs here — it says nothin
 about what happened, nothing about whose problem it is, and has no code. It has
 not moved yet.
 
+**A second one, recorded rather than fixed.** `truncatedMessage` in
+[`src/token-budget.ts`](../../src/token-budget.ts) ends *"Whichever of those two
+overran is the one to change — see src/token-budget.ts"*, and it names two token
+figures. That is developer copy, and it reaches the **reader's** screen: a step's
+error is copied onto the job and the job card renders it. By rule 1 above it
+should say what happened in words that assume none of this, and by rule 3 it
+should say what the reader can do — which is nothing, so it should say that
+instead of naming a file they cannot open.
+
+It has not been rewritten, on purpose, because the awkwardness is structural
+rather than a wording slip: **the same string has two audiences.** Whoever is
+re-tuning the constants needs the two figures — working them out by hand cost
+that bug a second six-minute run — and the reader needs neither. Fixing it
+properly means two sentences with two destinations (the log and the card), which
+is a bigger change than a reword. Noted 2026-08-26, alongside the work that
+stopped the card offering Retry underneath it
+([ingest-queue.md](ingest-queue.md#the-failures-retry-is-not-offered-under)).
+
 Otherwise: only the model-call failures are written down here. The rest of the interface —
 empty states, button labels, the panel headings — is still written wherever it is
 used, and has not been through this. That is a gap rather than a decision; when

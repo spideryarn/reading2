@@ -521,11 +521,32 @@ separates the two lists:
 | a missing source URL — Retry asks the same `meta.json` | the wrong number of arc sentences |
 | a page Readability already refused, over cached bytes | an empty answer, a refusal, a timeout |
 | a tree that does not contain its own root | a fetch that failed at somebody else's server |
-| a PDF over the page cap | |
+| a PDF over the page cap, or a chunk over the request cap | a nav-label batch that came back truncated |
+| an answer truncated at `max_tokens` — *see below* | |
 
 Model-output validation failures are in the right-hand column on purpose. The next call is a fresh
 draw, and the whole reason those checks are loud is that the model does occasionally get it right on
 the second attempt.
+
+**Truncation is the one entry that is not certain, and it is worth being exact about why.**
+`TooLongForOnePass` is arithmetic: the same block count gives the same estimate for ever. Running
+past `max_tokens` mid-answer is not — adaptive output varies between calls, and what we have is two
+observations on one article. So it is `bug` rather than `blocked`, because the thing that needs
+changing is a constant in [`src/token-budget.ts`](../../src/token-budget.ts) rather than anything
+the reader can do, and the sentence says **unlikely** rather than *will*. The button and the copy
+have to agree; softening the sentence is the honest way to make them.
+
+It is `truncationFailure` that carries the tag, and it returns an `Error` rather than a string
+**so that `throw new Error(truncationFailure(…))` does not compile.** Five stages meet a truncation
+— toc, arc, summary, glossary, thread — and each used to build its own `new Error` around the
+message, which is precisely how a sixth stage added next month copies the line without the tag and
+nothing says so. The type is the guard.
+
+`src/labels.ts` is the deliberate exception, and the only caller left taking the bare sentence. It
+throws `BatchIncomplete`, which the stage **catches and retries with double the headroom** — so the
+same attempt has not been made twice, and the claim does not hold. If that retry also fails, what
+escapes is a fresh error combining both messages, and the second failure is often a 429 or a refusal
+rather than a truncation. Hiding the button there would be wrong on both counts.
 
 `FetchFailure.retryable` in [`src/fetch.ts`](../../src/fetch.ts) is deliberately **not** wired into
 this. It marks a plain HTTP 500 non-retryable while 502–504 are retryable, which is a sensible

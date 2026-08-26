@@ -25,7 +25,12 @@ import { failureKindOf, jobWorthRetrying } from "../src/job-failure.js";
 import { providerHttpFailure } from "../src/messages.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
 import { generateSummaries } from "../src/summarise.js";
-import { budgetFor, MODEL_MAX_TOKENS, TooLongForOnePass } from "../src/token-budget.js";
+import {
+  budgetFor,
+  MODEL_MAX_TOKENS,
+  TooLongForOnePass,
+  truncationFailure,
+} from "../src/token-budget.js";
 import type { Job, Tree } from "../src/types.js";
 
 /** A finished, failed job carrying whatever kind we want to ask about. */
@@ -175,6 +180,18 @@ describe("the failures a retry cannot change", () => {
     // the stage never makes a call at all.
     const err = await threw(() => budgetFor("table of contents", MODEL_MAX_TOKENS + 1));
     expect(failureKindOf(err)).toBe("blocked");
+  });
+
+  it("calls a truncated answer `bug`", () => {
+    // Not arithmetic, unlike `TooLongForOnePass` — adaptive output varies, so
+    // this is "unlikely to differ" rather than "cannot". It is `bug` because
+    // the thing that needs changing is a constant in src/token-budget.ts, and
+    // the message says which. See docs/postmortems/toc-max-tokens.md.
+    const err = truncationFailure("table of contents", 77_100, 37_100, {
+      outputTokens: 77_100,
+      answerChars: 40_000,
+    });
+    expect(failureKindOf(err)).toBe("bug");
   });
 
   it("calls a missing source URL `ours`", async () => {

@@ -29,6 +29,7 @@
  *
  * See docs/project/table-of-contents.md#the-budget.
  */
+import { stageFailure } from "./job-failure.js";
 import type { FailureKind } from "./messages.js";
 
 /**
@@ -185,6 +186,55 @@ export function truncatedMessage(
     `${headroom.toLocaleString()} for reasoning. What it actually spent: about ` +
     `${answerSpent.toLocaleString()} tokens of answer and ${thinkingSpent.toLocaleString()} of ` +
     `reasoning. Whichever of those two overran is the one to change — see src/token-budget.ts. ` +
-    `Retrying will fail the same way until it does.`
+    `Retrying is unlikely to come out differently until it does.`
+  );
+}
+
+/**
+ * The same thing as a failure the job card can classify: **`bug`**.
+ *
+ * ## Why the wording softened
+ *
+ * This used to end *"Retrying will fail the same way until it does"*, which is
+ * a proof rather than a reading of the evidence. `TooLongForOnePass` above
+ * really is arithmetic — the same block count gives the same estimate every
+ * time — but this is not. The model's output varies between calls, and what we
+ * have is two observations on one article
+ * (docs/postmortems/toc-max-tokens.md). That is evidence, not a law.
+ *
+ * So the sentence now says *unlikely*, and the button is hidden. Those two have
+ * to agree, and the honest way to make them agree is to soften the sentence
+ * rather than to leave a Retry under a claim of certainty. Raised by GPT Sol.
+ *
+ * ## Why `bug` rather than `blocked`
+ *
+ * `blocked` is a request that cannot pass a boundary, and the reader's move is
+ * to ask for less. Nobody asked for anything here — a stage sized its own call
+ * wrongly. `bug` is the kind whose definition is *"a defect here. Retrying
+ * cannot help, and someone should hear about it"*, and the fix is a constant in
+ * this file, which the message already names.
+ *
+ * ## Why this returns the error rather than the string
+ *
+ * So that `throw new Error(truncationFailure(…))` does not compile. Every stage
+ * that meets a truncation used to build its own `new Error` around the message,
+ * and a sixth stage added tomorrow would have copied that line — which is how
+ * the tag goes missing from exactly one of six places and nothing says so. The
+ * type is the guard, rather than a test that has to remember to look.
+ *
+ * `truncatedMessage` stays exported for the one caller that needs the sentence
+ * without the kind: `src/labels.ts` wraps it in a `BatchIncomplete`, which the
+ * stage catches and retries itself. See the note at that throw site.
+ */
+export function truncationFailure(
+  stage: string,
+  maxTokens: number,
+  answerTokens: number,
+  spent: { outputTokens: number; answerChars: number },
+  headroom: number = THINKING_HEADROOM,
+): Error {
+  return stageFailure(
+    "bug",
+    truncatedMessage(stage, maxTokens, answerTokens, spent, headroom),
   );
 }

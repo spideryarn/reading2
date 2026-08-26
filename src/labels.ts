@@ -1164,6 +1164,26 @@ async function runBatch(
     throw new Error(MODEL_REFUSED.message);
   }
   if (message.stop_reason === "max_tokens") {
+    /**
+     * The one truncation in the pipeline that is **not** tagged `bug`, and the
+     * only place that still takes the bare sentence.
+     *
+     * The other five stages throw `truncationFailure`, which carries a
+     * `failureKind` so the job card withholds Retry (src/job-failure.ts). This
+     * one must not, for two reasons, and either alone would be enough:
+     *
+     * 1. **The stage already answers a truncation itself.** `BatchIncomplete`
+     *    is caught below and the batch is re-run with double the headroom, so
+     *    "another attempt is unlikely to differ" is not true here — we have not
+     *    made the same attempt twice.
+     * 2. **This error never reaches a job anyway.** If the retry also fails,
+     *    what escapes is a fresh `Error` combining both messages — and the
+     *    second failure is often a 429 or a refusal rather than a truncation,
+     *    which is exactly the case where hiding the button would be wrong.
+     *
+     * So the kind is dropped on purpose, at the one site where dropping it is
+     * the right answer, rather than by omission at six.
+     */
     throw new BatchIncomplete(
       truncatedMessage("nav labels", maxTokens, answerTokens, {
         outputTokens: message.usage.output_tokens,

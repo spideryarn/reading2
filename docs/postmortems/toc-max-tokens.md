@@ -95,7 +95,12 @@ Two distinct failures, kept distinct:
   section-by-section processing, which is [not built](../project/table-of-contents.md#long-articles).
 - **`stop_reason: "max_tokens"` still throws**, with a message that carries the budget and the
   estimate so the constants can be re-tuned from the failure, and that does not tell the reader to
-  retry.
+  retry. Since 2026-08-26 it also carries `failureKind: "bug"`, so the card withholds the button —
+  and its last sentence was **softened at the same time**, which matters more than the tag. It read
+  *"Retrying will fail the same way until it does"*: a proof, from two observations on one article.
+  Unlike `budgetFor` above this is not arithmetic — adaptive output varies between calls — so it now
+  says *unlikely*. A hidden button under a claimed certainty would have been the same overclaim
+  wearing a different hat.
 
 What was deliberately **not** done: keeping whatever JSON arrived and building a tree from the part
 that made it. A table of contents that silently describes two thirds of an article is precisely
@@ -192,6 +197,16 @@ Three things about the fix are worth keeping, because each went against the obvi
   that does not contain its own root, a PDF over the page cap. Model-output failures — malformed
   JSON, the wrong number of arc sentences, an empty answer — keep the button, because the next call
   is a fresh draw.
+- **And truncation, which is the interesting one**, added a round later. Running past `max_tokens`
+  mid-answer is *not* arithmetic, so it is the one entry here that says **unlikely** rather than
+  *cannot* — see [What changed](#what-changed) above for the wording, which was softened rather than
+  left to disagree with a hidden button. Counting it turned up the thing a report of four had
+  missed: there were **six** call sites, not four. `glossary` and `tweets` meet the same truncation
+  and had been left out of every list of this, including the one in this file, because each stage
+  wrote its own `new Error` around the shared message and nothing tied the six together. That is now
+  a compile error rather than a habit — `truncationFailure` returns the `Error`, so a stage cannot
+  wrap it in one of its own. The sixth site, `src/labels.ts`, is deliberately untagged: it retries
+  the batch itself with double the headroom, so "the same attempt twice" is not what happened.
 
 The mechanism is [`src/job-failure.ts`](../../src/job-failure.ts); the design is written up in
 [ingest-queue.md § The failures Retry is not offered under](../project/ingest-queue.md#the-failures-retry-is-not-offered-under).
