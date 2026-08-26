@@ -438,6 +438,15 @@ the stream strictly and chat and explain do not.** A malformed SSE frame costs p
 which is worth swallowing. It can cost one JSON object a whole array element while leaving text that
 still parses — a confidently wrong answer, stored.
 
+And, since 2026-08-26, **a clock on the bytes**. The hook already handled a stream that *ended*
+without a `done` frame — that is the "The search stopped arriving" failure. It had nothing for a
+stream that goes quiet without ending, which delivers no bytes and no error and leaves the reader
+watching a spinner with nothing behind it. `readEvents` now gets the same 60-second `stallMs` chat
+uses, and `sse(res)` beats a `: ping` down this route every 15 seconds so that silence means
+something. There is nowhere for a search to *recover* to — unlike chat, which goes and looks for
+the answer the server finished writing — so all this buys is the failure it already knew how to
+show. See [sse-stall-recovery.md](../plans/sse-stall-recovery.md).
+
 ## Saving, and the toy it stops this being
 
 Meaning-searches are stored in `data/<slug>/searches.json`, the third file with exactly the shape of

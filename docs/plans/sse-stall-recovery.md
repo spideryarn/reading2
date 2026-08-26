@@ -231,13 +231,18 @@ them; the first is still open, and is the only one of the three that is not a sm
   The window is narrow — the POST going out to `beginTurn`'s write returning — and the cost of
   losing it is one orphan row that the server's own sweep turns into a visible failure.
 - **`useComments` and `useSearch` now have the clock too**, added 2026-08-26 in the tidying pass
-  after this landed. *(The `useSearch` half — one argument, its test, and a paragraph in
-  [search.md](../project/search.md) — is in the working tree but **not yet in a commit**, and
-  the reason is worth knowing rather than guessing at: that file is mid-flight for the
-  stale-search work recorded in [search-staleness.md](search-staleness.md), whose agent hit a
-  session limit, and it imports `src/search-stale.ts`, which is not in the repo yet. Committing
-  it alone would land a tree that does not build; committing it with their module would sweep
-  up unverified work under somebody else's message. It goes in when that lands.)* One argument each way, and the argument for won: they are shorter waits and
+  after this landed. *(The `useSearch` half went in a commit later, and what it had to
+  carry is worth writing down: that file was mid-flight for the stale-search work recorded in
+  [search-staleness.md](search-staleness.md), whose agent hit a session limit, so committing one
+  argument meant committing their `SavedSearch`/`stale` derivation, the `src/search-stale.ts` it
+  imports, and the line adding that module to the client-import allowlist — five lines in
+  [`tests/client-imports.test.ts`](../../tests/client-imports.test.ts) without which the tree is
+  red. Checked the way you check a thing like this rather than assumed: a scratch `git worktree`
+  at `HEAD` with exactly those five files copied in, then `npm run typecheck` and the affected
+  tests. It adds no error that `HEAD` did not already have — `HEAD` itself does not typecheck,
+  for reasons in other agents' files — and the tests pass. Their server half is untouched and
+  still uncommitted, so the committed client half computes `stale: false` for every row and shows
+  nothing, which is what it should do until the server starts sending a fingerprint.)* One argument each way, and the argument for won: they are shorter waits and
   neither has anywhere to *recover* to, so all a clock buys them is a failure the reader can see
   instead of a spinner that never stops — but that is the whole of the bug this plan is about, and
   a comment that has hung for ever is not improved by having hung for a shorter time. The

@@ -193,3 +193,74 @@ describe("a run deleted while the model is thinking wins", () => {
     expect(latest?.runs.some((r: SearchRun) => r.id === id)).toBe(false);
   });
 });
+
+describe("a stream that stops without ending", () => {
+  /**
+   * The failure this exists for is not a stream that *closes* early — that one
+   * has always been handled, and the hook's own "The search stopped arriving"
+   * covers it. It is a stream that simply goes quiet: no bytes, no close, no
+   * error, so `reader.read()` never settles and a `for await` over it waits for
+   * ever. Before `stallMs` was passed here, this test hung until vitest's own
+   * timeout, which is exactly what the reader saw.
+   *
+   * Fake timers because the clock is 60 seconds long and a test should not be.
+   */
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Let promise chains settle without letting the stall clock run. */
+  async function settle(): Promise<void> {
+    await act(async () => {
+      for (let i = 0; i < 8; i++) {
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(0);
+      }
+    });
+  }
+
+  it("gives up after the stall window and tells the reader, instead of spinning for ever", async () => {
+    await mount("a-slug");
+    await settle();
+
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    let pulls = 0;
+    postImpl = ({ id, criterion }) =>
+      Promise.resolve({
+        ok: true,
+        body: new ReadableStream<Uint8Array>({
+          pull(c) {
+            pulls++;
+            if (pulls === 1) {
+              // One frame, so the clock arms — it deliberately does not run
+              // before the first byte, or a buffering proxy would be killed.
+              c.enqueue(
+                sseBytes([{ event: "begin", data: { id, criterion, createdAt, status: "pending", hits: [] } }]),
+              );
+              return;
+            }
+            // And then nothing, for ever. Not `close()` — that is the other
+            // failure, and it is the one that already worked.
+            return new Promise<void>(() => {});
+          },
+        }),
+      } as unknown as Response);
+
+    const id = latest?.ask("a criterion") as string;
+    await settle();
+    expect(latest?.runs.find((r) => r.id === id)?.status).toBe("pending");
+
+    // Just short of the window: still believed in.
+    await act(async () => vi.advanceTimersByTimeAsync(59_000));
+    await settle();
+    expect(latest?.runs.find((r) => r.id === id)?.status).toBe("pending");
+
+    await act(async () => vi.advanceTimersByTimeAsync(2_000));
+    await settle();
+
+    const run = latest?.runs.find((r) => r.id === id);
+    expect(run?.status).toBe("error");
+    // The reader's words, not the class's — see `describeFetchFailure`.
+    expect(run?.error).toContain("[ai-stalled]");
+    expect(run?.error).not.toContain("StreamStalled");
+  });
+});

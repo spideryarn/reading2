@@ -45,6 +45,11 @@ const SHARED = new Set([
   "ingest.js", // slug derivation, so the client can show the same one the server will mint
   "term-match.js", // where a glossary term appears in a block
   "quote-match.js",
+  // Whether a saved search still describes the article. The panel puts a
+  // warning on a row and the server answers the same question at the read seam;
+  // src/source-hash.ts computes the fingerprints and needs `node:crypto`, so
+  // only the *comparison* is shared. Three lines and no imports but types.
+  "search-stale.js",
   "sanitize-policy.js", // the DOMPurify config, shared so both passes agree
   // Every sentence a reader is shown when a model call fails. On the list
   // because it qualifies rather than because it was convenient: it imports

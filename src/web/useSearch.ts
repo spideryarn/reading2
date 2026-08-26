@@ -29,15 +29,35 @@
  * place it has to be checked: a `hit` frame for a run the reader has already
  * deleted must be dropped too, not just the final one.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SearchHit, SearchRun } from "../types.js";
 import { mintId } from "../ids.js";
+import { isStale } from "../search-stale.js";
 import { describeFetchFailure } from "./useComments.js";
-import { readEvents } from "./lib/sse.js";
+import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { failure, readJson } from "./lib/api.js";
 
+/**
+ * A saved run, plus the one thing about it that is not on the run.
+ *
+ * `stale` is *derived here and never stored* — the same rule `loadGlossary` and
+ * `loadTweets` follow on the server (src/api.ts): a flag written at generation
+ * time is right until the moment it matters. The run carries the fingerprint of
+ * the article it was answered against; the article carries its fingerprint now;
+ * `isStale` compares them, and it is the same function the server uses so the
+ * two cannot drift.
+ *
+ * It extends `SearchRun`, which is what keeps this change from reaching
+ * src/web/App.tsx: everything that already takes a `SearchRun` takes one of
+ * these unchanged.
+ */
+export interface SavedSearch extends SearchRun {
+  /** The article has moved since this search was answered — or we cannot tell. */
+  stale: boolean;
+}
+
 export interface SearchApi {
-  runs: SearchRun[];
+  runs: SavedSearch[];
   /**
    * False until the first fetch has answered, either way.
    *
@@ -67,6 +87,23 @@ export function useSearch(slug: string): SearchApi {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * The article's fingerprint, as the server last reported it.
+   *
+   * Three states, and the third is the one that earns the wrapper object.
+   * `null` means **the server did not tell us** — either the fetch has not
+   * answered yet, or it answered without the field. `{ hash: undefined }` means
+   * it answered and could not work one out. `{ hash: "…" }` is an answer.
+   *
+   * The difference matters because "unknown counts as stale" is a rule about
+   * the *article*, not about our own request. Applying it to a response that
+   * simply did not carry the field would put a warning on every saved search on
+   * every article at once — a claim about the piece made on the strength of a
+   * missing key. That is the same distinction `loaded` above exists for, and it
+   * lands the same way: say nothing until we have been told something.
+   */
+  const [fingerprint, setFingerprint] = useState<{ hash: string | undefined } | null>(null);
+
   /** Ids the reader deleted while their answer was still in the air. */
   const deleted = useRef(new Set<string>());
 
@@ -83,12 +120,23 @@ export function useSearch(slug: string): SearchApi {
        back to not-knowing, and leaving this true would show the *previous*
        article's emptiness as though it were this one's. */
     setLoaded(false);
+    setFingerprint(null);
     fetch(`/api/search/${encodeURIComponent(slug)}`)
-      .then((r) => readJson<{ runs?: SearchRun[]; error?: string }>(r))
+      .then((r) =>
+        readJson<{ runs?: SearchRun[]; sourceHash?: string; error?: string }>(r),
+      )
       .then((body) => {
         if (!live) return;
         if (body.error) setError(body.error);
-        else setRuns(body.runs ?? []);
+        else {
+          setRuns(body.runs ?? []);
+          /* `in`, not truthiness. The server sends `sourceHash: undefined` —
+             which JSON drops — for an article whose blocks it could not read,
+             and that is a real answer meaning "we checked and cannot tell".
+             An endpoint that does not carry the field at all is a different
+             thing and must not be read as one. */
+          if ("sourceHash" in body) setFingerprint({ hash: body.sourceHash });
+        }
         /* Loaded means *the question has been answered*, not *it succeeded*. A
            failed fetch leaves `runs` empty for good, and holding the panel on a
            spinner forever would be a worse lie than the one this fixes — the
@@ -170,13 +218,26 @@ export function useSearch(slug: string): SearchApi {
              the stream simply ending, handled below. */
           if (!r.ok || !r.body) throw await failure(r);
 
-          for await (const event of readEvents(r.body)) {
+          /* A clock on the bytes — see the note in useComments.ts. A search
+             has nowhere to recover to either, so this turns a stream that
+             stopped without ending into the failure it already shows for a
+             stream that ended, rather than a spinner nothing can clear. */
+          for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
             // Computed once per frame, before acting on it: a delete can land
             // between two frames of the same stream, and every branch below
             // has to see the same answer to "is this gone".
             const gone = deleted.current.has(liveId);
             if (event.name === "begin") {
               const begun = event.data as SearchRun;
+              /* Fresher news about the article than the GET has. The server
+                 fingerprints the blocks as it opens the run, so this hash *is*
+                 the article's current one — and adopting it is what stops a
+                 search the reader has just paid for being labelled out of date
+                 because the page was loaded before the piece was re-extracted.
+                 It also correctly ages every other row on the list at the same
+                 moment, which is the true thing to do rather than a side
+                 effect worth avoiding. */
+              if (begun.sourceHash !== undefined) setFingerprint({ hash: begun.sourceHash });
               if (begun.id !== liveId) {
                 // `beginRun` reset a different existing id than the one we
                 // sent — drop the row we rendered optimistically under our
@@ -272,5 +333,26 @@ export function useSearch(slug: string): SearchApi {
     [forget],
   );
 
-  return { runs, loaded, ask, retry, remove, error };
+  /**
+   * The runs the panel sees, each with its verdict attached.
+   *
+   * Recomputed rather than stored on the row, because both halves move: a run
+   * arrives from a stream, and the article's fingerprint arrives from a fetch.
+   * Deriving at the point of use is what stops a row that was judged before the
+   * fingerprint landed keeping that judgement for ever.
+   */
+  const decided: SavedSearch[] = useMemo(
+    () =>
+      runs.map((run) => ({
+        ...run,
+        /* Nothing is stale until the server has told us what to compare
+           against — see `fingerprint`. A run that has just been answered on
+           the POST stream carries no fingerprint of the article either way;
+           it carries its own, and that one is by construction current. */
+        stale: fingerprint === null ? false : isStale(run, fingerprint.hash),
+      })),
+    [runs, fingerprint],
+  );
+
+  return { runs: decided, loaded, ask, retry, remove, error };
 }
