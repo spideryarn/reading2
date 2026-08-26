@@ -42,7 +42,7 @@ shape.html, with the plates.`,
   },
 ];
 
-type Type = "heading1" | "paragraph";
+type Type = "heading1" | "paragraph" | "reference";
 interface Record_ {
   page: number;
   type: Type;
@@ -206,6 +206,32 @@ const CANDIDATES: { name: string; expect: "pass" | "fail"; because: string; reco
     records: [
       ...clone(VERBATIM).filter((r) => r.page === 1),
       record(2, interleave(clone(VERBATIM).filter((r) => r.page === 2).map((r) => r.text).join(" "))),
+    ],
+  },
+  {
+    name: "a year truncated to its last two digits",
+    expect: "fail",
+    because:
+      "GPT Sol's probe, and it defeated the first version: the page says 1843 and the output says 43. Matched against the page as one packed string, `43` IS a substring of `1843`, so the one class of error protect() exists for went through the MATCHER rather than the threshold.",
+    records: edit(VERBATIM, (r) => r.text.includes("1843–79"), (t) => t.replace("1843–79", "43–79")),
+  },
+  {
+    name: "a wrong number in a reference nobody sees",
+    expect: "pass",
+    because:
+      "a KNOWN TOLERANCE. Real, caught, reported — and in a bibliography v1 does not render. Failing a paper over it teaches whoever meets it to widen the threshold that catches the same fault in a paragraph. Observed on the harder fixture: the reader wrote DOI hgss-9-53-2018 for a paper printed on pages 79–83.",
+    records: [
+      ...clone(VERBATIM),
+      { ...record(2, "Smith, J.: A paper, Hist. Geo Space. Sci., 9, 79–83, 10.5194/hgss-9-53-2018, 2018."), type: "reference" as Type },
+    ],
+  },
+  {
+    name: "the same wrong number in a paragraph",
+    expect: "fail",
+    because: "the pair to the case above. Identical text, a type the reader can see, and now it gates.",
+    records: [
+      ...clone(VERBATIM),
+      record(2, "Smith, J.: A paper, Hist. Geo Space. Sci., 9, 79–83, 10.5194/hgss-9-53-2018, 2018."),
     ],
   },
   {

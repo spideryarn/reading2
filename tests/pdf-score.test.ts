@@ -33,7 +33,8 @@ const pass: Pass0 = {
     items: [],
   })),
   isScan: false,
-  furniture: new Set(),
+  metaTitle: null,
+      furniture: new Set(),
 };
 
 const REQUESTED = [1, 2];
@@ -74,9 +75,28 @@ describe("what each failure actually says", () => {
     expect(result.failures).toContain("Records claim page 19, and the document has 2 pages.");
   });
 
-  it("tells a numbering fault from a reading fault", () => {
+  it("still catches pages swapped end to end, on order", () => {
+    /* This used to be caught by a ±1 neighbour re-score whose job was to say
+       "read well, labelled badly". Gating on the chunk answers that before it
+       is asked, so what is left is the honest signal: the words are all there
+       and they are in the wrong sequence. */
     const result = check(only("page numbers swapped"), REQUESTED, pass);
-    expect(result.failures.join(" ")).toContain("looks like a numbering fault, not a reading one");
+    expect(result.ok).toBe(false);
+    expect(result.overall.recall).toBe(1);
+    expect(result.overall.order!).toBeLessThan(0.8);
+  });
+
+  it("does not mind which side of a page break a paragraph was filed under", () => {
+    /* The failure this replaced a per-page gate for: on the `harder` fixture a
+       sentence the text layer splits mid-word came back attached to the
+       previous page, and a word-perfect chunk failed twice — a 114-word
+       missing run on one page and five invented numbers on the other. */
+    const moved = only("verbatim").map((r) => (r.page === 2 ? { ...r, page: 1 } : r));
+    const result = check(moved, REQUESTED, pass);
+    expect(result.coverage.missing).toEqual([2]);
+    expect(result.overall.recall).toBe(1);
+    expect(result.overall.spans).toEqual([]);
+    expect(result.overall.invented).toEqual([]);
   });
 
   it("names the altered date, which no ratio would have noticed", () => {
@@ -127,8 +147,36 @@ describe("the two numbers that must not measure the same thing", () => {
   });
 });
 
+describe("what the check says it checked", () => {
+  it("does not count a page it could not check", () => {
+    /* `meta.pagesChecked` is shown to a reader. "8 of 8" for a document where a
+       page was skipped is worse than no number at all. */
+    const scanned: Pass0 = {
+      pages: [
+        { page: 1, text: "Some real words on a rights page.", words: 7, items: [] },
+        { page: 2, text: "", words: 0, items: [] },
+      ],
+      isScan: true,
+      metaTitle: null,
+      furniture: new Set(),
+    };
+    const records: PdfRecord[] = [
+      { page: 1, type: "cover", text: "Some real words on a rights page.", continues: false, uncertain: false },
+      { page: 2, type: "paragraph", text: "Whatever the model read here.", continues: false, uncertain: false },
+    ];
+    expect(check(records, [1, 2], scanned).scored).toEqual([1]);
+  });
+
+  it("says out loud that a trailing bibliography was left out", () => {
+    const result = check(only("verbatim"), REQUESTED, pass, { unchecked: [2] });
+    expect(result.scored).toEqual([1]);
+    expect(result.notes.join(" ")).toContain("Body text on them is unchecked");
+  });
+});
+
 describe("the scan, where there is nothing to check against", () => {
-  const scanned: Pass0 = { pages: [{ page: 1, text: "", words: 0, items: [] }], isScan: true, furniture: new Set() };
+  const scanned: Pass0 = { pages: [{ page: 1, text: "", words: 0, items: [] }], isScan: true, metaTitle: null,
+      furniture: new Set() };
 
   it("returns null rather than a perfect score for a page it cannot check", () => {
     const score = scorePage(

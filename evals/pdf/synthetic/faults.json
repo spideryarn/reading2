@@ -719,6 +719,167 @@
       ]
     },
     {
+      "name": "a year truncated to its last two digits",
+      "expect": "fail",
+      "because": "GPT Sol's probe, and it defeated the first version: the page says 1843 and the output says 43. Matched against the page as one packed string, `43` IS a substring of `1843`, so the one class of error protect() exists for went through the MATCHER rather than the threshold.",
+      "records": [
+        {
+          "page": 1,
+          "type": "heading1",
+          "text": "The Utility of Phrenology",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "A LECTURE DELIVERED AT THE MECHANICS INSTITUTE",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "Phrenology has been charged with materialism, and the charge has been repeated so often that many now take it for proved. I propose to examine it. The objection rests upon a confusion between the instrument and the player, and whoever keeps the two apart will find the difficulty dissolve.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "In 43–79 the Edinburgh society fell from 214 members to 47. The decline was not owing to any refutation, but to the indolence of those who had once been zealous.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "paragraph",
+          "text": "The second objection is of another kind. It is said that the science cannot be applied, and that a reading of the head tells the observer nothing he could not have learned by an hour of ordinary conversation. To this I answer that the hour of conversation is not always to be had, and that the observer is very often deceived by it. A man may govern his tongue who cannot govern the shape of his skull. The teacher who has thirty children before him has no hour to spare for each of them.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "paragraph",
+          "text": "The figures are reproduced at http://example.org/papers/skullshape.html, with the plates.",
+          "continues": false,
+          "uncertain": false
+        }
+      ]
+    },
+    {
+      "name": "a wrong number in a reference nobody sees",
+      "expect": "pass",
+      "because": "a KNOWN TOLERANCE. Real, caught, reported — and in a bibliography v1 does not render. Failing a paper over it teaches whoever meets it to widen the threshold that catches the same fault in a paragraph. Observed on the harder fixture: the reader wrote DOI hgss-9-53-2018 for a paper printed on pages 79–83.",
+      "records": [
+        {
+          "page": 1,
+          "type": "heading1",
+          "text": "The Utility of Phrenology",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "A LECTURE DELIVERED AT THE MECHANICS INSTITUTE",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "Phrenology has been charged with materialism, and the charge has been repeated so often that many now take it for proved. I propose to examine it. The objection rests upon a confusion between the instrument and the player, and whoever keeps the two apart will find the difficulty dissolve.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "In 1843–79 the Edinburgh society fell from 214 members to 47. The decline was not owing to any refutation, but to the indolence of those who had once been zealous.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "paragraph",
+          "text": "The second objection is of another kind. It is said that the science cannot be applied, and that a reading of the head tells the observer nothing he could not have learned by an hour of ordinary conversation. To this I answer that the hour of conversation is not always to be had, and that the observer is very often deceived by it. A man may govern his tongue who cannot govern the shape of his skull. The teacher who has thirty children before him has no hour to spare for each of them.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "paragraph",
+          "text": "The figures are reproduced at http://example.org/papers/skullshape.html, with the plates.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "reference",
+          "text": "Smith, J.: A paper, Hist. Geo Space. Sci., 9, 79–83, 10.5194/hgss-9-53-2018, 2018.",
+          "continues": false,
+          "uncertain": false
+        }
+      ]
+    },
+    {
+      "name": "the same wrong number in a paragraph",
+      "expect": "fail",
+      "because": "the pair to the case above. Identical text, a type the reader can see, and now it gates.",
+      "records": [
+        {
+          "page": 1,
+          "type": "heading1",
+          "text": "The Utility of Phrenology",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "A LECTURE DELIVERED AT THE MECHANICS INSTITUTE",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "Phrenology has been charged with materialism, and the charge has been repeated so often that many now take it for proved. I propose to examine it. The objection rests upon a confusion between the instrument and the player, and whoever keeps the two apart will find the difficulty dissolve.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 1,
+          "type": "paragraph",
+          "text": "In 1843–79 the Edinburgh society fell from 214 members to 47. The decline was not owing to any refutation, but to the indolence of those who had once been zealous.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "paragraph",
+          "text": "The second objection is of another kind. It is said that the science cannot be applied, and that a reading of the head tells the observer nothing he could not have learned by an hour of ordinary conversation. To this I answer that the hour of conversation is not always to be had, and that the observer is very often deceived by it. A man may govern his tongue who cannot govern the shape of his skull. The teacher who has thirty children before him has no hour to spare for each of them.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "paragraph",
+          "text": "The figures are reproduced at http://example.org/papers/skullshape.html, with the plates.",
+          "continues": false,
+          "uncertain": false
+        },
+        {
+          "page": 2,
+          "type": "paragraph",
+          "text": "Smith, J.: A paper, Hist. Geo Space. Sci., 9, 79–83, 10.5194/hgss-9-53-2018, 2018.",
+          "continues": false,
+          "uncertain": false
+        }
+      ]
+    },
+    {
       "name": "everything in one block per page",
       "expect": "pass",
       "because": "a KNOWN BLIND SPOT: the heading is gone and no number here can see it. Structure needs a gold.",

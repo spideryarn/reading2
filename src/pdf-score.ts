@@ -25,7 +25,7 @@
  * with the checker itself playing the part of the thing that reports success.
  */
 
-import { baselineFor, type Pass0, type PdfRecord } from "./pdf.js";
+import { baselineFor, type Pass0, type PdfRecord, RENDERED } from "./pdf.js";
 
 /**
  * The smoke test, not the gate — and the difference is worth reading before
@@ -48,6 +48,15 @@ import { baselineFor, type Pass0, type PdfRecord } from "./pdf.js";
  *
  * The real gate is still set from held-out pages with deliberately seeded
  * faults, and validated on documents it was not tuned on.
+ *
+ * **Three inputs that pass and should not**, constructed by GPT Sol rather than
+ * argued about, so that nobody has to rediscover them: an eight-word omission
+ * made of words that occur elsewhere on the page (0.93 / 1.00 / 1.00);
+ * twenty-five invented ordinary words on a hundred-word page (precision
+ * exactly 0.80); a fifth of a page moved (order exactly 0.80). All three are
+ * the same answer — a gold, in evals/pdf/<name>/gold.json — and none of them is
+ * a reason to move a number here, because every number tight enough to catch
+ * them fails pages that are correct.
  */
 export const THRESHOLDS = { recall: 0.85, precision: 0.8, order: 0.8 } as const;
 
@@ -81,7 +90,16 @@ export interface PageScore {
   got: number;
   /** Baseline tokens present in the output. Catches omission and summary. `null` with no baseline. */
   recall: number | null;
-  /** Output tokens present in the baseline. Catches invention. `null` with no baseline. */
+  /**
+   * Output tokens present **on the page** — not in the baseline. Catches invention.
+   *
+   * The page, because the baseline has had the running headers taken out of it
+   * and the model was shown the previous page as context. Measuring against the
+   * baseline made a correct transcription of a running header look like
+   * invention, and made a sentence that continues across a chunk boundary look
+   * like it too. Neither is invention; both are the model doing as it was told.
+   * `null` where there is no text layer at all.
+   */
   precision: number | null;
   /**
    * Longest common subsequence ÷ **the tokens that matched**, not ÷ the baseline.
@@ -103,14 +121,35 @@ export interface PageScore {
    * zero is text that moved, which `order` is the number for.
    */
   spans: { words: number; lost: number; text: string }[];
-  /** Numbers, dates, URLs and citations in the output that are nowhere in the baseline. */
+  /**
+   * Numbers, dates, URLs and citations **in what the reader will see** that are
+   * nowhere on the page.
+   */
   invented: string[];
+  /**
+   * The same faults — invented tokens, markup, replacement characters — found in
+   * records v1 transcribes and then throws away: footnotes, references, a
+   * publisher's cover page, a table's cells.
+   *
+   * **Reported, never gated**, and the reasoning is the same one that put those
+   * records in the prompt at all. On the `harder` fixture the reader invented a
+   * DOI — `hgss-9-53-2018` for a paper printed on pages 79–83 — inside a
+   * reference. That is a real fault and this check is right to have caught it,
+   * and it is also in a bibliography v1 does not render. Failing a fourteen-page
+   * article over it would teach whoever met it to widen the threshold, and the
+   * threshold is what catches the same fault in a paragraph.
+   *
+   * The page's recall and its missing runs still cover these records, so a model
+   * cannot escape the gate by labelling a paragraph `reference` — the page must
+   * still be transcribed in full.
+   */
+  unshown: string[];
   /** The same, the other way round — reported, never gated. See `check` below for why. */
   absent: string[];
   records: number;
   /** Records the model marked `uncertain` — the one honest signal a scan gives us. */
   uncertain: number;
-  /** Snippets where the model emitted markup instead of text. See `MARKUP`. */
+  /** Snippets where the reader would see markup instead of text. See `MARKUP`. */
   markup: string[];
   /** How many replacement characters (U+FFFD) the output holds — each one a word lost upstream. */
   garbage: number;
@@ -130,9 +169,48 @@ export interface Coverage {
 export interface Check {
   ok: boolean;
   coverage: Coverage;
+  /**
+   * **The whole chunk, scored as one — and this is what the gate reads.**
+   *
+   * Per-page numbers below are diagnostics; they are not the unit of judgment,
+   * and treating them as one cost an afternoon. A paragraph running across a
+   * page break has to be attributed to one page or the other, and the model and
+   * the PDF's text layer do not always agree which. On the `harder` fixture the
+   * reader put the opening of page 9 — a sentence the text layer splits
+   * mid-word, "…ange sphere of 15 cm" — into a page-8 record. Page 9 then had a
+   * 114-word missing run and page 8 had five invented numbers, and every word
+   * of it was transcribed correctly.
+   *
+   * That is a boundary, not a fidelity failure, and every document has them.
+   * The chunk is the unit the model was actually asked for, so it is the unit
+   * that is judged. What is lost is locality — a failure names three pages
+   * rather than one — and `pages` is still there to narrow it down.
+   *
+   * The page SET assertion stays per page, because it is about presence rather
+   * than attribution: a page with no records is a failure however the chunk
+   * scores.
+   */
+  overall: PageScore;
+  /** Per page, for reading a failure. Not the gate — see `overall`. */
   pages: PageScore[];
+  /**
+   * The pages `overall` actually covers — which is not the pages requested.
+   *
+   * A page with no text layer has nothing to check against, and a trailing
+   * bibliography is deliberately left out. Both are reported honestly rather
+   * than counted as checked, because `meta.pagesChecked` is what a reader is
+   * shown and "8 of 8" for a document where one page was skipped is the kind of
+   * number that is worse than none.
+   */
+  scored: number[];
   /** Plain sentences naming what went wrong and where. Empty when `ok`. */
   failures: string[];
+  /**
+   * Faults found in text v1 transcribes and does not show — a wrong DOI in a
+   * bibliography, markup in a footnote. Worth logging, not worth failing an
+   * article for. See `PageScore.unshown`.
+   */
+  notes: string[];
 }
 
 // ─────────────────────────────────────────────────────────── the folds
@@ -178,42 +256,57 @@ function protect(text: string): string[] {
 }
 
 /**
- * Which protected tokens of `want` are nowhere in `have` — matched against the
- * text with its spaces removed rather than token against token.
+ * Which protected tokens of `want` are nowhere in `have`.
  *
- * **The token boundary was the first version's bug, and it was a loud one.** It
- * reported `https://doi.org/10.5194/hgss-12-43-2021` as invented on a page that
- * prints exactly that DOI, because the PDF's text layer breaks it across a line
- * and the model — correctly, as instructed — joined it back up. Same for `0.83°`
- * against a layer that separates the degree sign, and `Keul1,☆` against a
- * byline whose footnote dagger is its own run. Three false alarms on the first
- * real page it was pointed at, all of them the model doing the right thing.
+ * **Matched against a set of whole tokens, not against the page as one string,
+ * and the difference is a real defect it took a probe to find.** The first
+ * version packed the page into one string with the spaces removed and asked
+ * `includes`. That reads as tolerant, and it is — of the wrong thing. `12` is a
+ * substring of `2012`, so a model that turned the year 2012 into 12 passed
+ * this check silently: the one class of error `protect` exists to catch, waved
+ * through by the matcher rather than by the threshold. Found by GPT Sol, by
+ * constructing the input rather than by reading the code.
  *
- * A check that cries wolf on correct output is worse than no check: it gets
- * relaxed, and it gets relaxed by whoever is annoyed by it rather than by
- * whoever understands it. So the comparison ignores where the whitespace fell,
- * which is the one thing the transcription is explicitly allowed to change.
+ * What the packing was *for* stays, and it is why the haystack is built rather
+ * than just split: a PDF breaks a long word — a URL, most often — across a line
+ * with a hyphen, and the prompt tells the model to join it back up. So the page
+ * holds `…/27/rock-` and `waga.html` on two lines and a correct transcription
+ * holds `…/27/rockwaga.html`. Every such join is added to the haystack as its
+ * own token, so the tolerance is a named case rather than a side effect of not
+ * knowing where words end.
  */
 function protectedFaults(want: string[], have: string): string[] {
-  const packed = flatten(have);
-  /* Two haystacks, because a PDF breaks a long word — a URL, most often —
-     across a line with a hyphen, and the model is told to join it back up. So
-     the page holds `…/27/rock-` and `waga.html` on separate lines and a correct
-     transcription holds `…/27/rockwaga.html`, with the hyphen gone. Comparing
-     against only the hyphenated form calls that invention; comparing against
-     only the stripped form would let a genuinely hyphenated range through
-     unnoticed. Both, and a token has to fail against both to count. */
-  const haystacks = [packed, packed.replace(/-/gu, "")];
+  const haystack = new Set<string>();
+  for (const token of protectedOf(have)) {
+    haystack.add(flatten(token));
+    haystack.add(flatten(token).replace(/-/gu, ""));
+  }
   return want.filter((token) => {
     const needle = flatten(token);
-    return !haystacks.some((h) => h.includes(needle) || h.includes(needle.replace(/-/gu, "")));
+    return !haystack.has(needle) && !haystack.has(needle.replace(/-/gu, ""));
   });
 }
 
 /**
- * A string reduced to what a comparison of *values* should care about:
- * whitespace gone, dash style normalised, case folded, and every character that
- * carries no information at all removed.
+ * Every protected token on the page, plus the joins a line break made.
+ *
+ * A word split at a line end appears in the text layer as `rock-` and
+ * `waga.html`; neither half is what a correct transcription contains, and the
+ * whole is what it does. Both halves and the join are all offered.
+ */
+function protectedOf(text: string): string[] {
+  const raw = text.normalize("NFKC").split(/\s+/);
+  const all = [...raw];
+  for (let i = 0; i < raw.length - 1; i++) {
+    if (/[-\u2010\u00ad]$/u.test(raw[i]!)) all.push(raw[i]!.replace(/[-\u2010\u00ad]$/u, "") + raw[i + 1]);
+  }
+  return protect(all.join(" "));
+}
+
+/**
+ * A string reduced to what a comparison of *values* should care about: dash
+ * style normalised, case folded, and every character that carries no
+ * information at all removed.
  *
  * That last set is not hypothetical. Reading the `easy` fixture, the model
  * joined a hyphenated URL back together and put U+FFFE — a permanent
@@ -222,11 +315,19 @@ function protectedFaults(want: string[], have: string): string[] {
  * on the page. Emitting it is still a fault; it is just a different one, and
  * `GARBAGE` below is the check that names it.
  */
-const flatten = (s: string) =>
-  dashes(s)
-    .replace(IGNORABLE, "")
-    .replace(/\s+/gu, "")
-    .toLowerCase();
+const flatten = (s: string) => dashes(s).replace(IGNORABLE, "").replace(/\s+/gu, "").toLowerCase();
+
+/**
+ * Every kind of dash, and a doubled hyphen, written the same way.
+ *
+ * `1868–2020` and `1868--2020` are the same page range, and the second is a
+ * model rendering the first the way a typewriter would. That is a punctuation
+ * error and the prompt does forbid it — but this check is the one that says a
+ * *number is wrong*, and letting it fire on dash style buries a changed date
+ * under a pile of hyphens. The markup check below is where "the model ignored
+ * the format instructions" belongs.
+ */
+const dashes = (s: string) => s.normalize("NFKC").replace(/[\u2010-\u2015\u2212]|--+/gu, "-");
 
 /** Characters that carry no information, so a comparison of values must ignore them. */
 const IGNORABLE = /[\uFFFE\uFFFF\uFFFD]|\p{Default_Ignorable_Code_Point}/gu;
@@ -250,19 +351,7 @@ const IGNORABLE = /[\uFFFE\uFFFF\uFFFD]|\p{Default_Ignorable_Code_Point}/gu;
 const GARBAGE = /\uFFFD/gu;
 
 /**
- * Every kind of dash, and a doubled hyphen, written the same way.
- *
- * `1868–2020` and `1868--2020` are the same page range, and the second is a
- * model rendering the first the way a typewriter would. That is a punctuation
- * error and the prompt does forbid it — but this check is the one that says a
- * *number is wrong*, and letting it fire on dash style buries a changed date
- * under a pile of hyphens. The markup check below is where "the model ignored
- * the format instructions" belongs.
- */
-const dashes = (s: string) => s.normalize("NFKC").replace(/[\u2010-\u2015\u2212]|--+/gu, "-");
-
-/**
- * Markdown, LaTeX and HTML, which rule 7 of the prompt forbids outright.
+ * Markdown, LaTeX and HTML, which rule 8 of the prompt forbids outright.
  *
  * Worth its own check because it is the cheapest signal there is that a model
  * has stopped following the instructions and started formatting — and because
@@ -398,22 +487,39 @@ export function scorePage(
   onPage: string = baseline.join("\n"),
 ): PageScore {
   const base = baseline.flatMap(tokens);
+  /* Everything, for recall and the missing runs: the page has to have been
+     transcribed in full, whatever we intend to show of it. */
   const text = records.map((r) => r.text).join("\n");
   const got = tokens(text);
-  const shared: Omit<PageScore, "recall" | "precision" | "order" | "spans" | "absent" | "invented"> = {
+  /* What the reader will actually see, for the checks that gate. */
+  const shownText = records.filter((r) => RENDERED.has(r.type)).map((r) => r.text).join("\n");
+  const hiddenText = records.filter((r) => !RENDERED.has(r.type)).map((r) => r.text).join("\n");
+  const shared: Omit<
+    PageScore,
+    "recall" | "precision" | "order" | "spans" | "absent" | "invented" | "unshown"
+  > = {
     page,
     base: base.length,
     got: got.length,
     records: records.length,
     uncertain: records.filter((r) => r.uncertain).length,
-    markup: [...text.matchAll(MARKUP)].map((m) => m[0]).slice(0, 5),
-    garbage: text.match(GARBAGE)?.length ?? 0,
+    markup: [...shownText.matchAll(MARKUP)].map((m) => m[0]).slice(0, 5),
+    garbage: shownText.match(GARBAGE)?.length ?? 0,
   };
   if (base.length === 0) {
     /* A scanned page. There is nothing to check against, and saying 1.0 here
        would be the worst possible answer — a perfect score for a page nobody
        has checked. Null means "not checked", and the reader is told so. */
-    return { ...shared, recall: null, precision: null, order: null, spans: [], absent: [], invented: [] };
+    return {
+      ...shared,
+      recall: null,
+      precision: null,
+      order: null,
+      spans: [],
+      absent: [],
+      invented: [],
+      unshown: [],
+    };
   }
   const mask = coveredMask(base, got);
   const matched = mask.filter(Boolean).length;
@@ -422,11 +528,16 @@ export function scorePage(
   return {
     ...shared,
     recall: round(matched / base.length),
-    precision: got.length ? round(hits(got, base) / got.length) : 0,
+    precision: got.length ? round(hits(got, tokens(onPage)) / got.length) : 0,
     order: matched ? round(aligned.filter(Boolean).length / matched) : 0,
     spans: spansOf(base, aligned, mask),
     absent: protectedFaults(protect(baselineText), text),
-    invented: protectedFaults(protect(text), onPage),
+    invented: protectedFaults(protect(shownText), onPage),
+    unshown: [
+      ...protectedFaults(protect(hiddenText), onPage),
+      ...[...hiddenText.matchAll(MARKUP)].map((m) => m[0]),
+      ...(hiddenText.match(GARBAGE) ?? []),
+    ].slice(0, 10),
   };
 }
 
@@ -472,8 +583,41 @@ export function check(
   records: PdfRecord[],
   requested: number[],
   pass: Pass0,
-  thresholds: { recall: number; precision: number; order: number } = THRESHOLDS,
+  options: {
+    thresholds?: { recall: number; precision: number; order: number };
+    /**
+     * The page sent with this chunk as evidence and not to be emitted.
+     *
+     * It counts as "on the page" for invention and precision, and never for
+     * recall. A sentence that starts on the context page and finishes on the
+     * first requested one is a sentence the model was shown, and pulling a few
+     * of its words across the boundary is not making something up — but the
+     * requested pages still have to be transcribed in full, so recall is
+     * untouched by it.
+     */
+    context?: number | undefined;
+    /**
+     * Pages to leave out of the scoring entirely, with `why` said out loud.
+     *
+     * One caller and one reason: a trailing page that is mostly a reference
+     * list. Rule 5 of the prompt asks for those to be transcribed and labelled
+     * so the baseline and the output cover the same text — and on a paper with
+     * sixty references the reader simply will not do it, returning a couple of
+     * dozen and stopping. That is a recall of 0.055 on a page whose every word
+     * of *body text* is correct.
+     *
+     * Excluding them is the honest move and it is not free, so the cost is
+     * written down here rather than in a commit message: **a paragraph of real
+     * prose on an excluded page is no longer checked.** What keeps that narrow
+     * is that the caller only excludes *trailing* pages the model itself
+     * labelled `reference` — a mid-document page labelled that way still gates,
+     * so the evasion is not available where it would hurt — and that the
+     * exclusion is reported every time rather than absorbed.
+     */
+    unchecked?: readonly number[];
+  } = {},
 ): Check {
+  const thresholds = options.thresholds ?? THRESHOLDS;
   const coverage = coverageOf(records, requested, pass);
   const failures: string[] = [];
 
@@ -486,87 +630,152 @@ export function check(
     failures.push(`Records claim page ${page}, which this chunk did not ask for.`);
   }
 
+  const notes: string[] = [];
   const pages: PageScore[] = [];
   for (const page of requested) {
-    const mine = records.filter((r) => r.page === page);
-    const score = scorePage(page, baselineFor(pass, page), mine, pass.pages.find((p) => p.page === page)?.text);
-    pages.push(score);
-    if (score.recall === null) continue;
+    pages.push(
+      scorePage(
+        page,
+        baselineFor(pass, page),
+        records.filter((r) => r.page === page),
+        pass.pages.find((p) => p.page === page)?.text,
+      ),
+    );
+  }
 
-    const bad: string[] = [];
-    if (score.recall < thresholds.recall) bad.push(`recall ${score.recall}`);
-    if (score.precision! < thresholds.precision) bad.push(`precision ${score.precision}`);
-    if (score.order! < thresholds.order) bad.push(`order ${score.order}`);
-    if (bad.length) {
-      failures.push(`Page ${page}: ${bad.join(", ")}.${nearby(records, page, pass)}`);
-    }
-    if (score.spans.length) {
-      const worst = score.spans[0]!;
-      failures.push(
-        `Page ${page}: ${score.spans.length} run(s) of the page are missing from the transcription, the ` +
-          `longest ${worst.words} words — “${worst.text.slice(0, 120)}”.`,
-      );
-    }
-    if (score.markup.length) {
-      failures.push(
-        `Page ${page}: the output contains markup, which the prompt forbids — ${score.markup.map((m) => `“${m}”`).join(", ")}.`,
-      );
-    }
-    if (score.garbage) {
-      failures.push(
-        `Page ${page}: ${score.garbage} replacement character(s) (U+FFFD) in the output — ` +
-          `something could not be decoded, and the word it stood for is gone.`,
-      );
-    }
-    if (score.invented.length) {
-      failures.push(
-        `Page ${page}: ${score.invented.length} number(s) or address(es) in the output are not on the page — ${score.invented.slice(0, SPANS_SHOWN).join(", ")}.`,
+  /*
+   * One baseline and one transcription for the chunk, in page order — over the
+   * pages that HAVE a baseline, and only those.
+   *
+   * That qualifier is the Wellcome scan. Its first chunk is pages 1–3, of which
+   * page 1 is the digitising library's own generated rights page with a text
+   * layer and pages 2–3 are photographs of Victorian print with nothing in them
+   * at all. Concatenate the three and the chunk has 104 baseline tokens against
+   * a thousand transcribed ones: recall 1.0, precision 0.1, and a perfect
+   * transcription of a scan failing for having read the pages nobody could
+   * check. Restricting both sides to the checkable pages is the only comparison
+   * there is; the rest of the chunk is unverified, which is what the reader is
+   * told on the page.
+   */
+  const where = requested.length === 1 ? `Page ${requested[0]}` : `Pages ${requested.join(", ")}`;
+  const unchecked = options.unchecked ?? [];
+  const checkable = requested.filter(
+    (page) => baselineFor(pass, page).length > 0 && !unchecked.includes(page),
+  );
+  if (unchecked.some((page) => requested.includes(page))) {
+    notes.push(
+      `Page(s) ${unchecked.filter((p) => requested.includes(p)).join(", ")} were not scored: the ` +
+        `model reports them as a reference list at the end of the document, which it transcribes ` +
+        `only partly. Body text on them is unchecked.`,
+    );
+  }
+  const overall = scorePage(
+    checkable[0] ?? 0,
+    checkable.flatMap((page) => baselineFor(pass, page)),
+    records.filter((r) => checkable.includes(r.page)).sort((a, b) => a.page - b.page),
+    [...(options.context === undefined ? [] : [options.context]), ...checkable]
+      .map((page) => pass.pages.find((p) => p.page === page)?.text ?? "")
+      .join("\n"),
+  );
+
+  if (overall.recall !== null) {
+    failures.push(...contentFailures(overall, where, thresholds, pages));
+    if (overall.unshown.length) {
+      notes.push(
+        `${where}: ${overall.unshown.length} fault(s) in text v1 does not render — ${overall.unshown.slice(0, SPANS_SHOWN).join(", ")}.`,
       );
     }
   }
 
-  return { ok: failures.length === 0, coverage, pages, failures };
+  return { ok: failures.length === 0, coverage, overall, pages, scored: checkable, failures, notes };
 }
 
 /**
- * Step 3, and only on a failure: do this page's records read like the page next
- * door?
+ * Which page dragged the chunk down — the cheap half of a diagnosis.
  *
- * A model that transcribes well and numbers badly is a completely different
- * problem from a model that reads badly, and the two are indistinguishable from
- * a low score alone — that is the circularity in scoring records against the
- * page the records themselves claim. This is the cheap half of content-based
- * alignment: it *diagnoses*, and deliberately does not rescue. Full alignment is
- * only worth its cost if you intend to keep mislabelled output, and this design
- * fails loudly instead.
+ * The chunk is what fails now, so the message has to say where to look inside
+ * it. This deliberately uses the *per-page* number the gate no longer trusts:
+ * it is unreliable exactly at page boundaries, which is why it does not gate,
+ * and it is perfectly good at pointing a person at the page that is wrong.
+ *
+ * What this replaced was a ±1 neighbour re-score, added to tell "read well,
+ * labelled badly" from "read badly". Gating on the chunk answers that question
+ * before it is asked — a record labelled with the wrong page inside the chunk
+ * no longer costs anything — and the case it still could not fix, a whole chunk
+ * numbered wrongly, is caught by the page-set assertion instead. A diagnostic
+ * for a failure that can no longer happen is a thing that rots.
  */
-function nearby(records: PdfRecord[], page: number, pass: Pass0): string {
-  const mine = records.filter((r) => r.page === page);
-  if (!mine.length) return "";
-  let best: { page: number; recall: number } | null = null;
-  for (const other of [page - 1, page + 1]) {
-    const baseline = baselineFor(pass, other);
-    if (!baseline.length) continue;
-    const score = scorePage(other, baseline, mine);
-    if (score.recall !== null && (!best || score.recall > best.recall)) best = { page: other, recall: score.recall };
-  }
-  return best && best.recall >= 0.8
-    ? ` The records claiming page ${page} match page ${best.page}'s text at ${best.recall} — this looks like a numbering fault, not a reading one.`
+function worstPage(pages: PageScore[], thresholds: { recall: number }): string {
+  const scored = pages.filter((p) => p.recall !== null);
+  if (scored.length < 2) return "";
+  const worst = scored.reduce((a, b) => (a.recall! <= b.recall! ? a : b));
+  return worst.recall! < thresholds.recall
+    ? ` Page ${worst.page} is the weakest, at ${worst.recall}.`
     : "";
+}
+
+/**
+ * Everything the scores say went wrong, as sentences.
+ *
+ * Split out from `check` because that function was doing two things: deciding
+ * what is true, and writing it down. This is the writing down, and it is a flat
+ * list of independent tests on purpose — each one names a different fault, and
+ * folding them together would produce a message that says a page is bad without
+ * saying how.
+ */
+function contentFailures(
+  overall: PageScore,
+  where: string,
+  thresholds: { recall: number; precision: number; order: number },
+  pages: PageScore[],
+): string[] {
+  const out: string[] = [];
+  const bad: string[] = [];
+  if (overall.recall! < thresholds.recall) bad.push(`recall ${overall.recall}`);
+  if (overall.precision! < thresholds.precision) bad.push(`precision ${overall.precision}`);
+  if (overall.order! < thresholds.order) bad.push(`order ${overall.order}`);
+  if (bad.length) out.push(`${where}: ${bad.join(", ")}.${worstPage(pages, thresholds)}`);
+
+  if (overall.spans.length) {
+    const worst = overall.spans[0]!;
+    out.push(
+      `${where}: ${overall.spans.length} run(s) are missing from the transcription, the longest ` +
+        `${worst.words} words — “${worst.text.slice(0, 120)}”.`,
+    );
+  }
+  if (overall.markup.length) {
+    out.push(
+      `${where}: the output contains markup, which the prompt forbids — ${overall.markup.map((m) => `“${m}”`).join(", ")}.`,
+    );
+  }
+  if (overall.garbage) {
+    out.push(
+      `${where}: ${overall.garbage} replacement character(s) (U+FFFD) in the output — ` +
+        `something could not be decoded, and the word it stood for is gone.`,
+    );
+  }
+  if (overall.invented.length) {
+    out.push(
+      `${where}: ${overall.invented.length} number(s) or address(es) in the output are on none of ` +
+        `these pages — ${overall.invented.slice(0, SPANS_SHOWN).join(", ")}.`,
+    );
+  }
+  return out;
 }
 
 /** The check as lines a person reads: the table first, then the sentences. */
 export function report(result: Check): string {
   const lines = ["page  base   got  recall   prec  order  recs  unc  missing runs"];
-  for (const p of result.pages) {
+  for (const p of [...result.pages, { ...result.overall, page: 0 }]) {
     const n = (v: number | null) => (v === null ? "    —" : String(v).padStart(5));
     const runs = p.spans.length ? p.spans.slice(0, 3).map((s) => s.words).join(",") : "";
     lines.push(
-      `${String(p.page).padStart(4)}  ${String(p.base).padStart(4)}  ${String(p.got).padStart(4)}  ` +
+      `${(p.page === 0 ? " all" : String(p.page)).padStart(4)}  ${String(p.base).padStart(4)}  ${String(p.got).padStart(4)}  ` +
         `${n(p.recall)}  ${n(p.precision)}  ${n(p.order)}  ${String(p.records).padStart(4)}  ${String(p.uncertain).padStart(3)}  ${runs}`,
     );
   }
   if (result.failures.length) lines.push("", ...result.failures.map((f) => `FAIL  ${f}`));
   else lines.push("", "No catastrophe detected. That is not the same as correct — see THRESHOLDS.");
+  if (result.notes.length) lines.push("", ...result.notes.map((n) => `note  ${n}`));
   return lines.join("\n");
 }
