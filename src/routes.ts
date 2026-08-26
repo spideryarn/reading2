@@ -14,7 +14,7 @@
  *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/models           which model writes what — { tasks: [{ task, model, effort? }] }
- *   GET    /api/reader           the reader's global profile — { profile: string | null }
+ *   GET    /api/reader           `?slug=` → { profile: string | null, hasProfile: boolean }
  *   PATCH  /api/reader           { profile: string | null } → the same shape
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
@@ -92,6 +92,7 @@ import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { readRaw } from "./fetch.js";
+import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { errorFields, log, since } from "./log.js";
@@ -99,13 +100,18 @@ import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
 import { CAPABLE_MODEL, STAGE_EFFORT, TASK_TIER, modelForOpenRouter } from "./models.js";
 import type {
+  Block,
+  ChatAnchor,
   ChatThread,
   Comment,
   LibraryEntry,
   GlossaryResponse,
+  Job,
   LibrarySearchResponse,
+  ShelfState,
   SummariesResponse,
   ThreadResponse,
+  ThreadSummary,
   SearchHit,
   SearchRun,
 } from "./types.js";
@@ -413,12 +419,33 @@ async function answer(slug: string, body: unknown, res: ServerResponse): Promise
   // the error we could have known about first.
   const article = await loadArticle(slug);
 
-  const comment = await commentStore.create(slug, {
-    blockId,
-    quote,
-    start,
-    ...(typeof id === "string" ? { id } : {}),
-  });
+  /* **This route no longer creates explanations.**
+   *
+   * Since 2026-08-26 a selection opens a chat rather than buying an answer
+   * (docs/plans/chat-as-gateway.md), and Greg's call was that the explanation
+   * panel becomes a museum: it can show the ones you already made, and retry
+   * and deepen them, but there is no way to make a new one.
+   *
+   * Deleting `useComments.ask` closes the React path and **nothing else**. A
+   * stale tab left open in another window, or a direct request, would still
+   * land here and `create` would happily mint a row. "There is no way to make a
+   * new one" is then a fact about the current build rather than a rule, which
+   * is the kind of thing that quietly stops being true. So the rule lives here,
+   * where the writing happens.
+   *
+   * Retry and deepen both send the id they already have, so requiring one costs
+   * them nothing. `create` stays idempotent on that id and is still what resets
+   * the row — see the note on `CommentStore.create`. */
+  if (typeof id !== "string") throw httpError(400, "Expected { id }");
+  const known = (await commentStore.load(slug)).some((c) => c.id === id);
+  if (!known) {
+    throw httpError(
+      404,
+      "Selecting text starts a conversation now; there is no explanation to answer",
+    );
+  }
+
+  const comment = await commentStore.create(slug, { blockId, quote, start, id });
   const key = `${slug}/${comment.id}`;
   const release = beganAnswering(key);
 
@@ -797,7 +824,7 @@ function sweepChat(slug: string): Promise<ChatThread[]> {
  *    error on it rather than discarded. See the note in `sweepChat`.
  */
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { threadId, question, at, retry, edit, expectedTailId, useProfile } = (body ??
+  const { threadId, question, at, retry, edit, expectedTailId, useProfile, anchor } = (body ??
     {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
@@ -824,9 +851,24 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (typeof question === "string" && question.length > MAX_QUESTION_CHARS) {
     throw httpError(413, `A question may be at most ${MAX_QUESTION_CHARS} characters`);
   }
+  /* **An anchor belongs to a turn that creates a thread, and to no other.**
+     `withRetry` and `withEdit` do not go through `withTurn` at all, so an
+     anchor sent with either would be dropped without a word — and the reader
+     would have a conversation the database says is about a passage they never
+     chose. Refused rather than ignored. */
+  if (anchor !== undefined && (wantsRetry || wantsEdit)) {
+    throw httpError(400, "An anchor can only be sent with a new question");
+  }
+  const wanted = parseAnchor(anchor);
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
   // 404 rather than an `error` frame inside a 200 stream.
   const article = await loadArticle(slug);
+  /* Checked against the real article, not just against itself. The three column
+     checks in the schema let a malformed id, an empty quote and an offset past
+     the end of the block through, and the foreign key only catches the first of
+     those. This is where the rest is caught — and it is done after
+     `loadArticle` because it needs the blocks. */
+  if (wanted) checkAnchor(wanted, article.blocks);
 
   /* Deciding and writing the turn happen together, under the conversation's
      turn order — see `inTurnOrder`. Everything after it is one answer streaming
@@ -858,6 +900,26 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          src/chat.ts. */
       await settleThread(slug, threadId);
     }
+    /* **A thread is anchored once.** Reached only for an ordinary send, and
+       only when one was offered — `withTurn` applies an anchor solely on the
+       branch that builds a new thread, so without this the second question of
+       an anchored conversation could carry a different passage and be accepted
+       in silence. What the reader would then have is a conversation the
+       database says is about passage A holding a question about passage B, with
+       nothing anywhere disagreeing.
+
+       Read under `inTurnOrder`, so the thread cannot be created between the
+       look and the write.
+
+       An identical anchor is allowed through, which is what makes a retried
+       send — the same request arriving twice — harmless rather than a 409 the
+       reader has to understand. */
+    if (wanted) {
+      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
+      if (existing && !sameAnchor(existing.anchor, wanted)) {
+        throw httpError(409, "That conversation is already about a different passage");
+      }
+    }
     return wantsRetry
       ? await chatStore.retry(slug, threadId, retry as string)
       : wantsEdit
@@ -871,7 +933,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
                an old tab mid-session, a curl — and is simply not protected. */
             ...(typeof expectedTailId === "string" ? { expectedTailId } : {}),
           })
-        : await chatStore.begin(slug, { threadId, question: (question as string).trim() });
+        : await chatStore.begin(slug, {
+            threadId,
+            question: (question as string).trim(),
+            ...(wanted ? { anchor: wanted } : {}),
+          });
   });
   const { thread, reply, user } = begun;
   /* **Which model call this is**, as far as storage is concerned, and it is
@@ -1122,8 +1188,238 @@ async function stopChat(
   return { stopped: true };
 }
 
+/**
+ * **Stop the first answer of a conversation, and throw the conversation away.**
+ *
+ * Greg's call, 2026-08-26: a reader who selects a sentence, sees the answer
+ * start, and changes their mind wants the whole thing gone — panel, mark and
+ * all, "as if you had never selected the text". Distinct from `stopChat` above,
+ * which keeps what arrived and is what a reader means further into a real
+ * conversation.
+ *
+ * ## Why this is one route and not `stop` followed by `DELETE`
+ *
+ * That was the first plan, and a GPT-5.6 review took it apart. `stopChat`'s
+ * `await live.done` genuinely does what it says — the *named* writer has
+ * finished when it returns — but it does not make the pair atomic:
+ *
+ *     Tab A                          Tab B
+ *     POST …/stop
+ *       aborts, awaits, returns
+ *                                    sends a second question
+ *                                    (the thread now has two turns)
+ *     DELETE …/<threadId>
+ *       deletes BOTH turns
+ *
+ * `DELETE` has no expected-tail guard, so B's question dies with A's. Four more
+ * ways through, all of them from the same review:
+ *
+ *  - a stop pressed before the `begin` frame names a provisional id, so it
+ *    stops nothing and the delete then races a live stream;
+ *  - `{stopped:false}` conflates "already finished", "wrong attempt" and "the
+ *    writer is in another process", and only the first is safe to act on;
+ *  - two filesystem servers can interleave `A load → B delete+save → A stale
+ *    save` and resurrect the thread;
+ *  - a concurrent sweep is not a cancellation fence.
+ *
+ * So the check and the delete happen together, here, with the tail named.
+ *
+ * ## What it does not promise
+ *
+ * **Aborting the model call is best-effort across processes.** `streaming` is
+ * this process's map; another server's call cannot be reached, so it runs to
+ * the end and is paid for, and its `finish` then updates zero rows because the
+ * thread is gone. Deletion is the part that is guaranteed, and it is the part
+ * that matters.
+ */
+async function cancelChat(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ cancelled: boolean }> {
+  const { messageId, attempt, expectedTailId } = (body ?? {}) as Record<string, unknown>;
+  if (typeof messageId !== "string") throw httpError(400, "Expected { messageId }");
+
+  return inTurnOrder(`${slug}/${threadId}`, async () => {
+    const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
+    /* Already gone. Not an error: a second tab, a double-press, or a reader who
+       cancelled and reloaded. The client wants to close the panel either way. */
+    if (!thread) return { cancelled: true };
+
+    /* **Exactly one turn**, which is what "the first answer" means. Anything
+       else is a conversation the reader has been having, and deleting it
+       because they pressed a button labelled for the other case is the outcome
+       this whole route exists to prevent. */
+    if (thread.messages.length !== 2) {
+      throw httpError(409, "That conversation has more in it than the answer you stopped");
+    }
+    const tail = thread.messages[thread.messages.length - 1];
+    if (tail?.id !== messageId) {
+      throw httpError(409, "That is not the answer at the end of this conversation");
+    }
+    /* The client sends what it believes is last; a body without one is simply
+       unguarded, the same deliberate looseness `edit`'s `expectedTailId` has. */
+    if (typeof expectedTailId === "string" && expectedTailId !== tail.id) {
+      throw httpError(409, "This conversation has moved on since you looked");
+    }
+
+    /* Abort and **wait**, before the delete rather than after it. A writer still
+       running would otherwise `finish` into rows we are about to remove — on
+       Postgres that updates nothing, but the filesystem store would write the
+       whole thread list back from a snapshot taken before the delete, and the
+       conversation would be there again on the next read. */
+    const live = streaming.get(`${slug}/${threadId}/${messageId}`);
+    if (live && (typeof attempt !== "string" || attempt === live.attempt)) {
+      live.stop.abort(new Error("cancelled by the reader"));
+      await live.done;
+    }
+
+    await chatStore.remove(slug, threadId);
+    log("store").info({ slug, threadId }, "chat cancelled and discarded");
+    return { cancelled: true };
+  });
+}
+
+/**
+ * A thread with its transcript replaced by the two facts a hover needs.
+ *
+ * `turns` counts the reader's questions rather than all messages, because that
+ * is what "three turns" means to a person looking at a tooltip.
+ *
+ * `lastLine` is the opening of the most recent **finished** answer. Deliberately
+ * not the pending one: a half-written answer is not a summary of anything, and
+ * an empty string in a tooltip reads as a bug. It is omitted rather than
+ * blanked when there is nothing to show, so the client's test is `if
+ * (lastLine)` rather than a length check on a string that might be whitespace.
+ *
+ * **Never carries the anchor quote into a log**, because nothing here logs. The
+ * quote is article prose, which docs/project/logging.md forbids; it travels in
+ * this response body and nowhere else.
+ */
+function summarise(thread: ChatThread): ThreadSummary {
+  const answers = thread.messages.filter((m) => m.role === "assistant" && m.status === "done");
+  const last = answers[answers.length - 1]?.text.trim().split(/\n/)[0]?.trim();
+  return {
+    id: thread.id,
+    title: thread.title,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+    ...(thread.anchor ? { anchor: thread.anchor } : {}),
+    turns: thread.messages.filter((m) => m.role === "user").length,
+    ...(last ? { lastLine: last } : {}),
+  };
+}
+
 /** Long enough for a paragraph of context, short enough that nothing runs away. */
 const MAX_QUESTION_CHARS = 4000;
+
+/**
+ * How long a selection may be, in characters.
+ *
+ * **Its own limit, not the question's**, and that is not tidiness. A question is
+ * something a reader types; an anchor quote is a passage of somebody else's
+ * prose that they dragged across, and a long paragraph goes past 4,000
+ * characters without trying. Sharing one limit meant selecting a long passage
+ * opened a thread optimistically and then took a 413 with the panel already on
+ * screen. Found by a GPT-5.6 review, 2026-08-26.
+ *
+ * Generous, because the cost of a big quote is tokens rather than risk, and the
+ * client refuses over-long selections before it mints a thread anyway. The
+ * ceiling that actually bites first is `MAX_BODY_BYTES`.
+ */
+const MAX_ANCHOR_CHARS = 20_000;
+
+/**
+ * The `anchor` field of a chat request, as a `ChatAnchor` or nothing.
+ *
+ * Shape only — whether the block exists and whether the quote is really at that
+ * offset are `checkAnchor`'s job, because those need the article.
+ *
+ * **No part of the quote reaches a thrown message.** `httpError` messages are
+ * logged as `reason`, redaction is path-based and cannot reach inside a string,
+ * and the quote is article prose — which docs/project/logging.md says must
+ * never be logged. The same rule `answer()` states for `deep` a few hundred
+ * lines up, and the reason every message here describes the shape rather than
+ * quoting the value.
+ */
+function parseAnchor(anchor: unknown): ChatAnchor | undefined {
+  if (anchor === undefined || anchor === null) return undefined;
+  if (typeof anchor !== "object") throw httpError(400, "anchor must be an object");
+  const { blockId, quote, start } = anchor as Record<string, unknown>;
+  if (typeof blockId !== "string" || !isSpideryarnId(blockId)) {
+    throw httpError(400, "anchor.blockId must be a block id");
+  }
+  /* Both or neither. Half an anchor is not an error anybody sees — it is a mark
+     drawn a few characters to the left of the words it belongs to, which reads
+     as a styling glitch rather than as bad data. The database says the same
+     thing in `chat_threads_anchor_both`; this says it before the write. */
+  const hasQuote = quote !== undefined;
+  const hasStart = start !== undefined;
+  if (hasQuote !== hasStart) {
+    throw httpError(400, "anchor needs both quote and start, or neither");
+  }
+  if (!hasQuote) return { blockId };
+  if (typeof quote !== "string" || quote.trim() === "") {
+    throw httpError(400, "anchor.quote must be a non-empty string");
+  }
+  if (quote.length > MAX_ANCHOR_CHARS) {
+    throw httpError(413, `A selection may be at most ${MAX_ANCHOR_CHARS} characters`);
+  }
+  if (typeof start !== "number" || !Number.isInteger(start) || start < 0) {
+    throw httpError(400, "anchor.start must be a non-negative integer");
+  }
+  return { blockId, quote, start };
+}
+
+/**
+ * Are these the same anchor?
+ *
+ * A thread with no anchor is **not** the same as one with any anchor: a send
+ * offering a passage for an unanchored conversation is still trying to change
+ * what that conversation is about, and it is refused. `undefined` on both sides
+ * cannot reach here — the caller only asks when it has one.
+ */
+function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): boolean {
+  if (!stored) return false;
+  if (stored.blockId !== wanted.blockId) return false;
+  const a = "quote" in stored ? stored : null;
+  const b = "quote" in wanted ? wanted : null;
+  if (!a || !b) return a === b; // both block-only, or one of each
+  return a.quote === b.quote && a.start === b.start;
+}
+
+/**
+ * The anchor against the article it claims to be part of.
+ *
+ * Three things the schema cannot check, in the order they matter:
+ *
+ *  - **the block is one of this article's.** The foreign key would catch it too,
+ *    but as a 500 out of a transaction rather than as a 400 anybody can read;
+ *  - **the offset is inside the block**, rather than past the end of it;
+ *  - **the quote is really the text at that offset.** Not required to match —
+ *    the client measures in the *rendered* offset space and the server has the
+ *    block's `text`, and the two can differ by whitespace — so a mismatch is
+ *    allowed through. `resolveMark` re-finds the quote in the rendered text
+ *    rather than trusting the offset, exactly as src/quote-match.ts does for a
+ *    search hit, so a drifted offset costs nothing. What is refused is a quote
+ *    that is not in the block **at all**, which is the case that means the
+ *    client is anchoring to something else entirely.
+ */
+function checkAnchor(anchor: ChatAnchor, blocks: Block[]): void {
+  const block = blocks.find((b) => b.id === anchor.blockId);
+  if (!block) throw httpError(400, "anchor.blockId is not a block of this article");
+  if (!("quote" in anchor)) return;
+  if (anchor.start > block.text.length) {
+    throw httpError(400, "anchor.start is past the end of that block");
+  }
+  /* Whitespace-folded on both sides, because the rendered text the client
+     measured collapses runs of space that `block.text` may keep. Comparing them
+     literally rejected perfectly good selections. */
+  const fold = (t: string) => t.replace(/\s+/g, " ").trim();
+  if (!fold(block.text).includes(fold(anchor.quote))) {
+    throw httpError(400, "anchor.quote is not in that block");
+  }
+}
 
 /* --------------------------------------------------------------- search --
    Finding a passage by what it says. See docs/project/search.md.
@@ -1617,6 +1913,29 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
 }
 
 /**
+ * A job as the client may see it — **without the reader's profile**.
+ *
+ * The frozen profile has to live on the job: that is what makes it survive a
+ * restart and what stops a summary run split across two profiles
+ * (`Job.profile`, src/types.ts). But the job record is also what
+ * `GET /api/jobs` returns on **every poll**, every eight seconds, for the life
+ * of the panel — and it is the reader's own description of themselves. There is
+ * nothing on the client that renders it and no question it answers there.
+ *
+ * So it is stripped on the way out. Not a leak in the sense of crossing a trust
+ * boundary — it is the reader's own text going back to the reader's own browser
+ * — but `docs/project/logging.md`'s rule about the reader's prose is the same
+ * instinct, and a field nothing renders should not be on the wire at all.
+ * GPT Sol's review of the built code, 2026-08-26.
+ *
+ * `guidance` deliberately stays: the summary panel puts it back in the box.
+ */
+function publicJob(job: Job): Omit<Job, "profile"> {
+  const { profile: _hidden, ...rest } = job;
+  return rest;
+}
+
+/**
  * Which model writes what — a read of the table in src/models.ts, nothing more.
  *
  * A route rather than an import, and that is the whole reason it exists. The
@@ -1668,7 +1987,16 @@ function modelsInUse(): {
  * Never reads the client's word for it. See `useProfile` above.
  */
 async function resolveProfile(slug: string): Promise<string | null> {
-  const [profile, shelf] = await Promise.all([readerStore.readProfile(), shelfStore.read(slug)]);
+  /* **The shelf read is allowed to fail, and the global half still counts.**
+     Under `postgres` an article with no row throws not-found here, and under
+     `files` a slug that is not an article is simply empty. Neither is a reason
+     to answer a question about the *reader* with an error — and a caller that
+     got one would fail a whole job over a purpose nobody had written.
+     Found by GPT Sol's review of the built code, 2026-08-26. */
+  const [profile, shelf] = await Promise.all([
+    readerStore.readProfile(),
+    shelfStore.read(slug).catch((): ShelfState => ({ opens: 0 })),
+  ]);
   return renderProfile({ profile, purpose: shelf.purpose ?? null });
 }
 
@@ -1880,6 +2208,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
   const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(url);
+  const chatCancel = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/cancel$/.exec(url);
   const searches = /^\/api\/search\/([\w.%-]+)$/.exec(url);
   const oneRun = /^\/api\/search\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const allJobs = url === "/api/jobs";
@@ -1917,7 +2246,24 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       return true;
     }
     if (readerRoute && req.method === "GET") {
-      send(res, 200, { profile: await readerStore.readProfile() });
+      /* **`?slug=` answers a different question, and the panels need that one.**
+         Without it this says only whether the *global* box is written, and a
+         reader who has filled in "why you're reading this one" and nothing else
+         has a profile as far as every prompt is concerned — `renderProfile`
+         joins the two — while every control that offered to turn it off has
+         disappeared. They could not opt out of something they could not see.
+
+         So `profile` is the global text, which is what /profile edits, and
+         `hasProfile` is the real answer to "is anything being taken into
+         account here", resolved the same way the prompts resolve it. One
+         request, right in every state, including the ones with no artefact to
+         hang a flag on. GPT Sol's review, 2026-08-26. */
+      const at = new URL(url, "http://x").searchParams.get("slug");
+      const [profile, effective] = await Promise.all([
+        readerStore.readProfile(),
+        at && isSlug(at) ? resolveProfile(at) : readerStore.readProfile(),
+      ]);
+      send(res, 200, { profile, hasProfile: effective !== null });
       return true;
     }
     /* PATCH rather than PUT, for the same reason the shelf's is: the body names
@@ -2012,7 +2358,24 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     }
     if (chat && req.method === "GET") {
       const slug = slugPart(chat, 1);
-      send(res, 200, { threads: await sweepChat(slug) });
+      const threads = await sweepChat(slug);
+      /* **`?summary=1` is the reading view's version of this list**, and it is a
+         parameter rather than a route because it is the same question with the
+         transcripts left off — same sweep, same order, same ids.
+
+         The reading view needs one thing from chat: which conversations are
+         anchored to which passage, so it can draw a mark and say something on
+         hover. Handing it the transcripts as well is not merely wasteful. Chat
+         state changes on every streamed token, so holding threads above
+         `TableView` would re-render — and re-`annotateHtml` — every paragraph
+         of the article, hundreds of times, while an answer arrives. Found by a
+         GPT-5.6 review, 2026-08-26; docs/plans/chat-as-gateway.md § summaries. */
+      const url = new URL(req.url ?? "/", "http://localhost");
+      if (url.searchParams.get("summary") === "1") {
+        send(res, 200, { threads: threads.map(summarise) });
+        return true;
+      }
+      send(res, 200, { threads });
       return true;
     }
     if (chat && req.method === "POST") {
@@ -2023,6 +2386,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
          catch below answers it as ordinary JSON; after that, the failure is an
          `error` frame inside a 200, because the status line is long gone. */
       await streamChat(slugPart(chat, 1), await readBody(req), res);
+      return true;
+    }
+    if (chatCancel && req.method === "POST") {
+      const [slug, id] = [slugPart(chatCancel, 1), part(chatCancel, 2)];
+      send(res, 200, await cancelChat(slug, id, await readBody(req)));
       return true;
     }
     if (chatStop && req.method === "POST") {
@@ -2071,7 +2439,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       return true;
     }
     if (allJobs && req.method === "GET") {
-      send(res, 200, { jobs: await listJobs() });
+      send(res, 200, { jobs: (await listJobs()).map(publicJob) });
       return true;
     }
     if (allJobs && req.method === "POST") {
@@ -2079,19 +2447,32 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
       const request = parseJobRequest(await readBody(req));
-      /* `=== false`, so absent means yes: a client that has never heard of
-         this field gets the profiled run, which is the default the panel
-         offers. Only an explicit refusal turns it off. */
+      /* **Not for the `{ url }` shape**, and that is a correctness fix rather
+         than an economy. The slug this resolves against is the one *derived*
+         from the URL, and `enqueue` may not use it: `freeSlug` renames on a
+         collision. So resolving here would read the purpose of *another
+         article* and stamp a new one's artefacts with it — and under `postgres`
+         it would simply throw, because the article does not exist yet.
+
+         Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which stops
+         at `arc`, and no step in it takes a profile. The reader asks for a
+         glossary or a summary later, by slug, and that request resolves
+         correctly. GPT Sol's review of the built code, 2026-08-26.
+
+         `=== false`, so absent means yes: a client that has never heard of this
+         field gets the profiled run, which is the default the panel offers. */
       const profile =
-        request.useProfile === false ? null : await resolveProfile(request.slug);
+        request.url !== undefined || request.useProfile === false
+          ? null
+          : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;
-      send(res, 202, await enqueue({ ...work, ...(profile ? { profile } : {}) }));
+      send(res, 202, publicJob(await enqueue({ ...work, ...(profile ? { profile } : {}) })));
       return true;
     }
     if (job && req.method === "GET") {
       const found = await getJob(part(job, 1));
       if (!found) throw httpError(404, "No such job");
-      send(res, 200, found);
+      send(res, 200, publicJob(found));
       return true;
     }
     if (job && req.method === "DELETE") {
@@ -2103,7 +2484,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       const [id, action] = [part(jobAction, 1), part(jobAction, 2)];
       const result = action === "cancel" ? await cancelJob(id) : await retryJob(id);
       if (!result) throw httpError(404, "No such job");
-      send(res, action === "cancel" ? 200 : 202, result);
+      send(res, action === "cancel" ? 200 : 202, publicJob(result));
       return true;
     }
     /**
