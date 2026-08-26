@@ -155,6 +155,45 @@ sources: [research § C](../research/pdf-parsing-options.md#c-a-multimodal-model
 The API sends text *and* image for a `document` block; we never rasterise anything ourselves,
 which is the trap the original version fell into twice.
 
+### Which model, and which vendor
+
+**Greg reversed the single-vendor default (2026-08-26): whoever reads best wins.** His reasoning,
+and it is right — every later stage inherits this stage's mistakes and none of them can detect one,
+so this is the stage where accuracy is worth paying complexity for. The choice is made on bake-off
+evidence in the first hour, not on a hunch; the rest of the app stays Anthropic; and
+[the eval](#the-eval-evalspdf) exists so the decision can be re-run when the models change, which
+they will.
+
+**And the complexity turned out to be much smaller than the first draft assumed.** "A second
+vendor" meant a second SDK, key, bill and outage surface only because we were thinking of going
+direct. OpenRouter is already wired here — `OPENROUTER_MODEL` in
+[`src/models.ts`](../../src/models.ts) — and reaches the alternatives under one key and one bill.
+Its `native` PDF engine passes the bytes straight through to a model that reads PDFs natively, so
+there is no conversion step and no fidelity loss; the loss only appears if you route through one of
+its *parsing* engines instead. Prices as of 2026-08-26, full table and caveats in
+[research § second round](../research/pdf-parsing-options.md#second-round-2026-08-26):
+
+| Candidate | Price | Why it is in the bake-off |
+|---|---|---|
+| **Claude Haiku 4.5** | $1 / $5 per MTok | already integrated, native PDF, the plan's incumbent |
+| **Gemini 3.7 Flash** | $0.375 / $1.875 per MTok | ~2.5× cheaper on these pages, and Gemini 3 Flash leads OCR Arena's head-to-head ELO |
+| **Mistral OCR** (via OpenRouter's `mistral-ocr` engine) | $2 / 1,000 pages | not as the transcriber — as the *witness* for scans, below |
+
+Two OpenRouter costs to keep in view: a thin platform fee, and **prompt caching that holds only
+within one provider**, so its auto-routing can break a cache hit unless routing is pinned. Neither
+is a capability loss. One thing to check before depending on it: whether its `mistral-ocr` engine
+runs OCR 4.1 or the older, Mistral-deprecated 2503 model — the docs don't say.
+
+**Mistral OCR is the receipt for a scan, not the reader of one.** Independent tests report it
+inventing text on low-resolution scans, dropping headers and footers, and misaligning ~17% of
+complex table columns — and OpenRouter's wrapper strips the block labels, bounding boxes and
+confidence scores that Mistral's own endpoint returns, which are the only things that would let us
+catch it. So it is not the transcription authority. But specialist OCR engines are markedly more
+honest about illegibility than general vision models — 93.2% against 72–85% on a
+hallucination-specific benchmark — because a general model faced with a damaged word reaches for a
+plausible one, which is exactly what it is built to do. That difference is what makes it useful
+here: see [the scan question](#a-scan-with-no-text-layer).
+
 **Model settings, so nobody copies the ToC's.** [`src/toc.ts`](../../src/toc.ts) asks for adaptive
 thinking, which is right for Sonnet 5 and **wrong for Haiku 4.5** — Haiku takes only manual
 `budget_tokens` thinking, and transcription doesn't want any. Omit `thinking`. Stream, set
@@ -163,6 +202,24 @@ system prompt: Haiku's minimum cacheable prefix is 4,096 tokens and parallel cal
 cache entry that the first call is still writing — read `usage.cache_read_input_tokens` and
 believe that. The SDK already retries 408/409/429/5xx twice with backoff; set `maxRetries`
 deliberately and log it rather than adding a second retry layer.
+
+**Two production failure modes we had not planned for**, from LlamaIndex's April 2026 write-up of
+LlamaParse at scale ([research](../research/pdf-parsing-options.md#silent-degradation-is-documented-in-production-not-theoretical)).
+Both are cheap to defend against and belong in v1:
+
+- **Repetition loops** — the decoder sticks and emits repeated text or whitespace until it hits the
+  token cap. Reported as *worse* with thinking models, which is another reason to omit `thinking`.
+  Defence: a hard `max_tokens` cap, and terminate the stream when a repeated window is detected.
+- **Recitation blocks** — a provider's own safety filter kills generation partway through long
+  structured or boilerplate text, mistaking it for copyright violation. It surfaces as
+  `content_filter` (OpenAI), `RECITATION` (Gemini) or a refusal (Anthropic). Verbatim transcription
+  is exactly the shape that trips it. Defence: **route retries by finish reason**, not blindly — a
+  truncated call and a filtered call need different responses, and a filtered call retried
+  identically will be filtered identically. Bump temperature slightly on retry.
+
+Both produce a short page, so the per-page check catches them — but the check reports "the model
+lost content", which is the wrong diagnosis and sends the next person looking in the wrong place.
+Read `stop_reason` first and say what actually happened.
 
 **Why chunks, and why a whole overlap page rather than a tail of text.** One call for a 20-page
 paper produces 60,000+ output tokens and drifts into summarising after page N — the original's own
@@ -191,12 +248,33 @@ step with the page numbers in the message — the original version's rule, *"fai
 names the alternative"* ([original-version/extraction.md](../project/original-version/extraction.md#the-correction-the-escalation-ladder-was-never-built)).
 Escalating that page to a stronger model is v2, and it will be a visible choice, not a fallback.
 
-**A scan with no text layer has no baseline, and the plan must say what that means.** The first
-draft said "skip the ratio and note it in `meta.note`" — which, as GPT put it, "means there is no
-check at all" and contradicts the hard-failure premise. Three honest options: mark the article
-**visibly unverified** in the reader; pay for a second, independent transcription and compare the
-two; or refuse scans in v1. This is a question for Greg ([below](#questions-for-greg)); the plan's
-default is *visibly unverified*, because it is the cheapest thing that doesn't lie.
+### A scan with no text layer
+
+It has no baseline, and the plan must say what that means. The first draft said "skip the ratio and
+note it in `meta.note`" — which, as GPT Sol put it, "means there is no check at all" and contradicts
+the hard-failure premise. Three honest options: mark the article **visibly unverified** in the
+reader; pay for a second, independent transcription and compare the two; or refuse scans in v1.
+
+**Greg's answer (2026-08-26): visibly unverified.** A scan is never refused and never paid for
+twice, and the reader must say so on the page, not only in `meta.json`.
+
+**Then the arithmetic changed, and he revisited it.** That answer assumed a second reading meant a
+second full model pass — roughly double. A specialist OCR engine is priced per page instead:
+about 3p for a 17-page scan through OpenRouter, on top of ~9p for the model. A third more, not
+double. And the two readers fail *differently* — a vision model guesses a plausible word where the
+ink is damaged, an OCR engine tends to produce visible rubbish — so where they disagree is a real
+signal, in a way that two vision models would not be.
+
+So a scan can have a baseline after all: **the OCR pass manufactures the text layer the file
+doesn't have**, and the existing per-page check runs against it unchanged. No new machinery, a
+different source for the same comparison.
+
+**Greg's call: put it in the bake-off and decide from what it catches.** The first hour already runs
+the hard pages through several readers; adding Mistral OCR on the scan pages costs pennies and no
+extra work. If its disagreements land on the model's real mistakes, wire up the cross-check. If they
+don't, scans stay visibly unverified exactly as decided, and nothing was built for nothing. The
+threshold — how much divergence in hyphens, ligatures and paragraph breaks is normal between two
+kinds of reader — comes from those same pages, not from a guess.
 
 **Caching, because this is the expensive stage.** [CLAUDE.md](../../CLAUDE.md) says anything
 expensive is cached on a content hash, and today most steps are "done" if the file exists. Each
@@ -225,14 +303,18 @@ encoded chunk. **Encrypted PDFs are rejected by the API** and must be refused by
 corrupt ones; the parser runs in-process on untrusted bytes, so bound pages, objects, time and
 memory, and turn off scripting and external resource loading in pdf.js.
 
-**Stage 3 has two limits this plan inherits, and one of them needs a decision.** Id carry-over
+**Stage 3 has two limits this plan inherits, and one of them is being fixed first.** Id carry-over
 matches **exact normalised text** ([`src/blocks.ts`](../../src/blocks.ts) `matchKey`), so a re-read
 that re-segments or corrects one word mints a new id for that paragraph — "re-read keeps ids" is
-true only for untouched paragraphs. And that normalisation is `/[^a-z0-9 ]/gi`: it deletes every
-non-ASCII letter, so **Arabic and CJK paragraphs cannot carry ids across a re-extraction at all**,
-and their word counts collapse. That is stage 3's bug, not this plan's, but it means v1 is
-**Latin-script only** unless stage 3 is fixed first — a question for Greg, and a note for
-[block-ids.md](../project/block-ids.md).
+true only for untouched paragraphs. That one stands, and PDF v1 lives with it.
+
+The other was going to be a limitation we wrote down and shipped: the same normalisation is
+`/[^a-z0-9 ]/gi`, which deletes every non-ASCII letter, so Arabic and CJK paragraphs can't carry ids
+at all. Investigated properly (2026-08-26) it turned out worse than "ids don't carry" —
+**two of its five failure modes delete paragraphs from the article**, and one hands a paragraph's id
+to the wrong paragraph. So it is not a documentable limitation, and the recommendation is to fix it
+*before* PDF work starts: two to three hours, no migration risk, the fix and the evidence in
+[the postmortem](../postmortems/block-id-matching-non-latin.md).
 
 **One title authority.** Pass 0 has three candidates (PDF metadata, biggest first-page line,
 filename) and the model emits an `h1`; JSTOR's cover page makes the first-page line the weakest.
@@ -399,7 +481,8 @@ cases); the golden three are:
 
 Nagel's gold is **not committed**: a private repo does not settle JSTOR's terms, and a full-text
 transcription is as sensitive as the PDF. It remains a probe with `source.url + sha256` and no
-gold unless Greg clears the rights ([questions](#questions-for-greg)).
+gold. **Decided (2026-08-26)**: it stays a probe, and the golden three are obscure, openly-licensed
+documents instead ([below](#gregs-answers-2026-08-26)).
 
 **How a gold is made.** The first draft had one frontier model transcribe the whole PDF in one
 call. That repeats the exact failure v1 is built around — long output drifts into summarising late
@@ -554,18 +637,8 @@ Two ways to get the number: ask the model, or turn on **citations** on the `docu
 return `page_location` for free. The attribute name must not collide with anything stage 3 or the
 annotator sets — [block-ids.md](../project/block-ids.md) on inherited `data-` attributes.
 
-**A different first pass.** Two candidates, and the bake-off in [the build order](#build-order)
-puts one of them in the first hour rather than deferring it:
-
-- **Gemini Flash** — 258 tokens a page and no charge for the PDF's embedded text, so roughly
-  $0.06–0.08 for 20 pages against Haiku's $0.14–0.20, and it tops the layout benchmarks. The cost
-  is a second SDK, a second key and a second set of failure modes. GPT's review: *"Gemini deserves
-  the first bake-off, not automatic deferral."* Agreed — and whether a second vendor is acceptable
-  if it wins is a question for Greg.
-- **Mistral OCR** ($4 per 1,000 pages, seconds, now with blocks and confidence) — but note the
-  arithmetic: Mistral *plus* a full Haiku rewrite is $0.010–0.012 a page, **more** than Haiku
-  alone. It only wins if its output is used directly or Haiku edits selectively. So it is the
-  fallback for scans if Haiku's pass turns out to need an OCR baseline, not a cheaper route.
+**A different first pass** has moved up into v1 — the vendor question is decided in the first hour
+now, not deferred. See [Which model, and which vendor](#which-model-and-which-vendor).
 
 **Backfills through the Batch API** at half price, for re-running a prompt version over every
 stored PDF. Same code path, different transport.
@@ -628,7 +701,7 @@ Fair. What it found and where it went, so the reasoning survives:
 | Library card has no PDF or page concept | unmentioned | `sourceKind`, `pages`; "PDF · 17 pages" — question for Greg |
 | Progress from parallel callbacks races; job shows the slug until extraction ends | unmentioned | aggregate centrally; show the title early |
 
-Its build order is adopted below. Its questions are in [Questions for Greg](#questions-for-greg).
+Its build order is adopted below. Its questions are in [Questions for Greg](#gregs-answers-2026-08-26).
 
 ### GPT Sol's review of the eval (2026-08-26)
 
@@ -660,11 +733,31 @@ the section above:
 The riskiest assumption is "Haiku doesn't summarise in small chunks, at this cost and speed" — so
 it is tested in the first hour, not the last, and against the alternative.
 
-1. **First hour: the bake-off.** Four pages of Nagel, four of BERT and four of a no-text scan,
-   through native-PDF Haiku 4.5, text-only Haiku 4.5, and Gemini Flash. Save every output and its
-   `usage`. Read them. This is a scratch script, not `src/`.
-2. From those outputs, set the fidelity, latency and cost thresholds; choose the model and the
-   schema. Write the numbers into this plan.
+0. **Before any of this: fix stage 3's paragraph matcher**
+   ([postmortem](../postmortems/block-id-matching-non-latin.md)). Two to three hours, unrelated to
+   PDFs, and it silently drops paragraphs today. Doing it first also means the PDF eval's block
+   comparison is built against a matcher that works.
+1. **First hour: the bake-off.** Four pages each of three hard documents — a scan with running
+   headers and hyphenation, a two-column paper, and a scan with no text layer at all — through:
+
+   | Reader | What it tells us |
+   |---|---|
+   | Haiku 4.5, native PDF | the incumbent; already integrated |
+   | Haiku 4.5, text layer only, no image | whether the image is worth 13–29% |
+   | Gemini 3.7 Flash, native PDF, via OpenRouter | ~2.5× cheaper, leads the head-to-head ELO |
+   | Mistral OCR, on the no-text scan only | whether it works as the *witness* for a scan |
+
+   Save every output, every `usage` block, every `stop_reason`, and the wall-clock time. Read them
+   side by side. This is a scratch script, not `src/`. It costs a few pounds at most.
+
+   Judge it on the failures that matter, not a character score: a dropped or summarised paragraph,
+   two columns interleaved (which reads as fluent English and no character-level metric will catch),
+   a running header left in, an invented word where the ink is damaged. And note which reader
+   *admits* it can't read something — that is the property we most want and the hardest to get.
+
+2. From those outputs, set the fidelity, latency and cost thresholds; choose the model, the vendor
+   and the schema; decide whether the OCR cross-check for scans earns its place. Write the numbers
+   into this plan, including the ones that argued against the choice.
 3. Build **pass 0 and the check** against the saved responses — no model call needed to test them.
    Build the scorer and its synthetic tests at the same time ([the eval](#the-eval-evalspdf)).
 4. Build chunking, rendering, stitching and the chunk cache.
@@ -672,44 +765,81 @@ it is tested in the first hour, not the last, and against the alternative.
 6. Integrate URL PDFs through `STEPS`. Make the easy eval PDF pass tier 1.
 7. Upload last — after the storage seam, or after Supabase, per Greg's answer.
 
-## Questions for Greg
+## Greg's answers (2026-08-26)
 
-Plainly, each with the default the plan takes if unanswered:
+Asked one at a time; his wording where it changes something.
 
-1. **Latin script only for v1?** Stage 3's id matching deletes non-ASCII letters, so Arabic, CJK
-   and similar can't keep ids across a re-read. *Default: yes, v1 is Latin-script; note it in
-   block-ids.md and fix stage 3 separately.*
-2. **A scan with no text inside it** has nothing to check the model against. Show it as
-   "unverified" in the reader, pay for a second transcription to compare, or refuse scans in v1?
-   *Default: visibly unverified.*
-3. **If Gemini Flash beats Haiku clearly in the first hour**, is a second vendor and key
-   acceptable? *Default: no — stay single-vendor unless the gap is large.*
-4. **Upload now with a local-only route, or wait for Supabase Storage?** The local route is mostly
-   throwaway. *Default: put the raw-document store seam in now, filesystem-backed, and build upload
-   against it.*
-5. **Should the library card say "PDF · 17 pages"?** *Default: yes, quietly, where the site name
-   would be.*
-6. **Is the upload's slug fixed from the filename, or may the title pass rename it?** *Default:
-   the pass-0 title names it once, at reservation; never renamed after.*
-7. **Footnotes and references: omitted in v1 (your answer) — or kept plainly for fidelity and
-   hidden by the reader?** Keeping them costs output tokens and ToC rows; omitting them loses
-   nothing that v2 can't add back, because the gold has them. *Default: omitted, as you said.*
-8. **May the Nagel gold's full text sit in this private repo** given JSTOR's terms? *Default: no —
-   the PDF stays git-ignored, Nagel is a probe without a gold, and the much-harder golden case is a
-   public-domain scan with no text layer.*
-9. **May the golden set be three obscure, fully redistributable documents** rather than BERT and
-   Nagel, which stay as informal probes? *Default: yes.*
-10. **At tier 1, must the footnote markers vanish from the body text** as well as the footnotes?
-    *Default: yes — the reader would otherwise see a `¹` pointing at nothing.*
-11. **Must every figure/table placeholder carry its caption?** *Default: yes, when the page has
-    one; it is the only thing the placeholder can say.*
-12. **Must lists stay lists**, or is paragraph output acceptable? *Default: lists stay lists —
-    stage 3 makes each item a block, and a ToC row per item is the whole point of that.*
-13. **Does "v1 done" mean every repeated run passes, or the median run?** *Default: every run.*
-14. **Who does the page-by-page human sign-off on a gold?** *Default: you, or an agent you name,
-    recorded per page in `gold.json`.*
-15. **Should numbers, citations and equations be held to exact match** while prose gets a
-    similarity score? *Default: yes.*
+**Decided.**
+
+1. **A scan with no text inside it** — v1 reads it and shows it, marked plainly as unverified.
+   Not refused, and not paid for twice. The reader has to say so where the reader can see it, not
+   only in `meta.json`.
+
+   **Revisited the same day**, once the research showed a second reading of a scan costs about 3p
+   rather than double — a specialist OCR engine priced per page, failing differently enough from a
+   vision model that disagreement is a real signal. His answer: **put it in the bake-off and decide
+   from what it catches.** If the OCR pass's disagreements land on the model's real mistakes, wire
+   up the cross-check; if not, this answer stands unchanged. Detail in
+   [A scan with no text layer](#a-scan-with-no-text-layer).
+2. **Upload** — build it now, behind a raw-document-store seam: one small module owning "put these
+   bytes / fetch these bytes", filesystem-backed today, Supabase Storage later. The filesystem half
+   is knowingly throwaway; the seam and the file-picker are not. It must be built knowing Vercel
+   refuses bodies over 4.5 MB, so the real path is a direct-to-storage upload, not a POST through us.
+3. **A second vendor — yes, whoever reads best wins.** This *reverses* the plan's earlier default of
+   staying single-vendor. His reasoning, and it is right: every later stage inherits this stage's
+   mistakes and none of them can detect one, so this is the stage where accuracy is worth paying
+   complexity for. The choice is made on bake-off evidence, in the first hour, not on a hunch; the
+   rest of the app stays Anthropic; and the eval exists so the decision can be re-run when models
+   change.
+
+   He added, separately:
+
+   > I'm also open to using Mistral-OCR if you think that's helpful. Make sure to use some Sonnet
+   > subagents to research what's available through OpenRouter.
+
+   **Researched, and it does**: OpenRouter's `native` PDF engine reaches Gemini and Claude under the
+   key and bill this repo already has, passing the bytes straight through with no conversion step
+   and no fidelity loss. So "a second vendor" costs a routing decision, not a second account. Mistral
+   OCR is reachable too, but as a *parser plugin* rather than its own endpoint — and the wrapper
+   strips the confidence scores that would let us catch its mistakes, so it is the scan witness and
+   not the transcriber. Full findings in
+   [research § second round](../research/pdf-parsing-options.md#second-round-2026-08-26); what it
+   means for the build is in [Which model, and which vendor](#which-model-and-which-vendor).
+
+4. **Non-Latin id matching** — not answered directly; handed to a background Opus subagent to
+   root-cause, with a GPT Sol review. The write-up is
+   [the postmortem](../postmortems/block-id-matching-non-latin.md), and it changes the answer: the
+   plan was going to ship Latin-script-only with a note, but two of the bug's five failure modes
+   **delete paragraphs** and one moves a reader's note to a different paragraph. Neither is
+   documentable. **Fix it first — two to three hours, and the migration risk was measured at zero
+   against the three articles in `data/`.**
+5. **The eval's three PDFs** — his judgment call, delegated:
+
+   > Use your judgment. Ask Sonnet subagents to do some web searches for PDFs (e.g. about
+   > consciousness or Rhizome or some other fun topics) and then use a subagent to pick from amongst
+   > them for the qualities you're looking for. But don't sweat this too much, we can always update
+   > the eval later. Let's just get to a v1 and then a v2.
+
+   So: three obscure, openly-licensed documents — easy single-column, two-column with figures and
+   footnotes, and a scan with no text layer — chosen by a subagent against those criteria. BERT is
+   out because it is memorised (a model can write it out without reading the page, so the test
+   passes while measuring nothing) and Nagel's gold is out on licence. Both stay as informal probes.
+   **Read the last sentence as a standing instruction on this whole plan**: the eval is improvable
+   later, and v1 is the thing to reach.
+
+**Taken as default, not worth his time — reversible any time.**
+
+- Library card says "PDF · 17 pages" where the site name would be.
+- The slug is fixed at reservation from the pass-0 title; never renamed after.
+- Footnotes and references omitted in v1, as he already said; the gold keeps them, so v2 adds them
+  back without redoing the gold.
+- At tier 1 the footnote *markers* vanish from the body too — otherwise the reader sees a `¹`
+  pointing at nothing.
+- Every figure/table placeholder carries its caption when the page has one.
+- Lists stay lists: stage 3 makes each item a block, and a ToC row per item is the point.
+- "v1 done" means every repeated run passes the structural checks, not the median run.
+- Page-by-page gold sign-off is by Greg or a named agent, recorded per page in `gold.json`.
+- Numbers, citations and equations are held to exact match; prose to a similarity score.
 
 ## Honest assessment
 

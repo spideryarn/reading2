@@ -76,6 +76,14 @@ unchanged, no matter how far it has moved. Blocks with no text — images, figur
 `src` instead, so a ToC row aimed at a diagram doesn't go stale. Each previous id is consumed once,
 so a page with several identical short paragraphs cannot hand the same id to two blocks.
 
+**"Normalised" is where the bug is, as of 2026-08-26.** The normalisation deletes every character
+that isn't `a-z`, `0-9` or a space — a correct spelling of "punctuation" if the only text you have
+ever looked at is English, and a deletion of the whole paragraph in Cyrillic, Greek, Chinese, Arabic
+or Devanagari. Two of its five failure modes drop paragraphs from the article outright. The cause,
+the measured blast radius and the fix are in
+[the postmortem](../postmortems/block-id-matching-non-latin.md); everything below describes the
+matcher as it behaves for Latin text, which is unchanged by that fix.
+
 Measured on the test article, re-extracted *and* with a new paragraph inserted above everything:
 **138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to
 match on and which nobody annotates.

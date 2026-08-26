@@ -189,10 +189,12 @@ pages to images yourself on Vercel* (their v1 and v2 pain), and *figures are the
 **v1 = pdf.js text layer as the free baseline + Claude Haiku 4.5 reading page-range chunks in
 parallel, checked against that baseline.** Reasons, in order:
 
-1. **No new vendor.** The Anthropic SDK and key are already here; every pipeline stage uses them.
-   Gemini Flash is cheaper and benchmarks higher, and it costs a second SDK, a second key and a
-   second set of failure modes — the right v2 experiment if Haiku's cost or latency bites, not the
-   v1 default.
+1. ~~**No new vendor.**~~ **Superseded 2026-08-26** — see [the second round](#second-round-2026-08-26).
+   The original reasoning was that Gemini Flash is cheaper and benchmarks higher but costs a second
+   SDK, key and set of failure modes. Greg reversed it: *whoever reads best wins*, because every
+   later stage inherits this stage's mistakes and none of them can detect one. And the cost of the
+   reversal turned out to be much smaller than assumed — OpenRouter reaches Gemini and Mistral under
+   the key and bill this repo already has.
 2. **The image is nearly free once you pay for the output**, and it is what makes scans, columns
    and headings work without heuristics.
 3. **Haiku, not Sonnet, not Opus.** Greg: *"I'm hoping we won't need a frontier model."*
@@ -207,7 +209,127 @@ parallel, checked against that baseline.** Reasons, in order:
    when the code is written — `unpdf` if the legacy build needs shims on Vercel, bare pdf.js if it
    doesn't.
 
-## Sources
+## Second round, 2026-08-26
+
+Two more Sonnet searches, prompted by Greg: *"I'm also open to using Mistral-OCR if you think that's
+helpful. Make sure to use some Sonnet subagents to research what's available through OpenRouter."*
+Everything below is dated, because most of it will be stale within months.
+
+### OpenRouter changes the vendor arithmetic
+
+The first round treated "a second vendor" as a second SDK, key, bill and outage surface. That is
+only true of going direct. OpenRouter — already wired here, `OPENROUTER_MODEL` in
+[`src/models.ts`](../../src/models.ts) — reaches the alternatives under one key and one bill:
+
+| Reachable via OpenRouter | What it is | Price (2026-08-26) | Notes |
+|---|---|---|---|
+| `native` PDF engine | passes the PDF's bytes straight to a model that reads PDFs natively (Claude, Gemini) | no per-page fee, just tokens | **the important row** — no conversion step, so no fidelity loss |
+| Claude Haiku 4.5 | vision + native PDF | $1 / $5 per MTok, $0.10 cache read | what the plan assumes today |
+| Gemini 3.7 Flash | vision + native PDF | $0.375 / $1.875 per MTok | released 2026-08-13; ~2.5× cheaper than Haiku on these pages |
+| `mistral-ocr` engine | a PDF→markdown *parser* invoked inside a chat request | $2 / 1,000 pages | **not** the same surface as Mistral's own `/v1/ocr` |
+| `cloudflare-ai` engine | PDF→markdown, text-oriented | free | born-digital only; no OCR for scans |
+| Qwen3-VL 32B/235B | open-weight vision | $0.10–0.25 / $0.42–0.88 per MTok | no independent quality evidence for this task |
+
+What OpenRouter costs: a thin platform fee, and **prompt caching that only holds within one
+provider** — its auto-routing can silently break a cache hit unless routing is made sticky. Not a
+capability loss. Structured JSON-schema output is supported.
+
+Two things could not be verified and should be checked before anything depends on them: whether
+OpenRouter's `mistral-ocr` engine runs OCR 4.1 or the older, Mistral-deprecated 2503 model; and
+whether dots.ocr, olmOCR or InternVL are listed there at all.
+
+### Mistral OCR: not the transcriber, possibly the witness
+
+The two searches disagreed, and the disagreement is the useful part.
+
+Against it as the main path: independent tests (Reducto, Pulse, a PyImageSearch review) report
+invented text on low-resolution scans, dropped headers and footers, tables rendered as images,
+headers duplicated across tables, ~17% column misalignment on complex tables and ~1.5% numeric
+deviation. It "doesn't validate" what it extracts, and clean markdown hides a flipped digit
+perfectly. OpenRouter's wrapper also strips the one thing that would let us catch its errors —
+Mistral's own endpoint returns block labels, bounding boxes and confidence; the wrapper returns
+flattened text.
+
+For it, on exactly our hardest case: **specialist OCR engines are markedly more honest about
+illegibility than general vision models.** On a hallucination-specific benchmark, PP-OCRv6 scored
+93.2% against Kimi-K2.6 at 85.0%, Qwen3-VL-235B at 80.6% and MiniMax-M3 at 72.6%. A general model
+faced with a damaged word reaches for a plausible one, because that is what it is built to do.
+
+So Mistral OCR's role here is **not transcription — it is the receipt for a scan.** A scan has no
+text layer, which is what our check normally compares against; an OCR pass manufactures one for
+about 3p on a 17-page document, and it fails differently enough from a vision model that
+disagreement is a real signal. Greg's call (2026-08-26): put it in the bake-off on scan pages and
+decide from what it actually catches, rather than committing now.
+
+### Silent degradation is documented in production, not theoretical
+
+The strongest finding, and it hardens the plan rather than changing it. LlamaIndex's April 2026
+write-up of LlamaParse failures at scale names two modes we had not planned for:
+
+- **Repetition loops** — the decoder sticks, emitting repeated text or whitespace. Reported as
+  *worse* with thinking models, which is a point in favour of the plan's "no thinking on Haiku".
+- **Recitation blocks** — a provider's own safety filter kills generation partway through long
+  structured or boilerplate text, mistaking it for copyright violation. It appears as
+  `content_filter` (OpenAI), `RECITATION` (Gemini) or a refusal (Anthropic). A transcription task
+  is precisely the shape that trips this.
+
+Their mitigations are cheap and belong in v1: hard `max_tokens` caps, terminate a stream on
+detected repetition, bump temperature on retry, and route retries by *finish reason* rather than
+retrying blindly.
+
+And the base rate: **ParseBench** (2,000 enterprise pages) found even the best methods reach only
+~90% content faithfulness — roughly one page in ten has dropped or invented content, and the
+omission is usually silent, a 40-row table returned as 38 rows with nothing to mark it. This is the
+number that justifies the whole per-page check.
+
+### Benchmarks: trust them less than the first round did
+
+OmniDocBench is **saturated** — top scores cluster at 90–96% on 1,355 pages, and its exact-match
+scoring punishes a semantically correct answer formatted differently. LlamaIndex argued in February
+2026 that it needs a successor; none has been adopted. Several leaderboard entries are vendor
+self-reported. [OCR Arena](https://ocrarena.ai), a head-to-head ELO, is the better cross-check, and
+has Gemini 3 Flash first, then Gemini 3 Pro, Claude Opus 4.6, GPT-5.2.
+
+Neither measures our two hard cases. That is the argument for the bake-off and for
+[the eval](../plans/pdf-ingestion.md#the-eval-evalspdf) — our documents are the benchmark that
+matters, and they are the only one that stays true when the models change.
+
+### Reading order is a structural failure, not an OCR one
+
+Worth stating plainly because it changes what to look for. A two-column page read straight across
+produces interleaved text that is still fluent English — no character is wrong, so a
+character-level score will not catch it. Docling has an open, unresolved issue (#2067) on exactly
+this. Two approaches compete: detect layout regions first and transcribe each in order, or let one
+model reason about layout and content together. Practitioners lean towards the first, because its
+failures are *visible* (boxes in the wrong order) rather than silent. We get this for free in a
+different way: the pdf.js text layer gives an independent reading order to compare against.
+
+### Dedicated OCR models, and why none of them is the answer here
+
+GLM-OCR (94.6 on OmniDocBench v1.5), PaddleOCR-VL-1.5 (94.5), MinerU2.5 (90.7) and dots.ocr (88.4)
+all beat the general models on raw transcription, at a fraction of the cost. All of them are Python
+plus GPU model weights. We deploy to Vercel serverless: no native binaries, no GPU. So a dedicated
+model is only interesting if somebody hosts it — which is exactly what Mistral OCR is. Licences are
+clean if this changes (PaddleOCR-VL Apache 2.0, dots.ocr MIT, olmOCR Apache 2.0, Docling MIT);
+MinerU has left AGPL for an Apache-based licence with a revenue cap that would not bind us.
+
+### Sources, second round
+
+openrouter.ai/docs/guides/overview/multimodal/pdfs · openrouter.ai/anthropic/claude-haiku-4.5 ·
+openrouter.ai/google/gemini-3.7-flash · openrouter.ai/qwen/qwen3-vl-32b-instruct ·
+openrouter.ai/blog/tutorials/prompt-caching-sticky-routing ·
+docs.mistral.ai/models/ocr-4-1 (2026-07-16) · mistral.ai/news/ocr-4 ·
+llamaindex.ai/blog/engineering-insights-failure-modes-that-break-vlm-powered-ocr-in-production
+(2026-04-08) · llamaindex.ai/blog/omnidocbench-is-saturated-what-s-next-for-ocr-benchmarks
+(2026-02-24) · llamaindex.ai/blog/llm-ocr (2026-08-03) · ocrarena.ai ·
+llm-stats.com/benchmarks/omnidocbench · arxiv.org/pdf/2604.08538 (ParseBench) ·
+arxiv.org/pdf/2606.13108 (PP-OCRv6 hallucination numbers) ·
+github.com/docling-project/docling/issues/2067 · github.com/opendatalab/MinerU/blob/master/LICENSE.md ·
+github.com/allenai/olmocr · huggingface.co/ibm-granite/granite-docling-258M ·
+pyimagesearch.com/2025/12/23/mistral-ocr-3-technical-review-sota-document-parsing-at-commodity-pricing ·
+github.com/icereed/paperless-gpt/issues/792
+
+## Sources, first round
 
 Family A: npmjs.com/package/pdfjs-dist · github.com/unjs/unpdf · npmjs.com/package/mupdf ·
 artifex.com/blog/mupdfjs-with-npm · github.com/hyzyla/pdfium · npmjs.com/package/@opendocsg/pdf2md ·
