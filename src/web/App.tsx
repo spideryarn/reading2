@@ -8,13 +8,16 @@ import {
   useState,
 } from "react";
 import { throttle, useQueryState } from "nuqs";
-import type { Article, BlockId } from "../types.js";
+import type { Article, BlockId, GlossaryEntry } from "../types.js";
 import { Library } from "./Library.js";
+import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
+import { SignInPage } from "./SignInPage.js";
+import { useSession } from "./useSession.js";
 import { DesignPage } from "./DesignPage.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
-import { type ArticleView, useRoute } from "./router.js";
+import { type ArticleView, LIBRARY_HREF, navigate, useRoute } from "./router.js";
 import { Metadata } from "./Metadata.js";
 import { Tweets } from "./Tweets.js";
 import { sanitizeArticle } from "./sanitize.js";
@@ -28,7 +31,8 @@ import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
-import { useGlossary } from "./useGlossary.js";
+import { TermTooltip } from "./TermTooltip.js";
+import { useGlossary, useGlossaryTerms } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
 import { useSummaries } from "./useSummaries.js";
@@ -93,8 +97,10 @@ import { fitView, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
+import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
+import { anchored, countByBlock, useChatAnchors } from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 
 
 
@@ -108,6 +114,24 @@ import { readJson } from "./lib/api.js";
  */
 export function App() {
   const route = useRoute();
+  const { user, loading } = useSession();
+
+  /* **The callback is answered before the gate**, and it has to be: the reader
+     arriving here is by definition not signed in yet, and sending them to the
+     sign-in screen would throw away the code they came back with. */
+  if (route.kind === "callback") return <AuthCallback />;
+
+  /* Nothing, not a spinner. This is one frame between page load and the SDK's
+     first `INITIAL_SESSION`, and a spinner that flashes on every reload reads
+     as slowness rather than as care. */
+  if (loading) return null;
+
+  /* **A whole-app gate rather than a route**, because who you are is not view
+     state and docs/project/url-state.md says view state is what lives in the
+     URL. The address you were at is still in the address bar when you come
+     back — which is the point. */
+  if (!user) return <SignInPage />;
+
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
@@ -137,6 +161,16 @@ export function App() {
         <ProfilePage />
       </>
     );
+  /* Signed in, and asking for the sign-in page. There is nothing to show — the
+     gate above already returned `SignInPage` for everyone who needs it — so
+     this is somebody following a stale link, and the shelf is where they meant
+     to end up. `replace`, because a Back button that returns you to a page that
+     immediately bounces you again is a trap. */
+  if (route.kind === "login") {
+    navigate(LIBRARY_HREF, { replace: true });
+    return null;
+  }
+
   return (
     <>
       <HomeLogo />
@@ -170,7 +204,7 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
     let live = true;
     setArticle(null);
     setError(null);
-    fetch(`/api/article/${encodeURIComponent(slug)}`)
+    apiFetch(`/api/article/${encodeURIComponent(slug)}`)
       .then((r) => readJson<Article>(r))
       // Sanitised here, at the doorway, and nowhere later. This is the pass that
       // guards the render: stage 3 cleaned this HTML under *jsdom's* parser and
@@ -211,7 +245,7 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
   useEffect(() => {
     if (counted.current === slug) return;
     counted.current = slug;
-    void fetch(`/api/library/${encodeURIComponent(slug)}/open`, { method: "POST" }).catch(
+    void apiFetch(`/api/library/${encodeURIComponent(slug)}/open`, { method: "POST" }).catch(
       () => {},
     );
   }, [slug]);
@@ -440,24 +474,119 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * through the layout arithmetic. That was the point of choosing a dialog.
    */
   const [note, setNote] = useQueryState("note", noteParam);
-  const { comments, ask, retry, deepen, remove, error: commentError } = useComments(slug);
+  const { comments, retry, deepen, remove, error: commentError } = useComments(slug);
 
   /**
-   * The glossary term whose occurrences are underlined in the prose.
+   * The floating chat, and the passage it is about.
+   *
+   * **One id, not two.** `?thread=` says which conversation is open and `mode`
+   * says how it is drawn — full width in chat mode, floating over the article
+   * anywhere else. An earlier draft of the plan added a `?chat=` beside it; a
+   * GPT-5.6 review pointed out it carries nothing `mode` does not already
+   * carry, and two ids that can disagree is a bug waiting to be written.
+   *
+   * `chatDraft` is the moment before there is a conversation at all: a passage
+   * the reader selected, or a paragraph they pressed, with nothing stored and
+   * nothing spent. It is component state rather than a parameter because there
+   * is nothing to link to — and because the quote is the reader's selection,
+   * which docs/project/logging.md and chat-handoff.ts both say does not belong
+   * in an address.
+   */
+  const [thread, setThread] = useQueryState("thread", threadParam);
+  const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
+  const chatAnchors = useChatAnchors(slug);
+
+  /**
+   * What is in the floating slot, decided in one place.
+   *
+   * `note` and `thread` are independent parameters and a pasted URL can carry
+   * both, so "opening one closes the other" is a statement about clicks and not
+   * about state. Chat wins, matching how an overlapping mark resolves.
+   *
+   * Suppressed in chat mode, where the band already shows that conversation and
+   * a floating copy on top of itself is nonsense. The parameter stays, so
+   * leaving the mode brings the panel back where the reader left it.
+   */
+  const overlay: ChatTarget | null =
+    mode === "chat" ? null : (chatDraft ?? (thread ? { kind: "thread", threadId: thread } : null));
+
+  /**
+   * **Every** glossary term, so every one of them can be underlined in the
+   * prose — in any mode, and whether or not the band has ever been opened.
+   *
+   * Greg's call, 2026-08-26: *"Glossary entries should always be underlined in
+   * the verbatim text column, even outside Glossary mode, and hover should show
+   * a rich tooltip."* That reverses a decision this file used to state in the
+   * comment on `term` below and styles.css still explains at length — the marks
+   * used to appear only while a term was pressed, so that the article acquired
+   * annotation on the reader's initiative rather than the model's. What carries
+   * that principle now is the *card*: the line is quiet and standing, and the
+   * explanation still only arrives when the reader points at something.
+   *
+   * `useGlossaryTerms` rather than `useGlossary`, which is the whole of why
+   * `GlossaryBand` still exists: this is one GET and no job poller. See its
+   * docstring.
+   */
+  const { entries: terms, setEntries: setTerms } = useGlossaryTerms(slug);
+
+  /**
+   * The glossary term the reader has *pressed* in the panel, of the many now
+   * drawn.
    *
    * **Held here rather than in the glossary band, and that is not where it
-   * wants to live.** `useGlossary` fetches on mount, so it has to stay inside a
-   * component that only exists in glossary mode — otherwise every reader of
-   * every article pays a request for a list almost none of them open, which is
-   * the same reason `ChatBand` exists. But the *marks* are drawn in the prose,
-   * which is `TableView`'s, and that is here.
+   * wants to live.** `useGlossary` fetches on mount and polls the job list, so
+   * it has to stay inside a component that only exists in glossary mode —
+   * otherwise every reader of every article pays for a list almost none of them
+   * open, which is the same reason `ChatBand` exists. But the *marks* are drawn
+   * in the prose, which is `TableView`'s, and that is here.
    *
    * So the band pushes the selection up as it changes, and clears it on the way
    * out. The state is a plain setter, which is stable, so the effect that does
    * the pushing cannot loop. It is one line more than lifting the whole hook,
    * and it is the line that keeps the fetch where it belongs.
+   *
+   * Since every term is underlined, being selected can no longer mean *having*
+   * a mark. It means a **different** mark — `mark.term[data-open]` — which is
+   * the same thing the open comment and the pressed search hit already do.
    */
   const [term, setTerm] = useState<TermSelection | null>(null);
+
+  /**
+   * The whole list, as the prose needs it: spellings and the blocks to look in.
+   *
+   * Memoised on the entries and on which one is pressed, because it is the
+   * input to a scan of the article — see `termMarks` in annotate.ts, which does
+   * the finding.
+   */
+  const termSelections = useMemo<TermSelection[]>(
+    () =>
+      terms.map((entry) => ({
+        id: entry.id,
+        forms: formsOf(entry),
+        blocks: entry.blocks,
+        open: entry.id === term?.id,
+      })),
+    [terms, term],
+  );
+
+  /**
+   * Point at a term in the prose and press "in the glossary": open the band on
+   * that entry.
+   *
+   * The `?term=` subscription that `GlossaryBand` deliberately keeps to itself
+   * is not duplicated here — this writes the parameter through the same nuqs
+   * setter the band reads, and the band picks it up when it mounts. Two setters
+   * on one parameter is fine; two *subscriptions* were what that comment was
+   * about.
+   */
+  const [, setTermId] = useQueryState("term", termParam);
+  const openTermInGlossary = useCallback(
+    (id: string) => {
+      void setTermId(id);
+      void setMode("glossary");
+    },
+    [setTermId, setMode],
+  );
 
   /**
    * The search results whose marks are drawn in the prose, and which of them
@@ -846,21 +975,82 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         onJump={jumpTo}
         comments={comments}
         openComment={note}
-        term={term}
+        chats={anchored(chatAnchors.summaries)}
+        chatCounts={countByBlock(chatAnchors.summaries)}
+        openChat={overlay?.kind === "thread" ? overlay.threadId : null}
+        onOpenChat={(id) => {
+          setChatDraft(null);
+          void setNote(null);
+          void setThread(id);
+        }}
+        onChatAbout={(blockId) => {
+          /* A conversation anchored to the whole block — the other half of what
+             an anchor can be, and the one that draws no mark in the prose. The
+             paragraph's opening words go into the composer so the reader can see
+             which one they pressed; a six-character id is not something you can
+             check you clicked correctly. */
+          void setNote(null);
+          void setThread(null);
+          setChatDraft({
+            kind: "draft",
+            anchor: { blockId },
+            opening: blockText.get(blockId) ?? "",
+          });
+        }}
+        terms={termSelections}
         hitMarks={hitMarks}
         hitHues={hitHues}
         hitStrength={hitStrength}
         onSelect={(anchor) => {
           if (!anchor) return;
-          void setNote(ask(anchor));
-          // Drop the browser's own selection highlight. It sits on top of the
-          // mark we just drew, so leaving it makes the new artefact invisible
-          // until the reader happens to click elsewhere.
-          window.getSelection()?.removeAllRanges();
+          /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
+             call the reader had not asked for; now it opens a box and waits.
+             Greg's call — see docs/plans/chat-as-gateway.md. */
+          void setNote(null);
+          void setThread(null);
+          setChatDraft({
+            kind: "draft",
+            anchor: { blockId: anchor.blockId, quote: anchor.quote, start: anchor.start },
+            opening: anchor.quote,
+          });
+          /* **The browser's selection is deliberately left alone**, which is a
+             reversal. It used to be cleared because it sat on top of the mark
+             we had just drawn and hid it. There is now no mark to reveal —
+             nothing is stored until the reader asks — so clearing it would
+             leave them looking at a quote in a box with no idea which words on
+             the page it came from. */
         }}
         onOpenComment={(id) => void setNote(id)}
       />
-      {openComment && (
+      {overlay && (
+        <ChatDialog
+          slug={slug}
+          target={overlay}
+          at={at}
+          blocks={blockText}
+          onJump={jumpTo}
+          onClose={() => {
+            setChatDraft(null);
+            void setThread(null);
+          }}
+          onThread={(id) => {
+            /* The draft has become a conversation. Cleared in the same commit
+               that names the thread, so the slot never holds both — the panel
+               becomes the conversation rather than closing and reopening. */
+            setChatDraft(null);
+            void setThread(id);
+          }}
+          onOpenFull={() => {
+            /* One id, so this is the whole of it: the band reads the same
+               `?thread=` the panel was reading. */
+            setChatDraft(null);
+            void setMode("chat");
+          }}
+          onCreated={chatAnchors.add}
+          onDropped={chatAnchors.drop}
+        />
+      )}
+      {!overlay && openComment && (
         <CommentDialog
           comment={openComment}
           position={positionOf(ordered, note)}
@@ -874,25 +1064,33 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           onRetry={() => retry(openComment.id)}
           onDeepen={() => deepen(openComment.id)}
           onDiscuss={(question) => {
-            /* Hand the question over, then move. The cell is read by `ChatBand`
-               once `useChat` has loaded — see chat-handoff.ts for why it is a
-               module cell rather than a query parameter, and for the three ways
-               that goes wrong.
+            /* **Into the floating panel, not into chat mode.** The follow-up
+               box has always handed the reader to a conversation rather than
+               growing a transcript in this dialog — Greg's call, chat-handoff.ts
+               — and since 2026-08-26 that conversation floats over the article
+               instead of replacing it.
 
-               The dialog closes on the way through. Chat is a mode, so it
-               replaces the columns this dialog floats over, and leaving it up
-               would park an explanation of a passage on top of the conversation
-               about it. */
-            /* Read at the moment of the click rather than at render, and from
-               the URL rather than from state: `?at=` is where the reader is
-               *now*, which is what "here" should mean in the conversation. Same
-               trick ChatBand uses. Named apart from the `at` this component
-               holds precisely because they can differ — that difference is the
-               whole reason this line reads the URL. */
-            const atNow = new URLSearchParams(location.search).get("at");
-            handOffToChat(slug, askAboutQuote(openComment.quote, question), atNow);
+               It carries the comment's own anchor, so the new chat is tied to
+               the same words the explanation was about: the passage keeps a mark
+               and the model is told what "this" refers to on every turn, not
+               just the first. The question itself is not sent yet — it is
+               pre-filled, and the reader presses send — because a follow-up
+               typed into one box and fired from another is a model call they did
+               not quite ask for, which is the whole thing this change is about.
+
+               The dialog closes on the way through: one panel in the slot. */
+            setChatDraft({
+              kind: "draft",
+              anchor: {
+                blockId: openComment.blockId,
+                quote: openComment.quote,
+                start: openComment.start,
+              },
+              opening: openComment.quote,
+            });
             void setNote(null);
-            void setMode("chat");
+            void setThread(null);
+            setFollowUpDraft(question);
           }}
           onDelete={() => {
             // Step to the neighbour rather than closing outright: deleting one
@@ -903,6 +1101,15 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           }}
         />
       )}
+      {/* The card that appears when the pointer rests on an underlined term.
+          One panel for the whole page rather than one per mark — the marks are
+          injected HTML and there are hundreds of them. TermTooltip.tsx.
+
+          Outside the mode band below on purpose: the underlines are drawn in
+          every mode now, so the thing that explains them has to be there in
+          every mode too. */}
+      <TermTooltip entries={terms} onOpen={openTermInGlossary} />
+
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —
           see ChatBand. */}
@@ -910,7 +1117,16 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         <ChatBand slug={slug} blocks={blockText} onJump={jumpTo} />
       )}
       {mode === "glossary" && (
-        <GlossaryBand slug={slug} onJump={jumpTo} onSelected={setTerm} />
+        <GlossaryBand
+          slug={slug}
+          onJump={jumpTo}
+          onSelected={setTerm}
+          /* The band holds the fresher list while it is open — the reader may
+             have just generated, appended to or reset it — and the underlines
+             in the prose are drawn from the copy up here. So it pushes, exactly
+             as it pushes the selection. */
+          onEntries={setTerms}
+        />
       )}
       {mode === "summary" && (
         <SummaryBand slug={slug} article={article} onJump={jumpTo} />
@@ -1193,10 +1409,13 @@ function GlossaryBand({
   slug,
   onJump,
   onSelected,
+  onEntries,
 }: {
   slug: string;
   onJump(id: BlockId): void;
   onSelected(selection: TermSelection | null): void;
+  /** The list itself, up to `Reader`, which is where the prose's marks are drawn. */
+  onEntries(entries: GlossaryEntry[]): void;
 }) {
   const glossary = useGlossary(slug);
   const [termId, setTermId] = useQueryState("term", termParam);
@@ -1216,6 +1435,18 @@ function GlossaryBand({
       selected ? { id: selected.id, forms: formsOf(selected), blocks: selected.blocks } : null,
     );
   }, [selected, onSelected]);
+
+  /* And the list. `glossary.glossary` is a fresh object only when it has
+     actually been refetched, so this fires on load and on each of the three
+     verbs, not on every render.
+
+     No cleanup that clears it, unlike the selection below: leaving glossary
+     mode must take the *highlight* off the pressed term, but the underlines are
+     not a property of the mode any more and must survive the band closing. */
+  const entries = glossary.glossary?.entries;
+  useEffect(() => {
+    if (entries) onEntries(entries);
+  }, [entries, onEntries]);
 
   /* Leaving glossary mode must take the underlines out of the prose with it.
      Its own effect, with no dependency on `selected`, so it runs on unmount and
