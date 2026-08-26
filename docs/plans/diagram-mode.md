@@ -313,6 +313,35 @@ gated on rAF — and so may have the same problem. Not changed here: different
 stage, different owner, and the spine degrades less badly because it renders
 something without metrics. Worth a look by whoever owns it.
 
+### And then what it actually showed
+
+After the fix, the same probe:
+
+```
+svgs 5 · measuring 0 · quiet 0 · nodes 55 · links 20 · labels 55
+```
+
+All five panels drew, at 288, 320 and 400px. No text crossed into a neighbouring
+column on either side of either mindmap. No console errors and no React
+warnings. Looked at directly, the things that matter are all there: strata's
+rotated part labels down its coloured rails, the tree's elbow connectors and its
+grey gist lines with the block count at the right edge, the orange you-are-here
+ring on the section the reader is in, and the dashed orange position line across
+strata.
+
+**The aesthetic verdict, and it is unanimous with Sol's.** Strata is the most
+polished — the coloured bands give the hierarchy for free and the whole shape of
+the piece reads at a glance. Tree is plainest and entirely legible. **Mindmap is
+the weakest of the three**: legible, but busier, lopsided when an article has few
+parts, and the one whose labels truncate first at 288px. Both reviewers picked it
+as the one to cut if one had to go.
+
+It is staying. Greg asked for a mindmap by name and for several ideas rather than
+one, and this is the round where we find out which of them earn their place. The
+argument for cutting it is recorded here so that the next person does not have to
+rediscover it — and the honest replacement is the cross-reference arcs below,
+which would put a genuine *graph* in the third slot rather than a third tree.
+
 
 
 ## Open, and deliberately not done

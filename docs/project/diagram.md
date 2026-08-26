@@ -192,6 +192,14 @@ saturated fill at 20px tall is a shout and thirty of them is a mess.
 - **No cross-reference arcs, yet.** The article's own internal links
   ([`internal-links.ts`](../../src/web/internal-links.ts)) would make this a real
   graph rather than a tree. The most interesting thing left, and a second feature.
+- **Mindmap may not survive.** Two independent reviews — GPT Sol, and a browser
+  pass looking at all three side by side — picked it as the weakest and as the
+  one to cut if one had to go: legible, but busier than the other two, lopsided
+  when an article has few parts, and the first to truncate its labels at 288px.
+  It is here because Greg asked for a mindmap by name, and because this is the
+  round that finds out which ideas earn their place. The honest replacement for
+  the third slot is the arcs below, which would put a real *graph* there rather
+  than a third tree.
 - **No block weighting.** Strata counts blocks, not words — see above. Giving
   each block a weight would make the picture honest about length rather than
   about count, and is the most valuable small change left here.
