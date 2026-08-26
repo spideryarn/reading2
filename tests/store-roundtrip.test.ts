@@ -30,6 +30,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
+import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
 import { exportArticle } from "../src/store/export.js";
 import { importArticle } from "../src/store/import.js";
 
@@ -46,6 +47,7 @@ const ARTEFACTS = [
   "tweets.json",
   "glossary.json",
   "summary.json",
+  "ideas.json",
   "labels.json",
   "comments.json",
   "chat.json",
@@ -91,6 +93,22 @@ function sorted(value: unknown): unknown {
  * would hide the day it breaks.
  */
 function canonical(artefact: string, value: unknown): unknown {
+  /* `blocks.json` carries a `sanitizer` stamp saying which version of the
+     policy cleaned it (docs/project/security.md). The export re-stamps, because
+     it writes the blocks through `blocksArtefact` and therefore has genuinely
+     just cleaned them — so an artefact that went into Postgres before the stamp
+     existed comes back out with one. That is the export doing its job, not
+     content changing, and it is the only key here that is *about* the file
+     rather than *in* it.
+     Dropped from both sides so the comparison stays about the blocks. The stamp
+     itself is not thereby untested — "stamps the blocks it exports" below
+     asserts it positively, which is the half a normalisation like this would
+     otherwise quietly delete. */
+  if (artefact === "blocks.json" && value && typeof value === "object") {
+    const { sanitizer: _ignored, ...rest } = value as Record<string, unknown>;
+    return rest;
+  }
+
   const key = { "comments.json": "comments", "searches.json": "runs", "chat.json": "threads" }[
     artefact
   ];
@@ -226,6 +244,20 @@ when("a round trip through Postgres", () => {
         sorted(canonical(artefact, original)),
       );
     });
+  });
+
+  it("stamps the blocks it exports", async () => {
+    /* The other half of dropping `sanitizer` in `canonical`. An export that
+       wrote the key away entirely would sail through the comparison above and
+       leave every exported article looking like it predates the sanitiser — so
+       the read seam would re-clean all of them on every load and warn about it
+       forever (docs/project/security.md § The stamp was written to a file
+       nobody reads, which is that mistake made once already). */
+    const returned = (await readJsonIfPresent(
+      path.join(out, "data", slugs[0] ?? "", "blocks.json"),
+    )) as { sanitizer?: number } | undefined;
+
+    expect(returned?.sanitizer).toBe(SANITIZER_VERSION);
   });
 
   it("puts the id-stamped HTML back in output/, not beside the article", async () => {
