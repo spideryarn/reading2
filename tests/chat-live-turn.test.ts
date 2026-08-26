@@ -15,6 +15,16 @@
  *    stopped it;
  *  - and a stop naming an answer that has already been replaced used to abort
  *    the replacement, because the key names a row and a retry reuses the row.
+ *
+ * The review's *other* High — a new turn appended into the gap an edit is
+ * waiting in — is **not** here, and an earlier version of this file claimed a
+ * test for it that did not test it. The window it needs is the wait inside
+ * `settleThread`, and nothing outside the process can widen that wait: the one
+ * lever available from here, a slow `cancel()` on the body, is dropped on the
+ * floor because `openrouter-stream.ts` cancels once un-awaited on abort and the
+ * awaited cancel afterwards is then a no-op. The test written against it passed
+ * with the lock removed, which is worse than no test. What is checked instead is
+ * the lock's own contract — see tests/turn-order.test.ts.
  */
 import { rm } from "node:fs/promises";
 import path from "node:path";
@@ -127,7 +137,7 @@ function call(method: string, url: string, body?: unknown): Call {
 
 /** Wait until the route has written its first frame, or give up. */
 async function begun(c: Call): Promise<Record<string, unknown>> {
-  for (let i = 0; i < 600; i++) {
+  for (let i = 0; i < 150; i++) {
     const first = c.frames()[0];
     if (first && first.data.text === undefined) return first.data;
     await new Promise((r) => setTimeout(r, 10));
@@ -137,7 +147,7 @@ async function begun(c: Call): Promise<Record<string, unknown>> {
 
 /** Wait until at least one word of the answer has arrived. */
 async function streaming(c: Call): Promise<void> {
-  for (let i = 0; i < 600; i++) {
+  for (let i = 0; i < 150; i++) {
     if (c.frames().some((f) => f.event === "delta")) return;
     await new Promise((r) => setTimeout(r, 10));
   }
@@ -147,39 +157,55 @@ async function streaming(c: Call): Promise<void> {
 const stored = async (threadId: string): Promise<ChatMessage[]> =>
   (await loadThreads(SLUG)).find((t) => t.id === threadId)?.messages ?? [];
 
+/** Stop whatever is still streaming in a conversation. Never throws. */
+async function release(threadId: string): Promise<void> {
+  if (threadId === "") return;
+  const pending = (await stored(threadId)).filter((m) => m.status === "pending");
+  for (const m of pending) {
+    await call("POST", `/api/chat/${SLUG}/${threadId}/stop`, { messageId: m.id }).done.catch(
+      () => {},
+    );
+  }
+}
+
 describe("a request that will be refused touches nothing", () => {
   it("does not stop the live answer on its way to a 409", async () => {
     const live = call("POST", `/api/chat/${SLUG}`, {
       threadId: "spya-t7r4wz",
       question: "why is it like that?",
     });
-    const first = await begun(live);
-    const threadId = first.threadId as string;
-    await streaming(live);
+    let threadId = "";
+    try {
+      const first = await begun(live);
+      threadId = first.threadId as string;
+      await streaming(live);
 
-    /* A retry of a message that is not the last one — a second tab a step
-       behind, which is the case ChatConflict exists for. It must be refused,
-       and the refusal must cost the reader in the other tab nothing. */
-    const stale = call("POST", `/api/chat/${SLUG}`, {
-      threadId,
-      retry: first.questionId as string,
-    });
-    await stale.done;
-    expect(stale.status()).toBe(409);
+      /* A retry of a message that is not the last one — a second tab a step
+         behind, which is the case ChatConflict exists for. It must be refused,
+         and the refusal must cost the reader in the other tab nothing. */
+      const stale = call("POST", `/api/chat/${SLUG}`, {
+        threadId,
+        retry: first.questionId as string,
+      });
+      await stale.done;
+      expect(stale.status()).toBe(409);
 
-    // Still arriving. Before the fix this row was `done` with `stopped: true`:
-    // the settle ran before the check, so the refusal aborted the answer first
-    // and refused itself second.
-    const after = await stored(threadId);
-    expect(after.at(-1)?.status).toBe("pending");
-    expect(after.at(-1)?.stopped).toBeUndefined();
-    expect(live.frames().some((f) => f.event === "done")).toBe(false);
-
-    // Let the live one go, or the test hangs.
-    await call("POST", `/api/chat/${SLUG}/${threadId}/stop`, {
-      messageId: first.messageId as string,
-    }).done;
-    await live.done;
+      // Still arriving. Before the fix this row was `done` with `stopped: true`:
+      // the settle ran before the check, so the refusal aborted the answer first
+      // and refused itself second.
+      const after = await stored(threadId);
+      expect(after.at(-1)?.status).toBe("pending");
+      expect(after.at(-1)?.stopped).toBeUndefined();
+      expect(live.frames().some((f) => f.event === "done")).toBe(false);
+    } finally {
+      /* In a `finally` because a *failing* assertion above leaves the stream
+         open, and an open stream here is not an inert leftover: it holds a
+         120-second deadline and a 45-second stall timer, and it stays in the
+         module's `streaming` map where the next test can see it. A regression
+         would take the whole file down with it rather than one case. */
+      await release(threadId);
+      await live.done;
+    }
   });
 });
 

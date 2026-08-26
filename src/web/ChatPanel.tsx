@@ -676,9 +676,12 @@ function Turn({
    * the pencil they opened it from is the least surprising place, and it is
    * where they were. Found by a GPT-5.6 review, 2026-08-26.
    *
-   * Nothing happens after a *submitted* edit: the pencil is withdrawn while the
-   * new answer arrives, so there is nothing to focus and the caret falls back to
-   * the body as before.
+   * It does nothing whenever the pencil is not there to receive it, which is
+   * any time an answer is arriving: after a submitted edit, and also after a
+   * *cancelled* one if the reader started another answer while the box was
+   * open. `canEdit` withdraws the pencil in both cases and the caret falls back
+   * to the body, as it did before. Restoring focus to something that is about
+   * to be withdrawn would be worse.
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);

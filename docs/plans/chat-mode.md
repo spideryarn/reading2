@@ -740,10 +740,53 @@ keep Escape from Dock.tsx — that listener is on `window` in the capture phase 
 `stopImmediatePropagation` before React's handler runs. The drawer wins, which is the right order,
 but it wins rather than being stopped.
 
-What was **not** fixed: the per-conversation lock has no test, because making a send land inside an
-edit's settle window on purpose is not something this harness can do deterministically. The two High
-findings do have one — [`tests/chat-live-turn.test.ts`](../../tests/chat-live-turn.test.ts) drives
-the real route with a body that says one word and then hangs, which is what a live answer is.
+[`tests/chat-live-turn.test.ts`](../../tests/chat-live-turn.test.ts) pins the first of the two Highs
+and the stop-token bug by driving the real route with a body that says one word and then hangs, which
+is what a live answer is. The per-conversation lock is checked separately and differently — see the
+round below.
+
+### And a third pass, on the fixes themselves
+
+The fixes above were sent straight back to GPT-5.6, because a concurrency fix written quickly is
+exactly the kind of change that trades one race for a worse one. **NO-SHIP again**, two more Highs,
+and both were the first fix's own new failure mode rather than anything older.
+
+**The attempt counter could collide across processes.** Attempts were numbered `1, 2, 3…` from a
+module variable, with a comment saying they were never reused — true within one process, which is not
+the claim that matters. Two servers on one `data/` directory both start at 1, so server A's stale stop
+for attempt 1 matches server B's live attempt 1 exactly and aborts an answer nobody asked to stop:
+*the bug the field was added to prevent, wearing the fix as a disguise.* It is a `randomUUID` now.
+Nothing else changed, and the client never looks at the value.
+
+**The 409 refetch could erase a newer answer.** Refusing an edit put the server's copy of the *whole
+list* over the top of the screen — including conversations the refusal had nothing to do with. A send
+running in another thread had its optimistic rows replaced by a snapshot taken before them, and every
+later frame of that stream then patched a row that was not there: an answer that arrives nowhere, or a
+spinner that never clears. The refetch now replaces exactly one conversation, and skips even that if
+another stream is still writing into it.
+
+A **delete** was brought under the same per-conversation lock, because a delete landing between an
+edit's check and its write put the abort-then-refuse bug back in a narrower window.
+
+**And the test written for the lock did not test the lock.** It set up a send arriving during an
+edit's settle, and it passed with the lock taken out — because the settle window it aimed at closes in
+under a millisecond and nothing outside the process can hold it open. The one lever available, a slow
+`cancel()` on the response body, is dropped on the floor: `openrouter-stream.ts` cancels once
+un-awaited on abort, so the awaited cancel afterwards is a no-op. That test is gone. What replaced it
+is [`tests/turn-order.test.ts`](../../tests/turn-order.test.ts), which checks the lock's own
+contract — that it excludes, that it keeps its order, that two conversations do not wait on each
+other, and that a turn queued behind a failing one still runs.
+
+Writing that last one turned up a line of the lock that was **dead code with a comment claiming it was
+load-bearing**: `before.then(fn, fn)`, whose second handler existed to keep a rejection from breaking
+the chain. It could never fire — what a turn waits on is the previous turn's *tail*, and the tail
+already swallows both outcomes. The property was real and the comment pointed at the wrong line for
+it. That is the third pass running in which the interesting finding was about a test or a comment
+rather than about code.
+
+Two comments were corrected: the lock does **not** make two conversations independent (the store's
+`update` is one queue for the whole process — the lock is narrower than that queue, not wider), and
+focus after an edit box closes is restored only when the pencil is there to receive it.
 
 ### What was deliberately not fixed
 

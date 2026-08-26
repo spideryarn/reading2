@@ -44,6 +44,7 @@
  * src/jobs.ts. See docs/project/comments.md, docs/project/library.md and
  * docs/project/ingest-queue.md.
  */
+import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 /* From the store rather than from src/api.ts directly, so that
    SPIDERYARN_STORE=postgres swaps every article read at once and no route has
@@ -83,6 +84,7 @@ import { findPassages } from "./search.js";
    the two halves in stores nothing keeps in step. */
 import { commentStore } from "./store/index.js";
 import { converse } from "./converse.js";
+import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { isSlug, slugFromUrl } from "./ingest.js";
 import { cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
@@ -410,16 +412,29 @@ interface Live {
    * stop would arrive to find a different answer under the name it was given
    * and abort that one instead. Rare in one tab, ordinary across two.
    *
-   * So `/stop` carries the number back and `stopChat` refuses a mismatch. A
-   * request with no number at all still stops whatever is there, which is what
-   * a client older than this field would send.
+   * So `/stop` carries the token back and `stopChat` refuses a mismatch.
+   *
+   * **A random token rather than a counter**, and the first version of this was
+   * a counter with a comment claiming it was never reused. It is not reused
+   * *within one process*, which is not the claim that matters: two servers on
+   * one `data/` directory both start at 1, so A's stale stop for attempt 1
+   * matches B's live attempt 1 exactly and aborts an answer nobody asked to
+   * stop — the same failure this field exists to prevent, wearing the fix as a
+   * disguise. A token nobody can guess cannot collide with another process's.
+   * Found by a GPT-5.6 review, 2026-08-26.
+   *
+   * A request with no token at all still stops whatever is there, and that is
+   * deliberate rather than an oversight: a tab that reloaded mid-answer has
+   * seen no `begin` frame and so has no token for the row, and it must still be
+   * able to stop the answer it is watching. The hole that leaves — an old
+   * client aborting a replacement — needs both a tokenless client and a live
+   * replacement, and is smaller than a stop button that does nothing after a
+   * reload.
    */
-  attempt: number;
+  attempt: string;
 }
 
 const streaming = new Map<string, Live>();
-/** Counts every attempt this process starts. Never reused, never reset. */
-let attempts = 0;
 
 /**
  * One turn at a time per conversation, across deciding *and* writing it.
@@ -433,22 +448,40 @@ let attempts = 0;
  * GPT-5.6 review, 2026-08-26.
  *
  * The lock is held for the settle and the write and **released before the model
- * is called**, so two conversations never wait on each other and a long answer
- * blocks nothing. It cannot deadlock against `settleThread`: the streams that
- * wait for are past this lock already.
+ * is called**, so a long answer blocks nothing. It cannot deadlock against
+ * `settleThread`: the streams it waits for are past this lock already.
+ *
+ * It does *not* make two conversations independent, and an earlier version of
+ * this comment said it did. The store's own `update` in src/chat.ts is one
+ * queue for the whole process, so every write to every article still lines up
+ * behind every other. This lock is narrower than that queue, not wider: it
+ * holds a conversation still across *several* of those writes, which is the
+ * thing the queue cannot do.
  *
  * Per process, like everything else here. Two servers on one `data/` directory
  * remains the unfixed problem in docs/plans/chat-mode.md § What is still open.
+ *
+ * Exported for its tests and for nothing else. The wiring — that every write in
+ * `streamChat` and the thread DELETE go through it — is checked by reading;
+ * what tests/turn-order.test.ts checks is that the thing they go through
+ * actually excludes, actually keeps its order, and actually survives a throw.
  */
 const turnOrder = new Map<string, Promise<void>>();
 
-async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const before = turnOrder.get(key) ?? Promise.resolve();
-  /* `fn` runs whether the turn in front succeeded or failed. A rejection must
-     not break the chain — every later turn in this conversation would reject
-     with a stranger's error — so the tail swallows both outcomes and only the
-     caller sees what happened to its own. */
-  const mine = before.then(fn, fn);
+  /* **The tail is what keeps the chain alive**, and it is worth being exact
+     about which line does the work. `mine` rejects when `fn` does, and that
+     rejection belongs to the caller and nobody else; what the *next* turn waits
+     on is `tail`, which swallows both outcomes. Without that, one refused
+     request would reject every later turn in this conversation with a
+     stranger's error for the life of the process.
+
+     This was first written as `before.then(fn, fn)` with a comment saying the
+     second handler was what saved the chain. It was dead code — `before` is a
+     tail and a tail never rejects — and the comment was pointing at the wrong
+     line for a property the code did genuinely have. */
+  const mine = before.then(fn);
   const tail = mine.then(
     () => {},
     () => {},
@@ -651,7 +684,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      something else, with nothing on screen to show the two had parted. */
   const asked = user.text;
   const key = `${slug}/${thread.id}/${reply.id}`;
-  const attempt = ++attempts;
+  const attempt = randomUUID();
   const stop = new AbortController();
   let release!: () => void;
   const done = new Promise<void>((resolve) => {
@@ -689,6 +722,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   };
 
   let text = "";
+  /** What the tools did, kept so a turn that fails still records them. */
+  const tools: ToolRun[] = [];
   try {
     streaming.set(key, { stop, done, attempt });
     res.statusCode = 200;
@@ -737,11 +772,25 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       history: thread.messages.slice(0, -2), // everything before this turn
       question: asked,
       at: typeof at === "string" ? at : undefined,
+      // The tools need to know which article the reader has open; the prompt
+      // does not, and does not get it. src/chat-tools.ts § ToolContext.
+      slug,
       signal: stop.signal,
     })) {
       if (event.type === "delta") {
         text += event.text;
         frame("delta", { text: event.text });
+        continue;
+      }
+      /* A tool starting, or the same tool finishing — one frame either way, and
+         the client assigns by `index`. Held here as well as sent, because the
+         connection may close mid-turn: the answer still finishes and is still
+         stored (see point 3 in the header), and it should be stored with the
+         tools it actually ran rather than with an empty list because nobody was
+         watching. That copy is what makes a *failed* turn keep them too. */
+      if (event.type === "tool") {
+        tools[event.index] = event.run;
+        frame("tool", { index: event.index, run: event.run });
         continue;
       }
       /* A stopped answer is stored `done`, with a flag. It is not a failure —
@@ -754,6 +803,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         citations: event.citations,
         searches: event.searches,
         model: event.model,
+        /* Omitted rather than stored empty, the same rule `stopped` follows on
+           the next line: most answers use no tools, and a `"tools": []` on every
+           one of them is noise in a file a person may well open. */
+        ...(event.tools.length > 0 ? { tools: event.tools } : {}),
         ...(event.stopped ? { stopped: true } : {}),
       };
       await finishTurn(slug, thread.id, reply.id, finished);
@@ -772,7 +825,14 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     const message = (err as Error).message;
     try {
       // The partial answer is kept, not dropped — see the header note.
-      await finishTurn(slug, thread.id, reply.id, { text, status: "error", error: message });
+      await finishTurn(slug, thread.id, reply.id, {
+        text,
+        status: "error",
+        error: message,
+        // A failed turn keeps what its tools found, for the same reason it keeps
+        // its half-written text: the reader watched both happen.
+        ...(tools.length > 0 ? { tools } : {}),
+      });
     } catch (storeErr) {
       log("store").error(
         { ...errorFields(storeErr), slug, threadId: thread.id, messageId: reply.id },
@@ -821,7 +881,7 @@ async function stopChat(
      sense the reader cares about: the words they were watching are already
      finished. Aborting what is there instead would stop an answer nobody asked
      to stop. */
-  if (typeof attempt === "number" && attempt !== live.attempt) return { stopped: false };
+  if (typeof attempt === "string" && attempt !== live.attempt) return { stopped: false };
   live.stop.abort(new Error("stopped by the reader"));
   await live.done;
   return { stopped: true };
@@ -1447,7 +1507,12 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     }
     if (oneThread && req.method === "DELETE") {
       const [slug, id] = [slugPart(oneThread, 1), part(oneThread, 2)];
-      send(res, 200, { threads: await deleteThread(slug, id) });
+      /* Under the conversation's turn order, like the writes in `streamChat`.
+         A retry or an edit checks that it will be accepted, then aborts the live
+         answer, then writes — and a delete landing between the check and the
+         write puts the abort-then-refuse bug back in a narrower window. There is
+         no reason a delete needs to interleave with a turn, so it does not. */
+      send(res, 200, { threads: await inTurnOrder(`${slug}/${id}`, () => deleteThread(slug, id)) });
       return true;
     }
     if (searches && req.method === "GET") {
