@@ -21,6 +21,8 @@ import {
   planChunks,
   renderHtml,
   runPdfExtract,
+  withoutRepeats,
+  wordsOf,
 } from "../src/pdf-read.js";
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
@@ -77,6 +79,45 @@ describe("cutting a document into chunks", () => {
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.flatMap((c) => c.pages)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
+});
+
+describe("text the chunk was only meant to look at", () => {
+  /* GPT Sol's probe: the context page split into ten short records and
+     relabelled as the next page. Every one is under the twenty-word floor the
+     exact-repeat rule uses, so every one survived it — and precision treats the
+     context page as legitimate source text, so the duplicated page scored 1.0
+     on everything. src/pdf-read.ts § withoutRepeats. */
+  it("drops the context page however finely it has been chopped up", async () => {
+    const bytes = new Uint8Array(await readFile(EASY));
+    const pass = await pass0(bytes);
+    const contextPage = pass.pages[3]!;
+    const wanted = pass.pages[4]!;
+
+    const chopped = contextPage.text
+      .split(/\s+/)
+      .filter(Boolean)
+      .reduce<string[][]>((acc, word, i) => {
+        if (i % 10 === 0) acc.push([]);
+        acc.at(-1)!.push(word);
+        return acc;
+      }, [])
+      .map((chunk) => record({ page: wanted.page, text: chunk.join(" ") }));
+
+    const honest = wanted.text
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((line) => record({ page: wanted.page, text: line }));
+
+    const kept = withoutRepeats(
+      [...chopped, ...honest],
+      new Set(),
+      wordsOf(pass, [contextPage.page]),
+      wordsOf(pass, [wanted.page]),
+    );
+    /* Nearly all the chopped records go; the real page's records all stay. */
+    expect(kept.length).toBeLessThan(chopped.length / 2 + honest.length);
+    expect(kept.filter((r) => honest.some((h) => h.text === r.text)).length).toBe(honest.length);
+  }, 30_000);
 });
 
 describe("records into HTML", () => {

@@ -9,10 +9,28 @@
  * Three steps, in this order, and the order is the design:
  *
  *   1. ASSERT the page set          — before a single token is scored
- *   2. SCORE per page               — recall, precision, order, protected tokens
- *   3. ON FAILURE ONLY, re-score    — against the neighbouring pages' baselines,
- *                                     so "read well, labelled badly" is one
- *                                     sentence rather than an afternoon
+ *   2. SCORE the CHUNK              — recall, precision, order, protected tokens
+ *   3. FLOOR each page              — its own words, looked for anywhere in the
+ *                                     chunk, so a short bad page cannot be paid
+ *                                     for by a long good one
+ *
+ * **Step 2 was per page until a fourteen-page fixture proved it could not be.**
+ * A paragraph that runs across a page break has to be filed under one page or
+ * the other, and the model and the text layer do not always agree which — which
+ * produced a 114-word "missing run" on one page and five "invented" numbers on
+ * the next, for a transcription that was word-perfect. So the chunk, which is
+ * the unit the model was actually asked for, is the unit that is judged.
+ *
+ * **Step 3 is what that cost, bought back.** Averaging over a chunk lets a
+ * 2,700-word page carry a 100-word one: GPT Sol's probe kept every eighth word
+ * of the short page and the chunk still scored 0.969. So each page is also
+ * asked, separately, whether its own words are anywhere in the chunk's output —
+ * which is boundary-proof, because a paragraph filed under the neighbour is
+ * still in the chunk, and still catches a page nobody read.
+ *
+ * There used to be a fourth step: re-scoring a failing page against its
+ * neighbours' baselines, to tell "read well, labelled badly" from "read badly".
+ * Gating on the chunk answers that before it is asked, so it is gone.
  *
  * **Why step 1 exists at all**, which is the whole reason this file was written
  * the way it was: the bake-off's scoring script grouped records by the page the
@@ -669,6 +687,7 @@ export function check(
         `only partly. Body text on them is unchecked.`,
     );
   }
+
   const overall = scorePage(
     checkable[0] ?? 0,
     checkable.flatMap((page) => baselineFor(pass, page)),
@@ -680,6 +699,7 @@ export function check(
 
   if (overall.recall !== null) {
     failures.push(...contentFailures(overall, where, thresholds, pages));
+    failures.push(...thinPages(records, checkable, pass, thresholds.recall, overall.recall));
     if (overall.unshown.length) {
       notes.push(
         `${where}: ${overall.unshown.length} fault(s) in text v1 does not render — ${overall.unshown.slice(0, SPANS_SHOWN).join(", ")}.`,
@@ -687,7 +707,49 @@ export function check(
     }
   }
 
+
   return { ok: failures.length === 0, coverage, overall, pages, scored: checkable, failures, notes };
+}
+
+/**
+ * **Every page's own words, looked for in the WHOLE chunk's output** — the
+ * floor under the chunk score, and the thing that stops one good page paying
+ * for a bad one.
+ *
+ * GPT Sol built the input that needed it: a 100-word page with every eighth
+ * word kept, followed by a perfect 2,700-word page. The chunk scores 0.969 and
+ * passes; the small page scores 0.130. That is not a fixable flaw in the
+ * average — a short page simply cannot move a long one — so the short page gets
+ * a check of its own.
+ *
+ * Measured against the chunk's whole output rather than against the page's own
+ * records, because that is the entire reason the gate moved to the chunk: a
+ * paragraph filed under the neighbouring page is still *there*, and this must
+ * not fail for it. What it catches is a page whose words are nowhere in the
+ * chunk at all, which is the only thing "this page was not read" can mean.
+ */
+function thinPages(
+  records: PdfRecord[],
+  checkable: number[],
+  pass: Pass0,
+  floor: number,
+  chunkRecall: number,
+): string[] {
+  const everything = tokens(records.map((r) => r.text).join("\n"));
+  const out: string[] = [];
+  for (const page of checkable) {
+    const baseline = baselineFor(pass, page).flatMap(tokens);
+    if (!baseline.length) continue;
+    const found = round(hits(baseline, everything) / baseline.length);
+    if (found < floor) {
+      out.push(
+        `Page ${page}: only ${found} of its words appear anywhere in this chunk's transcription. ` +
+          `The chunk as a whole scores ${chunkRecall}, which is why this needs saying separately — ` +
+          `a short page cannot move a long one's average.`,
+      );
+    }
+  }
+  return out;
 }
 
 /**

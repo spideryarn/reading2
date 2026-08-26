@@ -147,6 +147,57 @@ describe("the two numbers that must not measure the same thing", () => {
   });
 });
 
+describe("a short page cannot be paid for by a long one", () => {
+  /* GPT Sol's probe, verbatim in shape: a 100-word page with every eighth word
+     kept, then a perfect 2,700-word page. The chunk averages to 0.969 and the
+     small page is at 0.130. src/pdf-score.ts § thinPages. */
+  const short = Array.from({ length: 100 }, (_, i) => `alpha${i}`);
+  const long = Array.from({ length: 2700 }, (_, i) => `beta${i}`);
+  const twoPages: Pass0 = {
+    pages: [
+      { page: 1, text: short.join(" "), words: short.length, items: [] },
+      { page: 2, text: long.join(" "), words: long.length, items: [] },
+    ],
+    metaTitle: null,
+    isScan: false,
+    furniture: new Set(),
+  };
+  const records: PdfRecord[] = [
+    {
+      page: 1,
+      type: "paragraph",
+      text: short.filter((_, i) => i % 8 === 0).join(" "),
+      continues: false,
+      uncertain: false,
+    },
+    { page: 2, type: "paragraph", text: long.join(" "), continues: false, uncertain: false },
+  ];
+
+  it("fails, and names the page rather than the chunk", () => {
+    const result = check(records, [1, 2], twoPages);
+    expect(result.overall.recall!).toBeGreaterThan(THRESHOLDS.recall);
+    expect(result.ok).toBe(false);
+    expect(result.failures.join(" ")).toContain("Page 1: only 0.13 of its words");
+  });
+
+  it("does not fire when the words are merely filed under the neighbour", () => {
+    /* The case the chunk-level gate exists for: page 1's text attributed to
+       page 2. Every word is in the chunk, so the floor must stay quiet. */
+    const moved: PdfRecord[] = [
+      { page: 1, type: "paragraph", text: "", continues: false, uncertain: false },
+      {
+        page: 2,
+        type: "paragraph",
+        text: `${short.join(" ")} ${long.join(" ")}`,
+        continues: false,
+        uncertain: false,
+      },
+    ];
+    const result = check(moved, [1, 2], twoPages);
+    expect(result.failures.filter((f) => f.includes("appear anywhere in this chunk"))).toEqual([]);
+  });
+});
+
 describe("what the check says it checked", () => {
   it("does not count a page it could not check", () => {
     /* `meta.pagesChecked` is shown to a reader. "8 of 8" for a document where a

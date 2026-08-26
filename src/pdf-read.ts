@@ -55,6 +55,7 @@ import { PDFDocument } from "pdf-lib";
 import { stageFailure } from "./job-failure.js";
 import { PDF_READER_MODEL } from "./models.js";
 import {
+  baselineFor,
   foldLine,
   type Pass0,
   pass0,
@@ -67,9 +68,16 @@ import { type Check, check, report } from "./pdf-score.js";
 import type { Meta } from "./types.js";
 
 /**
- * Bump this and every cached chunk is invalidated, which is the point.
+ * The prompt's name, which goes in `meta.method` so an article on disk says
+ * what read it.
  *
- * It is in `meta.method` too, so an article on disk says which prompt read it.
+ * **It is NOT what invalidates the cache** — `promptFingerprint` below is, and
+ * that distinction is a bug this file already shipped. Adding the `tabledata`
+ * record type changed the prompt *and* the schema and left this string at
+ * `pdf-v1`, so every chunk cached under the old prompt stayed valid and would
+ * have been replayed as if it had been read under the new one. A version
+ * constant only invalidates a cache if somebody remembers to bump it, and the
+ * person who forgets is the person who just changed the prompt.
  */
 export const PROMPT_VERSION = "pdf-v1";
 
@@ -158,6 +166,27 @@ const RECORD_TYPES: RecordType[] = [
   "cover",
   "tabledata",
 ];
+
+/**
+ * The cache key's share of "what was this read with" — **hashed from the prompt
+ * and the schema themselves**, not from a version string beside them.
+ *
+ * Found by GPT Sol: `tabledata` changed both and left `PROMPT_VERSION` alone,
+ * so every chunk cached under the old prompt would have been replayed under the
+ * new one's name. Nothing would have said so; the article would simply have
+ * been read by two different prompts and claimed one.
+ *
+ * A constant that has to be remembered is a check that shares its author's
+ * blind spot — docs/reusable/silent-success.md. Deriving it means the edit
+ * cannot be made without the cache noticing, which is the property that was
+ * wanted from the constant in the first place.
+ */
+function promptFingerprint(): string {
+  return createHash("sha256")
+    .update(`${PROMPT_VERSION}\u0000${SYSTEM}\u0000${JSON.stringify(SCHEMA)}`)
+    .digest("hex")
+    .slice(0, 12);
+}
 
 export const SCHEMA = {
   type: "object",
@@ -336,7 +365,8 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
         );
       }
       const started = performance.now();
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const res = await withTransportRetries(() =>
+        fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         ...(signal ? { signal } : {}),
@@ -364,7 +394,8 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
           provider: { require_parameters: true, allow_fallbacks: false },
           usage: { include: true },
         }),
-      });
+        }),
+      );
       const body = await res.text();
       if (!res.ok) throw new Error(`The transcription service answered ${res.status}.`);
       let json: OpenRouterResponse;
@@ -386,6 +417,38 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
       };
     },
   };
+}
+
+/** How many times a *transport* failure is retried, before any answer exists to judge. */
+const TRANSPORT_ATTEMPTS = 3;
+
+/**
+ * Retry a request that never got an answer at all.
+ *
+ * **A different thing from the check retry in `runPdfExtract`, and worth keeping
+ * separate.** That one asks a model again because its answer was not good
+ * enough; this one asks because there was no answer — `TypeError: fetch failed`
+ * with an HTTP/2 `NGHTTP2_PROTOCOL_ERROR` underneath it, which is what killed a
+ * five-chunk run of the `harder` fixture on chunk two after the first chunk had
+ * been paid for.
+ *
+ * Nothing about a dropped connection is evidence about the transcription, so
+ * there is nothing to judge and no reason to be cautious about asking again.
+ * The check retry is the one that has to be argued for; this is the ordinary
+ * thing every network client does, and its absence was simply a gap.
+ *
+ * An abort is not a failure to retry: the reader has gone.
+ */
+async function withTransportRetries(send: () => Promise<Response>): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await send();
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw error;
+      if (attempt >= TRANSPORT_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+    }
+  }
 }
 
 interface OpenRouterResponse {
@@ -656,7 +719,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
           rawSha256,
           pages: chunk.pages,
           context: chunk.context ?? null,
-          prompt: PROMPT_VERSION,
+          prompt: promptFingerprint(),
           reader: reader.id,
           maxTokens: MAX_TOKENS,
         }),
@@ -729,6 +792,8 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     const emitted = withoutRepeats(
       reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
       seen,
+      chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
+      wordsOf(pass, chunk.pages),
     );
     stripped += reading.stripped ?? 0;
     if (!result.ok) failures.push(...result.failures);
@@ -856,18 +921,43 @@ function checkChunk(reading: ChunkReading, chunk: Chunk, pass: Pass0, seen: Set<
   const emitted = withoutRepeats(
     reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
     new Set(seen),
+    chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
+    wordsOf(pass, chunk.pages),
   );
   return check(emitted, chunk.pages, pass, {
     context: chunk.context,
-    unchecked: bibliographyPages(emitted, chunk.pages, pass.pages.length),
+    unchecked: bibliographyPages(emitted, chunk.pages, pass),
   });
 }
 
-/** A page is a bibliography if this much of what the model returned for it is a reference. */
-const MOSTLY_REFERENCES = 0.6;
+/**
+ * How much of a page's TRANSCRIBED WORDS must be references before the page is
+ * treated as a bibliography.
+ *
+ * Words, not records, and GPT Sol found why: counting records let three tiny
+ * `reference` entries outvote two long paragraphs of prose and take the whole
+ * page out of the gate. A share of the text cannot be gamed that cheaply.
+ */
+const REFERENCE_SHARE = 0.8;
 
 /** How far from the end of the document a bibliography is allowed to be. */
-const BIBLIOGRAPHY_TAIL = 3;
+const BIBLIOGRAPHY_TAIL = 2;
+
+/**
+ * How many of a page's own lines must carry a year before the *page itself*
+ * corroborates that it is a reference list.
+ *
+ * Measured rather than guessed, on the two born-digital fixtures: the two
+ * reference pages of `harder` are 0.47 and 0.34 and `easy`'s is 0.50, while
+ * every body page of `easy` is 0.00–0.13. The awkward one is `harder` page 7 at
+ * 0.37 — a paper about dated observations reads a lot like a bibliography by
+ * this measure — and it is why this is one of three conditions rather than the
+ * whole test: page 7 of 14 is not in the tail, and the model did not call it
+ * references either.
+ */
+const BIBLIOGRAPHY_YEARS = 0.3;
+
+const A_YEAR = /\b(1[6-9]\d\d|20\d\d)[a-z]?\b/;
 
 /**
  * **The pages at the end that are a reference list, and are therefore not
@@ -881,58 +971,82 @@ const BIBLIOGRAPHY_TAIL = 3;
  * whoever met it to widen the threshold, and the threshold is the only thing
  * standing between a lost paragraph and a reader.
  *
- * **Both conditions are load-bearing.** "The model said these are references"
- * on its own is an invitation: a model could label a paragraph `reference` and
- * lose it from the article and from the gate at once. Requiring the page to be
- * within a few of the document's last also being true makes that evasion
- * available exactly where nobody keeps their argument. A mid-document page
- * labelled `reference` still gates, and still has to match its baseline.
+ * **Three conditions, and the third one exists because a reviewer broke the
+ * first two.** GPT Sol's attack was an adversarial PDF with a reference-looking
+ * tail in front of real prose: the model labels the tail `reference`, the page
+ * drops out of the gate, and the prose goes unchecked. Against that, "the model
+ * said so" is worth nothing on its own — it is the party being checked. So the
+ * *page* has to corroborate, out of its own text layer, before its word is
+ * taken.
  *
- * What it gives up is real and is reported every time it happens: prose on
- * these pages is unchecked.
+ * What is still given up, and it is real: **a paragraph of prose at the top of
+ * a genuine, year-dense, final-page bibliography is unchecked.** That is a much
+ * smaller hole than the one it replaced, and the note printed on every run
+ * names the pages so it is never silent.
  */
-function bibliographyPages(records: PdfRecord[], pages: number[], total: number): number[] {
+function bibliographyPages(records: PdfRecord[], pages: number[], pass: Pass0): number[] {
   return pages.filter((page) => {
-    if (page < total - BIBLIOGRAPHY_TAIL) return false;
+    if (page < pass.pages.length - BIBLIOGRAPHY_TAIL + 1) return false;
+
     const mine = records.filter((r) => r.page === page);
-    if (!mine.length) return false;
-    return mine.filter((r) => r.type === "reference").length / mine.length >= MOSTLY_REFERENCES;
+    const words = (rs: PdfRecord[]) => rs.reduce((n, r) => n + r.text.split(/\s+/).length, 0);
+    const total = words(mine);
+    if (!total) return false;
+    if (words(mine.filter((r) => r.type === "reference")) / total < REFERENCE_SHARE) return false;
+
+    /* The page's own corroboration. A bibliography is a list of dated things;
+       prose, even prose about dates, is not this dense in them. */
+    const lines = baselineFor(pass, page).filter((l) => l.trim().length > 20);
+    if (!lines.length) return false;
+    return lines.filter((l) => A_YEAR.test(l)).length / lines.length >= BIBLIOGRAPHY_YEARS;
   });
 }
 
 /**
- * **Drop a paragraph this document has already had, and remember the rest.**
+ * **Drop text this chunk was only meant to look at, and text the document has
+ * already had.**
  *
  * Every chunk after the first is sent the previous page as evidence, with the
  * instruction not to emit anything for it. That instruction is not reliably
  * obeyed: on the `harder` fixture the reader transcribed page 9 *and* labelled
- * it page 10, so the page-number filter above let it straight through. Page 10
- * then had 1,793 tokens of output against 704 of baseline — recall 1.0,
- * precision 0.39 — and, far worse than any number, **a page of the article
- * would have appeared twice**, in fluent English, with nothing downstream able
- * to tell.
+ * it page 10, so the page-number filter let it straight through. Page 10 then
+ * had 1,793 tokens of output against 704 of baseline — and, far worse than any
+ * number, **a page of the article would have appeared twice**, in fluent
+ * English, with nothing downstream able to tell.
  *
- * The check caught it. This is what stops it happening, and it belongs here
- * rather than in the check because a duplicated page is a defect in the
- * article, not a disagreement about a score.
+ * Two rules, because one was not enough and GPT Sol built the input that showed
+ * it:
  *
- * **Exact matches only, and only for a substantial record.** A folded
- * comparison of twenty words or more: two paragraphs that long being identical
- * by coincidence does not happen, while a repeated `<h2>References</h2>` or a
- * one-word list item happens constantly and must survive. Fuzzy matching here
- * would silently delete a paragraph an author genuinely repeated, which is the
- * more expensive mistake.
+ * 1. **The context page's own words.** A record whose words are nearly all on
+ *    the context page and *not* on the requested ones is the context page
+ *    leaking through, however it has been chopped up. This is the rule that
+ *    matters, and it reads the PDF rather than trusting the record's label.
+ * 2. **An exact repeat of twenty words or more**, anywhere in the document. The
+ *    fallback for a scan, which has no text layer for rule 1 to read.
+ *
+ * Rule 2 alone was the first version, and Sol defeated it in one move: split
+ * the context page into ten ten-word records and relabel them. Every one is
+ * under the twenty-word floor, so every one was kept, and the duplicated page
+ * scored recall, precision and order of 1.0 — because precision now treats the
+ * context page legitimate source text, which it is. The floor exists to protect
+ * a repeated `<h2>References</h2>` and a one-word list item, and it still does;
+ * it simply cannot be the only rule.
  */
-function withoutRepeats(records: PdfRecord[], seen: Set<string>): PdfRecord[] {
+export function withoutRepeats(
+  records: PdfRecord[],
+  seen: Set<string>,
+  contextWords: Set<string> | null,
+  wantedWords: Set<string> | null,
+): PdfRecord[] {
   const kept: PdfRecord[] = [];
   for (const record of records) {
-    const words = record.text
-      .normalize("NFKC")
-      .replace(/[^\p{L}\p{N}\s]/gu, "")
-      .replace(/\s+/gu, " ")
-      .toLowerCase()
-      .trim();
-    if (words.split(" ").length < 20) {
+    const words = fold(record.text);
+    const list = words ? words.split(" ") : [];
+
+    if (contextWords && wantedWords && list.length >= 4 && isContextPage(list, contextWords, wantedWords)) {
+      continue;
+    }
+    if (list.length < 20) {
       kept.push(record);
       continue;
     }
@@ -941,6 +1055,30 @@ function withoutRepeats(records: PdfRecord[], seen: Set<string>): PdfRecord[] {
     kept.push(record);
   }
   return kept;
+}
+
+/** How much of a record has to be on the context page, and absent from the requested ones. */
+const FROM_CONTEXT = 0.9;
+
+function isContextPage(words: string[], context: Set<string>, wanted: Set<string>): boolean {
+  const onContext = words.filter((w) => context.has(w)).length / words.length;
+  const onWanted = words.filter((w) => wanted.has(w)).length / words.length;
+  return onContext >= FROM_CONTEXT && onWanted < FROM_CONTEXT;
+}
+
+const fold = (s: string) =>
+  s
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/gu, " ")
+    .toLowerCase()
+    .trim();
+
+/** The distinct words of some pages, for the comparison above. `null` where there is no text layer. */
+export function wordsOf(pass: Pass0, pages: number[]): Set<string> | null {
+  const text = pages.map((p) => baselineFor(pass, p).join(" ")).join(" ");
+  const words = fold(text);
+  return words ? new Set(words.split(" ")) : null;
 }
 
 /**
