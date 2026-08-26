@@ -76,8 +76,9 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { hashBlocks } from "./source-hash.js";
-import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import type {
   Block,
   BlockId,
@@ -88,7 +89,7 @@ import type {
   TreeNode,
 } from "./types.js";
 
-const PROMPT_VERSION = "summary/2";
+export const PROMPT_VERSION = "summary/3";
 
 /* ----------------------------------------------------------- the ladder --
    Two generated rungs, and a third the reader gets for free.
@@ -410,7 +411,9 @@ JSON only, no prose, no code fence:
 One object per numbered section, in order, echoing its number and its title so
 each summary can be matched back to the section it is about. Write every section
 you are given. If a section defeats you, still return its object with your best
-attempt — an omission is a hole in the reader's view.`;
+attempt — an omission is a hole in the reader's view.
+
+${PROFILE_RULES}`;
 
 /** The article's shape, so a section can be summarised knowing what surrounds it. */
 function skeletonOf(tree: Tree): string {
@@ -477,6 +480,18 @@ export function renderPrompt(opts: {
    * bust the cache for every batch if it lived there.
    */
   guidance?: string;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * **Two boxes about intent, in one prompt, and they are not the same thing.**
+   * The profile is durable and about the reader; `guidance` is a note typed
+   * while looking at the button that rewrites these summaries. So the profile
+   * goes first and the steer second, and `SYSTEM` states the precedence out
+   * loud: where they pull different ways, the steer wins. Leaving that to the
+   * model would be handing it two instructions about emphasis with no ordering
+   * between them, which is how you get an answer that follows neither.
+   */
+  profile?: string | null;
   /** Fed back on the one retry, so the second attempt knows what was wrong with the first. */
   repair?: string;
 }): string {
@@ -509,14 +524,17 @@ export function renderPrompt(opts: {
      of the same article — was guaranteed to miss the cache the first attempt
      had just written. It goes at the end now, with the other instructions.
      docs/plans/prompt-caching.md. */
+  /* The reader before the request: who they are frames what "lead with this"
+     even means. Both sit near the top, where they will be read, and both are
+     immediately re-bounded — the long rules are in SYSTEM, because a constraint
+     three thousand tokens above the text it constrains is a constraint the
+     model has stopped weighing. */
+  const who = profileSection(opts.profile ?? null);
+
   return `Summaries for ${title}.
 
 Write ${targets.length} ${targets.length === 1 ? "entry" : "entries"}, one per numbered section below.
-${
-  /* Near the top, where it will be read, and immediately re-bounded. The long
-     version of these rules is in SYSTEM; this is the reminder standing next to
-     the thing it is about, because a constraint three thousand tokens above
-     the text it constrains is a constraint the model has stopped weighing. */
+${who ? `\n${who}\n` : ""}${
   opts.guidance
     ? `
 === WHAT THIS READER IS AFTER ===
@@ -655,6 +673,8 @@ export function buildSummaries(
     elapsedMs: number;
     /** The reader's steer, kept so the panel can say these were written to it. */
     guidance?: string;
+    /** The rendered profile these were written from, or null for none. */
+    profile?: string | null;
   },
 ): Summaries {
   const order = orderOf(opts.blocks);
@@ -687,6 +707,16 @@ export function buildSummaries(
     generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash: opts.sourceHash,
+    /* `null`, never absent: absent means "written before this existed" and
+       `null` means "written deliberately without a profile", and the panel
+       needs to tell those apart to decide whether its checkbox starts ticked.
+       src/profile.ts § profileIsStale.
+
+       Note the difference from `guidance` two lines down, which is stored as
+       the text itself and omitted when empty. The steer is stored so a reader
+       can *read it back*; this is stored so the app can *compare* it, and a
+       comparison needs a value for "none" as much as for "this one". */
+    profileHash: opts.profile ? hashProfile(opts.profile) : null,
     entries,
     /* Stored, because a steered summary that does not say so is a summary the
        reader cannot weigh. Six months later "why does this one lean so hard on
@@ -837,6 +867,8 @@ async function runBatch(opts: {
   blocks: Block[];
   batch: Batch;
   guidance?: string;
+  /** The rendered profile, frozen for the whole run — see `generateSummaries`. */
+  profile?: string | null;
   signal?: AbortSignal;
   onTokens(input: number, output: number): void;
 }): Promise<{ assigned: Assigned[]; failed: boolean }> {
@@ -881,6 +913,7 @@ async function runBatch(opts: {
                 blocks: opts.blocks,
                 batch,
                 ...(opts.guidance !== undefined && { guidance: opts.guidance }),
+                ...(opts.profile !== undefined && { profile: opts.profile }),
                 ...(repair !== undefined && { repair }),
               }),
             },
@@ -903,14 +936,12 @@ async function runBatch(opts: {
       throw new Error(MODEL_REFUSED.message);
     }
     if (message.stop_reason === "max_tokens") {
-      throw new Error(
-        truncatedMessage("summary", maxTokens, answerTokens, {
-          outputTokens: message.usage.output_tokens,
-          answerChars: message.content
-            .filter((b): b is Anthropic.TextBlock => b.type === "text")
-            .reduce((n, b) => n + b.text.length, 0),
-        }),
-      );
+      throw truncationFailure("summary", maxTokens, answerTokens, {
+        outputTokens: message.usage.output_tokens,
+        answerChars: message.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .reduce((n, b) => n + b.text.length, 0),
+      });
     }
 
     const raw = message.content
@@ -958,6 +989,24 @@ export async function generateSummaries(opts: {
    * is stale.
    */
   guidance?: string;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * **Frozen by whoever queued the job, and this is the stage that most needs
+   * it to be.** A summary run is several batches in flight at once; a reader
+   * who edits their profile in the middle would otherwise get one artefact
+   * written from two profiles and stamped with whichever was last. src/jobs.ts
+   * resolves it once, as it already does for the steer above.
+   *
+   * Not part of `summariesAreCurrent` either — for the *opposite* reason to the
+   * steer's, and the difference is worth keeping straight. A steer is left out
+   * because it is a reason to force a rewrite rather than a reason to call the
+   * artefact stale. The profile is left out of *that* function because
+   * staleness against a profile is a different question with its own answer:
+   * `profileIsStale` in src/profile.ts, which the panel asks and the pipeline
+   * does not.
+   */
+  profile?: string | null;
   onProgress?: (detail: string) => void;
   /** Cancel the calls. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
@@ -1013,6 +1062,11 @@ export async function generateSummaries(opts: {
       blocks,
       batch,
       ...(opts.guidance !== undefined && { guidance: opts.guidance }),
+      /* Read off `opts` once per batch rather than captured in a local, which
+         is safe here only because nothing in this function can change it —
+         `generateSummaries` never writes to its own opts. The freezing that
+         matters happened upstream, in src/jobs.ts. */
+      profile: opts.profile ?? null,
       ...(opts.signal !== undefined && { signal: opts.signal }),
       onTokens: (i, o) => {
         inputTokens += i;
@@ -1034,6 +1088,7 @@ export async function generateSummaries(opts: {
       targets,
       blocks,
       sourceHash: hashBlocks(blocks),
+      profile: opts.profile ?? null,
       elapsedMs: Date.now() - started,
       ...(opts.guidance !== undefined && { guidance: opts.guidance }),
     },

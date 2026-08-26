@@ -274,6 +274,82 @@ describe("converse's article message is stable across a conversation", () => {
   });
 });
 
+describe("the reader profile rides after the breakpoint", () => {
+  /* The property is NOT "the prompt is the same with and without a profile" —
+     the profile is supposed to change the answer. It is that the *cached* part
+     is the same, which is exactly what these tests already pin for the search
+     criterion, the explain quote and the growing chat history. If a profile
+     ever reaches the article block, every reader gets their own copy of a
+     47,000-token prefix and the only symptom is the bill. */
+  const profile = "About the reader: A physicist who is rusty on information theory.";
+  const other = "About the reader: A historian with no mathematics.";
+
+  const turn = (role: "user" | "assistant", text: string): ChatMessage =>
+    ({ id: `spya-${role[0]}${text.length}`, role, text, status: "done" }) as ChatMessage;
+
+  it("leaves explain's cached part untouched", () => {
+    const without = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote");
+    const with_ = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, profile);
+    expect(cachedText(with_)).toBe(cachedText(without));
+    // …and it really did arrive, rather than being dropped on the floor.
+    expect(partText(with_[1]!.content, 1)).toContain("rusty on information theory");
+  });
+
+  it("leaves converse's cached part untouched", () => {
+    const without = buildConverseMessages({ meta, blocks, history: [], question: "why?" });
+    const with_ = buildConverseMessages({ meta, blocks, history: [], question: "why?", profile });
+    expect(cachedText(with_)).toBe(cachedText(without));
+    expect(with_[with_.length - 1]!.content as string).toContain("rusty on information theory");
+  });
+
+  it("keeps one cached prefix across two different profiles", () => {
+    /* The reason the placement matters at all. Two readers, or one reader who
+       edited their box, must share the article's cache entry — otherwise the
+       feature quietly multiplies the cost of every article by the number of
+       profiles it has ever been read under. */
+    const a = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, profile);
+    const b = buildExplainMessages(meta, blocks, "spya-aaaaaa", "a quote", false, other);
+    expect(cachedText(a)).toBe(cachedText(b));
+  });
+
+  it("survives a growing conversation, profile and all", () => {
+    const one = buildConverseMessages({
+      meta,
+      blocks,
+      history: [],
+      question: "what is entropy?",
+      at: "spya-aaaaaa",
+      profile,
+    });
+    const two = buildConverseMessages({
+      meta,
+      blocks,
+      history: [turn("user", "what is entropy?"), turn("assistant", "uncertainty")],
+      question: "and free energy?",
+      at: "spya-cccccc",
+      profile,
+    });
+    expect(cachedText(two)).toBe(cachedText(one));
+  });
+
+  it("adds nothing at all when there is no profile", () => {
+    /* Absence must leave no trace. A prompt that always carries the header with
+       nothing under it has taught the model to expect one, and an empty one
+       then reads as "this reader is nobody in particular" rather than as "we
+       did not ask". src/profile.ts § profileSection. */
+    const none = buildConverseMessages({ meta, blocks, history: [], question: "why?" });
+    const empty = buildConverseMessages({
+      meta,
+      blocks,
+      history: [],
+      question: "why?",
+      profile: null,
+    });
+    expect(empty[empty.length - 1]!.content).toBe(none[none.length - 1]!.content);
+    expect(none[none.length - 1]!.content as string).toBe("why?");
+  });
+});
+
 describe("the cache floor", () => {
   it("counts a short article as too short to cache", () => {
     // Below the floor a breakpoint is accepted and does nothing, returning zeros

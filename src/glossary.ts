@@ -48,9 +48,10 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
-import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
+import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import type {
   Block,
   BlockId,
@@ -73,7 +74,7 @@ import type {
  * literal that has to be edited on every bump — a fixture that hardcodes the
  * version tests the fixture.
  */
-export const PROMPT_VERSION = "glossary/2";
+export const PROMPT_VERSION = "glossary/3";
 
 /**
  * The most entries one call may return.
@@ -335,10 +336,36 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
  * So: refuse here, and inherit the identity next door. `idsByTerm` is the half
  * that was missing. See docs/plans/glossary-entries-worth-reading.md
  * § What review caught.
+ *
+ * **A glossary written from a different reader profile is refused for the same
+ * reason**, and this one is easy to get wrong by fixing it somewhere else.
+ * `isStale` is not the gate here — this function is — so folding the profile
+ * into `isStale` and stopping would have left the top-up path untouched: new
+ * profiled terms appended to old unprofiled ones, and the whole list then
+ * stamped with the new hash. A lie about provenance, written by us, into a
+ * file. Refusing sends it down the rewrite path instead, where `idsByTerm`
+ * keeps the reader's `?term=` links alive across the change. Found by GPT Sol's
+ * review of docs/plans/reader-profile.md, 2026-08-26.
+ *
+ * Note this is a stricter test than `profileIsStale`: there, `null` never
+ * counts as stale, because a reader who asked for a plain glossary should not
+ * be nagged. Here any difference matters, including `null` against a hash — the
+ * question is not "should we warn them" but "may these two lists be merged",
+ * and entries written for a physicist may not be merged with entries written
+ * for nobody in particular.
  */
-export function existingFor(onDisk: Glossary | null, sourceHash: string): Glossary | null {
+export function existingFor(
+  onDisk: Glossary | null,
+  sourceHash: string,
+  /** The profile the *incoming* run will use, hashed — or null for none. */
+  profileHash: string | null = null,
+): Glossary | null {
   if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
   if (onDisk.version !== PROMPT_VERSION) return null;
+  /* `?? null` so that a list written before the field existed compares equal to
+     one written without a profile. Those two really are the same thing to
+     merge: neither was written for anybody in particular. */
+  if ((onDisk.profileHash ?? null) !== profileHash) return null;
   return onDisk;
 }
 
@@ -619,6 +646,8 @@ export function buildGlossary(
     slug: string;
     blocks: Block[];
     sourceHash: string;
+    /** The rendered profile this was written from, or null for none. */
+    profile?: string | null;
     elapsedMs: number;
     existing?: Glossary | null;
     /**
@@ -650,6 +679,12 @@ export function buildGlossary(
     generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash: opts.sourceHash,
+    /* `null`, never absent, and never omitted the way an empty field usually is
+       here. Absent means "written before this existed"; `null` means "written
+       deliberately without a profile", and the panel needs to tell those two
+       apart to decide whether its checkbox starts ticked.
+       src/profile.ts § profileIsStale. */
+    profileHash: opts.profile ? hashProfile(opts.profile) : null,
     entries: inDocumentOrder(located, opts.blocks),
     passes: (opts.existing?.passes ?? 0) + 1,
     generatedAt: new Date().toISOString(),
@@ -862,7 +897,9 @@ rather than guessing — a wrong link is worse than none.
 
 "senseHere", "background" and "url" may each be omitted, but an entry with
 neither "senseHere" nor "background" says nothing and will be thrown away.
-Nothing else may be omitted.`;
+Nothing else may be omitted.
+
+${PROFILE_RULES}`;
 
 /**
  * What the model is shown.
@@ -878,10 +915,28 @@ Nothing else may be omitted.`;
  * than ours and it will happily return the synonym, the plural, and the
  * subcategory of something already on the list.
  */
-function renderPrompt(opts: {
+/* Exported for tests/profile-prompts.test.ts, which pins the two things a
+   profile must do here: arrive when there is one, and leave no trace when
+   there is not. Same reason src/summarise.ts exports its own. */
+export function renderPrompt(opts: {
   tree: Tree;
   count: number;
   existing: GlossaryEntry[];
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * **The stage this matters most to.** Elsewhere a profile changes how a
+   * paragraph is pitched; here it changes *which terms get an entry at all* and
+   * what `difficulty` means. A term is hard relative to a reader, so under a
+   * profile that score stops being a property of the term and becomes a
+   * property of the pair — which is why the threshold slider the reader drags
+   * is downstream of this argument, and why `profileHash` on the artefact is
+   * not bookkeeping. docs/project/glossary.md.
+   *
+   * In the user prompt, never the `system` block: the article is up there with
+   * the breakpoint on it, and this changes between readers.
+   */
+  profile: string | null;
 }): string {
   const { tree, count, existing } = opts;
   const skeleton = partsOf(tree)
@@ -919,9 +974,15 @@ That is a real answer and a better one than padding.
      invalidated the one before it. Glossary is the stage that calls repeatedly
      over one piece, so it was the stage with the most to gain and the ordering
      that guaranteed it gained nothing. docs/plans/prompt-caching.md. */
+  /* Near the top, where it will be read, and before the shape — the reader is
+     context for *choosing* the terms, and the choosing is what the rest of this
+     prompt is about. The long rules are in SYSTEM, where the profile cannot
+     reach them. src/profile.ts § PROFILE_RULES. */
+  const who = profileSection(opts.profile);
+
   return `Find up to ${count} terms. Fewer is fine — a short piece has few, and a
 list padded to a number is worse than a short list.
-${already}
+${who ? `\n${who}\n` : ""}${already}
 === ITS SHAPE ===
 
 ${skeleton}`;
@@ -999,6 +1060,20 @@ export async function generateGlossary(opts: {
    * docs/project/prompt-caching.md.
    */
   cacheArticle?: boolean;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * **Frozen by whoever queued the job, not read here.** A glossary run and a
+   * top-up minutes later are two calls, and a reader who edits their profile in
+   * between must not get one artefact stamped with a profile only half of it
+   * was written from. src/jobs.ts resolves it once and carries it, exactly as
+   * it already does for the summary steer.
+   *
+   * Absent means "written deliberately without one", which the artefact records
+   * as `profileHash: null` — a real answer, and never stale. src/profile.ts §
+   * profileIsStale.
+   */
+  profile?: string | null;
 
 }): Promise<GlossaryRun> {
   /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
@@ -1042,7 +1117,12 @@ export async function generateGlossary(opts: {
      original weak entry survives wearing a "background" label whose tooltip
      says the article did not say it. The bad entry certified rather than
      replaced, which is the opposite of what the button promises. */
-  const existing = existingFor(onDisk, sourceHash);
+  /* Read once, here, and used for three things: whether the previous list may
+     be appended to, what the prompt carries, and what the artefact is stamped
+     with. Those three must agree by construction, not by three callers reading
+     the same field and happening to reach the same answer. */
+  const profile = opts.profile ?? null;
+  const existing = existingFor(onDisk, sourceHash, profile ? hashProfile(profile) : null);
   /* Nothing to append to, but a list to replace: same article, older prompt.
      The prose is regenerated — that is what the banner offering "Find them
      again" promises — and the ids come across so the reader's links and their
@@ -1117,6 +1197,7 @@ export async function generateGlossary(opts: {
               tree,
               count,
               existing: existing?.entries ?? [],
+              profile,
             }),
           },
         ],
@@ -1152,14 +1233,12 @@ export async function generateGlossary(opts: {
     throw new Error(MODEL_REFUSED.message);
   }
   if (message.stop_reason === "max_tokens") {
-    throw new Error(
-      truncatedMessage("glossary", maxTokens, answerTokens, {
-        outputTokens: message.usage.output_tokens,
-        answerChars: message.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .reduce((n, b) => n + b.text.length, 0),
-      }),
-    );
+    throw truncationFailure("glossary", maxTokens, answerTokens, {
+      outputTokens: message.usage.output_tokens,
+      answerChars: message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .reduce((n, b) => n + b.text.length, 0),
+    });
   }
 
   const raw = message.content
@@ -1171,6 +1250,7 @@ export async function generateGlossary(opts: {
     slug: tree.slug,
     blocks,
     sourceHash,
+    profile,
     elapsedMs: Date.now() - started,
     existing,
     inherit,

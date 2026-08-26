@@ -16,7 +16,8 @@ import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { listArticles } from "../src/api.js";
-import { loadShelf, recordOpen, setArchived, setTitle } from "../src/shelf.js";
+import { loadShelf, patchShelf, recordOpen, setArchived, setTitle } from "../src/shelf.js";
+import { MAX_PURPOSE_CHARS } from "../src/profile.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SLUG = "test-shelf-fixture";
@@ -76,6 +77,53 @@ describe("shelf state", () => {
        the two opens silently does not happen — with both reporting success. */
     await Promise.all(Array.from({ length: 10 }, () => recordOpen(SLUG)));
     expect((await loadShelf(SLUG)).opens).toBe(10);
+  });
+
+  it("stores a purpose, and clears it on blank", async () => {
+    // Same three rules as the title above, deliberately: absent leaves it,
+    // blank clears it, `null` clears it. A reader empties a box by selecting
+    // all and typing nothing, and a purpose of "   " is not a purpose.
+    expect((await patchShelf(SLUG, { purpose: "  the evidence  " })).purpose).toBe("the evidence");
+    expect((await patchShelf(SLUG, { purpose: "   " })).purpose).toBeUndefined();
+    expect((await patchShelf(SLUG, { purpose: "again" })).purpose).toBe("again");
+    expect((await patchShelf(SLUG, { purpose: null })).purpose).toBeUndefined();
+  });
+
+  it("settles a pasted purpose's line endings before storing it", async () => {
+    /* Not cosmetic. This string is hashed onto every artefact generated from
+       it, and a `\r\n` from a paste would make the same purpose compare as a
+       different one — marking every glossary on the shelf "you changed your
+       profile" for a change nobody made. src/profile.ts § normaliseProfileText. */
+    expect((await patchShelf(SLUG, { purpose: "one\r\ntwo" })).purpose).toBe("one\ntwo");
+  });
+
+  it("refuses a purpose longer than the cap, rather than shortening it", async () => {
+    // Refused, never truncated: a silently shortened instruction is one the
+    // reader believes they gave and did not.
+    await expect(
+      patchShelf(SLUG, { purpose: "x".repeat(MAX_PURPOSE_CHARS + 1) }),
+    ).rejects.toThrow(/characters or fewer/);
+    // …and the refusal changed nothing.
+    expect((await loadShelf(SLUG)).purpose).toBeUndefined();
+  });
+
+  it("leaves the purpose alone when the patch does not mention it", async () => {
+    await patchShelf(SLUG, { purpose: "the evidence" });
+    await patchShelf(SLUG, { archived: true });
+    expect((await loadShelf(SLUG)).purpose).toBe("the evidence");
+  });
+
+  it("survives a re-extraction, like the title", async () => {
+    /* The whole reason it lives out here rather than on the article. Stage 2
+       rewrites meta.json on every run; a purpose stored there would work
+       perfectly until the next `npm run extract` quietly dropped it. */
+    await patchShelf(SLUG, { purpose: "the evidence" });
+    await writeFile(
+      path.join(ROOT, "data", SLUG, "meta.json"),
+      JSON.stringify({ slug: SLUG, title: "Freshly Extracted" }),
+      "utf8",
+    );
+    expect((await loadShelf(SLUG)).purpose).toBe("the evidence");
   });
 
   it("keeps archived and renamed independent of each other", async () => {

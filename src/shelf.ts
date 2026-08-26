@@ -25,12 +25,20 @@
  * not an access control list, and a link that stops working is a worse surprise
  * than a card that is out of sight.
  *
+ * `purpose` — "why you're reading this one" — is the newest field and the
+ * argument is the same one again: it is the per-article half of
+ * docs/plans/reader-profile.md, and a reader's stated reason for reading a
+ * piece must survive a re-extraction exactly as their rename does. The global
+ * half ("about you", true on every article) is NOT here — it lives in its own
+ * store, because it is not this article's state.
+ *
  * Transport-free, like src/comments.ts and src/api.ts. The routes wrap it.
  */
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { MAX_PURPOSE_CHARS, normaliseProfileText } from "./profile.js";
 import type { ShelfState } from "./types.js";
 import { assertSlug } from "./slug.js";
 
@@ -85,6 +93,7 @@ export async function loadShelf(slug: string): Promise<ShelfState> {
       ...(parsed.title ? { title: parsed.title } : {}),
       opens: typeof parsed.opens === "number" && parsed.opens >= 0 ? parsed.opens : 0,
       ...(parsed.lastOpenedAt ? { lastOpenedAt: parsed.lastOpenedAt } : {}),
+      ...(parsed.purpose ? { purpose: parsed.purpose } : {}),
     };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return { ...EMPTY };
@@ -133,11 +142,11 @@ async function edit(slug: string, change: (state: ShelfState) => ShelfState): Pr
  * this shape.
  *
  * An absent key means "leave it alone". `title: null` is not absent: it clears
- * the override.
+ * the override. Same for `purpose: null` — see docs/plans/reader-profile.md.
  */
 export async function patchShelf(
   slug: string,
-  change: { archived?: boolean; title?: string | null },
+  change: { archived?: boolean; title?: string | null; purpose?: string | null },
   now = new Date(),
 ): Promise<ShelfState> {
   /* Validated before `edit` is entered, so a rejected change never opens the
@@ -150,6 +159,20 @@ export async function patchShelf(
     });
   }
 
+  /* `normaliseProfileText`, not a bare `trim()`: this box is the per-article
+     half of the reader profile, and its normalisation has to match the
+     global box's — trim, collapse `\r\n`, whitespace-only counts as clearing —
+     or a paste from Windows would silently mark the same purpose "changed"
+     the next time `hashProfile` looked at it. **Refused, not truncated**, for
+     the reason src/profile.ts gives about the global box: a silently
+     shortened purpose is one the reader believes they gave and did not. */
+  const purpose = change.purpose === undefined ? undefined : normaliseProfileText(change.purpose);
+  if (purpose && purpose.length > MAX_PURPOSE_CHARS) {
+    throw Object.assign(new Error(`Purpose must be ${MAX_PURPOSE_CHARS} characters or fewer`), {
+      status: 400,
+    });
+  }
+
   return edit(slug, (state) => {
     let next = state;
 
@@ -157,6 +180,14 @@ export async function patchShelf(
       if (title) next = { ...next, title };
       else {
         const { title: _dropped, ...rest } = next;
+        next = rest;
+      }
+    }
+
+    if (purpose !== undefined) {
+      if (purpose) next = { ...next, purpose };
+      else {
+        const { purpose: _droppedPurpose, ...rest } = next;
         next = rest;
       }
     }

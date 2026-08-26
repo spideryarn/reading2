@@ -285,6 +285,51 @@ describe("the shelf routes", () => {
   });
 });
 
+describe("the reader routes", () => {
+  const FILE = path.resolve(import.meta.dirname, "..", "data", "reader.json");
+  afterEach(() => rm(FILE, { force: true }));
+
+  it("answers null for a reader who has written nothing", async () => {
+    const r = await call("GET", "/api/reader");
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ profile: null });
+  });
+
+  it("stores a profile and reads it back", async () => {
+    const w = await call("PATCH", "/api/reader", { profile: "  A physicist.  " });
+    expect(w.status).toBe(200);
+    // Normalised on the way in, so the value stored is the value hashed.
+    expect(w.body).toEqual({ profile: "A physicist." });
+    expect((await call("GET", "/api/reader")).body).toEqual({ profile: "A physicist." });
+  });
+
+  it("treats null and blank as clearing it", async () => {
+    await call("PATCH", "/api/reader", { profile: "A physicist." });
+    expect((await call("PATCH", "/api/reader", { profile: null })).body).toEqual({ profile: null });
+    await call("PATCH", "/api/reader", { profile: "A physicist." });
+    expect((await call("PATCH", "/api/reader", { profile: "   " })).body).toEqual({ profile: null });
+  });
+
+  it("refuses a body with no profile in it, rather than answering 200", async () => {
+    /* This body has exactly one field, so a request without it meant something
+       else — and a 200 would report a save that did not happen. */
+    const r = await call("PATCH", "/api/reader", {});
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/Nothing to change/);
+  });
+
+  it("refuses a profile that is not a string or null", async () => {
+    expect((await call("PATCH", "/api/reader", { profile: 42 })).status).toBe(400);
+    expect((await call("PATCH", "/api/reader", '"hello"')).status).toBe(400);
+  });
+
+  it("refuses one longer than the cap, and stores nothing", async () => {
+    const r = await call("PATCH", "/api/reader", { profile: "x".repeat(2000) });
+    expect(r.status).toBe(400);
+    expect((await call("GET", "/api/reader")).body).toEqual({ profile: null });
+  });
+});
+
 describe("the library route, continued", () => {
   it("does not answer to a path that merely starts with it", async () => {
     // `/api/library/anything` quietly serving the whole shelf would be the

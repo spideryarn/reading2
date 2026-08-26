@@ -128,6 +128,26 @@ export interface TweetThread {
    * could not answer — src/tweets.ts `hashBlocks`.
    */
   sourceHash: string;
+  /**
+   * Fingerprint of the **reader's profile** this was written from, or `null`
+   * for "written deliberately without one".
+   *
+   * Three states, and only one of them means stale:
+   *
+   * | value | means | stale? |
+   * |---|---|---|
+   * | absent | written before the profile existed | no |
+   * | `null` | written deliberately without one | **no** |
+   * | a hash | written from that profile | only if it differs from now |
+   *
+   * A hash rather than a `usedProfile: true`, because a boolean cannot tell
+   * "written for the profile you have now" from "written for the profile you
+   * had last week" — and from every surface in this app those two look
+   * identical. `hashProfile` in src/profile.ts; `profileIsStale` is the
+   * comparison, in one place, so the three states cannot be re-derived
+   * differently by three panels.
+   */
+  profileHash?: string | null;
   /** The per-post character limit `chars` was counted against. One number, one place. */
   limit: number;
   tweets: Tweet[];
@@ -148,6 +168,18 @@ export interface TweetThread {
 export interface ThreadResponse {
   thread: TweetThread;
   stale: boolean;
+  /**
+   * The reader's profile has changed since this was written — a third fact,
+   * with a third sentence, for the same reason `outdated` needed one beside
+   * `stale`. `stale` means *the article moved*; `outdated` means *we would
+   * write this differently now*; this means *you are not who you were when we
+   * wrote it*.
+   *
+   * False when the artefact was written deliberately without a profile, and
+   * false when the reader has since cleared theirs. `profileIsStale` in
+   * src/profile.ts is the one place those two rules live.
+   */
+  profileChanged: boolean;
 }
 
 /* --------------------------------------------------------------- glossary --
@@ -339,6 +371,26 @@ export interface Glossary {
   /** Fingerprint of the blocks it was written from — `hashBlocks`, src/source-hash.ts. */
   sourceHash: string;
   /**
+   * Fingerprint of the **reader's profile** this was written from, or `null`
+   * for "written deliberately without one".
+   *
+   * Three states, and only one of them means stale:
+   *
+   * | value | means | stale? |
+   * |---|---|---|
+   * | absent | written before the profile existed | no |
+   * | `null` | written deliberately without one | **no** |
+   * | a hash | written from that profile | only if it differs from now |
+   *
+   * A hash rather than a `usedProfile: true`, because a boolean cannot tell
+   * "written for the profile you have now" from "written for the profile you
+   * had last week" — and from every surface in this app those two look
+   * identical. `hashProfile` in src/profile.ts; `profileIsStale` is the
+   * comparison, in one place, so the three states cannot be re-derived
+   * differently by three panels.
+   */
+  profileHash?: string | null;
+  /**
    * In document order: first use in the article first.
    *
    * The reader's own order through the piece, which is a real order rather than
@@ -388,6 +440,18 @@ export interface GlossaryResponse {
    * docs/plans/glossary-entries-worth-reading.md § What review caught.
    */
   outdated: boolean;
+  /**
+   * The reader's profile has changed since this was written — a third fact,
+   * with a third sentence, for the same reason `outdated` needed one beside
+   * `stale`. `stale` means *the article moved*; `outdated` means *we would
+   * write this differently now*; this means *you are not who you were when we
+   * wrote it*.
+   *
+   * False when the artefact was written deliberately without a profile, and
+   * false when the reader has since cleared theirs. `profileIsStale` in
+   * src/profile.ts is the one place those two rules live.
+   */
+  profileChanged: boolean;
 }
 
 /* -------------------------------------------------------------- summaries --
@@ -457,6 +521,26 @@ export interface Summaries {
   slug: string;
   /** Fingerprint of the blocks it was written from — `hashBlocks`, src/source-hash.ts. */
   sourceHash: string;
+  /**
+   * Fingerprint of the **reader's profile** this was written from, or `null`
+   * for "written deliberately without one".
+   *
+   * Three states, and only one of them means stale:
+   *
+   * | value | means | stale? |
+   * |---|---|---|
+   * | absent | written before the profile existed | no |
+   * | `null` | written deliberately without one | **no** |
+   * | a hash | written from that profile | only if it differs from now |
+   *
+   * A hash rather than a `usedProfile: true`, because a boolean cannot tell
+   * "written for the profile you have now" from "written for the profile you
+   * had last week" — and from every surface in this app those two look
+   * identical. `hashProfile` in src/profile.ts; `profileIsStale` is the
+   * comparison, in one place, so the three states cannot be re-derived
+   * differently by three panels.
+   */
+  profileHash?: string | null;
   /** Document order, coarse before fine — the order the panel renders them in. */
   entries: SummaryEntry[];
   /**
@@ -494,7 +578,30 @@ export interface Summaries {
 export interface SummariesResponse {
   summaries: Summaries;
   stale: boolean;
+  /**
+   * The reader's profile has changed since these were written — see the same
+   * field on `GlossaryResponse` for what it does and does not mean.
+   */
+  profileChanged: boolean;
 }
+
+
+/**
+ * What a **store** can say about an artefact: everything in the response except
+ * the one question that is not about the article.
+ *
+ * `profileChanged` needs the reader's current profile, and a store adapter
+ * reaching for that would be an import cycle (src/store/index.ts imports the
+ * filesystem reader). So the adapters answer everything else and the route adds
+ * the last field — `withProfileChanged` in src/routes.ts. Written as a type
+ * rather than left implicit so that a new adapter cannot accidentally return a
+ * `profileChanged: false` it did not compute.
+ */
+export type ThreadFound = Omit<ThreadResponse, "profileChanged">;
+/** As `ThreadFound`, for the glossary. */
+export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
+/** As `ThreadFound`, for the summaries. */
+export type SummariesFound = Omit<SummariesResponse, "profileChanged">;
 
 export interface Meta {
   slug: string;
@@ -641,6 +748,17 @@ export interface ShelfState {
   opens: number;
   /** ISO. */
   lastOpenedAt?: string;
+  /**
+   * "Why you're reading this one" — this article only, in the reader's own
+   * words. The per-article half of docs/plans/reader-profile.md; the global
+   * half is `data/reader.json` / `reader_profiles`, addressed through a
+   * `ReaderStore` rather than through here, because it is true of every
+   * article rather than of this one.
+   *
+   * Lives on `ShelfState` for the same reason the renamed title does: it must
+   * survive re-extraction, and the pipeline must not be able to undo it.
+   */
+  purpose?: string;
 }
 
 /**
@@ -740,6 +858,17 @@ export interface ArticleMetadata {
    * page gets the line its plan sketched without paying for the drawer.
    */
   comments: number;
+  /**
+   * The reader's "about you" and "why this one" boxes — docs/plans/reader-profile.md.
+   *
+   * `null` means the box is empty, not that the question was not asked; the
+   * Metadata page needs both to fill its own textareas and to show the global
+   * half as a read-only preview. This endpoint is already walking the
+   * article's directory (or the article's row) for `comments` above, so both
+   * are one more read rather than a new endpoint.
+   */
+  profile: string | null;
+  purpose: string | null;
 }
 
 /** A source the model consulted, from OpenRouter's `annotations`. See src/explain.ts. */
@@ -912,6 +1041,21 @@ export interface Job {
    * request be answered with the first one's job.
    */
   guidance?: string;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * On the job, beside `guidance`, and for the same two reasons: the queue is
+   * what survives a restart, and a job resumed from disk with its profile
+   * dropped would run the plain prompt, report success, and stamp the artefact
+   * with a `profileHash` describing a profile it did not use.
+   *
+   * And a third that is its own: **it is frozen here.** A summary run is
+   * several batches at once; reading the profile inside each step would let a
+   * reader who edits their box mid-run get one artefact written from two
+   * profiles. src/jobs.ts § sameWork keeps two differently-profiled requests
+   * two different jobs.
+   */
+  profile?: string;
 }
 
 /* ------------------------------------------------------------------ chat --

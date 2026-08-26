@@ -24,6 +24,7 @@ import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { getDb } from "../db/client.js";
 import { articles, articleRevisions, revisionBlocks } from "../db/schema.js";
 import { MAX_TITLE_CHARS } from "../shelf.js";
+import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
 import { notFound, requireSlug, shelfFrom } from "./pg.js";
 import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
@@ -67,9 +68,21 @@ export const pgShelfStore: ShelfStore = {
       });
     }
 
+    // `normaliseProfileText`, not `trim()` — this column has to agree with the
+    // filesystem store's normalisation byte for byte, or the same purpose typed
+    // twice would hash to two different values. See src/shelf.ts.
+    const purpose =
+      change.purpose === undefined ? undefined : normaliseProfileText(change.purpose);
+    if (purpose && purpose.length > MAX_PURPOSE_CHARS) {
+      throw Object.assign(new Error(`Purpose must be ${MAX_PURPOSE_CHARS} characters or fewer`), {
+        status: 400,
+      });
+    }
+
     const set: Record<string, unknown> = {};
     // Whitespace-only clears the override, exactly as it does on disk.
     if (title !== undefined) set.titleOverride = title || null;
+    if (purpose !== undefined) set.purpose = purpose || null;
     if (change.archived !== undefined) {
       /* `coalesce(archived_at, now())` rather than a plain `now()`: archiving
          something already archived keeps the ORIGINAL date. Undo is one click

@@ -71,6 +71,7 @@ import {
 } from "./openrouter-stream.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
 import { isWebUrl } from "./urls.js";
+import { PROFILE_RULES, profileSection } from "./profile.js";
 import {
   type OpenRouterMessage,
   articleWithIds,
@@ -292,7 +293,9 @@ GOOD — step 1, then step 2:
 
 Never open with "I", "None of", "The search", "Unfortunately", or "There is no
 information". If the very first thing you have to say is a negative, you have
-skipped step 1.`;
+skipped step 1.
+
+${PROFILE_RULES}`;
 
 export interface ExplainRequest {
   meta: Meta;
@@ -308,6 +311,15 @@ export interface ExplainRequest {
    * `DEEP` for why "and nothing else" is load-bearing rather than minimal.
    */
   deep?: boolean;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * **The call this changes most.** A selection explained to somebody who
+   * already knows the field spends its first paragraph rebuilding what they
+   * know, and there is no second chance at it — a wrong pitch wastes the whole
+   * answer, where a wrong pitch in a glossary wastes one entry.
+   */
+  profile?: string | null;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
@@ -372,7 +384,19 @@ export function buildExplainMessages(
   blockId: string,
   quote: string,
   deep = false,
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts, or
+   * `null` for a reader who has written nothing.
+   *
+   * **In the second part, never the first.** The first part is the article and
+   * it carries the breakpoint, so a profile up there would buy a separate cache
+   * entry per distinct profile and re-write the whole article every time the
+   * reader edited their box. Down here it costs nothing at all: this part was
+   * already going to differ on every call, because the quote is in it.
+   */
+  profile: string | null = null,
 ): OpenRouterMessage[] {
+  const who = profileSection(profile);
   return [
     { role: "system", content: SYSTEM },
     {
@@ -384,8 +408,12 @@ export function buildExplainMessages(
           cache_control: { type: "ephemeral" },
         },
         {
+          /* Order: where they are, who they are, what they picked, what to do.
+             The instruction goes last on purpose — the profile is context for
+             the job and the job should be the final thing read. `DEEP` sits
+             after it for the same reason it always did. */
           type: "text",
-          text: `${readerPositionLine(blockId)}\n\nThe reader has selected this passage, inside block ${blockId}:\n\n"""\n${quote}\n"""\n\nExplain it.${deep ? `\n\n${DEEP}` : ""}`,
+          text: `${readerPositionLine(blockId)}${who ? `\n\n${who}` : ""}\n\nThe reader has selected this passage, inside block ${blockId}:\n\n"""\n${quote}\n"""\n\nExplain it.${deep ? `\n\n${DEEP}` : ""}`,
         },
       ],
     },
@@ -411,6 +439,7 @@ export async function* explainStream({
   blockId,
   quote,
   deep = false,
+  profile = null,
   model = process.env.SPIDERYARN_EXPLAIN_MODEL || DEFAULT_MODEL,
   signal,
   timeoutMs = EXPLAIN_TIMEOUT_MS,
@@ -432,7 +461,7 @@ export async function* explainStream({
     throw new Error(NOT_CONFIGURED.message);
   }
 
-  const messages = buildExplainMessages(meta, blocks, blockId, quote, deep);
+  const messages = buildExplainMessages(meta, blocks, blockId, quote, deep, profile ?? null);
 
   /* Logged, not thrown — below the floor the breakpoint is accepted and does
      nothing, and the zeros that result are indistinguishable from a cache that

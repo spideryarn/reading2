@@ -13,10 +13,17 @@
  * ## Idempotent, and what that actually means here
  *
  * Running this twice must leave the database in the state one run leaves it —
- * not "converge on something equivalent". So the revision id is **derived from
- * the content** rather than minted: same article, same blocks, same revision
- * row, upserted in place. A second run with changed blocks makes a second
- * revision, which is correct — that is a different extraction.
+ * not "converge on something equivalent". The rule that gives that is the same
+ * one the pipeline follows: **a new revision only when the text changes.** Same
+ * article, same blocks, same revision row, updated in place; changed blocks,
+ * new revision, which is correct — that is a different extraction.
+ *
+ * The revision id itself used to be *derived* from the blocks, which encoded
+ * that rule in a hash. It no longer is: ids are minted, opaque, and name
+ * nothing about the contents, because `beginRevision` (src/store/pg-revisions.ts)
+ * mints one too and two paths disagreeing about what a revision id means is
+ * worse than either answer. See `revisionId` below for the whole argument. The
+ * ARTICLE id is still derived from the slug, and that asymmetry is deliberate.
  *
  * Convergence is the property, and it is stronger than "does not crash on a
  * second run". A field that is written on the first import and left alone on
@@ -44,7 +51,7 @@
  * rather than discovering it later as a null column.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
@@ -71,9 +78,11 @@ import { isSpideryarnId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId, type OwnerId } from "../owner.js";
 import { parseJsonFrom } from "../parse-json.js";
+import { hashBlocks } from "../source-hash.js";
+import { deriveLibraryScalars } from "./pg-revisions.js";
 import type { LabelsFile } from "../labels.js";
 import type { Arc, Block, Glossary, Meta, Summaries, Tree, TweetThread } from "../types.js";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const logger = log("store");
@@ -327,20 +336,17 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
 
   const fingerprint = await blocksFingerprint(blocks);
   const articleId = derivedUuid("article", slug);
-  const revisionId = derivedUuid("revision", slug, fingerprint);
 
-  // The library's scalars, computed once here rather than by a directory walk
-  // per request — the discipline `LibraryEntry` was already written to.
-  const wordCount = blocks.reduce((n, b) => n + b.words, 0);
-  let partCount = 0;
-  let sectionCount = 0;
-  for (const node of Object.values(tree.nodes)) {
-    if (node.depth === 1) partCount++;
-    else if (node.depth === 2) sectionCount++;
-  }
-  const rootGist = tree.nodes[tree.rootId]?.gist ?? tree.nodes[tree.rootId]?.summary;
+  /* The library's scalars, through the SAME function the pipeline publishes
+     with (src/store/pg-revisions.ts). It was eight lines of arithmetic here and
+     they had already drifted: `describeArticle` in src/api.ts falls back to
+     `meta.excerpt` for the blurb and this did not, so an article whose tree root
+     has no gist got a blurb on the filesystem and none in Postgres. A review
+     found it, and the fix is one derivation rather than two that agree today. */
+  const scalars = deriveLibraryScalars({ blocks, tree, excerpt: meta?.excerpt });
 
   const db = getDb();
+  let revisionId = "";
   await db.transaction(async (tx) => {
     await tx
       .insert(articles)
@@ -348,6 +354,12 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
         id: articleId,
         ownerId,
         slug,
+        /* The article's own added-time, seeded from the same value as the
+           revision's. The shelf orders on `coalesce(revision.fetched_at,
+           article.created_at)` (`ADDED_AT`, src/store/pg.ts), so leaving this
+           at `now()` would put every article with no `fetchedAt` at the top of
+           the library on the day it was imported. */
+        createdAt,
         archivedAt: shelf.archivedAt ? new Date(shelf.archivedAt) : null,
         titleOverride: shelf.title ?? null,
         opens: shelf.opens,
@@ -366,12 +378,61 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       .onConflictDoUpdate({
         target: articles.id,
         set: {
+          createdAt,
           archivedAt: shelf.archivedAt ? new Date(shelf.archivedAt) : null,
           titleOverride: shelf.title ?? null,
           opens: shelf.opens,
           lastOpenedAt: shelf.lastOpenedAt ? new Date(shelf.lastOpenedAt) : null,
         },
       });
+
+    /* **Which revision this import lands on, and why it is no longer derived
+       from the blocks.**
+
+       It used to be `derivedUuid("revision", slug, hashBlocks(blocks))`, which
+       made the id a function of the content — so two extractions that happened
+       to produce identical blocks were the SAME ROW, and the second overwrote
+       the first in place. That is exactly what "immutable in its text" forbids,
+       and once `beginRevision` (src/store/pg-revisions.ts) started minting a
+       fresh uuid the importer was the only thing left deriving one. Two paths
+       disagreeing about what a revision id *means* is worse than either answer,
+       so it was decided in the same change: **a revision id is opaque, minted
+       once, and names nothing about the contents.**
+
+       What survives is the rule the derivation was standing in for, and it is
+       the same rule the pipeline follows: **a new revision only when the text
+       changes.** So this asks the question directly instead of encoding it in a
+       hash — does the current published revision hold these same blocks?
+
+       - Yes → update it in place. That keeps the importer's contract, which is
+         that re-running it converges rather than accumulating, and it is what
+         makes a corrected `meta.json` land on the article you are looking at.
+       - No → mint a new revision and move the pointer at the end of this
+         transaction, exactly as the first import does.
+
+       `derivedUuid("article", slug)` stays, and the asymmetry is deliberate: an
+       article really is identified by its slug, and a stable article id is what
+       lets the importer, the exporter and the tests address the same row twice.
+
+       **This is still the importer's licence, not the schema's.** Updating a
+       published row in place is a migration tool's privilege — the files win —
+       and it is the same reason cutover is a step rather than a flag flip. */
+    const currentBlocks = await tx
+      .select({ id: revisionBlocks.blockId, text: revisionBlocks.text })
+      .from(revisionBlocks)
+      .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
+      .where(eq(articles.id, articleId))
+      .orderBy(asc(revisionBlocks.ordinal));
+    const current = await tx
+      .select({ id: articles.currentRevisionId })
+      .from(articles)
+      .where(eq(articles.id, articleId));
+    const currentRevisionId = current[0]?.id ?? null;
+    const sameText =
+      currentRevisionId !== null &&
+      currentBlocks.length > 0 &&
+      hashBlocks(currentBlocks) === fingerprint;
+    revisionId = sameText && currentRevisionId ? currentRevisionId : randomUUID();
 
     /* **One object, used for both branches, and that is the whole fix.**
 
@@ -457,11 +518,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       glossary: glossary ?? null,
       summary: summaries ?? null,
       labels: labels ?? null,
-      wordCount,
-      blockCount: blocks.length,
-      partCount,
-      sectionCount,
-      rootGist: rootGist ?? null,
+      ...scalars,
     } as const;
 
     await tx
@@ -622,6 +679,16 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
           criterion: run.criterion,
           status: run.status,
           hits: run.hits,
+          /* The article this run was answered against. Dropping it on import
+             would not read as "unknown" — `isStale` reads an absent hash as
+             *out of date*, so every saved search on every imported article
+             would carry the "answered against an older version" banner
+             permanently, for no reason. tests/store-roundtrip.test.ts catches
+             it, but only once a real `searches.json` under some article
+             carries the field, which is why this is written now rather than
+             waited for. (That sentence named the glob directly until the `*`
+             and `/` closed this comment three lines early.) */
+          sourceHash: run.sourceHash ?? null,
           model: run.model ?? null,
           error: run.error ?? null,
           createdAt: new Date(run.createdAt),

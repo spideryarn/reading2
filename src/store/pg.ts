@@ -43,8 +43,10 @@ import {
 } from "../db/schema.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import { isSlug } from "../ingest.js";
+import { CAPABLE_MODEL } from "../models.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
+import { hashBlocks } from "../source-hash.js";
 import { isStale as summariesStale } from "../summarise.js";
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
@@ -54,18 +56,21 @@ import type {
   StageState,
   Block,
   Glossary,
-  GlossaryResponse,
+  GlossaryFound,
   LibraryEntry,
   ListOptions,
   Meta,
   ShelfState,
+  StepName,
   Summaries,
-  SummariesResponse,
-  ThreadResponse,
+  SummariesFound,
+  ThreadFound,
   Tree,
   TweetThread,
 } from "../types.js";
+import { sameStamp } from "./artifacts.js";
 import type { ArticleReader } from "./contracts.js";
+import { pgReaderStore } from "./pg-reader.js";
 
 /** A 404 shaped exactly like src/api.ts's, so routes.ts cannot tell them apart. */
 export function notFound(slug: string): Error {
@@ -91,6 +96,7 @@ export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
     ...(article.titleOverride ? { title: article.titleOverride } : {}),
     opens: article.opens,
     ...(article.lastOpenedAt ? { lastOpenedAt: article.lastOpenedAt.toISOString() } : {}),
+    ...(article.purpose ? { purpose: article.purpose } : {}),
   };
 }
 
@@ -210,8 +216,15 @@ function metaFrom(
  * migration does not preserve behaviour exactly — and it is listed as such in
  * docs/plans/postgres-storage-implementation.md rather than left for somebody
  * to find on the page.
+ *
+ * **`Record<StepName, …>`, and no `?? []` at the lookup.** It was
+ * `Record<string, …>` with a fallback, which made a step nobody had added here
+ * come out as an empty list — a row on the metadata page saying the artefact is
+ * stored nowhere, which reads like a finding rather than like the omission it
+ * is. Exhaustive over `StepName` means adding a step to the pipeline fails the
+ * typecheck here instead. Found in a review of the built seam, 2026-08-26.
  */
-const STEP_STORAGE: Record<string, string[]> = {
+const STEP_STORAGE: Record<StepName, string[]> = {
   fetch: ["article_revisions.raw_bytes"],
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
@@ -225,10 +238,10 @@ const STEP_STORAGE: Record<string, string[]> = {
 /**
  * What the library calls `addedAt`, as SQL.
  *
- * **`coalesce(fetched_at, created_at)`, never `fetched_at` alone.** On the
- * filesystem `addedAt` is `meta.fetchedAt` where stage 2 recorded one and the
- * mtime of `blocks.json` otherwise, and src/store/import.ts seeds `created_at`
- * from that same mtime so the two agree exactly.
+ * **`coalesce(fetched_at, articles.created_at)`, never `fetched_at` alone.** On
+ * the filesystem `addedAt` is `meta.fetchedAt` where stage 2 recorded one and
+ * the mtime of `blocks.json` otherwise, and src/store/import.ts seeds both
+ * `created_at` columns from that same mtime so the two agree exactly.
  *
  * Ordering on `fetched_at` by itself puts every article that never got one at
  * the TOP, because Postgres sorts NULLs first under DESC. That is what this
@@ -236,8 +249,23 @@ const STEP_STORAGE: Record<string, string[]> = {
  * `fetched_at` happens to be the newest. Exported so the test can exercise the
  * real expression against data that is not lucky — asserting the property
  * against the articles we happen to have could not fail.
+ *
+ * ## The fallback is the ARTICLE's created_at, not the revision's
+ *
+ * It was the revision's, and that was safe only while no article had ever been
+ * re-extracted. `beginRevision` (src/store/pg-revisions.ts) mints a fresh
+ * `created_at` for every new revision — it has to, or the retention sweep would
+ * judge a brand-new draft by its ancestor's age — so with the old fallback,
+ * re-extracting an article whose `meta.json` never had a `fetchedAt` would jump
+ * it to the top of the shelf. Nothing about that has a symptom: the shelf is
+ * simply in a different order than it was, and both halves succeeded.
+ *
+ * "When was this added" is a fact about the article, and `articles.created_at`
+ * is the column that already holds it. A review named the fix in these words;
+ * the plan's original reasoning had it exactly backwards, blaming the *copy*
+ * for a reordering that only minting can cause.
  */
-export const ADDED_AT = sql`coalesce(${articleRevisions.fetchedAt}, ${articleRevisions.createdAt})`;
+export const ADDED_AT = sql`coalesce(${articleRevisions.fetchedAt}, ${articles.createdAt})`;
 
 export const pgArticleReader: Pick<
   ArticleReader,
@@ -328,7 +356,11 @@ export const pgArticleReader: Pick<
           blocks,
           tree: tree as Tree,
           comments: count,
-          addedAt: (row.revision.fetchedAt ?? row.revision.createdAt).toISOString(),
+          // The TypeScript half of `ADDED_AT`, and it has to agree with it —
+          // one of them orders the list and the other prints the date on the
+          // card, so a difference shows up as a card dated 2020 sitting at the
+          // top of a list sorted by "newest first".
+          addedAt: (row.revision.fetchedAt ?? row.article.createdAt).toISOString(),
           shelf: shelfFrom(row.article),
           /* `!= null` on a column we already selected, not four more queries.
              The filesystem store answers the same question with four `stat`s
@@ -347,14 +379,51 @@ export const pgArticleReader: Pick<
   },
 
   /**
-   * Which stages have run.
+   * Which stages have run **and still describe this article**.
    *
-   * **`done` comes from `revision_step_runs`, not from a column being non-null.**
-   * That table exists precisely to answer "has this stage run" — and reading it
-   * keeps the honest distinction the filesystem loses, between a step that
-   * never ran and a step that ran and produced nothing. `stepIsDone` on the
-   * filesystem is an existence check, which is the bug the table was designed
-   * not to inherit.
+   * `revision_step_runs` answers the first half: it exists precisely to say
+   * "has this stage run", and reading it keeps the honest distinction the
+   * filesystem loses, between a step that never ran and a step that ran and
+   * produced nothing.
+   *
+   * ## Why the row saying `done` is not enough, and the bug that proves it
+   *
+   * This used to be `status === 'done'` and nothing else. The filesystem
+   * computes *present **and** current* — `stepIsDone` in src/pipeline.ts is
+   * `has()` plus a stamp comparison — and the two agreed only because no
+   * revision had ever been superseded and the importer stamps every row `done`.
+   *
+   * Carry-forward is what makes them disagree, on its first day. A new draft
+   * copies the previous revision's glossary **and its step-run row, with
+   * `input_hash` unchanged**, which is exactly right: the row then says *the
+   * glossary ran against hash X* while the blocks hash Y. On disk the reader is
+   * offered "regenerate"; here they were shown a green tick over a glossary
+   * describing text that has since changed. Note that the parity test cannot
+   * catch this, for the same reason it cannot catch carry-forward at all —
+   * there is no re-extraction in between.
+   *
+   * ## What "current" means per step, and the one half that is still missing
+   *
+   * `toc` is checked the way `publishRevision` checks it, so the metadata page
+   * and the publication guard cannot disagree: the recorded `input_hash` must
+   * equal `hashBlocks` of this revision's blocks.
+   *
+   * `tweets`, `glossary` and `summary` carry their own `sourceHash`, so they
+   * are checked against the artefact itself rather than against the step row —
+   * the artefact is what a reader would actually be served.
+   *
+   * **The prompt-version and model half of the comparison is only done for the
+   * glossary**, and that is a known, narrow divergence rather than an oversight:
+   * `src/tweets.ts` and `src/summarise.ts` keep their `PROMPT_VERSION` module
+   * private, so nothing outside them can say what stamp they *would* write.
+   * The fix is theirs and a review already named it — each stage exports an
+   * `expectedStamp(blocks)` factory and keeps the constant private. Until then
+   * a model change makes those two steps re-runnable on disk and still
+   * green here.
+   *
+   * `fetch`, `extract`, `blocks` and `arc` have no currency rule in **either**
+   * store — nothing they write records what it was made from — so they are the
+   * step row alone, exactly as on the filesystem.
    */
   async articleMetadata(slug: string): Promise<ArticleMetadata> {
     requireSlug(slug);
@@ -366,13 +435,60 @@ export const pgArticleReader: Pick<
       .select()
       .from(revisionStepRuns)
       .where(eq(revisionStepRuns.revisionId, found.revision.id));
-    const doneSteps = new Set(runs.filter((r) => r.status === "done").map((r) => r.stepName));
+    const byStep = new Map(runs.map((r) => [r.stepName, r]));
+
+    /* Read once, outside the loop: four of the eight checks need the blocks,
+       and asking for a 360-row table four times to answer one page is the kind
+       of thing that only shows up in production. */
+    const blocks = await blocksFor(found.revision.id);
+    const blocksHash = blocks.length ? hashBlocks(blocks) : null;
+    const { revision } = found;
+
+    /** Is this step's output one we would write again today? */
+    const isCurrent = (step: StepName): boolean => {
+      switch (step) {
+        case "toc": {
+          if (!revision.tree || !blocksHash) return false;
+          return byStep.get("toc")?.inputHash === blocksHash;
+        }
+        case "tweets": {
+          const thread = revision.tweets as TweetThread | null;
+          return Boolean(thread && !tweetsStale(thread, blocks));
+        }
+        case "glossary": {
+          const glossary = revision.glossary as Glossary | null;
+          if (!glossary) return false;
+          // The one of the three that can be checked in full, because its
+          // prompt version is exported. `sameStamp` rather than three
+          // comparisons written out again — one definition of "current".
+          return sameStamp(
+            {
+              inputHash: glossary.sourceHash,
+              promptVersion: glossary.version,
+              model: glossary.generator,
+            },
+            {
+              ...(blocksHash ? { inputHash: blocksHash } : {}),
+              promptVersion: PROMPT_VERSION,
+              model: CAPABLE_MODEL,
+            },
+          );
+        }
+        case "summary": {
+          const summaries = revision.summary as Summaries | null;
+          return Boolean(summaries && !summariesStale(summaries, blocks));
+        }
+        default:
+          // fetch, extract, blocks, arc — nothing to compare, in either store.
+          return true;
+      }
+    };
 
     const stages: StageState[] = STEP_ORDER.map((step) => ({
       step,
       label: STEPS[step].label,
-      outputs: STEP_STORAGE[step] ?? [],
-      done: doneSteps.has(step),
+      outputs: STEP_STORAGE[step],
+      done: byStep.get(step)?.status === "done" && isCurrent(step),
     }));
 
     const commentRows = await db
@@ -380,16 +496,24 @@ export const pgArticleReader: Pick<
       .from(commentsTable)
       .where(eq(commentsTable.articleId, found.article.id));
 
+    /* `profile` and `purpose` for the same reason `comments` above is read
+       here rather than from a second endpoint. `profile` is global
+       (`reader_profiles`) and `purpose` is this article's own (`articles.
+       purpose`, via `shelfFrom`) — docs/plans/reader-profile.md. */
+    const profile = await pgReaderStore.readProfile();
+
     return {
       slug,
       // The filesystem reports a repo-relative directory; there isn't one.
       dir: `spideryarn.article_revisions/${found.revision.id}`,
       stages,
       comments: commentRows.length,
+      profile,
+      purpose: shelfFrom(found.article).purpose ?? null,
     };
   },
 
-  async loadTweets(slug: string): Promise<ThreadResponse> {
+  async loadTweets(slug: string): Promise<ThreadFound> {
     requireSlug(slug);
     const found = await currentRevision(slug);
     if (!found) throw notFound(slug);
@@ -405,7 +529,7 @@ export const pgArticleReader: Pick<
     return { thread, stale: tweetsStale(thread, blocks) };
   },
 
-  async loadGlossary(slug: string): Promise<GlossaryResponse> {
+  async loadGlossary(slug: string): Promise<GlossaryFound> {
     requireSlug(slug);
     const found = await currentRevision(slug);
     if (!found) throw notFound(slug);
@@ -456,7 +580,7 @@ export const pgArticleReader: Pick<
     };
   },
 
-  async loadSummaries(slug: string): Promise<SummariesResponse> {
+  async loadSummaries(slug: string): Promise<SummariesFound> {
     requireSlug(slug);
     const found = await currentRevision(slug);
     if (!found) throw notFound(slug);

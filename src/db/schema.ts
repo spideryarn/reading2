@@ -141,16 +141,33 @@ export const articles = spideryarn.table("articles", {
   currentRevisionId: uuid("current_revision_id"),
   createdAt: createdAt(),
 
+  /**
+   * **This article is the shipped demo, not something a reader added.**
+   *
+   * `example/` is a checked-in fixture that the filesystem reader serves as an
+   * ordinary article (src/api.ts § `FIXTURE_SLUG`), and at cutover it has to
+   * exist in Postgres or a fresh clone opens onto an empty shelf. Greg's call
+   * on 2026-08-26 was that it **goes in, marked as one** — so the flag is a
+   * column rather than a slug the code special-cases, because "is this the
+   * demo" is a fact about the row and a hardcoded `slug === "example"` is a
+   * fact about a string that anybody may later rename.
+   *
+   * Not null with a default, so every existing row and every future insert
+   * answers the question. Step 13 (docs/plans/postgres-storage-implementation.md)
+   * is what sets it true for exactly one article.
+   */
+  fixture: boolean("fixture").notNull().default(false),
+
   /* ---- shelf state: what the reader has done to the card. src/shelf.ts ----
      Columns here rather than a table of their own, because there is exactly one
      row per article and it is per-owner state on a table that already carries
-     `owner_id`. A join for four scalars would be ceremony.
+     `owner_id`. A join for five scalars would be ceremony.
 
-     All four are on `articles` and NOT on `article_revisions`, and that is the
+     All five are on `articles` and NOT on `article_revisions`, and that is the
      load-bearing part: a revision is one extraction, and re-extracting an
-     article must not un-archive it, forget the reader's title or reset the
-     count. Reader state outlives revisions — the same rule `block_identities`
-     exists to enforce for block ids. */
+     article must not un-archive it, forget the reader's title, reset the
+     count or forget why they are reading it. Reader state outlives revisions —
+     the same rule `block_identities` exists to enforce for block ids. */
 
   /** Set means it is off the shelf. Never a delete; Greg chose archive + Undo. */
   archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -164,14 +181,43 @@ export const articles = spideryarn.table("articles", {
   titleOverride: text("title_override"),
   opens: integer("opens").notNull().default(0),
   lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
+  /**
+   * "Why you're reading this one" — the per-article half of
+   * docs/plans/reader-profile.md. The global half ("about you", true on every
+   * article) is `reader_profiles` below, keyed by owner rather than by
+   * article, because it is not this article's state to lose.
+   */
+  purpose: text("purpose"),
 });
 
 /**
- * One extraction of one article. Immutable once published.
+ * One extraction of one article. **Immutable in its text** once published.
  *
  * The pipeline builds a *draft* and publishes it in one step, so a reader sees
  * either the previous published revision or the complete new one and never a
- * mixture. Today a failed re-extraction overwrites a good article in place.
+ * mixture. src/store/pg-revisions.ts is that lifecycle:
+ * `beginRevision` / `publishRevision` / `failRevision`.
+ *
+ * ## Why "in its text" and not simply "immutable"
+ *
+ * Only `fetch`, `extract` and `blocks` mint a revision. `toc`, `arc`, `tweets`,
+ * `glossary` and `summary` write their own column onto the revision that is
+ * already published, in one `UPDATE`. That weakens the plain reading of
+ * "immutable" and it belongs here rather than arriving as a surprise to
+ * whoever reads this comment and then reads the code.
+ *
+ * What the property is *for* is the sentence below it: a failed re-extraction
+ * must not overwrite a good article in place. That is about the **text**. A
+ * revision per glossary regeneration would copy every `revision_blocks` row and
+ * every `raw_bytes` blob to add one JSONB value, and no reader could tell the
+ * difference — a single-column `UPDATE` is already atomic.
+ *
+ * **The limit of that licence, which a review found and which the code
+ * enforces:** `toc` is not one of the five. It owns `tree` *and* `labels`, and
+ * a job that runs `toc` then `arc` would otherwise show every reader the new
+ * tree beside the old arc for the length of a model call. So `toc` mints a
+ * revision like the structural steps do, and only genuinely independent
+ * on-demand artefacts update in place.
  */
 export const articleRevisions = spideryarn.table(
   "article_revisions",
@@ -541,6 +587,33 @@ export const jobs = spideryarn.table(
      */
     attemptId: uuid("attempt_id"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+
+    /**
+     * **The unpublished revision this job is filling in**, or null when it does
+     * not own one.
+     *
+     * Nothing related a job to a revision before this column, and the absence
+     * was not a gap in the record — it made two designs undecidable. "Carry
+     * forward from this job's previous draft" had nothing to resolve, and
+     * "the latest draft for this slug" would have picked up *another* job's
+     * draft and resurrected exactly what copying-from-published exists to
+     * prevent. GPT Sol's review of the step 11 design, 2026-08-26:
+     * docs/plans/postgres-storage-implementation.md § What the review found.
+     *
+     * It is the anchor for the browser-driven advance endpoint too
+     * (docs/plans/job-queue-rethink.md): one request runs one step, and the
+     * only way the next request knows where to write is this column.
+     *
+     * `on delete set null` rather than cascade — a draft swept away by
+     * retention must not take the job record with it, and a job whose draft has
+     * gone is a job with no draft, which is a state the lifecycle already
+     * handles. Cleared when the draft is published or failed, so a non-null
+     * value always names something still in flight.
+     */
+    draftRevisionId: uuid("draft_revision_id").references(() => articleRevisions.id, {
+      onDelete: "set null",
+    }),
+
     createdAt: createdAt(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -569,6 +642,18 @@ export const jobs = spideryarn.table(
      * not. A unique index on a constant, restricted to running rows.
      */
     uniqueIndex("jobs_only_one_running").on(sql`(true)`).where(sql`${t.status} = 'running'`),
+    /**
+     * A draft has exactly one owner, enforced rather than assumed.
+     *
+     * Two jobs pointing at one draft is the state in which "publish what I
+     * built" publishes somebody else's work, and it would arise from an
+     * ordinary bug — a retry that copies the old job's row, a rescue that
+     * forgets to clear the pointer. Partial, because null means "owns no
+     * draft" and any number of jobs may be in that state.
+     */
+    uniqueIndex("jobs_draft_revision_unique")
+      .on(t.draftRevisionId)
+      .where(sql`${t.draftRevisionId} is not null`),
   ],
 );
 
@@ -859,6 +944,26 @@ export const searchRuns = spideryarn.table(
     createdAt: createdAt(),
 
     /**
+     * **The article this run was answered against** — `hashBlocks`,
+     * src/source-hash.ts, sixteen hex characters.
+     *
+     * Without it a saved search survives a re-extraction still presenting
+     * itself as an answer about *this* article: hits whose blocks are gone are
+     * silently dropped and the rest may quote text that has moved. Nothing
+     * about that has a symptom. The same field, the same function and the same
+     * word for it as `tweet_threads`, the glossary and the summaries carry —
+     * one definition of "current" for the whole article, which is the reason
+     * src/source-hash.ts exists.
+     *
+     * Nullable for the two cases where there is honestly no answer: a run
+     * imported from a `searches.json` written before 2026-08-26, and an article
+     * whose blocks could not be read at the moment the run started. Null counts
+     * as **stale** (`isStale`, src/searches.ts) — not knowing is not the same as
+     * knowing it is fine.
+     */
+    sourceHash: text("source_hash"),
+
+    /**
      * **Which attempt is in flight, so a second server cannot kill it.**
      *
      * `src/searches.ts` sweeps stale `pending` runs by asking an in-process
@@ -951,3 +1056,25 @@ export const glossaryLookups = spideryarn.table(
     check("glossary_lookups_searches", sql`${t.searches} >= 0`),
   ],
 );
+
+/* -------------------------------------------------------- reader profile -- */
+
+/**
+ * "About you" — the global half of docs/plans/reader-profile.md, true on
+ * every article rather than on one. `ShelfState.purpose` on `articles` above
+ * is the other half; src/profile.ts joins the two into one string a prompt
+ * can carry.
+ *
+ * `ownerId` IS the primary key, not a foreign key on a surrogate id: there is
+ * exactly one profile per reader, so there is nothing for a second key to
+ * distinguish. `src/store/pg-reader.ts` upserts on it — see
+ * src/store/pg-lookups.ts for the same shape used for the same reason.
+ */
+export const readerProfiles = spideryarn.table("reader_profiles", {
+  /** `auth.users(id)`. FK in the custom migration, as with every other `owner_id`. */
+  ownerId: uuid("owner_id").primaryKey(),
+  /** Absent (no row) and empty are treated the same by src/profile.ts; this
+      column is simply `null` for "never written". */
+  profile: text("profile"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

@@ -322,6 +322,11 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
         hits: row.hits,
         model: row.model,
         error: row.error,
+        /* The article the run was answered against. Dropping it here would
+           make a round trip through Postgres quietly reset every saved search
+           to "we cannot tell", which reads as *out of date* — src/searches.ts
+           § isStale. `compact` turns a null back into an absent key. */
+        sourceHash: row.sourceHash,
       }) as SearchRun,
     );
     await put("searches.json", { runs });

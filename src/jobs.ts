@@ -393,6 +393,7 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
         job.steps.slice(job.steps.indexOf(step) + 1).map((s) => s.name),
       ),
       ...(job.guidance !== undefined && { guidance: job.guidance }),
+      ...(job.profile !== undefined && { profile: job.profile }),
     };
 
     if (!step.force && (await stepIsDone(STEPS[step.name], ctx, pipelineStore))) {
@@ -543,6 +544,19 @@ export interface EnqueueRequest {
    * different jobs (`sameWork` below).
    */
   guidance?: string;
+  /**
+   * Who is reading, **already rendered** — `renderProfile` in src/profile.ts.
+   *
+   * Resolved by the route, once, and carried from here. That is the whole point
+   * of it being on the request rather than read inside each step: a summary run
+   * is several batches in flight at once, and a reader who edits their profile
+   * while one is running would otherwise get an artefact written from two
+   * profiles and stamped with whichever finished last.
+   *
+   * Absent means "run without a profile", which is a real answer — the reader
+   * unticked the box — and the artefacts record it as `profileHash: null`.
+   */
+  profile?: string;
 }
 
 /**
@@ -582,7 +596,8 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   // happened. Anything else queues behind, which is safe: concurrency is 1 and
   // a cancelled job now really does release its slot last (see `queue.add`).
   const running = activeFor(slug);
-  if (running && sameWork(running, names, forced, request.guidance)) return running;
+  if (running && sameWork(running, names, forced, request.guidance, request.profile))
+    return running;
 
   const job: Job = {
     id: mintId(),
@@ -592,6 +607,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     status: "queued",
     createdAt: new Date().toISOString(),
     ...(request.guidance ? { guidance: request.guidance } : {}),
+    ...(request.profile ? { profile: request.profile } : {}),
   };
 
   jobs.set(job.id, job);
@@ -686,9 +702,17 @@ function sameWork(
   names: StepName[],
   forced: Set<StepName>,
   guidance?: string,
+  profile?: string,
 ): boolean {
   if (job.steps.length !== names.length) return false;
   if ((job.guidance ?? "") !== (guidance ?? "")) return false;
+  /* And the profile, for the identical reason one field up — plus a sharper
+     one. Unticking "use your profile" and pressing the button again is a
+     request for a *different artefact*, not a retry of the one already
+     running. Without this line the reader is handed the profiled job, it
+     succeeds, and the panel shows a glossary stamped with the profile they had
+     just asked it not to use. */
+  if ((job.profile ?? "") !== (profile ?? "")) return false;
   return job.steps.every(
     (s, i) => s.name === names[i] && (s.force === true) === forced.has(s.name),
   );
@@ -882,6 +906,7 @@ export async function retryJob(id: string): Promise<Job | null> {
     // Copied, unlike force. The steer is not a thing the first attempt used up
     // — a retry of a summary run that was steered is still that run.
     ...(old.guidance ? { guidance: old.guidance } : {}),
+    ...(old.profile ? { profile: old.profile } : {}),
   });
 }
 

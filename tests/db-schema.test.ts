@@ -347,7 +347,7 @@ describe("the schema keeps the promises the plan makes", () => {
         `select conname from pg_constraint
           where connamespace = 'spideryarn'::regnamespace
             and conname in ('articles_owner_fk','comments_owner_fk','jobs_owner_fk',
-                            'articles_current_revision_fk')
+                            'articles_current_revision_fk','reader_profiles_owner_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -355,6 +355,7 @@ describe("the schema keeps the promises the plan makes", () => {
         "articles_owner_fk",
         "comments_owner_fk",
         "jobs_owner_fk",
+        "reader_profiles_owner_fk",
       ]);
     });
   });

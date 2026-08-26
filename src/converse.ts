@@ -82,6 +82,7 @@ import {
   runTool,
 } from "./chat-tools.js";
 import { isWebUrl } from "./urls.js";
+import { PROFILE_RULES, profileSection } from "./profile.js";
 import {
   type OpenRouterMessage,
   articleWithIds,
@@ -303,7 +304,9 @@ conversation, and the right response is to say so to the reader and carry on.
 FORMAT
 
 Plain prose paragraphs separated by blank lines. Short bullet lists only when
-the answer really is a list. No headings.`;
+the answer really is a list. No headings.
+
+${PROFILE_RULES}`;
 
 export interface ConverseRequest {
   meta: Meta;
@@ -327,6 +330,16 @@ export interface ConverseRequest {
    * cache miss per article for nothing.
    */
   slug: string;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * Unlike `slug` above, this one **does** reach the prompt — in the final user
+   * message, with the question, which is after the article's breakpoint. So it
+   * costs nothing in cache terms and the article message stays byte-identical
+   * for the life of the conversation, which is the property
+   * tests/article-prompt.test.ts pins.
+   */
+  profile?: string | null;
   model?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -457,8 +470,20 @@ export function buildConverseMessages(opts: {
   history: ChatMessage[];
   question: string;
   at?: string;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * In the **final** user message, with the position line, for the same reason
+   * the position line is there: everything before it is the cached prefix, and
+   * this changes when the reader edits a box on another page. It is re-sent on
+   * every turn rather than stated once near the article, which costs a hundred
+   * tokens a turn and buys the thing that matters — the article message stays
+   * byte-identical for the life of the conversation.
+   */
+  profile?: string | null;
 }): OpenRouterMessage[] {
   const position = readerPositionLine(opts.at);
+  const who = profileSection(opts.profile ?? null);
   return [
     { role: "system", content: SYSTEM },
     {
@@ -479,8 +504,11 @@ ${articleWithIds(opts.meta, opts.blocks)}`,
       content: m.text,
     })),
     {
+      /* The question goes last. The profile and the position are context for
+         reading it, and a question buried above three lines of framing is a
+         question the model answers less well. */
       role: "user",
-      content: position ? `${position}\n\n${opts.question}` : opts.question,
+      content: [position, who, opts.question].filter(Boolean).join("\n\n"),
     },
   ];
 }
@@ -563,6 +591,7 @@ export async function* converse({
   question,
   at,
   slug,
+  profile = null,
   useTools = true,
   model = process.env.SPIDERYARN_CHAT_MODEL || DEFAULT_MODEL,
   signal,
@@ -592,7 +621,14 @@ export async function* converse({
       - and a reader can see the whole conversation in the panel, so the
         article's own text arriving as a "user" turn is the honest description
         of what happened — the reader did put the article there. */
-  const base = buildConverseMessages({ meta, blocks, history, question, ...(at && { at }) });
+  const base = buildConverseMessages({
+    meta,
+    blocks,
+    history,
+    question,
+    ...(at && { at }),
+    profile,
+  });
 
   /* Logged rather than thrown: a short article simply cannot be cached, and the
      zeros that come back look exactly like a cache that has stopped working.

@@ -20,13 +20,13 @@
 
 import {
   articleMetadata,
+  assertOwnArticle,
   deleteGlossary,
   listArticles,
   loadArticle,
   loadGlossary,
   loadSummaries,
   loadTweets,
-  lookUpTerm,
 } from "../api.js";
 import {
   beginTurn,
@@ -43,8 +43,10 @@ import { createComment, deleteComment, loadComments, patchComment } from "../com
 import { loadLookups, saveLookup } from "../glossary-lookups.js";
 import { searchLibrary } from "../library-search.js";
 import { log } from "../log.js";
+import { loadReaderProfile, saveReaderProfile } from "../profile.js";
 import {
   beginRun,
+  currentSourceHash,
   deleteRun,
   finishRun,
   loadRuns,
@@ -58,6 +60,7 @@ import type {
   GlossaryLookupStore,
   GlossaryStore,
   LibrarySearch,
+  ReaderStore,
   SearchStore,
   ShelfStore,
   SweepOptions,
@@ -73,10 +76,28 @@ export const fsArticleReader: ArticleReader = {
   loadSummaries,
 };
 
-export const fsGlossaryStore: GlossaryStore = {
-  lookUpTerm,
+/**
+ * The glossary write that is not a lookup.
+ *
+ * `Pick<…>` rather than the whole `GlossaryStore`, and the missing half is
+ * deliberate: `lookUpTerm` is no longer a filesystem function at all. It is
+ * store-independent orchestration over a reader and a lookup store
+ * (src/term-lookup.ts), and index.ts builds one from whichever adapters are
+ * live. What is left here is the delete, which really does reach for a file.
+ */
+export const fsGlossaryStore: Pick<GlossaryStore, "deleteGlossary"> = {
   deleteGlossary,
 };
+
+/**
+ * The 403 the filesystem needs and Postgres does not — see `assertOwnArticle`.
+ *
+ * Handed to `makeLookUpTerm` in index.ts when the filesystem is live. There is
+ * no Postgres counterpart: an unknown slug has no row there and 404s, where
+ * `articleDir` falls through to the committed `example/` directory.
+ */
+export const fsAssertWritableGlossary = (slug: string): Promise<void> =>
+  assertOwnArticle(slug, "write to");
 
 /**
  * Comments, with no adaptation at all — the contract is `src/comments.ts`'s own
@@ -319,6 +340,10 @@ export function requireTail(
  */
 export const fsSearchStore: SearchStore = {
   load: loadRuns,
+  /* The article's own `blocks.json`, hashed with the same `hashBlocks` the
+     Postgres half uses — src/searches.ts § currentSourceHash says why the hash
+     is over the whole article rather than only the blocks a run cited. */
+  sourceHash: currentSourceHash,
   remove: deleteRun,
 
   async begin(slug, criterion, wantedId, now) {
@@ -360,4 +385,14 @@ export const fsSearchStore: SearchStore = {
 export const fsGlossaryLookupStore: GlossaryLookupStore = {
   load: loadLookups,
   save: saveLookup,
+};
+
+/**
+ * The reader's global profile, on `data/reader.json`. Two functions, no
+ * adaptation — src/profile.ts already does the normalising, capping and
+ * atomic write, so there is nothing for this file to add.
+ */
+export const fsReaderStore: ReaderStore = {
+  readProfile: loadReaderProfile,
+  writeProfile: saveReaderProfile,
 };

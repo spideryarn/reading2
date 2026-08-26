@@ -34,12 +34,13 @@ import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks } from "./source-hash.js";
-import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
+import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 
-const PROMPT_VERSION = "tweets/1";
+export const PROMPT_VERSION = "tweets/2";
 
 /**
  * The per-post limit, in one place.
@@ -230,7 +231,9 @@ JSON only, no prose, no code fence:
 {"tweets": ["...", "...", ...]}
 
 Each element is one post's text, in order, with no numbering in it. Nothing
-else — no summary, no title, no commentary about the thread.`;
+else — no summary, no title, no commentary about the thread.
+
+${PROFILE_RULES}`;
 
 /**
  * The article, and enough about who wrote it to attribute anything to them.
@@ -245,10 +248,24 @@ else — no summary, no title, no commentary about the thread.`;
  * full text follows it so the posts stay in the author's own words rather than
  * becoming a summary of a summary.
  */
-function renderPrompt(opts: {
+/* Exported for tests/profile-prompts.test.ts, which pins the two things a
+   profile must do here: arrive when there is one, and leave no trace when
+   there is not. Same reason src/summarise.ts exports its own. */
+export function renderPrompt(opts: {
   meta: Meta | null;
   tree: Tree;
   posts: number;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * The weakest of the five cases and included because Greg asked for it: a
+   * thread is written for whoever scrolls past it, so "who is reading" is a
+   * stranger claim here than it is for a glossary. What it can honestly change
+   * is which of the article's threads gets pulled out — and that is worth
+   * having. In the user prompt, never the `system` block, which is where the
+   * article and the breakpoint are.
+   */
+  profile: string | null;
 }): string {
   const { meta, tree, posts } = opts;
   const skeleton = partsOf(tree)
@@ -265,12 +282,14 @@ function renderPrompt(opts: {
 
   /* The full text and the title moved to a cached `system` block — see
      `generateThread`. What is left is what only this stage asks for. */
+  const who = profileSection(opts.profile);
+
   return `Write about ${posts} posts. Adjust that up or down a little if the piece
 genuinely needs it.
 
 ${author}
 
-=== ITS SHAPE ===
+${who ? `${who}\n\n` : ""}=== ITS SHAPE ===
 
 ${skeleton}`;
 }
@@ -306,7 +325,13 @@ function parseJson(raw: string): { tweets: string[] } {
  */
 export function buildThread(
   parsed: { tweets: string[] },
-  opts: { slug: string; sourceHash: string; elapsedMs: number },
+  opts: {
+    slug: string;
+    sourceHash: string;
+    elapsedMs: number;
+    /** The rendered profile this was written from, or null for none. */
+    profile?: string | null;
+  },
 ): TweetThread {
   const texts = parsed.tweets.map((t) => t.trim()).filter((t) => t.length > 0);
   if (texts.length === 0) {
@@ -318,6 +343,10 @@ export function buildThread(
     generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash: opts.sourceHash,
+    /* `null`, never absent: absent means "written before this existed" and
+       `null` means "written deliberately without a profile", and the page needs
+       to tell those apart. src/profile.ts § profileIsStale. */
+    profileHash: opts.profile ? hashProfile(opts.profile) : null,
     limit: LIMIT,
     tweets,
     generatedAt: new Date().toISOString(),
@@ -380,6 +409,14 @@ export async function generateTweets(opts: {
    * docs/project/prompt-caching.md.
    */
   cacheArticle?: boolean;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * The weakest of the five cases: a thread is written for whoever scrolls past
+   * it. What it can honestly change is which of the article's threads gets
+   * pulled out. Resolved by whoever queued the job, not read here — src/jobs.ts.
+   */
+  profile?: string | null;
 
 }): Promise<TweetsRun> {
   /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
@@ -400,6 +437,10 @@ export async function generateTweets(opts: {
   const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
     .then((raw) => JSON.parse(raw) as Meta)
     .catch(() => null);
+
+  /* Read once, used for both the prompt and the stamp — the stamp's whole job
+     is to name what the prompt actually carried. */
+  const profile = opts.profile ?? null;
 
   const words = blocks.reduce((n, b) => n + b.words, 0);
   const posts = suggestedLength(words);
@@ -444,7 +485,7 @@ export async function generateTweets(opts: {
         },
         { type: "text" as const, text: SYSTEM },
       ],
-      messages: [{ role: "user", content: renderPrompt({ meta, tree, posts }) }],
+      messages: [{ role: "user", content: renderPrompt({ meta, tree, posts, profile }) }],
     }, { signal: opts.signal });
 
     if (opts.onProgress) {
@@ -474,14 +515,12 @@ export async function generateTweets(opts: {
     throw new Error(MODEL_REFUSED.message);
   }
   if (message.stop_reason === "max_tokens") {
-    throw new Error(
-      truncatedMessage("thread", maxTokens, answerTokens, {
-        outputTokens: message.usage.output_tokens,
-        answerChars: message.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .reduce((n, b) => n + b.text.length, 0),
-      }),
-    );
+    throw truncationFailure("thread", maxTokens, answerTokens, {
+      outputTokens: message.usage.output_tokens,
+      answerChars: message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .reduce((n, b) => n + b.text.length, 0),
+    });
   }
 
   const raw = message.content
@@ -492,6 +531,7 @@ export async function generateTweets(opts: {
   const thread = buildThread(parseJson(raw), {
     slug: tree.slug,
     sourceHash: hashBlocks(blocks),
+    profile,
     elapsedMs: Date.now() - started,
   });
 

@@ -201,6 +201,22 @@ export interface StepContext {
    */
   guidance?: string;
   /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * Resolved once by whoever queued the job and carried here, never read from
+   * storage by a step. Read the note on `Job.profile` in src/types.ts for why
+   * that matters: a step that resolved it itself would let a profile edited
+   * mid-run split one artefact across two profiles.
+   *
+   * **Not part of any step's `isDone` either**, and for a different reason from
+   * `guidance` above. A steer is left out because it is a reason to force a
+   * rewrite rather than evidence of staleness. The profile is left out because
+   * staleness against a profile is a separate question with its own answer —
+   * `profileIsStale` in src/profile.ts — which the reader's panel asks and the
+   * pipeline does not.
+   */
+  profile?: string;
+  /**
    * Whether this step should pay to cache the article it is about to send.
    *
    * True only when a *later step in this same job* renders the same article the
@@ -665,6 +681,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
           chunks: result.chunks,
           records: result.records,
           strippedChars: result.stripped,
+          retries: result.retries.length,
           isScan: result.isScan,
           recall: result.recall,
           inputTokens: result.usage.input,
@@ -863,6 +880,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     async run(ctx) {
       const run = await generateTweets({
         dir: ctx.dir,
+        profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
         cacheArticle: ctx.cacheArticle,
@@ -925,6 +943,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     async run(ctx) {
       const run = await generateGlossary({
         dir: ctx.dir,
+        profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
         cacheArticle: ctx.cacheArticle,
@@ -967,6 +986,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
       const run = await generateSummaries({
         dir: ctx.dir,
         ...(ctx.guidance !== undefined && { guidance: ctx.guidance }),
+        profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
       });
@@ -1003,6 +1023,11 @@ export const STEPS: Record<StepName, PipelineStep> = {
              docs/project/logging.md keeps out of the log. The number is enough
              to answer "was one sent at all". */
           guidanceChars: ctx.guidance?.length ?? 0,
+          /* The same rule again, and it matters more here: this one is about
+             the person rather than about the article. A length answers "was one
+             sent", which is the only question the log is entitled to ask.
+             docs/project/logging.md. */
+          profileChars: ctx.profile?.length ?? 0,
         },
         `summary ${ctx.slug}: ${run.targets - missing}/${run.targets} sections in ${run.batches} groups`,
       );

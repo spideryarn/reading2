@@ -20,15 +20,9 @@ import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadComments } from "./comments.js";
 import { loadShelf } from "./shelf.js";
-import { formsOf, termAppears, termPattern } from "./term-match.js";
-import { explain } from "./explain.js";
-import { loadLookups, saveLookup } from "./glossary-lookups.js";
-import {
-  isStale as glossaryIsStale,
-  PROMPT_VERSION,
-  readGlossary,
-  safeUrl,
-} from "./glossary.js";
+import { loadReaderProfile } from "./profile.js";
+import { loadLookups } from "./glossary-lookups.js";
+import { isStale as glossaryIsStale, PROMPT_VERSION, readGlossary } from "./glossary.js";
 import { isStale as summariesStale, readSummaries } from "./summarise.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
@@ -43,16 +37,14 @@ import type {
   Article,
   ArticleMetadata,
   Block,
-  GlossaryEntry,
-  GlossaryLookup,
-  GlossaryResponse,
-  SummariesResponse,
+  GlossaryFound,
+  SummariesFound,
   LibraryEntry,
   ListOptions,
   Meta,
   ShelfState,
   StageState,
-  ThreadResponse,
+  ThreadFound,
   Tree,
   TweetThread,
 } from "./types.js";
@@ -212,8 +204,11 @@ export async function loadArticle(slug: string): Promise<Article> {
        cleans only when it disagrees — measured at 33ms and ~130MB of jsdom
        retention per article to do it unconditionally, which is a real cost on
        every page load forever to cover a case that is rare and bounded. The
-       other five reads here (loadTweets, loadGlossary, lookUpTerm,
-       loadSummaries, describeDir) take `text`, not `html`.
+       other four reads here (loadTweets, loadGlossary, loadSummaries,
+       describeDir) take `text`, not `html`. A glossary lookup used to be a
+       fifth; since 2026-08-26 it asks for the article through this function
+       instead (src/term-lookup.ts), so it is covered by this line rather than
+       standing beside it.
 
        The warn is the point as much as the cleaning is: a stale artefact is
        still stale after we have served it safely, and stage 3 is what actually
@@ -259,7 +254,7 @@ export async function loadArticle(slug: string): Promise<Article> {
  * is the ordinary case, not a fault — it is what the page's button is for, and
  * the message says how to ask for one.
  */
-export async function loadTweets(slug: string): Promise<ThreadResponse> {
+export async function loadTweets(slug: string): Promise<ThreadFound> {
   requireSlug(slug);
 
   const dir = await articleDir(slug);
@@ -301,7 +296,7 @@ export async function loadTweets(slug: string): Promise<ThreadResponse> {
  *    articles have none; it is what the panel's button is for, and the message
  *    says how to ask for one.
  */
-export async function loadGlossary(slug: string): Promise<GlossaryResponse> {
+export async function loadGlossary(slug: string): Promise<GlossaryFound> {
   requireSlug(slug);
 
   const dir = await articleDir(slug);
@@ -343,164 +338,38 @@ export async function loadGlossary(slug: string): Promise<GlossaryResponse> {
 }
 
 /**
- * The form of a term the article actually uses in one block, or nothing.
+ * The article's own directory, or a refusal — the guard the reader-facing
+ * glossary writes share.
  *
- * Names are canonical and aliases are what the piece says — *"Martin Luther
- * King Jr."* against a paragraph that reads "MLK" — so asking a model to
- * explain a selection has to quote the words that are there. Longest form
- * first, so a block containing both gets the more specific one, which is the
- * same preference `richness` encodes in the dedup.
+ * `articleDir` falls through to `example/` for any slug with no pipeline output
+ * of its own, **including a slug that does not exist at all**, so without this
+ * the one committed directory in the repo is one request away from an unknown
+ * article. It has no `glossary.json` today, which is exactly the kind of "it
+ * can't happen" that stops being true the first time somebody hand-authors one.
+ *
+ * Exported because `lookUpTerm` no longer lives in this file: it is
+ * store-independent now (src/term-lookup.ts) and takes this as its
+ * `assertWritable`. Postgres has no fixture to fall into and needs no
+ * counterpart — an unknown slug there has no row and 404s. **A stated
+ * difference with a test on each side**, rather than something to discover.
+ *
+ * @param verb what the caller is about to do, for the 403's wording. The
+ *   sentence a reader sees says which act was refused, and the two acts are not
+ *   the same thing to be told about.
  */
-function quoteIn(entry: { name: string; aliases: string[] }, text: string): string | undefined {
-  const forms = [...formsOf(entry)].sort((a, b) => b.length - a.length);
-  for (const form of forms) {
-    const pattern = termPattern([form]);
-    if (pattern && termAppears(text, pattern)) return form;
-  }
-  return undefined;
-}
-
-/**
- * Check one glossary term on the web, and keep what comes back.
- *
- * **This is `explain` with a different selection, and that is the point.** Our
- * review of the version this feature was borrowed from argued that a glossary
- * should be *the same mechanism as comments with a different prompt* rather
- * than a second system, and docs/project/glossary.md § What is still open has
- * carried that as an open question since the feature landed. It is answered
- * here by using the mechanism rather than by describing it: the same call, the
- * same web-search tool, the same `Citation` shape, the same cached article
- * prefix — so a lookup on an article somebody has already asked a question
- * about is a cache hit rather than a fresh read of the whole piece.
- *
- * **The quote is the form the article actually uses, not the entry's name.**
- * That distinction was missing and it made the request untrue. `findOccurrences`
- * matches on the name *or any alias*, so `entry.blocks[0]` is a block one of
- * them appears in — and on the one real glossary we have, three entries of five
- * are matched by an alias: the block behind *John F. Kennedy* says only "JFK".
- * Telling the model the reader selected "John F. Kennedy" inside a block that
- * does not contain those words is a false premise handed to a model that is
- * then asked to reason from it. `quoteIn` picks the form that is there.
- *
- * With that fixed, "the reader has selected this passage" is literally true,
- * and the prompt's own instruction to supply *"the term of art, the named
- * person, the debate being alluded to"* is the question a glossary reader is
- * asking.
- *
- * An entry with **no** occurrences is refused rather than anchored to an
- * arbitrary paragraph. The panel already says of those that the exact words do
- * not appear in the article; inventing a position for them would be a second,
- * quieter place for the same failure — and the model would be told a passage
- * was selected in a paragraph that has nothing to do with the term.
- *
- * **What it does not do is touch `background`.** The remembered answer and the
- * checked one sit side by side, because a reader who can no longer tell which
- * is which has lost the thing this panel spent a rewrite acquiring.
- */
-export async function lookUpTerm(
-  slug: string,
-  termId: string,
-  signal?: AbortSignal,
-): Promise<{ entry: GlossaryEntry }> {
+export async function assertOwnArticle(slug: string, verb: string): Promise<void> {
   requireSlug(slug);
 
   const dir = await articleDir(slug);
   if (!dir) {
     throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
   }
-  /* The fixture is not the reader's to write into — the same guard
-     `deleteGlossary` carries, and for the same reason: `articleDir` falls
-     through to `example/` for any slug with no output of its own, so without
-     this a lookup on an unknown slug would edit the one committed directory in
-     the repo. */
   if (dir !== path.join(ROOT, "data", slug)) {
     throw Object.assign(
-      new Error(`"${slug}" is the built-in example. Its glossary is not yours to write to.`),
+      new Error(`"${slug}" is the built-in example. Its glossary is not yours to ${verb}.`),
       { status: 403 },
     );
   }
-
-  const glossary = await readGlossary(dir);
-  const entry = glossary?.entries.find((e) => e.id === termId);
-  if (!glossary || !entry) {
-    throw Object.assign(new Error(`No glossary term "${termId}" in "${slug}".`), { status: 404 });
-  }
-
-  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
-  if (!blocksFile) {
-    throw Object.assign(new Error(`Cannot read the blocks for "${slug}".`), { status: 500 });
-  }
-  /* A missing meta.json is not worth refusing over — it only tells the model
-     what it is reading — so the fallback carries the two fields `Meta` actually
-     requires and nothing invented. Same call the glossary stage itself makes. */
-  const meta: Meta = (await readJson<Meta>(path.join(dir, "meta.json"))) ?? { slug, title: slug };
-
-  const anchor = entry.blocks[0];
-  const block = blocksFile.blocks.find((b) => b.id === anchor);
-  const quote = block ? quoteIn(entry, block.text) : undefined;
-  if (!anchor || !block || !quote) {
-    /* Refused rather than anchored somewhere arbitrary. Three ways to get here
-       and they are all the same fact — this term is not in this text: the model
-       named words the article does not use, or the glossary is stale and its
-       block ids no longer exist, or the block exists but no form of the term is
-       in it. `409`, not `500`: nothing is broken, the question just cannot be
-       asked in the form this call needs. */
-    throw Object.assign(
-      new Error(
-        `"${entry.name}" does not appear in this article, so there is no passage to check it in. ` +
-          `Find the terms again if the article has changed.`,
-      ),
-      { status: 409 },
-    );
-  }
-
-  const result = await explain({
-    meta,
-    blocks: blocksFile.blocks,
-    blockId: anchor,
-    quote,
-    ...(signal ? { signal } : {}),
-  });
-
-  const lookup: GlossaryLookup = {
-    answer: result.answer,
-    /* Filtered here rather than trusted, even though `explain` built these from
-       the provider's own annotations. This is where a model-supplied URL stops
-       being a value in flight and becomes a value on disk that the panel will
-       put in an `href` — src/glossary.ts § `safeUrl`, and the same call
-       `converse` makes at its own storage boundary. */
-    citations: result.citations.flatMap((c) => {
-      const url = safeUrl(c.url);
-      return url ? [{ url, ...(c.title ? { title: c.title } : {}) }] : [];
-    }),
-    searches: result.searches,
-    model: result.model,
-    at: new Date().toISOString(),
-  };
-
-  /* Into its own file, keyed by id, atomically and one at a time — never into
-     `glossary.json`. src/glossary-lookups.ts sets out the three failures that
-     patching the artefact would have inherited; the one that cannot be
-     engineered around is that the `glossary` step reads that file, spends a
-     minute in a model call, and then writes back what it read.
-
-     Keyed by **id** because ids are identity and names are display: a later
-     pass may merge or rename this term, and `merge` keeps the incumbent's id
-     precisely so a `?term=` link survives. The lookup survives with it. */
-  await saveLookup(slug, termId, lookup);
-  const updated: GlossaryEntry = { ...entry, lookup };
-
-  /* No prose in the log line, and that includes the answer and the term. What
-     is here is what tells you the feature is working or quietly is not:
-     `searches: 0` on every call means the model has stopped choosing to look,
-     which is invisible from the outside because "I already knew that" is a
-     legitimate answer. src/log.ts. */
-  log("store").info(
-    { slug, termId, searches: lookup.searches, citations: lookup.citations.length, model: lookup.model },
-    "looked up a glossary term",
-  );
-
-  return { entry: updated };
 }
 
 /**
@@ -568,7 +437,7 @@ export async function deleteGlossary(slug: string): Promise<{ deleted: boolean }
  * second way to say the same thing, and the only thing it would add is a way to
  * lose the summaries without getting new ones.
  */
-export async function loadSummaries(slug: string): Promise<SummariesResponse> {
+export async function loadSummaries(slug: string): Promise<SummariesFound> {
   requireSlug(slug);
 
   const dir = await articleDir(slug);
@@ -714,7 +583,23 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
   // the client fetching the comments themselves.
   const comments = (await loadComments(slug)).length;
 
-  return { slug, dir: path.relative(ROOT, dir), stages, comments };
+  /* `profile` and `purpose` for the same reason as `comments` above: this
+     endpoint already walks the article's directory, so both are one more read
+     rather than a second endpoint. `profile` is global (`data/reader.json`)
+     and `purpose` is this article's own (`shelf.json`) — see
+     docs/plans/reader-profile.md. Both default to `null` via
+     `normaliseProfileText`, which is what `loadReaderProfile` already
+     returns and what an absent `shelf.purpose` collapses to here. */
+  const [profile, shelf] = await Promise.all([loadReaderProfile(), loadShelf(slug)]);
+
+  return {
+    slug,
+    dir: path.relative(ROOT, dir),
+    stages,
+    comments,
+    profile,
+    purpose: shelf.purpose ?? null,
+  };
 }
 
 /* ------------------------------------------------------------ the library --

@@ -48,15 +48,15 @@ import type {
   Comment,
   GlossaryEntry,
   GlossaryLookup,
-  GlossaryResponse,
+  GlossaryFound,
   Job,
   LibraryEntry,
   LibraryHit,
   ListOptions,
   SearchRun,
   ShelfState,
-  SummariesResponse,
-  ThreadResponse,
+  SummariesFound,
+  ThreadFound,
 } from "../types.js";
 
 /**
@@ -86,13 +86,13 @@ export interface ArticleReader {
   articleMetadata(slug: string): Promise<ArticleMetadata>;
 
   /** The article as a numbered thread, plus whether it still describes the article. */
-  loadTweets(slug: string): Promise<ThreadResponse>;
+  loadTweets(slug: string): Promise<ThreadFound>;
 
   /** The glossary, plus staleness. Computed at read time, never stored. */
-  loadGlossary(slug: string): Promise<GlossaryResponse>;
+  loadGlossary(slug: string): Promise<GlossaryFound>;
 
   /** The summaries at every rung, plus staleness. */
-  loadSummaries(slug: string): Promise<SummariesResponse>;
+  loadSummaries(slug: string): Promise<SummariesFound>;
 }
 
 /**
@@ -211,8 +211,8 @@ export interface ShelfStore {
   read(slug: string): Promise<ShelfState>;
 
   /**
-   * Change one or both of "is it on the shelf" and "what do I call it", **in one
-   * write**.
+   * Change any of "is it on the shelf", "what do I call it" and "why am I
+   * reading it", **in one write**.
    *
    * One method rather than `archive` and `rename`, and that is not tidiness. A
    * route that validated and wrote each field in turn could rename an article
@@ -222,12 +222,18 @@ export interface ShelfStore {
    * it atomically: one serialised file edit, or one `UPDATE`.
    *
    * An absent key means "leave it alone". `title: null` is not absent — it
-   * means clear the override and go back to the extractor's title.
+   * means clear the override and go back to the extractor's title. `purpose`
+   * follows the identical rule: absent leaves it, `null` clears it. `purpose`
+   * is the per-article half of docs/plans/reader-profile.md — see
+   * src/shelf.ts for why it lives here rather than being edited in place.
    *
    * Returns the entry as it now stands, so a caller cannot get away with
    * assuming what the write did.
    */
-  patch(slug: string, change: { archived?: boolean; title?: string | null }): Promise<LibraryEntry>;
+  patch(
+    slug: string,
+    change: { archived?: boolean; title?: string | null; purpose?: string | null },
+  ): Promise<LibraryEntry>;
 
   /**
    * One more open.
@@ -473,6 +479,24 @@ export interface SearchStore {
   load(slug: string): Promise<SearchRun[]>;
 
   /**
+   * The fingerprint of the article **right now**, to judge a saved run against.
+   *
+   * A run carries the hash of the blocks it was answered over (`SearchRun.
+   * sourceHash`). Comparing it against this one is what lets the panel say a
+   * search is out of date — `isStale` in src/searches.ts holds the comparison,
+   * so both stores share one rule as well as one hash.
+   *
+   * **A method rather than a field on what `load` returns**, so a caller that
+   * only wants the list does not pay for a scan of every block. The read seam
+   * asks for both together (`readSearches`).
+   *
+   * `undefined` when the article has no readable blocks. That is not "current"
+   * — `isStale` counts it as stale, because not knowing and knowing it is fine
+   * are different answers.
+   */
+  sourceHash(slug: string): Promise<string | undefined>;
+
+  /**
    * Record a `pending` run before the model is called.
    *
    * A `wantedId` naming an existing row is a **retry only when the criterion
@@ -525,4 +549,31 @@ export interface SearchStore {
 export interface GlossaryLookupStore {
   load(slug: string): Promise<LookupsByTerm>;
   save(slug: string, termId: string, lookup: GlossaryLookup): Promise<LookupsByTerm>;
+}
+
+/**
+ * The reader's global profile — "about you", true on every article rather
+ * than on one. docs/plans/reader-profile.md is the design; src/profile.ts
+ * is where the two boxes (this one and `ShelfState.purpose`) become one string
+ * a prompt can carry.
+ *
+ * Not article-scoped, unlike everything else in this file — there is one
+ * profile per reader, which today means one profile, full stop
+ * (docs/project/auth.md). The filesystem adapter is a thin wrapper over
+ * `loadReaderProfile` / `saveReaderProfile` in src/profile.ts, which already
+ * does the normalising, capping and atomic write; the Postgres adapter is
+ * `reader_profiles`, one row per `owner_id`.
+ */
+export interface ReaderStore {
+  /** `null` when the reader has not written one yet — not a fault. */
+  readProfile(): Promise<string | null>;
+
+  /**
+   * Write the profile, or clear it with `null`. Returns what was actually
+   * stored (normalised), so a caller cannot get away with assuming its own
+   * input survived unchanged.
+   *
+   * **Refused, not truncated**, past `MAX_PROFILE_CHARS` — see src/profile.ts.
+   */
+  writeProfile(text: string | null): Promise<string | null>;
 }

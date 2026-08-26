@@ -10,8 +10,10 @@
  *   GET    /api/library         every article on the shelf, for the homepage
  *                                `?archived=1` for the other half
  *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
- *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null }
+ *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
+ *   GET    /api/reader           the reader's global profile — { profile: string | null }
+ *   PATCH  /api/reader           { profile: string | null } → the same shape
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
  *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
@@ -56,9 +58,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
    docs/plans/postgres-storage-implementation.md */
 import {
   articleMetadata,
+  chatStore,
   deleteGlossary,
   librarySearch,
   listArticles,
+  readerStore,
+  searchStore,
   shelfStore,
   loadArticle,
   loadGlossary,
@@ -66,28 +71,21 @@ import {
   loadSummaries,
   loadTweets,
 } from "./store/index.js";
-import {
-  beginTurn,
-  ChatConflict,
-  deleteThread,
-  editTurn,
-  finishTurn,
-  loadThreads,
-  renameThread,
-  retryTurn,
-  update as updateThreads,
-  withEdit,
-  withRetry,
-} from "./chat.js";
-import { beginRun, deleteRun, finishRun, loadRuns, update as updateRuns } from "./searches.js";
-import { findPassagesStream } from "./search.js";
+/* **Pure functions only**, and that is the whole reason this import survived
+   step 10 while the writes beside it did not. `withRetry` and `withEdit` take a
+   snapshot and return what the result would be, so they can be run as a gate
+   here and thrown away; `ChatConflict` is what they throw and what this file
+   turns into a 409. Nothing here touches a file, so nothing here has to know
+   which store is live. Every write goes through `chatStore` above. */
+import { ChatConflict, withEdit, withRetry } from "./chat.js";
+import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Through the store, so SPIDERYARN_STORE moves comments and articles together.
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
 import { fsLocations } from "./store/artifacts-fs.js";
 import { commentStore } from "./store/index.js";
-import { converse } from "./converse.js";
+import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { readRaw } from "./fetch.js";
@@ -95,11 +93,15 @@ import { isSlug, normaliseUrl, slugFromUrl } from "./ingest.js";
 import { cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
+import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
 import type {
   ChatThread,
   Comment,
   LibraryEntry,
+  GlossaryResponse,
   LibrarySearchResponse,
+  SummariesResponse,
+  ThreadResponse,
   SearchHit,
   SearchRun,
 } from "./types.js";
@@ -376,7 +378,10 @@ function sse(res: ServerResponse): {
  * chat, weeks after the ids stopped matching.
  */
 async function answer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { id, blockId, quote, start, deep } = (body ?? {}) as Record<string, unknown>;
+  const { id, blockId, quote, start, deep, useProfile } = (body ?? {}) as Record<
+    string,
+    unknown
+  >;
   if (typeof blockId !== "string" || typeof quote !== "string" || typeof start !== "number") {
     throw httpError(400, "Expected { blockId, quote, start }");
   }
@@ -393,6 +398,11 @@ async function answer(slug: string, body: unknown, res: ServerResponse): Promise
      messages must never be — they are logged as `reason`, and redaction is
      path-based and cannot reach a string. See the note on `httpError` below. */
   const deeper = deep === true;
+  /* `!== false`, the mirror of the line above and deliberately not the same
+     rule. Deep search is an extra the reader asks for, so absent means no;
+     the profile is the default this app now writes with, so absent means yes
+     and only an explicit refusal turns it off. */
+  const wantsProfile = useProfile !== false;
 
   // Before the comment is created, so a slug that is not an article is a clean
   // 404 with nothing written, rather than a stored comment whose only content is
@@ -419,6 +429,7 @@ async function answer(slug: string, body: unknown, res: ServerResponse): Promise
       blockId,
       quote,
       deep: deeper,
+      profile: wantsProfile ? await resolveProfile(slug) : null,
     })) {
       if (event.type === "delta") {
         text += event.text;
@@ -625,6 +636,53 @@ export async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise
 export const CHAT_ORPHAN_GRACE_MS = 150_000;
 
 /**
+ * The window must outlive the longest a model call can legally take, and here
+ * is where that is checked rather than assumed.
+ *
+ * **There is no heartbeat.** An attempt is written once when it starts and
+ * once when it ends, and nothing in between says "still going". So the grace
+ * window is the *only* thing standing between another process's live answer
+ * and a sweep that buries it — and an attempt that outlives the window is
+ * buried while it is still running, with the reader watching the words arrive.
+ *
+ * `CHAT_TIMEOUT_MS` is 120s (src/converse.ts), which is the hard deadline on
+ * the whole turn including every tool round. 150s leaves 30s for the write and
+ * for a clock the two processes do not share exactly. If that deadline ever
+ * goes up, this has to go up with it, which is what this assertion is for: it
+ * fails at import, on every machine, rather than turning into a rare answer
+ * that disappears.
+ */
+if (CHAT_ORPHAN_GRACE_MS <= CHAT_TIMEOUT_MS) {
+  throw new Error(
+    `CHAT_ORPHAN_GRACE_MS (${CHAT_ORPHAN_GRACE_MS}ms) must be longer than CHAT_TIMEOUT_MS ` +
+      `(${CHAT_TIMEOUT_MS}ms), or a sweep buries answers that are still being written. ` +
+      "There is no heartbeat, so this window is the only thing protecting them.",
+  );
+}
+
+/**
+ * The same number for a meaning-search, and it is a different number because
+ * the deadline it has to clear is a different deadline.
+ *
+ * `SEARCH_TIMEOUT_MS` is 60s (src/search.ts) — a search is one call with no
+ * tool rounds, so it is bounded much tighter than a chat turn. 90s leaves the
+ * same 30s of room for the article read that happens after `begin`, the write
+ * that happens after the model, and two processes' clocks.
+ *
+ * **The filesystem store ignores it entirely**, and that is today's behaviour
+ * rather than an oversight: it errors any `pending` run this process did not
+ * start, immediately. Only Postgres has other processes to be wrong about.
+ */
+export const SEARCH_ORPHAN_GRACE_MS = 90_000;
+
+if (SEARCH_ORPHAN_GRACE_MS <= SEARCH_TIMEOUT_MS) {
+  throw new Error(
+    `SEARCH_ORPHAN_GRACE_MS (${SEARCH_ORPHAN_GRACE_MS}ms) must be longer than SEARCH_TIMEOUT_MS ` +
+      `(${SEARCH_TIMEOUT_MS}ms), or a sweep buries searches that are still running.`,
+  );
+}
+
+/**
  * Stop whatever this process is streaming into a thread, and wait for it to
  * finish writing.
  *
@@ -655,39 +713,44 @@ async function settleThread(slug: string, threadId: string): Promise<void> {
   await Promise.all(live.map((l) => l.done));
 }
 
-/** Turn abandoned `pending` answers into `error`, so the reader can ask again. */
-async function sweepChat(slug: string, threads: ChatThread[]): Promise<ChatThread[]> {
-  const now = Date.now();
-  const orphaned = (t: ChatThread, m: { id: string; createdAt: string }) => {
-    if (streaming.has(`${slug}/${t.id}/${m.id}`)) return false; // this process is on it
-    // A timestamp we cannot read is treated as old rather than as young: the
-    // alternative is a message that can never be swept, which is the state this
-    // whole function exists to prevent.
-    const started = Date.parse(m.createdAt);
-    return Number.isNaN(started) || now - started > CHAT_ORPHAN_GRACE_MS;
-  };
-  const stale = threads.some((t) =>
-    t.messages.some((m) => m.status === "pending" && orphaned(t, m)),
-  );
-  if (!stale) return threads;
-  return updateThreads(slug, (current) =>
-    current.map((t) => ({
-      ...t,
-      messages: t.messages.map((m) =>
-        m.status === "pending" && orphaned(t, m)
-          ? {
-              ...m,
-              status: "error" as const,
-              /* The text stays. A half-written answer the reader watched appear
-                 is the most confusing thing to lose on reload — they know they
-                 read something, and it is gone. Keeping it with the failure
-                 attached says what actually happened. */
-              error: "The server stopped before this answer finished.",
-            }
-          : m,
-      ),
-    })),
-  );
+/**
+ * What this process is answering *in this article*, as bare message ids.
+ *
+ * `streaming` is keyed `slug/threadId/messageId` because that is what a stop
+ * request names; `SweepOptions.keep` is a set of message ids because that is
+ * what a row is called. Converting here rather than changing either is
+ * deliberate — the key has to stay unique across articles, and the store must
+ * not be handed a composite it would then have to take apart.
+ *
+ * **Filtered by slug.** Handing over every live id in the process would spare a
+ * row in *this* article that happens to share an id with one being written in
+ * another, which is possible: ids are unique per article, not globally.
+ */
+function liveMessages(slug: string): Set<string> {
+  const prefix = `${slug}/`;
+  const ids = new Set<string>();
+  for (const key of streaming.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    const id = key.slice(key.lastIndexOf("/") + 1);
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+/**
+ * Turn abandoned `pending` answers into `error`, so the reader can ask again.
+ *
+ * The rule itself lives in the store now — `fsChatStore.sweepPending` for the
+ * filesystem, an `UPDATE … WHERE` for Postgres — and what is left here is the
+ * half only a running server knows: which rows this process is writing, and
+ * how long another process's row is allowed to be silent. See `SweepOptions`
+ * in src/store/contracts.ts for why neither half is sufficient alone.
+ */
+function sweepChat(slug: string): Promise<ChatThread[]> {
+  return chatStore.sweepPending(slug, {
+    keep: liveMessages(slug),
+    graceMs: CHAT_ORPHAN_GRACE_MS,
+  });
 }
 
 /**
@@ -730,8 +793,14 @@ async function sweepChat(slug: string, threads: ChatThread[]): Promise<ChatThrea
  *    error on it rather than discarded. See the note in `sweepChat`.
  */
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { threadId, question, at, retry, edit } = (body ?? {}) as Record<string, unknown>;
+  const { threadId, question, at, retry, edit, expectedTailId, useProfile } = (body ??
+    {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
+  /* Absent means yes, as it does everywhere the profile is offered. Per turn
+     rather than per thread, because the composer's checkbox is per turn — a
+     reader may reasonably want one answer written plainly in the middle of a
+     conversation that is otherwise theirs. */
+  const wantsProfile = useProfile !== false;
   /* Three ways to start a turn, one endpoint, one stream.
 
      A retry and an edit could each have had a route of their own, and each
@@ -774,7 +843,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          away. Whatever they would refuse, they refuse here, for free, before
          the destructive part. The authoritative run is still the one inside
          `retryTurn` / `editTurn` — this is a gate, not a substitute. */
-      const snapshot = await loadThreads(slug);
+      const snapshot = await chatStore.load(slug);
       if (wantsRetry) withRetry(snapshot, threadId, retry as string, "");
       else withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
 
@@ -786,12 +855,31 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       await settleThread(slug, threadId);
     }
     return wantsRetry
-      ? await retryTurn(slug, threadId, retry as string)
+      ? await chatStore.retry(slug, threadId, retry as string)
       : wantsEdit
-        ? await editTurn(slug, threadId, edit as string, (question as string).trim())
-        : await beginTurn(slug, { threadId, question: (question as string).trim() });
+        ? await chatStore.edit(slug, threadId, edit as string, (question as string).trim(), {
+            /* **The guard is only as good as the client's willingness to send
+               it**, which is why it is optional in the contract and not
+               optional here in spirit: an edit that names no tail is an
+               unguarded edit, and a stale tab can then delete every turn added
+               since it last looked. src/web/useChat.ts sends the id of the
+               message it believes is last. A body without one still works —
+               an old tab mid-session, a curl — and is simply not protected. */
+            ...(typeof expectedTailId === "string" ? { expectedTailId } : {}),
+          })
+        : await chatStore.begin(slug, { threadId, question: (question as string).trim() });
   });
   const { thread, reply, user } = begun;
+  /* **Which model call this is**, as far as storage is concerned, and it is
+     NOT the same thing as `attempt` below.
+
+     `Live.attempt` is a token this process invents so a reader's stop can name
+     the answer they were watching; it never leaves this process. This one comes
+     out of the store and goes back into `finish`, and it is what stops a call
+     some *other* process's sweep already declared dead from landing on top of
+     the retry the reader is now watching. `undefined` from the filesystem
+     store, which has no attempts — see `Turn` in src/store/contracts.ts. */
+  const storeAttempt = begun.attempt;
   /* **The question that was stored is the question that gets asked** — one rule
      for all three kinds of turn, rather than "the request's text, except on a
      retry". A retry has no question in its request at all, and taking one from
@@ -899,6 +987,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       // The tools need to know which article the reader has open; the prompt
       // does not, and does not get it. src/chat-tools.ts § ToolContext.
       slug,
+      /* Resolved per turn rather than once per thread, so a reader who edits
+         their profile mid-conversation gets the next answer written to the new
+         one. The opposite of the job path, which freezes it — and the reason
+         they differ is that a turn is one call, so there is no window in which
+         half an artefact could be written to each. */
+      profile: wantsProfile ? await resolveProfile(slug) : null,
       signal: stop.signal,
     })) {
       if (event.type === "delta") {
@@ -936,7 +1030,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         ...(event.truncated ? { truncated: true } : {}),
         ...(event.stopped ? { stopped: true } : {}),
       };
-      await finishTurn(slug, thread.id, reply.id, finished);
+      await chatStore.finish(slug, thread.id, reply.id, finished, { attempt: storeAttempt });
       frame("done", finished);
     }
   } catch (err) {
@@ -952,14 +1046,23 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     const message = (err as Error).message;
     try {
       // The partial answer is kept, not dropped — see the header note.
-      await finishTurn(slug, thread.id, reply.id, {
-        text,
-        status: "error",
-        error: message,
-        // A failed turn keeps what its tools found, for the same reason it keeps
-        // its half-written text: the reader watched both happen.
-        ...(tools.length > 0 ? { tools } : {}),
-      });
+      await chatStore.finish(
+        slug,
+        thread.id,
+        reply.id,
+        {
+          text,
+          status: "error",
+          error: message,
+          // A failed turn keeps what its tools found, for the same reason it
+          // keeps its half-written text: the reader watched both happen.
+          ...(tools.length > 0 ? { tools } : {}),
+        },
+        // The same attempt as the success path. A failure is this call
+        // reporting, and a call whose fence has been taken away by a sweep may
+        // no longer report at all — which is the point of the fence.
+        { attempt: storeAttempt },
+      );
     } catch (storeErr) {
       log("store").error(
         { ...errorFields(storeErr), slug, threadId: thread.id, messageId: reply.id },
@@ -1048,24 +1151,36 @@ const MAX_QUESTION_CHARS = 4000;
  */
 const searching = new Set<string>();
 
-/** Turn abandoned `pending` searches into `error`, so they can be run again. */
-async function sweepSearches(slug: string, runs: SearchRun[]): Promise<SearchRun[]> {
-  const orphaned = (r: SearchRun) => r.status === "pending" && !searching.has(`${slug}/${r.id}`);
-  if (!runs.some(orphaned)) return runs;
-  const swept = await updateRuns(slug, (current) =>
-    current.map((r) =>
-      orphaned(r)
-        ? { ...r, status: "error" as const, error: "The server stopped before this search finished." }
-        : r,
-    ),
-  );
-  // One line for the batch, not one per run: they all get the same patch for
-  // the same reason, and the count is the only part that varies.
-  log("store").warn(
-    { slug, orphans: swept.filter((r) => r.status === "error").length },
-    `swept abandoned search(es) for ${slug}`,
-  );
-  return swept;
+/**
+ * What this process is searching *in this article*, as bare run ids.
+ *
+ * The same conversion `liveMessages` does, and for the same two reasons: the
+ * set's key has to stay unique across articles, and the store's `keep` is a
+ * set of row ids rather than of composites it would have to take apart.
+ */
+function liveRuns(slug: string): Set<string> {
+  const prefix = `${slug}/`;
+  const ids = new Set<string>();
+  for (const key of searching) {
+    if (key.startsWith(prefix)) ids.add(key.slice(prefix.length));
+  }
+  return ids;
+}
+
+/**
+ * Turn abandoned `pending` searches into `error`, so they can be run again.
+ *
+ * As with `sweepChat`, the rule is the store's and only the two things a
+ * running server knows are here: what this process is writing, and how long
+ * another process's row may stay silent. The filesystem store ignores the
+ * grace window — it has no other processes to be wrong about, and giving it
+ * one would be an improvement smuggled in under a migration.
+ */
+function sweepSearches(slug: string): Promise<SearchRun[]> {
+  return searchStore.sweepPending(slug, {
+    keep: liveRuns(slug),
+    graceMs: SEARCH_ORPHAN_GRACE_MS,
+  });
 }
 
 /**
@@ -1120,7 +1235,11 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     throw httpError(400, "A criterion must be 500 characters or fewer");
   }
 
-  const run = await beginRun(slug, criterion.trim(), typeof id === "string" ? id : undefined);
+  const { run, attempt } = await searchStore.begin(
+    slug,
+    criterion.trim(),
+    typeof id === "string" ? id : undefined,
+  );
   const key = `${slug}/${run.id}`;
   searching.add(key);
 
@@ -1152,10 +1271,18 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
   }
 
   try {
-    const stored = (await finishRun(slug, run.id, patch)).find((r) => r.id === run.id);
-    // `undefined` means the reader deleted this run while the model was still
-    // thinking — see the docstring above. Silence, not a 404: the client has
-    // already forgotten the row.
+    /* The attempt goes back with the answer, and the Postgres store refuses a
+       `finish` without one rather than falling back to identity. A run keeps
+       its id across a retry — that is what makes it the same question — so
+       identity alone cannot say which model call is reporting, and a call a
+       sweep already buried would otherwise land on top of the retry the reader
+       is watching. `undefined` on the filesystem, which has no attempts. */
+    const stored = await searchStore.finish(slug, run.id, patch, attempt);
+    /* `undefined` now means one of two things and both are silence. The reader
+       deleted this run while the model was thinking — see the docstring above,
+       the client has already forgotten the row — or this attempt is no longer
+       the live one, in which case there is a newer answer on its way and
+       saying anything about this one would only overwrite it on screen. */
     if (stored) frame("done", stored);
   } catch (storeErr) {
     log("store").error(
@@ -1271,24 +1398,28 @@ async function searchTheLibrary(url: string): Promise<LibrarySearchResponse> {
 }
 
 /**
- * `PATCH /api/library/:slug` — archive it, put it back, rename it.
+ * `PATCH /api/library/:slug` — archive it, put it back, rename it, or say why
+ * you're reading it.
  *
- * One route for both because they are one act from the reader's side: they
- * edited the shelf record. Sending neither field is refused rather than treated
- * as a no-op — a PATCH with nothing in it is a client bug, and answering 200
- * would hide it.
+ * One route for all three because they are one act from the reader's side:
+ * they edited the shelf record. Sending none of the accepted fields is
+ * refused rather than treated as a no-op — a PATCH with nothing in it is a
+ * client bug, and answering 200 would hide it.
  *
- * `title: null` is meaningful and is NOT the same as omitting it: null clears
- * the reader's override and restores whatever the extractor last found. So this
- * tests `in`, not truthiness.
+ * `title: null` and `purpose: null` are both meaningful and NOT the same as
+ * omitting the key: `title: null` clears the reader's override and restores
+ * whatever the extractor last found; `purpose: null` clears "why you're
+ * reading this one" (docs/plans/reader-profile.md). So this tests `in`, not
+ * truthiness.
  *
  * **Everything is validated before anything is written, and the write is one
  * call.** An earlier version validated and wrote each field in turn, so
  * `{ title: "Changed", archived: "no" }` renamed the article and then answered
  * 400 — a request that reports failure and changes your data, which is the
  * worst available combination. Caught by a cross-family review, 2026-08-26.
- * `ShelfStore.patch` exists so that both fields land in one serialised file
- * edit or one `UPDATE`, rather than as two writes a reader can land between.
+ * `ShelfStore.patch` exists so that every field lands in one serialised file
+ * edit or one `UPDATE`, rather than as separate writes a reader can land
+ * between.
  */
 async function patchShelf(slug: string, body: unknown): Promise<{ entry: LibraryEntry }> {
   /* A JSON body that is not an object at all — `"hello"`, `42`, `null` — must
@@ -1300,11 +1431,12 @@ async function patchShelf(slug: string, body: unknown): Promise<{ entry: Library
   const patch = body as Record<string, unknown>;
   const hasArchived = "archived" in patch;
   const hasTitle = "title" in patch;
-  if (!hasArchived && !hasTitle) {
-    throw httpError(400, "Nothing to change: expected archived, title, or both");
+  const hasPurpose = "purpose" in patch;
+  if (!hasArchived && !hasTitle && !hasPurpose) {
+    throw httpError(400, "Nothing to change: expected archived, title, purpose, or some of them");
   }
 
-  const change: { archived?: boolean; title?: string | null } = {};
+  const change: { archived?: boolean; title?: string | null; purpose?: string | null } = {};
 
   if (hasTitle) {
     const title = patch.title;
@@ -1312,6 +1444,13 @@ async function patchShelf(slug: string, body: unknown): Promise<{ entry: Library
       throw httpError(400, "title must be a string or null");
     }
     change.title = title;
+  }
+  if (hasPurpose) {
+    const purpose = patch.purpose;
+    if (purpose !== null && typeof purpose !== "string") {
+      throw httpError(400, "purpose must be a string or null");
+    }
+    change.purpose = purpose;
   }
   if (hasArchived) {
     const archived = patch.archived;
@@ -1344,8 +1483,22 @@ export function parseJobRequest(body: unknown): {
   steps?: StepName[];
   force?: StepName[];
   guidance?: string;
+  /**
+   * Whether this run should use the reader's profile. Default true.
+   *
+   * A boolean rather than the profile itself, because **the caller must not get
+   * to say who the reader is.** The text is resolved server-side from the
+   * store, by `resolveProfile` below; all a client may do is decline it. Any
+   * other arrangement would make "who is reading" a request parameter, which is
+   * a way to spend tokens on a string of your choosing and a way to put
+   * arbitrary text into a prompt that writes an artefact.
+   */
+  useProfile?: boolean;
 } {
-  const { url, slug, steps, force, guidance } = (body ?? {}) as Record<string, unknown>;
+  const { url, slug, steps, force, guidance, useProfile } = (body ?? {}) as Record<
+    string,
+    unknown
+  >;
 
   const stepList = (value: unknown, field: string): StepName[] | undefined => {
     if (value === undefined) return undefined;
@@ -1357,6 +1510,14 @@ export function parseJobRequest(body: unknown): {
   const parsedSteps = stepList(steps, "steps");
   const parsedForce = stepList(force, "force");
   const parsedGuidance = readGuidance(guidance);
+  /* Absent means yes. Not truthiness on the raw value: `useProfile: "false"` is
+     the shape a hand-written client produces, and reading it as true would
+     write a profiled artefact for somebody who asked for a plain one — the same
+     trap `archived` names two hundred lines up. */
+  if (useProfile !== undefined && typeof useProfile !== "boolean") {
+    throw httpError(400, "useProfile must be true or false");
+  }
+  const parsedUseProfile = useProfile;
 
   if (typeof url === "string" && url.trim() !== "") {
     // **The slug is derived, never accepted.** It used to fall back to a
@@ -1392,6 +1553,7 @@ export function parseJobRequest(body: unknown): {
       ...(parsedSteps ? { steps: parsedSteps } : {}),
       ...(parsedForce ? { force: parsedForce } : {}),
       ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
+      ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
     };
   }
 
@@ -1403,7 +1565,88 @@ export function parseJobRequest(body: unknown): {
     ...(parsedSteps ? { steps: parsedSteps } : {}),
     ...(parsedForce ? { force: parsedForce } : {}),
     ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
+    ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
   };
+}
+
+/**
+ * Decorate an artefact response with "your profile changed since this".
+ *
+ * **In the route rather than in the store adapters**, and that placement is not
+ * tidiness. Answering it needs the reader's current profile, which lives behind
+ * `readerStore` in src/store/index.ts — and that module imports the filesystem
+ * artefact reader, so a store adapter reaching back for it would be an import
+ * cycle. The routes are already the layer that knows about both.
+ *
+ * It also keeps the adapters answering only questions about the article, which
+ * is what they are for: `stale` and `outdated` are properties of the artefact
+ * against the piece, and this one is a property of the artefact against the
+ * person.
+ */
+async function withProfileChanged<R extends { profileChanged: boolean }>(
+  slug: string,
+  found: Omit<R, "profileChanged">,
+  artefact: { profileHash?: string | null },
+): Promise<R> {
+  const now = await resolveProfile(slug);
+  return {
+    ...found,
+    profileChanged: profileIsStale(artefact.profileHash, now ? hashProfile(now) : null),
+  } as R;
+}
+
+/**
+ * Who is reading this article, as one string, resolved from the store.
+ *
+ * The two halves live apart — the global one on the reader, the per-article one
+ * on the shelf — and this is the only place in the request path that joins
+ * them. `renderProfile` returns `null` when both are empty, which is what every
+ * caller downstream tests for.
+ *
+ * **Resolved here rather than inside the step that uses it**, and for a job the
+ * result is then frozen onto the job. See `Job.profile` in src/types.ts: a
+ * summary run is several batches at once, and a reader who edits their box
+ * mid-run would otherwise get one artefact written from two profiles.
+ *
+ * Never reads the client's word for it. See `useProfile` above.
+ */
+async function resolveProfile(slug: string): Promise<string | null> {
+  const [profile, shelf] = await Promise.all([readerStore.readProfile(), shelfStore.read(slug)]);
+  return renderProfile({ profile, purpose: shelf.purpose ?? null });
+}
+
+/**
+ * The reader's global profile — "about you", the half that is true on every
+ * article.
+ *
+ * Its own route rather than a field on the shelf, because it is not about an
+ * article: `PATCH /api/library/:slug` needs a slug and this has none. The
+ * per-article half lives there, as `purpose`, and the two are joined into one
+ * prompt string by `renderProfile` in src/profile.ts — which is the only place
+ * that knows there were two.
+ *
+ * `profile: null` clears it. Absent is a 400 rather than a no-op: this body has
+ * exactly one field, so a request without it is a request that meant something
+ * else, and answering 200 to it would report a save that did not happen.
+ *
+ * The **cap is enforced in the store, not here**, unlike `readGuidance` below.
+ * That looks inconsistent and is not: guidance is validated at the boundary
+ * because it goes straight into a prompt and never lands anywhere, while this
+ * is stored, so the rule has to hold for every writer rather than for this one
+ * route. src/profile.ts § saveReaderProfile throws with `status: 400`, which
+ * `httpErrorFrom` below turns into the same answer this would have given.
+ */
+async function patchReader(body: unknown): Promise<{ profile: string | null }> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw httpError(400, "Expected a JSON object");
+  }
+  const patch = body as Record<string, unknown>;
+  if (!("profile" in patch)) throw httpError(400, "Nothing to change: expected profile");
+  const profile = patch.profile;
+  if (profile !== null && typeof profile !== "string") {
+    throw httpError(400, "profile must be a string or null");
+  }
+  return { profile: await readerStore.writeProfile(profile) };
 }
 
 /**
@@ -1535,6 +1778,10 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   const librarySearchRoute = path === "/api/library/search";
   const shelfEntry = /^\/api\/library\/([\w.%-]+)$/.exec(path);
   const shelfOpen = /^\/api\/library\/([\w.%-]+)\/open$/.exec(path);
+  /* No slug, and that is the whole shape of it: this one is about the reader
+     rather than about an article. Matched on `path` like the rest, so a query
+     string cannot smuggle a request past it. */
+  const readerRoute = path === "/api/reader";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(url);
   // Its own endpoint rather than a field on the article payload: that one is
   // ~150KB and is fetched on every page, and stat-ing every file for it would
@@ -1604,6 +1851,19 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       send(res, 200, await patchShelf(slugPart(shelfEntry, 1), await readBody(req)));
       return true;
     }
+    if (readerRoute && req.method === "GET") {
+      send(res, 200, { profile: await readerStore.readProfile() });
+      return true;
+    }
+    /* PATCH rather than PUT, for the same reason the shelf's is: the body names
+       what changed. Here that is one field, so the two spellings would mean the
+       same thing today — and PUT would start meaning "here is the whole reader
+       record" the moment a second field arrives, which is exactly when a client
+       that had not been updated would silently clear it. */
+    if (readerRoute && req.method === "PATCH") {
+      send(res, 200, await patchReader(await readBody(req)));
+      return true;
+    }
     /* POST, not GET, because it writes — and it is its own route rather than a
        side effect inside `GET /api/article/:slug` for the same reason. A GET
        that counts is a GET that a prefetch, a retry or a health check inflates
@@ -1629,11 +1889,19 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       return true;
     }
     if (tweets && req.method === "GET") {
-      send(res, 200, await loadTweets(slugPart(tweets, 1)));
+      {
+        const at = slugPart(tweets, 1);
+        const found = await loadTweets(at);
+        send(res, 200, await withProfileChanged<ThreadResponse>(at, found, found.thread));
+      }
       return true;
     }
     if (glossary && req.method === "GET") {
-      send(res, 200, await loadGlossary(slugPart(glossary, 1)));
+      {
+        const at = slugPart(glossary, 1);
+        const found = await loadGlossary(at);
+        send(res, 200, await withProfileChanged<GlossaryResponse>(at, found, found.glossary));
+      }
       return true;
     }
     if (glossary && req.method === "DELETE") {
@@ -1651,7 +1919,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
        in src/api.ts. Asking for them is
        POST /api/jobs { slug, steps: ["summary"] }. */
     if (summary && req.method === "GET") {
-      send(res, 200, await loadSummaries(slugPart(summary, 1)));
+      {
+        const at = slugPart(summary, 1);
+        const found = await loadSummaries(at);
+        send(res, 200, await withProfileChanged<SummariesResponse>(at, found, found.summaries));
+      }
       return true;
     }
     if (comments && req.method === "GET") {
@@ -1675,7 +1947,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     }
     if (chat && req.method === "GET") {
       const slug = slugPart(chat, 1);
-      send(res, 200, { threads: await sweepChat(slug, await loadThreads(slug)) });
+      send(res, 200, { threads: await sweepChat(slug) });
       return true;
     }
     if (chat && req.method === "POST") {
@@ -1699,7 +1971,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       const [slug, id] = [slugPart(oneThread, 1), part(oneThread, 2)];
       const { title } = (await readBody(req)) as Record<string, unknown>;
       if (typeof title !== "string") throw httpError(400, "Expected { title }");
-      send(res, 200, { threads: await renameThread(slug, id, title) });
+      send(res, 200, { threads: await chatStore.rename(slug, id, title) });
       return true;
     }
     if (oneThread && req.method === "DELETE") {
@@ -1709,12 +1981,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
          answer, then writes — and a delete landing between the check and the
          write puts the abort-then-refuse bug back in a narrower window. There is
          no reason a delete needs to interleave with a turn, so it does not. */
-      send(res, 200, { threads: await inTurnOrder(`${slug}/${id}`, () => deleteThread(slug, id)) });
+      send(res, 200, {
+        threads: await inTurnOrder(`${slug}/${id}`, () => chatStore.remove(slug, id)),
+      });
       return true;
     }
     if (searches && req.method === "GET") {
       const slug = slugPart(searches, 1);
-      send(res, 200, { runs: await sweepSearches(slug, await loadRuns(slug)) });
+      send(res, 200, { runs: await sweepSearches(slug) });
       return true;
     }
     if (searches && req.method === "POST") {
@@ -1728,7 +2002,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     if (oneRun && req.method === "DELETE") {
       // The slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
-      send(res, 200, { runs: await deleteRun(slug, id) });
+      send(res, 200, { runs: await searchStore.remove(slug, id) });
       return true;
     }
     if (allJobs && req.method === "GET") {
@@ -1739,7 +2013,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       // 202, not 200: the work has been accepted and has not been done. The
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
-      send(res, 202, await enqueue(parseJobRequest(await readBody(req))));
+      const request = parseJobRequest(await readBody(req));
+      /* `=== false`, so absent means yes: a client that has never heard of
+         this field gets the profiled run, which is the default the panel
+         offers. Only an explicit refusal turns it off. */
+      const profile =
+        request.useProfile === false ? null : await resolveProfile(request.slug);
+      const { useProfile: _asked, ...work } = request;
+      send(res, 202, await enqueue({ ...work, ...(profile ? { profile } : {}) }));
       return true;
     }
     if (job && req.method === "GET") {
