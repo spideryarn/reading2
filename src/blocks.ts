@@ -70,8 +70,44 @@ const CAPTION_MARKER = /^(figure|fig\.?|table|chart|diagram|image|photo|plate)\s
 /** Standalone boilerplate labels acting as headings: "Credits", "Sources". */
 const BOILERPLATE_LABEL = /^(credits?|sources?|notes?|references?|photo credits?)$/i;
 
+/**
+ * Fold text down to what two extractions of the same paragraph agree on: case,
+ * punctuation and whitespace all drift between Readability runs, so none of
+ * them can be part of a match key.
+ *
+ * Until 2026-08-26 this was `[^a-z0-9 ]`, which is a correct spelling of
+ * "punctuation" only if the only text you have ever looked at is English. In
+ * Cyrillic, Greek, Chinese, Arabic or Devanagari it deleted the paragraph, and
+ * every one of the five resulting failures reported success — see
+ * docs/postmortems/block-id-matching-non-latin.md.
+ *
+ * `NFKC` first is load-bearing rather than tidy: `\p{M}` is kept so Devanagari
+ * matras and Arabic diacritics survive, which means NFD `café` (e + U+0301)
+ * would otherwise key differently from NFC `café`. NFKC composes them. It
+ * changes string length, which is fatal in src/quote-match.ts — that file
+ * hand-rolls a length-preserving fold because it derives offsets — but nothing
+ * here derives offsets, so it is available to us.
+ *
+ * Whitespace is collapsed *after* the strip, not before, so `and — as` and
+ * `and as` agree; stripping the dash first leaves a double space behind.
+ */
 const normalize = (s: string) =>
-  s.replace(/\s+/g, " ").replace(/[^a-z0-9 ]/gi, "").toLowerCase().trim();
+  s
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, "")
+    .replace(/\s+/gu, " ")
+    .toLowerCase()
+    .trim();
+
+/**
+ * Is there anything here at all?
+ *
+ * A different question from "what is this text's match key", and it has to be
+ * asked separately. `normalize` folds `★ ★ ★` and `©` to nothing, so a
+ * paragraph made of symbols reads as empty to it — and three call sites used to
+ * take that answer as permission to drop the paragraph.
+ */
+const hasContent = (s: string) => /\S/u.test(s);
 
 /** Lists nested directly inside this element. */
 const nestedLists = (el: Element) =>
@@ -124,10 +160,58 @@ function classify(el: Element): { kind: BlockKind; level?: number } {
   return { kind: "text" };
 }
 
+/**
+ * What kind of block this is, and whether the ToC should write a row about it.
+ *
+ * `classify` answers from the tag alone; this is everything that needs the text
+ * as well. Split out of `splitIntoBlocks` so the id-assignment logic and the
+ * gistable rules can each be read without the other.
+ */
+function describeBlock(
+  el: Element,
+  text: string,
+  proseText: string[],
+): { kind: BlockKind; level?: number; gistable: boolean; note?: string } {
+  let { kind, level } = classify(el);
+  let gistable = true;
+  let note: string | undefined;
+
+  if (kind === "media" || el.tagName === "HR") {
+    gistable = false;
+    note = "media";
+  } else if (el.tagName === "P" && isImageOnly(el)) {
+    kind = "media";
+    gistable = false;
+    note = "image-only paragraph";
+  } else if (text.length === 0) {
+    gistable = false;
+    note = "empty";
+  } else if (CAPTION_MARKER.test(text)) {
+    kind = "caption";
+    gistable = false;
+    note = "figure caption";
+  } else if (BOILERPLATE_LABEL.test(text)) {
+    gistable = false;
+    note = "boilerplate label";
+  }
+
+  // Pull-quotes repeat a sentence that is already in the prose. Giving them
+  // gists would put the same claim in the ToC twice.
+  if (gistable && (kind === "quote" || el.closest("figure"))) {
+    const probe = normalize(text).slice(0, 60);
+    if (probe.length >= 30 && proseText.some((p) => p.includes(probe))) {
+      gistable = false;
+      note = "pull-quote duplicating body text";
+    }
+  }
+
+  return { kind, level, gistable, note };
+}
+
 /** A `<p>` whose only real content is an image is a media block, not prose. */
 function isImageOnly(el: Element): boolean {
   return (
-    el.querySelector("img") !== null && normalize(el.textContent ?? "").length === 0
+    el.querySelector("img") !== null && !hasContent(el.textContent ?? "")
   );
 }
 
@@ -153,7 +237,7 @@ function rewrapOrphanText(el: Element): void {
   const doc = el.ownerDocument;
   for (const node of Array.from(el.childNodes)) {
     if (node.nodeType !== 3) continue; // TEXT_NODE
-    if (normalize(node.nodeValue ?? "").length === 0) continue;
+    if (!hasContent(node.nodeValue ?? "")) continue;
     const p = doc.createElement("p");
     el.replaceChild(p, node);
     p.appendChild(node);
@@ -183,7 +267,7 @@ function collectElements(root: Element): Element[] {
         (c) => LEAF_BLOCKS.has(c.tagName) || CONTAINERS.has(c.tagName),
       );
       if (hasBlockChildren) walk(child);
-      else if (normalize(child.textContent ?? "").length > 0) out.push(child);
+      else if (hasContent(child.textContent ?? "")) out.push(child);
     }
   };
   walk(root);
@@ -218,9 +302,14 @@ export interface SplitResult {
  * id is consumed once, so a page with several identical short paragraphs can't
  * hand the same id to two blocks.
  */
-function matchKey(text: string, html: string): string | null {
-  const words = normalize(text);
-  if (words) return `t:${words}`;
+/**
+ * Pass one's key: the text as written, whitespace collapsed. Two runs that
+ * produced the same paragraph agree here, and an exact agreement is the only
+ * kind that needs no judgement at all.
+ */
+function exactKey(text: string, html: string): string | null {
+  const written = text.replace(/\s+/gu, " ").trim();
+  if (written) return `x:${written}`;
   // Images and rules carry no text, so match them on what they point at —
   // otherwise every figure is re-minted on each re-extraction and any ToC row
   // aimed at a diagram goes stale.
@@ -228,19 +317,103 @@ function matchKey(text: string, html: string): string | null {
   return src ? `s:${src}` : null;
 }
 
-function carryOverIds(previous: Block[] | undefined) {
-  const byKey = new Map<string, string[]>();
-  for (const b of previous ?? []) {
-    const key = matchKey(b.text, b.html);
-    if (!key) continue;
-    const bucket = byKey.get(key);
-    if (bucket) bucket.push(b.id);
-    else byKey.set(key, [b.id]);
+/** Pass two's key: the same words, once punctuation and case are folded away. */
+function foldedKey(text: string): string | null {
+  const words = normalize(text);
+  return words ? `f:${words}` : null;
+}
+
+function bucketBy<T>(items: T[], key: (item: T) => string | null): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    if (k === null) continue;
+    const bucket = out.get(k);
+    if (bucket) bucket.push(item);
+    else out.set(k, [item]);
   }
-  return (text: string, html: string): string | undefined => {
-    const key = matchKey(text, html);
-    return key ? byKey.get(key)?.shift() : undefined;
+  return out;
+}
+
+interface Candidate {
+  text: string;
+  html: string;
+}
+
+/**
+ * Re-attach previous ids to this run's blocks — the whole reason a
+ * re-extraction is survivable, since stage 2 hands us a fresh document from
+ * Readability with no ids in it at all
+ * (block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters).
+ *
+ * **Two passes, and the second one refuses to guess.**
+ *
+ *   pass 1  exact text (or, for a block with none, its src)  → consume the id
+ *   pass 2  the folded key, and only where exactly one previous block and
+ *           exactly one new block claim it                   → consume the id
+ *   else    re-mint
+ *
+ * Pass one first because it needs no judgement, and because it is what stops
+ * two paragraphs trading ids when a re-render merely reorders them. Pass two
+ * catches the ordinary drift the fold exists for — a curly apostrophe going
+ * straight, an entity decoding differently.
+ *
+ * The ambiguity rule is the part with design in it. A fold creates equivalence
+ * classes the raw text does not have — `Ⅳ` and `IV` both become `iv`, `①` and
+ * `1` both become `1` — so a bucket can hold two genuinely different
+ * paragraphs, and the old code handed the id to whichever came first. That is
+ * not "the id was lost", it is "the reader's note is now attached to a
+ * different claim", and block-ids.md is explicit that a lost anchor is the
+ * safer failure. So an ambiguous bucket re-mints and says so in `minted`.
+ *
+ * Runs over the whole document at once rather than block by block, because
+ * "is this bucket ambiguous?" cannot be answered until every claimant is known.
+ *
+ * Returns one entry per candidate: the id it may keep, or undefined to mint.
+ */
+function carryOverIds(
+  previous: Block[] | undefined,
+  candidates: Candidate[],
+  taken: Set<string>,
+): (string | undefined)[] {
+  const out: (string | undefined)[] = candidates.map(() => undefined);
+  if (!previous?.length) return out;
+
+  const claim = (id: string | undefined): boolean => {
+    if (id === undefined || taken.has(id)) return false;
+    taken.add(id);
+    return true;
   };
+
+  // Pass one. Each previous id is consumed once, so a page with several
+  // identical short paragraphs cannot hand the same id to two blocks.
+  const byExact = bucketBy(previous, (b) => exactKey(b.text, b.html));
+  const unmatched: number[] = [];
+  candidates.forEach((c, i) => {
+    const key = exactKey(c.text, c.html);
+    const bucket = key === null ? undefined : byExact.get(key);
+    let id: string | undefined;
+    while (bucket?.length && id === undefined) {
+      const next = bucket.shift()!.id;
+      if (claim(next)) id = next;
+    }
+    if (id === undefined) unmatched.push(i);
+    else out[i] = id;
+  });
+
+  // Pass two, over what is left on both sides.
+  const byFolded = bucketBy(
+    previous.filter((b) => !taken.has(b.id)),
+    (b) => foldedKey(b.text),
+  );
+  const claimants = bucketBy(unmatched, (i) => foldedKey(candidates[i]!.text));
+  for (const [key, indices] of claimants) {
+    const bucket = byFolded.get(key);
+    if (indices.length !== 1 || bucket?.length !== 1) continue; // ambiguous → mint
+    if (claim(bucket[0]!.id)) out[indices[0]!] = bucket[0]!.id;
+  }
+
+  return out;
 }
 
 export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
@@ -279,70 +452,50 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
   let reused = 0;
   let carried = 0;
   let minted = 0;
-  const recoverId = carryOverIds(previous);
 
-  const blocks: Block[] = elements.map((el) => {
+  /* Content first, ids second. The matcher works over the whole document at
+     once — whether a folded bucket is ambiguous cannot be answered until every
+     claimant is known — so every candidate has to exist before any id is handed
+     out. See carryOverIds. */
+  const found = elements.map((el) => {
     const content = ownContent(el);
-    const text = extractText(content);
+    return { el, content, text: extractText(content) };
+  });
 
-    // Three ways to get an id, in descending order of confidence: it is already
-    // in the document; the previous run had a block with these exact words; or
-    // this is genuinely new text.
-    let id = el.getAttribute("id");
-    if (isSpideryarnId(id)) {
-      reused++;
-      taken.add(id!);
-    } else {
-      const recovered = recoverId(text, content.outerHTML);
-      if (recovered && !taken.has(recovered)) {
-        id = recovered;
-        carried++;
-        taken.add(id);
-      } else {
-        id = mintUniqueId(taken);
-        minted++;
-      }
-      el.setAttribute("id", id);
-    }
+  // Three ways to get an id, in descending order of confidence: it is already
+  // in the document; the previous run had a block with these words; or this is
+  // genuinely new text.
+  const ids: (string | undefined)[] = found.map(({ el }) => {
+    const existing = el.getAttribute("id");
+    if (!isSpideryarnId(existing)) return undefined;
+    reused++;
+    taken.add(existing!);
+    return existing!;
+  });
+
+  const pending = ids.flatMap((id, i) => (id === undefined ? [i] : []));
+  const recovered = carryOverIds(
+    previous,
+    pending.map((i) => ({ text: found[i]!.text, html: found[i]!.content.outerHTML })),
+    taken,
+  );
+  pending.forEach((i, n) => {
+    const id = recovered[n];
+    if (id === undefined) minted++;
+    else carried++;
+    ids[i] = id ?? mintUniqueId(taken);
+    found[i]!.el.setAttribute("id", ids[i]!);
+  });
+
+  const blocks: Block[] = found.map(({ el, content, text }, index) => {
+    const id = ids[index]!;
     // `ownContent` may have cloned before the id existed; keep the stored html
     // in step with the document.
-    if (content !== el) content.setAttribute("id", id!);
+    if (content !== el) content.setAttribute("id", id);
 
-    let { kind, level } = classify(el);
-    let gistable = true;
-    let note: string | undefined;
-
-    if (kind === "media" || el.tagName === "HR") {
-      gistable = false;
-      note = "media";
-    } else if (el.tagName === "P" && isImageOnly(el)) {
-      kind = "media";
-      gistable = false;
-      note = "image-only paragraph";
-    } else if (text.length === 0) {
-      gistable = false;
-      note = "empty";
-    } else if (CAPTION_MARKER.test(text)) {
-      kind = "caption";
-      gistable = false;
-      note = "figure caption";
-    } else if (BOILERPLATE_LABEL.test(text)) {
-      gistable = false;
-      note = "boilerplate label";
-    }
-
-    // Pull-quotes repeat a sentence that is already in the prose. Giving them
-    // gists would put the same claim in the ToC twice.
-    if (gistable && (kind === "quote" || el.closest("figure"))) {
-      const probe = normalize(text).slice(0, 60);
-      if (probe.length >= 30 && proseText.some((p) => p.includes(probe))) {
-        gistable = false;
-        note = "pull-quote duplicating body text";
-      }
-    }
-
+    const { kind, level, gistable, note } = describeBlock(el, text, proseText);
     return {
-      id: id!,
+      id,
       tag: el.tagName.toLowerCase(),
       kind,
       ...(level !== undefined ? { level } : {}),

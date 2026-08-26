@@ -71,18 +71,39 @@ re-minted all 139 and would have orphaned every note, which is the exact failure
 chosen to prevent.
 
 So stage 3 also **carries ids over from the previous `blocks.json`** when one exists, matching a new
-block to an old one by its normalised text. A paragraph keeps its id as long as its words are
-unchanged, no matter how far it has moved. Blocks with no text — images, figures — match on their
-`src` instead, so a ToC row aimed at a diagram doesn't go stale. Each previous id is consumed once,
-so a page with several identical short paragraphs cannot hand the same id to two blocks.
+block to an old one by its text. A paragraph keeps its id as long as its words are unchanged, no
+matter how far it has moved. Blocks with no text — images, figures — match on their `src` instead,
+so a ToC row aimed at a diagram doesn't go stale. Each previous id is consumed once, so a page with
+several identical short paragraphs cannot hand the same id to two blocks.
 
-**"Normalised" is where the bug is, as of 2026-08-26.** The normalisation deletes every character
-that isn't `a-z`, `0-9` or a space — a correct spelling of "punctuation" if the only text you have
-ever looked at is English, and a deletion of the whole paragraph in Cyrillic, Greek, Chinese, Arabic
-or Devanagari. Two of its five failure modes drop paragraphs from the article outright. The cause,
-the measured blast radius and the fix are in
-[the postmortem](../postmortems/block-id-matching-non-latin.md); everything below describes the
-matcher as it behaves for Latin text, which is unchanged by that fix.
+### Two passes, and the second one refuses to guess
+
+```
+  pass 1   the text exactly as written (or, with no text, the src)   → keep the id
+  pass 2   the same words with case and punctuation folded away,
+           and only where one old block and one new block claim it   → keep the id
+  else                                                               → mint a fresh one
+```
+
+**Pass one needs no judgement**, which is why it goes first: two runs that produced the same
+paragraph agree on it exactly. It is also what stops two paragraphs trading ids when a re-render
+merely reorders them.
+
+**Pass two is the drift allowance** — a curly apostrophe going straight, an entity decoding
+differently, a line break moving. The fold is Unicode-aware: NFKC, then everything that isn't a
+letter, number, mark or space removed.
+
+**The ambiguity rule is the part with design in it.** Folding creates equivalence classes the raw
+text does not have — `Ⅳ` and `IV` both become `iv`, `①` and `1` both become `1` — so one bucket can
+hold two genuinely different paragraphs. When it does, stage 3 **mints rather than choosing**. That
+follows the rule this page states everywhere else: a lost anchor is safer than one silently attached
+to a different claim.
+
+Until 2026-08-26 there was one pass, the fold deleted every character outside `a-z0-9`, and an
+ambiguous bucket was handed out first-come. In English that stripped punctuation; in Cyrillic, Greek,
+Chinese, Arabic or Devanagari it stripped the paragraph, and two of its five failure modes dropped
+paragraphs from the article outright while reporting success. The cause, the measured blast radius
+and the fix are in [the postmortem](../postmortems/block-id-matching-non-latin.md).
 
 Measured on the test article, re-extracted *and* with a new paragraph inserted above everything:
 **138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to

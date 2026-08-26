@@ -291,3 +291,120 @@ describe("splitIntoBlocks after sanitising", () => {
     expect(after.stats.carried).toBe(1);
   });
 });
+
+/**
+ * The matcher used to normalise text with `[^a-z0-9 ]`, which is a correct
+ * spelling of "punctuation" only if the only text you have ever looked at is
+ * English. In every other script it deleted the paragraph, and the failures all
+ * reported success — see docs/postmortems/block-id-matching-non-latin.md.
+ *
+ * Every test here fails against that regex, and most of them fail silently in
+ * production rather than loudly: a re-minted id is indistinguishable from a new
+ * paragraph, and a dropped one from a paragraph that was never there.
+ */
+describe("text in a script other than Latin", () => {
+  const RUSSIAN = `
+    <article>
+      <p>Сознание — это одна из самых трудных проблем философии.</p>
+      <p>Но машины пока не дают нам ответа на этот вопрос.</p>
+    </article>
+  `;
+
+  it("carries ids across a re-extraction, exactly as it does for English", () => {
+    const first = splitIntoBlocks(RUSSIAN);
+    const reExtracted = RUSSIAN.replace(
+      "<p>Но машины",
+      "<p>Вставленный позже абзац.</p>\n<p>Но машины",
+    );
+    const second = splitIntoBlocks(reExtracted, first.blocks);
+    const idOf = (r: typeof first, needle: string) =>
+      r.blocks.find((b) => b.text.includes(needle))!.id;
+    for (const survivor of ["Сознание", "Но машины"]) {
+      expect(idOf(second, survivor), survivor).toBe(idOf(first, survivor));
+    }
+    expect(second.stats.carried).toBe(2);
+  });
+
+  it("does not swap two ids between paragraphs that share only a year", () => {
+    // Both of these used to normalise to "2024" — one bucket, two ids, handed
+    // out by order. Re-render them the other way round and the reader's note
+    // moves to a different claim, while the stage reports `carried: 2`.
+    const before = `<article>
+      <p>人工智能在 2024 年取得了巨大的进展。</p>
+      <p>但是，关于意识的问题在 2024 年仍然没有答案。</p>
+    </article>`;
+    const after = `<article>
+      <p>但是，关于意识的问题在 2024 年仍然没有答案。</p>
+      <p>人工智能在 2024 年取得了巨大的进展。</p>
+    </article>`;
+    const first = splitIntoBlocks(before);
+    const second = splitIntoBlocks(after, first.blocks);
+    const idOf = (r: typeof first, needle: string) =>
+      r.blocks.find((b) => b.text.includes(needle))!.id;
+    expect(idOf(second, "人工智能")).toBe(idOf(first, "人工智能"));
+    expect(idOf(second, "关于意识")).toBe(idOf(first, "关于意识"));
+  });
+
+  it("keeps Greek prose that lost its wrapper to the sanitiser", () => {
+    // rewrapOrphanText asked `normalize` whether a bare text node held
+    // anything, so it rewrapped English and discarded everything else.
+    const { blocks } = splitIntoBlocks(
+      `<article><x-article>Ελληνικό κείμενο μέσα σε ένα άγνωστο στοιχείο.</x-article>
+       <p>An ordinary paragraph following it.</p></article>`,
+    );
+    const text = blocks.map((b) => b.text).join(" ");
+    expect(text).toContain("Ελληνικό κείμενο");
+    expect(text).toContain("An ordinary paragraph");
+  });
+
+  it("keeps Japanese prose inside an unknown wrapper", () => {
+    const { blocks } = splitIntoBlocks(
+      `<article><span>日本語のテキストがここにあります。</span></article>`,
+    );
+    expect(blocks.map((b) => b.text).join(" ")).toContain("日本語のテキスト");
+  });
+
+  it("keeps prose made only of symbols, which no fold can rescue", () => {
+    // ★ and © survive NFKC and are not letters or numbers, so a Unicode-aware
+    // match key still folds them to nothing. Whether content exists is a
+    // different question from what its match key is, and has to be asked
+    // separately — otherwise this paragraph disappears either way.
+    const { blocks } = splitIntoBlocks(`<article><span>★ ★ ★</span></article>`);
+    expect(blocks.map((b) => b.text).join(" ")).toContain("★");
+  });
+
+  it("does not mistake an Arabic caption beside an image for an empty one", () => {
+    const { blocks } = splitIntoBlocks(
+      `<article><p><img src="/x.png"> صورة توضيحية للنظرية الأساسية.</p></article>`,
+    );
+    const p = blocks.find((b) => b.tag === "p")!;
+    expect(p.note).not.toBe("image-only paragraph");
+    expect(p.gistable).toBe(true);
+  });
+
+  it("matches the same word written in two Unicode normalisation forms", () => {
+    // NFC café and NFD café are the same word and the same reading; only the
+    // bytes differ, and which one arrives depends on the extractor's mood.
+    const nfc = "Le café était fermé ce matin-là, comme toujours.".normalize("NFC");
+    const nfd = nfc.normalize("NFD");
+    expect(nfc).not.toBe(nfd);
+    const first = splitIntoBlocks(`<article><p>${nfc}</p></article>`);
+    const second = splitIntoBlocks(`<article><p>${nfd}</p></article>`, first.blocks);
+    expect(second.blocks[0]?.id).toBe(first.blocks[0]?.id);
+  });
+
+  it("re-mints rather than guessing when a folded bucket is ambiguous", () => {
+    // NFKC creates equivalence classes the old key did not have: ① and 1 fold
+    // together, and so do Ⅳ and IV. Two previous blocks in one bucket, two new
+    // ones whose raw text has moved on, and no way to tell which is which. A
+    // lost anchor is safer than one attached to the wrong paragraph.
+    const before = `<article><p>Note ① of the argument.</p><p>Note 1 of the argument.</p></article>`;
+    const after = `<article><p>Note ① of the argument!</p><p>Note 1 of the argument!</p></article>`;
+    const first = splitIntoBlocks(before);
+    const second = splitIntoBlocks(after, first.blocks);
+    const oldIds = new Set(first.blocks.map((b) => b.id));
+    for (const b of second.blocks) expect(oldIds.has(b.id)).toBe(false);
+    expect(second.stats.minted).toBe(2);
+    expect(second.stats.carried).toBe(0);
+  });
+});

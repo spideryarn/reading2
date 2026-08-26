@@ -869,13 +869,16 @@ except where they are genuinely open:
 The riskiest assumption is "Haiku doesn't summarise in small chunks, at this cost and speed" — so
 it is tested in the first hour, not the last, and against the alternative.
 
-0. **Fix stage 3's paragraph matcher** ([postmortem](../postmortems/block-id-matching-non-latin.md)).
-   Two to three hours, unrelated to PDFs, and it silently drops paragraphs today.
+0. ~~**Fix stage 3's paragraph matcher**~~ — **done, 2026-08-26**
+   ([postmortem](../postmortems/block-id-matching-non-latin.md#what-landed)). A Unicode-aware fold,
+   a separate presence test, and a two-pass matcher that mints rather than guessing when a folded
+   bucket is ambiguous. Eight red tests first; carry-over on the three real articles unchanged at
+   360, 140 and 19.
 
-   **It blocks integration, not the spike** (GPT Sol's correction, and it's right): the bake-off is
-   a scratch script that never touches stage 3, so run them in parallel or the bake-off first. What
-   must not happen is the PDF scorer being written against `splitIntoBlocks` while `splitIntoBlocks`
-   is still wrong — the eval would then be calibrated against the bug.
+   It blocked integration rather than the spike (GPT Sol's correction, and it was right): the
+   bake-off is a scratch script that never touches stage 3. What must not happen is the PDF scorer
+   being written against `splitIntoBlocks` while `splitIntoBlocks` is still wrong — the eval would
+   then be calibrated against the bug. That is now safe.
 1. **First hour: the bake-off.** Four pages each of three hard documents — a scan with running
    headers and hyphenation, a two-column paper, and a scan with no text layer at all — through:
 

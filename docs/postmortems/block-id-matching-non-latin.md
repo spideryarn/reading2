@@ -4,7 +4,12 @@
 Nobody has pasted a Russian article in yet. When they do, every paragraph in it will lose its id on
 every re-extraction, and some of them will hand their id to the wrong paragraph on the way.
 
-The line is [`src/blocks.ts:84`](../../src/blocks.ts):
+> **Fixed the same day**, in [`src/blocks.ts`](../../src/blocks.ts) — all three parts below, with
+> eight tests in [`tests/blocks.test.ts`](../../tests/blocks.test.ts) that were red first. See
+> [what landed](#what-landed). Everything in the present tense above that line describes the code as
+> it was.
+
+The line was [`src/blocks.ts:84`](../../src/blocks.ts):
 
 ```ts
 const normalize = (s: string) =>
@@ -189,7 +194,36 @@ Not recommended: hashing the key (the string is readable in a debugger and there
 to solve); fuzzy matching (deliberately rejected in block-ids.md, for good reasons that have not
 changed); adding `tag` to the key (real but rare, and a separate change with its own argument).
 
+## What landed
+
+All three, in one commit, 2026-08-26. The order of the work was: eight failing tests, then the fix,
+then a re-run over the real articles.
+
+- **The Unicode-aware fold**, exactly as written above.
+- **`hasContent`**, a separate `/\S/u` test, replacing `normalize(...).length === 0` in
+  `rewrapOrphanText`, `collectElements` and `isImageOnly`. This is what saves symbol-only prose,
+  which the new fold still folds to nothing.
+- **The two-pass matcher with the ambiguity rule**, which meant turning `carryOverIds` from a
+  per-block lookup into one that runs over the whole document: whether a bucket is ambiguous cannot
+  be answered until every claimant is known. `splitIntoBlocks` now collects content first and hands
+  out ids second, and the gistable rules moved into `describeBlock` so the two can be read apart.
+
+Measured after, by re-running stage 3 over the three articles in `data/` against a document with
+every id stripped out — the re-extraction case:
+
+```
+  constitution                      360 blocks   carried 360   minted 0
+  noema-mythology-of-conscious-ai   141 blocks   carried 140   minted 1   ← the <hr>, as documented
+  writes                             19 blocks   carried  19   minted 0
+```
+
+The counts the estimate predicted, and the one casualty is the horizontal rule that has never had
+anything to match on. `npm test` is green apart from one pre-existing failure in another agent's
+file; `npm run lint` on `src/blocks.ts` reports exactly what it reported before.
+
 ## Sequencing
+
+**Fixed before PDF ingestion started.** The reasoning, kept as written:
 
 **Fix it before PDF ingestion starts.** Not because PDF causes it — this is today's behaviour for
 HTML — but because PDF is where non-Latin text and repeated re-extraction both arrive in volume, and
