@@ -32,7 +32,8 @@
  * at `main()` in src/blocks.ts. With one, this module becomes an async module,
  * and importing it would also *run* it.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import path from "node:path";
@@ -70,6 +71,90 @@ export interface FetchedDocument {
   /** The WHATWG encoding name actually used. `null` for a PDF. */
   encoding: string | null;
   fetchedAt: string;
+}
+
+/**
+ * **What stage 1 left on disk, and which file is authoritative.**
+ *
+ * Written as `raw.json` beside the bytes. Stage 2 reads this rather than
+ * looking to see which raw file exists, and that difference is the whole reason
+ * it exists: a re-fetch of a URL that used to serve HTML and now serves a PDF
+ * leaves `raw.html` and `raw.pdf` side by side, and "whichever is there" then
+ * makes a stale file authoritative by accident — silently, with the article
+ * still rendering. Found by a GPT Sol review of the plan before it was built.
+ *
+ * It is also where the fields `fetchDocument` already returns and the pipeline
+ * used to throw away finally survive: the final URL after redirects, the
+ * content type the server claimed, the byte length and the hash. Those are the
+ * provenance the Postgres migration needs and could not get
+ * (docs/plans/postgres-migration.md § raw.html is not raw).
+ */
+export interface RawManifest {
+  kind: DocumentKind;
+  /** The file beside this manifest that holds the bytes — `raw.html` or `raw.pdf`. */
+  file: string;
+  requestedUrl: string;
+  url: string;
+  contentType: string | null;
+  encoding: string | null;
+  bytes: number;
+  /**
+   * SHA-256 of the fetched bytes.
+   *
+   * `null` only in a **backfilled** manifest — one written for an article
+   * fetched before manifests existed, where the bytes are gone and only the
+   * decoded string survives. Hashing that instead would produce a real-looking
+   * number that answers a different question, which is worse than admitting we
+   * do not know.
+   */
+  sha256: string | null;
+  fetchedAt: string;
+  /** Present only on a backfilled manifest, saying so in a sentence. */
+  backfilled?: string;
+}
+
+/** The bytes and the manifest, together, so the two cannot disagree. */
+export async function writeRaw(dir: string, doc: FetchedDocument): Promise<RawManifest> {
+  const file = doc.kind === "pdf" ? "raw.pdf" : "raw.html";
+  await mkdir(dir, { recursive: true });
+  /* HTML is written as the decoded string, not the fetched bytes — every later
+     stage wants text, and the encoding sniff above is the only place that knows
+     how to decode it. The manifest records the encoding so that stays visible;
+     `raw.html` is therefore not raw, which src/db/schema.ts says out loud. */
+  await writeFile(
+    path.join(dir, file),
+    doc.kind === "pdf" ? doc.bytes : (doc.text ?? ""),
+    doc.kind === "pdf" ? undefined : "utf8",
+  );
+  const manifest: RawManifest = {
+    kind: doc.kind,
+    file,
+    requestedUrl: doc.requestedUrl,
+    url: doc.url,
+    contentType: doc.contentType,
+    encoding: doc.encoding,
+    bytes: doc.bytes.byteLength,
+    sha256: createHash("sha256").update(doc.bytes).digest("hex"),
+    fetchedAt: doc.fetchedAt,
+  };
+  await writeFile(path.join(dir, "raw.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return manifest;
+}
+
+/**
+ * The manifest, or `null` where a fetch predates it.
+ *
+ * **Null must mean "assume HTML", not "fail".** Every article ingested before
+ * this existed has a `raw.html` and no `raw.json`, and refusing to extract
+ * those would turn a new field into a migration. The caller decides; this
+ * function only reports.
+ */
+export async function readRaw(dir: string): Promise<RawManifest | null> {
+  try {
+    return JSON.parse(await readFile(path.join(dir, "raw.json"), "utf8")) as RawManifest;
+  } catch {
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -1053,9 +1138,16 @@ async function readDocument(
 /**
  * The HTML of a page, or a failure explaining why there isn't any.
  *
- * The convenience wrapper for stage 2, which wants a string. A PDF is a
- * *successful* fetch that this stage can't use, so it fails by name rather than
- * returning something empty and letting Readability produce a blank article.
+ * The convenience wrapper for **`src/extract.ts`'s command line**, which wants
+ * a string and runs Readability over it. A PDF is a *successful* fetch that
+ * Readability cannot use, so this fails by name rather than returning something
+ * empty and letting Readability produce a blank article.
+ *
+ * **The ingest queue no longer comes through here.** It calls `fetchDocument`,
+ * writes the manifest, and stage 2 branches on what arrived — a PDF goes to
+ * src/pdf-read.ts instead. So the sentence below is now about one command
+ * rather than about the product: `npm run extract -- <a-pdf-url>` is genuinely
+ * the wrong command, and pasting that URL into the add box is not.
  */
 export async function fetchHtml(url: string, options: FetchOptions = {}): Promise<string> {
   const doc = await fetchDocument(url, options);
@@ -1063,7 +1155,8 @@ export async function fetchHtml(url: string, options: FetchOptions = {}): Promis
     throw new FetchFailure(
       "unsupported-type",
       doc.url,
-      "That's a PDF. Reading PDFs isn't built yet — see docs/project/fetching.md.",
+      "That's a PDF, and this command runs Readability. Add it through the app, or run " +
+        "`npm run pdf -- <file.pdf>` — see docs/plans/pdf-ingestion.md.",
       { status: doc.status },
     );
   }

@@ -90,7 +90,22 @@ export const PATHS: {
   [S in StepName]: Partial<Record<ArtifactKind, (at: ArtifactLocations) => string>>;
 } = {
   fetch: {
-    raw: (at) => path.join(at.dir, "raw.html"),
+    /**
+     * **The manifest, and the bytes are named inside it.**
+     *
+     * Not `raw.html`, since 2026-08-26. Stage 1 can fetch a web page or a PDF,
+     * so the file holding the bytes is `raw.html` or `raw.pdf` and its name is
+     * not knowable until the fetch has happened — which makes it useless as the
+     * answer to "is this step done?". `raw.json` is written after every fetch,
+     * says which kind arrived and which file holds it, and carries the final
+     * URL, content type, encoding, byte count and hash that the pipeline used
+     * to throw away.
+     *
+     * That is also closer to what Postgres will do, not further from it: there
+     * the fetched document is one row — `raw_bytes`, `raw_content_type`,
+     * `raw_encoding`, `requested_url`, `final_url` — and this is that row.
+     */
+    raw: (at) => path.join(at.dir, "raw.json"),
   },
   extract: {
     extractedHtml: (at) => at.htmlFile,
@@ -210,7 +225,7 @@ const text: Decoder["decode"] = (t) => {
 const DECODERS: Record<ArtifactKind, Decoder> = {
   /* 32 MiB is src/fetch.ts's own ceiling on a page, so anything bigger did not
      come from us. */
-  raw: { maxBytes: 32 * MiB, decode: text },
+  raw: { maxBytes: 4 * MiB, decode: json("file", isString) },
   extractedHtml: { maxBytes: 32 * MiB, decode: text },
   stampedHtml: { maxBytes: 32 * MiB, decode: text },
   meta: { maxBytes: 4 * MiB, decode: json("slug", isString) },
@@ -300,7 +315,7 @@ async function writeAtomic(file: string, body: string): Promise<void> {
 
 /** JSON gets two-space indent and a trailing newline; text goes as it is. */
 function serialise(kind: ArtifactKind, value: unknown): string {
-  if (kind === "raw" || kind === "extractedHtml" || kind === "stampedHtml") {
+  if (kind === "extractedHtml" || kind === "stampedHtml") {
     return value as string;
   }
   return `${JSON.stringify(value, null, 2)}\n`;

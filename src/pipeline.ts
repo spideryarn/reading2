@@ -18,13 +18,14 @@
  * the stage implementations belong to other agents and are reached through
  * their exported functions, never by reimplementing what they do.
  */
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { generateArc } from "./arc.js";
 import { runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
-import { fetchHtml } from "./fetch.js";
+import { fetchDocument, readRaw, writeRaw } from "./fetch.js";
 import { generateGlossary, PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "./glossary.js";
+import { runPdfExtract } from "./pdf-read.js";
 import { generateSummaries, summariesAreCurrent } from "./summarise.js";
 import { log } from "./log.js";
 import { type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
@@ -493,16 +494,21 @@ export const STEPS: Record<StepName, PipelineStep> = {
   fetch: {
     name: "fetch",
     label: "Fetching the page",
-    outputs: (ctx) => [path.join(ctx.dir, "raw.html")],
+    /**
+     * **The manifest, not the bytes.** `raw.json` is the one file that exists
+     * after both kinds of fetch, so it is the one that can mean "this step is
+     * done". Listing `raw.html` would make an article that turned out to be a
+     * PDF look permanently unfetched, and it would re-fetch on every retry.
+     */
+    outputs: (ctx) => [path.join(ctx.dir, "raw.json")],
     produces: ["raw"],
     async run(ctx) {
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
       ctx.report(host);
-      const html = await fetchHtml(url, { signal: ctx.signal });
-      await mkdir(ctx.dir, { recursive: true });
-      await writeFile(path.join(ctx.dir, "raw.html"), html, "utf8");
-      const kb = Math.round(html.length / 1024);
+      const doc = await fetchDocument(url, { signal: ctx.signal });
+      const manifest = await writeRaw(ctx.dir, doc);
+      const kb = Math.round(manifest.bytes / 1024);
       /* The **hostname**, not the URL. A log of full article URLs is a reading
          history, and nothing writes one down: the enqueue line in src/jobs.ts
          deliberately logs the slug and not the url, and says so. (This comment
@@ -517,8 +523,18 @@ export const STEPS: Record<StepName, PipelineStep> = {
     },
   },
 
-  /* Stage 2. Reads raw.html rather than re-fetching, which is the whole point
-     of splitting the two. */
+  /* Stage 2. Reads what stage 1 wrote rather than re-fetching, which is the
+     whole point of splitting the two.
+
+     **Two extractors, one artefact.** A web page goes through Readability; a
+     PDF goes through a model that reads its pages. Both write `article.html`
+     and `meta.json`, and stage 3 onwards cannot tell which produced them —
+     which is the entire design. See docs/plans/pdf-ingestion.md.
+
+     The branch is on **what stage 1 says it fetched**, never on the URL: a
+     `.pdf` address that served a Cloudflare challenge is HTML, an
+     `application/octet-stream` that starts `%PDF-` is a PDF, and stage 1
+     already looked at the bytes (docs/project/fetching.md). */
   extract: {
     name: "extract",
     label: "Extracting the article",
@@ -526,8 +542,47 @@ export const STEPS: Record<StepName, PipelineStep> = {
     produces: ["extractedHtml", "meta"],
     async run(ctx) {
       const url = requireUrl(ctx);
-      const html = await readFile(path.join(ctx.dir, "raw.html"), "utf8");
-      const result = await runExtract({ html, url, outFile: ctx.htmlFile, dataDir: ctx.dir });
+      const manifest = await readRaw(ctx.dir);
+      /* No manifest means an article fetched before `raw.json` existed. Those
+         all have a `raw.html`, so HTML is the right assumption — and a wrong
+         one would fail loudly on the read below rather than quietly. */
+      if (manifest?.kind !== "pdf") {
+        const html = await readFile(path.join(ctx.dir, manifest?.file ?? "raw.html"), "utf8");
+        const result = await runExtract({ html, url, outFile: ctx.htmlFile, dataDir: ctx.dir });
+        return result.meta.title;
+      }
+
+      const bytes = new Uint8Array(await readFile(path.join(ctx.dir, manifest.file)));
+      const result = await runPdfExtract({
+        bytes,
+        url,
+        outFile: ctx.htmlFile,
+        dataDir: ctx.dir,
+        slug: ctx.slug,
+        signal: ctx.signal,
+        /* Aggregated here rather than reported per chunk from inside the stage:
+           several chunks finish at once and callbacks racing each other would
+           make the progress line jump backwards. src/jobs.ts § describe. */
+        onProgress: (done, total, pages) =>
+          ctx.report(`${done}/${total} chunks, page${pages.length > 1 ? "s" : ""} ${pages.join("–")}`),
+      });
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "extract",
+          kind: "pdf",
+          pages: result.pages,
+          chunks: result.chunks,
+          records: result.records,
+          strippedChars: result.stripped,
+          isScan: result.isScan,
+          recall: result.recall,
+          inputTokens: result.usage.input,
+          outputTokens: result.usage.output,
+          model: result.meta.method,
+        },
+        `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
+      );
       return result.meta.title;
     },
   },
