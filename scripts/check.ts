@@ -1,0 +1,166 @@
+/**
+ * Run everything that can be checked without a human, in one command.
+ *
+ *   npm run check
+ *   npm run check -- --fast     # skip the production build (the slow one)
+ *
+ * The point of this file is the **gate/advisory split**, which is the only
+ * interesting decision in it.
+ *
+ * A check that always fails is a check nobody runs. This repo's lint baseline
+ * is deliberately not clean (docs/project/linting.md), and Knip currently
+ * reports real findings that are queued rather than fixed. If `npm run check`
+ * exited non-zero because of those, everyone would learn to ignore its exit
+ * code, and the day a *test* broke it would be ignored too. So:
+ *
+ *   - a GATE fails the command. It is green today, and a failure means
+ *     something is newly wrong.
+ *   - an ADVISORY prints its findings and does not fail the command. It is a
+ *     to-do list, not a verdict.
+ *
+ * A check earns promotion from advisory to gate on the day its findings reach
+ * zero — not before. Promoting one with a known backlog just re-teaches
+ * everyone to ignore the exit code. See docs/project/static-analysis.md.
+ */
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const FAST = process.argv.includes("--fast");
+
+type Step = {
+  name: string;
+  /** Fails `npm run check` when non-zero. */
+  gate: boolean;
+  argv: string[];
+  /** Why it is advisory rather than a gate, printed when it has findings. */
+  note?: string;
+  /**
+   * How many findings this step reported, for the steps whose exit code does
+   * not say. Both of the ones that need this exit 0 while holding findings —
+   * Biome because `info` is not a failure, jscpd because it only fails above a
+   * `--threshold` we do not set — so without a counter the summary would print
+   * "clean" over a list of real findings. Which is the bug this repo keeps
+   * writing down: docs/reusable/silent-success.md.
+   */
+  count?: (output: string) => number;
+};
+
+const countMatches = (re: RegExp) => (out: string) => out.match(re)?.length ?? 0;
+
+const STEPS: Step[] = [
+  // ---- gates: green today, so a failure is news --------------------------
+  {
+    name: "typecheck",
+    gate: true,
+    argv: ["run", "--silent", "typecheck"],
+  },
+  {
+    name: "test",
+    gate: true,
+    argv: ["run", "--silent", "test"],
+  },
+  {
+    // Typechecking does not prove Vite can resolve, bundle and parse the CSS.
+    // Those failures only ever showed up in a deploy before this was here.
+    name: "build",
+    gate: true,
+    argv: ["run", "--silent", "build"],
+  },
+  {
+    // Import cycles. Zero of them today, across four independent tools, so
+    // this gates from day one. Biome parses with its own parser rather than
+    // tsc, which is why it works at all under TypeScript 7.
+    name: "cycles",
+    gate: true,
+    argv: ["run", "--silent", "cycles"],
+  },
+
+  // ---- advisories: real findings, deliberately not blocking --------------
+  {
+    name: "lint",
+    gate: false,
+    argv: ["run", "--silent", "lint"],
+    note: "the lint baseline is not clean on purpose — docs/project/linting.md",
+  },
+  {
+    name: "knip",
+    gate: false,
+    argv: ["run", "--silent", "knip"],
+    note: "unused files/exports/deps are queued, not fixed — promote to a gate when this reaches zero",
+  },
+  {
+    name: "complexity",
+    gate: false,
+    argv: ["run", "--silent", "complexity"],
+    note: "a high score means 'go and look', never 'this is wrong'",
+    count: countMatches(/noExcessiveCognitiveComplexity/g),
+  },
+  {
+    name: "dupes",
+    gate: false,
+    argv: ["run", "--silent", "dupes"],
+    note: "some duplication is honest; read before deduplicating",
+    count: countMatches(/Clone found/g),
+  },
+];
+
+const results: { step: Step; code: number; findings?: number }[] = [];
+
+for (const step of STEPS) {
+  if (FAST && step.name === "build") {
+    console.log(`\n── ${step.name} (skipped: --fast)`);
+    continue;
+  }
+  console.log(`\n── ${step.name} ${step.gate ? "(gate)" : "(advisory)"}`);
+
+  if (!step.count) {
+    const run = spawnSync("npm", step.argv, { cwd: ROOT, stdio: "inherit" });
+    // A signal (or a missing binary) leaves status null. Treat that as a
+    // failure rather than letting `null` fall through as a falsy success.
+    results.push({ step, code: run.status ?? 1 });
+    continue;
+  }
+
+  // Counted steps have to be captured to be counted, so echo the output
+  // ourselves rather than inheriting the stream.
+  const run = spawnSync("npm", step.argv, { cwd: ROOT, encoding: "utf8" });
+  const output = `${run.stdout ?? ""}${run.stderr ?? ""}`;
+  process.stdout.write(output);
+  results.push({ step, code: run.status ?? 1, findings: step.count(output) });
+}
+
+console.log(`\n${"=".repeat(60)}\nsummary\n${"=".repeat(60)}`);
+
+let gateFailed = false;
+for (const { step, code, findings } of results) {
+  // For a counted step the exit code says nothing, so the count is the truth.
+  const ok = findings === undefined ? code === 0 : findings === 0;
+  if (!ok && step.gate) gateFailed = true;
+  const mark = ok ? "✓" : step.gate ? "✗" : "!";
+  const label = ok
+    ? "clean"
+    : step.gate
+      ? "FAILED"
+      : findings === undefined
+        ? "has findings"
+        : `${findings} finding(s)`;
+  console.log(`  ${mark} ${step.name.padEnd(12)} ${label}`);
+  if (!ok && !step.gate && step.note) console.log(`      ${step.note}`);
+}
+
+const noisy = results.filter((r) => (r.findings === undefined ? r.code !== 0 : r.findings !== 0));
+
+if (gateFailed) {
+  console.error("\nA gate failed. That means something is newly wrong.");
+} else {
+  console.log("\nAll gates green.");
+  if (noisy.length > 0) {
+    console.log(
+      `${noisy.length} advisory check(s) have findings above — a to-do list, not a verdict.`,
+    );
+  }
+}
+
+process.exit(gateFailed ? 1 : 0);

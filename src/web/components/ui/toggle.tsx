@@ -19,7 +19,7 @@
  *
  * If you re-run the CLI over this file, put both back in the bin. */
 
-import * as React from "react"
+import type * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Toggle as TogglePrimitive } from "radix-ui"
 

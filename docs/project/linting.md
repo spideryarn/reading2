@@ -1,14 +1,28 @@
 # Linting
 
 ```bash
-npm run lint         # Biome over src/, tests/, scripts/
+npm run lint         # Biome over src/, api/, tests/, scripts/, evals/, styles/ and the config files
 npm run lint:fix     # the same, applying the fixes Biome considers safe
 ```
 
 Fast enough not to think about — around 20ms for the whole tree — so run it alongside
-`npm test` and `npm run typecheck` before you commit.
+`npm test` and `npm run typecheck` before you commit. Or run
+[`npm run check`](static-analysis.md), which is those three plus the build and the
+project-wide analysis, with an honest split between what gates and what only advises.
 
 The config is [`biome.jsonc`](../../biome.jsonc), and every rule turned off in it says there why.
+
+> **`includes` is an allowlist, and that is the trap in it.** A path not named there is linted by
+> nothing and says so nowhere — no error, no warning, no "0 files" line in ordinary output.
+> `api/`, `evals/`, `styles/` and `drizzle.config.ts` were all in that hole until 2026-08-26:
+> typechecked by `scripts/typecheck.ts`, linted by no one. Adding a path to the **script** in
+> `package.json` does nothing on its own; it has to go in the config as well. One more
+> [silent success](../reusable/silent-success.md).
+
+Three rules that live in Biome and are not in its `recommended` set are switched on here —
+import cycles, cognitive complexity, and a fourth that was switched straight back **off** after its
+autofix was caught rewriting `import "./tailwind.css"` to `"./tailwind.js"`. That story, and the
+tools we chose not to install at all, are in [static-analysis.md](static-analysis.md).
 
 ## Why Biome and not ESLint
 

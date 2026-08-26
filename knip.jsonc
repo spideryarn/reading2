@@ -1,0 +1,69 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+
+  // Knip finds unused FILES, unused EXPORTS and unused DEPENDENCIES — the
+  // project-wide layer. The per-file layer (unused locals and parameters) is
+  // already covered by tsconfig.base.json's `noUnusedLocals` /
+  // `noUnusedParameters`, so the two do not overlap. See
+  // docs/project/static-analysis.md.
+  //
+  // Deliberately NOT configured here:
+  //   - `paths` for the `@/*` alias. Knip reads that alias out of vite.config.ts
+  //     and vitest.config.ts via its own vite/vitest plugins, not out of any
+  //     tsconfig, so declaring it here would be dead config that looks
+  //     load-bearing. Verified: with no `paths` at all, `@/components/ui/button`
+  //     resolves and only the genuinely-unused `collapsible.tsx` is flagged.
+  //   - workspaces. Those key on package.json locations and this repo has one;
+  //     src/web cannot be a workspace without a package.json of its own.
+
+  "entry": [
+    // The pipeline stages (`tsx src/fetch.ts` and friends) are NOT listed here.
+    // Knip reads them straight out of package.json's scripts, and listing them
+    // again is redundant — it says so itself, as a "Remove redundant entry
+    // pattern" hint. Adding a stage to package.json is therefore all it takes.
+
+    // The Vercel deploy, which is reachable only through vercel.json and so is
+    // invisible to every other tool here. `api/[...path].js` is the one file
+    // Vercel routes to; it forwards to src/vercel.ts, which vite.api.config.ts
+    // builds to api-dist/vercel.js. That indirection is deliberate — Vercel's
+    // Node builder cannot drive this repo's TypeScript 7 and ships a broken
+    // function while reporting success — see the header of api/[...path].js.
+    "api/**/*.js",
+    "src/vercel.ts",
+    "vite.api.config.ts",
+
+    // Operational scripts and evals, each behind its own npm script.
+    "scripts/*.ts",
+    "evals/*.ts"
+
+    // Not listed on purpose: vite.config.ts, vitest.config.ts,
+    // drizzle.config.ts, index.html -> src/web/main.tsx, and tests/**. Knip's
+    // vite / vitest / drizzle plugins discover all of those on their own.
+  ],
+
+  // The CSS is in here on purpose, and it is load-bearing: the only reference
+  // to @fontsource-variable/geist{,-mono} anywhere in the repo is an `@import`
+  // in src/web/tailwind.css, and the only reference to `tailwindcss` itself is
+  // two more. Leave CSS out and Knip reports all three as unused dependencies —
+  // three false positives that would have been "fixed" by uninstalling the
+  // fonts the reading view is set in.
+  //
+  // The root-level globs are here for the same reason in reverse: without them
+  // a stray `scratch-tok2.mts` at the repo root is not in the project at all,
+  // so it is never reported as unused. A file that falls out of scope looks
+  // exactly like a file with nothing wrong with it.
+  "project": [
+    "src/**/*.{ts,tsx,css}",
+    "styles/**/*.css",
+    "api/**/*.js",
+    "scripts/**/*.ts",
+    "evals/**/*.ts",
+    "*.{ts,mts,cts}"
+  ],
+
+  // Binaries invoked from npm scripts and tests that are installed globally
+  // rather than as dependencies. Both are genuinely expected to be on PATH:
+  // `supabase` is the CLI from docs/project/supabase-local.md, and `openssl` is
+  // used by tests/db-tls.test.ts to inspect the remote's certificate.
+  "ignoreBinaries": ["supabase", "openssl"]
+}

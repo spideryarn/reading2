@@ -11,19 +11,24 @@
     // never parses. Both modifiers are load-bearing (see that file's header),
     // so the exclusion is the only lever. Everything else under src/ is still
     // linted, this one file is not linted at all.
+    // This list is an ALLOWLIST, which is the trap in it: a path that is not
+    // named here is linted by nothing, and says so nowhere. `api/`, `evals/`,
+    // `styles/` and drizzle.config.ts were all in that hole — typechecked by
+    // scripts/typecheck.ts, linted by no one — until 2026-08-26. Add the path
+    // here as well as to the `lint` script in package.json; the script alone
+    // does nothing.
     "includes": [
       "src/**",
       "!src/web/tailwind.css",
-      // Vendored shadcn/ui components: `npx shadcn add` writes these and will
-      // overwrite them again, so hand-fixing their lint findings is work that
-      // gets thrown away and a diff against upstream that has to be re-resolved
-      // every time. Their style is not ours either (no semicolons, `@/` alias).
-      // Not linted, on purpose.
-      "!src/web/components/ui/**",
+      "api/**",
       "tests/**",
       "scripts/**",
+      "evals/**",
+      "styles/**",
       "vite.config.ts",
-      "vitest.config.ts"
+      "vitest.config.ts",
+      "vite.api.config.ts",
+      "drizzle.config.ts"
     ]
   },
 
@@ -65,6 +70,60 @@
         // can move or change between Biome versions, which is why
         // @biomejs/biome is pinned to an exact version in package.json.
         "noFloatingPromises": "error"
+      },
+
+      // The three rules below are the whole of this repo's "static analysis"
+      // that is not Knip — see docs/project/static-analysis.md. All three were
+      // already in the installed Biome and simply not switched on, which is why
+      // they cost no new dependency.
+      "suspicious": {
+        // Import cycles. Biome parses with its own parser rather than tsc, so
+        // unlike dependency-cruiser and every other graph tool this survives
+        // TypeScript 7 removing the compiler API. 183 files in 14ms.
+        // Green when switched on (2026-08-26) and *proved red* against a
+        // two-file fixture first — a check nobody has watched fail is not yet
+        // a check (docs/reusable/silent-success.md).
+        "noImportCycles": "error"
+      },
+
+      // useImportExtensions is NOT here, and must not be added back without
+      // reading this. It looks like an exact fit — this repo writes `./arc.js`
+      // meaning `arc.ts`, which is what `forceJsExtensions: true` is for — and
+      // it finds zero real problems, because every TS import already complies.
+      //
+      // What it does find is `import "./tailwind.css"` in src/web/main.tsx,
+      // which is correct code. The rule does not understand CSS side-effect
+      // imports, reports the line as missing an extension, and marks itself
+      // FIXABLE — and the fix it applies is:
+      //
+      //     - import "./tailwind.css";
+      //     + import "./tailwind.js";
+      //
+      // which points the only stylesheet entry point at a file that does not
+      // exist. Anyone running `npm run lint:fix` would have shipped an
+      // unstyled app and a green linter. Verified by running it, 2026-08-26.
+      //
+      // Zero true positives against one silent catastrophe is not a trade, so
+      // the rule is off. Revisit if Biome learns to skip non-JS imports.
+
+      "complexity": {
+        // Triage, not a gate — hence `info`, and hence 25 rather than the
+        // default 15. At 15 this reports 41 functions, which is enough to bury
+        // the findings that mean something (the same argument that turned
+        // noNonNullAssertion off, below). At 25 it reports the ~16 worth
+        // looking at.
+        //
+        // Read a high score as "go and look", never as "this is wrong": the
+        // metric punishes a long flat `switch` about as hard as genuinely
+        // nested logic, and the worst score in the repo is a flat route
+        // dispatcher that is fine as it is.
+        //
+        // Counts measured 2026-08-26 and *not* to be trusted later — this tree
+        // moves hourly. Re-measure before arguing from them.
+        "noExcessiveCognitiveComplexity": {
+          "level": "info",
+          "options": { "maxAllowedComplexity": 25 }
+        }
       },
 
       "style": {
