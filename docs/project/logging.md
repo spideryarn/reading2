@@ -319,6 +319,39 @@ Three things follow from that, and the third is the one that matters:
    for every file that stores such a message: **never
    log a stored `error` string, however sure you are of what is in it.**
 
+### And then it was found twice more, which is the part worth keeping
+
+The count went three → six → seven above. **It was thirteen, and then fifteen.** Two later sweeps, on
+the same day, each found sites the previous one could not have found because it was looking at a
+list rather than at a kind of moment.
+
+*Sweep two* — six pipeline stages (`arc`, `labels`, `summarise`, `toc`, `glossary`, `tweets`) each
+threw `` `Model refused: ${JSON.stringify(message.stop_details)}` `` on Anthropic's
+`stop_reason: "refusal"`. That object is the provider's own words about a request carrying the whole
+article, and `jobs.ts` copies a failed step's error onto the job, which the ingest card renders. One
+sentence now, `MODEL_REFUSED` in [`src/messages.ts`](../../src/messages.ts).
+
+*Sweep three* — the **request** failing rather than answering. Verified against the installed SDK
+rather than assumed (`node_modules/@anthropic-ai/sdk/core/error.js`, `APIError.makeMessage`):
+`Error.message` on a thrown `APIError` is `` `${status} ${error.message}` `` built straight from the
+upstream body, or the whole body stringified if it has no `.message`. None of the six stages caught
+it. [`src/anthropic-call.ts`](../../src/anthropic-call.ts) is the request-failure analogue of
+`providerRefused`, and reuses `providerHttpFailure` rather than growing a second mapping. The same
+sweep found `labels.ts` throwing the model's own output back in a validation error two lines below a
+sibling branch commented *"Shape, not value"*, and `vercel.ts`'s last-resort catch sending
+`(err as Error).message` — whatever escaped every other handler — straight to the client.
+
+**The lesson is not "we missed some".** Each sweep closed every site it was looking for. What made
+the next one possible was changing what was being looked *for*: first "OpenRouter's HTTP error
+bodies", then "Anthropic's refusal payloads", then "any moment where a provider's own text becomes
+an `Error`". A list of sites is a snapshot; the genre is the thing. This is written down as Rule 1
+in [simplification-audit.md](../plans/simplification-audit.md) — *grep the genre, not the list* —
+and it was written after an earlier undercount, by the person who then went on to sweep by list
+twice more.
+
+The honest status: **three declarations that this class was closed, three of them wrong.** Treat a
+fourth with suspicion.
+
 The same review found the rule broken in a second shape, which is easier to miss because the leak and
 the log are in different files. `src/toc.ts` validated a node's range and threw
 ``Node "${mn.title}" has a range not in blocks.json`` — a label the model wrote *about the article*,
