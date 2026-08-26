@@ -140,6 +140,30 @@ file_size_limit = "50MiB"
 # allowed_mime_types = ["image/png", "image/jpeg"]
 # objects_path = "./images"
 
+# The document an article was made from — see docs/plans/pdf-upload-and-storage.md.
+#
+# `sources`, not `pdfs`: it holds the raw document behind an article, which is
+# what GET /api/source/:slug already names, and PDFs are only the first kind.
+#
+# **Private, always.** These are a reader's own documents and some of them will
+# be things they would not put on the open web. Every read goes through us or
+# through a short-lived signed URL we issue after checking that this reader has
+# an article referencing this source.
+#
+# 50MiB is the ceiling Supabase's free plan puts on a single object, and Greg's
+# cap landed on the same number, so v1 needs no plan change and any later raise
+# needs one.
+#
+# **This block is local only.** Declaring a bucket here does not create it on a
+# remote project: that needs `supabase seed buckets --project-ref <ref>` (the
+# flag is not `--linked`, whatever a web search says), and it is the kind of
+# deployment step that fails by appearing to work, because a missing bucket only
+# shows up on the first upload. See docs/project/deployment.md.
+[storage.buckets.sources]
+public = false
+file_size_limit = "50MiB"
+allowed_mime_types = ["application/pdf"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true
