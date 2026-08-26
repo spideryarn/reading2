@@ -79,7 +79,7 @@ import type { Meta } from "./types.js";
  * constant only invalidates a cache if somebody remembers to bump it, and the
  * person who forgets is the person who just changed the prompt.
  */
-export const PROMPT_VERSION = "pdf-v1";
+export const PROMPT_VERSION = "pdf-v2";
 
 /** A cost cap, not a capability one: about a dollar of transcription. */
 export const MAX_PAGES = 100;
