@@ -390,10 +390,10 @@ reader is told about it is the only symptom most people will ever report.
 3. **`DATABASE_URL`** — the transaction pooler, with no `ssl*` parameters in it.
    Written into `.env.prod`; not yet set on Vercel, along with `SPIDERYARN_STORE`
    and `PGSSLROOTCERT`.
-4. **Import the articles**: `npm run db:import` — **currently broken in the working
-   tree**, and not by anything remote. `src/db/schema.ts` has
-   `article_revisions.raw_source_id` with no migration creating it, so the import
-   fails the same way against the local database.
+4. ~~**Import the articles**~~ — done 2026-08-27. Five articles, 635 blocks, 24
+   comments, 56 chat messages, and reads verified through the store seam over the
+   transaction pooler. `ball-lightning` and `coolabah-memory` have no
+   `blocks.json`/`tree.json` yet, so the importer correctly skipped them.
 5. **[The beta gate](../plans/deploy-and-repo-move.md#the-beta-gate)**, which is
    what makes a stable URL possible and what the domain move needs.
 

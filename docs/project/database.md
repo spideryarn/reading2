@@ -135,11 +135,13 @@ touch anything storage-shaped:
 
 ## Connecting to the remote
 
-**The remote exists and has the schema**, as of 2026-08-26: project `alschkahzfagtppxspfq`,
-eu-west-2, Postgres 17.6, 14 migrations applied, 14 tables, both roles created, the owner account
-made. What it does *not* have is data — see [§ Roles](#roles) for how it was bootstrapped and
-[§ What is not done](#what-is-not-done-yet) for what is still missing. Nothing in the app points at
-it yet; `SPIDERYARN_STORE` and `DATABASE_URL` are recorded in `.env.prod`, which is read by nothing.
+**The remote is up and has the data**, as of 2026-08-27: project `alschkahzfagtppxspfq`,
+eu-west-2, Postgres 17.6, 14 migrations, 14 tables, both roles, the owner account, and five
+articles — 635 blocks, 24 comments, 56 chat messages. `listArticles` and `loadArticle` have been
+served from it through the **transaction** pooler, which is the path production uses. See
+[§ Roles](#roles) for how it was bootstrapped and [§ What is not done](#what-is-not-done-yet) for
+what is still missing. Nothing in the *deployed* app points at it yet; `SPIDERYARN_STORE` and
+`DATABASE_URL` are recorded in `.env.prod`, which is read by nothing.
 
 The facts below are the ones that turn a five-minute job into an afternoon, and each fails in a way
 that misdirects you.
@@ -441,13 +443,11 @@ than writing rows nobody owns.
 
 ## What is not done yet
 
-- **No data.** `npm run db:import` is currently **broken in the working tree**, not on the remote:
-  [`src/db/schema.ts`](../../src/db/schema.ts) has `article_revisions.raw_source_id` and no migration
-  creates it, so the import fails with `42703 column "raw_source_id" does not exist` — against the
-  *local* database too. Somebody is mid-change. Once a migration for it lands, the import should run.
-- **The uplink is a real constraint.** `data/` was 25 MB on 2026-08-26 and this laptop was uploading
-  at 6–17 KB/s, which is over an hour of transfer and puts single rows past `statement_timeout`. If
-  an import dies at exactly two minutes, measure the upload before blaming the database.
+- **The uplink can be the constraint, and it does not look like one.** On 2026-08-26 this laptop
+  uploaded at 6–17 KB/s and a single `INSERT` blew a two-minute `statement_timeout`; the next morning
+  the same link ran at 119 KB/s and the whole import took under two minutes. The tell is
+  `pg_stat_activity` showing the statement `active` on `Client:ClientRead` — the server waiting for
+  you. Measure the upload before blaming the database.
 - **Vercel does not have these values yet** — `SPIDERYARN_STORE`, `DATABASE_URL`,
   `SPIDERYARN_OWNER_ID`, `PGSSLROOTCERT`. See [deployment.md](deployment.md#environment-variables).
 - **`on delete restrict` is inherited, not chosen.** All seven `owner_id` foreign keys use it, which
