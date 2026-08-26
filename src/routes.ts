@@ -41,6 +41,11 @@
  * docs/project/ingest-queue.md.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+/* From the store rather than from src/api.ts directly, so that
+   SPIDERYARN_STORE=postgres swaps every article read at once and no route has
+   to know which store it is talking to. `files` is the default and is exactly
+   src/api.ts, so nothing changes for anyone who has not opted in.
+   docs/plans/postgres-storage-implementation.md */
 import {
   articleMetadata,
   deleteGlossary,
@@ -50,7 +55,7 @@ import {
   lookUpTerm,
   loadSummaries,
   loadTweets,
-} from "./api.js";
+} from "./store/index.js";
 import {
   beginTurn,
   ChatConflict,

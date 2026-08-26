@@ -92,20 +92,35 @@ let slugs: readonly string[] = [];
 
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
+  /* 10 seconds, not 2. At 2s this probe timed out under nothing worse than a
+     dev server holding connections, and the whole suite skipped — inside a run
+     that still printed a green "1103 passed". A parity suite that opts itself
+     out when the machine is busy is worse than one that fails, because the
+     signal it gives is indistinguishable from success. */
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 1,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 10_000,
   });
+  let why = "";
   try {
     const probe = await pool.query(
       "select to_regclass('spideryarn.revision_blocks') is not null as ready",
     );
     reachable = probe.rows[0]?.ready === true;
-  } catch {
+    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
+  } catch (err) {
     reachable = false;
+    why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
+
+  /* Said out loud. DATABASE_URL being SET and the database being unreachable is
+     a different situation from having no database at all, and only the first
+     one means somebody's Docker is off while they believe these ran. */
+  if (!reachable) {
+    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
+  }
   if (reachable) slugs = await importableSlugs();
 }
 

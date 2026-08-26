@@ -39,14 +39,18 @@ import {
   comments as commentsTable,
   glossaryLookups,
   revisionBlocks,
+  revisionStepRuns,
 } from "../db/schema.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import { isSlug } from "../ingest.js";
+import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { isStale as summariesStale } from "../summarise.js";
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
   Arc,
   Article,
+  ArticleMetadata,
+  StageState,
   Block,
   Glossary,
   GlossaryResponse,
@@ -147,9 +151,37 @@ function metaFrom(
   };
 }
 
+/**
+ * Where each pipeline step's output lives once it is in Postgres.
+ *
+ * `StageState.outputs` is repo-relative file paths on the filesystem side. It
+ * cannot be here, and pretending otherwise would be worse than the change: the
+ * metadata page's job is to say where an artefact actually is, and after the
+ * cutover the answer is a column, not a path. **This is a deliberate,
+ * user-visible divergence between the two stores** — the one place the
+ * migration does not preserve behaviour exactly — and it is listed as such in
+ * docs/plans/postgres-storage-implementation.md rather than left for somebody
+ * to find on the page.
+ */
+const STEP_STORAGE: Record<string, string[]> = {
+  fetch: ["article_revisions.raw_bytes"],
+  extract: ["article_revisions.title", "article_revisions.extracted_html"],
+  blocks: ["revision_blocks", "block_identities"],
+  toc: ["article_revisions.tree", "article_revisions.labels"],
+  arc: ["article_revisions.arc"],
+  tweets: ["article_revisions.tweets"],
+  glossary: ["article_revisions.glossary"],
+  summary: ["article_revisions.summary"],
+};
+
 export const pgArticleReader: Pick<
   ArticleReader,
-  "loadArticle" | "listArticles" | "loadTweets" | "loadGlossary" | "loadSummaries"
+  | "loadArticle"
+  | "listArticles"
+  | "articleMetadata"
+  | "loadTweets"
+  | "loadGlossary"
+  | "loadSummaries"
 > = {
   async loadArticle(slug: string): Promise<Article> {
     requireSlug(slug);
@@ -209,6 +241,49 @@ export const pgArticleReader: Pick<
       );
     }
     return entries;
+  },
+
+  /**
+   * Which stages have run.
+   *
+   * **`done` comes from `revision_step_runs`, not from a column being non-null.**
+   * That table exists precisely to answer "has this stage run" — and reading it
+   * keeps the honest distinction the filesystem loses, between a step that
+   * never ran and a step that ran and produced nothing. `stepIsDone` on the
+   * filesystem is an existence check, which is the bug the table was designed
+   * not to inherit.
+   */
+  async articleMetadata(slug: string): Promise<ArticleMetadata> {
+    requireSlug(slug);
+    const found = await currentRevision(slug);
+    if (!found) throw notFound(slug);
+
+    const db = getDb();
+    const runs = await db
+      .select()
+      .from(revisionStepRuns)
+      .where(eq(revisionStepRuns.revisionId, found.revision.id));
+    const doneSteps = new Set(runs.filter((r) => r.status === "done").map((r) => r.stepName));
+
+    const stages: StageState[] = STEP_ORDER.map((step) => ({
+      step,
+      label: STEPS[step].label,
+      outputs: STEP_STORAGE[step] ?? [],
+      done: doneSteps.has(step),
+    }));
+
+    const commentRows = await db
+      .select({ id: commentsTable.id })
+      .from(commentsTable)
+      .where(eq(commentsTable.articleId, found.article.id));
+
+    return {
+      slug,
+      // The filesystem reports a repo-relative directory; there isn't one.
+      dir: `spideryarn.article_revisions/${found.revision.id}`,
+      stages,
+      comments: commentRows.length,
+    };
   },
 
   async loadTweets(slug: string): Promise<ThreadResponse> {
