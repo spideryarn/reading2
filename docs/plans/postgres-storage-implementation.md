@@ -48,10 +48,25 @@ Legend: ✅ done · 🔵 in progress · 📐 designed, not built · ⬜ not star
 | 8 | Artefact manifest test — the guard against the next file | ✅ |
 | 9 | Comments — writes | ✅ |
 | 9b | Shelf state — archive, rename, opens — and library-wide search | ✅ **added 2026-08-26**, both adapters. See [library-shelf-actions-and-search.md](library-shelf-actions-and-search.md) |
-| 10 | Chat, searches, glossary lookups — writes | 📐 **designed and reviewed 2026-08-26, not built.** [The design](#step-10-chat-searches-and-glossary-lookups-writes) · two criticals from the review, one of them in a choice the design defended. Partial by construction: `deleteGlossary` stays 501 |
+| 10 | Chat, searches, glossary lookups — writes | 🔵 **stores built and reviewed 2026-08-26; not yet wired into `src/routes.ts`.** All three adapters exist on both sides, with a scripted parity sequence and the two criticals from the design review applied — then [a second review of the built code](#what-the-review-found-in-the-built-step-10) found two more races and four tests that passed for bad reasons. Those are fixed. **What is left is the wiring**, plus `lookUpTerm` moving out of `src/api.ts`; `deleteGlossary` stays 501 by construction |
 | 11 | Pipeline writes to draft revisions (+ carry-forward) | 📐 **designed and reviewed 2026-08-26, not built.** [The design](#step-11-the-pipeline-writes-revisions) · smaller than this document claimed — `outputs` is one table, not eight modules — but four criticals, and it does need one schema migration |
 | 12 | Jobs and claiming | 📐 **designed and reviewed 2026-08-26, not built.** [The decisions](#step-12-jobs-and-claiming-decided-before-it-is-built) · three criticals, including a fence this document had dropped |
 | 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ |
+
+**What step 10 still needs before it is done**, all of it in `src/routes.ts` and deliberately left
+until that file settles — it is being heavily edited for the streaming work:
+
+1. Route the chat, search and lookup calls through `src/store/index.js` instead of importing
+   `src/chat.ts` and `src/searches.ts` directly. Searches have no seam at all today.
+2. **Carry the attempt token.** `begin`, `retry` and `edit` return one; `finish` refuses without it.
+   The `streaming` and `searching` maps become the `keep` set of a `SweepOptions`.
+3. **Choose `graceMs` to be longer than any hard model-call timeout, and say so where it is set.**
+   There is no heartbeat, so an attempt that outlives the grace window is buried while still
+   running. The fence stops the buried answer overwriting the retry; it does not make the answer
+   dead. Raised in review and not yet answered.
+4. Send `expectedTailId` from the client on an edit. The guard is optional in the contract because
+   the value has to come from the client, and an edit that does not send one is unguarded.
+5. Move `lookUpTerm` out of `src/api.ts` — see [the design](#lookupterm-has-to-move-out-of-apits).
 
 **The import reconciles, and the direction it reconciles in reverses at cutover.** The importer
 deletes an article's reader-state rows inside its transaction before re-inserting them from the
