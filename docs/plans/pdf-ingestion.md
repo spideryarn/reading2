@@ -1011,7 +1011,19 @@ it is tested in the first hour, not the last, and against the alternative.
    The 17-page Wellcome scan transcribes in full, every page, one record marked `uncertain`.
 7. Upload last — the store seam, then the file picker, then the pipeline's URL assumptions. Not
    "after Supabase": Greg's answer was to build it now, behind the seam, knowing the local half is
-   throwaway. **Still to do**, and the only step that is.
+   throwaway. **Still to do**, and the only step of this plan that is — but it is no longer only a
+   line in a list: it is worked out to the point where somebody could build it in
+   [pdf-upload-and-storage.md](pdf-upload-and-storage.md), which adds the object store underneath
+   it. Two things from over there that bear on *this* file rather than on that one:
+
+   - **The bytes go browser → Supabase Storage directly**, because on Vercel they cannot come
+     through us: a function refuses a body over 4.5 MB, and two of the three PDFs in our own eval
+     set are bigger than that. `raw.pdf` beside the article is the local half of a seam, not the
+     shape this ends in.
+   - **An upload hands `pass0` a stranger's parser input directly**, rather than one we chose to
+     fetch — which is why the page cap moving to `doc.numPages` before any page loop was a
+     prerequisite of that step rather than a follow-on, and is already done
+     ([security.md](../project/security.md#pdfs)).
 
 ## The bake-off, and what it decided (2026-08-26)
 
