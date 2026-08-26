@@ -403,12 +403,29 @@ becomes visible without any hover (title link → pencil → refresh → externa
 focus ring), and **Delete → Undo restores the article to its correct sorted position**, verified
 against `GET /api/library?archived=1` as well as on screen.
 
-It found one thing, small and real: after saving a rename, the helper line under the input still read
+The first pass found one thing, small and real: after saving a rename, the helper line under the input still read
 *"empty to restore “…”"* naming the **just-saved** title — because `entry.title` is the reader's own
 once an override exists. Clearing the field restores the *extracted* title, which the card
 deliberately does not carry (`LibraryEntry` ships a `titleOverridden` flag rather than both strings).
 So the line now names the title only when it is the extractor's, and otherwise says what will happen
 without naming it. Saying less beats saying something false.
+
+A focused second pass, against the post-review code, found the two things that only a browser can
+tell you — both cases where every part worked and the whole did not:
+
+- **`?find=` highlighted nothing.** The link carried `at`, `find` and `match=words`, all correct; the
+  reader landed on exactly the right paragraph; and no word was marked. The reading view mounts
+  `SearchBand` — the thing that turns `?find=` into marks — only while the band is in **search
+  mode**, and the default mode is `toc`. So the parameter arrived at a page with nothing listening
+  for it. The link now sets `mode=search` too, and only when there is a term worth finding, since a
+  bare `mode=search` would open the panel on an article with nothing in it.
+- **"Show deleted" could sit on "Looking…" for ever.** The fetch lived in the click handler, but the
+  list is also invalidated from outside the component — archiving or restoring sets it back to
+  `null` — so a panel that was already open waited for a click that had already happened. It is an
+  effect now, keyed on "open and we have nothing", which covers both cases with one rule.
+
+Both are the same shape as the plan's own [§ How this could fail while reporting
+success](#how-this-could-fail-while-reporting-success) list, and neither was on it.
 
 One transient React error was seen and is **not** an app bug: it coincided exactly with another
 agent's HMR reload of `SearchPanel.tsx` mid-keystroke, and did not recur. Worth knowing that several

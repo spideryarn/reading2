@@ -385,9 +385,19 @@ function Passage({ hit, query }: { hit: LibraryHit; query: string }) {
      highlight is always something the reader can see. Caught by a cross-family
      review, 2026-08-26. */
   const term = queryTerms(query).find((t) => fold(hit.text).includes(t));
+  /* **`mode=search` is load-bearing, not decoration.** The reading view mounts
+     `SearchBand` — the thing that turns `?find=` into marks on the prose — only
+     while the band is in search mode (App.tsx), and the default mode is `toc`.
+     So a link carrying `at`, `find` and `match` but not `mode` landed on
+     exactly the right paragraph and highlighted nothing at all, with every
+     parameter present and correct. Found in a browser pass, 2026-08-26; it is
+     the kind of thing no unit test would have caught, because each half works.
+
+     Set only when there is a term to find: a bare `mode=search` would open the
+     search panel on an article with nothing to search for. */
   const href =
     `${readHref(hit.slug)}?at=${encodeURIComponent(hit.blockId)}` +
-    (term ? `&find=${encodeURIComponent(term)}&match=words` : "");
+    (term ? `&mode=search&find=${encodeURIComponent(term)}&match=words` : "");
 
   return (
     <Link
@@ -478,29 +488,37 @@ function marked(text: string, query: string) {
  */
 function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
   const [open, setOpen] = useState(false);
+  const { archived, loadArchived } = shelf;
+
+  /* An effect rather than a call in the click handler, because the list is also
+     invalidated from *outside* this component: archiving or restoring sets it
+     back to null, and with the fetch living in the handler an open panel then
+     sat on "Looking…" for ever, waiting for a click that had already happened.
+     Keyed on "open and we have nothing", so it covers both cases with one rule.
+     Found in a browser pass, 2026-08-26. */
+  useEffect(() => {
+    if (open && archived === null) void loadArchived();
+  }, [open, archived, loadArchived]);
 
   return (
     <section className="tw:mt-10">
       <button
         type="button"
-        onClick={() => {
-          setOpen((v) => !v);
-          if (!open) void shelf.loadArchived();
-        }}
+        onClick={() => setOpen((v) => !v)}
         className="tw:rounded tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:hover:text-foreground"
       >
         {open ? "Hide deleted" : "Show deleted"}
       </button>
 
-      {open && shelf.archived === null && (
+      {open && archived === null && (
         <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Looking…</p>
       )}
-      {open && shelf.archived?.length === 0 && (
+      {open && archived?.length === 0 && (
         <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Nothing deleted.</p>
       )}
-      {open && !!shelf.archived?.length && (
+      {open && !!archived?.length && (
         <ul className="tw:m-0 tw:mt-3 tw:flex tw:list-none tw:flex-col tw:gap-2 tw:p-0">
-          {shelf.archived.map((a) => (
+          {archived.map((a) => (
             <li
               key={a.slug}
               className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border tw:px-4 tw:py-2 tw:text-sm"
