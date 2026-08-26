@@ -177,6 +177,18 @@ address bar. **That is the case the first design could not have handled at all**
 failed exchange to nobody, so a callback waiting on an auth event would have sat on "Signing you
 in…" for ever, and the single test first proposed for it would have passed throughout.
 
+**The address survives the gate**, which is the design claim and was checked in both states:
+signed out at `/read/<slug>?at=…` or `/profile`, the address bar does not move — only the content
+becomes the sign-in screen. That is why the gate is a whole-app branch rather than a `/login`
+redirect ([url-state.md](../project/url-state.md): who you are is not view state), and it is what
+makes the `sessionStorage` return path a belt-and-braces for the Google round trip rather than the
+only thing holding the reader's place.
+
+*(One line in the browser report — a direct load of `/profile` redirecting to `/` — turned out to be
+a misread rather than an observation. Worth chasing anyway: the server answers 200 on all five
+paths, so a changed address bar could only have been our own code, and the only redirects to root
+in `src/web/` are two lines both written today. It reproduced clean in both auth states.)*
+
 **And it found a trap in the testing rather than in the code.** The first check showed the *shelf*,
 not the sign-in screen — because the tab had a session in `localStorage` from earlier in the day. A
 signed-out check in a browser you have used before is not signed out until you clear storage. Now
