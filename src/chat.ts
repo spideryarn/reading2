@@ -211,58 +211,90 @@ export interface Turn {
  * The thread is created here if it is missing, so a reader typing into a fresh
  * chat does not need a round trip before they can send.
  */
+/**
+ * The new turn, as a value. **Pure — no clock, no disk, no id but the ones it
+ * mints.**
+ *
+ * Lifted out of `beginTurn`'s `update` callback so that both stores can share
+ * it: everything here is an invariant (which ids are free, when a thread takes
+ * its title, whether the client's thread id is honoured), and an invariant with
+ * two implementations is an invariant with two behaviours. The Postgres store
+ * calls this inside its transaction and writes the difference; the filesystem
+ * store calls it inside the mutex and writes the file. Neither owns the rule.
+ *
+ * `at` rather than a `now()` — the caller resolves the clock once, exactly as
+ * `withRetry` and `withEdit` already do, so every row in one turn carries the
+ * same timestamp. That matters more than it looks: the user message and its
+ * pending reply are written together and sort by `ordinal` precisely because
+ * their `createdAt` collides.
+ */
+export function withTurn(
+  threads: ChatThread[],
+  { threadId, question }: Turn,
+  at: string,
+): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
+  const ids = taken(threads);
+  const existing = threads.find((t) => t.id === threadId);
+  const user: ChatMessage = {
+    id: mintUniqueId(ids),
+    role: "user",
+    text: question,
+    createdAt: at,
+    status: "done",
+  };
+  const reply: ChatMessage = {
+    id: mintUniqueId(ids),
+    role: "assistant",
+    text: "",
+    createdAt: at,
+    status: "pending",
+  };
+  const base: ChatThread = existing ?? {
+    /* The client mints the thread id so `?thread=` can be in the URL before
+       the first message is sent — the same trick createComment allows for a
+       comment id, and for the same reason: nothing has to be swapped when the
+       answer lands.
+
+       Accepted only if it is one of ours and free. A caller who sends
+       something else gets a minted id rather than an error, and gets it back
+       in the response, so the client's job is to believe the response rather
+       than to assume its guess was taken. That is what makes a duplicate
+       send harmless instead of a way to append to a stranger's thread. */
+    id: isSpideryarnId(threadId) && !ids.has(threadId) ? threadId : mintUniqueId(ids),
+    title: "New chat",
+    createdAt: at,
+    updatedAt: at,
+    messages: [],
+  };
+  const thread: ChatThread = {
+    ...base,
+    // The first question names the thread. Later ones do not — a conversation
+    // is about what it started as, and renaming it under the reader as it
+    // wanders would lose them the entry they were looking for in the list.
+    title: base.messages.length === 0 ? titleFrom(question) : base.title,
+    updatedAt: at,
+    messages: [...base.messages, user, reply],
+  };
+  return {
+    threads: existing
+      ? threads.map((t) => (t.id === thread.id ? thread : t))
+      : [...threads, thread],
+    thread,
+    user,
+    reply,
+  };
+}
+
 export async function beginTurn(
   slug: string,
-  { threadId, question }: Turn,
+  turn: Turn,
   now: () => string = () => new Date().toISOString(),
 ): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage }> {
   let out!: { thread: ChatThread; user: ChatMessage; reply: ChatMessage };
   await update(slug, (threads) => {
-    const at = now();
-    const ids = taken(threads);
-    const existing = threads.find((t) => t.id === threadId);
-    const user: ChatMessage = {
-      id: mintUniqueId(ids),
-      role: "user",
-      text: question,
-      createdAt: at,
-      status: "done",
-    };
-    const reply: ChatMessage = {
-      id: mintUniqueId(ids),
-      role: "assistant",
-      text: "",
-      createdAt: at,
-      status: "pending",
-    };
-    const base: ChatThread = existing ?? {
-      /* The client mints the thread id so `?thread=` can be in the URL before
-         the first message is sent — the same trick createComment allows for a
-         comment id, and for the same reason: nothing has to be swapped when the
-         answer lands.
-
-         Accepted only if it is one of ours and free. A caller who sends
-         something else gets a minted id rather than an error, and gets it back
-         in the response, so the client's job is to believe the response rather
-         than to assume its guess was taken. That is what makes a duplicate
-         send harmless instead of a way to append to a stranger's thread. */
-      id: isSpideryarnId(threadId) && !ids.has(threadId) ? threadId : mintUniqueId(ids),
-      title: "New chat",
-      createdAt: at,
-      updatedAt: at,
-      messages: [],
-    };
-    const thread: ChatThread = {
-      ...base,
-      // The first question names the thread. Later ones do not — a conversation
-      // is about what it started as, and renaming it under the reader as it
-      // wanders would lose them the entry they were looking for in the list.
-      title: base.messages.length === 0 ? titleFrom(question) : base.title,
-      updatedAt: at,
-      messages: [...base.messages, user, reply],
-    };
-    out = { thread, user, reply };
-    return existing ? threads.map((t) => (t.id === thread.id ? thread : t)) : [...threads, thread];
+    const { threads: next, ...rest } = withTurn(threads, turn, now());
+    out = rest;
+    return next;
   });
   log("store").info(
     { slug, threadId: out.thread.id, messageId: out.reply.id, turns: out.thread.messages.length },
@@ -469,6 +501,14 @@ export function withEdit(
   messageId: string,
   question: string,
   at: string,
+  /**
+   * Where the new answer's id comes from. Injectable for the same reason
+   * `mintId` and `mintUniqueId` take one (src/ids.ts): the rule below is *which
+   * ids are off limits*, and with a real generator that rule can only be tested
+   * by hoping a 771-million-to-one collision does not happen — which is a test
+   * that passes whether or not the rule is there.
+   */
+  random?: () => number,
 ): {
   threads: ChatThread[];
   thread: ChatThread;
@@ -502,7 +542,7 @@ export function withEdit(
        be robust against. Note also that the guarantee is only within one call:
        a discarded id leaves the file, so the *next* mint may hand it back. Ids
        are cheap, and this is the narrow win it is rather than a rule. */
-    id: mintUniqueId(taken(threads)),
+    id: mintUniqueId(taken(threads), random),
     role: "assistant",
     text: "",
     createdAt: at,

@@ -38,17 +38,22 @@
  * divergence this migration is meant to make impossible.
  */
 
+import type { LookupsByTerm } from "../glossary-lookups.js";
 import type { NewComment } from "../comments.js";
 import type {
   Article,
   ArticleMetadata,
+  ChatMessage,
+  ChatThread,
   Comment,
   GlossaryEntry,
+  GlossaryLookup,
   GlossaryResponse,
   Job,
   LibraryEntry,
   LibraryHit,
   ListOptions,
+  SearchRun,
   ShelfState,
   SummariesResponse,
   ThreadResponse,
@@ -261,4 +266,194 @@ export interface LibrarySearch {
    * @param limit the most hits to return. The caller says whether the answer was cut.
    */
   searchLibrary(query: string, limit: number): Promise<{ hits: LibraryHit[]; capped: boolean }>;
+}
+
+/* ------------------------------------------------- the reader's own state -- */
+
+/**
+ * What a stale `pending` row looks like, for both sweeps.
+ *
+ * **`keep` is this process's live work and `graceMs` is everybody else's.**
+ * That split is the whole shape of the problem. The filesystem stores decide
+ * staleness from an in-memory `Set` in `src/routes.ts`, which is exactly right
+ * for one server on one disk and silently wrong the moment two processes share
+ * a database: process B sees process A's live row in nobody's set and errors
+ * an answer that is still arriving. On Vercel that is not an edge case, it is
+ * the ordinary shape.
+ *
+ * So the Postgres stores take both — spare what this process is doing, and
+ * spare anything young enough that some *other* process is plausibly still on
+ * it. `keep` alone is a cross-process bug; `graceMs` alone would error a run
+ * this very process has been streaming for four minutes.
+ */
+export interface SweepOptions {
+  /** Ids this process is actively writing. Never swept, whatever their age. */
+  readonly keep: ReadonlySet<string>;
+  /**
+   * How old an attempt must be before another process may declare it dead.
+   * The filesystem stores ignore this — they have no attempt clock to read.
+   */
+  readonly graceMs: number;
+}
+
+/**
+ * A conversation with the model about one article.
+ *
+ * ## Why this is not `src/chat.ts`'s surface, function for function
+ *
+ * `contracts.ts` argues elsewhere that copying today's shape is what makes
+ * cutover safe, and that argument is about not *improving* things under cover
+ * of a migration. These departures are different: each is a return value the
+ * caller already throws away, free on a filesystem and a whole extra query in
+ * SQL.
+ *
+ * - **`update(slug, mutate)` becomes `sweepPending`.** A callback over the
+ *   whole array can only be implemented in SQL as select-everything, diff,
+ *   write-everything — which is precisely the read-modify-write the table
+ *   exists to delete. There is one caller and it does one thing, so the method
+ *   is that thing.
+ * - **`finishTurn` returns nothing.** Both call sites discard the list today,
+ *   and returning it costs a full read of every thread in the article on every
+ *   streamed answer.
+ *
+ * `begin` / `retry` / `edit` keep the thread *with its messages*, because
+ * `streamChat` builds the model's history from `thread.messages.slice(0, -2)`.
+ * That one is not negotiable.
+ *
+ * Every method takes the clock, so a parity test can drive both stores from one
+ * fixed sequence and compare the wire form at every step.
+ */
+export interface ChatStore {
+  load(slug: string): Promise<ChatThread[]>;
+
+  /**
+   * Append a question and an empty `pending` answer, creating the thread if
+   * this is its first question.
+   */
+  begin(
+    slug: string,
+    turn: { threadId: string; question: string },
+    now?: () => string,
+  ): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage }>;
+
+  /**
+   * Patch one message in place. **Never appends**, and bumps the thread's
+   * `updatedAt` whenever the *thread* matches — even if the message does not,
+   * which is what the filesystem does and what the panel's ordering depends on.
+   */
+  finish(
+    slug: string,
+    threadId: string,
+    messageId: string,
+    patch: Partial<ChatMessage>,
+    now?: () => string,
+  ): Promise<void>;
+
+  /**
+   * Blank the last answer so the model can have another go at the same
+   * question. Throws `ChatConflict` when the client's view is stale.
+   */
+  retry(
+    slug: string,
+    threadId: string,
+    messageId: string,
+    now?: () => string,
+  ): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage }>;
+
+  /**
+   * Rewrite a question and discard everything after it.
+   *
+   * `expectedTailId` is the guard, and it is the narrow answer to a real bug
+   * rather than a version column: a stale tab editing an old question deletes
+   * every turn added since it last looked, and today nothing notices. Naming
+   * the message the client believes is last means the only edits refused are
+   * the ones whose discard set has changed underneath them. `retry` has always
+   * had this guard implicitly, by insisting on the thread's actual last
+   * message.
+   */
+  edit(
+    slug: string,
+    threadId: string,
+    messageId: string,
+    question: string,
+    opts?: { expectedTailId?: string; now?: () => string },
+  ): Promise<{
+    thread: ChatThread;
+    user: ChatMessage;
+    reply: ChatMessage;
+    discarded: number;
+  }>;
+
+  rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
+  remove(slug: string, threadId: string): Promise<ChatThread[]>;
+
+  /** Turn abandoned `pending` answers into `error`. See `SweepOptions`. */
+  sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]>;
+}
+
+/**
+ * "Find every passage that…", and the runs the reader has asked for.
+ *
+ * ## The attempt, and why `begin` hands one back
+ *
+ * A run is the reader's question and outlives any number of tries at answering
+ * it; an **attempt** is one model call. Only the Postgres store has attempts as
+ * rows, and it needs them for the reason `SweepOptions` gives: `finish` must be
+ * able to say *which* call is reporting, so that a late answer from a call
+ * another process already declared dead cannot land on top of the retry the
+ * reader is watching. So `begin` returns an opaque attempt token, the caller
+ * carries it, and `finish` presents it.
+ *
+ * The filesystem store returns `undefined` and ignores it, which is today's
+ * behaviour exactly: fenced by identity alone.
+ *
+ * **`finish` returns the run or `undefined`** rather than the whole list. The
+ * caller only ever did `.find(…)` on it and 404s when missing, and
+ * `UPDATE … RETURNING *` answers that directly — zero rows *is* "deleted while
+ * running", or "this attempt is no longer the live one".
+ */
+export interface SearchStore {
+  load(slug: string): Promise<SearchRun[]>;
+
+  /**
+   * Record a `pending` run before the model is called.
+   *
+   * A `wantedId` naming an existing row is a **retry only when the criterion
+   * matches and that row's status is `error`** — all three, and the third is
+   * the one this codebase carries a postmortem for.
+   */
+  begin(
+    slug: string,
+    criterion: string,
+    wantedId?: string,
+    now?: () => string,
+  ): Promise<{ run: SearchRun; attempt: string | undefined }>;
+
+  /** Write the answer, if this attempt is still the live one. */
+  finish(
+    slug: string,
+    runId: string,
+    patch: Partial<SearchRun>,
+    attempt?: string,
+  ): Promise<SearchRun | undefined>;
+
+  remove(slug: string, runId: string): Promise<SearchRun[]>;
+
+  /** Turn abandoned `pending` runs into `error`. See `SweepOptions`. */
+  sweepPending(slug: string, opts: SweepOptions): Promise<SearchRun[]>;
+}
+
+/**
+ * What the reader has asked the web about, one answer per glossary entry.
+ *
+ * Keyed by entry id, which is why the Postgres table is keyed
+ * `(article_id, entry_id)` and why `save` is an upsert rather than a rewrite of
+ * the map. That is not a tidiness win: the file's read-modify-write holds a
+ * stale copy of every *other* lookup across the model call, so a lookup landing
+ * while a `glossary` job is running is overwritten wholesale and no in-process
+ * lock can help.
+ */
+export interface GlossaryLookupStore {
+  load(slug: string): Promise<LookupsByTerm>;
+  save(slug: string, termId: string, lookup: GlossaryLookup): Promise<LookupsByTerm>;
 }

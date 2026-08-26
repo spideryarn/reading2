@@ -782,11 +782,44 @@ export const searchRuns = spideryarn.table(
     model: text("model"),
     error: text("error"),
     createdAt: createdAt(),
+
+    /**
+     * **Which attempt is in flight, so a second server cannot kill it.**
+     *
+     * `src/searches.ts` sweeps stale `pending` runs by asking an in-process
+     * `Set` which ones it started. That works for one server on one disk and
+     * breaks the moment two processes share a database, which on Vercel is not
+     * an edge case but the ordinary shape: process A takes the POST, process B
+     * takes a GET a second later, sees A's `pending` run in nobody's set, and
+     * marks it `error`. The reader retries. A's model call then returns and
+     * `finishRun` — matching on identity alone — overwrites the retry with the
+     * older answer.
+     *
+     * So the attempt gets an identity of its own. The sweep may only error an
+     * attempt whose `attempt_started_at` is genuinely old, and `finishRun` may
+     * only write to the attempt it started: `where id = $ and attempt_id = $
+     * and status = 'pending'`. Naming the status as well as the identity is the
+     * rule step 12's job lease arrives at independently — a conditional write
+     * must say what it expects to find, not only what it wants to change.
+     *
+     * Nullable because an imported run has no attempt: it is finished, and
+     * `data/<slug>/searches.json` never recorded one. GPT Sol's review called
+     * this the single change that most reduces risk in step 10.
+     */
+    attemptId: text("attempt_id"),
+    attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
     check("search_runs_status", sql`${t.status} in ('pending','done','error')`),
     check("search_runs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /* An attempt is both columns or neither. Half of one is a run that either
+       cannot be swept (no age) or cannot be finished (no id), and both of those
+       fail by leaving a `pending` row on the reader's screen for ever. */
+    check(
+      "search_runs_attempt_both",
+      sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
+    ),
   ],
 );
 

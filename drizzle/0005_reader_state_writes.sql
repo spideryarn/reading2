@@ -1,0 +1,3 @@
+ALTER TABLE "spideryarn"."search_runs" ADD COLUMN "attempt_id" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."search_runs" ADD COLUMN "attempt_started_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "spideryarn"."search_runs" ADD CONSTRAINT "search_runs_attempt_both" CHECK (("spideryarn"."search_runs"."attempt_id" is null) = ("spideryarn"."search_runs"."attempt_started_at" is null));

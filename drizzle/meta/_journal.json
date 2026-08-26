@@ -36,6 +36,13 @@
       "when": 1787727453114,
       "tag": "0004_shelf_state_and_block_fts",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787745570629,
+      "tag": "0005_reader_state_writes",
+      "breakpoints": true
     }
   ]
 }

@@ -169,6 +169,79 @@ export function update(
  * Anything that is not one of our ids still gets a minted one back, and the
  * caller is expected to believe the response rather than its own guess.
  */
+/**
+ * Which run a `beginRun` produces, as a value. **Pure — no clock, no disk.**
+ *
+ * Lifted out of `beginRun`'s `update` callback so both stores share one copy of
+ * the decision. The three-condition retry rule below is the one this file
+ * carries a postmortem for; having it in two implementations is how it comes
+ * back.
+ *
+ * `kind` tells the caller which branch ran, because in SQL the two branches are
+ * different statements — an `UPDATE` that must name the status it expects, and
+ * an `INSERT` followed by a trim. A store that reads `run.status` to work that
+ * out would get it wrong: both branches produce `pending`.
+ */
+export function withRun(
+  runs: SearchRun[],
+  criterion: string,
+  wantedId: string | undefined,
+  at: string,
+): { runs: SearchRun[]; run: SearchRun; kind: "reset" | "minted" } {
+  /* A retry: the same id, the same criterion, **and a row that actually
+     failed**. All three, and the third is the one that took two goes to get
+     right.
+
+     The criterion stops a send that asks a *different* question under an id
+     somebody already holds from overwriting it — that is still a collision and
+     still gets a minted id. But criterion equality only proves "same
+     question", never "this request is a retry": a double-clicked POST, a
+     stale tab retrying after another tab succeeded, and a replayed request all
+     match on both fields. Without the status check, each of those would reset
+     a `pending` or `done` row — abandoning a call in flight, or throwing away
+     an answer the reader already has, and paying for another one either way.
+
+     Only a run that failed is retryable. A `pending` row that is stuck because
+     the server died is not covered here and is deliberately left to delete and
+     search again, which costs one call rather than risking one. */
+  const existing = wantedId
+    ? runs.find((r) => r.id === wantedId && r.criterion === criterion && r.status === "error")
+    : undefined;
+  if (existing) {
+    /* Rebuilt field by field rather than spread, and that is the whole point:
+       `hits`, `model` and `error` are absent from this object, so the failed
+       attempt's error cannot survive underneath a later successful answer.
+       `createdAt` is kept, because it is still the same search the reader
+       asked for and only the attempt is new — the exact opposite of
+       `withRetry` in src/chat.ts, where the reply's `createdAt` IS the
+       attempt's clock and has to move. Both are deliberate. */
+    const run: SearchRun = {
+      id: existing.id,
+      criterion,
+      createdAt: existing.createdAt,
+      status: "pending",
+      hits: [],
+    };
+    return { runs: runs.map((r) => (r.id === run.id ? run : r)), run, kind: "reset" };
+  }
+
+  const taken = new Set(runs.map((r) => r.id));
+  const run: SearchRun = {
+    id:
+      wantedId && isSpideryarnId(wantedId) && !taken.has(wantedId)
+        ? wantedId
+        : mintUniqueId(taken),
+    criterion,
+    createdAt: at,
+    status: "pending",
+    hits: [],
+  };
+  // Newest last on disk, oldest dropped first — the panel sorts for display,
+  // so the file stays in the order things happened, which is the order that
+  // makes it readable when somebody opens it in an editor.
+  return { runs: [...runs, run].slice(-MAX_RUNS), run, kind: "minted" };
+}
+
 export async function beginRun(
   slug: string,
   criterion: string,
@@ -177,53 +250,9 @@ export async function beginRun(
 ): Promise<SearchRun> {
   let stored!: SearchRun;
   await update(slug, (runs) => {
-    /* A retry: the same id, the same criterion, **and a row that actually
-       failed**. All three, and the third is the one that took two goes to get
-       right.
-
-       The criterion stops a send that asks a *different* question under an id
-       somebody already holds from overwriting it — that is still a collision and
-       still gets a minted id. But criterion equality only proves "same
-       question", never "this request is a retry": a double-clicked POST, a
-       stale tab retrying after another tab succeeded, and a replayed request all
-       match on both fields. Without the status check, each of those would reset
-       a `pending` or `done` row — abandoning a call in flight, or throwing away
-       an answer the reader already has, and paying for another one either way.
-
-       Only a run that failed is retryable. A `pending` row that is stuck because
-       the server died is not covered here and is deliberately left to delete and
-       search again, which costs one call rather than risking one. */
-    const existing = wantedId
-      ? runs.find(
-          (r) => r.id === wantedId && r.criterion === criterion && r.status === "error",
-        )
-      : undefined;
-    if (existing) {
-      stored = {
-        id: existing.id,
-        criterion,
-        createdAt: existing.createdAt,
-        status: "pending",
-        hits: [],
-      };
-      return runs.map((r) => (r.id === stored.id ? stored : r));
-    }
-
-    const taken = new Set(runs.map((r) => r.id));
-    stored = {
-      id:
-        wantedId && isSpideryarnId(wantedId) && !taken.has(wantedId)
-          ? wantedId
-          : mintUniqueId(taken),
-      criterion,
-      createdAt: now(),
-      status: "pending",
-      hits: [],
-    };
-    // Newest last on disk, oldest dropped first — the panel sorts for display,
-    // so the file stays in the order things happened, which is the order that
-    // makes it readable when somebody opens it in an editor.
-    return [...runs, stored].slice(-MAX_RUNS);
+    const { runs: next, run } = withRun(runs, criterion, wantedId, now());
+    stored = run;
+    return next;
   });
   log("store").info({ slug, runId: stored.id }, "search started");
   return stored;

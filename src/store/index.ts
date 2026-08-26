@@ -52,8 +52,34 @@ loadEnvLocal();
 
 export type StoreName = "files" | "postgres";
 
-/** `postgres` only when asked for by name. Anything else, including a typo, is `files`. */
-export const STORE: StoreName = process.env.SPIDERYARN_STORE === "postgres" ? "postgres" : "files";
+/**
+ * Which store is live. **Unset means `files`; a wrong value is an error.**
+ *
+ * Those are not the same rule and the difference is the whole point. Unset is
+ * the ordinary state of every machine that has not opted in yet, so it has to
+ * mean something. `SPIDERYARN_STOER=postgres`, or `postgress`, or `Postgres`
+ * with a capital, is somebody who *has* opted in and does not know it did not
+ * take — and the first version of this line handed all three of them the
+ * filesystem in silence, which is the shape of failure this whole migration
+ * keeps tripping over: the check you would naturally run comes back saying
+ * everything is fine, because it is asking the same wrong question.
+ *
+ * Failing at import is deliberate. The alternative is a server that boots,
+ * serves the wrong store all afternoon, and is discovered by someone wondering
+ * why their comment did not survive a restart. GPT Sol raised this in review,
+ * 2026-08-26.
+ */
+export function storeFromEnv(value: string | undefined): StoreName {
+  if (value === undefined || value === "") return "files";
+  if (value === "files" || value === "postgres") return value;
+  throw new Error(
+    `SPIDERYARN_STORE is ${JSON.stringify(value)}, which is neither "files" nor "postgres". ` +
+      "Unset it for files, or spell it exactly. Refusing to guess, because guessing " +
+      "would serve the store you did not ask for and say nothing about it.",
+  );
+}
+
+export const STORE: StoreName = storeFromEnv(process.env.SPIDERYARN_STORE);
 
 if (STORE === "postgres") {
   // info, not debug: which store is serving reads is the first thing anybody
