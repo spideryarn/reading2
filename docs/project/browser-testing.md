@@ -50,6 +50,13 @@ measuring — a wrong measurement that looked like a finding. Use `find` and cli
 returns, or drive the control from the keyboard: a range input takes Home, End and arrow keys, which
 is also the only way to check that its whole track steps 1:1.
 
+**But only in a visible tab.** Keys into a hidden one are *intermittent* rather than dead — see
+[A background tab will lie to you](#a-background-tab-will-lie-to-you-about-scrolling) below, whose
+fourth point is the longer version. On 2026-08-26 a session pressed `ArrowRight` thirty times at a slider and the value did not
+move once, with `visibilityState` reading `hidden` throughout; clicking the track worked every time.
+So the two pieces of advice on this page are ordered: **visible tab first, then keyboard, then
+refs** — and never pixel arithmetic.
+
 ### Counting marks is not counting results
 
 A search result's highlight is drawn as **one `<mark>` per text-node run**, not one per result, so a
