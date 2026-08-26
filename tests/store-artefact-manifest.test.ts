@@ -66,6 +66,13 @@ const HOMES: Record<string, string> = {
   "chat.json": "chat_threads + chat_messages",
   "searches.json": "search_runs (hits stay JSONB)",
   "glossary-lookups.json": "glossary_lookups",
+  /* Reader state, and the one exception to "never on a revision" being stated
+     as a positive: these four ARE on `articles` rather than on a table of their
+     own. There is exactly one row per article and it is per-owner state on a
+     table that already carries `owner_id`, so a join for four scalars would be
+     ceremony. What matters is that they are not on `article_revisions` — a
+     re-extraction must not un-archive an article or forget the reader's title. */
+  "shelf.json": "articles.{archived_at,title_override,opens,last_opened_at}",
 };
 
 /**

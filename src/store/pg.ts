@@ -29,9 +29,9 @@
  * § Rules. It would hide exactly the divergence the parity test is looking for.
  */
 
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
-import { describeArticle } from "../api.js";
+import { describeArticle, titleFor } from "../api.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
@@ -55,7 +55,9 @@ import type {
   Glossary,
   GlossaryResponse,
   LibraryEntry,
+  ListOptions,
   Meta,
+  ShelfState,
   Summaries,
   SummariesResponse,
   ThreadResponse,
@@ -65,14 +67,30 @@ import type {
 import type { ArticleReader } from "./contracts.js";
 
 /** A 404 shaped exactly like src/api.ts's, so routes.ts cannot tell them apart. */
-function notFound(slug: string): Error {
+export function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
 /** A slug that is about to reach a query, or a 400 — the same guard src/api.ts keeps. */
-function requireSlug(slug: string): void {
+export function requireSlug(slug: string): void {
   if (isSlug(slug)) return;
   throw Object.assign(new Error(`Not a slug: ${JSON.stringify(slug)}`), { status: 400 });
+}
+
+/**
+ * The four shelf columns, as the shape `describeArticle` wants.
+ *
+ * Conditional spreads because `exactOptionalPropertyTypes` is on and Postgres
+ * hands back `null` where the file simply had no key — the single biggest
+ * source of near-miss parity failures in this store, per the file header.
+ */
+export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
+  return {
+    ...(article.archivedAt ? { archivedAt: article.archivedAt.toISOString() } : {}),
+    ...(article.titleOverride ? { title: article.titleOverride } : {}),
+    opens: article.opens,
+    ...(article.lastOpenedAt ? { lastOpenedAt: article.lastOpenedAt.toISOString() } : {}),
+  };
 }
 
 /** One article's current published revision, or undefined. */
@@ -213,19 +231,46 @@ export const pgArticleReader: Pick<
 
     const arc = found.revision.arc;
     return {
-      meta: metaFrom(slug, found.revision, blocks),
+      /* Through `titleFor`, so the reading view's masthead calls a renamed
+         article what the shelf calls it. The filesystem store does the same at
+         the same seam; a review found this applied to the card only. */
+      meta: titleFor(metaFrom(slug, found.revision, blocks), shelfFrom(found.article)),
       blocks,
       tree: tree as Tree,
       ...(arc ? { arc: arc as Arc } : {}),
     };
   },
 
-  async listArticles(): Promise<LibraryEntry[]> {
+  async listArticles(opts: ListOptions = {}): Promise<LibraryEntry[]> {
     const db = getDb();
     const rows = await db
       .select({ article: articles, revision: articleRevisions })
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+      /* `is null` / `is not null`, never `= null`. The archived half is asked
+         for by name so that both halves come out of this one query and cannot
+         disagree about what an article is — the same reason src/api.ts filters
+         after its walk rather than skipping during it. */
+      .where(
+        and(
+          opts.archived ? isNotNull(articles.archivedAt) : isNull(articles.archivedAt),
+          /* `_`-prefixed slugs are not articles, exactly as in src/api.ts:
+             `data/_jobs/` is the ingest queue's directory, and the filesystem
+             walk has always skipped the prefix. Postgres had no equivalent, so
+             the two libraries disagreed about any slug starting with an
+             underscore — invisible until a test fixture used one, and then
+             visible only as tests/store-parity.test.ts failing in a full run
+             and passing alone. Answering Sol's question 1: this is one of the
+             things nothing was comparing.
+
+             `left(slug, 1)` rather than `not like`, because `_` is LIKE's
+             single-character wildcard: `not like '_%'` excludes every slug with
+             at least one character, which is all of them. Written that way
+             first, and the library came back empty. Escaping it works and reads
+             like a typo. */
+          sql`left(${articles.slug}, 1) <> '_'`,
+        ),
+      )
       .orderBy(desc(ADDED_AT));
 
     const entries: LibraryEntry[] = [];
@@ -254,6 +299,17 @@ export const pgArticleReader: Pick<
           tree: tree as Tree,
           comments: count,
           addedAt: (row.revision.fetchedAt ?? row.revision.createdAt).toISOString(),
+          shelf: shelfFrom(row.article),
+          /* `!= null` on a column we already selected, not four more queries.
+             The filesystem store answers the same question with four `stat`s
+             and neither of them parses the artefact — the tooltip asks whether
+             a glossary exists, not how many terms are in it. */
+          has: {
+            arc: row.revision.arc != null,
+            tweets: row.revision.tweets != null,
+            glossary: row.revision.glossary != null,
+            summary: row.revision.summary != null,
+          },
         }),
       );
     }

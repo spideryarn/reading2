@@ -96,6 +96,14 @@
    thing to change — and the shape it should take is `[data-theme]`, not
    prefers-color-scheme. */
 @custom-variant dark (&);
+
+/* `hover-none:x` — applies where the pointer cannot hover: a touch screen.
+   Tailwind ships `hover:` but no way to say "and what about devices that have
+   no hover at all", which is exactly where a hover-revealed control becomes a
+   control you cannot see and can still press by accident. Used by the shelf's
+   card actions (src/web/Library.tsx). */
+@custom-variant hover-none (@media (hover: none));
+
 @import "./styles.css" layer(app);
 
 /* The motion guard, written once and globally, BEFORE most of the motion it

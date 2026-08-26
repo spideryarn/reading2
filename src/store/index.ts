@@ -30,10 +30,23 @@
 
 import { loadEnvLocal } from "../env.js";
 import { log } from "../log.js";
-import type { ArticleReader, CommentStore, GlossaryStore } from "./contracts.js";
-import { fsArticleReader, fsCommentStore, fsGlossaryStore } from "./fs.js";
+import type {
+  ArticleReader,
+  CommentStore,
+  GlossaryStore,
+  LibrarySearch,
+  ShelfStore,
+} from "./contracts.js";
+import {
+  fsArticleReader,
+  fsCommentStore,
+  fsGlossaryStore,
+  fsLibrarySearch,
+  fsShelfStore,
+} from "./fs.js";
 import { pgArticleReader } from "./pg.js";
 import { pgCommentStore } from "./pg-comments.js";
+import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
 
 loadEnvLocal();
 
@@ -89,3 +102,17 @@ export const deleteGlossary = glossary.deleteGlossary;
  */
 export const commentStore: CommentStore =
   STORE === "postgres" ? pgCommentStore : fsCommentStore;
+
+/**
+ * The shelf's write side, and the library-wide search box.
+ *
+ * Both follow the same flag as the article reads, and both have to. An archived
+ * flag written to a file while the shelf is being listed out of Postgres would
+ * archive nothing at all — the card would come straight back on the next load,
+ * having reported success. That is the exact failure `notMigrated` exists to
+ * prevent above, and it is why these are wired here rather than imported
+ * directly by routes.ts.
+ */
+export const shelfStore: ShelfStore = STORE === "postgres" ? pgShelfStore : fsShelfStore;
+
+export const librarySearch: LibrarySearch = STORE === "postgres" ? pgLibrarySearch : fsLibrarySearch;

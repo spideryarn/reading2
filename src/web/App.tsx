@@ -55,9 +55,11 @@ import {
   matchParam,
   orderParam,
   runParam,
+  spineParam,
   textParam,
   threadParam,
 } from "./params.js";
+import { askAboutQuote, handOffToChat, takeHandoff } from "./chat-handoff.js";
 import { isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
@@ -68,6 +70,7 @@ import {
 } from "./position.js";
 import { fitView, proseVisible } from "./layout.js";
 import { navPlan, useArrowNav } from "./keynav.js";
+import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { PILL } from "./pill.js";
 
@@ -143,6 +146,38 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
     return () => {
       live = false;
     };
+  }, [slug]);
+
+  /**
+   * One more open, for the shelf's tooltip to count.
+   *
+   * **From here, not from inside `GET /api/article/:slug`.** A GET that writes
+   * is a GET that a prefetch, a retry or a health check inflates without
+   * anybody deciding to — and the shelf itself does not fetch article payloads,
+   * so counting on the server would count a different thing anyway.
+   *
+   * Its own effect, keyed on the slug alone, so it fires once per article
+   * opened rather than once per render. Fire-and-forget: a failed count is not
+   * worth a message to a reader who came here to read, and the server logs it.
+   *
+   * **The ref is not belt-and-braces; without it the number is simply wrong.**
+   * `<StrictMode>` is on (main.tsx), and in development React deliberately runs
+   * every effect twice — so every article opened counted as two, and the
+   * tooltip said "opened 19 times" to somebody who had opened it nine. It would
+   * have been right in a production build, which is the worst version of this:
+   * a number that is confidently wrong exactly where anybody would look at it.
+   * A ref survives StrictMode's simulated remount, so this counts once per slug
+   * per mount either way. See docs/reusable/silent-success.md.
+   *
+   * See src/shelf.ts and docs/project/library.md.
+   */
+  const counted = useRef<string | null>(null);
+  useEffect(() => {
+    if (counted.current === slug) return;
+    counted.current = slug;
+    void fetch(`/api/library/${encodeURIComponent(slug)}/open`, { method: "POST" }).catch(
+      () => {},
+    );
   }, [slug]);
 
   const slow = useSlow(!article && !error);
@@ -283,6 +318,16 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   const [showText, setShowText] = useQueryState("text", textParam);
 
   /**
+   * Whether the reader has had a view about the spine — see params.ts §
+   * spineParam and layout.ts § showSpine.
+   *
+   * `null` until they press the pill, and `null` is not the same as `true`:
+   * absent means the rail follows the window and the mode as it always has, and
+   * that is what the `auto` control puts back.
+   */
+  const [showSpine, setShowSpine] = useQueryState("spine", spineParam);
+
+  /**
    * Which mode owns the middle band — see params.ts § modeParam, and
    * docs/plans/chat-mode.md.
    *
@@ -321,8 +366,9 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         showText: proseOn,
         chosen: cols,
         modeBand: inMode,
+        showSpine,
       }),
-    [windowWidth, gistDepths, geometry.leafDepth, proseOn, cols, inMode],
+    [windowWidth, gistDepths, geometry.leafDepth, proseOn, cols, inMode, showSpine],
   );
 
   /**
@@ -339,8 +385,10 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   // A string, not the array: a fresh array every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
   // row on the page sideways, and the `?at=` tracker holds row elements it
-  // measured before the move.
-  const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}`;
+  // measured before the move. `spine` is in it for a stronger reason than
+  // sideways: the rail's width is taken out of the prose column's, so hiding it
+  // rewraps every paragraph in the article and every row changes height.
+  const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
   const jumpTo = useReadingPosition(sections, layoutKey);
 
   /**
@@ -351,7 +399,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * through the layout arithmetic. That was the point of choosing a dialog.
    */
   const [note, setNote] = useQueryState("note", noteParam);
-  const { comments, ask, retry, remove, error: commentError } = useComments(slug);
+  const { comments, ask, retry, deepen, remove, error: commentError } = useComments(slug);
 
   /**
    * The glossary term whose occurrences are underlined in the prose.
@@ -438,6 +486,18 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   );
 
   /**
+   * The same step, taken with a finger — Greg, 2026-08-26: "jumps step-by-step
+   * if I scroll within a column, kinda like the up/down buttons". A swipe over
+   * a gist column moves one item at that column's level; the prose column keeps
+   * ordinary iPad scrolling, which is the point rather than a limitation. See
+   * swipe.ts and docs/project/touch.md.
+   *
+   * Reading mode only. Outline mode is gist columns all the way across, so
+   * there would be nothing left that scrolls continuously.
+   */
+  useSwipeNav(nav, article.blocks, proseOn && !drawerOpen);
+
+  /**
    * Reading order, not ask order — the panel's arrows walk you *down the
    * article*, not back through your own afternoon. See comment-nav.ts, and note
    * that the order comes from the block index and never from the id string
@@ -509,6 +569,32 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
     setCols([...next].sort((a, b) => a - b));
   };
 
+  /**
+   * The rail, on or off — Greg, 2026-08-26: "a button in the top bar to
+   * show/hide the Spine (just as we can with L0, L1, etc)".
+   *
+   * Rendered in **both** halves of the bar below, unlike the granularity pills.
+   * Those are removed in a mode because the columns they name are not there,
+   * and a control that looks live and does nothing is worse than no control.
+   * The spine is the opposite case: it is on screen in every mode, so the pill
+   * that hides it has to be too.
+   *
+   * `pressed` reads the resolved layout rather than the parameter, so the pill
+   * says what is actually on screen — unpressed in outline mode, where nobody
+   * chose anything and the rail is gone anyway. Pressing it then writes the
+   * explicit `?spine=1` that overrules that.
+   */
+  const spineToggle = (
+    <Toggle
+      className={PILL}
+      pressed={fit.spine !== "off"}
+      onPressedChange={(on) => void setShowSpine(on)}
+      title="Show or hide the bird's-eye rail down the left"
+    >
+      Spine
+    </Toggle>
+  );
+
   return (
     <div
       className={`reader spine-${fit.spine}`}
@@ -551,6 +637,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
             >
               back to contents
             </button>
+            {spineToggle}
           </>
         ) : (
           <>
@@ -587,16 +674,39 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           >
             Text
           </Toggle>
-          {cols === null ? (
-            <span className="mode" title="Columns are following the window width">
+          {spineToggle}
+          {/* `fit` means nothing has been pinned down by hand, so it has to
+              watch both parameters: a reader who has hidden the rail but left
+              the columns alone is not on automatic, and would otherwise have no
+              way back. `auto` clears the pair for the same reason.
+
+              **The pair, deliberately, and it does cost something** — GPT Sol
+              named it, 2026-08-26: you cannot hand the rail back to automatic
+              while keeping columns you chose. The bar gets one "nothing is
+              pinned" affordance rather than one per parameter, because two
+              would be two more words in a bar that is already dense, to undo a
+              state almost nobody is in. Say `auto` resets the layout, not the
+              columns.
+
+              There is no `auto` in a mode, and it is not needed: `fitMode`
+              turns the rail off only for an explicit `?spine=0`, so pressing
+              the pill back on there is indistinguishable from automatic. */}
+          {cols === null && showSpine === null ? (
+            <span
+              className="mode"
+              title="The columns and the spine are following the window width"
+            >
               fit
             </span>
           ) : (
             <button
               type="button"
               className="linky"
-              onClick={() => setCols(null)}
-              title="Let the columns follow the window width again"
+              onClick={() => {
+                void setCols(null);
+                void setShowSpine(null);
+              }}
+              title="Let the columns and the spine follow the window width again"
             >
               auto
             </button>
@@ -661,6 +771,26 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           onNext={() => goToComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
           onRetry={() => retry(openComment.id)}
+          onDeepen={() => deepen(openComment.id)}
+          onDiscuss={(question) => {
+            /* Hand the question over, then move. The cell is read by `ChatBand`
+               once `useChat` has loaded — see chat-handoff.ts for why it is a
+               module cell rather than a query parameter, and for the three ways
+               that goes wrong.
+
+               The dialog closes on the way through. Chat is a mode, so it
+               replaces the columns this dialog floats over, and leaving it up
+               would park an explanation of a passage on top of the conversation
+               about it. */
+            /* Read at the moment of the click rather than at render, and from
+               the URL rather than from state: `?at=` is where the reader is
+               *now*, which is what "here" should mean in the conversation. Same
+               trick ChatBand uses. */
+            const at = new URLSearchParams(location.search).get("at");
+            handOffToChat(slug, askAboutQuote(openComment.quote, question), at);
+            void setNote(null);
+            void setMode("chat");
+          }}
           onDelete={() => {
             // Step to the neighbour rather than closing outright: deleting one
             // of five is a tidy-up, not a reason to lose the panel.
@@ -813,6 +943,31 @@ function ChatBand({
   useEffect(() => {
     started.current = false;
   }, [slug]);
+
+  /**
+   * A question handed over from the explanation dialog — see chat-handoff.ts.
+   *
+   * **Above the auto-start effect, and that alone is not enough.** Both run in
+   * the same commit when `loaded` flips, and the effect below reads
+   * `threads.length` from the render that scheduled it — so `send` scheduling a
+   * `setThreads` does not stop it seeing zero, opening a second empty
+   * conversation and pointing `?thread=` at that instead. The latch has to be
+   * set *synchronously*, here, before `send` is called. Ordering alone is a bug.
+   *
+   * Gated on `loaded` for the reason chat-handoff.ts gives: sending into an
+   * unloaded `useChat` inserts optimistic rows the in-flight GET then replaces,
+   * after which every delta lands on a thread that no longer exists and is
+   * dropped without an error.
+   */
+  useEffect(() => {
+    if (!loaded) return;
+    const handoff = takeHandoff(slug);
+    if (!handoff) return;
+    started.current = true;
+    const id = send(null, handoff.question, handoff.at, (real) => void setThread(real));
+    void setThread(id);
+  }, [loaded, slug, send, setThread]);
+
   useEffect(() => {
     if (!loaded || started.current) return;
     if (threads.length === 0) {

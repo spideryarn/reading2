@@ -19,6 +19,7 @@
 import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadComments } from "./comments.js";
+import { loadShelf } from "./shelf.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { explain } from "./explain.js";
 import { loadLookups, saveLookup } from "./glossary-lookups.js";
@@ -45,7 +46,9 @@ import type {
   GlossaryResponse,
   SummariesResponse,
   LibraryEntry,
+  ListOptions,
   Meta,
+  ShelfState,
   StageState,
   ThreadResponse,
   Tree,
@@ -176,7 +179,7 @@ export async function loadArticle(slug: string): Promise<Article> {
     if (!stored) {
       log("store").debug({ slug, dir: path.relative(ROOT, dir) }, "no meta.json; title derived");
     }
-    const meta =
+    const extracted =
       stored ??
       ({
         slug,
@@ -184,6 +187,15 @@ export async function loadArticle(slug: string): Promise<Article> {
           blocksFile.blocks.find((b) => b.kind === "heading" && b.level === 1)?.text ??
           slug,
       } satisfies Meta);
+
+    /* The reader's own title wins here too, not only on the shelf.
+       `describeArticle` already applied it to the card, and for a while that
+       was ALL it applied to — so renaming an article on the shelf left the
+       reading view's masthead still calling it whatever the site called it,
+       while docs/project/library.md promised the two agreed. Caught by a
+       cross-family review, 2026-08-26. src/shelf.ts, and `titleFor` below,
+       which is the one place the precedence is written down. */
+    const meta = titleFor(extracted, await loadShelf(slug));
 
     // Optional, and stays optional: the arc (stage 5b, src/arc.ts) is a
     // second model pass, so an article can be perfectly readable without one.
@@ -704,8 +716,20 @@ export function describeArticle(input: {
   comments: number;
   addedAt: string;
   fixture?: boolean;
+  /**
+   * What the reader has done to the card — src/shelf.ts.
+   *
+   * Passed in rather than read here, because this function is shared by both
+   * stores and each one fetches it its own way (a file, or four columns). It is
+   * optional so that a caller who has not got round to it still gets an entry
+   * rather than a type error, and the default is "never touched".
+   */
+  shelf?: ShelfState;
+  /** Which optional stages have produced something. Absent means none of them. */
+  has?: Partial<LibraryEntry["has"]>;
 }): LibraryEntry {
   const { slug, meta, blocks, tree } = input;
+  const shelf = input.shelf ?? { opens: 0 };
   const words = blocks.reduce((n, b) => n + b.words, 0);
 
   // One pass rather than two filters: the tree of a long article is thousands
@@ -724,7 +748,19 @@ export function describeArticle(input: {
   // See docs/project/typechecking.md.
   return {
     slug,
-    title: meta.title,
+    // Through `titleFor`, which is also what `loadArticle` uses — so the card
+    // and the masthead cannot end up calling one article two things.
+    title: titleFor(meta, shelf).title,
+    ...(shelf.title ? { titleOverridden: true as const } : {}),
+    opens: shelf.opens,
+    ...(shelf.lastOpenedAt ? { lastOpenedAt: shelf.lastOpenedAt } : {}),
+    ...(shelf.archivedAt ? { archivedAt: shelf.archivedAt } : {}),
+    has: {
+      arc: input.has?.arc ?? false,
+      tweets: input.has?.tweets ?? false,
+      glossary: input.has?.glossary ?? false,
+      summary: input.has?.summary ?? false,
+    },
     ...(meta.byline ? { byline: meta.byline } : {}),
     ...(meta.siteName ? { siteName: meta.siteName } : {}),
     ...(meta.url ? { url: meta.url } : {}),
@@ -738,6 +774,17 @@ export function describeArticle(input: {
     ...(gist ? { gist } : {}),
     ...(input.fixture ? { fixture: true as const } : {}),
   };
+}
+
+/**
+ * The title the reader should see, and the one place that precedence lives.
+ *
+ * Reader's override first, extractor's second. Called by `loadArticle` for the
+ * masthead and by `describeArticle` for the card, so the two cannot disagree —
+ * which they did, for exactly as long as only one of them knew about overrides.
+ */
+export function titleFor(meta: Meta, shelf: ShelfState | undefined): Meta {
+  return shelf?.title ? { ...meta, title: shelf.title } : meta;
 }
 
 /** One directory's verdict: an article for the shelf, or the reason it isn't. */
@@ -797,11 +844,48 @@ async function describeDir(
     blocksFile.blocks.find((b) => b.kind === "heading" && b.level === 1)?.text ??
     slug;
 
-  // `fetchedAt` is the honest answer and stage 2 now records one (src/extract.ts).
-  // Before it did, the best available is when the blocks were last written —
-  // close enough to order a shelf by, and it degrades rather than disappearing.
-  const addedAt =
-    meta?.fetchedAt ?? (await stat(path.join(dir, "blocks.json"))).mtime.toISOString();
+  /* `fetchedAt` is the honest answer and stage 2 now records one
+     (src/extract.ts). Before it did, the best available is when the blocks were
+     last written — close enough to order a shelf by, and it degrades rather
+     than disappearing.
+
+     The `stat` is guarded because a directory can go away **between the readdir
+     above and this line**: an ingest that failed and cleaned up, another agent,
+     a test fixture being removed. Unguarded, that ENOENT leaves through
+     `Promise.allSettled` and is rethrown by `listArticles`, so one directory
+     disappearing at the wrong moment takes down the whole shelf with a 500 —
+     for an article that no longer exists. Treated as "not an article", which
+     is what it now is. */
+  let addedAt = meta?.fetchedAt;
+  if (!addedAt) {
+    try {
+      addedAt = (await stat(path.join(dir, "blocks.json"))).mtime.toISOString();
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      return { skipped: slug };
+    }
+  }
+
+  /* Existence, not contents. Four `stat`s beside the three reads this function
+     already does, and deliberately not four more `readJson`s: the tooltip asks
+     "has a glossary been built", not "how many terms are in it", and parsing
+     four artefacts per card per homepage load to answer a question nobody asked
+     is how a shelf gets slow without anyone deciding it should.
+
+     `Promise.all`, because they are independent and this already runs once per
+     article; and `exists` rather than a try/catch each, so a missing file reads
+     as `false` rather than as an error to be swallowed. */
+  const [arc, tweets, glossaryFile, summary] = await Promise.all(
+    ["arc.json", "tweets.json", "glossary.json", "summary.json"].map((name) =>
+      exists(path.join(dir, name)),
+    ),
+  );
+
+  /* Reader state lives under `data/<slug>/` even for the fixture, whose article
+     artefacts do not — the same rule `loadComments` follows two paragraphs up,
+     and for the same reason: the fixture is committed and shared, what the
+     reader has done to it is neither. So this is keyed by SLUG, not by `dir`. */
+  const shelf = await loadShelf(slug);
 
   return {
     entry: describeArticle({
@@ -812,9 +896,17 @@ async function describeDir(
       comments: (await loadComments(slug)).length,
       addedAt,
       fixture,
+      shelf,
+      has: {
+        arc: arc ?? false,
+        tweets: tweets ?? false,
+        glossary: glossaryFile ?? false,
+        summary: summary ?? false,
+      },
     }),
   };
 }
+
 
 /**
  * Every article on the shelf, newest first.
@@ -827,7 +919,7 @@ async function describeDir(
  * clone with no `data/` still has something to open rather than an empty shelf
  * that looks like a bug.
  */
-export async function listArticles(): Promise<LibraryEntry[]> {
+export async function listArticles(opts: ListOptions = {}): Promise<LibraryEntry[]> {
   let dirs: string[] = [];
   try {
     const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
@@ -911,11 +1003,18 @@ export async function listArticles(): Promise<LibraryEntry[]> {
   const failed = settled.find((r) => r.status === "rejected");
   if (failed?.status === "rejected") throw failed.reason;
 
-  return found
-    // Real articles above the fixture, then newest first. Sorting ISO strings
-    // works because they are ISO — no Date objects needed.
-    .sort((a, b) => {
-      if (!!a.fixture !== !!b.fixture) return a.fixture ? 1 : -1;
-      return a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0;
-    });
+  return (
+    found
+      /* Archived articles are filtered here rather than skipped in
+         `describeDir`, so that `{ archived: true }` gets the same entries by
+         the same route and there is no second walk that could disagree with
+         this one about what an article is. */
+      .filter((e) => !!e.archivedAt === !!opts.archived)
+      // Real articles above the fixture, then newest first. Sorting ISO strings
+      // works because they are ISO — no Date objects needed.
+      .sort((a, b) => {
+        if (!!a.fixture !== !!b.fixture) return a.fixture ? 1 : -1;
+        return a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0;
+      })
+  );
 }

@@ -25,6 +25,12 @@ disk but is shaped like rows**, so the day it becomes Postgres is a change to on
 | `/read/<slug>/metadata` | everything we know about the article — [metadata-page.md](../plans/metadata-page.md) |
 | `/read/<slug>/tweets` | the article as a numbered thread — [tweet-thread-page.md](../plans/tweet-thread-page.md) |
 
+The shelf's own API surface grew on 2026-08-26: `GET /api/library` (now taking `?archived=1`),
+`GET /api/library/search?q=`, `PATCH /api/library/:slug` and `POST /api/library/:slug/open`.
+`/api/library/search` is matched **before** the `:slug` pattern, because `search` is a valid slug
+shape and the specific pattern has to win — otherwise the search box would read as a request to
+rename an article called "search".
+
 **This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
 route with three views rather than three routes: same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it
@@ -90,6 +96,153 @@ fourth segment. Until then it is still the boring choice, per [AGENTS.md](../../
 
 [`Link.tsx`](../../src/web/Link.tsx) keeps ⌘-click, middle-click and "copy link address" working by
 rendering a real `href` and only intercepting the plain left-click.
+
+## What you can do to a card
+
+The shelf was read-only until 2026-08-26. Every card was one big link, and the only thing you could
+do to an article was open it. Then Greg asked for the verbs:
+
+> On the home page where it shows the docs: add a "Delete" button. Add any other useful buttons you
+> think we should add (e.g. "Edit title"). Add a hover-tooltip that displays extra metadata … Add a
+> search bar at the top.
+>
+> — Greg, 2026-08-26
+
+Five buttons, revealed on hover and on focus: **Edit title**, **Re-fetch and rebuild**, **Open the
+original**, **Copy link**, **Delete**. Re-run is not new machinery — it is
+`POST /api/jobs { slug, force: ["fetch"] }`, the route the add box already uses; without the `force`
+the queue skips every step whose artefact is on disk, which is every step.
+
+The plan, the decisions and what was deliberately left out are in
+[library-shelf-actions-and-search.md](../plans/library-shelf-actions-and-search.md).
+
+### The card is no longer one big link
+
+A button inside an anchor is invalid HTML and behaves differently in every browser, so the card is
+now an `<article>`, the **title** is the link, and the link's `::after` is stretched over the whole
+card to keep the card clickable. The action buttons get `position: relative` so they sit above that
+pseudo-element. The property being protected is the one [`Link.tsx`](../../src/web/Link.tsx) exists
+for: ⌘-click, middle-click and "copy link address" still work, because the title really is an
+`<a href>`.
+
+The action row is hidden with `opacity`, **never `display: none`**. A hidden element is not
+focusable, so hiding the row until hover would delete it outright for anyone navigating by keyboard —
+and every check anybody ran with a mouse would look fine.
+
+### Delete means archive, and Undo is the confirmation
+
+> Archive, with an Undo — the card disappears from the shelf straight away … Underneath, the row is
+> flagged hidden rather than removed, so nothing is destroyed.
+>
+> — Greg's choice, 2026-08-26
+
+So there is **no confirmation dialog**: the Undo strip is the confirmation, and it costs the common
+case nothing. `GET /api/library?archived=1` is the other half of the shelf.
+
+A **Show deleted** disclosure at the foot of the shelf is the other way back, and it is not
+optional decoration: without it Delete is permanent from the interface the moment the nine-second
+Undo strip goes, which would make "nothing is destroyed" true of the database and false of the
+product. It does not fetch until opened.
+
+**An archived article is still readable by direct link.** Only the shelf filters. That is a decision
+rather than an oversight — the shelf is a shelf, not an access control list, and a link that stops
+working is a worse surprise than a card that is out of sight. The library *search* is the exception:
+an archived article is out of the index entirely, because a hit that opens an article you deleted
+reads as a ghost.
+
+### A renamed title is an override, not an edit
+
+Stage 2 rewrites `meta.json` on every run (see [below](#metajson-and-the-articles-identity)). A
+renamed title stored there would work perfectly and be silently undone by the next
+`npm run extract` — a bug that reports success, waits weeks, and then looks like the rename never
+happened. So the reader's title lives in shelf state and `describeArticle` prefers it, which is why
+a renamed article is called the same thing on the card, in the masthead and in the search results.
+`tests/shelf.test.ts` re-runs the rewrite and asserts the override survives.
+
+### Shelf state: a fourth kind of reader state
+
+Archived, renamed, and how often you have opened something are all *reader state about an article* —
+the same category as comments, chat and saved searches, and not the same category as the article's
+text.
+
+| Store | Where |
+|---|---|
+| `files` | `data/<slug>/shelf.json` — [`src/shelf.ts`](../../src/shelf.ts) |
+| `postgres` | four columns on `spideryarn.articles`: `archived_at`, `title_override`, `opens`, `last_opened_at` |
+
+Columns on `articles` and **not** on `article_revisions`, which is the load-bearing part: a revision
+is one extraction, and re-extracting must not un-archive an article, forget its title or reset the
+count. Reader state outlives revisions — the same rule `block_identities` exists to enforce for block
+ids ([block-ids.md](block-ids.md)).
+
+Opens are a counter and a timestamp, deliberately **not** an event log. The tooltip can say "opened
+6 times, last on Tuesday" and can never say "three times this week". If that second question ever
+matters, the answer is a table of events, not another column.
+
+`POST /api/library/:slug/open` is called by the **client**, from the reading view's mount — not by
+the server from inside `GET /api/article/:slug`. A GET that writes is a GET that a prefetch, a retry
+or a health check inflates without anybody deciding to.
+
+### The tooltip
+
+Hovering the date line gives everything the card has no room for: when it was added, where from, how
+often you have opened it, how many questions you have asked, which optional stages have produced
+something, and the size in words, blocks, parts and sections.
+
+**What it deliberately does not say.** Chat threads and saved searches are per-article reader state
+that has *not* moved to Postgres — [`src/chat.ts`](../../src/chat.ts) and
+[`src/searches.ts`](../../src/searches.ts) write files in both modes, and the `chat_threads` /
+`search_runs` tables exist but nothing touches them. A count that reads 7 on the filesystem and 0 in
+Postgres is worse than no count at all, because it looks like an answer. They go in when step 10 of
+[postgres-storage-implementation.md](../plans/postgres-storage-implementation.md) lands.
+
+## Finding an article, and finding a passage in one
+
+One box at the top of the shelf, **two matchers behind it** — which is the same shape the in-article
+search already has ([search.md](search.md)), deliberately rather than coincidentally.
+
+1. **The cards, filtered in the browser.** Case- and accent-folded substring match over `title`,
+   `byline`, `siteName` and `gist` — exactly the four fields a card renders, because matching
+   something invisible looks like a bug from the outside. Free, instant, no request.
+2. **The passages, from the server.** `GET /api/library/search?q=…`, debounced, returning
+   `LibraryHit[]`. A result deep-links to `/read/<slug>?at=<blockId>&find=<query>&match=words`, so
+   the in-article search lights the same words up when you land — reusing the existing vocabulary
+   rather than inventing a third one is what makes that handoff work. `match=words` is said out loud
+   rather than left to the default, because on 2026-08-26 that default became `meaning`
+   ([search.md § the URL](search.md#match-defaults-to-meaning-and-used-to-default-to-words)); this is
+   the one link in the app that produces a bare `?find=`, so it is the one that had to say so.
+
+| Store | How |
+|---|---|
+| `postgres` | a generated `tsvector` column on `revision_blocks`, GIN index, `websearch_to_tsquery` to parse, `ts_rank_cd` to sort — [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) |
+| `files` | scan every `blocks.json` in memory, fold, substring-match, rank by count damped by length — [`src/library-search.ts`](../../src/library-search.ts) |
+
+**The two do not agree, and it is worth being precise about how far that goes**, because the first
+version of this paragraph got it wrong. It said they agreed on the *set* of block ids for a
+single-word query. They do not: Postgres matches English lexemes, so `writes` finds "writing" and
+"write-nots" while `the` finds nothing at all (a stop word); the filesystem scan matches substrings,
+so it finds `the` inside "theory" and misses every inflection. Single words were exactly the case the
+old claim called safe. A cross-family review caught it, 2026-08-26.
+
+What they *do* share, and what a test may hold them to: an exact word that appears verbatim, is not a
+stop word, and has no inflections in the corpus is found by both, in the same blocks. Ranking is
+never comparable — `ts_rank_cd` with normalisation flag 1 on one side, a count damped by paragraph
+length on the other. The divergence is written down rather than papered over, because a hand-built
+near-copy of `websearch_to_tsquery` would be worse than an obviously simpler thing that admits what
+it is.
+
+The hit carries **the whole paragraph**, not a snippet, and the client cuts it. Trimming on the
+server would mean the two adapters trimming differently — Postgres knows which *stems* matched, not
+which characters, so it would either return the whole thing anyway or call `ts_headline` and hand
+back a second flavour of highlighting to reconcile with the client's own. One highlighter.
+
+What was considered and deferred, with the research behind it in
+[postgres-search.md](../research/postgres-search.md): **BM25** (`pg_search`/ParadeDB is not available
+on Supabase at all, hosted or local — what you actually get is `ts_rank`), **`pg_trgm`** for
+typo-tolerant titles (available, useful, but matcher one already handles titles in the browser), and
+**pgvector + embeddings** for meaning-based search — `vector 0.8.2` is available locally but not
+enabled, Anthropic has no embeddings API so it means a second vendor, and Greg deferred it
+explicitly.
 
 ## What a card says, and why
 
@@ -216,10 +369,16 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl`, `isSlug` — shared by the extractor, the add box and the server |
 | [`src/api.ts`](../../src/api.ts) | `listArticles()`, `describeArticle()` — **the Postgres seam** |
+| [`src/shelf.ts`](../../src/shelf.ts) | archived, renamed, opened — `data/<slug>/shelf.json` |
+| [`src/library-search.ts`](../../src/library-search.ts) | searching every article at once, filesystem half |
+| [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | the same two things, in SQL |
+| [`src/web/useShelf.ts`](../../src/web/useShelf.ts) | the shelf and its verbs, client side, including Undo |
+| [`src/web/useLibrarySearch.ts`](../../src/web/useLibrarySearch.ts) | the debounced half of the box, and dropping late responses |
 | [`src/reading-time.ts`](../../src/reading-time.ts) | `~54 min`, said once for both the card and the masthead |
 | [`src/routes.ts`](../../src/routes.ts) | `GET /api/library`, and the six job routes |
 | [`src/extract.ts`](../../src/extract.ts) | stage 2, now writing `meta.json` |
 | [`tests/library.test.ts`](../../tests/library.test.ts), [`tests/router.test.ts`](../../tests/router.test.ts), [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | the shelf, the routes, the slugs |
+| [`tests/shelf.test.ts`](../../tests/shelf.test.ts), [`tests/library-search.test.ts`](../../tests/library-search.test.ts) | archive, rename, opens — and the search that must survive a re-extraction |
 
 Styling is Tailwind utilities, not a block in [`styles.css`](../../src/web/styles.css). That is the
 rule rather than a preference: this page is chrome, and chrome is what shadcn and Tailwind were

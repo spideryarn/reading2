@@ -42,6 +42,9 @@ import type {
   GlossaryResponse,
   Job,
   LibraryEntry,
+  LibraryHit,
+  ListOptions,
+  ShelfState,
   SummariesResponse,
   ThreadResponse,
 } from "../types.js";
@@ -60,8 +63,14 @@ export interface ArticleReader {
   /** Everything needed for every zoom level. 404 when there are no artefacts. */
   loadArticle(slug: string): Promise<Article>;
 
-  /** The shelf. Never throws for an empty library — that is `[]`, not a fault. */
-  listArticles(): Promise<LibraryEntry[]>;
+  /**
+   * The shelf. Never throws for an empty library — that is `[]`, not a fault.
+   *
+   * `{ archived: true }` asks for the other half. One method rather than two,
+   * so both halves come out of the same walk (or the same `SELECT`) and cannot
+   * disagree with each other about what counts as an article.
+   */
+  listArticles(opts?: ListOptions): Promise<LibraryEntry[]>;
 
   /** Which stages have run. See the note on `StageState` about what this means under Postgres. */
   articleMetadata(slug: string): Promise<ArticleMetadata>;
@@ -177,4 +186,74 @@ export interface JobStore {
 
   /** Return jobs whose lease expired mid-run to the queue, or fail them. */
   rescueExpired(): Promise<number>;
+}
+
+/**
+ * What the reader has done to the card: archived it, renamed it, opened it.
+ *
+ * A store of its own rather than three more methods on `ArticleReader`, because
+ * these are **writes**, and the one thing the read seam has going for it is
+ * that it cannot change anything. See src/shelf.ts for why a renamed title is
+ * an override rather than a rewrite.
+ */
+export interface ShelfStore {
+  /** What the reader has done to this card. Never throws for an untouched one. */
+  read(slug: string): Promise<ShelfState>;
+
+  /**
+   * Change one or both of "is it on the shelf" and "what do I call it", **in one
+   * write**.
+   *
+   * One method rather than `archive` and `rename`, and that is not tidiness. A
+   * route that validated and wrote each field in turn could rename an article
+   * and then answer 400 for the other field — a failed request that changed
+   * your data. And two writes are two chances for a concurrent reader to see
+   * half of one act. So the caller assembles the whole change and this applies
+   * it atomically: one serialised file edit, or one `UPDATE`.
+   *
+   * An absent key means "leave it alone". `title: null` is not absent — it
+   * means clear the override and go back to the extractor's title.
+   *
+   * Returns the entry as it now stands, so a caller cannot get away with
+   * assuming what the write did.
+   */
+  patch(slug: string, change: { archived?: boolean; title?: string | null }): Promise<LibraryEntry>;
+
+  /**
+   * One more open.
+   *
+   * Returns nothing. This is fire-and-forget from the client's point of view,
+   * and a response body would only invite somebody to render a counter that is
+   * one behind.
+   */
+  recordOpen(slug: string): Promise<void>;
+}
+
+/**
+ * Finding a passage anywhere in the library — the home page's search box.
+ *
+ * Deliberately NOT `findPassages` (src/search.ts), which is one article, one
+ * model call and a confidence score. This one is a text index: free, instant,
+ * and with nothing to be uncertain about.
+ *
+ * **The two adapters do not agree, and a parity test over this would be wrong
+ * to demand that they do.** This said they agreed on the *set* of block ids for
+ * a single-word query. That was false, and a cross-family review caught it:
+ * Postgres matches English lexemes, so `writes` finds "writing" and "write-nots"
+ * and `the` finds nothing at all (a stop word); the filesystem adapter matches
+ * substrings, so it finds `the` inside "theory" and misses every inflection.
+ * They disagree on single words, which was exactly the case the old claim
+ * called safe.
+ *
+ * What they DO share is written down and is what a test may hold them to: an
+ * exact word that appears verbatim, is not a stop word, and has no inflections
+ * in the corpus is found by both, in the same blocks. Ranking is never
+ * comparable. See docs/plans/library-shelf-actions-and-search.md.
+ */
+export interface LibrarySearch {
+  /**
+   * @param query what the reader typed, raw. Each adapter parses it its own way.
+   * @param limit the most hits to return. The caller says whether the answer was cut.
+   */
+  searchLibrary(query: string, limit: number): Promise<{ hits: LibraryHit[]; capped: boolean }>;
 }

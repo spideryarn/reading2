@@ -536,6 +536,116 @@ export interface LibraryEntry {
   gist?: string;
   /** The committed `example/` fixture rather than real pipeline output. */
   fixture?: boolean;
+
+  /* ---- shelf state: what the reader has done to the card (src/shelf.ts) ---- */
+
+  /** How many times the reading view has been opened. */
+  opens: number;
+  /** ISO, absent until it has been opened once. */
+  lastOpenedAt?: string;
+  /**
+   * `title` above is the reader's own, not the extractor's.
+   *
+   * The flag rather than both strings, because the only thing anything needs to
+   * know is whether "reset to the original" is worth offering — and shipping
+   * the superseded title to every card would put a string on the wire that
+   * nothing renders.
+   */
+  titleOverridden?: boolean;
+  /** ISO. Only ever set on entries from the archived listing. */
+  archivedAt?: string;
+  /**
+   * Which of the optional stages have produced something.
+   *
+   * Booleans rather than counts, and that is the honest limit of what both
+   * stores can answer cheaply: the filesystem knows a file exists without
+   * parsing it, and Postgres knows a column is not null without fetching it.
+   * A count would mean reading the artefact for every card on every load.
+   */
+  has: { arc: boolean; tweets: boolean; glossary: boolean; summary: boolean };
+}
+
+/**
+ * Which half of the shelf to list — `listArticles`.
+ *
+ * A parameter rather than a second function, so both halves are built by the
+ * same walk and cannot disagree about what counts as an article. Absent means
+ * the shelf proper.
+ */
+export interface ListOptions {
+  /** True lists what has been archived, and only that. */
+  archived?: boolean;
+}
+
+/**
+ * What the reader has done to an article's place on the shelf.
+ *
+ * Reader state, in the same category as comments and chat rather than in the
+ * same category as the article's text — so nothing the pipeline does may
+ * overwrite it. See src/shelf.ts for why the renamed title in particular has to
+ * live out here, and docs/plans/library-shelf-actions-and-search.md for the
+ * decisions behind it.
+ */
+export interface ShelfState {
+  /** ISO. Absent means it is on the shelf. */
+  archivedAt?: string;
+  /** The reader's own title, overriding whatever stage 2 extracted. */
+  title?: string;
+  opens: number;
+  /** ISO. */
+  lastOpenedAt?: string;
+}
+
+/**
+ * One passage found by searching the whole library — `GET /api/library/search`.
+ *
+ * Deliberately *not* `SearchHit`, which is the in-article shape and carries a
+ * model's confidence and reasoning. This one has neither: it comes from a text
+ * index, so there is nothing to be uncertain about and nobody to explain
+ * anything. What it has instead is a `slug`, because the whole point is that
+ * the answer might be in an article you are not reading.
+ *
+ * `rank` is comparable **only within one response**. It is `ts_rank_cd` under
+ * Postgres and a cruder count on the filesystem, and neither is a probability.
+ * Nothing may render it as a percentage. See docs/project/search.md.
+ */
+export interface LibraryHit {
+  slug: string;
+  /** As the shelf shows it, so a renamed article is named the same in both places. */
+  title: string;
+  blockId: BlockId;
+  /**
+   * The matching block's prose, whole and plain.
+   *
+   * **Not a snippet, and that is the point.** Trimming a window around the match
+   * has to happen somewhere, and if the server did it the two adapters would do
+   * it differently — Postgres knows which *stems* matched, not which characters,
+   * so it would either return the whole thing anyway or call `ts_headline` and
+   * hand back a second flavour of highlighting for the client to reconcile with
+   * its own. So the server returns the paragraph and the client cuts it, using
+   * the same folding it already uses for in-article hits. One highlighter.
+   *
+   * A paragraph, so a few hundred characters. Nothing here is worth streaming.
+   */
+  text: string;
+  rank: number;
+}
+
+/** What GET /api/library/search returns. */
+export interface LibrarySearchResponse {
+  /** Echoed back, so a late response can be dropped by a client that has moved on. */
+  query: string;
+  hits: LibraryHit[];
+  /** How many articles those hits are spread across — the line above the list. */
+  articles: number;
+  /**
+   * True when the index had more to say and we stopped asking.
+   *
+   * Said out loud rather than silently truncated: a capped list that does not
+   * admit it is a list that reads as "that is everything", which is the
+   * silent-success shape this repo keeps meeting.
+   */
+  capped: boolean;
 }
 
 /**

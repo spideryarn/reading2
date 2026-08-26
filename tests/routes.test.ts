@@ -8,12 +8,13 @@
  *
  * Writes under `data/<throwaway slug>/`, which is gitignored, and removes it.
  */
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { handleApi } from "../src/routes.js";
 import { createComment, loadComments } from "../src/comments.js";
+import { loadShelf } from "../src/shelf.js";
 
 const SLUG = "test-routes-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -54,6 +55,96 @@ async function call(method: string, url: string, body?: unknown): Promise<Reply>
   return { handled, status, body: text ? JSON.parse(text) : {} };
 }
 
+/**
+ * The same drive, but with a response that can be streamed to — and that
+ * remembers whether it was.
+ *
+ * `call` above deliberately has no `writeHead`, `write` or `on`, which is why
+ * every existing POST test still passes now that a successful POST is an event
+ * stream: they all fail validation, and validation happens before a single
+ * header is written. That is load-bearing rather than lucky, so it gets a test
+ * of its own below.
+ */
+async function callStreaming(
+  method: string,
+  url: string,
+  body?: unknown,
+): Promise<{ status: number; headers: Record<string, string>; frames: string; streamed: boolean }> {
+  const payload = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
+  const req = Object.assign(
+    (async function* () {
+      yield* payload;
+    })(),
+    { method, url },
+  ) as unknown as IncomingMessage;
+
+  let status = 0;
+  let streamed = false;
+  let headers: Record<string, string> = {};
+  let frames = "";
+  const res = {
+    set statusCode(v: number) {
+      status = v;
+    },
+    get statusCode() {
+      return status;
+    },
+    writableEnded: false,
+    destroyed: false,
+    setHeader() {},
+    on() {},
+    flushHeaders() {},
+    writeHead(code: number, h: Record<string, string>) {
+      streamed = true;
+      status = code;
+      headers = h;
+    },
+    write(chunk: string) {
+      frames += chunk;
+    },
+    end(chunk?: string) {
+      if (chunk) frames += chunk;
+    },
+  } as unknown as ServerResponse;
+
+  await handleApi(req, res);
+  return { status, headers, frames, streamed };
+}
+
+describe("asking a question is a stream, and refusing one is not", () => {
+  /* The two shapes, and they must not be able to swap places. A failure the
+     server can see before it starts writing is an HTTP status the client can
+     read with `r.ok`; a failure after that can only be a frame. If validation
+     ever moved below `sse(res)`, a malformed request would get a 200 event
+     stream carrying an error nobody checks for — and the reader would watch a
+     spinner. */
+  it("refuses a malformed body with JSON, before any header is written", async () => {
+    const r = await callStreaming("POST", `/api/comments/${SLUG}`, { blockId: 1 });
+    expect(r.streamed).toBe(false);
+    expect(r.status).toBe(400);
+  });
+
+  it("refuses a negative offset the same way", async () => {
+    const r = await callStreaming("POST", `/api/comments/${SLUG}`, {
+      blockId: "spya-aaaaaa",
+      quote: "x",
+      start: -1,
+    });
+    expect(r.streamed).toBe(false);
+    expect(r.status).toBe(400);
+  });
+
+  it("refuses a traversing slug before it can write anything at all", async () => {
+    const r = await callStreaming("POST", "/api/comments/..%2F..%2Fetc", {
+      blockId: "spya-aaaaaa",
+      quote: "x",
+      start: 0,
+    });
+    expect(r.streamed).toBe(false);
+    expect(r.status).toBeGreaterThanOrEqual(400);
+  });
+});
+
 describe("the library route", () => {
   it("serves the shelf, with the committed fixture on it", async () => {
     const r = await call("GET", "/api/library");
@@ -62,6 +153,137 @@ describe("the library route", () => {
     expect(articles.some((a) => a.slug === "example")).toBe(true);
   });
 
+});
+
+describe("the shelf routes", () => {
+  const SHELF = "test-routes-shelf";
+  const SHELF_DIR = path.resolve(import.meta.dirname, "..", "data", SHELF);
+  const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
+
+  /** A complete-enough article, because the shelf routes now refuse to write for one that isn't. */
+  const makeArticle = () => cp(EXAMPLE, SHELF_DIR, { recursive: true });
+
+  afterEach(() => rm(SHELF_DIR, { recursive: true, force: true }));
+
+  it("counts an open, and says nothing back", async () => {
+    await makeArticle();
+    const r = await call("POST", `/api/library/${SHELF}/open`);
+    expect(r.status).toBe(204);
+    expect(await loadShelf(SHELF)).toMatchObject({ opens: 1 });
+  });
+
+  it("refuses to count an open for an article that does not exist", async () => {
+    /* And, crucially, writes nothing. src/shelf.ts will happily create
+       `data/<slug>/shelf.json` for any slug-shaped string, so without the
+       existence check a typo left a directory and a file behind for an article
+       the server had just said it did not have. */
+    const r = await call("POST", `/api/library/${SHELF}/open`);
+    expect(r.status).toBe(404);
+    expect(await loadShelf(SHELF)).toEqual({ opens: 0 });
+  });
+
+  it("refuses a PATCH with nothing in it, rather than answering 200", async () => {
+    await makeArticle();
+    const r = await call("PATCH", `/api/library/${SHELF}`, {});
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/Nothing to change/);
+  });
+
+  it("refuses a body that is not an object, rather than throwing a 500", async () => {
+    for (const body of ['"hello"', "42", "null", "[1,2]"]) {
+      const r = await call("PATCH", `/api/library/${SHELF}`, body);
+      expect(r.status, body).toBe(400);
+    }
+  });
+
+  it("refuses a title that is not a string or null", async () => {
+    await makeArticle();
+    const r = await call("PATCH", `/api/library/${SHELF}`, { title: 42 });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/title must be/);
+  });
+
+  it("refuses an archived flag that is not a boolean", async () => {
+    // `"true"` is the shape a hand-written query string produces, and treating
+    // it as truthy would mean `archived: "false"` archived the article.
+    await makeArticle();
+    const r = await call("PATCH", `/api/library/${SHELF}`, { archived: "true" });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/archived must be/);
+  });
+
+  it("changes NOTHING when one of two fields is invalid", async () => {
+    /* The test this route was rewritten for. It used to write each field in
+       turn, so this renamed the article and *then* answered 400 — a request
+       that reports failure and changes your data. */
+    await makeArticle();
+    const r = await call("PATCH", `/api/library/${SHELF}`, {
+      title: "Should not stick",
+      archived: "no",
+    });
+    expect(r.status).toBe(400);
+    expect(await loadShelf(SHELF)).toEqual({ opens: 0 });
+  });
+
+  it("applies both fields together when both are valid", async () => {
+    await makeArticle();
+    const r = await call("PATCH", `/api/library/${SHELF}`, {
+      title: "Both at once",
+      archived: true,
+    });
+    expect(r.status).toBe(200);
+    const state = await loadShelf(SHELF);
+    expect(state.title).toBe("Both at once");
+    expect(state.archivedAt).toBeTruthy();
+    // The entry comes back from the half it now lives in, not the one it left.
+    expect((r.body as unknown as { entry: { title: string } }).entry.title).toBe("Both at once");
+  });
+
+  it("refuses a slug that is not a slug", async () => {
+    /* 400, not 404, and that is `slugPart`'s rule rather than this route's: the
+       request is malformed, and answering "not found" would send whoever sent
+       it looking for a missing article. The path decodes to `../../etc`, which
+       reached `loadArticle` as a real traversal before that guard existed —
+       see docs/project/security.md. */
+    const r = await call("POST", "/api/library/..%2F..%2Fetc/open");
+    expect(r.status).toBe(400);
+  });
+
+  it("searches the library, and echoes the query back", async () => {
+    const r = await call("GET", "/api/library/search?q=the");
+    expect(r.status).toBe(200);
+    const body = r.body as unknown as { query: string; hits: unknown[]; capped: boolean };
+    // Echoed so a client can drop a response that arrived after it moved on.
+    expect(body.query).toBe("the");
+    expect(Array.isArray(body.hits)).toBe(true);
+  });
+
+  it("answers an empty search with an empty list, not an error", async () => {
+    const r = await call("GET", "/api/library/search?q=");
+    expect(r.status).toBe(200);
+    expect((r.body as unknown as { hits: unknown[] }).hits).toEqual([]);
+  });
+
+  it("clamps a silly limit instead of refusing it", async () => {
+    // A limit is a hint from a client we wrote. A 400 here would be a broken
+    // search box rather than a corrected one — but unbounded is not on offer.
+    for (const limit of ["9999", "abc", "0", "-5"]) {
+      const r = await call("GET", `/api/library/search?q=the&limit=${limit}`);
+      expect(r.status, limit).toBe(200);
+      expect((r.body as unknown as { hits: unknown[] }).hits.length, limit).toBeLessThanOrEqual(30);
+    }
+  });
+
+  it("keeps /api/library/search out of the rename route's way", async () => {
+    // `search` is a valid slug shape, so the two patterns overlap. If the
+    // `:slug` one won, this would be a request to rename an article called
+    // "search" — and the search box would 405 or worse.
+    const r = await call("GET", "/api/library/search?q=zzz");
+    expect(r.status).toBe(200);
+  });
+});
+
+describe("the library route, continued", () => {
   it("does not answer to a path that merely starts with it", async () => {
     // `/api/library/anything` quietly serving the whole shelf would be the
     // kind of thing nobody notices until something depends on it.

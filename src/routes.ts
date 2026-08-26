@@ -8,6 +8,10 @@
  * is only routing, parsing and status codes.
  *
  *   GET    /api/library         every article on the shelf, for the homepage
+ *                                `?archived=1` for the other half
+ *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
+ *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null }
+ *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
  *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
@@ -49,7 +53,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   articleMetadata,
   deleteGlossary,
+  librarySearch,
   listArticles,
+  shelfStore,
   loadArticle,
   loadGlossary,
   lookUpTerm,
@@ -75,12 +81,18 @@ import { findPassages } from "./search.js";
    the two halves in stores nothing keeps in step. */
 import { commentStore } from "./store/index.js";
 import { converse } from "./converse.js";
-import { explain } from "./explain.js";
+import { explainStream } from "./explain.js";
 import { isSlug, slugFromUrl } from "./ingest.js";
 import { cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
-import type { ChatThread, Comment, SearchRun } from "./types.js";
+import type {
+  ChatThread,
+  Comment,
+  LibraryEntry,
+  LibrarySearchResponse,
+  SearchRun,
+} from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -125,7 +137,36 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
  *
  * Only the running process can tell them apart, so it keeps the list.
  */
-const answering = new Set<string>();
+const answering = new Map<string, number>();
+
+/**
+ * Mark a comment as being answered right now, and hand back the release.
+ *
+ * **A count rather than a flag, and that is not defensive padding.** It was a
+ * `Set` while the only way to re-answer a comment was the "Try again" link on a
+ * failed one, so two requests for the same id could not overlap. The deep-search
+ * button removed that guarantee: it sits on an answered comment, and the obvious
+ * way to press it twice is to press it twice. With a `Set`, the first request to
+ * finish deletes the key while the second is still streaming, and the next
+ * `GET /api/comments` sees a `pending` row nobody is working on and sweeps it —
+ * telling the reader "the server stopped before this was answered" about an
+ * answer that is arriving as they read it.
+ *
+ * Chat needed `Live` and `settleThread` for the same problem. This is the small
+ * version: nothing here can stop or supersede anything, it only stops the sweep
+ * from lying.
+ */
+function beganAnswering(key: string): () => void {
+  answering.set(key, (answering.get(key) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return; // a double release must not decrement someone else's
+    released = true;
+    const left = (answering.get(key) ?? 1) - 1;
+    if (left > 0) answering.set(key, left);
+    else answering.delete(key);
+  };
+}
 
 /**
  * Turn abandoned `pending` comments into `error`, so they can be retried.
@@ -158,17 +199,80 @@ async function sweepOrphaned(slug: string, comments: Comment[]): Promise<Comment
 }
 
 /**
- * Create a comment, answer it, and store the answer.
+ * Server-sent events on a response that is otherwise a plain Node one.
+ *
+ * Shared by chat and by comments, which are the only two things in this app a
+ * reader waits on. Extracted from `streamChat`, where every line of it was
+ * already written — see the note on `res.on("close")` there for the one trap it
+ * carries.
+ */
+function sse(res: ServerResponse): {
+  frame(event: string, data: unknown): void;
+  alive(): boolean;
+} {
+  /* Has the reader gone?
+
+     `res.on("close")`, **not** `req.on("close")`, and the difference is a real
+     trap rather than a preference. Node documents the request's `close` as
+     "the request has been completed, **or** its underlying connection was
+     terminated" — and `readBody` consumes the request stream to its end, so
+     "completed" is already true before the model is ever called. Listening
+     there means that on any Node version which takes the first reading, every
+     frame is dropped and the reader watches a spinner while a perfectly good
+     answer is written to disk behind them. The response's `close` has one
+     meaning: this connection is finished. */
+  let open = true;
+  res.on("close", () => {
+    open = false;
+  });
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    // Nginx and friends buffer a response body by default, which for a stream
+    // means the reader gets everything at once at the end — i.e. exactly the
+    // spinner this feature exists to remove, with none of the symptoms.
+    "X-Accel-Buffering": "no",
+  });
+  // Before the model call, so the browser's `fetch` resolves immediately and
+  // the client is reading the stream while the first token is still being
+  // thought about.
+  res.flushHeaders?.();
+  return {
+    frame(event, data) {
+      if (!open || res.writableEnded || res.destroyed) return;
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    },
+    alive: () => open && !res.writableEnded && !res.destroyed,
+  };
+}
+
+/**
+ * Create a comment, answer it a few words at a time, and store the answer.
+ *
+ * **Validation happens before a single header is written**, so a bad request is
+ * still an ordinary JSON 400 — the thrown `httpError` never reaches a
+ * half-opened stream. Everything after `sse(res)` is frames, including failure.
  *
  * Three writes, deliberately: `pending` lands before the model call so a crash
- * leaves evidence, and the terminal state is written before the response so the
- * disk and the reply can never disagree. A model failure comes back as HTTP 200
+ * leaves evidence, and the terminal state is written before the last frame so
+ * the disk and the reader can never disagree. A model failure is a `done` frame
  * carrying a comment whose status is `error` — the request *did* succeed at what
  * it was for, which was recording the question; the dialog shows the failure and
  * offers a retry.
+ *
+ * Frames: one `begin`, then any number of `delta`, then exactly one `done`.
+ *
+ * **`begin` carries the whole comment, and that is the point of it.**
+ * `commentStore.create` re-mints the id when the client's is malformed or
+ * collides, and with a stream there is no response body to carry the real one
+ * back. Without this frame the client would stream an answer into a row the
+ * server has never heard of, and a reload would show a different comment.
+ * src/web/useChat.ts § Begun is the write-up of that exact bug happening in
+ * chat, weeks after the ids stopped matching.
  */
-async function answer(slug: string, body: unknown): Promise<Comment> {
-  const { id, blockId, quote, start } = (body ?? {}) as Record<string, unknown>;
+async function answer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
+  const { id, blockId, quote, start, deep } = (body ?? {}) as Record<string, unknown>;
   if (typeof blockId !== "string" || typeof quote !== "string" || typeof start !== "number") {
     throw httpError(400, "Expected { blockId, quote, start }");
   }
@@ -180,6 +284,16 @@ async function answer(slug: string, body: unknown): Promise<Comment> {
   if (!Number.isInteger(start) || start < 0) {
     throw httpError(400, `start must be a non-negative integer, got ${start}`);
   }
+  /* Anything other than `true` is not deep. A 400 here would be a validation
+     message built from the request body, which is the one thing `httpError`
+     messages must never be — they are logged as `reason`, and redaction is
+     path-based and cannot reach a string. See the note on `httpError` below. */
+  const deeper = deep === true;
+
+  // Before the comment is created, so a slug that is not an article is a clean
+  // 404 with nothing written, rather than a stored comment whose only content is
+  // the error we could have known about first.
+  const article = await loadArticle(slug);
 
   const comment = await commentStore.create(slug, {
     blockId,
@@ -188,30 +302,61 @@ async function answer(slug: string, body: unknown): Promise<Comment> {
     ...(typeof id === "string" ? { id } : {}),
   });
   const key = `${slug}/${comment.id}`;
-  answering.add(key);
+  const release = beganAnswering(key);
+
+  const { frame } = sse(res);
+  frame("begin", comment);
+
+  let text = "";
   try {
-    const article = await loadArticle(slug);
-    const result = await explain({
+    for await (const event of explainStream({
       meta: article.meta,
       blocks: article.blocks,
       blockId,
       quote,
-    });
-    const patch = {
-      status: "done" as const,
-      answer: result.answer,
-      citations: result.citations,
-      searches: result.searches,
-      model: result.model,
-    };
-    await commentStore.patch(slug, comment.id, patch);
-    return { ...comment, ...patch };
+      deep: deeper,
+    })) {
+      if (event.type === "delta") {
+        text += event.text;
+        frame("delta", { text: event.text });
+        continue;
+      }
+      const patch = {
+        status: "done" as const,
+        answer: event.answer,
+        citations: event.citations,
+        searches: event.searches,
+        model: event.model,
+      };
+      await commentStore.patch(slug, comment.id, patch);
+      frame("done", { ...comment, ...patch });
+    }
   } catch (err) {
-    const patch = { status: "error" as const, error: (err as Error).message };
-    await commentStore.patch(slug, comment.id, patch);
-    return { ...comment, ...patch };
+    /* The partial answer is kept, exactly as chat keeps one. Half an
+       explanation and a reason beats a spinner that turns into nothing, and the
+       reader has already read the half. */
+    const patch = {
+      status: "error" as const,
+      error: (err as Error).message,
+      ...(text.trim() ? { answer: text.trim() } : {}),
+    };
+    /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
+       error would reach the outer handler, which would try to `send` a JSON 500
+       onto a response that is already an open event stream — and the reader
+       would see the stream simply stop. A store that cannot record the failure
+       is a worse thing than a failure, and it is worth its own line. */
+    try {
+      await commentStore.patch(slug, comment.id, patch);
+    } catch (storeErr) {
+      log("store").error(
+        { ...errorFields(storeErr), slug, id: comment.id },
+        `could not record a failed explanation for ${slug}`,
+      );
+    }
+    frame("done", { ...comment, ...patch });
   } finally {
-    answering.delete(key);
+    release();
+    res.end();
   }
 }
 
@@ -728,6 +873,105 @@ function slugPart(m: RegExpExecArray, group: number): string {
 }
 
 /**
+ * The most passages one search will return.
+ *
+ * A cap, and the response says when it bit. A list that is silently cut reads
+ * as "that is everything", which is the failure mode this repo keeps writing
+ * up (docs/reusable/silent-success.md).
+ */
+const MAX_LIBRARY_HITS = 30;
+
+/**
+ * `GET /api/library/search?q=…&limit=…` — every article at once.
+ *
+ * The query is read from the URL rather than a body because this is a read, and
+ * a read that cannot be linked to or retried is a read that has given something
+ * up for nothing.
+ *
+ * **Nothing here logs `q`.** It is what the reader typed, which is as much their
+ * own text as a comment is — and `redact` in src/log.ts matches key names, not
+ * values, so the only thing keeping it out of the log is not putting it in. The
+ * `finally` in `handleApi` logs `path`, which is already stripped of its query
+ * string for exactly this reason. See docs/project/logging.md.
+ */
+async function searchTheLibrary(url: string): Promise<LibrarySearchResponse> {
+  const params = new URL(url, "http://x").searchParams;
+  const query = params.get("q") ?? "";
+
+  const asked = Number(params.get("limit") ?? MAX_LIBRARY_HITS);
+  /* Clamped rather than refused. A limit is a hint from a client we wrote, and
+     a 400 here would be a broken search box rather than a corrected one — but
+     an unbounded one is a client asking the server to read every paragraph it
+     owns. `Number.isFinite` catches `?limit=abc`, which is `NaN`, which passes
+     every comparison you would write instead. */
+  const limit = Number.isFinite(asked) ? Math.min(Math.max(Math.trunc(asked), 1), MAX_LIBRARY_HITS) : MAX_LIBRARY_HITS;
+
+  const { hits, capped } = await librarySearch.searchLibrary(query, limit);
+  return {
+    // Echoed so a client can drop a response that arrived after it moved on.
+    // Debounced typing produces out-of-order responses as a matter of course.
+    query,
+    hits,
+    articles: new Set(hits.map((h) => h.slug)).size,
+    capped,
+  };
+}
+
+/**
+ * `PATCH /api/library/:slug` — archive it, put it back, rename it.
+ *
+ * One route for both because they are one act from the reader's side: they
+ * edited the shelf record. Sending neither field is refused rather than treated
+ * as a no-op — a PATCH with nothing in it is a client bug, and answering 200
+ * would hide it.
+ *
+ * `title: null` is meaningful and is NOT the same as omitting it: null clears
+ * the reader's override and restores whatever the extractor last found. So this
+ * tests `in`, not truthiness.
+ *
+ * **Everything is validated before anything is written, and the write is one
+ * call.** An earlier version validated and wrote each field in turn, so
+ * `{ title: "Changed", archived: "no" }` renamed the article and then answered
+ * 400 — a request that reports failure and changes your data, which is the
+ * worst available combination. Caught by a cross-family review, 2026-08-26.
+ * `ShelfStore.patch` exists so that both fields land in one serialised file
+ * edit or one `UPDATE`, rather than as two writes a reader can land between.
+ */
+async function patchShelf(slug: string, body: unknown): Promise<{ entry: LibraryEntry }> {
+  /* A JSON body that is not an object at all — `"hello"`, `42`, `null` — must
+     be a 400 rather than a 500. `in` throws on a primitive, so this cannot be
+     folded into the checks below. */
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw httpError(400, "Expected a JSON object");
+  }
+  const patch = body as Record<string, unknown>;
+  const hasArchived = "archived" in patch;
+  const hasTitle = "title" in patch;
+  if (!hasArchived && !hasTitle) {
+    throw httpError(400, "Nothing to change: expected archived, title, or both");
+  }
+
+  const change: { archived?: boolean; title?: string | null } = {};
+
+  if (hasTitle) {
+    const title = patch.title;
+    if (title !== null && typeof title !== "string") {
+      throw httpError(400, "title must be a string or null");
+    }
+    change.title = title;
+  }
+  if (hasArchived) {
+    const archived = patch.archived;
+    // Not truthiness: `"false"` is the shape a hand-written client produces,
+    // and treating it as true would archive an article somebody was un-archiving.
+    if (typeof archived !== "boolean") throw httpError(400, "archived must be true or false");
+    change.archived = archived;
+  }
+
+  return { entry: await shelfStore.patch(slug, change) };
+}
+
+/**
  * Turn a POST body into a job request, or explain what was wrong with it.
  *
  * Two shapes, and they are **mutually exclusive**. `{ url }` means "add this
@@ -921,9 +1165,18 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
      review. */
   const path = url.split("?")[0] ?? url;
 
-  // Exact match, not a prefix: a stray `/api/library/anything` should 404 rather
-  // than quietly serve the whole shelf.
-  const library = url === "/api/library";
+  /* Matched on `path` rather than `url`, because the shelf now takes a query
+     string (`?archived=1`). It stays an EXACT match on the path — a stray
+     `/api/library/anything` must still 404 rather than quietly serve the whole
+     shelf, which is what this line has always been for. */
+  const library = path === "/api/library";
+  /* Before the `:slug` pattern below, and it has to be: `search` is a valid
+     slug shape, so the two patterns overlap and the specific one must win.
+     Putting them the other way round would make `/api/library/search` a
+     perfectly plausible request to rename an article called "search". */
+  const librarySearchRoute = path === "/api/library/search";
+  const shelfEntry = /^\/api\/library\/([\w.%-]+)$/.exec(path);
+  const shelfOpen = /^\/api\/library\/([\w.%-]+)\/open$/.exec(path);
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(url);
   // Its own endpoint rather than a field on the article payload: that one is
   // ~150KB and is fetched on every page, and stat-ing every file for it would
@@ -975,7 +1228,33 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   let failure: unknown;
   try {
     if (library && req.method === "GET") {
-      send(res, 200, { articles: await listArticles() });
+      /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
+         meaning "no", and a loose check would hand them the archive. */
+      const archived = new URL(url, "http://x").searchParams.get("archived") === "1";
+      send(res, 200, { articles: await listArticles({ archived }) });
+      return true;
+    }
+    if (librarySearchRoute && req.method === "GET") {
+      send(res, 200, await searchTheLibrary(url));
+      return true;
+    }
+    /* PATCH rather than PUT: both fields are optional and the client sends
+       whichever the reader changed. A PUT would mean "here is the whole shelf
+       record", and a client that forgot one field would silently clear it. */
+    if (shelfEntry && req.method === "PATCH") {
+      send(res, 200, await patchShelf(slugPart(shelfEntry, 1), await readBody(req)));
+      return true;
+    }
+    /* POST, not GET, because it writes — and it is its own route rather than a
+       side effect inside `GET /api/article/:slug` for the same reason. A GET
+       that counts is a GET that a prefetch, a retry or a health check inflates
+       without anybody deciding to. */
+    if (shelfOpen && req.method === "POST") {
+      await shelfStore.recordOpen(slugPart(shelfOpen, 1));
+      // 204: there is nothing worth reading back, and a body would invite
+      // somebody to render a counter that is one behind.
+      res.statusCode = 204;
+      res.end();
       return true;
     }
     if (article && req.method === "GET") {
@@ -1018,7 +1297,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       return true;
     }
     if (comments && req.method === "POST") {
-      send(res, 200, await answer(slugPart(comments, 1), await readBody(req)));
+      /* The second endpoint in this file that does not answer with JSON — see
+         `answer`, which writes its own headers and ends the response. It is
+         still reached through `send` for its *failures*: validation throws
+         before a header is written, so a bad request is an ordinary 400. */
+      await answer(slugPart(comments, 1), await readBody(req), res);
       return true;
     }
     if (one && req.method === "DELETE") {

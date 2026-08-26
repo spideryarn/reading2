@@ -1,10 +1,15 @@
 /**
- * The Postgres schema, as TypeScript. Nothing reads this yet.
+ * The Postgres schema, as TypeScript.
  *
- * This is step 3 of docs/plans/postgres-migration.md, written ahead of the
- * storage contracts because it is the artefact everything else is judged
- * against. **No table here is live**; the store is still JSON files under
- * `data/<slug>/` (docs/project/database.md).
+ * Written ahead of the storage contracts (step 3 of
+ * docs/plans/postgres-migration.md) because it is the artefact everything else
+ * is judged against. **These tables are now live for reads**: src/store/pg.ts
+ * serves the reading view and the library out of them when
+ * `SPIDERYARN_STORE=postgres`, and src/store/pg-comments.ts writes to them.
+ * The pipeline still writes JSON files under `data/<slug>/`, and the two are
+ * kept in step by src/store/import.ts. docs/project/database.md says which is
+ * true of what today; docs/plans/postgres-storage-implementation.md tracks the
+ * rest of the cutover.
  *
  * Two rules that outrank convenience, both from docs/project/block-ids.md:
  *
@@ -37,12 +42,13 @@
  * docs/plans/postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth.
  */
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import {
   boolean,
   check,
   customType,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgSchema,
@@ -76,6 +82,18 @@ export const spideryarn = pgSchema("spideryarn");
  */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
+});
+
+/**
+ * Postgres's own full-text type. Drizzle has no `tsvector` either.
+ *
+ * Typed as `string` because that is what `pg` hands back, and because **nothing
+ * in TypeScript should ever read this column**. It exists to be matched against
+ * with `@@` and ranked with `ts_rank_cd` inside SQL; selecting it would ship a
+ * lexeme dump to the client. See src/store/pg-shelf.ts.
+ */
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType: () => "tsvector",
 });
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -120,6 +138,30 @@ export const articles = spideryarn.table("articles", {
   slug: text("slug").notNull().unique(),
   currentRevisionId: uuid("current_revision_id"),
   createdAt: createdAt(),
+
+  /* ---- shelf state: what the reader has done to the card. src/shelf.ts ----
+     Columns here rather than a table of their own, because there is exactly one
+     row per article and it is per-owner state on a table that already carries
+     `owner_id`. A join for four scalars would be ceremony.
+
+     All four are on `articles` and NOT on `article_revisions`, and that is the
+     load-bearing part: a revision is one extraction, and re-extracting an
+     article must not un-archive it, forget the reader's title or reset the
+     count. Reader state outlives revisions — the same rule `block_identities`
+     exists to enforce for block ids. */
+
+  /** Set means it is off the shelf. Never a delete; Greg chose archive + Undo. */
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  /**
+   * The reader's own title, overriding whatever stage 2 extracted.
+   *
+   * An override rather than an edit of `article_revisions.title`, because that
+   * one is rewritten by every re-extraction — so a rename stored there would be
+   * silently undone weeks later. src/shelf.ts has the long version.
+   */
+  titleOverride: text("title_override"),
+  opens: integer("opens").notNull().default(0),
+  lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
 });
 
 /**
@@ -303,9 +345,37 @@ export const revisionBlocks = spideryarn.table(
     /** False for media, rules and code — blocks with no prose to summarise. */
     gistable: boolean("gistable").notNull(),
     note: text("note"),
+
+    /**
+     * The block's prose, as Postgres's full-text type — the home page's search box.
+     *
+     * **Per block, not per article**, and that is the design rather than an
+     * accident of where there was room. The whole point of the library search is
+     * that a hit deep-links to the paragraph (`/read/<slug>?at=<blockId>`), and a
+     * `tsvector` over the whole article can tell you only which article. Ranking
+     * follows the same logic: `ts_rank_cd` over one paragraph is a statement
+     * about that paragraph, which is what the result list shows.
+     *
+     * **Generated, not written.** A column the pipeline had to remember to fill
+     * is a column that is empty for exactly the article somebody just re-ran —
+     * and an empty `tsvector` matches nothing, silently, which is the shape of
+     * bug this repo keeps writing postmortems about. `stored` rather than
+     * `virtual` because it is indexed, and Postgres will only index a stored one.
+     *
+     * `'english'` is hardcoded here, matching `to_tsquery`'s configuration in
+     * src/store/pg-shelf.ts. The two must agree: a vector built with one
+     * configuration and queried with another silently matches almost nothing.
+     * `article_revisions.lang` exists and is deliberately NOT consulted — a
+     * generated column may only reference its own row.
+     */
+    fts: tsvector("fts").generatedAlwaysAs(
+      (): SQL => sql`to_tsvector('english', coalesce(${revisionBlocks.text}, ''))`,
+    ),
   },
   (t) => [
     primaryKey({ columns: [t.revisionId, t.blockId] }),
+    /** GIN, because this column is queried with `@@` and never selected. */
+    index("revision_blocks_fts").using("gin", t.fts),
     unique("revision_blocks_revision_ordinal").on(t.revisionId, t.ordinal),
     check("revision_blocks_ordinal", sql`${t.ordinal} >= 0`),
     check(

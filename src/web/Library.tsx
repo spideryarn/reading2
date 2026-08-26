@@ -1,5 +1,6 @@
 /**
- * The homepage: the shelf of articles, and the way to put another one on it.
+ * The homepage: the shelf of articles, what you can do to them, and the box for
+ * finding one.
  *
  * Greg, 2026-08-25:
  *
@@ -20,46 +21,68 @@
  * (docs/project/web-client.md#tailwind-and-shadcn-components). The reading view
  * stays hand-written, because its geometry is not something utilities can say.
  * Note the `tw:` prefix on every class — unprefixed names do nothing here.
+ *
+ * ## The card is no longer one big link
+ *
+ * It was, until 2026-08-26, and it could not stay that way: a button inside an
+ * anchor is invalid HTML and behaves differently in every browser. So the card
+ * is a `<article>`, the title is the link, and the link's `::after` is stretched
+ * over the whole card to keep it clickable. The action buttons sit above that
+ * pseudo-element on the z-axis.
+ *
+ * The property being protected is the one Link.tsx exists for: ⌘-click,
+ * middle-click and "copy link address" all still work, because the title really
+ * is an `<a href>` and not a div with a handler.
+ *
+ * See docs/plans/library-shelf-actions-and-search.md.
  */
-import { useCallback, useEffect, useState } from "react";
-import { FileText, MessageCircle, Palette } from "lucide-react";
-import type { LibraryEntry } from "../types.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  FileText,
+  MessageCircle,
+  Palette,
+  Pencil,
+  RefreshCw,
+  Search,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
+import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { Link } from "./Link.js";
 import { DESIGN_HREF, readHref } from "./router.js";
+import { Tooltip } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
+import { useLibrarySearch } from "./useLibrarySearch.js";
+import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 
 export function Library() {
-  const [articles, setArticles] = useState<LibraryEntry[] | null>(null);
+  const shelf = useShelf();
+  const { articles, error, reload } = shelf;
   const slow = useSlow(articles === null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    fetch("/api/library")
-      .then(async (r) => {
-        const body = await r.json();
-        if (!r.ok) throw new Error(body.error ?? r.statusText);
-        return body as { articles: LibraryEntry[] };
-      })
-      .then((b) => setArticles(b.articles))
-      // A fetch that never reached the server says "Failed to fetch", which
-      // tells the reader nothing. Say the likely cause.
-      .catch((e: Error) =>
-        setError(
-          e.message === "Failed to fetch"
-            ? "Couldn't reach the server — is `npm run dev` still running?"
-            : e.message,
-        ),
-      );
-  }, []);
-
-  useEffect(load, [load]);
+  const [query, setQuery] = useState("");
 
   // Reload the shelf the moment a job finishes, rather than telling the reader
   // to reload the page — they just watched the five steps go green, and an
   // empty shelf underneath would read as a failure.
-  const queue = useJobs(load);
+  const queue = useJobs(reload);
+
+  /* Matcher one: the shelf itself, filtered in the browser. Free, instant, and
+     over exactly the fields a card shows — a reader who can see a word on a
+     card expects typing it to find that card. `useMemo` because this runs on
+     every keystroke over every article, and because the identity of the array
+     decides whether every card re-renders. */
+  const filtered = useMemo(() => filterEntries(articles, query), [articles, query]);
+
+  // Matcher two: the passages inside the articles, from the server.
+  const passages = useLibrarySearch(query);
+
+  const searching = query.trim().length > 0;
 
   return (
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
@@ -85,6 +108,8 @@ export function Library() {
         </p>
       </header>
 
+      <SearchBox value={query} onChange={setQuery} count={filtered?.length ?? 0} />
+
       <AddArticle queue={queue} />
 
       {error && (
@@ -92,6 +117,16 @@ export function Library() {
           {error}
         </p>
       )}
+      {shelf.actionError && (
+        <p className="tw:mb-3 tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:px-4 tw:py-2 tw:text-sm tw:text-foreground">
+          {shelf.actionError}
+        </p>
+      )}
+
+      {shelf.undoable && (
+        <UndoStrip title={shelf.undoable.title} onUndo={() => void shelf.undo()} />
+      )}
+
       {/* Silent until the wait is worth mentioning — on a warm shelf this fetch
           is over well before that, and a line that flashes up and away reads as
           a fault. After that, say what is being fetched. See useSlow.ts, which
@@ -104,17 +139,416 @@ export function Library() {
           Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two.
         </p>
       )}
+      {/* A shelf with articles on it and nothing matching is a different thing
+          from an empty shelf, and says so. */}
+      {searching && filtered?.length === 0 && (articles?.length ?? 0) > 0 && (
+        <p className="tw:text-sm tw:text-muted-foreground">
+          No article's title, author or blurb matches “{query.trim()}”.
+        </p>
+      )}
 
       <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
-        {articles?.map((a) => (
+        {filtered?.map((a) => (
           <li key={a.slug}>
-            <Card entry={a} />
+            <Card entry={a} shelf={shelf} />
           </li>
         ))}
       </ul>
+
+      {searching && <Passages state={passages} query={query} />}
+
+      {!searching && <Archived shelf={shelf} />}
     </main>
   );
 }
+
+/* ------------------------------------------------------------- searching -- */
+
+/**
+ * Fold for comparison: case, accents, curly punctuation.
+ *
+ * The browser twin of `fold` in src/library-search.ts, and it must stay its
+ * twin — a reader who finds "Gödel" by typing "godel" in the passage results
+ * and *not* in the card filter would reasonably conclude the box is broken.
+ * Kept as two small functions rather than one shared module because this one
+ * runs in the browser and that one imports node:fs.
+ */
+function fold(s: string): string {
+  return foldWithMap(s).folded;
+}
+
+/**
+ * The same fold, plus **where every folded character came from**.
+ *
+ * Needed because a snippet has to be cut out of the *original* paragraph — the
+ * reader should see the article's real curly quotes and accents, not our
+ * flattened copy — while the match is found in the folded one. And folding is
+ * not length-preserving: NFKD expands `ﬁ` to `fi` and `½` to `1⁄2`, and
+ * `toLowerCase` lengthens `İ`. So an offset carried straight across drifts by a
+ * character per ligature earlier in the paragraph, with no error and nothing to
+ * grep for — every ASCII test passes and one article looks subtly wrong.
+ *
+ * src/library-search.ts carries the same warning for the same reason.
+ */
+function foldWithMap(s: string): { folded: string; starts: number[]; ends: number[] } {
+  let folded = "";
+  const starts: number[] = [];
+  const ends: number[] = [];
+  /* Iterated by code POINT, not by code unit, so an emoji or any astral
+     character is folded once rather than as two broken halves. */
+  for (const ch of s) {
+    const from = starts.length === 0 ? 0 : (ends[ends.length - 1] as number);
+    const to = from + ch.length;
+    for (const out of foldChar(ch)) {
+      folded += out;
+      /* **Every folded character gets the WHOLE source character's span**, and
+         both ends of it. An earlier version stored only the start, so matching
+         `af` inside `aﬁ` produced an end offset *before* the ligature and the
+         snippet cut it off — the exact silent drift this function exists to
+         prevent, reintroduced by recording half the answer. Caught by a
+         cross-family review, 2026-08-26. */
+      starts.push(from);
+      ends.push(to);
+    }
+  }
+  return { folded, starts, ends };
+}
+
+/** One character, folded. May come back empty (a combining mark) or longer (a ligature). */
+function foldChar(ch: string): string {
+  return ch
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[‘’‛]/g, "'")
+    .replace(/[“”„]/g, '"')
+    .replace(/[–—]/g, "-")
+    .toLowerCase();
+}
+
+/**
+ * The terms of a query, folded, ignoring the syntax neither matcher shares.
+ *
+ * Quotes are stripped rather than honoured, `or` is dropped, and an excluding
+ * `-term` is left out: this is used for *filtering cards* and for
+ * *highlighting*, not for the real match, and a third implementation of
+ * `websearch_to_tsquery`'s grammar would be a third thing to keep in step with
+ * the other two.
+ */
+function queryTerms(query: string): string[] {
+  return fold(query.replace(/["\u201c\u201d]/g, " "))
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && t !== "or" && !t.startsWith("-"));
+}
+
+/**
+ * The cards whose visible words contain every term typed.
+ *
+ * AND across terms, substring within one — so "seth noema" finds the article by
+ * that author on that site, and "consc" finds "consciousness" while you are
+ * still typing it. Deliberately over exactly the four fields a card renders:
+ * matching something invisible would look like a bug from the outside.
+ */
+function filterEntries(articles: LibraryEntry[] | null, query: string): LibraryEntry[] | null {
+  if (!articles) return null;
+  const terms = queryTerms(query);
+  if (terms.length === 0) return articles;
+  return articles.filter((a) => {
+    const hay = fold([a.title, a.byline, a.siteName, a.gist].filter(Boolean).join(" "));
+    return terms.every((t) => hay.includes(t));
+  });
+}
+
+function SearchBox({
+  value,
+  onChange,
+  count,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  count: number;
+}) {
+  return (
+    <div className="tw:mb-4">
+      <div className="tw:relative">
+        <Search
+          size={15}
+          className="tw:pointer-events-none tw:absolute tw:left-3 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground"
+        />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Search titles, authors, and the text of every article"
+          aria-label="Search the library"
+          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            aria-label="Clear the search"
+            className="tw:absolute tw:right-2 tw:top-1/2 tw:-translate-y-1/2 tw:rounded tw:p-1 tw:text-muted-foreground tw:hover:text-foreground"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      {value.trim() && (
+        <p className="tw:mt-1.5 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+          {count === 1 ? "1 article" : `${count} articles`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The passages, under the cards.
+ *
+ * Under rather than beside, and after rather than before, because the cards are
+ * the answer to "which of my articles is this?" and the passages are the answer
+ * to "where in them?". The first question is the commoner one and the free one.
+ */
+function Passages({
+  state,
+  query,
+}: {
+  state: ReturnType<typeof useLibrarySearch>;
+  query: string;
+}) {
+  if (state.error) {
+    return (
+      <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">
+        Couldn't search the text of the articles: {state.error}
+      </p>
+    );
+  }
+  if (state.searching && state.hits.length === 0) {
+    return <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">Searching the text…</p>;
+  }
+  if (!state.asked) return null;
+  /* Results are shown only for the query they are the answer to. Without this
+     the previous query's passages sit on screen while the next request runs,
+     marked and linked with the NEW query — passages that do not contain what
+     the reader typed, presented as though they do. */
+  if (state.resultsQuery !== query.trim()) return null;
+  if (state.hits.length === 0) {
+    return (
+      <p className="tw:mt-8 tw:text-sm tw:text-muted-foreground">
+        Nothing in the text of any article matches “{query.trim()}”.
+      </p>
+    );
+  }
+
+  return (
+    <section className="tw:mt-8">
+      <h2 className="tw:m-0 tw:mb-3 tw:text-xs tw:font-medium tw:tracking-wide tw:text-muted-foreground tw:uppercase">
+        {state.hits.length} {state.hits.length === 1 ? "passage" : "passages"} in {state.articles}{" "}
+        {state.articles === 1 ? "article" : "articles"}
+        {/* Said out loud rather than silently truncated: a capped list that does
+            not admit it reads as "that is everything". */}
+        {state.capped && <span className="tw:ml-1 tw:normal-case">(showing the best)</span>}
+      </h2>
+      <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-2 tw:p-0">
+        {state.hits.map((hit) => (
+          <li key={`${hit.slug}/${hit.blockId}`}>
+            <Passage hit={hit} query={query} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** How much of the paragraph to show. Wide enough to judge, short enough to skim. */
+const SNIPPET_CHARS = 200;
+
+function Passage({ hit, query }: { hit: LibraryHit; query: string }) {
+  /* The link carries `?at=`, `?find=` and `?match=`, and all three are
+     load-bearing. `at` scrolls to the paragraph; `find` hands the words to the
+     in-article search so the same passage is highlighted when you land. Reusing
+     the existing vocabulary rather than inventing a third one is the whole
+     reason the handoff works — see docs/project/url-state.md and
+     docs/project/search.md.
+
+     `match=words` is said out loud rather than left to the default, because on
+     2026-08-26 the default became `meaning` (params.ts § matchParam) and a
+     meaning-mode panel has nothing to do with a literal `?find=`. This is the
+     one link in the app that produces a bare `?find=`; everywhere else the
+     reader has pressed `words` and pushed the parameter themselves. */
+  /* **One term, not the whole query**, and that is a fix rather than a
+     simplification. In-article search matches `?find=` as a single literal
+     substring (`findLiteral` in search-hits.ts), so handing it
+     `writing OR "hard problem"` — or even two plain words — matched nothing,
+     and the reader landed on the right paragraph with nothing highlighted. The
+     term used is the first one that actually appears in THIS hit, so the
+     highlight is always something the reader can see. Caught by a cross-family
+     review, 2026-08-26. */
+  const term = queryTerms(query).find((t) => fold(hit.text).includes(t));
+  const href =
+    `${readHref(hit.slug)}?at=${encodeURIComponent(hit.blockId)}` +
+    (term ? `&find=${encodeURIComponent(term)}&match=words` : "");
+
+  return (
+    <Link
+      href={href}
+      className="tw:block tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-4 tw:py-3 tw:no-underline tw:hover:border-highlight/60"
+    >
+      <span className="tw:block tw:text-xs tw:text-muted-foreground">{hit.title}</span>
+      <span className="tw:mt-1 tw:block tw:font-prose tw:text-[0.95rem] tw:leading-relaxed tw:text-foreground">
+        {marked(hit.text, query)}
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * A window of the paragraph around the first match, with the match in bold.
+ *
+ * The cutting and the marking happen here rather than on the server because the
+ * two stores would do them differently — Postgres knows which *stems* matched,
+ * not which characters — and two flavours of highlighting to reconcile is worse
+ * than one that occasionally shows the start of the paragraph instead. See
+ * `LibraryHit.text`.
+ *
+ * A stemmed hit is exactly that case: Postgres can match "qualias" for a search
+ * for "qualia", and this will not find those letters. It falls back to the
+ * opening of the paragraph, which is honest and readable rather than empty.
+ */
+function marked(text: string, query: string) {
+  const terms = queryTerms(query);
+  const { folded, starts, ends } = foldWithMap(text);
+
+  let at = -1;
+  let length = 0;
+  for (const term of terms) {
+    const i = folded.indexOf(term);
+    if (i !== -1 && (at === -1 || i < at)) {
+      at = i;
+      length = term.length;
+    }
+  }
+
+  // Nothing to point at — a stemmed match, or a term shorter than two
+  // characters. Show the opening of the paragraph, which is honest and
+  // readable rather than empty.
+  if (at === -1) {
+    const head = text.slice(0, SNIPPET_CHARS);
+    return head.length < text.length ? `${head}…` : head;
+  }
+
+  /* Every offset is translated before it touches `text`, so the snippet carries
+     the article's own punctuation — and the END comes from `ends`, which is the
+     exclusive end of the source character the match finished inside. See
+     `foldWithMap`. */
+  const start = starts[at] ?? 0;
+  const end = ends[at + length - 1] ?? text.length;
+  const want = Math.max(0, SNIPPET_CHARS - (end - start));
+  const from = Math.max(0, start - Math.floor(want / 2));
+  const to = Math.min(text.length, end + (want - (start - from)));
+
+  return (
+    <>
+      {from > 0 && "…"}
+      {text.slice(from, start)}
+      <strong className="tw:font-semibold tw:text-highlight">{text.slice(start, end)}</strong>
+      {text.slice(end, to)}
+      {to < text.length && "…"}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------- archived --- */
+
+/**
+ * The other half of the shelf, behind a disclosure.
+ *
+ * Without this, Delete is **permanent from the interface**: the Undo strip is
+ * gone after nine seconds and there is no other way back to an archived
+ * article. Greg chose "archive, with an Undo" over a real delete precisely so
+ * that nothing is destroyed — and an archive nobody can open is destruction
+ * with extra steps. The plan deferred this ("a separate 'Show archived' view
+ * can come later"); a cross-family review pointed out that "later" left the
+ * feature contradicting its own reason for existing.
+ *
+ * Closed by default, and it does not fetch until opened: most sessions never
+ * archive anything, and a request per homepage load to say "nothing here" is a
+ * request nobody asked for. Hidden entirely while searching, because the search
+ * deliberately does not look in here.
+ */
+function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="tw:mt-10">
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((v) => !v);
+          if (!open) void shelf.loadArchived();
+        }}
+        className="tw:rounded tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:hover:text-foreground"
+      >
+        {open ? "Hide deleted" : "Show deleted"}
+      </button>
+
+      {open && shelf.archived === null && (
+        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Looking…</p>
+      )}
+      {open && shelf.archived?.length === 0 && (
+        <p className="tw:mt-2 tw:text-sm tw:text-muted-foreground">Nothing deleted.</p>
+      )}
+      {open && !!shelf.archived?.length && (
+        <ul className="tw:m-0 tw:mt-3 tw:flex tw:list-none tw:flex-col tw:gap-2 tw:p-0">
+          {shelf.archived.map((a) => (
+            <li
+              key={a.slug}
+              className="tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border tw:px-4 tw:py-2 tw:text-sm"
+            >
+              <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-muted-foreground">
+                {a.title}
+              </span>
+              <button
+                type="button"
+                onClick={() => void shelf.restore(a.slug)}
+                className="tw:inline-flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded tw:px-2 tw:py-1 tw:text-highlight tw:hover:bg-highlight/10"
+              >
+                <Undo2 size={14} />
+                Put back
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/* ----------------------------------------------------------------- undo --- */
+
+function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
+  return (
+    <div
+      /* `status`, not `alert`: a screen reader should hear this when it gets to
+         it rather than have the current sentence interrupted. Deleting was the
+         reader's own act, so it is a confirmation, not an emergency. */
+      role="status"
+      className="tw:mb-3 tw:flex tw:items-center tw:gap-3 tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-4 tw:py-2 tw:text-sm tw:text-foreground"
+    >
+      <span className="tw:min-w-0 tw:flex-1 tw:truncate">Deleted “{title}”</span>
+      <button
+        type="button"
+        onClick={onUndo}
+        className="tw:inline-flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded tw:px-2 tw:py-1 tw:text-highlight tw:hover:bg-highlight/10"
+      >
+        <Undo2 size={14} />
+        Undo
+      </button>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------- card --- */
 
 /** `12 Aug 2026`. Absent or unparseable dates simply don't show. */
 function whenAdded(iso: string): string {
@@ -128,7 +562,16 @@ function whenAdded(iso: string): string {
       });
 }
 
-function Card({ entry }: { entry: LibraryEntry }) {
+/** `25 Aug 2026, 14:02` — the tooltip's longer form, where precision is the point. */
+function whenExactly(iso: string | undefined): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function Card({ entry, shelf }: { entry: LibraryEntry; shelf: ReturnType<typeof useShelf> }) {
+  const [editing, setEditing] = useState(false);
+
   // Only the facts this article actually has. A filtered join beats a chain of
   // `&&`s that can leave a stranded separator — same reasoning as Masthead.
   const facts = [
@@ -139,13 +582,38 @@ function Card({ entry }: { entry: LibraryEntry }) {
   ].filter(Boolean) as string[];
 
   return (
-    <Link
-      href={readHref(entry.slug)}
-      className="tw:block tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:no-underline tw:transition-colors tw:hover:border-highlight/60 tw:focus-visible:border-highlight tw:focus-visible:outline-none"
-    >
-      <h2 className="tw:m-0 tw:font-prose tw:text-xl tw:leading-snug tw:text-foreground">
-        {entry.title}
-      </h2>
+    <article className="tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
+      <div className="tw:flex tw:items-start tw:gap-3">
+        {editing ? (
+          <TitleEditor
+            entry={entry}
+            onDone={(title) => {
+              setEditing(false);
+              // `undefined` means "escaped" — nothing to save, and saying so
+              // here rather than in the editor keeps the cancel path from
+              // writing the unchanged title back to the server.
+              if (title !== undefined) void shelf.rename(entry.slug, title);
+            }}
+          />
+        ) : (
+          <h2 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:font-prose tw:text-xl tw:leading-snug">
+            {/* The stretched link: a real `<a href>` whose ::after covers the
+                card, so the whole card is a click target and ⌘-click still
+                opens a tab. Everything interactive after this needs `relative`
+                to sit above it. */}
+            <Link
+              href={readHref(entry.slug)}
+              className="tw:text-foreground tw:no-underline tw:after:absolute tw:after:inset-0 tw:after:content-['']"
+            >
+              {entry.title}
+            </Link>
+          </h2>
+        )}
+
+        {!editing && (
+          <Actions entry={entry} shelf={shelf} onEdit={() => setEditing(true)} />
+        )}
+      </div>
 
       <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
         {facts.map((f, i) => (
@@ -187,8 +655,276 @@ function Card({ entry }: { entry: LibraryEntry }) {
             {entry.comments}
           </span>
         )}
-        <span className="tw:ml-auto">{whenAdded(entry.addedAt)}</span>
+        <Tooltip content={<Details entry={entry} />} placement="top">
+          {/* The date line is the trigger, because it is the field a reader is
+              already looking at when they wonder "when did I add this, and have
+              I read it?" — the tooltip answers the rest of that question.
+
+              A real `<button>` rather than a `<span tabIndex={0}>`, which is
+              what this was: a span in the tab order is focusable without being
+              announced as anything, so a screen reader lands on a date and is
+              told nothing is there. The button carries the name. `relative` so
+              it sits above the stretched link and can be hovered at all. */}
+          <button
+            type="button"
+            aria-label={`Details of ${entry.title}`}
+            className="tw:relative tw:ml-auto tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
+          >
+            {whenAdded(entry.addedAt)}
+          </button>
+        </Tooltip>
       </p>
-    </Link>
+    </article>
+  );
+}
+
+/* -------------------------------------------------------------- tooltip --- */
+
+/** `opened 6 times, last on 25 Aug` — or nothing at all, if it never has been. */
+function opensLine(entry: LibraryEntry): string {
+  if (entry.opens === 0) return "not yet";
+  const last = whenExactly(entry.lastOpenedAt);
+  const times = entry.opens === 1 ? "once" : `${entry.opens} times`;
+  return last ? `${times}, last ${last}` : times;
+}
+
+/**
+ * Everything we know about the article that the card has no room for.
+ *
+ * **What it deliberately does not say, and why.** Chat threads and saved
+ * searches are per-article reader state that has *not* moved to Postgres —
+ * src/chat.ts and src/searches.ts write files in both modes, and the
+ * `chat_threads` / `search_runs` tables exist but nothing touches them. A count
+ * that reads 7 on the filesystem and 0 in Postgres is worse than no count,
+ * because it looks like an answer. They go in when step 10 of
+ * docs/plans/postgres-storage-implementation.md lands.
+ */
+function Details({ entry }: { entry: LibraryEntry }) {
+  const built = [
+    entry.has.arc && "arc",
+    entry.has.tweets && "thread",
+    entry.has.glossary && "glossary",
+    entry.has.summary && "summaries",
+  ].filter(Boolean) as string[];
+
+  const rows: [string, string][] = [
+    ["Added", whenExactly(entry.addedAt) ?? "unknown"],
+    ["Opened", opensLine(entry)],
+    ["Asked", entry.comments === 1 ? "1 question" : `${entry.comments} questions`],
+    ["Built", built.length ? built.join(" · ") : "nothing beyond the tree"],
+    [
+      "Size",
+      `${entry.words.toLocaleString()} words · ${entry.blocks} blocks · ${entry.parts} parts · ${entry.sections} sections`,
+    ],
+  ];
+  if (entry.siteName) rows.splice(1, 0, ["From", entry.siteName]);
+  if (entry.titleOverridden) rows.push(["Title", "renamed by you"]);
+
+  return (
+    <dl className="tw:m-0 tw:grid tw:grid-cols-[auto_1fr] tw:gap-x-3 tw:gap-y-1 tw:text-xs">
+      {rows.map(([label, value]) => (
+        <div key={label} className="tw:contents">
+          <dt className="tw:text-muted-foreground">{label}</dt>
+          <dd className="tw:m-0 tw:text-foreground">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/* --------------------------------------------------------------- actions -- */
+
+/**
+ * Rename in place.
+ *
+ * `onDone(undefined)` means cancelled, `onDone(null)` means "clear it and go
+ * back to the extractor's title", and a string means that title. Three
+ * outcomes, three values, rather than a boolean and a string that can disagree.
+ */
+function TitleEditor({
+  entry,
+  onDone,
+}: {
+  entry: LibraryEntry;
+  onDone: (title: string | null | undefined) => void;
+}) {
+  const [value, setValue] = useState(entry.title);
+  const ref = useRef<HTMLInputElement>(null);
+
+  // Focus and select, so the common case — replacing the site's title wholesale
+  // — is one keystroke rather than a drag.
+  useEffect(() => ref.current?.select(), []);
+
+  return (
+    <form
+      // Above the stretched link, or every click in the input would follow it.
+      className="tw:relative tw:min-w-0 tw:flex-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const next = value.trim();
+        // Unchanged is a cancel, not a write. Otherwise pressing Enter on an
+        // untouched field would mark the extractor's own title as "renamed by
+        // you", which is a lie the tooltip would then repeat.
+        if (next === entry.title) return onDone(undefined);
+        onDone(next === "" ? null : next);
+      }}
+    >
+      <input
+        ref={ref}
+        value={value}
+        aria-label="Title"
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onDone(undefined);
+        }}
+        // Blur commits rather than cancels: clicking away from a field you have
+        // typed into and losing the typing is the more annoying of the two.
+        onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+        className="tw:w-full tw:rounded tw:border tw:border-highlight tw:bg-background tw:px-2 tw:py-1 tw:font-prose tw:text-xl tw:leading-snug tw:text-foreground tw:outline-none"
+      />
+      <span className="tw:mt-1 tw:block tw:text-xs tw:text-muted-foreground">
+        Enter to save · Escape to cancel · empty to restore “{entry.title}”
+      </span>
+    </form>
+  );
+}
+
+/**
+ * The row of buttons.
+ *
+ * **`opacity`, never `display: none`.** A hidden element is not focusable, so
+ * hiding the row until hover would delete it outright for anyone navigating by
+ * keyboard — and every check anybody ran with a mouse would look fine.
+ * `focus-within` brings it back for exactly that reason.
+ */
+function Actions({
+  entry,
+  shelf,
+  onEdit,
+}: {
+  entry: LibraryEntry;
+  shelf: ReturnType<typeof useShelf>;
+  onEdit: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [rerunning, setRerunning] = useState(false);
+
+  const copy = useCallback(() => {
+    const url = new URL(readHref(entry.slug), window.location.origin).toString();
+    /* Caught, because `writeText` rejects for real reasons — a page without
+       focus, a browser that refuses the permission — and an unhandled rejection
+       here left the reader looking at a button that had simply done nothing. */
+    void navigator.clipboard
+      .writeText(url)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch((e: Error) => shelf.report(`Couldn't copy the link: ${e.message}`));
+  }, [entry.slug, shelf]);
+
+  /* Re-running is `POST /api/jobs { slug, steps, force }` — the route that
+     already exists, and the same one the add box uses. `force: ["fetch"]` is
+     what makes it a refresh rather than a resume: without it the queue skips
+     every step whose artefact is already on disk, which is every step.
+     `useJobs` picks the job up from the queue and the progress list shows it,
+     so there is nothing to render here beyond the button going quiet. */
+  const rerun = useCallback(async () => {
+    setRerunning(true);
+    try {
+      const r = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug: entry.slug, force: ["fetch"] }),
+      });
+      /* Checked. The first version ignored the response entirely, so a refused
+         job — a bad slug, a queue that would not take it, a 501 — left the
+         button spinning briefly and then looking as though it had worked. That
+         is the silent success this repo keeps writing up. */
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? r.statusText);
+      }
+    } catch (e) {
+      shelf.report(`Couldn't queue a rebuild: ${(e as Error).message}`);
+    } finally {
+      setRerunning(false);
+    }
+  }, [entry.slug, shelf]);
+
+  return (
+    /* `opacity`, never `display: none` — a hidden element is not focusable, so
+       hiding the row until hover would delete it outright for anyone navigating
+       by keyboard, and every check done with a mouse would look fine.
+       `hover-none:opacity-100` is the other half: on a touch screen there is no
+       hover, so without it these buttons stayed invisible AND hit-testable —
+       controls you cannot see but can press by accident. Caught by a
+       cross-family review, 2026-08-26. */
+    <div className="tw:relative tw:flex tw:shrink-0 tw:items-center tw:gap-0.5 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100">
+      <IconButton label="Edit title" onClick={onEdit}>
+        <Pencil size={14} />
+      </IconButton>
+      <IconButton
+        label={rerunning ? "Queueing…" : "Re-fetch and rebuild"}
+        onClick={() => void rerun()}
+        disabled={rerunning}
+      >
+        <RefreshCw size={14} className={rerunning ? "tw:animate-spin" : undefined} />
+      </IconButton>
+      {entry.url && (
+        <a
+          href={entry.url}
+          target="_blank"
+          // noreferrer as well as noopener: the target should not be told which
+          // of the reader's articles linked to it.
+          rel="noopener noreferrer"
+          title="Open the original page"
+          aria-label="Open the original page"
+          className="tw:rounded tw:p-1.5 tw:text-muted-foreground tw:no-underline tw:hover:bg-highlight/10 tw:hover:text-foreground"
+        >
+          <ExternalLink size={14} />
+        </a>
+      )}
+      <IconButton label={copied ? "Copied" : "Copy link"} onClick={copy}>
+        {copied ? <Check size={14} className="tw:text-highlight" /> : <Copy size={14} />}
+      </IconButton>
+      <IconButton label="Delete" onClick={() => void shelf.archive(entry.slug)} destructive>
+        <Trash2 size={14} />
+      </IconButton>
+    </div>
+  );
+}
+
+function IconButton({
+  label,
+  onClick,
+  children,
+  disabled,
+  destructive,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      // Both, and they are not the same thing: `title` is the hover tooltip a
+      // sighted reader gets, `aria-label` is the name a screen reader reads.
+      // An icon-only button with neither is a button called "".
+      title={label}
+      aria-label={label}
+      className={`tw:rounded tw:p-1.5 tw:text-muted-foreground tw:disabled:opacity-50 ${
+        destructive
+          ? "tw:hover:bg-destructive/10 tw:hover:text-destructive"
+          : "tw:hover:bg-highlight/10 tw:hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
