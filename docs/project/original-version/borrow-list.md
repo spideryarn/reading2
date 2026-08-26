@@ -14,8 +14,8 @@ sites, more prompts, or more marks on the page.
 
 | Do | Why now | Page |
 |---|---|---|
-| **Settle one document wrapper tag** for every prompt, and put the article **first** in every prompt | Their caching work died on a retrofit of exactly this. We have five prompts; they had five and it was already too many | [prompt-caching.md](prompt-caching.md#the-prerequisite-that-killed-it) |
-| **One helper that builds the article prompt block** | "Similar" prefixes don't cache, only identical ones do; three hand-written copies will drift | [prompt-caching.md](prompt-caching.md#what-wed-do-concretely) |
+| ~~**Settle one document wrapper tag** for every prompt, and put the article **first** in every prompt~~ — **done**, 2026-08-26 | Their caching work died on a retrofit of exactly this, and ours had already started down the same road: two prompts were writing the reader's position *into* the article body, so those calls could never have cached at all | [../prompt-caching.md](../prompt-caching.md) |
+| ~~**One helper that builds the article prompt block**~~ — **done**, 2026-08-26 | "Similar" prefixes don't cache, only identical ones do — and the three hand-written copies had already drifted, one dropping the `URL:` line and two carrying a per-call marker. Now [`src/article-prompt.ts`](../../../src/article-prompt.ts) | [../prompt-caching.md](../prompt-caching.md) |
 | **Throw on an undefined template variable** | Otherwise a renamed variable silently sends the model a prompt with a hole in it | [llm-plumbing.md](llm-plumbing.md#good-prompts-as-files-with-a-validated-input-type) |
 | **Time every model call from the outside** | The SDK's own timestamp fields were empty in production, and read as zero rather than as missing | [llm-plumbing.md](llm-plumbing.md#one-real-gotcha-worth-stealing-outright) |
 | **A global `prefers-reduced-motion` rule** | Ours is a view built on motion. Retrofitting per-component is how theirs ended up covering almost nothing | [design-system.md](design-system.md#accessibility-and-motion) |
