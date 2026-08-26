@@ -1223,8 +1223,17 @@ export async function* converse({
        then as easily as before. Guarded on it, a garbled call on the withheld
        round fell through every check and reached the reader as `saidNothing` —
        "finished without saying anything at all" — which is the wrong sentence
-       for the third time. Found by a GPT Sol review, 2026-08-26. */
-    if (finishReason === "tool_calls" && wanted.length === 0) {
+       for the third time. Found by a GPT Sol review, 2026-08-26.
+
+       **`!stopped` for the same reason every guard above it has one.** A reader
+       who presses stop mid-stream lands in the catch above, which sets the flag
+       and falls through here rather than throwing — and the fragments they
+       interrupted are, by definition, unassembled. So a stop that happened to
+       land while a tool call was arriving was filed as "the request arrived
+       garbled": a failure, a red row, and an apology, for a button they had just
+       pressed. Exactly the bug `saidNothing`'s own stop branch exists to
+       prevent, in the guard next door. Found by a GPT Sol review, 2026-08-27. */
+    if (!stopped && finishReason === "tool_calls" && wanted.length === 0) {
       line.error(
         { ...turnSoFar(), model: used, ms: since(started), fragments: calls.size },
         `${used} asked for tools but no call could be reassembled`,
@@ -1318,6 +1327,22 @@ export async function* converse({
       if (readerAborted(signal, deadline, stall.signal)) {
         stopped = true;
         break;
+      }
+      /* **And the deadline, which `readerAborted` deliberately does not cover.**
+         That function answers "was this the reader?", and returns false the
+         moment the deadline has fired — which is right for what it is asked, and
+         meant the check above let a timed-out turn keep working through the rest
+         of its batch. The next round's `fetch` would reject on the composite
+         signal, so no further model request was ever paid for; the wasted work
+         was the tools. It ends here now, and it ends the way a deadline always
+         ends rather than as a quiet stop: `tookTooLong`, so the reader is told
+         the thing that is true. Found by a GPT Sol review, 2026-08-27. */
+      if (deadline.aborted) {
+        line.error(
+          { ...turnSoFar(), model: used, ms: since(started), timedOut: true },
+          `${used} ran out of time between tools`,
+        );
+        throw explainAbort(new Error("aborted"), deadline, stall.signal, timeoutMs, stallMs);
       }
       const index = toolRuns.length;
       const args = parseToolArgs(call.args);

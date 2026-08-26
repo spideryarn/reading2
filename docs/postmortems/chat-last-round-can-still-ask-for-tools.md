@@ -107,8 +107,10 @@ round again. Worth revisiting if `[ai-tool-loop]` ever shows up in real logs.
 ## What the review found afterwards, which is most of the value here
 
 The change above went to GPT Sol before it was committed
-([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)). It said **DO NOT SHIP**, and it
-was right four times. Each was reproduced here before being fixed, and each now has a test that goes
+([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)). It said **DO NOT SHIP** five
+times running, and was right ten times. **Three of the ten were in the fixes for the other seven**,
+which is the argument for re-reviewing built code rather than only the plan, in one line. The first
+pass found four. Each was reproduced here before being fixed, and each now has a test that goes
 red without its fix.
 
 1. **The token totals could double-count.** `usage` is one variable, assigned from whatever chunk
@@ -181,6 +183,29 @@ found the eighth, and it is the plainest of them.
    *next* round noticed. The signal is checked before the batch and between tools now, and a tool
    carries the turn's deadline as well as the reader's signal. Not the stall clock, which is per
    round and about a silent stream — a tool taking eight seconds is not a stalled stream.
+
+A fifth pass — a confirmation pass, on the fix for the fourth — found two more, both in the control
+flow the fourth pass's fix had just added. Ten defects across five reviews.
+
+9. **A stop could still end as a tool-call failure.** A reader who presses stop mid-stream lands in
+   the catch around the chunk loop, which sets `stopped` and *falls through* rather than throwing —
+   and the tool-call fragments they interrupted are, by definition, unassembled. The malformed-call
+   guard was not looking at `stopped`, so it filed the interruption as *"the request for it arrived
+   garbled"*: a red row and an apology for a button they had just pressed. Which is exactly the bug
+   the empty-answer guard beside it already carries a stop branch to prevent — the same mistake, one
+   guard along.
+
+10. **The deadline did not stop a batch.** Both of the new between-tools checks called
+    `readerAborted`, which answers *"was this the reader?"* and returns false the moment the deadline
+    has fired. Correct for what it is asked; wrong for what it was being used for. A turn that had
+    already run out of time worked through the rest of its tools. No further model request was ever
+    paid for — the next `fetch` rejects on the composite signal — so the cost was wasted tool work
+    and a reader told late. It throws `tookTooLong` from inside the batch now, which is what a
+    deadline should say.
+
+That test is deterministic despite involving a real clock, and the trick is worth stealing: the
+generator is **suspended** at its `yield` while the consumer waits, so a `setTimeout` in the consumer
+guarantees the deadline has fired by the time the generator resumes. No race.
 
 Two smaller ones worth recording: the message promised that a retry "often works", which nobody has
 measured — the same overclaim as `[ai-empty]`'s *"asking again usually gets an answer"*, which is the

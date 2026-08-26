@@ -246,6 +246,57 @@ describe("a stop ends in `done`, never in a throw", () => {
     expect(last?.usage.outputTokens).toBe(56);
   });
 
+  it("does not call a stop a garbled tool call", async () => {
+    /* The stop that lands while a tool call is still arriving. The catch around
+       the chunk loop sets `stopped` and falls through rather than throwing, so
+       the guards below it run — and the fragments the reader interrupted are, by
+       definition, unassembled. The malformed-call guard was not looking at
+       `stopped`, so it filed the interruption as "the request for it arrived
+       garbled": a red row and an apology for a button they had just pressed.
+       Which is the very bug the empty-answer guard beside it already carries a
+       stop branch to prevent. Found by a GPT Sol review, 2026-08-27. */
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        () =>
+          ({
+            ok: true,
+            body: hangingBody([
+              // A fragment with no id and no name — the head never arrived.
+              `data: ${JSON.stringify({
+                model: "test/model",
+                choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"q":' } }] } }],
+              })}\n\n`,
+              `data: ${JSON.stringify({ choices: [{ finish_reason: "tool_calls", delta: {} }] })}\n\n`,
+            ]),
+          }) as Response,
+      ),
+    );
+
+    const events: { type: string }[] = [];
+    let failure: string | null = null;
+    setTimeout(() => controller.abort(new Error("stopped")), 20);
+    try {
+      for await (const event of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "why?",
+        slug: "example",
+        signal: controller.signal,
+      })) {
+        events.push(event);
+      }
+    } catch (err) {
+      failure = (err as Error).message;
+    }
+    expect(failure).toBeNull();
+    const last = events.at(-1) as { type: string; stopped: boolean } | undefined;
+    expect(last?.type).toBe("done");
+    expect(last?.stopped).toBe(true);
+  });
+
   it("does not run the rest of a tool batch after the reader has stopped", async () => {
     /* A model can ask for three tools at once and they run one at a time, so a
        stop landing during the first used to wait for all three: the signal was
@@ -331,6 +382,95 @@ describe("a stop ends in `done`, never in a throw", () => {
     // one thing this loop must never store.
     const [first] = (done?.tools ?? []) as { status: string }[];
     expect(first?.status).toBe("done");
+  });
+
+  it("stops a tool batch when the turn's own deadline fires, and says so", async () => {
+    /* `readerAborted` answers "was this the reader?", and returns false the
+       moment the deadline has fired — correct for what it is asked, and it meant
+       the between-tools check let a turn that had already run out of time work
+       through the rest of its batch. No further model request was ever paid for
+       (the next `fetch` rejects on the composite signal); the wasted work was
+       the tools, and the reader was told about it late. Found by a GPT Sol
+       review, 2026-08-27.
+
+       Deterministic despite involving a real clock, because the generator is
+       *suspended* at the `yield` below while this waits: the deadline is
+       guaranteed to have fired by the time it resumes. */
+    const encoder = new TextEncoder();
+    const two = [0, 1].map(
+      (i) =>
+        `data: ${JSON.stringify({
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: i,
+                    id: `toolu_${i}`,
+                    type: "function",
+                    function: {
+                      name: "search_article_words",
+                      arguments: JSON.stringify({ query: "alpha" }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        })}\n\n`,
+    );
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(
+        () =>
+          ({
+            ok: true,
+            body: new ReadableStream<Uint8Array>({
+              start(c) {
+                c.enqueue(encoder.encode(delta("Looking. ")));
+                for (const f of two) c.enqueue(encoder.encode(f));
+                c.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ choices: [{ finish_reason: "tool_calls", delta: {} }] })}\n\n`,
+                  ),
+                );
+                c.enqueue(encoder.encode("data: [DONE]\n\n"));
+                c.close();
+              },
+            }),
+          }) as Response,
+      ),
+    );
+
+    const ran: string[] = [];
+    let failure: string | null = null;
+    try {
+      for await (const event of converse({
+        meta,
+        blocks,
+        history: [],
+        question: "why?",
+        slug: "example",
+        timeoutMs: 60,
+      })) {
+        if (event.type === "tool" && event.run.status === "done") {
+          ran.push(event.run.name);
+          // Hold here, suspended, until the turn's deadline has passed.
+          await new Promise((r) => setTimeout(r, 80));
+        }
+      }
+    } catch (err) {
+      failure = (err as Error).message;
+    }
+
+    // The first tool ran; the second never started.
+    expect(ran).toHaveLength(1);
+    // And the reader is told the true thing — a deadline, not a silent stop.
+    // `[ai-slow]` is `tookTooLong`; the number in the sentence is the deadline,
+    // which is 60 milliseconds here and reads oddly, so the code is what is
+    // pinned rather than the prose.
+    expect(failure).toContain("did not finish within");
+    expect(failure).toContain("[ai-slow]");
   });
 
   it("survives a stop after the response arrives but before a single word does", async () => {
