@@ -1214,6 +1214,15 @@ change narrows the check everywhere except the interrupted-rerun case above.
 
 ## Step 12 — jobs and claiming, decided before it is built
 
+> **Reconsidered 2026-08-26, after this was written and reviewed.**
+> [job-queue-rethink.md](job-queue-rethink.md) asks whether this whole design is the right shape, and
+> two credible alternatives came out of it — a **browser-driven advance endpoint** that deletes most
+> of what follows, and **pg-boss**, whose earlier rejection turned out to rest on an incomplete
+> reading of what it owns for you. Which one wins turns on a product question, not a technical one.
+> That document also found that **ingest does not currently work on Vercel at all**, which is
+> independent of any of this. Read it before building what is below.
+
+
 Scoped, argued out and cross-reviewed on 2026-08-26 before a line was written, because this is the
 step where a single-process assumption becomes a multi-process one, and hand-waving it is how the
 migration breaks in production. Fable arbitrated the first pass; **GPT Sol reviewed that pass and
