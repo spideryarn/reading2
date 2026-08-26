@@ -808,6 +808,19 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   }
 
   if (failures.length) {
+    /* A plain Error, so the job card keeps its Retry button — and that is the
+       right answer here even though `stageFailure("blocked")` is the right
+       answer three lines up for the page cap and the encode limit.
+       src/job-failure.ts asks "should this unchanged attempt be offered again
+       now?", and here it should: the reader is nondeterministic, this chunk has
+       already been asked twice inside one run, and a third ask is a real chance
+       rather than the identical arithmetic.
+
+       What makes that cheap, and what a later reader should know before
+       changing it: **every chunk that passed is cached**, so a Retry re-pays
+       only for the ones that failed. The general worry in job-failure.ts —
+       that a false retry costs minutes of pipeline and another billed call — is
+       much smaller here than it looks. */
     throw new Error(
       `The transcription of this PDF did not pass its checks:\n  ${failures.join("\n  ")}`,
     );
