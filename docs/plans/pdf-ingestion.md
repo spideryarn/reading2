@@ -1412,6 +1412,18 @@ Also from the same review, and both taken: the `raw.pdf` written by `npm run pdf
 article made from a local file offered a "view the original" link that 404'd; and the eval had its
 own copy of the prompt, which would have gone on testing the wording the product had stopped using.
 
+**Everything above came out of the review's activity log rather than its report**, because the run
+was killed before it wrote one — it had finished all four of its own planned steps. A second review,
+of the changes the fourteen-page fixture then forced (the chunk-level gate, `bibliographyPages`, the
+`/api/source/:slug` route), **did not happen**: the `CODEX_API_KEY` account has no credits and the
+first run exhausted the subscription that was standing in for it. So these three are reviewed by
+nobody but their author, and that is worth knowing before trusting them:
+
+- **the gate moving from the page to the chunk**, which is a real loosening in exchange for not
+  failing every page boundary;
+- **`bibliographyPages`**, which takes prose on a trailing reference page out of the gate entirely;
+- **`GET /api/source/:slug`**, which serves a stranger's PDF back inline from our own origin.
+
 ### What the bake-off raised, and what Fable said about it
 
 Two design questions the measurements produced rather than settled. Both went to

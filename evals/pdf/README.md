@@ -4,9 +4,26 @@ Run by hand, not by `npm test`. See [testing.md § evals](../../docs/project/tes
 difference and [pdf-ingestion.md § The eval](../../docs/plans/pdf-ingestion.md#the-eval-evalspdf)
 for the design this implements.
 
-**Nothing here scores anything yet.** The three source PDFs are committed and verified; the golds,
-the scorer and `npm run eval:pdf` are steps 3 and 6 of the plan's build order. What exists today is
-the fixtures and their provenance, so that the first-hour bake-off had something honest to run on.
+**What exists, and what does not.** The scorer is built and tested —
+[`src/pdf-score.ts`](../../src/pdf-score.ts), with its own sixteen-plus deliberately broken
+transcriptions under [`synthetic/`](synthetic/). The three source PDFs are committed and verified,
+and all three now ingest end to end. **The golds do not exist**, and until they do the numbers below
+are a smoke test rather than a gate: three inputs that a reviewer constructed pass it and should
+not, and they are listed in
+[the plan](../../docs/plans/pdf-ingestion.md#gpt-sols-review-of-the-built-code-2026-08-26-and-the-four-inputs-that-defeat-it).
+`npm run eval:pdf` is not written either; the bake-off harness in [`bakeoff/`](bakeoff/README.md) is
+what runs today.
+
+Measured 2026-08-26, `openai/gpt-5.6-luna` through OpenRouter:
+
+| Fixture | Result |
+|---|---|
+| **easy** — 8pp born-digital | 0.998 mean recall over 7 of 8 pages, ~65 s, about a penny |
+| **harder** — 14pp two-column, three tables | 0.999 mean recall over 12 of 14 pages |
+| **much harder** — 17pp photographic scan | every page transcribed, nothing checkable, one block marked uncertain |
+
+The pages not scored in the first two are trailing bibliographies, and the run says so out loud
+every time.
 
 ## The three
 
