@@ -612,6 +612,18 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * here: `glide` gives way to a wheel or a touch (scroll.ts), so a reader who
    * started reading during the fetch is not dragged off their line.
    */
+  const arriving = useRef({ at, note });
+  useEffect(() => {
+    const { at: wasAt, note: wasNote } = arriving.current;
+    if (wasNote === null) return;
+    const target = arrivalTarget(wasAt, wasNote, comments);
+    // `target === wasAt` is the two harmless cases at once: the comments have
+    // not landed, and the note is anchored to the very block the link already
+    // restored. Both mean the `?at=` restore has this covered.
+    if (target === null || target === wasAt) return;
+    arriving.current = { at: wasAt, note: null };
+    if (!isBlockOnScreen(target)) scrollToBlock(target);
+  }, [comments]);
 
   /**
    * Every block this article has, id to its plain text — for chat's citations.
