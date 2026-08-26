@@ -6,6 +6,21 @@ and gives a slightly different answer each time. It is run by hand when a decisi
 results are committed so the next change can be compared against a number rather than against
 somebody's memory of last week.
 
+## `pdf/` — three PDFs, and what "read correctly" means
+
+```
+(no runner yet — see evals/pdf/README.md)
+```
+
+The odd one out on this page: **no script and no numbers yet**, just three source PDFs committed
+with their licences and one committed result. It is here because the fixtures already did their job
+— the first-hour bake-off for [PDF ingestion](../docs/plans/pdf-ingestion.md) ran on them, and
+[`pdf/baselines/bakeoff-2026-08-26.json`](pdf/baselines/bakeoff-2026-08-26.json) is the number the
+next change gets compared against.
+
+Read [`pdf/README.md`](pdf/README.md) for what each fixture is for and the three ways choosing them
+nearly went quietly wrong.
+
 ## `prompt-caching.ts` — is the article actually being cached?
 
 ```

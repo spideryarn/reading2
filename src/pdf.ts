@@ -117,13 +117,18 @@ export function repeatedLines(pages: { text: string }[]): Set<string> {
  * maths wrong. Line breaks are kept because `repeatedLines` needs them — a
  * running header is a *line*, and a text blob has none.
  *
- * `isEvalSupported: false` because a PDF is a stranger's file and pdf.js will
- * otherwise compile pattern code out of it. See docs/project/security.md.
+ * **There is no `isEvalSupported: false` here, and there was until the
+ * typechecker said otherwise.** A PDF is a stranger's file
+ * (docs/project/security.md), older pdf.js compiled pattern code out of one
+ * with `Function`, and that flag turned it off — so it looked like exactly the
+ * line this file should carry. pdf.js 6 removed the option: it is not in the
+ * typings and not in the build, so passing it did nothing at all while reading
+ * as a precaution. Which is the house pattern (docs/reusable/silent-success.md)
+ * in its smallest form: a security option that is a comment.
  */
 export async function pass0(source: string | Uint8Array): Promise<Pass0> {
   const data = typeof source === "string" ? new Uint8Array(await readFile(source)) : source;
-  const doc = await pdfjs.getDocument({ data, useSystemFonts: true, isEvalSupported: false })
-    .promise;
+  const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
 
   const pages: PageText[] = [];
   try {
