@@ -302,13 +302,21 @@ Honestly: more than the bottom bar did, and the reason is the routing.
 
 ## What is still open
 
-- **A pasted `?note=` does not scroll.** Found while checking the review's point about opening a
-  question from a list. From the list it is fine — that list lives only on the reading view, and
-  `goToComment` has the block id and scrolls with it. But a link arriving as
-  `/read/<slug>?note=<id>` with no `?at=` opens the dialog for a passage that may be a long way off
-  screen: `App.tsx` derives the open comment from `note` and nothing scrolls. Not fixed here,
-  because it is inside the reading view rather than this work, and it wants deciding rather than
-  patching — probably the dialog should scroll to its own anchor on mount.
+- ~~**A pasted `?note=` does not scroll.**~~ **Fixed 2026-08-26.** Found while checking the review's
+  point about opening a question from a list. From the list it was fine — that list lives only on the
+  reading view, and `goToComment` has the block id and scrolls with it. But a link arriving as
+  `/read/<slug>?note=<id>` with no `?at=` opened the dialog for a passage that could be a long way off
+  screen: `App.tsx` derived the open comment from `note` and nothing scrolled.
+
+  The guess above was right about the shape and wrong about the timing. "On mount" cannot work: the
+  link carries a comment *id*, and the block that comment is anchored to arrives over the wire, so
+  there is nothing to scroll to at mount. It fires when the comments land instead, and once only.
+  The other half needed deciding rather than patching, exactly as this said: a URL can carry two
+  things that sound like a position, and **the note wins** — `?at=` is written by scrolling, `?note=`
+  is only there because somebody opened a dialog. See
+  [url-state.md § When `?note=` and `?at=` disagree](../project/url-state.md#when-note-and-at-disagree-the-note-wins)
+  and [comments.md § A pasted `?note=`](../project/comments.md#note-arrival). The rule is
+  `arrivalTarget` in `src/web/scroll.ts`, pinned in `tests/scroll.test.ts`.
 
 - **Re-running a stage from this page.** The job queue already takes
   `POST /api/jobs { slug, steps, force }` and `cascadeForce` already handles the hard part, so a

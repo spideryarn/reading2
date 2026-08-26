@@ -182,6 +182,39 @@ jolting the page between them costs the reader their place for nothing. Like
 Deleting steps to the neighbour instead of closing the panel — deleting one of nine is a tidy-up, not
 a reason to lose your place.
 
+### A pasted `?note=` brings its own passage into view <a id="note-arrival"></a>
+
+Stepping was always fine, because stepping has the comment in hand. **Arriving was not.** A link that
+comes in from outside — `/read/<slug>?note=<id>` — has only an id, and until 2026-08-26 nothing
+connected it to the article: the dialog opened, and the paragraph it was explaining could be anywhere.
+That is the ordinary shape of a link you *send someone*, because the `?at=` that would have saved it
+is only in the URL if the sender had scrolled. It was found while building the metadata page and left
+open there ([metadata-page.md](../plans/metadata-page.md)); it is fixed now.
+
+The rule when a URL carries both: **the note wins.** `?at=` is written by scrolling and says where the
+sender's eye happened to be; `?note=` is only in a URL because somebody opened a dialog. The argument
+in full, and what happens when the two agree, is in
+[url-state.md § When `?note=` and `?at=` disagree](url-state.md#when-note-and-at-disagree-the-note-wins).
+
+Two things about it are worth knowing before you touch it, and both come from the anchor being a
+comment rather than a block:
+
+- **It waits for the fetch.** The link carries a comment id; the block it is anchored to arrives over
+  the wire with the comments. So the jump happens when they land, not when the URL is read — and
+  until then it deliberately does nothing, leaving the page where `?at=` put it.
+- **It fires once**, for the note the page opened with. After that, moving between comments is
+  `goToComment`'s, which holds still when the next passage is already on screen. Two things moving
+  the page is two things that have to agree.
+
+It reuses `scrollToBlock` and its glide (`scroll.ts`) rather than adding a second way to move the
+page, and it is smooth rather than instant — unlike the `?at=` restore, which runs before the reader
+has seen anything. This one lands on a page that is already up and being looked at, so the travel is
+what says the article moved rather than was replaced. It is also the safer of the two: the glide gives
+way to a wheel or a touch, so a reader who started reading during the fetch is not dragged off their
+line. The decision itself is `arrivalTarget`, pure and pinned in
+[`tests/scroll.test.ts`](../../tests/scroll.test.ts); the wiring is one effect in `App.tsx` and can
+only be checked in a browser.
+
 ### The web-search badge <a id="search-badge"></a>
 
 Greg, 2026-08-25: "indicate (with an icon + hover-tooltip or similar) in the dialog box whether or

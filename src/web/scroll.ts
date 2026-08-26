@@ -268,6 +268,45 @@ export function scrollByScreen(dir: -1 | 1) {
 }
 
 /**
+ * Which block a link should put under the reader's eye when it opens.
+ *
+ * A URL can carry two things that sound like a position, and until 2026-08-26
+ * only one of them moved the page. `?at=` restored the section and `?note=`
+ * opened the dialog, so `/read/<slug>?note=<id>` with no `?at=` beside it —
+ * which is exactly the shape of a link somebody *sends* — showed the reader an
+ * explanation of a paragraph that was somewhere off screen, with no way to tell
+ * where. Recorded as open in docs/plans/metadata-page.md and fixed here.
+ *
+ * **The note wins**, and the argument is about which parameter anybody meant.
+ * `?at=` is written by scrolling: it is debounced, it replaces rather than
+ * pushes, and it says where the sender's eye happened to be when the address
+ * bar last caught up. `?note=` is only ever in a URL because someone opened a
+ * dialog. So when the two disagree, one is a byproduct and the other is the
+ * point of the link.
+ *
+ * Nothing is lost when they agree, either — if the note's passage sits inside
+ * the section `?at=` names, the passage is simply the finer of the two answers,
+ * and the caller's `isBlockOnScreen` check means an already-visible passage
+ * costs no movement at all.
+ *
+ * A `?note=` naming a comment we do not have falls back to `at`. That covers
+ * both the comment being deleted and the fetch not having landed yet, and the
+ * caller distinguishes them by trying again when the comments arrive.
+ *
+ * Pure, and pinned in tests/scroll.test.ts — the rule is worth a test even
+ * though the wiring around it can only be checked in a browser. Structural
+ * types rather than `Comment`, so this file stays about pixels.
+ */
+export function arrivalTarget(
+  at: string | null,
+  note: string | null,
+  comments: readonly { id: string; blockId: string }[],
+): string | null {
+  if (note === null) return at;
+  return comments.find((c) => c.id === note)?.blockId ?? at;
+}
+
+/**
  * Whether a block's row is already comfortably in view.
  *
  * Used to decide whether stepping between comments should scroll at all. Two

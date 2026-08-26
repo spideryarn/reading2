@@ -8,7 +8,7 @@
  * to catch — so they are pinned.
  */
 import { describe, expect, it } from "vitest";
-import { screenTarget } from "../src/web/scroll.js";
+import { arrivalTarget, screenTarget } from "../src/web/scroll.js";
 
 /** A 900px viewport with a 84px header and a 40px dock: 776px of usable screen. */
 const VIEW = 900;
@@ -60,5 +60,45 @@ describe("screenTarget", () => {
     // or less would make the gesture dead, or send it the wrong way.
     expect(screenTarget(500, 100, 200, 200, MAX, 1)).toBe(501);
     expect(screenTarget(500, 100, 200, 200, MAX, -1)).toBe(499);
+  });
+});
+
+/**
+ * Where a pasted link lands — see src/web/scroll.ts § arrivalTarget.
+ *
+ * Pinned here for the same reason `screenTarget` is: it is the arithmetic of a
+ * bug that needed no browser to find. `/read/<slug>?note=<id>` opened the
+ * dialog and left the passage it is about somewhere off screen, because `?at=`
+ * was the only parameter that moved the page.
+ */
+const NOTE = "spya-k3m9qt";
+const PASSAGE = "spya-p7w2dn";
+const ELSEWHERE = "spya-tgnssb";
+const COMMENTS = [
+  { id: NOTE, blockId: PASSAGE },
+  { id: "spya-h4r2wd", blockId: ELSEWHERE },
+];
+
+describe("arrivalTarget", () => {
+  it("scrolls to the note's passage when the link carries no position", () => {
+    // The bug. Before the fix this returned null, which is the top of the
+    // article — a dialog about a paragraph the reader cannot see.
+    expect(arrivalTarget(null, NOTE, COMMENTS)).toBe(PASSAGE);
+  });
+
+  it("lets the note beat a position that disagrees with it", () => {
+    expect(arrivalTarget(ELSEWHERE, NOTE, COMMENTS)).toBe(PASSAGE);
+  });
+
+  it("is the position when there is no note", () => {
+    expect(arrivalTarget(ELSEWHERE, null, COMMENTS)).toBe(ELSEWHERE);
+    expect(arrivalTarget(null, null, COMMENTS)).toBe(null);
+  });
+
+  it("falls back to the position when the note names nothing we have", () => {
+    // Two cases in one: the comments have not arrived yet, and the comment was
+    // deleted. Neither is a reason to strand the reader at the top.
+    expect(arrivalTarget(ELSEWHERE, NOTE, [])).toBe(ELSEWHERE);
+    expect(arrivalTarget(null, "spya-999999", COMMENTS)).toBe(null);
   });
 });
