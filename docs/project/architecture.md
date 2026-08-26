@@ -21,13 +21,17 @@ constraint, not an apology — keep it boring while the ideas are still moving.
   URL
    │
    ▼
- ┌──────────┐   raw.html
- │ 1 fetch  │──────────────►  data/<slug>/raw.html
+ ┌──────────┐   raw.html OR raw.pdf, and raw.json saying which
+ │ 1 fetch  │──────────────►  data/<slug>/raw.{html,pdf} + raw.json
  └──────────┘
    │
    ▼
- ┌──────────┐   Mozilla Readability (NOT a sanitiser — security.md)
- │ 2 extract│──────────────►  data/<slug>/article.html   + meta.json
+ ┌──────────┐   HTML → Mozilla Readability (NOT a sanitiser — security.md)
+ │ 2 extract│   PDF  → a model reads the pages, and the transcription is
+ │          │          CHECKED against the PDF's own text layer, per page
+ │          │          (pdf-ingestion.md; the branch is on raw.json, never
+ │          │           on the URL)
+ │          │──────────────►  data/<slug>/article.html   + meta.json
  └──────────┘                 (title, byline, siteName, lang, url)
    │
    ▼
@@ -90,8 +94,8 @@ artefacts on disk, not by reaching into another stage's code.
 
 | # | Stage | Owner | Artefact |
 |---|-------|-------|----------|
-| 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` |
-| 2 | extract / Readability — see [content-extraction.md](content-extraction.md) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
+| 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` or `raw.pdf`, plus `raw.json` |
+| 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/pdf-ingestion.md](../plans/pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
 | 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
 | 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
@@ -131,7 +135,15 @@ Filesystem, one directory per article, no database:
   data/_jobs/       ingest job records, one file per job (ingest-queue.md)
   data/<slug>/
     raw.html        raw fetched page — kept so a re-extraction needn't re-fetch
-    article.html    Readability-extracted — NOT yet sanitised (security.md)
+      or raw.pdf    the fetched PDF, as bytes
+    raw.json        WHICH of those two is authoritative, and the provenance
+                    with it: final URL, content type, encoding, bytes, sha256.
+                    Read by stage 2 — a refresh can leave BOTH raw files there,
+                    and "whichever exists" then picks the stale one silently
+    pdf-chunks/     PDFs only: one cached model response per page range, keyed
+                    on the bytes + the prompt version + the reader, so fixing
+                    the renderer costs nothing (pdf-ingestion.md)
+    article.html    extracted — NOT yet sanitised (security.md)
     meta.json       title, byline, site, lang, url, fetchedAt
     blocks.json     the block sequence with stable ids   ← the spine
                     (array order IS document order — block-ids.md)

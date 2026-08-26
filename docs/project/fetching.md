@@ -377,14 +377,21 @@ Honest list, none of it blocking:
    `runExtract` is the obvious answer, and it touches two stages this one doesn't own
    ([ingest-queue.md](ingest-queue.md), [content-extraction.md](content-extraction.md)). Worth doing
    deliberately rather than quietly.
-2. **The queue writes `raw.html` as a UTF-8 string** rather than the bytes, and has no PDF path.
-   Fine today, since nothing downstream reads a PDF; see [ingest-queue.md](ingest-queue.md).
-3. **PDFs are fetched and stored and nothing reads them.** Deliberate — Greg asked for the fetcher
-   to handle them ahead of the viewer. What the previous version learned about PDF transcription is
-   in [original-version/extraction.md](original-version/extraction.md#pdfs-out-of-scope-but-the-lesson-transfers);
-   the short version is *don't parse structurally when a multimodal model will read the bytes*.
-   **Now planned**: [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md) closes this item and the
-   one above it — `raw.pdf` as bytes, and a second extractor beside Readability.
+2. ~~**The queue writes `raw.html` as a UTF-8 string** rather than the bytes, and has no PDF path.~~
+   **Closed, 2026-08-26.** The queue calls `fetchDocument` and `writeRaw`, which writes the bytes for
+   a PDF, the decoded string for HTML, and **`raw.json` beside either** — the manifest recording
+   `kind`, the file, the requested and final URLs, the content type, the encoding, the byte count and
+   the SHA-256. HTML is still written decoded, deliberately, since every later stage wants text; the
+   manifest is what stops that being a silent loss. See `RawManifest` in
+   [`src/fetch.ts`](../../src/fetch.ts).
+3. ~~**PDFs are fetched and stored and nothing reads them.**~~ **Closed, 2026-08-26.** Paste a PDF
+   URL into the add box and it becomes an article. Stage 2 branches on the manifest — never on the
+   URL, because a `.pdf` address that served a Cloudflare page is HTML — and a PDF goes to
+   [`src/pdf-read.ts`](../../src/pdf-read.ts) instead of Readability, producing the same
+   `article.html` + `meta.json`. What the previous version learned still held:
+   [original-version/extraction.md](original-version/extraction.md#pdfs-out-of-scope-but-the-lesson-transfers)
+   says *don't parse structurally when a multimodal model will read the bytes*, and that is what was
+   built. [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).
 4. **A JS-rendered page returns its shell**, and we report success. `x.com` gives 193 KB of HTML
    with no post text in it. Detecting this needs the two-sided extraction ratio check, which belongs
    to stage 2 and is [on the borrow list](original-version/borrow-list.md).

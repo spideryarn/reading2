@@ -156,8 +156,10 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 
 | Command | Stage | Writes |
 |---|---|---|
-| `npm run fetch -- <url> [dir]` | 1, fetch the page and say what came back ([fetching.md](fetching.md)) | `data/<slug>/raw.html`, or `raw.pdf` |
+| `npm run fetch -- <url> [dir]` | 1, fetch the page and say what came back ([fetching.md](fetching.md)) | `data/<slug>/raw.html` or `raw.pdf`, plus the `raw.json` manifest |
 | `npm run extract -- <url>` | 1–2, fetch + Readability ([content-extraction.md](content-extraction.md)) | `output/<slug>.html`, `data/<slug>/meta.json` |
+| `npm run pdf:pass0 -- <file.pdf>` | 2, what a PDF says for free: pages, words, scan or not, running headers. No model, no network | nothing — it prints |
+| `npm run pdf -- <file.pdf> [slug]` | 2, **the other extractor**: a model reads the pages, the transcription is checked against the PDF's own text, and the result is the same `article.html` Readability would have made ([content-extraction.md § Two extractors](content-extraction.md#two-extractors-one-artefact)) | `output/<slug>.html`, `data/<slug>/meta.json`, `data/<slug>/pdf-chunks/` |
 | `npm run blocks -- <article.html>` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | `<article>.blocks.json` |
 | `npm run toc -- <blocks.json> [dir]` | 4, the tree **and** its nav labels ([table-of-contents.md](table-of-contents.md)). Two model passes — the structure in one call, the labels in parallel batches — but one command, and nothing is written until both finish | `tree.json`, `labels.json`, `blocks.json` |
 | `npm run labels -- <dir>` | 4b on its own, against a `tree.json` that already exists ([src/labels.ts](../../src/labels.ts)). The stage to re-run when you have changed the label prompt and do not want to pay for a new tree | `labels.json`, and rewrites `tree.json` |
