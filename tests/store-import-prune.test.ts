@@ -176,6 +176,32 @@ when("pruning an article whose directory has gone", () => {
     expect(orphans.map((o) => o.slug)).not.toContain(SLUG);
   }, 30_000);
 
+  it("does not delete an article whose directory came back after the scan", async () => {
+    /* The gap between `findOrphans` and `pruneOrphans` is a listing, four
+       count(*)s per article, and however long the operator spent reading the
+       list before agreeing. Two checks that far apart are one observation
+       repeated, not two independent ones — and this repository lives inside a
+       Dropbox folder, so a directory can go and come back with nobody
+       intending anything.
+
+       Raised by a GPT Sol review, 2026-08-26: `pruneOrphans` trusted the list
+       it was handed and deleted without looking again. Placed BEFORE the test
+       below, which really does remove the article. */
+    await rm(DIR, { recursive: true, force: true });
+
+    const mine = (await findOrphans()).filter((o) => o.slug === SLUG);
+    expect(mine, "the scan should have called it an orphan").toHaveLength(1);
+
+    // It comes back: a sync, another session re-running a stage, a restore.
+    await mkdir(DIR, { recursive: true });
+    await writeFile(path.join(DIR, "blocks.json"), JSON.stringify({ blocks: [] }), "utf8");
+
+    expect(await pruneOrphans(mine), "it deleted an article that is on disk again").toEqual([]);
+
+    const left = await getDb().select({ id: articles.id }).from(articles).where(eq(articles.slug, SLUG));
+    expect(left, "the row was deleted anyway").toHaveLength(1);
+  }, 30_000);
+
   it("finds it, counts what it holds, and removes it once the directory is gone", async () => {
     await rm(DIR, { recursive: true, force: true });
 

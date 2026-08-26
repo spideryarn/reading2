@@ -27,15 +27,33 @@ import { fileURLToPath } from "node:url";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 
-/** `const ARTICLE_ID = "…"` and its neighbours, which is how every fixture spells it. */
-const DECLARED = /const\s+(\w*(?:ARTICLE|OWNER|REVISION)\w*_ID)\s*=\s*"([0-9a-f-]{36})"/g;
+/**
+ * **Every uuid literal in the file**, not the ones declared a particular way.
+ *
+ * The first version matched `const <SOMETHING>_ID = "…"`, which is how most
+ * fixtures spell it — and a GPT Sol review found a live collision it could not
+ * see, because `tests/store-export-isolation.test.ts` writes its uuid as an
+ * object property (`id: "…"`) instead. Both files insert and tear down that
+ * article, and the guard was green.
+ *
+ * A guard that only sees the shape it was written from is the same
+ * written-from-a-list mistake this whole pass kept finding. So: parse them all.
+ * Measured before widening — 19 distinct uuids across the suite and exactly one
+ * appearing in two files — so this costs no false-positive noise.
+ */
+const DECLARED = /"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/g;
 
 function claims(): { file: string; name: string; id: string }[] {
   const out: { file: string; name: string; id: string }[] = [];
   for (const file of readdirSync(DIR).filter((f) => f.endsWith(".test.ts"))) {
     const source = readFileSync(path.join(DIR, file), "utf8");
-    for (const [, name, id] of source.matchAll(DECLARED)) {
-      out.push({ file, name: name as string, id: id as string });
+    for (const m of source.matchAll(DECLARED)) {
+      /* The name is for the failure message only — the id is the fact. Taken
+         from the nearest `const NAME =` before the match where there is one,
+         so a property-style id still reports something a reader can find. */
+      const before = source.slice(0, m.index ?? 0);
+      const name = before.match(/const\s+(\w+)\s*=\s*[^;]*$/)?.[1] ?? "inline";
+      out.push({ file, name, id: m[1] as string });
     }
   }
   return out;

@@ -122,8 +122,23 @@ const TRANSIENT_ERRNOS = new Set([
   "EAI_AGAIN",
 ]);
 
-/** A SQLSTATE is exactly five of `[0-9A-Z]`. Anything else is somebody's errno. */
+/**
+ * A SQLSTATE is exactly five of `[0-9A-Z]`. Anything else is somebody's errno.
+ *
+ * **Takes `undefined` deliberately, because its own caller hands it one.**
+ * `chain.find(...)` returns `undefined` when nothing in the chain carries a
+ * SQLSTATE — a plain `Error`, or a `pg` connection failure that never reached
+ * Postgres — and the guard clause below is what stops this whole file throwing
+ * a `TypeError` of its own instead of classifying the failure.
+ *
+ * It did exactly that until 2026-08-26, and the tests were satisfied: they
+ * asked whether the sentinel was gone, and a crash inside the scrubber removes
+ * it perfectly. What went with it was the classification, the `[db-*]` code and
+ * the diagnostic log. Found by a GPT Sol review; the tests now assert the
+ * sentence rather than the absence.
+ */
 function sqlstateOf(err: unknown): string | undefined {
+  if (err === null || typeof err !== "object") return undefined;
   const code = (err as { code?: unknown }).code;
   return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : undefined;
 }

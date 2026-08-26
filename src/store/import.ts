@@ -987,6 +987,30 @@ export async function pruneOrphans(orphans: readonly Orphan[]): Promise<Orphan[]
   const db = getDb();
   const removed: Orphan[] = [];
   for (const orphan of orphans) {
+    /* **Stat again, here, immediately before the delete.** `findOrphans` also
+       checked — but that was a different moment, and what is between the two is
+       a listing, four `count(*)`s per article, and however long the operator
+       spent reading the list. A directory that came back in that window is not
+       an orphan any more.
+ 
+       This is not a hypothetical on this machine: the repository lives inside a
+       Dropbox folder, so a directory can go and return without anybody
+       intending anything, and another session re-running a stage does the same.
+       Two checks a minute apart are one observation repeated, not two
+       independent ones — raised by a GPT Sol review, 2026-08-26.
+ 
+       Same rule as before: only ENOENT is gone. Anything else, including a
+       directory that has reappeared, is skipped and said out loud, because the
+       thing on the other side of this is an irreversible delete of everything
+       the reader wrote about that article. */
+    const state = await directoryState(path.join(ROOT, "data", orphan.slug));
+    if (state !== "gone") {
+      logger.warn(
+        { slug: orphan.slug, state },
+        "not pruning after all: its directory is back, or cannot be read",
+      );
+      continue;
+    }
     await db.transaction(async (tx) => {
       await tx
         .update(articles)

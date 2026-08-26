@@ -58,7 +58,7 @@ const PREVIOUS_FLAG = vi.hoisted(() => {
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles, comments as commentsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { kindOfMessage, worthRetrying } from "../src/messages.js";
+import { kindOfMessage, STORAGE_BUSY, STORAGE_FAILED, worthRetrying } from "../src/messages.js";
 import { guardDbStore } from "../src/store/db-errors.js";
 import { currentOwnerId } from "../src/owner.js";
 
@@ -340,10 +340,33 @@ describe("the guard, without a database", () => {
   it("scrubs an error that has nothing to do with Drizzle", async () => {
     /* The allowlist, doing the thing a detector could not: a store throwing its
        own message with a value interpolated into it is not on anybody's list of
-       third-party error shapes, and is covered anyway. */
-    const homegrown = new Error(`bad row: ${SENTINEL}`);
+       third-party error shapes, and is covered anyway.
 
-    expect((await failureFrom(homegrown)).message).not.toContain(SENTINEL);
+       **Asserting the classified sentence, not merely the sentinel's absence.**
+       Absence was satisfied for a while by the scrubber throwing its own
+       `TypeError` — the sentinel really was gone, and so was the classification,
+       the `[db-*]` code and the diagnostic log. A test that asks only "is the
+       secret gone" is answered perfectly by a crash. Found by GPT Sol,
+       2026-08-26. */
+    const homegrown = new Error(`bad row: ${SENTINEL}`);
+    const failure = await failureFrom(homegrown);
+
+    expect(failure.message).not.toContain(SENTINEL);
+    expect(failure.name).toBe("StoreFailure");
+    expect(failure.message).toBe(STORAGE_FAILED.message);
+    expect(kindOfMessage(failure.message)).not.toBeNull();
+  });
+
+  it("classifies a connection failure as its own sentence, not as a crash", async () => {
+    /* The same hole from the other side. `ECONNREFUSED` carries an errno rather
+       than a SQLSTATE, so nothing in the chain has one — which used to make the
+       scrubber dereference `undefined`. `worthRetrying` said "true" about the
+       resulting TypeError and the retryability test was satisfied by it. */
+    const refused = Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" });
+    const failure = await failureFrom(refused);
+
+    expect(failure.name).toBe("StoreFailure");
+    expect(failure.message).toBe(STORAGE_BUSY.message);
   });
 
   it("keeps the frames and drops the line that carries the message", async () => {
