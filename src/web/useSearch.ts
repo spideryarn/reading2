@@ -23,6 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SearchRun } from "../types.js";
 import { mintId } from "../ids.js";
 import { describeFetchFailure } from "./useComments.js";
+import { failure, readJson } from "./lib/api.js";
 
 export interface SearchApi {
   runs: SearchRun[];
@@ -52,8 +53,8 @@ export function useSearch(slug: string): SearchApi {
     let live = true;
     setRuns([]);
     fetch(`/api/search/${encodeURIComponent(slug)}`)
-      .then((r) => r.json())
-      .then((body: { runs?: SearchRun[]; error?: string }) => {
+      .then((r) => readJson<{ runs?: SearchRun[]; error?: string }>(r))
+      .then((body) => {
         if (!live) return;
         if (body.error) setError(body.error);
         else setRuns(body.runs ?? []);
@@ -81,10 +82,7 @@ export function useSearch(slug: string): SearchApi {
         // A DELETE that 500s used to remove the row from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
         // Same line, same reason, as useComments.ts.
-        if (!r.ok) {
-          const body = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body.error ?? r.statusText);
-        }
+        if (!r.ok) throw await failure(r);
       } catch (e) {
         setError(describeFetchFailure(e as Error));
       }
@@ -107,11 +105,7 @@ export function useSearch(slug: string): SearchApi {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, criterion }),
       })
-        .then(async (r) => {
-          const body = await r.json();
-          if (!r.ok) throw new Error(body.error ?? r.statusText);
-          return body as SearchRun;
-        })
+        .then((r) => readJson<SearchRun>(r))
         // The server always answers with the whole run, `status: "error"`
         // included, so there is one code path for "the model failed" and it is
         // the same one as for success.

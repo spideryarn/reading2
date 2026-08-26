@@ -61,6 +61,7 @@ import { useJobs } from "./useJobs.js";
 import { useLibrarySearch } from "./useLibrarySearch.js";
 import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
+import { failure } from "./lib/api.js";
 
 export function Library() {
   const shelf = useShelf();
@@ -769,10 +770,7 @@ function Actions({
          job — a bad slug, a queue that would not take it, a 501 — left the
          button spinning briefly and then looking as though it had worked. That
          is the silent success this repo keeps writing up. */
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? r.statusText);
-      }
+      if (!r.ok) throw await failure(r);
     } catch (e) {
       shelf.report(`Couldn't queue a rebuild: ${(e as Error).message}`);
     } finally {

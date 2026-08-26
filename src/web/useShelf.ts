@@ -18,6 +18,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LibraryEntry } from "../types.js";
+import { readJson } from "./lib/api.js";
 
 /** How long the Undo strip stays up. Long enough to reach, short enough not to nag. */
 const UNDO_MS = 9000;
@@ -65,11 +66,7 @@ export function useShelf(): Shelf {
 
   const reload = useCallback(() => {
     return fetch("/api/library")
-      .then(async (r) => {
-        const body = await r.json();
-        if (!r.ok) throw new Error(body.error ?? r.statusText);
-        return body as { articles: LibraryEntry[] };
-      })
+      .then((r) => readJson<{ articles: LibraryEntry[] }>(r))
       .then((b) => {
         setArticles(b.articles);
         // Cleared on success, or a transient failure leaves a red box above a
@@ -105,9 +102,7 @@ export function useShelf(): Shelf {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.error ?? r.statusText);
-      return (json as { entry: LibraryEntry }).entry;
+      return (await readJson<{ entry: LibraryEntry }>(r)).entry;
     },
     [],
   );
@@ -177,9 +172,7 @@ export function useShelf(): Shelf {
   const loadArchived = useCallback(async () => {
     try {
       const r = await fetch("/api/library?archived=1");
-      const body = await r.json();
-      if (!r.ok) throw new Error(body.error ?? r.statusText);
-      setArchived((body as { articles: LibraryEntry[] }).articles);
+      setArchived((await readJson<{ articles: LibraryEntry[] }>(r)).articles);
     } catch (e) {
       setActionError((e as Error).message);
     }

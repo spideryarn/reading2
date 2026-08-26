@@ -74,6 +74,7 @@ import { navPlan, useArrowNav } from "./keynav.js";
 import { useSwipeNav } from "./swipe.js";
 import { useComments } from "./useComments.js";
 import { PILL } from "./pill.js";
+import { readJson } from "./lib/api.js";
 
 
 
@@ -132,11 +133,7 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
     setArticle(null);
     setError(null);
     fetch(`/api/article/${encodeURIComponent(slug)}`)
-      .then(async (r) => {
-        const body = await r.json();
-        if (!r.ok) throw new Error(body.error ?? r.statusText);
-        return body as Article;
-      })
+      .then((r) => readJson<Article>(r))
       // Sanitised here, at the doorway, and nowhere later. This is the pass that
       // guards the render: stage 3 cleaned this HTML under *jsdom's* parser and
       // we are about to hand it to *Chrome's*. It must happen before anything

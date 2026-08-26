@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Job, Summaries, SummariesResponse } from "../types.js";
 import { useJobs } from "./useJobs.js";
+import { readJson } from "./lib/api.js";
 
 export type SummariesStatus = "loading" | "none" | "ready" | "error";
 
@@ -76,9 +77,7 @@ export function useSummaries(slug: string): UseSummaries {
         setStatus("none");
         return;
       }
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      const loaded = body as SummariesResponse;
+      const loaded = await readJson<SummariesResponse>(res);
       setSummaries(loaded.summaries);
       setStale(loaded.stale);
       setError(null);

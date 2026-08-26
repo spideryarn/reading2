@@ -104,6 +104,7 @@ import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
+import { readJson } from "./lib/api.js";
 
 /**
  * Clear of the fixed bottom bar, in terms of `--dock-h` rather than a number.
@@ -216,11 +217,7 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
     setSlow(false);
     const timer = setTimeout(() => live && setSlow(true), LOADING_AFTER_MS);
     fetch(`/api/metadata/${encodeURIComponent(slug)}`)
-      .then(async (r) => {
-        const body = await r.json();
-        if (!r.ok) throw new Error(body.error ?? r.statusText);
-        return body as ArticleMetadata;
-      })
+      .then((r) => readJson<ArticleMetadata>(r))
       .then((m) => live && setProvenance(m))
       .catch((e: Error) => live && setProvenanceError(e.message));
     return () => {

@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryResponse, Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
+import { failure, readJson } from "./lib/api.js";
 
 export type GlossaryStatus = "loading" | "none" | "ready" | "error";
 
@@ -80,9 +81,7 @@ export function useGlossary(slug: string): UseGlossary {
         setStatus("none");
         return;
       }
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      const loaded = body as GlossaryResponse;
+      const loaded = await readJson<GlossaryResponse>(res);
       setGlossary(loaded.glossary);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
@@ -186,10 +185,7 @@ export function useGlossary(slug: string): UseGlossary {
   const reset = useCallback(async () => {
     try {
       const res = await fetch(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? res.statusText);
-      }
+      if (!res.ok) throw await failure(res);
     } catch (err) {
       setError((err as Error).message);
       return;
@@ -229,9 +225,7 @@ export function useGlossary(slug: string): UseGlossary {
           `/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
           { method: "POST" },
         );
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((body as { error?: string }).error ?? res.statusText);
-        const { entry } = body as { entry: GlossaryEntry };
+        const { entry } = await readJson<{ entry: GlossaryEntry }>(res);
         setGlossary((current) =>
           current
             ? { ...current, entries: current.entries.map((e) => (e.id === entry.id ? entry : e)) }

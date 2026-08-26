@@ -17,6 +17,7 @@ import type { ChatMessage, ChatThread, Citation } from "../types.js";
 import { mintId } from "../ids.js";
 import { readEvents } from "./lib/sse.js";
 import { describeFetchFailure } from "./useComments.js";
+import { failure, readJson } from "./lib/api.js";
 
 export interface ChatApi {
   threads: ChatThread[];
@@ -113,7 +114,7 @@ export interface Begun {
    * refuse one aimed at an answer that has already finished — see `Live.attempt`
    * in src/routes.ts.
    */
-  attempt?: number;
+  attempt?: string;
 }
 
 /**
@@ -216,27 +217,68 @@ export function useChat(slug: string): ChatApi {
   const showing = useRef(slug);
 
   /**
+   * How many streams are writing into each conversation right now.
+   *
+   * Only `refresh` reads it, and only to answer one question: is anything on
+   * screen for this conversation newer than what the server is about to say?
+   * See the note there.
+   */
+  const running = useRef(new Map<string, number>());
+
+  /**
    * Ask the server what this article's conversations actually are.
    *
-   * Used on arrival, and again whenever the server has refused something the
-   * client had already done optimistically — see the 409 in `run`. In that case
-   * the screen is not merely out of date, it is *wrong*: it is showing an edit
-   * that did not happen, with the turns it would have discarded already gone.
+   * Two callers, and they want different amounts of it. On arrival there is
+   * nothing on screen worth keeping, so the whole list is replaced. After a 409
+   * the screen is not merely out of date, it is *wrong* — it is showing an edit
+   * that did not happen, with the turns it would have discarded already gone —
+   * but only for **one conversation**, and that is all that gets replaced.
+   *
+   * That narrowing is not tidiness. Replacing the whole list put a snapshot
+   * taken before an unrelated send over the top of that send's optimistic rows,
+   * and every later frame of it then patched a row that was not there any more:
+   * an answer that arrives nowhere, or a spinner that never clears. A 409 in one
+   * conversation has nothing to say about another. Found by a GPT-5.6 review,
+   * 2026-08-26.
+   *
+   * The same argument applies *within* one conversation, so a thread another
+   * stream is still writing into is left alone too — there is nothing the server
+   * can tell us about it that is not already older than the screen.
    */
-  const refresh = useCallback(async (): Promise<void> => {
-    const mine = slug;
-    try {
-      const body = (await (await fetch(`/api/chat/${encodeURIComponent(mine)}`)).json()) as {
-        threads?: ChatThread[];
-        error?: string;
-      };
-      if (showing.current !== mine) return;
-      if (body.error) setError(body.error);
-      else setThreads(body.threads ?? []);
-    } catch (e) {
-      if (showing.current === mine) setError(describeFetchFailure(e as Error));
-    }
-  }, [slug]);
+  const refresh = useCallback(
+    async (only?: string): Promise<void> => {
+      const mine = slug;
+      try {
+        const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
+          await fetch(`/api/chat/${encodeURIComponent(mine)}`),
+        );
+        if (showing.current !== mine) return;
+        if (body.error) {
+          setError(body.error);
+          return;
+        }
+        const fresh = body.threads ?? [];
+        if (only === undefined) {
+          setThreads(fresh);
+          return;
+        }
+        // More than one means somebody else is still writing here — this run is
+        // counted too, and it is the one that failed.
+        if ((running.current.get(only) ?? 0) > 1) return;
+        const server = fresh.find((t) => t.id === only);
+        setThreads((prev) =>
+          server
+            ? prev.map((t) => (t.id === only ? server : t))
+            : // The server does not have it at all: it was deleted, or it was
+              // never written down. Either way it is not a conversation.
+              prev.filter((t) => t.id !== only),
+        );
+      } catch (e) {
+        if (showing.current === mine) setError(describeFetchFailure(e as Error));
+      }
+    },
+    [slug],
+  );
 
   useEffect(() => {
     showing.current = slug;
@@ -309,7 +351,17 @@ export function useChat(slug: string): ChatApi {
    * in src/routes.ts. Missing means the server did not say, and the stop then
    * behaves as it always did.
    */
-  const attempts = useRef(new Map<string, number>());
+  const attempts = useRef(new Map<string, string>());
+
+  /* Cleared when the article changes, like the tombstones above. The tokens
+     name streams in *this* server for *these* conversations; carrying them into
+     another article's threads is at best dead weight and at worst a stop that
+     names something real by accident. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads a ref, and changing article is when the tokens in it stop meaning anything
+  useEffect(() => {
+    const stale = attempts.current;
+    return () => stale.clear();
+  }, [slug]);
 
   /**
    * Ask the server to stop one answer.
@@ -331,10 +383,7 @@ export function useChat(slug: string): ChatApi {
             body: JSON.stringify({ messageId, attempt: attempts.current.get(messageId) }),
           },
         );
-        if (!r.ok) {
-          const body = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body.error ?? r.statusText);
-        }
+        if (!r.ok) throw await failure(r);
       } catch (e) {
         setError(`Couldn't stop that answer: ${describeFetchFailure(e as Error)}`);
       }
@@ -399,6 +448,11 @@ export function useChat(slug: string): ChatApi {
          showed — until `stop` needed to name the row it wanted stopped, and
          found the only name it had was one the server had never heard of. */
       let pendingId = replyId;
+      /* Counted for `refresh` alone — see the note there. Incremented before
+         the request leaves and decremented in the `finally` below, so a 409 can
+         tell "nothing else is happening here" from "there is a live answer in
+         this conversation whose rows the server has not heard about yet". */
+      running.current.set(id, (running.current.get(id) ?? 0) + 1);
 
       /** Rewrite the assistant row this send is responsible for. */
       const patchReply = (patch: Partial<ChatMessage>) =>
@@ -418,8 +472,7 @@ export function useChat(slug: string): ChatApi {
             // A failure *before* the stream starts is ordinary JSON — a bad
             // slug, a question over the size cap. After it starts, failures
             // arrive as an `error` frame inside a 200, and are handled below.
-            const body = (await response.json().catch(() => ({}))) as { error?: string };
-            const why = body.error ?? response.statusText;
+            const why = (await failure(response)).message;
             /* **409 is the one status the screen cannot survive being wrong
                about.** It means the server refused a retry or an edit that this
                client had already performed on screen — and an edit performs by
@@ -434,7 +487,7 @@ export function useChat(slug: string): ChatApi {
                2026-08-26. */
             if (response.status === 409) {
               setError(why);
-              await refresh();
+              await refresh(current);
               return;
             }
             throw new Error(why);
@@ -513,6 +566,11 @@ export function useChat(slug: string): ChatApi {
           patchReply({ status: "error", error: describeFetchFailure(e as Error) });
         } finally {
           // Whatever happened, nobody is waiting to stop this any more.
+          for (const thread of new Set([id, current])) {
+            const left = (running.current.get(thread) ?? 1) - 1;
+            if (left > 0) running.current.set(thread, left);
+            else running.current.delete(thread);
+          }
           stopWanted.current.delete(replyId);
           stopWanted.current.delete(pendingId);
           /* The attempt number outlives the stream on purpose. A stop pressed
@@ -644,10 +702,7 @@ export function useChat(slug: string): ChatApi {
           `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
           init,
         );
-        if (!r.ok) {
-          const body = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body.error ?? r.statusText);
-        }
+        if (!r.ok) throw await failure(r);
       } catch (e) {
         // The optimistic change stays on screen. Reverting it would be a second
         // surprise on top of the first, and the message says what happened —

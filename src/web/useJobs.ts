@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, StepName } from "../types.js";
+import { readJson } from "./lib/api.js";
 
 /** While something is running. Fast enough to feel live, slow enough to be free. */
 const BUSY_MS = 1000;
@@ -25,10 +26,7 @@ function isBusy(jobs: Job[]): boolean {
 }
 
 async function send<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((body as { error?: string }).error ?? res.statusText);
-  return body as T;
+  return readJson<T>(await fetch(url, init));
 }
 
 export interface UseJobs {

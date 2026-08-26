@@ -1,6 +1,6 @@
 # Deployment
 
-Spideryarn on Vercel: how it gets there, what is live, and the four things that
+Spideryarn on Vercel: how it gets there, what is live, and the five things that
 break without saying so.
 
 > I'm inclined to think we should set up a new Vercel project, rather than
@@ -92,7 +92,7 @@ is read by nothing.
 | `DATABASE_URL` | Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off) |
-| `NODEJS_HELPERS=0` | the request body (section not written yet) |
+| `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
 | `ANTHROPIC_API_KEY` | the pipeline stages. Note it is *not* in `.env.local` — it comes from Greg's shell, so it is the easy one to forget |
 | `OPENROUTER_API_KEY` | explain, and chat |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | for the beta gate, which does not exist yet |
@@ -112,11 +112,13 @@ things it exists to catch. A health check that passes when the deployment is
 wrong is worse than none, because it is the thing you point at to argue nothing
 is wrong. [silent-success.md](../reusable/silent-success.md).
 
-## The four that fail quietly
+## The five that fail quietly
 
-Each of these was found on 2026-08-26, each reported success while being wrong,
-and each is written up in
-[first-vercel-deploy-silent-failures.md](../postmortems/first-vercel-deploy-silent-failures.md).
+Each reported success while being wrong. The first four were found on 2026-08-26
+by the deployment itself and are written up in
+[first-vercel-deploy-silent-failures.md](../postmortems/first-vercel-deploy-silent-failures.md);
+the fifth was found in review before it could bite, which is the only reason it
+is not in there too.
 
 ### The build compiles TypeScript it cannot compile
 
@@ -176,6 +178,31 @@ There is a second way to lose the same guarantee, found by GPT Sol in review:
 as verified, and not used. `/api/health` warns when `DATABASE_URL` carries any of
 them; keep them out of it.
 
+### The request body
+
+`readBody` in [`src/routes.ts`](../../src/routes.ts) consumes the raw request
+stream with `for await (const chunk of req)`. Vercel's request helpers read that
+stream **first** and replay it through `req.on("data")` — not through the async
+iterator — so with helpers on, every `POST` body arrives **empty**. Nothing
+errors: each route reports a missing field, as though the client had sent a bad
+request. `NODEJS_HELPERS=0` turns the helpers off and hands the function the raw
+Node request, which is the shape `handleApi` was written against anyway.
+
+Found by GPT Sol in review, 2026-08-26, from Vercel's own source rather than its
+documentation.
+
+**`POST /api/health` is how you check it is still true**, after a platform change
+or a runtime bump:
+
+```
+curl -X POST .../api/health -d '{"hello":"world"}'
+```
+
+It reports `bytes`, and it counts them with the *same* `for await` loop
+`readBody` uses. A check that reads the body a different way from the code it is
+vouching for can pass while the real path fails. `bytes: 0` against a request
+that had one means something read it first.
+
 ## What does not work in production yet
 
 Reading an article, the shelf, and comments come from Postgres. These four still
@@ -191,6 +218,23 @@ write to a local filesystem, which a serverless host does not have, and will
 
 Greg, 2026-08-26, chose to ship with these broken rather than wait for them. They
 are steps 7–10 of [postgres-migration.md](../plans/postgres-migration.md).
+
+## What the reader sees when the server fails
+
+Worth knowing because the first deployment demonstrated it: while every API route
+was returning Vercel's plain-text 500, the homepage rendered
+
+    Unexpected token 'A', "A server e"... is not valid JSON
+
+and logged **nothing** to the browser console. Twelve call sites had each written
+`await r.json()` *before* checking `r.ok`, so the parser threw first and the line
+that turns a server error into a readable message never ran.
+
+That is fixed in [`src/web/lib/api.ts`](../../src/web/lib/api.ts), which every
+client `fetch` now reads its response through — see
+[web-client.md § Reading an API response](web-client.md#reading-an-api-response).
+It matters here rather than only there: when this deployment breaks, what the
+reader is told about it is the only symptom most people will ever report.
 
 ## Still to do before this is a real deployment
 

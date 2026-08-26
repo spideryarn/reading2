@@ -16,6 +16,7 @@ import type { Comment } from "../types.js";
 import { mintId } from "../ids.js";
 import { readEvents } from "./lib/sse.js";
 import type { SelectionAnchor } from "./selection.js";
+import { failure, readJson } from "./lib/api.js";
 
 /**
  * What to say when the request never reached the server.
@@ -99,8 +100,8 @@ export function useComments(slug: string): CommentsApi {
     let live = true;
     setComments([]);
     fetch(`/api/comments/${encodeURIComponent(slug)}`)
-      .then((r) => r.json())
-      .then((body: { comments?: Comment[]; error?: string }) => {
+      .then((r) => readJson<{ comments?: Comment[]; error?: string }>(r))
+      .then((body) => {
         if (!live) return;
         if (body.error) setError(body.error);
         else setComments(body.comments ?? []);
@@ -130,10 +131,7 @@ export function useComments(slug: string): CommentsApi {
         );
         // A DELETE that 500s used to remove the comment from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
-        if (!r.ok) {
-          const body = (await r.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body.error ?? r.statusText);
-        }
+        if (!r.ok) throw await failure(r);
       } catch (e) {
         setError(describeFetchFailure(e as Error));
       }
@@ -202,10 +200,7 @@ export function useComments(slug: string): CommentsApi {
              validates before it writes a header. A failure after it opens is a
              `done` frame carrying `status: "error"`. Two shapes, because they
              are two different things, and only the first can be an HTTP code. */
-          if (!r.ok || !r.body) {
-            const body = (await r.json().catch(() => ({}))) as { error?: string };
-            throw new Error(body.error ?? r.statusText);
-          }
+          if (!r.ok || !r.body) throw await failure(r);
 
           for await (const event of readEvents(r.body)) {
             /* **Read to the end even when the reader has deleted it.** Breaking

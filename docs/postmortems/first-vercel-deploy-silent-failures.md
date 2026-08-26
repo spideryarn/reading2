@@ -1,12 +1,14 @@
-# The first Vercel deploy: four failures, none of which said anything
+# The first Vercel deploy: five failures, none of which said anything
 
 2026-08-26. Getting Spideryarn onto Vercel for the first time took four
-iterations, and the striking thing is not that four things were wrong. It is that
-**all four reported success.** Every one of them produced a green build, a
-"Ready" deployment, and a site that was broken in a way no log we write mentions.
+iterations, and the striking thing is not that things were wrong. It is that
+**every one of them reported success.** Four broke the deployment — each
+producing a green build, a "Ready" status, and a site broken in a way no log we
+write mentions — and a fifth, in the client, turned the resulting failure into a
+message about JavaScript syntax.
 
-This is one file rather than four because the bugs are unrelated and the lesson
-is not. It is [silent-success.md](../reusable/silent-success.md) four times in one
+This is one file rather than five because the bugs are unrelated and the lesson
+is not. It is [silent-success.md](../reusable/silent-success.md) five times in one
 afternoon, on a platform where the usual instinct — read the logs — returns
 nothing.
 
@@ -17,7 +19,8 @@ request returned `500 FUNCTION_INVOCATION_FAILED`. `vercel logs` showed no
 runtime output at all, on either the deployment stream or the API. The build log
 said `Build Completed`.
 
-Four distinct causes, found in this order, each hidden behind the one before it.
+Four distinct causes, found in this order, each hidden behind the one before it —
+and then a fifth, which decided what any of it looked like to a reader.
 
 ## 1. The build compiled TypeScript it could not compile, then said it was fine
 
@@ -149,6 +152,46 @@ the protection does cover. The real fix is
 **The lesson**, which is the same as the other three: *a control that reports
 itself as enabled has told you about its configuration, not about its effect.*
 The only question worth asking is what an unauthenticated request actually gets.
+
+## What it looked like from the outside, which was its own bug
+
+While all of the above was true, a browser session was sent to look at the site
+and reported what the homepage actually said:
+
+```
+Unexpected token 'A', "A server e"... is not valid JSON
+```
+
+with **nothing in the console**. `"A server e…"` is the first ten characters of
+Vercel's plain-text 500, and `The page c…` — which `/read/<slug>` showed — is its
+404. So a reader hitting a completely dead backend was shown a JavaScript
+parser's complaint about the first character of an error page, and whoever went
+looking in devtools found an empty console.
+
+The cause was a fifth instance of the same habit, in the client this time.
+Twelve call sites had each written:
+
+```ts
+const body = await r.json();
+if (!r.ok) throw new Error(body.error ?? r.statusText);
+```
+
+which parses **before** it checks. That second line is careful, correct, and
+unreachable whenever the failing reply is not JSON — which is exactly when a
+reader most needs it. The error handling was not missing. It had been written and
+then placed where it could never run.
+
+Fixed in [`src/web/lib/api.ts`](../../src/web/lib/api.ts): read the text once,
+then decide; never put a response body in a user-facing message; log every
+failure once. [web-client.md § Reading an API
+response](../project/web-client.md#reading-an-api-response) has the reasoning,
+[`tests/web-api.test.ts`](../../tests/web-api.test.ts) pins it with the real
+bodies.
+
+**The general form is worth naming**, because it is not the same as a missing
+check: *error handling that runs after the thing that fails*. It is invisible in
+review — the code reads as thorough — and it only shows up when the error path is
+actually taken.
 
 ## What to change about how we work
 

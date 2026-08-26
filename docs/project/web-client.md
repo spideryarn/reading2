@@ -103,8 +103,19 @@ Read that as **adopting shadcn components**, not switching the reading view to s
 the full accounting are [shadcn-migration.md](../plans/shadcn-migration.md); this section is
 what actually landed and what a future reader would otherwise have to reverse-engineer.
 
-**What shadcn now stands behind:** the granularity pills in [`App.tsx`](../../src/web/App.tsx) and a
-`Button` waiting for the comment dialog. What it buys is accessibility we did not have —
+**What shadcn now stands behind:** the granularity pills in [`App.tsx`](../../src/web/App.tsx), a
+`Button` waiting for the comment dialog, and — since 2026-08-26 — **every "run this job" button in
+the app**, via [`JobProgress.tsx`](../../src/web/JobProgress.tsx).
+
+That last one was a deliberate visible change and the first time this section's own logic was
+applied rather than just written down. The glossary, the summaries and the thread each had a private
+copy of the same component; two of them were drawn with hand-written `gloss-btn` / `summ-btn` rules
+that differed from each other only in two paddings, a gap and two colours. That is not two designs,
+it is one design diverging. The thread was already on shadcn, this section already named shadcn as
+the house style for chrome, and a run button is chrome — so the other two moved rather than a third
+set of numbers being invented. 38 lines of CSS went with them. All four states are on
+[`/design`](../../src/web/DesignPage.tsx), because three of them only exist while a model call is in
+flight. What it buys is accessibility we did not have —
 `aria-pressed` on the toggles — and a house style for chrome not yet built.
 
 The masthead's `▾` used to be on this list, over shadcn's `Collapsible`. It went when the article's
@@ -328,6 +339,53 @@ that mismatch shipped a bug that nobody working on it could see.
   `--panel` rather than `--page` — which is exactly where the active gist cell and the active spine
   band put it. `tw:bg-highlight/20` is a plausible-looking substitution that renders subtly wrong on
   half its uses.
+
+## Reading an API response
+
+Every `fetch` in the client reads its response through
+[`src/web/lib/api.ts`](../../src/web/lib/api.ts) — `readJson` when the body is
+wanted, `failure` when the caller has already decided the request failed and only
+needs the error. There are two rules in it and both are there because they were
+once broken:
+
+**Read the text once, then decide.** Twelve call sites had each written the same
+careful four lines:
+
+```ts
+const body = await r.json();
+if (!r.ok) throw new Error(body.error ?? r.statusText);
+```
+
+which parses *before* it checks. When the failing reply is not JSON — Vercel's
+plain-text 500, an HTML 404, a proxy's login page — `r.json()` throws first and
+the second line never runs. In production on 2026-08-26 the homepage said
+`Unexpected token 'A', "A server e"... is not valid JSON`. The error handling was
+not missing; it was unreachable.
+
+**A response body never becomes a user-facing message.** Only the server's own
+`{ error }` string does, because that one is written for a reader. An unparsed
+body belongs to somebody else, and putting it on screen is how a stack trace or a
+login page ends up rendered inside a red box. What the reader gets instead is the
+status and a pointer to the console; what the console gets is the status, the
+URL, the content type and the first 300 bytes.
+
+Two smaller things it fixes on the way. `res.statusText` is **empty in
+production** — HTTP/2 removed the reason phrase from the protocol — so the old
+`?? r.statusText` fallback produced `new Error("")`, an empty red box, on exactly
+the deployments where it mattered and never on a laptop. And a `200` that is not
+JSON gets its own sentence, because it usually means the single-page-app fallback
+answered a request the API should have: calling that "not found" sends you
+looking in the wrong place entirely.
+
+Failures are logged with `console.error`, once. There is no client-side logger
+and there should not be one — [logging.md](logging.md) is about the server, and a
+browser already has a console — but before this, nothing reached it at all.
+[`tests/web-api.test.ts`](../../tests/web-api.test.ts) pins the real bodies.
+
+`describeFetchFailure` in [`useComments.ts`](../../src/web/useComments.ts) is the
+neighbouring case and stays where it is: it names the failure where the request
+never got a *response at all*, which is a different thing from a response that
+says no.
 
 ## The constraints it works under
 

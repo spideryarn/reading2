@@ -68,7 +68,7 @@
  * the `tw:` prefix — unprefixed names silently do nothing.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Copy, Loader2, PenLine, TriangleAlert, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, PenLine, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
 import { Dock } from "./Dock.js";
@@ -77,6 +77,8 @@ import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { useJobs } from "./useJobs.js";
 import { useSlow } from "./useSlow.js";
+import { readJson } from "./lib/api.js";
+import { JobProgress } from "./JobProgress.js";
 
 /** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-h)_+_2rem)]";
@@ -108,9 +110,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
         setLoaded({ status: "none" });
         return;
       }
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      const { thread, stale } = body as ThreadResponse;
+      const { thread, stale } = await readJson<ThreadResponse>(res);
       setLoaded({ status: "ready", thread, stale });
     } catch (err) {
       setLoaded({ status: "error", message: (err as Error).message });
@@ -328,12 +328,14 @@ function Empty({
  * the same text the add box shows — "Step 1 of 1" would tell you neither what
  * is slow nor what is about to fail (see AddArticle.tsx).
  */
+/**
+ * The thread page's run button. `onWrite` rather than `onRun` because that is
+ * what this page's callers already call it; the shared component underneath
+ * does not care.
+ */
 function Progress({
-  job,
-  failed,
   onWrite,
-  onCancel,
-  label,
+  ...props
 }: {
   job: Job | null;
   failed: string | null;
@@ -341,42 +343,14 @@ function Progress({
   onCancel(id: string): void;
   label: string;
 }) {
-  if (job) {
-    const step = job.steps.find((s) => s.name === "tweets");
-    return (
-      <div className="tw:flex tw:items-center tw:gap-2 tw:text-xs tw:text-foreground">
-        <Loader2 size={13} className="tw:animate-spin tw:text-highlight" />
-        <span>
-          {job.status === "queued" ? "Waiting for the queue…" : (step?.label ?? "Writing…")}
-        </span>
-        {step?.detail && <span className="tw:text-ink-faint">— {step.detail}</span>}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="tw:ml-auto"
-          title="Stop this job"
-          disabled={job.cancelling === true}
-          onClick={() => onCancel(job.id)}
-        >
-          <X size={12} />
-          {job.cancelling ? "Stopping…" : "Stop"}
-        </Button>
-      </div>
-    );
-  }
   return (
-    <>
-      {/* `() => onWrite()` and not `onWrite`: React hands the click handler a
-          MouseEvent, and `write(force = false)` would take that event as its
-          `force` argument — an object, so truthy — and quietly force every
-          press. The default parameter is what makes the shorthand dangerous. */}
-      <Button type="button" variant="outline" size="sm" onClick={() => void onWrite()}>
-        <PenLine size={13} />
-        {label}
-      </Button>
-      {failed && <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive">{failed}</p>}
-    </>
+    <JobProgress
+      {...props}
+      onRun={onWrite}
+      step="tweets"
+      icon={<PenLine size={13} />}
+      runningLabel="Writing…"
+    />
   );
 }
 
