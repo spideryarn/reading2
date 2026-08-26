@@ -325,7 +325,7 @@ function ([`src/explain.ts`](../../src/explain.ts)), the routes are a thin wrapp
 
 It is also the only place the project talks to **OpenRouter** rather than the Anthropic SDK the
 pipeline uses, because `OPENROUTER_API_KEY` is the key this project has. The model defaults to
-`anthropic/claude-sonnet-4.5` and is overridable with `SPIDERYARN_EXPLAIN_MODEL`.
+`anthropic/claude-sonnet-5` and is overridable with `SPIDERYARN_EXPLAIN_MODEL`.
 
 ## What the prompt asks for
 

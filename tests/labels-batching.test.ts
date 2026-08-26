@@ -45,7 +45,7 @@ import {
   usableCheckpoint,
 } from "../src/labels.js";
 import type { Batch } from "../src/labels.js";
-import { MODEL } from "../src/models.js";
+import { CAPABLE_MODEL } from "../src/models.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 
@@ -1019,7 +1019,7 @@ describe("generateLabels, resuming", () => {
     const batches = planBatches(tree, blocks);
     const file = {
       version: "labels/1",
-      generator: MODEL,
+      generator: CAPABLE_MODEL,
       slug: "test",
       sourceHash: hashBlocks(blocks),
       batches: batches.map((batch) => ({

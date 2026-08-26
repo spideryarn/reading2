@@ -30,7 +30,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
-import { MODEL, effortFor } from "./models.js";
+import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
@@ -135,7 +135,7 @@ export async function threadIsCurrent(dir: string): Promise<boolean> {
   const thread = await readJson<TweetThread>(path.join(dir, "tweets.json"));
   if (!thread) return false;
   if (thread.version !== PROMPT_VERSION) return false;
-  if (thread.generator !== MODEL) return false;
+  if (thread.generator !== CAPABLE_MODEL) return false;
   const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   if (!blocksFile?.blocks) return false;
   return !isStale(thread, blocksFile.blocks);
@@ -313,7 +313,7 @@ export function buildThread(
   const tweets: Tweet[] = texts.map((text) => ({ text, chars: countChars(text) }));
   return {
     version: PROMPT_VERSION,
-    generator: MODEL,
+    generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     limit: LIMIT,
@@ -412,7 +412,7 @@ export async function generateTweets(opts: {
 
   const client = new Anthropic();
   const stream = client.messages.stream({
-    model: MODEL,
+    model: CAPABLE_MODEL,
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: effortFor("tweets") },
@@ -497,7 +497,7 @@ async function main(): Promise<void> {
   }
   // Before the call, not after. This is the only thing on screen while the
   // model works, and printing it afterwards makes the command look hung.
-  console.log(`Writing the thread with ${MODEL}…`);
+  console.log(`Writing the thread with ${CAPABLE_MODEL}…`);
   const run = await generateTweets({
     dir,
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),

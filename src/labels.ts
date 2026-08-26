@@ -34,7 +34,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
-import { MODEL } from "./models.js";
+import { CAPABLE_MODEL } from "./models.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -580,7 +580,7 @@ export function batchFingerprint(batch: Batch, blocks: Block[], outline: string)
   const { shared, own } = batchParts(batch, blocks, outline);
   const canonical = [
     PROMPT_VERSION,
-    MODEL,
+    CAPABLE_MODEL,
     EFFORT,
     SYSTEM,
     batch.blocks.map((b) => b.id).join(","),
@@ -1116,7 +1116,7 @@ async function runBatch(
 
   const message = await client.messages.stream(
     {
-      model: MODEL,
+      model: CAPABLE_MODEL,
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
@@ -1210,7 +1210,7 @@ export async function generateLabels(opts: {
   const sourceHash = hashBlocks(opts.blocks);
   const manifest = {
     version: PROMPT_VERSION,
-    generator: MODEL,
+    generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash,
   };
@@ -1418,7 +1418,7 @@ export async function generateLabels(opts: {
     labels,
     file: {
       version: PROMPT_VERSION,
-      generator: MODEL,
+      generator: CAPABLE_MODEL,
       slug: opts.slug,
       sourceHash,
       structureHash: structureHash(opts.tree),
@@ -1542,7 +1542,7 @@ async function main(): Promise<void> {
     blocks: Block[];
   };
 
-  console.log(`Labelling ${blocks.filter((b) => b.gistable).length} blocks with ${MODEL}…`);
+  console.log(`Labelling ${blocks.filter((b) => b.gistable).length} blocks with ${CAPABLE_MODEL}…`);
   const run = await generateLabels({
     tree,
     blocks,

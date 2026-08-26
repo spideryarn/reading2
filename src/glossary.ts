@@ -43,7 +43,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
 import { mintUniqueId } from "./ids.js";
-import { MODEL, effortFor } from "./models.js";
+import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -645,7 +645,7 @@ export function buildGlossary(
 
   return {
     version: PROMPT_VERSION,
-    generator: MODEL,
+    generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     entries: inDocumentOrder(located, opts.blocks),
@@ -696,7 +696,7 @@ export async function glossaryIsCurrent(dir: string): Promise<boolean> {
   const glossary = await readGlossary(dir);
   if (!glossary) return false;
   if (glossary.version !== PROMPT_VERSION) return false;
-  if (glossary.generator !== MODEL) return false;
+  if (glossary.generator !== CAPABLE_MODEL) return false;
   const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   if (!blocksFile?.blocks) return false;
   return !isStale(glossary, blocksFile.blocks);
@@ -1070,7 +1070,7 @@ export async function generateGlossary(opts: {
   const client = new Anthropic();
   const stream = client.messages.stream(
     {
-      model: MODEL,
+      model: CAPABLE_MODEL,
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
       output_config: { effort: effortFor("glossary") },
@@ -1163,7 +1163,7 @@ export async function generateGlossary(opts: {
     words,
     added: glossary.entries.length - (existing?.entries.length ?? 0),
     unmatched: glossary.entries.filter((e) => e.blocks.length === 0).length,
-    model: MODEL,
+    model: CAPABLE_MODEL,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
@@ -1181,7 +1181,7 @@ async function main(): Promise<void> {
   }
   // Before the call, not after. This is the only thing on screen while the
   // model works, and printing it afterwards makes the command look hung.
-  console.log(`Finding the terms with ${MODEL}…`);
+  console.log(`Finding the terms with ${CAPABLE_MODEL}…`);
   const run = await generateGlossary({
     dir,
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),

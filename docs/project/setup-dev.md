@@ -98,8 +98,9 @@ applies.
 ## Which model everything uses
 
 **One file: [`src/models.ts`](../../src/models.ts).** It names two tiers and a table saying which
-tier each job is on. Change it there and everything moves together; before 2026-08-25 the same
-constant was declared separately in four files and one of them had drifted a version behind.
+tier each job is on. Change the model for a tier there and every job on that tier moves together;
+before 2026-08-25 the same constant was declared separately in four files and one of them had
+drifted a version behind.
 
 | Tier | The model | Reached through |
 |---|---|---|
@@ -111,6 +112,13 @@ here has been measured on it, so it exists as a named option rather than as a ch
 means running an eval under [`evals/`](../../evals/README.md) first and writing down what it cost.
 Greg, 2026-08-26 — *"use your judgment about which tasks to use for which (default to capable-model
 for now)."*
+
+**Changing a row is not the whole of moving a job**, and the file carries the list: the completion
+ceilings were sized for a model that does not spend a reasoning allocation out of them, the
+web-search cap is one only Anthropic honours, and a truncated answer is stored here as a finished
+one. The six pipeline stages cannot move by that table at all — they reach the model through the
+Anthropic SDK, and setting one of them to `quick` makes the app refuse to start rather than pretend
+it worked.
 
 Four things that file will tell you and this one will not: why the two spellings are not derived
 from each other, why the quick tier has no Anthropic-SDK spelling *and cannot have one*, why the

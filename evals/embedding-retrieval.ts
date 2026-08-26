@@ -69,7 +69,7 @@ import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { loadEnvLocal } from "../src/env.js";
-import { MODEL } from "../src/models.js";
+import { CAPABLE_MODEL } from "../src/models.js";
 import type { Block } from "../src/types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -1271,7 +1271,7 @@ async function main(): Promise<void> {
   if (arms.length === 0) {
     throw new Error(`--arms matched nothing. Known: ${DEFAULT_ARMS.map((a) => a.id).join(", ")}`);
   }
-  const judgeModel = process.env.SPIDERYARN_JUDGE_MODEL ?? MODEL;
+  const judgeModel = process.env.SPIDERYARN_JUDGE_MODEL ?? CAPABLE_MODEL;
 
   const { passages, duplicates } = await loadCorpus();
   console.log(

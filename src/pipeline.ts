@@ -48,7 +48,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * The numbers are all in scope *here*, at the seam the queue already owns, so
  * this file can answer that question without a single edit inside somebody
  * else's stage — see architecture.md#stage-ownership. The two exceptions are two
- * lines each: `toc` and `arc` keep `MODEL` private, so they now return it.
+ * lines each: `toc` and `arc` keep `CAPABLE_MODEL` private, so they now return it.
  *
  * A module-level logger is fine and rule 4 in src/log.ts does not forbid it: it
  * carries the component name and nothing else. What must never be module-level

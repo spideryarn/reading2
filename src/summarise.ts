@@ -71,7 +71,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL } from "./models.js";
+import { CAPABLE_MODEL } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -681,7 +681,7 @@ export function buildSummaries(
 
   return {
     version: PROMPT_VERSION,
-    generator: MODEL,
+    generator: CAPABLE_MODEL,
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     entries,
@@ -769,7 +769,7 @@ export async function summariesAreCurrent(dir: string): Promise<boolean> {
   const summaries = await readSummaries(dir);
   if (!summaries) return false;
   if (summaries.version !== PROMPT_VERSION) return false;
-  if (summaries.generator !== MODEL) return false;
+  if (summaries.generator !== CAPABLE_MODEL) return false;
   const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   if (!blocksFile?.blocks) return false;
   return !isStale(summaries, blocksFile.blocks);
@@ -858,7 +858,7 @@ async function runBatch(opts: {
        once and a character count would be three streams added together. */
     const stream = opts.client.messages.stream(
       {
-        model: MODEL,
+        model: CAPABLE_MODEL,
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: "medium" },
@@ -1018,7 +1018,7 @@ export async function generateSummaries(opts: {
   return {
     summaries,
     outFile,
-    model: MODEL,
+    model: CAPABLE_MODEL,
     targets: targets.length,
     batches: batches.length,
     failedBatches: results.filter((r) => r.failed).length,
@@ -1045,7 +1045,7 @@ async function main(): Promise<void> {
   // Before the calls, not after. This is the only thing on screen for the
   // minute or two the model takes, and printing it afterwards made the sibling
   // stages look hung for the whole request.
-  console.log(`Writing the summaries with ${MODEL}…`);
+  console.log(`Writing the summaries with ${CAPABLE_MODEL}…`);
   const run = await generateSummaries({
     dir,
     ...(guidance ? { guidance } : {}),
@@ -1054,7 +1054,7 @@ async function main(): Promise<void> {
 
   console.log(
     `\n${run.targets} sections in ${run.batches} ${run.batches === 1 ? "group" : "groups"}, ` +
-      `${run.blocks} blocks → ${MODEL}`,
+      `${run.blocks} blocks → ${CAPABLE_MODEL}`,
   );
   console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(

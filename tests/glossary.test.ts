@@ -37,7 +37,7 @@ import {
 } from "../src/glossary.js";
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
 import { hashBlocks } from "../src/source-hash.js";
-import { MODEL } from "../src/models.js";
+import { CAPABLE_MODEL } from "../src/models.js";
 import {
   GATE_STEP,
   PRIORITY_GATE,
@@ -396,7 +396,7 @@ describe("isStale / glossaryIsCurrent", () => {
   function glossary(over: Partial<Glossary> = {}): Glossary {
     return {
       version: PROMPT_VERSION,
-      generator: MODEL,
+      generator: CAPABLE_MODEL,
       slug: "a-slug",
       sourceHash: hashBlocks(BLOCKS),
       entries: [entry({ name: "Seth" })],
@@ -998,7 +998,7 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
 
   const v1: Glossary = {
     version: "glossary/1",
-    generator: MODEL,
+    generator: CAPABLE_MODEL,
     slug: "a-slug",
     sourceHash: "deadbeefdeadbeef",
     entries: [without(entry({ name: "Seth", gloss: "The author." }), "senseHere")],

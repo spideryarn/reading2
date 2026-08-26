@@ -30,7 +30,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, effortFor } from "./models.js";
+import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -163,7 +163,7 @@ export function buildArc(
     // check is the whole reason this function refuses to guess.
     text: sentences[i]!.trim(),
   }));
-  return { version: PROMPT_VERSION, generator: MODEL, slug, entries };
+  return { version: PROMPT_VERSION, generator: CAPABLE_MODEL, slug, entries };
 }
 
 /**
@@ -185,7 +185,7 @@ function parseJson(raw: string): { arc: string[] } {
 export interface ArcRun {
   arc: Arc;
   outFile: string;
-  /** Which model wrote it. `MODEL` is private here, and the queue logs what an arc cost. */
+  /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what an arc cost. */
   model: string;
   parts: TreeNode[];
   blocks: number;
@@ -263,7 +263,7 @@ export async function generateArc(opts: {
 
   const client = new Anthropic();
   const stream = client.messages.stream({
-    model: MODEL,
+    model: CAPABLE_MODEL,
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: effortFor("arc") },
@@ -321,7 +321,7 @@ export async function generateArc(opts: {
   return {
     arc,
     outFile,
-    model: MODEL,
+    model: CAPABLE_MODEL,
     parts,
     blocks: blocks.length,
     inputTokens: message.usage.input_tokens,
@@ -341,13 +341,13 @@ async function main(): Promise<void> {
   // Before the call, not after. This is the only thing on screen for the two
   // minutes the model takes, and printing it afterwards made `npm run arc` look
   // hung for the whole request.
-  console.log(`Writing the arc with ${MODEL}\u2026`);
+  console.log(`Writing the arc with ${CAPABLE_MODEL}\u2026`);
   const run = await generateArc({
     dir,
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
-  console.log(`\n${run.parts.length} parts, ${run.blocks} blocks → ${MODEL}`);
+  console.log(`\n${run.parts.length} parts, ${run.blocks} blocks → ${CAPABLE_MODEL}`);
   console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`Wrote:     ${path.resolve(run.outFile)}\n`);

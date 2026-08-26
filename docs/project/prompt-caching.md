@@ -89,7 +89,7 @@ values — arc at `medium` loses 11 points of vocabulary retention on one articl
 wins, so aligning would mean paying in writing quality to win a cache. The settings on disk were
 chosen for what each stage writes, and that is the right reason to choose them.
 
-The effort table now lives in [`src/models.ts`](../../src/models.ts) beside `MODEL`, because both
+The effort table now lives in [`src/models.ts`](../../src/models.ts) beside `CAPABLE_MODEL`, because both
 are part of the cache key, and **that table is the cache grouping** — `sharesArticleCache` in
 [`src/pipeline.ts`](../../src/pipeline.ts) reads it rather than keeping a second list that could
 drift back out of agreement with it.
