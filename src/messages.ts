@@ -186,6 +186,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-filtered": "blocked",
   "ai-no-room": "blocked",
   "ai-empty": "retry",
+  /* Not a model call. `db-` rather than `ai-` so that a reader quoting four
+     characters, and whoever they quote them to, can tell the two apart at a
+     glance — see `STORAGE_BUSY`. */
+  "db-busy": "retry",
+  "db-failed": "bug",
 };
 
 
@@ -414,6 +419,45 @@ export const UNEXPECTED_FAILURE: ReaderFacingFailure = {
     "[ai-unexpected]",
 };
 
+/**
+ * The database would not do what the app asked of it.
+ *
+ * **The second widening of this file, and the reason is not the reader — it is
+ * the store.** `UNEXPECTED_FAILURE` above widened it from model calls to any
+ * failed request; these two go further, and exist because a Drizzle error's
+ * `message` is
+ *
+ *     Failed query: insert into "comments" … values ($1, $2, …)
+ *     params: <every bound value>
+ *
+ * — which here means the reader's selected quote and the model's whole answer.
+ * That message went to the client, to the log, and into the row's own `error`
+ * column, from where the next failed query flattened it in one level deeper.
+ * So `src/store/db-errors.ts` translates every error leaving a Postgres store
+ * into one of these two, and the untranslated one never leaves the seam.
+ *
+ * Two rather than one because the reader's next move genuinely differs, and the
+ * SQLSTATE says which: a connection that dropped or a deadlock that lost is a
+ * blip, and a constraint that refused the row will refuse it again for ever.
+ * Guessing "retry" for both would have somebody clicking at a foreign key.
+ */
+export const STORAGE_BUSY: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app could not reach its database just then, so that did not go through. It is usually a " +
+    "moment's trouble rather than anything lasting — waiting a few seconds and trying again " +
+    "generally works. [db-busy]",
+};
+
+/** @see STORAGE_BUSY — the other half, for a database that answered "no". */
+export const STORAGE_FAILED: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "This app asked its database for something it would not do, so that did not go through. That is " +
+    "a bug here rather than anything you did, and trying again will not help until somebody fixes " +
+    "it. It has been recorded. [db-failed]",
+};
+
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */
 export function tookTooLong(seconds: number): ReaderFacingFailure {
   return {
@@ -435,6 +479,28 @@ export function wentQuiet(seconds: number): ReaderFacingFailure {
       "Trying again starts a fresh answer. [ai-stalled]",
   };
 }
+
+/**
+ * The request went out and nothing came back — not an error, not a status, not
+ * a header.
+ *
+ * Its own message rather than `ENDED_UNFINISHED`, because nothing ended: the
+ * answer never started, so there is no partial text on screen and telling the
+ * reader that "what did arrive is real" would be describing an empty row. This
+ * is the reader's own connection or something between it and us, and a retry
+ * genuinely is the thing to do.
+ *
+ * Raised by the client rather than the server — see `OPEN_TIMEOUT_MS` in
+ * src/web/useChat.ts, which exists because a `fetch` that never resolves was
+ * the last way left to strand an answer on "thinking…" for ever.
+ */
+export const NO_RESPONSE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The question was sent and nothing came back at all, so this app stopped waiting. That is the " +
+    "connection rather than the article or the AI service. Trying again is usually all it takes. " +
+    "[ai-no-response]",
+};
 
 /**
  * The connection ended mid-answer, with no sign it had finished.

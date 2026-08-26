@@ -218,6 +218,32 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    the rest of the chrome (web-client.md#tailwind-and-shadcn-components).
    docs/plans/metadata-page.md. */
 
+/* How this article was made, when the answer is not "a web page" — see
+   Masthead.tsx. Deliberately the same size and colour as `.facts` rather than a
+   warning: it is a statement about provenance, and dressing it as an alarm
+   would make a checked PDF look broken. The scan wording carries its own weight
+   without any help from the colour. */
+.provenance {
+  margin: 0.35rem 0 0;
+  max-width: 48rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+}
+
+/* A block the model admitted it could not fully read — src/pdf-read.ts writes
+   the class, and the ⟦illegible⟧ markers are in the text itself. The rule is
+   here rather than in tokens.css because it is article content, not chrome.
+
+   A left border rather than a background wash: the search and comment
+   highlights already own washes, and a third one competing with them would
+   make a page with all three unreadable (docs/project/search.md). */
+.pdf-uncertain {
+  border-left: 2px solid var(--ink-faint);
+  padding-left: 0.75rem;
+  opacity: 0.92;
+}
+
 .root-gist {
   margin: 0.55rem 0 0;
   max-width: 48rem;
@@ -849,6 +875,10 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   top: var(--bar-h);
   bottom: 0;
   width: var(--spine-w);
+  /* How much of the rail's width the search lanes may take, and how wide one
+     lane may get when there are few of them — see § search marks below. */
+  --spine-gutter: 22px;
+  --lane-max: 5px;
   z-index: 45;
   background: var(--panel);
   border-right: 1px solid var(--rule-strong);
@@ -952,6 +982,64 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   outline-offset: -1px;
 }
 
+/* ------------------------------------------------- search marks in the rail --
+   Where each switched-on search matched, as parallel lanes down the right-hand
+   edge — Greg, 2026-08-26: "dots/thin vertical lines of the relevant
+   search-colour in all the places where there's a match in the Spine so it's
+   easy to see at a glance where the results are in the doc (and how common)".
+
+   Lanes rather than a single stacked column: with several searches on at once
+   one column could only say "something matched here", which is the question the
+   colours were introduced to stop being the only one anybody could ask. See
+   Spine.tsx § Search results down the rail.
+
+   The gutter is a fixed slice of the rail's width, and the lane width is that
+   slice divided between however many searches actually matched — capped, so one
+   search draws a tick rather than a five-millimetre slab. `min()` with a
+   division means the whole thing is arithmetic the browser does, and the only
+   number React sets is `--lanes`. */
+.spine-matches {
+  position: absolute;
+  inset: 0;
+  /* Never in the way of the band buttons underneath, which are what the rail is
+     for. A mark is 3px tall at its thinnest and would otherwise be a 3px strip
+     of the rail that does not respond to a click. */
+  pointer-events: none;
+  /* **Declared here and not on `.spine`, and it has to be.** A custom property
+     is substituted where it is *declared*, not where it is used: `--lanes` is
+     set inline on this element, so a `--lane-w` written on `.spine` would
+     resolve against the fallback — one lane, every time — and inherit that
+     frozen value down. Every search would then draw a full-width bar in lane 0,
+     on top of each other. Nothing about that looks like a CSS bug; it looks
+     like the lanes feature not working. */
+  --lane-w: min(var(--lane-max), calc(var(--spine-gutter) / var(--lanes, 1)));
+}
+
+.spine-match {
+  position: absolute;
+  right: calc(var(--lane) * var(--lane-w));
+  width: var(--lane-w);
+  /* Percentages of the document's height, like everything else in the track —
+     so a mark is as tall as its paragraph. The floor is what keeps a one-line
+     list item in a long article visible at all; without it a mark can round to
+     zero and the search looks like it found nothing there. */
+  min-height: 3px;
+  background: rgb(var(--h));
+  /* A hairline of the rail's own background on the left edge, so two adjacent
+     lanes read as two marks rather than as one wider one. `box-shadow` rather
+     than a border or a gap: both of those would come out of the lane's width,
+     and at ~2.75px a lane has none to give. */
+  box-shadow: -1px 0 0 var(--panel);
+}
+
+/* Keep the part labels clear of the lanes while there is something in them.
+   Conditional rather than permanent: the gutter is a tenth of the rail's width,
+   and paying it on every article the reader is not searching would shorten
+   every label in the app for a feature that is off. */
+.spine.marked .spine-part {
+  padding-right: calc(var(--spine-gutter) + 4px);
+}
+
 /* How much of the article is on screen, and where. Drawn over everything and
    deliberately not interactive. */
 .spine-viewport {
@@ -968,6 +1056,10 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 /* Collapsed rail: bands, ticks and the viewport marker, no words. Below about
    1100px the labels cost more width than they are worth, but "where am I" is
    exactly as useful on a small screen as on a large one. */
+/* The collapsed rail is 24px wide in total, so the search gutter has to be a
+   smaller share of it — and the cap comes down with it, or two searches would
+   cover most of a rail that is also trying to show you where you are. */
+.spine.narrow { --spine-gutter: 14px; --lane-max: 4px; }
 .spine.narrow .spine-label { display: none; }
 .spine.narrow .spine-part { padding: 0; }
 .spine.narrow .spine-part::before { width: 100%; opacity: 0.3; }
@@ -1094,6 +1186,14 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   line-height: 1;
   color: var(--ink-faint);
   opacity: 0.8;
+}
+
+/* The match count, which is the one thing in the foot that is not always there
+   and the one thing worth spotting. Brighter than its neighbours rather than a
+   different size, so the row keeps its single baseline. */
+.tip-matches {
+  color: var(--highlight-ink);
+  opacity: 1;
 }
 
 /* Somebody who has asked not to be moved gets the panel, not the animation.
@@ -2838,6 +2938,20 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.8rem;
 }
 
+/* The same line, for the case where this browser has lost the stream and is
+   asking the server whether the answer finished anyway — see `watch` in
+   src/web/useChat.ts. It gets a class of its own for one reason: the sentence
+   is long enough to wrap in a narrow band, and a vertically centred spinner
+   beside two lines of text sits halfway down the gap looking like a mistake. */
+.chat-thinking.reconnecting {
+  align-items: flex-start;
+}
+
+.chat-thinking.reconnecting .cmt-spinner {
+  flex: none;
+  margin-top: 0.15rem;
+}
+
 /* The caret at the end of a streaming answer. Purely so a long pause between
    tokens reads as "still coming" rather than as "finished, oddly". */
 .chat-cursor {
@@ -3108,6 +3222,67 @@ td.text.has-hit[data-hues="8"] {
 /* Said in words, because a slider that has stopped dividing the list looks
    exactly like a slider that has stopped working. */
 .gloss-gate-note {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+/* ---- the search panel's confidence bar ----
+   The prioritised order's threshold — see search.md § Prioritised. Deliberately
+   the same rules as `.gloss-gate` above, and the shared block below is where
+   they are actually shared: one idea in the reader's hands, one look, whichever
+   band it is in. What is NOT shared is the value's alignment story — the
+   glossary's number lines up with scores on its rows, and this one lines up
+   with the confidence chips on its own. Both are mono for that reason.
+
+   Grouped by selector rather than merged into one `.gate` class because the two
+   panels' paddings differ and always have; sharing the class would have meant a
+   modifier on every rule to say which band it was in. */
+.srch-gate {
+  padding: 0.4rem 0.7rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.srch-gate-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.srch-gate-label {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+.srch-gate-value {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.srch-gate-reset {
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.srch-gate-reset:hover { color: var(--ink); }
+.srch-gate-reset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.srch-gate-range {
+  display: block;
+  width: 100%;
+  margin: 0.3rem 0 0;
+  accent-color: var(--highlight);
+  cursor: pointer;
+}
+.srch-gate-range:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+/* Said in words, because a bar that is hiding everything looks exactly like a
+   search that found nothing — and unlike the glossary's, this one really does
+   take rows away. */
+.srch-gate-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
   font-size: 0.7rem;

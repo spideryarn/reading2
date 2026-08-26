@@ -13,6 +13,7 @@
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null }
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
+ *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
  *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
  *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
  *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
@@ -45,6 +46,8 @@
  * docs/project/ingest-queue.md.
  */
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 /* From the store rather than from src/api.ts directly, so that
    SPIDERYARN_STORE=postgres swaps every article read at once and no route has
@@ -82,11 +85,13 @@ import { findPassagesStream } from "./search.js";
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
+import { fsLocations } from "./store/artifacts-fs.js";
 import { commentStore } from "./store/index.js";
 import { converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
-import { isSlug, slugFromUrl } from "./ingest.js";
+import { readRaw } from "./fetch.js";
+import { isSlug, normaliseUrl, slugFromUrl } from "./ingest.js";
 import { cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
@@ -106,6 +111,37 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(body));
+}
+
+/**
+ * **The document this article was made from** — today, only a PDF.
+ *
+ * It exists for one reason, and it is the reason a scan is shown at all: a
+ * transcription of a photographed page has nothing to check it against, so the
+ * only real verification available is a person looking at the ink. Every record
+ * carries its page number even though v1's reader does not show it, and the raw
+ * file is kept, so handing the reader the original costs one route. A second
+ * machine's opinion would have cost a page-reconstruction aligner and would
+ * still not have been verification. docs/plans/pdf-ingestion.md.
+ *
+ * `inline`, not `attachment`: the browser's own PDF viewer is the point. And
+ * `X-Content-Type-Options: nosniff` because this is a stranger's file being
+ * served from our origin — the one place a wrong content type becomes script.
+ */
+async function sendSource(res: ServerResponse, slug: string): Promise<void> {
+  /* `fsLocations`, not a path built here — the store is the layer allowed to
+     know where an article's files are, and a second copy of that knowledge is
+     how one of them ends up pointing somewhere else. src/store/artifacts-fs.ts. */
+  const { dir } = fsLocations(slug);
+  const manifest = await readRaw(dir);
+  if (manifest?.kind !== "pdf") throw httpError(404, "That article did not come from a PDF.");
+  const bytes = await readFile(path.join(dir, manifest.file));
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${slug}.pdf"`);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Length", String(bytes.byteLength));
+  res.end(bytes);
 }
 
 /** An error carrying the HTTP status it should be reported as. */
@@ -204,6 +240,65 @@ async function sweepOrphaned(slug: string, comments: Comment[]): Promise<Comment
 }
 
 /**
+ * How often an open stream says something even when it has nothing to say.
+ *
+ * The number is chosen against the client's clock rather than on its own: the
+ * reader's side (`readEvents` in src/web/lib/sse.ts) gives up after
+ * `STREAM_STALL_MS`, so this has to be comfortably shorter than that or a
+ * healthy stream would be killed for being quiet. Three beats of headroom.
+ */
+export const SSE_HEARTBEAT_MS = 15_000;
+
+/**
+ * Keep an open stream making noise, so that silence means something.
+ *
+ * Nothing on the reader's side can tell a stream that is thinking from a stream
+ * that is dead — a TCP connection that has gone away without being closed
+ * delivers no bytes and no error, and `reader.read()` simply never settles. The
+ * only fix is for the live case to keep proving it is live, which is what this
+ * does: an SSE **comment** (`: ping`) every `SSE_HEARTBEAT_MS`, which the spec
+ * says a client must ignore and which `parseFrame` on our side duly drops. The
+ * bytes are the message.
+ *
+ * That matters more here than in most streaming apps, because the silences on a
+ * *healthy* chat stream are long and legitimate: a tool can run for 45 seconds
+ * (`MEANING_TIMEOUT_MS` in src/chat-tools.ts) between its two `tool` frames, and
+ * a round can spend ten seconds thinking before its first word. Without a
+ * heartbeat the client's clock would have to be longer than the longest of
+ * those, which means a dead connection is not noticed for a minute and a half.
+ *
+ * It also stops an idle-timeout proxy — thirty or sixty seconds is a common
+ * default — closing a stream that was about to deliver.
+ *
+ * `unref()` so a stray interval cannot hold the process open, and the interval
+ * is cleared on `close` as well as by the returned function, because the two
+ * callers reach the end by different routes.
+ */
+export function heartbeat(
+  res: ServerResponse,
+  alive: () => boolean,
+  /* Only a test passes this. It is here because the alternative is a
+     fifteen-second test, and a heartbeat that silently never fires is exactly
+     the failure docs/reusable/silent-success.md is about — the answer still
+     arrives, and only the dead connections take a minute longer to notice. */
+  everyMs: number = SSE_HEARTBEAT_MS,
+): () => void {
+  const timer = setInterval(() => {
+    if (!alive()) return;
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      // The socket went away between the guard and the write. Nothing to do
+      // and nobody to tell: the stream is over either way.
+    }
+  }, everyMs);
+  timer.unref?.();
+  const stop = () => clearInterval(timer);
+  res.on("close", stop);
+  return stop;
+}
+
+/**
  * Server-sent events on a response that is otherwise a plain Node one.
  *
  * Shared by chat and by comments, which are the only two things in this app a
@@ -243,12 +338,16 @@ function sse(res: ServerResponse): {
   // the client is reading the stream while the first token is still being
   // thought about.
   res.flushHeaders?.();
+  const alive = () => open && !res.writableEnded && !res.destroyed;
+  // Started here rather than left to the caller, so that every stream this
+  // helper opens is one the reader can tell apart from a dead one.
+  heartbeat(res, alive);
   return {
     frame(event, data) {
-      if (!open || res.writableEnded || res.destroyed) return;
+      if (!alive()) return;
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     },
-    alive: () => open && !res.writableEnded && !res.destroyed,
+    alive,
   };
 }
 
@@ -513,7 +612,17 @@ export async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise
  * the next read after two minutes releases it. Longer than any answer the
  * deadline in converse.ts permits (120s), plus room for the write.
  */
-const CHAT_ORPHAN_GRACE_MS = 150_000;
+/**
+ * How long an abandoned `pending` answer is left alone before a sweep calls it
+ * a failure.
+ *
+ * Exported for one test, which asserts that the client watches for at least
+ * this long — see `RECOVER_MARGIN_MS` in src/web/useChat.ts. A client that gave
+ * up first would declare a failure over a row this server was about to turn
+ * into an answer, and the two numbers drifting apart is invisible from either
+ * side on its own.
+ */
+export const CHAT_ORPHAN_GRACE_MS = 150_000;
 
 /**
  * Stop whatever this process is streaming into a thread, and wait for it to
@@ -723,10 +832,17 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   res.on("close", () => {
     open = false;
   });
+  const alive = () => open && !res.writableEnded && !res.destroyed;
   const frame = (event: string, data: unknown) => {
-    if (!open || res.writableEnded || res.destroyed) return;
+    if (!alive()) return;
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
+  /* Cleared in the `finally`. This route does not go through `sse(res)` — it
+     writes its headers itself, inside the try, so that a socket dying between
+     `beginTurn` and the first write cannot leak the `streaming` key — so it
+     needs its own beat. See `heartbeat` for why an idle chat stream needs one
+     more than most: a tool round is 45 seconds of legitimate silence. */
+  let stopBeating = () => {};
 
   let text = "";
   /** What the tools did, kept so a turn that fails still records them. */
@@ -739,6 +855,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
+    stopBeating = heartbeat(res, alive);
 
     /* The ids first, before a single word of the answer. The client minted the
        thread id optimistically and beginTurn may have overruled it (a collision,
@@ -851,6 +968,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     }
     frame("error", { error: message, text });
   } finally {
+    stopBeating();
     streaming.delete(key);
     // After the delete, so a supersede that was waiting on this cannot see the
     // key again and abort a stream that has already let go of the row.
@@ -1251,7 +1369,12 @@ export function parseJobRequest(body: unknown): {
     if (slug !== undefined) {
       throw httpError(400, "Send a url or a slug, not both — the slug comes from the url");
     }
-    const derived = slugFromUrl(url);
+    /* Normalised before anything else looks at it, so the URL that is fetched,
+       the URL stored in meta.json and the URL `freeSlug` compares against the
+       shelf are one string rather than three spellings of one. See
+       `normaliseUrl` in src/ingest.ts. */
+    const source = normaliseUrl(url);
+    const derived = slugFromUrl(source);
     if (!isSlug(derived)) {
       // **Not the URL.** This message is logged — `logRequest` writes an
       // `httpError`'s message as `reason`, because an error that named its own
@@ -1265,7 +1388,7 @@ export function parseJobRequest(body: unknown): {
     }
     return {
       slug: derived,
-      url: url.trim(),
+      url: source,
       ...(parsedSteps ? { steps: parsedSteps } : {}),
       ...(parsedForce ? { force: parsedForce } : {}),
       ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
@@ -1444,6 +1567,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
      needs a patient deadline; `explain` has its own. */
   const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(url);
   const summary = /^\/api\/summary\/([\w.%-]+)$/.exec(url);
+  const source = /^\/api\/source\/([\w.%-]+)$/.exec(url);
   const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(url);
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
@@ -1494,6 +1618,10 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     }
     if (article && req.method === "GET") {
       send(res, 200, await loadArticle(slugPart(article, 1)));
+      return true;
+    }
+    if (source && req.method === "GET") {
+      await sendSource(res, slugPart(source, 1));
       return true;
     }
     if (metadata && req.method === "GET") {

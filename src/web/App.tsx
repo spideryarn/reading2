@@ -35,10 +35,13 @@ import { useSearch } from "./useSearch.js";
 import { assignSlots } from "./hit-colours.js";
 import {
   blockHues,
+  blockMatches,
   blockStrength,
   findLiteral,
   hitMarks as buildHitMarks,
   orderFound,
+  keepAbove,
+  PRIORITY_CONF,
   resolveHits,
   type Found,
 } from "./search-hits.js";
@@ -66,6 +69,7 @@ import {
   matchParam,
   resolveMatcher,
   orderParam,
+  confParam,
   runParam,
   runsParam,
   resolveRuns,
@@ -464,6 +468,16 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   const hitMarks = useMemo(() => buildHitMarks(found, openHit), [found, openHit]);
   const hitStrength = useMemo(() => blockStrength(found), [found]);
   const hitHues = useMemo(() => blockHues(found), [found]);
+  /* The same facts again, for the rail rather than for the prose — which
+     searches matched where, plus how many times. Kept as its own memo beside
+     the other two for the reason given on them: `found` changes on every
+     keystroke in words mode, and this is the cheap half.
+
+     Note it is `blockMatches` and not `hitHues`. A literal match has no palette
+     slot, so `blockHues` drops it — right for the paragraph bar, which falls
+     back to the one fixed search hue, and wrong for the rail, which would then
+     show nothing at all in words mode. search-hits.ts § Why `null` survives. */
+  const hitBlocks = useMemo(() => blockMatches(found), [found]);
 
   /**
    * The bottom drawer — see Dock.tsx, and docs/plans/bottom-bar.md for why the
@@ -632,6 +646,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           outline={outline}
           layoutKey={layoutKey}
           narrow={fit.spine === "narrow"}
+          matches={hitBlocks}
           onJump={jumpTo}
         />
       )}
@@ -853,7 +868,38 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         slug={slug}
         view="article"
         mode={mode}
-        onMode={(next) => void setMode(next)}
+        onMode={(next) => {
+          void setMode(next);
+          /* Search draws its results down the rail, so entering search mode
+             brings the rail back if the reader had put it away — Greg,
+             2026-08-26: *"show the Spine by default when Search mode is
+             active"*.
+
+             `null`, not `true`: the rail goes back to following the window and
+             the mode, which in a mode means on. Writing `true` would pin it,
+             and the reader would find it still there in outline mode later
+             with no memory of having asked for that.
+
+             On the transition and **not** as a standing effect, which is the
+             part worth getting right. A rule that re-asserted the rail whenever
+             search mode was open would make the `Spine` pill dead in exactly
+             the mode this is about: press it off, and it comes straight back.
+             "By default" is a fact about arriving, not a fact about staying —
+             hence `mode !== "search"` as well, since the dock calls this for a
+             press on the mode you are already in.
+
+             **The cost, stated because it is real**: the reader's `?spine=0`
+             was a choice about the page, and this throws it away rather than
+             suspending it — come back to reading mode afterwards and the rail
+             is there. Suspending it would mean `?spine=` growing a per-mode
+             shape, which is a lot of machinery for one bit; and the alternative
+             of leaving it alone means a reader who has hidden the rail opens
+             search and finds half the feature drawn somewhere they cannot see.
+             The pill is one press away. docs/project/search.md § The rail. */
+          if (next === "search" && mode !== "search" && showSpine === false) {
+            void setShowSpine(null);
+          }
+        }}
         drawer={{
           comments: ordered,
           panel,
@@ -894,8 +940,20 @@ function ChatBand({
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
 }) {
-  const { threads, loaded, send, retry, edit, stop, begin, discard, rename, remove, error } =
-    useChat(slug);
+  const {
+    threads,
+    loaded,
+    recovering,
+    send,
+    retry,
+    edit,
+    stop,
+    begin,
+    discard,
+    rename,
+    remove,
+    error,
+  } = useChat(slug);
   const [thread, setThread] = useQueryState("thread", threadParam);
 
   /**
@@ -1033,6 +1091,7 @@ function ChatBand({
       onEdit={(messageId, question) => thread && edit(thread, messageId, question, at)}
       onStop={(messageId) => thread && stop(thread, messageId)}
       onJump={onJump}
+      recovering={recovering}
       blocks={blocks}
       focusNonce={focusNonce}
       error={error}
@@ -1168,6 +1227,11 @@ function SearchBand({
   const [runIds, setRunIds] = useQueryState("runs", runsParam);
   const active = useMemo(() => resolveRuns(runIds, run1), [runIds, run1]);
   const [order, setOrder] = useQueryState("order", orderParam);
+  /* Null until the reader drags it — see confParam, and `gateParam` beside it,
+     for why "nobody has touched this" has to stay distinguishable from "the
+     reader chose the default". */
+  const [chosenConf, setConf] = useQueryState("conf", confParam);
+  const gate = chosenConf ?? PRIORITY_CONF;
 
   /**
    * Which colour each saved search wears.
@@ -1207,7 +1271,11 @@ function SearchBand({
     [runs, active, slots],
   );
 
-  const results = useMemo(
+  /* The ordered results, before the prioritised bar. Kept as its own value
+     because the slider needs a denominator: the reader has to be told `3 of 11`
+     rather than `3`, or a filter that hides eight things looks like a search
+     that found three. */
+  const ordered = useMemo(
     () =>
       orderFound(
         matcher === "words" ? findLiteral(blocks, find) : resolveHits(blocks, answered),
@@ -1215,6 +1283,34 @@ function SearchBand({
       ),
     [matcher, blocks, find, answered, order],
   );
+
+  /* And after it. **This is the one place the threshold may be applied**, for
+     the same reason `ordered` is computed here rather than in the panel: what
+     goes to the panel goes to the prose, so the marks in the article are the
+     rows in the list and can never be a different set. A filter applied in the
+     panel would hide a row and leave its wash on the paragraph. See the
+     `hitMarks` prop in TableView.tsx and `found` in Reader above.
+
+     Note it is the whole list back again for every order but this one, so
+     `?conf=` sitting in a URL cannot filter a list the reader is not looking
+     at a threshold for. */
+  const results = useMemo(
+    () => (order === "prioritised" ? keepAbove(ordered, gate) : ordered),
+    [ordered, order, gate],
+  );
+
+  /* A result the bar has hidden cannot stay the open one. Its row and its mark
+     both go, so nothing on screen says it is open — but the key survived, and
+     dragging the bar back later silently reopened a selection the reader had
+     made minutes ago and watched disappear. Cleared rather than remembered:
+     "open" is a thing the reader can see, and a hidden one is a claim about the
+     page that the page is not making. GPT Sol's review, 2026-08-26.
+
+     Keyed on absence from `results`, so ordinary streaming — where the open row
+     is still in the list — leaves it alone. */
+  useEffect(() => {
+    if (openHit && !results.some((f) => f.key === openHit)) onOpenHit(null);
+  }, [results, openHit, onOpenHit]);
 
   /* Push the results up to `Reader`, which owns the prose. `onFound` is a plain
      setter and therefore stable, so this cannot loop.
@@ -1303,8 +1399,12 @@ function SearchBand({
         onOpenHit(null);
       }}
       found={results}
+      all={ordered}
       order={order}
       onOrder={(next) => void setOrder(next)}
+      gate={gate}
+      gateMoved={chosenConf !== null}
+      onGate={(next) => void setConf(next)}
       openKey={openHit}
       onOpen={(key, blockId) => {
         onOpenHit(key);

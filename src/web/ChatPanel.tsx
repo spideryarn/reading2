@@ -88,6 +88,14 @@ interface Props {
   /** Jump to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
   /**
+   * Answers whose stream the client has lost and is asking the server about.
+   *
+   * These rows are still `pending` and no words are arriving, so "thinking…"
+   * would be a claim about the model that is not true. See `watch` in
+   * src/web/useChat.ts.
+   */
+  recovering: Set<string>;
+  /**
    * Every block this article has, id to its plain text.
    *
    * Two jobs in one map: a cited id that is not a key is not turned into a
@@ -192,6 +200,7 @@ export function ChatPanel({
   onEdit,
   onStop,
   onJump,
+  recovering,
   blocks,
   focusNonce,
   error,
@@ -291,6 +300,7 @@ export function ChatPanel({
           key={open.id}
           thread={open}
           onJump={onJump}
+          recovering={recovering}
           blocks={blocks}
           onSend={onSend}
           onRetry={onRetry}
@@ -441,6 +451,7 @@ function RenameRow({
 function Conversation({
   thread,
   onJump,
+  recovering,
   blocks,
   onSend,
   onRetry,
@@ -453,6 +464,8 @@ function Conversation({
 }: {
   thread: ChatThread;
   onJump(id: BlockId): void;
+  /** See `recovering` in Props. */
+  recovering: Set<string>;
   blocks: Map<string, string>;
   onSend(question: string): void;
   onRetry(messageId: string): void;
@@ -563,6 +576,7 @@ function Conversation({
             key={m.id}
             message={m}
             onJump={onJump}
+            recovering={recovering.has(m.id)}
             blocks={blocks}
             /* Only the last answer may be retried — see `retryTurn` in
                src/chat.ts. The button is hidden rather than shown-and-refused,
@@ -665,6 +679,7 @@ function Suggestions({ onAsk }: { onAsk(question: string): void }) {
 function Turn({
   message,
   onJump,
+  recovering,
   blocks,
   onRetry,
   onEdit,
@@ -675,6 +690,8 @@ function Turn({
 }: {
   message: ChatMessage;
   onJump(id: BlockId): void;
+  /** This answer's stream is lost and the client is asking the server about it. */
+  recovering: boolean;
   blocks: Map<string, string>;
   /** Present only on the last message. See the call site. */
   onRetry?: ((messageId: string) => void) | undefined;
@@ -766,7 +783,10 @@ function Turn({
      the strip below says what, which is a better answer to the same question —
      and both at once reads as two spinners for one wait. */
   const thinking =
-    message.status === "pending" && message.text === "" && (message.tools?.length ?? 0) === 0;
+    message.status === "pending" &&
+    message.text === "" &&
+    (message.tools?.length ?? 0) === 0 &&
+    !recovering;
   return (
     <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`}>
       <ToolStrip tools={message.tools} searches={message.searches} />
@@ -786,7 +806,22 @@ function Turn({
           live={message.status === "pending"}
         />
       )}
-      {message.status === "pending" && message.text !== "" && <span className="chat-cursor" />}
+      {/* Where the blinking cursor would be, and instead of it — because a cursor
+          says "more is coming here in a moment", which is the one thing that is
+          not true. Nothing is arriving: this browser has lost the stream and is
+          asking the server whether the answer finished without it. "thinking…"
+          would be worse still, being a claim about the model, and it is the
+          claim the reader already sat through for two minutes. The row stays
+          `pending`, so Stop is still offered — the answer really may still be
+          being written, just not to us. */}
+      {recovering && message.status === "pending" ? (
+        <span className="chat-thinking reconnecting">
+          <LoaderCircle className="cmt-spinner" size={13} /> connection lost — checking whether the
+          answer finished…
+        </span>
+      ) : (
+        message.status === "pending" && message.text !== "" && <span className="chat-cursor" />
+      )}
       {message.status === "error" && <p className="chat-failed">{message.error}</p>}
       {message.truncated && (
         /* Styled as a failure, unlike `stopped` two lines down — because it is

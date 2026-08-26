@@ -15,7 +15,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, ChatThread, Citation, ToolRun } from "../types.js";
 import { mintId } from "../ids.js";
-import { readEvents } from "./lib/sse.js";
+import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
+import { ENDED_UNFINISHED, NO_RESPONSE } from "../messages.js";
 import { describeFetchFailure } from "./useComments.js";
 import { failure, readJson } from "./lib/api.js";
 
@@ -30,6 +31,12 @@ export interface ChatApi {
    * and then not create one when they legitimately had none.
    */
   loaded: boolean;
+  /**
+   * Answers whose stream this client has lost, and is now asking the server
+   * about. See `watch` — the row is still `pending`, but nothing is arriving
+   * and the panel should say so rather than go on claiming to be thinking.
+   */
+  recovering: Set<string>;
   /* No `streaming` flag here, and its absence is deliberate.
      One was exported and nothing used it — the composer takes its `busy` state
      from the *message* it is waiting on, which is the honest source: sends can
@@ -180,6 +187,131 @@ export function withServerIds(
  */
 export function withoutEmpty(threads: ChatThread[], id: string): ChatThread[] {
   return threads.filter((t) => !(t.id === id && t.messages.length === 0));
+}
+
+/**
+ * A lost stream goes back and looks for its answer before it gives up.
+ *
+ * The server does not stop working when a reader's connection dies — see the
+ * note on `stopChat` in src/routes.ts, where letting an abandoned answer finish
+ * is a deliberate choice — so by the time the client has noticed the silence,
+ * the answer it was watching is usually already on disk, complete. Declaring a
+ * failure and offering a retry would make the reader pay twice for something
+ * they have already bought.
+ *
+ * So: ask again every `RECOVER_GAP_MS`, until the server's own turn deadline
+ * has passed with room to spare, and only then call it a failure.
+ */
+const RECOVER_GAP_MS = 3_000;
+
+/**
+ * The server's deadline for one turn, which is `CHAT_TIMEOUT_MS` in
+ * src/converse.ts.
+ *
+ * **Copied rather than imported**, and not by preference: importing it would
+ * pull src/converse.ts — and with it the OpenRouter client, the tool
+ * definitions and jsdom — into the browser bundle, which is what
+ * tests/client-imports.test.ts exists to prevent. A copied constant that drifts
+ * is exactly the silent failure this repo keeps writing up
+ * (docs/reusable/silent-success.md): watching would stop while the server was
+ * still legitimately writing, and the reader would be told their answer failed
+ * moments before it landed. tests/use-chat-recovery.test.ts imports both and
+ * asserts they are equal, which a test may do and the client may not.
+ */
+export const SERVER_TURN_MS = 120_000;
+
+/**
+ * How much longer than the server's own deadline a watch keeps looking.
+ *
+ * It has to cover **two** server numbers, not one: the turn deadline above, and
+ * `CHAT_ORPHAN_GRACE_MS` — 150 seconds, after which a sweep turns an abandoned
+ * `pending` row into a failure the watch can then adopt. Stopping first would
+ * mean declaring a failure over a row the server was seconds from settling, and
+ * the reader would see the answer only on their next reload. A test asserts the
+ * sum clears the grace period, because the two numbers live in different files
+ * and drifting apart is invisible from either side. Found by a GPT-5.6 review,
+ * 2026-08-26.
+ */
+export const RECOVER_MARGIN_MS = 40_000;
+
+/**
+ * A clock on each individual look.
+ *
+ * `fetch` has no timeout of its own, so one hung request would stall the whole
+ * watch — a recovery from a hang that can itself hang. Pointed out by a GPT-5.6
+ * review, 2026-08-26.
+ */
+const POLL_TIMEOUT_MS = 10_000;
+
+/**
+ * How long to wait for the *response* to a send before giving up on it.
+ *
+ * Not a deadline on the answer — it is cleared the moment the headers arrive,
+ * and the stream that follows may run for as long as it likes. It is a deadline
+ * on the request never being answered at all, which was the last way left to
+ * strand a row: `run` claims the row before the POST, so a `fetch` that hangs
+ * before the headers leaves it `pending`, owned for ever, and therefore skipped
+ * by the watcher that exists to rescue exactly that. A spinner with no clock
+ * and no owner. Found by a GPT-5.6 review, 2026-08-26.
+ *
+ * Three minutes because a retry or an edit legitimately waits on `settleThread`
+ * in src/routes.ts, which finishes a superseded answer before starting the new
+ * one — and that can take the server's whole turn deadline. A long wait is not
+ * an infinite one.
+ */
+export const OPEN_TIMEOUT_MS = 180_000;
+
+/**
+ * The server's copy of one answer, but only once it has stopped moving.
+ *
+ * `null` covers four different things on purpose — the request failed, it timed
+ * out, the row is not there, or it is there and still `pending` — because the
+ * caller does the same thing with all of them: wait a moment and ask again. The
+ * one it must *not* do is adopt a `pending` row, which would put a spinner on
+ * screen with no stream behind it and nothing left to end it. That is strictly
+ * worse than the failure this whole path is trying to avoid, and it is why the
+ * status is checked here rather than left to the caller to remember.
+ */
+async function settledAnswer(
+  slug: string,
+  threadId: string,
+  messageId: string,
+): Promise<ChatMessage | null> {
+  /* An `AbortController` and a `setTimeout` rather than `AbortSignal.timeout`,
+     which would say the same thing in one line. The one line is not testable:
+     `AbortSignal.timeout` runs on a timer the test runner's fake clock does not
+     patch, so the only way to watch it fire is to wait ten real seconds. This
+     way the hung-poll case is a test rather than a paragraph. */
+  const giveUp = new AbortController();
+  const timer = setTimeout(() => giveUp.abort(new Error("poll timed out")), POLL_TIMEOUT_MS);
+  try {
+    const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
+      await fetch(`/api/chat/${encodeURIComponent(slug)}`, { signal: giveUp.signal }),
+    );
+    const found = body.threads
+      ?.find((t) => t.id === threadId)
+      ?.messages.find((m) => m.id === messageId);
+    return found && found.status !== "pending" ? found : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Outside the component on purpose: as functions defined in the hook body they
+   were new objects on every render, and the only honest thing to do with that
+   is list them as dependencies of `run` — which would then be new on every
+   render too, and so would `send`, `retry` and `edit` under it. A `useCallback`
+   with an empty list would work and would be one more thing to be right about. */
+function claim(owned: Map<string, number>, id: string): void {
+  owned.set(id, (owned.get(id) ?? 0) + 1);
+}
+
+function release(owned: Map<string, number>, id: string): void {
+  const left = (owned.get(id) ?? 1) - 1;
+  if (left > 0) owned.set(id, left);
+  else owned.delete(id);
 }
 
 export function useChat(slug: string): ChatApi {
@@ -409,6 +541,182 @@ export function useChat(slug: string): ChatApi {
   );
 
   /**
+   * Assistant rows a stream **in this hook** is currently writing into.
+   *
+   * The one question the watcher below has to answer, and it cannot be answered
+   * from the row: `pending` on screen means "somebody is answering this", and
+   * says nothing about whether that somebody is still here. A stream in another
+   * tab, a stream in a hook that has since unmounted, and this hook's own live
+   * stream all look identical.
+   *
+   * Server ids and provisional ones both, because a row is claimed before the
+   * request leaves and again when `begin` names it.
+   *
+   * **Counted rather than a set.** Two streams can be writing into one row id —
+   * the panel does not offer a retry on a `pending` row, so it takes some doing,
+   * but a `Set` makes the first of them to finish announce that nobody is
+   * writing while the second still is, and the watcher then says "connection
+   * lost" over an answer whose words are arriving. A count cannot say that.
+   * Found by a GPT-5.6 review, 2026-08-26.
+   */
+  const owned = useRef(new Map<string, number>());
+
+  /**
+   * Bumped whenever a stream lets go of a row, purely to make the effect below
+   * look again.
+   *
+   * `owned` is a ref, so removing an id from it changes nothing React can see —
+   * and the case that matters most releases a row without touching `threads`
+   * either: the stream stalls, the row stays exactly as it was, and the only
+   * thing that has changed is that nobody is writing to it any more. Without
+   * this the scan would not run again until the reader happened to type
+   * something, which is to say the spinner would still be there for ever. Cost
+   * one afternoon of a test that was right about the code.
+   */
+  const [released, setReleased] = useState(0);
+
+  /**
+   * Rows being polled for, so the panel can say what it is doing.
+   *
+   * State rather than a ref, because something renders from it — and a `Set`
+   * rebuilt on each change rather than mutated, because React compares by
+   * identity. Deliberately *not* a field on `ChatMessage`: this is what the
+   * client is doing, not what the server recorded, and putting it in the stored
+   * shape would mean writing "we are looking for this" to disk.
+   */
+  const [recovering, setRecovering] = useState<Set<string>>(() => new Set());
+
+  /**
+   * Watches that have not finished, each under a token of its own.
+   *
+   * A token rather than a bare id, so that a watch can tell "I am still the one
+   * watching this row" from "somebody else is". Clearing the map — which
+   * changing article does — lets a second watch start for a row the first is
+   * still looping over, and with a plain `Set` the first would then read the
+   * second's entry as its own and both would run. Two loops writing the same
+   * answer is harmless today and is the kind of thing that stops being harmless
+   * quietly. Found by a GPT-5.6 review, 2026-08-26.
+   */
+  const watched = useRef(new Map<string, object>());
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads a ref, and leaving the article is when a watch stops being anybody's business
+  useEffect(() => {
+    const open = watched.current;
+    return () => open.clear();
+  }, [slug]);
+
+  /**
+   * Go and find out whether an answer nobody is streaming ever finished.
+   *
+   * **This is the whole recovery mechanism, and it has exactly one trigger:** a
+   * `pending` assistant row that no local stream owns. That covers the case it
+   * was written for — a stream this hook lost — and the one that was originally
+   * reported and that an earlier design missed entirely: the hook *remounts*
+   * (Vite Fast Refresh in development, and StrictMode on every mount), the old
+   * hook's stream dies with it, and the new hook loads a `pending` row from the
+   * server with no clock and no stream. That spins for ever, exactly as before,
+   * unless something notices the row is nobody's. Found by a GPT-5.6 review,
+   * 2026-08-26.
+   *
+   * It ends in one of three ways: the row settles on the server and is adopted;
+   * the reader deletes the conversation or leaves the article; or the server's
+   * own deadline passes and the row becomes a failure the reader can retry.
+   */
+  const watch = useCallback(
+    async (threadId: string, messageId: string): Promise<void> => {
+      if (watched.current.has(messageId)) return;
+      const token = {};
+      watched.current.set(messageId, token);
+      setRecovering((prev) => new Set(prev).add(messageId));
+      const mine = slug;
+      /* Measured from **now**, not from the row's `createdAt`, and that is a fix
+         rather than a simplification. The client stamps `createdAt` when the
+         reader presses Enter, and the server may then spend its whole turn
+         deadline in `settleThread` finishing a superseded answer before this
+         turn starts at all — so a deadline anchored to the stamp can already be
+         spent by the time the first word arrives. Anchoring here is also what
+         lets the window cover the server's orphan sweep for a row inherited
+         from a process that is no longer running; see `RECOVER_MARGIN_MS`.
+         Found by a GPT-5.6 review, 2026-08-26. */
+      const until = Date.now() + SERVER_TURN_MS + RECOVER_MARGIN_MS;
+      /** Is this still the watch on this row, or has another one taken over? */
+      const stillOurs = () => watched.current.get(messageId) === token;
+      try {
+        for (;;) {
+          /* Checked after the await as well as before it, which is the rule this
+             file already follows for `showing`. A watch outlives several round
+             trips, and the reader can delete the conversation or leave the
+             article in any of them. */
+          if (!stillOurs() || gone.current.has(threadId)) return;
+          if (showing.current !== mine) return;
+          const settled = await settledAnswer(mine, threadId, messageId);
+          if (!stillOurs() || gone.current.has(threadId)) return;
+          if (showing.current !== mine) return;
+          if (settled) {
+            /* Only this row, and only by patching it. Replacing the whole
+               thread with the server's copy is the mistake `refresh` documents
+               at length: it puts a snapshot taken before an unrelated send over
+               the top of that send's optimistic rows. */
+            put(threadId, (t) => ({
+              ...t,
+              messages: t.messages.map((m) =>
+                m.id === messageId
+                  ? /* Defaulted before the spread, the same rule the `done`
+                       frame follows: the stored row omits a field it has
+                       nothing to say about, so a spread alone cannot clear one
+                       left over from the attempt this watch is recovering. */
+                    { ...m, stopped: false, truncated: false, tools: [], error: "", ...settled }
+                  : m,
+              ),
+            }));
+            return;
+          }
+          if (Date.now() >= until) break;
+          await new Promise((r) => setTimeout(r, RECOVER_GAP_MS));
+        }
+        put(threadId, (t) => ({
+          ...t,
+          messages: t.messages.map((m) =>
+            m.id === messageId ? { ...m, status: "error" as const, error: ENDED_UNFINISHED.message } : m,
+          ),
+        }));
+      } finally {
+        // Only if it is still ours — a watch that was superseded must not take
+        // its successor's registration down with it.
+        if (stillOurs()) watched.current.delete(messageId);
+        setRecovering((prev) => {
+          if (watched.current.has(messageId)) return prev;
+          const next = new Set(prev);
+          next.delete(messageId);
+          return next;
+        });
+      }
+    },
+    [slug, put],
+  );
+
+  /**
+   * Every `pending` answer with nobody behind it gets a watch.
+   *
+   * One scan of what is on screen, on every change to it. Cheap, and it is the
+   * only place a watch starts — a row that arrived from a load, from a lost
+   * stream, or from a remount is the same row and gets the same treatment,
+   * rather than three code paths that have to agree.
+   *
+   * `watch` is idempotent on the message id, which is what makes StrictMode's
+   * double-invoked effect harmless.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — `released` is read by nothing and is in the list precisely so that a stream letting go of a row re-runs this scan; see the note on it above
+  useEffect(() => {
+    for (const thread of threads) {
+      for (const message of thread.messages) {
+        if (message.role !== "assistant" || message.status !== "pending") continue;
+        if (owned.current.has(message.id)) continue;
+        void watch(thread.id, message.id);
+      }
+    }
+  }, [threads, released, watch]);
+
+  /**
    * Open the stream, and keep one assistant row in step with it.
    *
    * All three of `send`, `retry` and `edit` end up here, because from the
@@ -448,6 +756,17 @@ export function useChat(slug: string): ChatApi {
          showed — until `stop` needed to name the row it wanted stopped, and
          found the only name it had was one the server had never heard of. */
       let pendingId = replyId;
+      /* Claimed **now**, under the name the caller invented, and again under the
+         server's name when `begin` arrives.
+
+         Not an optimisation. `send` puts a `pending` assistant row on screen
+         before this function is called, and the watcher effect runs on the very
+         next render — so without this the watcher would immediately start
+         hunting for a row the server has not been told about yet, fail to find
+         it every time, and error a perfectly live answer out from under its own
+         stream about fifteen seconds in. Caught by tests/use-chat-recovery.test.ts
+         while it was being written for a different case entirely. */
+      claim(owned.current, replyId);
       /* Counted for `refresh` alone — see the note there. Incremented before
          the request leaves and decremented in the `finally` below, so a 409 can
          tell "nothing else is happening here" from "there is a live answer in
@@ -462,12 +781,34 @@ export function useChat(slug: string): ChatApi {
         }));
 
       void (async () => {
+        /* A deadline on the *response*, cleared the moment the headers arrive —
+           see `OPEN_TIMEOUT_MS`. It must not outlive the `await` below, or it
+           would abort the answer itself three minutes in. */
+        const opening = new AbortController();
+        const openBy = setTimeout(
+          () => opening.abort(new Error(NO_RESPONSE.message)),
+          OPEN_TIMEOUT_MS,
+        );
         try {
-          const response = await fetch(`/api/chat/${encodeURIComponent(slug)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ threadId: id, ...payload }),
-          });
+          let response: Response;
+          try {
+            response = await fetch(`/api/chat/${encodeURIComponent(slug)}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ threadId: id, ...payload }),
+              signal: opening.signal,
+            });
+          } catch (e) {
+            /* Asked of the controller rather than of the rejection. What a
+               `fetch` rejects with when its signal fires is an `AbortError`
+               whose text varies by engine, and reading a reader-facing sentence
+               off it would be reading whichever one this browser happens to
+               use. The controller is ours and it knows. */
+            if (opening.signal.aborted) throw new Error(NO_RESPONSE.message);
+            throw e;
+          } finally {
+            clearTimeout(openBy);
+          }
           if (!response.ok || !response.body) {
             // A failure *before* the stream starts is ordinary JSON — a bad
             // slug, a question over the size cap. After it starts, failures
@@ -496,97 +837,143 @@ export function useChat(slug: string): ChatApi {
           let text = "";
           /** What the tools have done so far, kept here for the same reason `text` is. */
           let tools: ToolRun[] = [];
-          let finished = false;
-          for await (const event of readEvents(response.body)) {
-            if (event.name === "begin") {
-              const begun = event.data as Begun;
-              setThreads((prev) => withServerIds(prev, current, pendingId, begun));
-              const wanted =
-                stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
-              if (begun.attempt !== undefined) {
-                attempts.current.set(begun.messageId, begun.attempt);
+          /* Whether the server ever named this row. Until it has, `pendingId` is
+             a name this client invented and no amount of looking on the server
+             will find it — so a stream lost before `begin` cannot be recovered
+             and goes straight to a failure. */
+          let began = false;
+          try {
+            for await (const event of readEvents(response.body, { stallMs: STREAM_STALL_MS })) {
+              if (event.name === "begin") {
+                began = true;
+                const begun = event.data as Begun;
+                /* Claimed before anything else in this frame. From here on the
+                   watcher must leave this row alone: it is `pending` and it has
+                   somebody. Released in the `finally` below, whatever happens. */
+                claim(owned.current, begun.messageId);
+                /* Both ids read into `const`s **before** the updater is handed
+                   over, and that is a bug fix rather than a style. React runs a
+                   functional updater during the next render, not at the call —
+                   and the four lines below this one reassign both `current` and
+                   `pendingId`, which the closure would then see. So
+                   `withServerIds` was being asked to find a thread under the id
+                   the server had just moved it to, and a row under the id it
+                   was about to be renamed to; it found neither and returned the
+                   list untouched.
+                   Invisible in the ordinary case, because the server accepts
+                   the client's thread id and neither variable changes. It bites
+                   on exactly the path this frame exists for — a thread id the
+                   server overrules — leaving the panel holding invented names
+                   for both rows, which is the "That message is not in this
+                   conversation." failure this file already describes once.
+                   Found by tests/use-chat-recovery.test.ts, 2026-08-26. */
+                const wasThread = current;
+                const wasReply = pendingId;
+                setThreads((prev) => withServerIds(prev, wasThread, wasReply, begun));
+                const wanted =
+                  stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
+                if (begun.attempt !== undefined) {
+                  attempts.current.set(begun.messageId, begun.attempt);
+                }
+                pendingId = begun.messageId;
+                if (begun.threadId !== current) {
+                  current = begun.threadId;
+                  // The URL is pointing at an id the server did not accept. Tell
+                  // the caller so `?thread=` can follow, or a reload lands on a
+                  // conversation that does not exist.
+                  onThreadId?.(begun.threadId);
+                }
+                // A stop pressed before this frame arrived. Now there is an id
+                // for it, so it happens rather than being dropped on the floor.
+                if (wanted) void askToStop(current, pendingId);
+                continue;
               }
-              pendingId = begun.messageId;
-              if (begun.threadId !== current) {
-                current = begun.threadId;
-                // The URL is pointing at an id the server did not accept. Tell
-                // the caller so `?thread=` can follow, or a reload lands on a
-                // conversation that does not exist.
-                onThreadId?.(begun.threadId);
+              if (event.name === "delta") {
+                text += (event.data as { text: string }).text;
+                patchReply({ text });
+                continue;
               }
-              // A stop pressed before this frame arrived. Now there is an id
-              // for it, so it happens rather than being dropped on the floor.
-              if (wanted) void askToStop(current, pendingId);
-              continue;
-            }
-            if (event.name === "delta") {
-              text += (event.data as { text: string }).text;
-              patchReply({ text });
-              continue;
-            }
-            /* A tool starting, or the same tool finishing. **Assigned by index
-               rather than appended**, which is what makes the row that says
-               "searching your library…" become the row that says what it found,
-               in place, rather than a second row underneath it.
+              /* A tool starting, or the same tool finishing. **Assigned by index
+                 rather than appended**, which is what makes the row that says
+                 "searching your library…" become the row that says what it found,
+                 in place, rather than a second row underneath it.
 
-               `tools.slice()` because the array on the row is the one React has
-               already rendered; mutating it and handing back the same reference
-               is the classic way to make a list that updates on the next
-               unrelated render and not before. */
-            if (event.name === "tool") {
-              const { index, run } = event.data as { index: number; run: ToolRun };
-              tools = tools.slice();
-              tools[index] = run;
-              patchReply({ tools });
-              continue;
+                 `tools.slice()` because the array on the row is the one React has
+                 already rendered; mutating it and handing back the same reference
+                 is the classic way to make a list that updates on the next
+                 unrelated render and not before. */
+              if (event.name === "tool") {
+                const { index, run } = event.data as { index: number; run: ToolRun };
+                tools = tools.slice();
+                tools[index] = run;
+                patchReply({ tools });
+                continue;
+              }
+              if (event.name === "done") {
+                const done = event.data as {
+                  text: string;
+                  citations: Citation[];
+                  searches: number;
+                  tools?: ToolRun[];
+                  truncated?: boolean;
+                  model: string;
+                  stopped?: boolean;
+                };
+                /* `stopped: false` explicitly, not left off. This row may be a
+                   retry of one that *was* stopped, and a patch that omits the
+                   field leaves the old `true` sitting under new text — a complete
+                   answer wearing "Stopped" underneath it. */
+                /* `stopped` and `tools` are both defaulted *before* the spread,
+                   for one reason: the server omits each of them when there is
+                   nothing to say, so a spread alone cannot clear a stale one. A
+                   retry of an answer that ran three tools would otherwise keep
+                   that answer's tool strip sitting above text those tools had
+                   nothing to do with. */
+                patchReply({ stopped: false, truncated: false, tools: [], ...done, status: "done" });
+                continue;
+              }
+              if (event.name === "error") {
+                const failed = event.data as { error: string; text: string };
+                // The partial answer is kept — the reader watched it appear, and
+                // taking it away on failure is more confusing than leaving it
+                // there with the failure attached. The server stores it too.
+                patchReply({ text: failed.text || text, status: "error", error: failed.error });
+              }
             }
-            if (event.name === "done") {
-              const done = event.data as {
-                text: string;
-                citations: Citation[];
-                searches: number;
-                tools?: ToolRun[];
-                truncated?: boolean;
-                model: string;
-                stopped?: boolean;
-              };
-              /* `stopped: false` explicitly, not left off. This row may be a
-                 retry of one that *was* stopped, and a patch that omits the
-                 field leaves the old `true` sitting under new text — a complete
-                 answer wearing "Stopped" underneath it. */
-              /* `stopped` and `tools` are both defaulted *before* the spread,
-                 for one reason: the server omits each of them when there is
-                 nothing to say, so a spread alone cannot clear a stale one. A
-                 retry of an answer that ran three tools would otherwise keep
-                 that answer's tool strip sitting above text those tools had
-                 nothing to do with. */
-              patchReply({ stopped: false, truncated: false, tools: [], ...done, status: "done" });
-              finished = true;
-              continue;
-            }
-            if (event.name === "error") {
-              const failed = event.data as { error: string; text: string };
-              // The partial answer is kept — the reader watched it appear, and
-              // taking it away on failure is more confusing than leaving it
-              // there with the failure attached. The server stores it too.
-              patchReply({ text: failed.text || text, status: "error", error: failed.error });
-              finished = true;
-            }
-          }
-          /* The stream ended without saying how.
+            /* The stream ended without saying how — the server always sends
+               `done` or `error` before it ends the response. Usually nothing is
+               done about it here, and that is the point: the row is left
+               `pending`, this run lets go of it in the `finally` below, and the
+               watcher effect picks it up on the next render. See `watch`.
 
-             The server always sends `done` or `error` before it ends the
-             response, so reaching here means the connection died rather than
-             the answer finishing — the dev server restarted mid-answer, the
-             laptop slept, a proxy gave up. Without this the row stays `pending`
-             and spins for as long as the tab is open, which is exactly the
-             failure the server's own sweep exists to catch, one reload later.
-             This is the same fix, immediately. */
-          if (!finished) {
-            patchReply({
-              status: "error",
-              error: "The connection closed before the answer finished.",
-            });
+               Unless the row was never named, in which case there is nothing to
+               pick up. This branch used to fall through with the rest, and the
+               watcher would then spend two and a half minutes politely asking
+               the server about a message id this client invented — showing
+               "connection lost, checking…" the whole time for an answer that
+               could never be found. The thrown case already guarded on `began`;
+               a clean close had been left out of it. Found by a GPT-5.6 review,
+               2026-08-26. */
+            if (!began) throw new Error(ENDED_UNFINISHED.message);
+          } catch (streamErr) {
+            /* Three ways to lose a stream, one response to all of them.
+
+               `StreamStalled` is the one that had no answer at all before: the
+               stream stopped *without* ending — no bytes, no close, no error —
+               and only `readEvents`' own clock can see it, because it watches
+               bytes rather than frames. An ordinary network `TypeError` mid-read
+               is the same situation with a louder name. Both leave the server
+               working, so both are the watcher's business rather than a failure
+               to report. Adding the second one was a GPT-5.6 note, 2026-08-26.
+
+               A failure *before* the server named this row is different, and it
+               is the one case the watcher cannot help with: `pendingId` is a
+               name this client invented and no amount of looking will find it.
+               That is a plain failure. */
+            if (!began) throw streamErr;
+            if (!(streamErr instanceof StreamStalled) && !(streamErr instanceof TypeError)) {
+              throw streamErr;
+            }
           }
         } catch (e) {
           patchReply({ status: "error", error: describeFetchFailure(e as Error) });
@@ -599,6 +986,14 @@ export function useChat(slug: string): ChatApi {
           }
           stopWanted.current.delete(replyId);
           stopWanted.current.delete(pendingId);
+          /* Let go of the row. If it is still `pending` — the stream stalled,
+             the connection dropped, the read threw — the watcher effect sees an
+             unowned pending row on the next render and goes looking for the
+             answer. That is the whole handoff. */
+          release(owned.current, replyId);
+          if (pendingId !== replyId) release(owned.current, pendingId);
+          // And make the watcher effect look again — see `released`.
+          setReleased((n) => n + 1);
           /* The attempt number outlives the stream on purpose. A stop pressed
              in the frame between the last token and the row repainting still
              has to name the right attempt, and the next `begin` for this row
@@ -766,5 +1161,18 @@ export function useChat(slug: string): ChatApi {
     [write],
   );
 
-  return { threads, loaded, send, retry, edit, stop, begin, discard, rename, remove, error };
+  return {
+    threads,
+    loaded,
+    recovering,
+    send,
+    retry,
+    edit,
+    stop,
+    begin,
+    discard,
+    rename,
+    remove,
+    error,
+  };
 }
