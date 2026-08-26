@@ -57,8 +57,11 @@ until you know what they are for.
  │             ├─────────────────────┤                         │
  │             │ Find more · Start   │                         │
  ├─────────────┴─────────────────────┴─────────────────────────┤
- │ ⌂ Home  ✳ Questions  ⓘ Metadata  ☰ Thread  ⌸ Chat  📖 Glossary ●
+ │ ⊞Contents ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …             │
  └─────────────────────────────────────────────────────────────┘
+
+ The bar's five modes, with Glossary lit. Questions, Tweets and Metadata sit
+ off the right of this box and are elided — see ../plans/bottom-bar.md.
 
  The two headings are the whole of "prioritised": difficulty × centrality
  decides which side of the divider a term is on, and NOTHING else. Inside
@@ -440,9 +443,16 @@ is re-minted** — every `?term=` link dead — the file is overwritten, and `pa
 log reads like a first run. All behind a button labelled *Find more terms*, which was the only one on
 screen because of the bug above.
 
-What it does now is **upcast**: the old entries are translated into the new shape before they are
-merged, so there is one vocabulary rather than a refusal. Nothing is lost and no id moves. The blend
-goes to `background`, for the same reason `toEntries` puts it there.
+The first fix for *that* was also wrong, and a second review caught it: it translated the old entries
+into the new shape and appended as normal, which preserves ids and **defeats the feature**. Appending
+hands the model a FORBIDDEN list naming every term already present, so it never rewrites them — the
+result is stamped `glossary/2`, the banner disappears, and the original weak entry survives wearing a
+"background" label whose tooltip says the article did not say it. Certified rather than replaced.
+
+**What it does now is refuse, and inherit the ids.** A version change regenerates the prose, which is
+what *Find them again* promises; `idsByTerm` gives a fresh entry the id the old list used for the same
+name or alias, so `?term=` links and stored lookups survive a rewrite that the sentences do not. Names
+are display; ids are identity.
 
 ## The scores, and the condition attached to keeping them
 

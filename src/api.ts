@@ -19,6 +19,7 @@
 import { readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadComments } from "./comments.js";
+import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { explain } from "./explain.js";
 import { loadLookups, saveLookup } from "./glossary-lookups.js";
 import {
@@ -306,6 +307,24 @@ export async function loadGlossary(slug: string): Promise<GlossaryResponse> {
 }
 
 /**
+ * The form of a term the article actually uses in one block, or nothing.
+ *
+ * Names are canonical and aliases are what the piece says — *"Martin Luther
+ * King Jr."* against a paragraph that reads "MLK" — so asking a model to
+ * explain a selection has to quote the words that are there. Longest form
+ * first, so a block containing both gets the more specific one, which is the
+ * same preference `richness` encodes in the dedup.
+ */
+function quoteIn(entry: { name: string; aliases: string[] }, text: string): string | undefined {
+  const forms = [...formsOf(entry)].sort((a, b) => b.length - a.length);
+  for (const form of forms) {
+    const pattern = termPattern([form]);
+    if (pattern && termAppears(text, pattern)) return form;
+  }
+  return undefined;
+}
+
+/**
  * Check one glossary term on the web, and keep what comes back.
  *
  * **This is `explain` with a different selection, and that is the point.** Our
@@ -318,12 +337,25 @@ export async function loadGlossary(slug: string): Promise<GlossaryResponse> {
  * prefix — so a lookup on an article somebody has already asked a question
  * about is a cache hit rather than a fresh read of the whole piece.
  *
- * The term's own name is the quote. That is not a trick: the entry earned its
- * place because the article uses those words, `findOccurrences` proved it, and
- * `entry.blocks[0]` is a block they appear in. So "the reader selected this
- * passage" is literally true, and the prompt's own instruction to supply *"the
- * term of art, the named person, the debate being alluded to"* is the question
- * a glossary reader is asking.
+ * **The quote is the form the article actually uses, not the entry's name.**
+ * That distinction was missing and it made the request untrue. `findOccurrences`
+ * matches on the name *or any alias*, so `entry.blocks[0]` is a block one of
+ * them appears in — and on the one real glossary we have, three entries of five
+ * are matched by an alias: the block behind *John F. Kennedy* says only "JFK".
+ * Telling the model the reader selected "John F. Kennedy" inside a block that
+ * does not contain those words is a false premise handed to a model that is
+ * then asked to reason from it. `quoteIn` picks the form that is there.
+ *
+ * With that fixed, "the reader has selected this passage" is literally true,
+ * and the prompt's own instruction to supply *"the term of art, the named
+ * person, the debate being alluded to"* is the question a glossary reader is
+ * asking.
+ *
+ * An entry with **no** occurrences is refused rather than anchored to an
+ * arbitrary paragraph. The panel already says of those that the exact words do
+ * not appear in the article; inventing a position for them would be a second,
+ * quieter place for the same failure — and the model would be told a passage
+ * was selected in a paragraph that has nothing to do with the term.
  *
  * **What it does not do is touch `background`.** The remembered answer and the
  * checked one sit side by side, because a reader who can no longer tell which
@@ -367,21 +399,30 @@ export async function lookUpTerm(
      requires and nothing invented. Same call the glossary stage itself makes. */
   const meta: Meta = (await readJson<Meta>(path.join(dir, "meta.json"))) ?? { slug, title: slug };
 
-  /* The first block the term appears in, or the first block of the article when
-     the model named a term this piece does not use in those words — which the
-     panel already surfaces as "These exact words do not appear in the article".
-     A lookup on one of those is a stranger question but still a real one, and
-     refusing it would be a second, quieter place for that failure to appear. */
-  const anchor = entry.blocks[0] ?? blocksFile.blocks[0]?.id;
-  if (!anchor) {
-    throw Object.assign(new Error(`"${slug}" has no blocks to anchor a lookup to.`), { status: 500 });
+  const anchor = entry.blocks[0];
+  const block = blocksFile.blocks.find((b) => b.id === anchor);
+  const quote = block ? quoteIn(entry, block.text) : undefined;
+  if (!anchor || !block || !quote) {
+    /* Refused rather than anchored somewhere arbitrary. Three ways to get here
+       and they are all the same fact — this term is not in this text: the model
+       named words the article does not use, or the glossary is stale and its
+       block ids no longer exist, or the block exists but no form of the term is
+       in it. `409`, not `500`: nothing is broken, the question just cannot be
+       asked in the form this call needs. */
+    throw Object.assign(
+      new Error(
+        `"${entry.name}" does not appear in this article, so there is no passage to check it in. ` +
+          `Find the terms again if the article has changed.`,
+      ),
+      { status: 409 },
+    );
   }
 
   const result = await explain({
     meta,
     blocks: blocksFile.blocks,
     blockId: anchor,
-    quote: entry.name,
+    quote,
     ...(signal ? { signal } : {}),
   });
 

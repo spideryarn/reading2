@@ -32,8 +32,8 @@ import {
   richness,
   safeUrl,
   existingFor,
+  idsByTerm,
   suggestedCount,
-  upcast,
 } from "../src/glossary.js";
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
 import { hashBlocks } from "../src/source-hash.js";
@@ -792,6 +792,26 @@ describe("what an entry says — the glossary/2 field split", () => {
     expect(g.entries[1]?.senseHere).toBeUndefined();
   });
 
+  it("survives a malformed member of the entries array", () => {
+    /* The salvage this function advertises only ever covered malformed *fields
+       inside* an object — a `null` or a bare string in the array threw on the
+       first property read and took every good entry with it. Found in review,
+       and it is the failure the docstring promises does not happen. */
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "good", background: "b" },
+          null,
+          "not an object",
+          42,
+          { name: "also good", background: "b" },
+        ],
+      },
+      opts,
+    );
+    expect(g.entries.map((e) => e.name)).toEqual(["good", "also good"]);
+  });
+
   it("throws away an entry that has a name and nothing else", () => {
     // The new drop rule. A name on its own is not an entry, it is a word.
     const g = buildGlossary(
@@ -897,59 +917,6 @@ describe("entryProse", () => {
   });
 });
 
-describe("upcasting a glossary/1 list instead of refusing it", () => {
-  /* The regression this exists for, found in review before anybody hit it.
-
-     `glossary/2` briefly *refused* to append across a version boundary. That
-     sounds conservative and was a data-loss bug: `existing` became null, so
-     `buildGlossary` got no previous entries, `taken` was empty, **every id was
-     re-minted** — killing every `?term=` link a reader held — the file was
-     overwritten wholesale, and `passes` reset to 1 so the log line looked like
-     a first run. All from a button labelled "Find more terms".
-
-     Compounded by a second thing: `isStale` compares source hashes only, so
-     bumping the prompt version marked nothing stale, the panel showed no
-     banner, and the only button on screen was the forcing one. Both halves are
-     tested here — the upcast below, and `outdated` in tests/api.test.ts. */
-  const v1 = entry({ name: "Seth", gloss: "The author.", detail: "Wrote a book." });
-
-  it("translates the old shape into the new one, blend into background", () => {
-    const out = upcast(without(v1, "senseHere"));
-    expect(out.background).toBe("The author. Wrote a book.");
-    expect(out.senseHere).toBeUndefined();
-    expect(out.gloss).toBeUndefined();
-    expect(out.detail).toBeUndefined();
-    // The blend goes to `background`, never `senseHere`. `senseHere` is
-    // labelled "in this piece", and a blend under that label would attribute
-    // the model's own knowledge to the article — the one direction of error
-    // this design exists to prevent. `background` under-claims, which is safe.
-  });
-
-  it("keeps the id, which is what a ?term= link points at", () => {
-    expect(upcast(without(v1, "senseHere")).id).toBe(v1.id);
-  });
-
-  it("keeps fromOutside, the only field that could ever split a blend", () => {
-    // Dropping it would close the door on a real upcast for good: it is the one
-    // signal saying which half of an old gloss came from outside the article.
-    const flagged = { ...without(v1, "senseHere"), fromOutside: true as const };
-    expect(upcast(flagged).fromOutside).toBe(true);
-  });
-
-  it("leaves a new-shape entry completely alone, and is idempotent", () => {
-    // It runs on every append, so a second pass must not re-translate what the
-    // first one already did.
-    const v2 = entry({ name: "Seth", senseHere: "Narrowed here." });
-    expect(upcast(v2)).toEqual(v2);
-    expect(upcast(upcast(without(v1, "senseHere")))).toEqual(upcast(without(v1, "senseHere")));
-  });
-
-  it("leaves an entry with nothing to translate alone", () => {
-    const bare = without(without(entry({ name: "bare" }), "senseHere"), "background");
-    expect(upcast(bare)).toEqual(bare);
-  });
-});
-
 describe("which prose a merge puts in front of the reader", () => {
   /* Raised in review, and the test was the reviewer's point rather than the
      rule: the existing merge test asserts both fields survive but never asserts
@@ -989,7 +956,7 @@ describe("which prose a merge puts in front of the reader", () => {
   });
 });
 
-describe("a second pass over a glossary/1 list", () => {
+describe("replacing a glossary/1 list, and keeping its ids", () => {
   /* The regression test for the data-loss bug, at the level where it happened.
      `buildGlossary` takes `existing` and needs no model call, so the whole
      append path is assertable here.
@@ -1012,53 +979,70 @@ describe("a second pass over a glossary/1 list", () => {
     elapsedMs: 1,
   };
 
-  it("appends across a prompt-version boundary rather than starting over", () => {
-    /* The bug itself, at the line where it lived. Null here is what re-mints
-       every id. A version change must NOT produce it; a source-hash change
-       must, because those entries describe a piece that has moved. */
-    const kept = existingFor(v1, "deadbeefdeadbeef");
-    expect(kept).not.toBeNull();
-    expect(kept?.entries[0]?.id).toBe(v1.entries[0]!.id);
-    // And upcast on the way in, so `dedupe` never sees two vocabularies.
-    expect(kept?.entries[0]?.background).toBe("The author.");
-    expect(kept?.entries[0]?.gloss).toBeUndefined();
-
-    expect(existingFor(v1, "a-different-hash")).toBeNull();
+  it("refuses to append across a prompt-version boundary", () => {
+    /* Both halves of `existingFor` matter, and the second was argued about
+       twice. A moved article makes the old entries claims about a piece that no
+       longer exists. An older prompt makes them answers to a different
+       question, and appending would hand the model a FORBIDDEN list naming
+       every one of them — so it never rewrites them, and the result is stamped
+       with the current version while the old weak entries survive under labels
+       that do not describe them. */
+    expect(existingFor(v1, "deadbeefdeadbeef")).toBeNull();
+    expect(existingFor({ ...v1, version: PROMPT_VERSION }, "deadbeefdeadbeef")).not.toBeNull();
+    expect(existingFor({ ...v1, version: PROMPT_VERSION }, "a-different-hash")).toBeNull();
     expect(existingFor(null, "deadbeefdeadbeef")).toBeNull();
   });
 
-  it("keeps the old entry's id, which is what a ?term= link points at", () => {
+  it("carries the ids across the rewrite, which is what refusing forgot", () => {
+    /* The data-loss bug, and the shape of its real fix. Refusing to append was
+       right; doing it without inheriting ids was not. `taken` was empty, every
+       id was re-minted, and with them went every `?term=` link the reader held
+       and every lookup they had paid for — all behind a button that said "Find
+       more terms". */
     const before = v1.entries[0]!.id;
     const g = buildGlossary(
-      { entries: [{ name: "Qualia", senseHere: "Raw feels, narrowed." }] },
-      { ...opts, existing: { ...v1, entries: v1.entries.map(upcast) } },
+      { entries: [{ name: "Seth", background: "Rewritten properly." }] },
+      { ...opts, existing: null, inherit: idsByTerm(v1) },
     );
-    expect(g.entries.find((e) => e.name === "Seth")?.id).toBe(before);
+    expect(g.entries[0]?.id).toBe(before);
+    // And the prose IS new, which is the thing appending could never do.
+    expect(g.entries[0]?.background).toBe("Rewritten properly.");
+    expect(g.entries[0]?.gloss).toBeUndefined();
   });
 
-  it("keeps the old entries at all, and counts the pass", () => {
+  it("inherits by alias too, and never gives one id to two terms", () => {
+    const twoNames: Glossary = {
+      ...v1,
+      entries: [without(entry({ name: "Leslie Lamport", aliases: ["Lamport"] }), "senseHere")],
+    };
+    const ids = idsByTerm(twoNames);
     const g = buildGlossary(
-      { entries: [{ name: "Qualia", senseHere: "Raw feels, narrowed." }] },
-      { ...opts, existing: { ...v1, entries: v1.entries.map(upcast) } },
+      {
+        entries: [
+          { name: "Lamport", background: "First claimant, by alias." },
+          { name: "Leslie Lamport", background: "Second, wants the same id." },
+        ],
+      },
+      { ...opts, existing: null, inherit: ids },
     );
-    expect(g.entries.map((e) => e.name).sort()).toEqual(["Qualia", "Seth"]);
-    // `pass 1` on a second pass was the log line that made the loss look like a
-    // first run. It is the cheapest signal that the append happened at all.
-    expect(g.passes).toBe(2);
+    const inherited = twoNames.entries[0]!.id;
+    const got = g.entries.map((e) => e.id);
+    expect(got).toContain(inherited);
+    // Two entries, two ids. An id is identity; handing one to two terms would
+    // make a `?term=` link ambiguous and a stored lookup attach to the wrong row.
+    expect(new Set(got).size).toBe(g.entries.length);
   });
 
-  it("leaves one vocabulary behind, not two", () => {
-    // The thing the refusal was protecting against, solved by translating
-    // rather than refusing: after an append every entry answers the same
-    // question, because the old ones were upcast on the way in.
+  it("does not mint a fresh id that an inherited one is about to take", () => {
+    // The collision `taken` exists to prevent, now that ids arrive from two
+    // places rather than one.
+    const ids = idsByTerm(v1);
     const g = buildGlossary(
-      { entries: [{ name: "Qualia", senseHere: "Raw feels, narrowed." }] },
-      { ...opts, existing: { ...v1, entries: v1.entries.map(upcast) } },
+      { entries: [{ name: "Qualia", background: "Unrelated." }, { name: "Seth", background: "New." }] },
+      { ...opts, existing: null, inherit: ids },
     );
-    for (const e of g.entries) {
-      expect(e.gloss).toBeUndefined();
-      expect(e.senseHere !== undefined || e.background !== undefined).toBe(true);
-    }
-    expect(g.entries.find((e) => e.name === "Seth")?.background).toBe("The author.");
+    expect(new Set(g.entries.map((e) => e.id)).size).toBe(g.entries.length);
+    expect(g.entries.find((e) => e.name === "Seth")?.id).toBe(v1.entries[0]!.id);
   });
 });
+

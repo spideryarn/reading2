@@ -14,7 +14,7 @@
  * case rather than a fault.
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { readdir, rm, writeFile } from "node:fs/promises";
+import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadLookups, saveLookup } from "../src/glossary-lookups.js";
 import type { GlossaryLookup } from "../src/types.js";
@@ -93,6 +93,22 @@ describe("glossary lookups", () => {
     const file = path.join(process.cwd(), "data", slug, "glossary-lookups.json");
     await writeFile(file, "{ truncated", "utf8");
     expect(await loadLookups(slug)).toEqual({});
+  });
+
+  it("refuses to write over a file it could not read", async () => {
+    /* The second half of the corrupt-file story, and the dangerous half. The
+       read degrades to `{}` so a bad side file does not cost the reader their
+       glossary — and a write that merged into that `{}` and renamed it over the
+       top would then discard every answer they had paid for, at the moment they
+       were least likely to notice, because the lookup they just asked for
+       appears exactly as expected. Found in review. */
+    const slug = scratchSlug();
+    await saveLookup(slug, "spya-aaaaaa", lookup("Paid for."));
+    const file = path.join(process.cwd(), "data", slug, "glossary-lookups.json");
+    await writeFile(file, "{ truncated", "utf8");
+    await expect(saveLookup(slug, "spya-bbbbbb", lookup("New."))).rejects.toThrow(/could not be read/);
+    // And the unreadable file is left exactly as it was, to be recovered.
+    expect(await readFile(file, "utf8")).toBe("{ truncated");
   });
 
   it("leaves no temp file behind", async () => {

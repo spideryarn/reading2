@@ -1103,8 +1103,14 @@ function Looked({
 
   return (
     <div className="gloss-look on">
+      {/* **"checked" only when something was actually checked.** The model
+          decides per call whether to search, so a lookup can come back with
+          `searches: 0` — a real answer, and a memory one. Heading that
+          "checked" and admitting otherwise in a tooltip is a provenance claim
+          the reader has to hover to disprove, which is the same shape as the
+          warning badge this panel spent a rewrite removing. Found in review. */}
       <p className="gloss-part-label">
-        checked
+        {lookup.searches > 0 ? "checked" : "asked, not checked"}
         <Tooltip
           content={
             lookup.searches > 0 ? (

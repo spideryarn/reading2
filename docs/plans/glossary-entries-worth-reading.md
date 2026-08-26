@@ -255,12 +255,18 @@ and becomes a value on disk that the panel puts in an `href` — the same call `
 [glossary.md § Five ways to break this quietly](../project/glossary.md#five-ways-to-break-this-quietly)
 item 3 is about exactly this field.
 
-**Two writers, one file, no lock.** The lookup re-reads `glossary.json` after the model call and
-re-finds the entry **by id** — a second pass may have merged, renamed or reordered it, and ids are
-identity while names are display. That narrows the race to the width of the write rather than the
-width of a thirty-second call; it does not close it. Said plainly rather than papered over: this is
-last-writer-wins, the loss is one lookup the reader can ask for again, and a term that has *gone*
-gets an honest 409 rather than a lookup written back into a list it is no longer in.
+**One writer per file, which is why there is a second file.** This paragraph used to describe a
+post-call re-read of `glossary.json` and a 409 for a term that had vanished. That was true of a draft
+and never of the shipped code — moving lookups to their own store removed the need for it and the
+paragraph outlived the mechanism it described, which is its own small lesson about writing the doc
+before the code settles.
+
+What actually happens: the lookup is saved to `data/<slug>/glossary-lookups.json` keyed by entry id,
+through `serialised` and a temp-and-rename. A term that disappears while the call is in flight leaves
+an orphaned record rather than an error — harmless, because `loadGlossary` only attaches records
+whose id it still has, and cheap to fix later by pruning on read. **`serialised` is per process**, so
+two server processes could still lose one of two concurrent writes; that is a real limit of a
+filesystem store and one of the things [the Postgres migration](postgres-migration.md) settles.
 
 ### Checked in a browser
 
@@ -360,14 +366,28 @@ first run. And because of the bug above, the only button on screen was the one t
 Textbook [silent success](../reusable/silent-success.md): the operation reported success, and the
 check you would naturally run — *did the glossary come back?* — returns yes.
 
-**The gate is gone, replaced by an `upcast`.** The thing it was protecting against was real: `merge`
-cannot choose between a `gloss` and a `background`, because they are not the same field. The answer
-is to translate the old entries into the new shape *before* they are merged, so there is one
-vocabulary rather than a refusal. Nothing is lost, no id moves, and the blend goes to `background`
-for the same reason `toEntries` puts it there — `senseHere` is labelled "in this piece", and a blend
-under that label would attribute the model's own knowledge to the article.
+**The first fix was itself wrong, and a cross-family review caught it.** It replaced the gate with an
+`upcast` — translate the old entries into the new shape and append as normal. That preserves ids and
+loses nothing, and it quietly defeats the entire feature. Follow it: appending means `renderPrompt`
+hands the model a **FORBIDDEN** list naming every term already present, so the model never rewrites
+them; `buildGlossary` stamps the result `glossary/2`; the outdated banner disappears. **The original
+weak entry survives, wearing a "background" label whose tooltip says the article did not say it.**
+The bad entry is certified rather than replaced — worse provenance than the badge this whole change
+removed, and the exact opposite of what the button offering it promises.
 
-**What would have caught it:** a test that asserts ids survive a pass. There now is one.
+**What shipped instead: refuse, and inherit the ids.** The gate was right; what was missing beside it
+was `idsByTerm`. A version change means the prose is regenerated — which is what "Find them again"
+says — while a fresh entry that answers to a name the old list knew keeps that entry's **id**. Names
+are display, ids are identity, and the id is what a `?term=` link addresses and what a stored lookup
+is keyed by. So the reader loses the old sentences, which is the point, and keeps their links and
+their paid-for lookups, which was never the point of losing them.
+
+`upcast` is gone rather than left in place. Dead code carrying a confident docstring about a strategy
+we abandoned is worse than no code.
+
+**What would have caught it:** a test asserting that "Find them again" on an old list actually
+*changes the prose*. The tests pinned the mechanical translation and never asked whether the entry
+had been rewritten.
 
 ### And what the review got right that this plan had not decided
 

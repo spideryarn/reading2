@@ -90,6 +90,25 @@ export type LookupsByTerm = Record<string, GlossaryLookup>;
  * side file it does not need went bad.
  */
 export async function loadLookups(slug: string): Promise<LookupsByTerm> {
+  return (await read(slug)).lookups;
+}
+
+/**
+ * The same read, but saying **why** it came back empty.
+ *
+ * Reading and writing want different answers to that question. A reader can
+ * treat an unreadable side file as "no lookups" and show the glossary anyway. A
+ * *writer* must not: merging one new answer into `{}` and renaming that over a
+ * file that was merely unparseable would turn a recoverable file into a
+ * permanent loss of everything in it. Found in review — the read degraded
+ * correctly and the write then quietly finished the job.
+ */
+async function read(slug: string): Promise<{ lookups: LookupsByTerm; unreadable: boolean }> {
+  /* Before the try, deliberately. A bad slug is a refusal, not an unreadable
+     file — and inside the try it would be caught, logged as a read failure and
+     turned into "the stored lookups could not be read", which is both wrong and
+     the kind of wrong that sends somebody looking at the disk. */
+  assertSlug(slug);
   try {
     /* `parseJsonFrom`, not `JSON.parse`: V8's parse error quotes the first
        characters of what it was handed, and those characters are a model's
@@ -98,11 +117,15 @@ export async function loadLookups(slug: string): Promise<LookupsByTerm> {
       await readFile(fileFor(slug), "utf8"),
       "glossary-lookups.json",
     );
-    return parsed.lookups ?? {};
+    return { lookups: parsed.lookups ?? {}, unreadable: false };
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return {};
+    // Missing is the ordinary case and not unreadable: most articles have had
+    // no term checked, and writing the first one must not be refused.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return { lookups: {}, unreadable: false };
+    }
     log("store").error({ ...errorFields(err), slug }, "could not read the glossary lookups");
-    return {};
+    return { lookups: {}, unreadable: true };
   }
 }
 
@@ -123,7 +146,17 @@ export function saveLookup(
   lookup: GlossaryLookup,
 ): Promise<LookupsByTerm> {
   return serialised(async () => {
-    const current = await loadLookups(slug);
+    const { lookups: current, unreadable } = await read(slug);
+    /* Fail closed. The alternative is writing `{ [termId]: lookup }` over a file
+       that was only unparseable, which discards every other answer the reader
+       has paid for — and does it at the moment they are least likely to notice,
+       because the lookup they just asked for appears exactly as expected. */
+    if (unreadable) {
+      throw new Error(
+        "The stored lookups for this article could not be read, so this answer was not saved. " +
+          "Move or delete data/" + slug + "/glossary-lookups.json and try again.",
+      );
+    }
     const next: LookupsByTerm = { ...current, [termId]: lookup };
     const file = fileFor(slug);
     await mkdir(path.dirname(file), { recursive: true });

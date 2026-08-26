@@ -209,6 +209,13 @@ describe("loadGlossary's two verdicts", () => {
 });
 
 describe("lookUpTerm", () => {
+  const slugs: string[] = [];
+  afterAll(async () => {
+    for (const slug of slugs) {
+      await rm(path.join(process.cwd(), "data", slug), { recursive: true, force: true });
+    }
+  });
+
   it("refuses to write into the built-in example", async () => {
     /* `articleDir` falls through to `example/` for any slug with no output of
        its own — including a slug that does not exist — so without this guard a
@@ -218,6 +225,62 @@ describe("lookUpTerm", () => {
       /built-in example/,
     );
     await expect(lookUpTerm("example", "spya-k3m9qt")).rejects.toThrow(/built-in example/);
+  });
+
+  it("refuses a term the article does not actually contain", async () => {
+    /* Two failures reviewed into one refusal. The anchor used to fall back to
+       the article's first block, so a term the model named but the piece never
+       uses was announced to the model as a passage the reader had selected in
+       an unrelated paragraph. And the quote used to be `entry.name`, while
+       `findOccurrences` matches on the name *or an alias* — on the one real
+       glossary we have, three entries of five are matched by an alias, so the
+       request claimed the reader had selected words that were not on the page.
+
+       Both are refused before any model call, which is what makes this
+       assertable without a network. */
+    const slug = `zz-test-api-${process.pid}-unmatched`;
+    slugs.push(slug);
+    const dir = path.join(process.cwd(), "data", slug);
+    await mkdir(dir, { recursive: true });
+    const blocks: Block[] = [
+      {
+        id: "spya-aaaaaa" as Block["id"],
+        kind: "text",
+        tag: "p",
+        gistable: true,
+        html: "<p>Nothing relevant here.</p>",
+        text: "Nothing relevant here.",
+        words: 3,
+      },
+    ];
+    await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks }));
+    await writeFile(
+      path.join(dir, "tree.json"),
+      JSON.stringify({ rootId: "spya-aaaaaa", nodes: {} }),
+    );
+    await writeFile(
+      path.join(dir, "glossary.json"),
+      JSON.stringify({
+        version: PROMPT_VERSION,
+        generator: "a-model",
+        slug,
+        sourceHash: hashBlocks(blocks),
+        entries: [
+          {
+            id: "spya-zzzzzz",
+            name: "Leslie Lamport",
+            kind: "person",
+            aliases: [],
+            background: "Somebody the article never mentions.",
+            blocks: [],
+          },
+        ],
+        passes: 1,
+        generatedAt: "2026-08-25T12:00:00.000Z",
+        elapsedMs: 1,
+      }),
+    );
+    await expect(lookUpTerm(slug, "spya-zzzzzz")).rejects.toThrow(/does not appear in this article/);
   });
 
   it("rejects a slug that is not one", async () => {

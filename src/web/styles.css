@@ -2838,6 +2838,13 @@ td.text.has-hit {
   border-radius: var(--radius);
   background: var(--surface-raised);
 }
+/* An answer the model chose not to search for is still memory, and it is set
+   apart from a searched one by more than its label — a dotted edge, the same
+   one `background` carries, because that is what it is. */
+.gloss-look.on:has(.gloss-globe.off) {
+  border-left: 2px dotted var(--rule-strong);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
 .gloss-look .gloss-part-text { margin-top: 0.15rem; white-space: pre-wrap; }
 /* The globe, on or off. **The off state is drawn rather than omitted** — the
    model chooses per call whether to search, so "it decided it already knew" is

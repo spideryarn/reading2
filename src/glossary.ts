@@ -247,6 +247,13 @@ function text(value: unknown): string {
 function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
   const out: GlossaryEntry[] = [];
   for (const item of raw) {
+    /* **Per element, before any field is touched.** The salvage this function
+       advertises — thirty good entries must not be lost because one came back
+       wrong — only ever covered malformed *fields inside* an object. A `null`
+       or a bare string in the array threw on the first property read and took
+       the whole batch with it, which is the failure the docstring promises does
+       not happen. Found in review. */
+    if (!item || typeof item !== "object") continue;
     const name = text(item.name);
     const senseHere = text(item.senseHere);
     /* The old shape, folded in rather than dropped — see the docstring. Joined
@@ -307,47 +314,78 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
  * longer exists, so its entries are about text that has moved and appending to
  * them would produce a list half-describing each. That one is a real refusal.
  *
- * A glossary written by an **older prompt** is not. It was briefly refused too,
- * and the refusal was a data-loss bug: null here means `buildGlossary` gets no
- * previous entries, so `taken` is empty and every id is re-minted — every
- * `?term=` link the reader holds goes dead — while the file is overwritten and
- * `passes` resets to 1, so nothing anywhere says it happened. Behind a button
- * labelled "Find more terms". See docs/plans/glossary-entries-worth-reading.md
- * § What review caught.
+ * **A glossary written by an older prompt is refused too**, and this took three
+ * goes to get right. Refusing on its own was a data-loss bug: null here means
+ * `buildGlossary` gets no previous entries, so `taken` is empty and every id is
+ * re-minted — every `?term=` link the reader holds goes dead, every stored
+ * lookup is orphaned — while the file is overwritten and `passes` resets to 1,
+ * so nothing anywhere says it happened, behind a button labelled "Find more
+ * terms".
  *
- * The thing that refusal was protecting against is real — `merge` cannot choose
- * between a `gloss` and a `background`, because they are not the same field —
- * and `upcast` answers it properly, by translating rather than discarding.
+ * The obvious fix was to append anyway after translating the old entries, and
+ * it is worse. Appending means `renderPrompt` hands the model a FORBIDDEN list
+ * naming every term already present, so it never rewrites them — and the result
+ * is stamped with the current version while the original weak entries survive
+ * under labels that do not describe them. Certified rather than replaced.
+ *
+ * So: refuse here, and inherit the identity next door. `idsByTerm` is the half
+ * that was missing. See docs/plans/glossary-entries-worth-reading.md
+ * § What review caught.
  */
 export function existingFor(onDisk: Glossary | null, sourceHash: string): Glossary | null {
   if (!onDisk || onDisk.sourceHash !== sourceHash) return null;
-  return { ...onDisk, entries: onDisk.entries.map(upcast) };
+  if (onDisk.version !== PROMPT_VERSION) return null;
+  return onDisk;
 }
 
 /**
- * A `glossary/1` entry in `glossary/2` shape, so a second pass has one
- * vocabulary to merge rather than two.
+ * The ids an older list already spent, keyed by every name it answers to.
  *
- * The blend goes to **`background`**, which is the same call `toEntries` makes
- * when the model answers in the old shape, and for the same reason: the old
- * `gloss` mixed what the article means with what the model knows, `senseHere`
- * is labelled "in this piece", and putting a blend under that label would
- * attribute the model's own knowledge to the article. `background` under-claims
- * the article, which is the harmless direction.
+ * **This is the half that was missing**, and its absence is what made refusing
+ * to append look like a data-loss bug. Refusing was right; doing it without
+ * carrying the identity across was not.
  *
- * `fromOutside` is carried rather than dropped. It is the only field that could
- * ever discriminate an old blend into its two halves without guessing, and an
- * upcast that threw it away would close that door for good.
+ * A fresh entry that answers to a name the old list knew keeps the old id,
+ * which is what a `?term=` link addresses and what a stored lookup is keyed by
+ * (src/glossary-lookups.ts). Names are display, ids are identity — the same
+ * rule `merge` follows.
  *
- * An entry already in the new shape is returned untouched — this is idempotent,
- * which matters because it runs on every append.
+ * Aliases are indexed as well as names, and first writer wins, so an alias
+ * already owned by an earlier entry does not silently change hands.
  */
-export function upcast(entry: GlossaryEntry): GlossaryEntry {
-  if (entry.senseHere !== undefined || entry.background !== undefined) return entry;
-  const background = [entry.gloss, entry.detail].filter(Boolean).join(" ");
-  if (!background) return entry;
-  const { gloss, detail, ...rest } = entry;
-  return { ...rest, background };
+export function idsByTerm(onDisk: Glossary | null): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!onDisk) return out;
+  for (const entry of onDisk.entries) {
+    for (const term of [entry.name, ...entry.aliases]) {
+      const key = normaliseTerm(term);
+      if (key && !out.has(key)) out.set(key, entry.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * Give a fresh entry the id the old list used for the same term.
+ *
+ * Only ever runs on a **rewrite** — a list whose prose is being regenerated
+ * because the prompt that wrote it has moved on. Two fresh entries cannot claim
+ * the same old id, so the first one to match wins and the second keeps the id
+ * it was minted with.
+ */
+function inheritIds(fresh: GlossaryEntry[], inherit: Map<string, string> | null): GlossaryEntry[] {
+  if (!inherit || inherit.size === 0) return fresh;
+  const used = new Set<string>();
+  return fresh.map((entry) => {
+    for (const term of [entry.name, ...entry.aliases]) {
+      const id = inherit.get(normaliseTerm(term));
+      if (id && !used.has(id)) {
+        used.add(id);
+        return { ...entry, id };
+      }
+    }
+    return entry;
+  });
 }
 
 /**
@@ -557,14 +595,23 @@ export function buildGlossary(
     sourceHash: string;
     elapsedMs: number;
     existing?: Glossary | null;
+    /**
+     * Ids from a list this run is **replacing** rather than appending to — see
+     * `idsByTerm`. A fresh entry that answers to one of those names keeps its
+     * id, so `?term=` links and stored lookups survive a rewrite that the prose
+     * does not.
+     */
+    inherit?: Map<string, string> | null;
   },
 ): Glossary {
   const raw = Array.isArray(parsed.entries) ? (parsed.entries as RawEntry[]) : [];
   const previous = opts.existing?.entries ?? [];
-  // Ids already spent, so a fresh entry cannot collide with one the reader may
-  // already have a `?term=` link to.
-  const taken = new Set(previous.map((e) => e.id));
-  const fresh = toEntries(raw, taken);
+  /* Ids already spent, so a fresh entry cannot collide with one the reader may
+     already have a `?term=` link to — from the list being appended to, and from
+     the one being replaced, because an inherited id must not be minted for some
+     *other* term in the same batch. */
+  const taken = new Set([...previous.map((e) => e.id), ...(opts.inherit?.values() ?? [])]);
+  const fresh = inheritIds(toEntries(raw, taken), opts.inherit ?? null);
   if (previous.length === 0 && fresh.length === 0) {
     throw new Error("The model returned no terms. Nothing to write.");
   }
@@ -895,25 +942,33 @@ export async function generateGlossary(opts: {
 
   const sourceHash = hashBlocks(blocks);
   const onDisk = await readGlossary(opts.dir);
-  /* Append to any glossary that still describes THIS text, whatever prompt
-     version wrote it — **upcast on the way in** rather than refused.
+  /* Two questions, and they took three attempts to separate.
 
-     This was briefly a *gate*, and the gate was a bug. `glossary/2` replaced one
-     blended `gloss` with `senseHere` and `background`, and refusing to append
-     across that boundary sounds conservative until you follow it: `existing`
-     becomes null, `buildGlossary` gets no previous entries, so `taken` is empty
-     and **every id is re-minted** — every `?term=` link the reader holds goes
-     dead, the file is overwritten wholesale, and `passes` resets to 1 so the log
-     line is indistinguishable from a first run. A button labelled "Find more
-     terms" quietly destroying the list is the exact shape
-     docs/reusable/silent-success.md is about.
+     **Append** only to a list that describes this same text AND was written by
+     this same prompt. That is `existingFor`, and both halves are load-bearing:
+     a moved article makes the old entries claims about a piece that no longer
+     exists, and an older prompt makes them answers to a different question that
+     no current label can honestly describe.
 
-     The thing the gate was actually protecting against — `dedupe` handed two
-     vocabularies, and `merge` asked to choose between a `gloss` and a
-     `background`, which are not the same field — is real, and `upcast` answers
-     it properly: there is one vocabulary because the old entries are translated
-     into it before they are merged. Nothing is lost and no id moves. */
+     **Inherit** the ids of a list we are replacing rather than appending to.
+     That is the half whose absence made the refusal look like a data-loss bug —
+     without it, `taken` is empty, every id is re-minted, every `?term=` link
+     goes dead and every stored lookup is orphaned.
+
+     The attempt in between was worse than either, and is worth knowing about
+     because it looked like the safe option: appending across the version
+     boundary after translating the old entries. The model is handed a FORBIDDEN
+     list naming every term already present, so it never rewrites them — and the
+     result is stamped `glossary/2`, the outdated banner disappears, and the
+     original weak entry survives wearing a "background" label whose tooltip
+     says the article did not say it. Certified rather than replaced. */
   const existing = existingFor(onDisk, sourceHash);
+  /* Nothing to append to, but a list to replace: same article, older prompt.
+     The prose is regenerated — that is what the banner offering "Find them
+     again" promises — and the ids come across so the reader's links and their
+     paid-for lookups survive it. */
+  const inherit =
+    !existing && onDisk && onDisk.sourceHash === sourceHash ? idsByTerm(onDisk) : null;
 
   const words = blocks.reduce((n, b) => n + b.words, 0);
   const count = suggestedCount(words);
@@ -1000,6 +1055,7 @@ export async function generateGlossary(opts: {
     sourceHash,
     elapsedMs: Date.now() - started,
     existing,
+    inherit,
   });
 
   const outFile = path.join(opts.dir, "glossary.json");
