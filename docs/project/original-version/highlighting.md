@@ -113,8 +113,35 @@ Two more things worth carrying over:
    nothing you produce with it can be returned to. Ours would go in the URL or in a JSON artefact
    beside the article, like `comments.json` already does.
 
+## Built, 2026-08-26 — and how much of this survived contact
+
+[../search.md](../search.md) is the feature. What this file recommended, scored:
+
+| This file said | What happened |
+|---|---|
+| the feature is worth having | **Built.** A criterion, a confidence, a reason per hit — all of it |
+| confidence should be visible, not just used | **Taken.** Printed beside every result as well as drawn as intensity |
+| the border scaled harder than the fill | **Taken verbatim.** ×1.5 on the bar, ×0.3 on the wash |
+| persist the highlight set | **Taken.** `data/<slug>/searches.json`, and re-opening one costs no model call |
+| don't put three meanings on one hue | **Taken.** The search wash is its own colour, not the orange at another alpha |
+| **go straight to the CSS Custom Highlight API** | **Not needed** — see below |
+
+That last row is the interesting one, and it is a case of this file being right about the problem
+and aimed at a different solution to it. [`annotateHtml`](../../../src/web/annotate.ts) never wraps
+a range: it cuts every text node at every mark boundary and labels each piece with whichever marks
+cover it. Nothing nests, so nothing can fail to nest, and a comment, a glossary term and a search
+hit that only partially overlap come out as a run of well-formed `<mark>`s carrying two classes
+each. There is a test for exactly that case. Adding the third kind of mark cost that file one entry
+in a union and one `if`.
+
+The unit inconsistency this file spotted — API says 0–1, code reads 0–100 — was inherited as a
+*lesson* rather than as a bug: the confidence is 0–100 everywhere, stated on the type and enforced
+on the way in, and a value that comes back as a fraction is **counted in the log rather than
+rescaled**, because rescaling is a guess. See [../search.md](../search.md#the-confidence-and-the-unit-that-changed-silently).
+
 ## See also
 
+- [../search.md](../search.md) — what got built from this
 - [overview.md](overview.md) — the map to that codebase
 - [../comments.md](../comments.md) — our first marks-on-prose feature, and where a second one would collide
 - [../block-ids.md](../block-ids.md) — the contract any highlight must be anchored to

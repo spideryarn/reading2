@@ -71,8 +71,22 @@ If chat ever does arrive here, the constraint to hold is that it must be **roote
 and must cite block ids back. That keeps it on the augment side of the line — an interlocutor about
 the passage, not an oracle about the article.
 
+## Built, 2026-08-26
+
+[../search.md](../search.md). Both details this file said were worth copying were copied:
+
+- **Two snippet lengths, not one** — short in the row, longer on hover. And capped, so the hover
+  card is enough to *judge* a hit and never enough to read it instead of the article.
+- **The same UI serves both literal and semantic search.** One box, one results list, one kind of
+  mark; a toggle says which matcher runs. The two meet in one file and nothing downstream of it
+  knows which one ran.
+
+The Mark.js dependency was not copied, as this file advised — though not for the reason it gave.
+See [highlighting.md § Built](highlighting.md#built-2026-08-26-and-how-much-of-this-survived-contact).
+
 ## See also
 
+- [../search.md](../search.md) — what got built from this
 - [overview.md](overview.md) — the map to that codebase
 - [../vision.md#anti-goals](../vision.md#anti-goals) — why chat is the one to be suspicious of
 - [../comments.md](../comments.md) — what we built instead, and how it is scoped
