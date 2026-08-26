@@ -368,6 +368,44 @@ function cleanSrcset(value: string): string | null {
   return kept.length ? kept.join(", ") : null;
 }
 
+/**
+ * Take every reference to our own API off one element.
+ *
+ * Its own function rather than three loops inside the hook, because the hook
+ * runs on every node of every article and had grown to a complexity the linter
+ * was right to complain about — and because these three are one idea in three
+ * spellings, which reads better named once.
+ *
+ * The three spellings, and why each needs its own:
+ *
+ *  - **an attribute that is a URL** — `src`, `href`, `background`, the ordinary case;
+ *  - **an attribute that is a list of URLs** — `srcset`, cleaned candidate by
+ *    candidate so one bad entry does not cost the reader the other three;
+ *  - **an attribute that merely contains one** — `fill="url(/api/health)"`, an
+ *    SVG paint server the browser will happily go and fetch, and which the
+ *    ordinary check looks straight past.
+ */
+function stripOwnApiUrls(el: Element): void {
+  for (const name of URL_ATTRS) {
+    const value = el.getAttribute(name);
+    if (value !== null && isOwnApi(value)) el.removeAttribute(name);
+  }
+
+  const srcset = el.getAttribute("srcset");
+  if (srcset !== null) {
+    const cleaned = cleanSrcset(srcset);
+    if (cleaned === null) el.removeAttribute("srcset");
+    else if (cleaned !== srcset) el.setAttribute("srcset", cleaned);
+  }
+
+  for (const name of IRI_ATTRS) {
+    const value = el.getAttribute(name);
+    if (value === null || !value.includes("url(")) continue;
+    const candidates = [...value.matchAll(FUNCTIONAL_IRI)].map((m) => m[1] ?? "");
+    if (candidates.some(isOwnApi)) el.removeAttribute(name);
+  }
+}
+
 export function installArticlePolicy(purify: DOMPurify): void {
   purify.addHook("afterSanitizeAttributes", (node) => {
     // Duck-typed, not `node instanceof Element`. There is no global `Element` in
@@ -407,33 +445,7 @@ export function installArticlePolicy(purify: DOMPurify): void {
      *
      * Every URL-bearing attribute, not just `href` and `src` — a rule that
      * covers four of six looks exactly like a rule that covers six. */
-    for (const name of URL_ATTRS) {
-      const value = el.getAttribute(name);
-      if (value !== null && isOwnApi(value)) el.removeAttribute(name);
-    }
-
-    /* `srcset` is a list, so it is cleaned rather than kept-or-dropped: one bad
-       candidate must not cost the reader the other three. */
-    const srcset = el.getAttribute("srcset");
-    if (srcset !== null) {
-      const cleaned = cleanSrcset(srcset);
-      if (cleaned === null) el.removeAttribute("srcset");
-      else if (cleaned !== srcset) el.setAttribute("srcset", cleaned);
-    }
-
-    /* `fill="url(/api/health)"` is a paint server the browser will fetch, and
-       the attribute check above looks straight past it because the value is not
-       a URL. */
-    for (const name of IRI_ATTRS) {
-      const value = el.getAttribute(name);
-      if (value === null || !value.includes("url(")) continue;
-      FUNCTIONAL_IRI.lastIndex = 0;
-      let bad = false;
-      for (const m of value.matchAll(FUNCTIONAL_IRI)) {
-        if (isOwnApi(m[1] ?? "")) bad = true;
-      }
-      if (bad) el.removeAttribute(name);
-    }
+    stripOwnApiUrls(el);
 
     if (el.tagName !== "IFRAME") return;
     if (!isAllowedEmbed(el.getAttribute("src"))) {

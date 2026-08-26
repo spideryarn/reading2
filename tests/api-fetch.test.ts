@@ -171,3 +171,44 @@ describe("apiFetch", () => {
     expect(getSession).toHaveBeenCalledTimes(2);
   });
 });
+
+/**
+ * `leavingFetch` — the `pagehide` path, which does not go through `apiFetch` at
+ * all because the `await` for a token is long enough for a closing page to be
+ * killed inside.
+ */
+describe("leavingFetch", () => {
+  it("starts immediately, with keepalive and the cached token", async () => {
+    const { leavingFetch } = await import("../src/web/lib/api.js");
+    const calls = stubFetch(ok());
+    leavingFetch("/api/reader", { method: "PATCH", body: '{"profile":"x"}' });
+    /* Synchronous: no await before the request goes out. That is the whole
+       point of the function, so the assertion is that `calls` is already
+       populated rather than that it eventually is. */
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![1].keepalive).toBe(true);
+    expect(calls[0]![1].body).toBe('{"profile":"x"}');
+  });
+
+  it("refuses anywhere but our own API", async () => {
+    const { leavingFetch } = await import("../src/web/lib/api.js");
+    const calls = stubFetch(ok());
+    leavingFetch("https://evil.example/api/reader", { method: "PATCH" });
+    expect(calls).toHaveLength(0);
+  });
+
+  /**
+   * Browsers cap all in-flight keepalive bodies at about 64KiB and reject over
+   * it. This function swallows its own failures by design, so without an
+   * explicit guard a large body would fail in total silence.
+   */
+  it("says so rather than failing silently over the keepalive budget", async () => {
+    const { leavingFetch } = await import("../src/web/lib/api.js");
+    const complaint = vi.spyOn(console, "error").mockImplementation(() => {});
+    const calls = stubFetch(ok());
+    leavingFetch("/api/reader", { method: "PATCH", body: "x".repeat(70 * 1024) });
+    expect(calls).toHaveLength(0);
+    expect(complaint).toHaveBeenCalled();
+    complaint.mockRestore();
+  });
+});

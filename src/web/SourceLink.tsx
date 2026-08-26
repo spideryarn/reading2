@@ -43,8 +43,7 @@ import { apiFetch } from "./lib/api.js";
 export function SourceLink({ slug, children }: { slug: string; children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
-  const open = (event: React.MouseEvent) => {
-    event.preventDefault();
+  const open = () => {
     setError(null);
 
     /* Synchronously, before any await. See the header. */
@@ -73,13 +72,22 @@ export function SourceLink({ slug, children }: { slug: string; children: React.R
 
   return (
     <>
-      {/* Still an `<a>` with an `href`, so it looks and behaves like a link —
-          middle-click and "copy link address" will not work, which is the
-          honest cost of this approach and is why the href is the API path
-          rather than `#`. tests/no-api-hrefs.test.ts knows about this one. */}
-      <a href={`/api/source/${encodeURIComponent(slug)}`} onClick={open}>
+      {/* **A button, not an anchor with an href.**
+       *
+        The first version was an anchor pointing at the API route, so the element
+        would look and behave like a link, cancelling the click in `onClick`. That
+        is fine for an ordinary click and wrong for every other way a browser
+        opens a link: middle-click, ⌘-click, "Open in new tab", "Copy link
+        address" and some assistive navigation all skip the handler and hit the
+        API with no `Authorization` header, giving the reader a 401 page where
+        their own document should be. And `tests/no-api-hrefs.test.ts` exempted
+        this component by name, so it passed the whole time. GPT Sol, 2026-08-27.
+       *
+        What that costs is "copy link address", which was never worth anything
+        here — the URL 401s for anybody who is not signed in as you. */}
+      <button type="button" onClick={open} className="tw:cursor-pointer tw:underline tw:bg-transparent tw:border-0 tw:p-0 tw:font-inherit tw:text-inherit">
         {children}
-      </a>
+      </button>
       {error && <span className="tw:ml-2 tw:text-xs tw:text-destructive">{error}</span>}
     </>
   );

@@ -295,6 +295,21 @@ async function accessToken(): Promise<string | undefined> {
  */
 export function leavingFetch(input: string, init: RequestInit = {}): void {
   if (!input.startsWith("/api/")) return;
+
+  /* **Browsers cap the total body of all in-flight `keepalive` requests at
+     about 64KiB, and reject over it.** Nothing here comes close — the only
+     caller is the reader profile, capped near 1,500 characters — but this
+     function is generic and swallows its own failures by design, so a future
+     caller sending something large would fail completely silently. Better to
+     say so in the console than to be that silent. GPT Sol, 2026-08-27. */
+  const body = init.body;
+  if (typeof body === "string" && body.length > KEEPALIVE_LIMIT) {
+    console.error(
+      `[api] not sending ${input} on page exit: ${body.length} bytes is over the ~${KEEPALIVE_LIMIT} keepalive budget.`,
+    );
+    return;
+  }
+
   const headers = new Headers(init.headers);
   const token = cachedToken;
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -302,6 +317,9 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
      unhandled: there is no one left to tell. */
   void fetch(input, { ...init, headers, keepalive: true }).catch(() => {});
 }
+
+/** The browser's keepalive body budget, less a little for headers. */
+const KEEPALIVE_LIMIT = 60 * 1024;
 
 /**
  * The last token we saw, kept for `leavingFetch`.

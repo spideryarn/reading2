@@ -81,6 +81,56 @@ const EXPECTED = [
  */
 const MAX_PROBE_BYTES = 8 * 1024;
 
+/**
+ * How long a store check is reused for. Long enough that a loop of requests
+ * costs one query; short enough that somebody watching a deploy is not
+ * confused by a stale answer.
+ */
+const CACHE_MS = 30_000;
+
+type StoreCheck = { name: string; articles: number } | { name: string; error: string };
+
+let cached: { at: number; value: StoreCheck; warnings: string[] } | null = null;
+
+/**
+ * The store check, at most once every `CACHE_MS`.
+ *
+ * The warnings it produced are cached with it — recomputing them from a cached
+ * value would be a second place that has to agree with the first about what an
+ * empty shelf means.
+ */
+async function cachedStoreCheck(warnings: string[]): Promise<StoreCheck> {
+  const now = Date.now();
+  if (cached && now - cached.at < CACHE_MS) {
+    warnings.push(...cached.warnings);
+    return cached.value;
+  }
+
+  const mine: string[] = [];
+  let value: StoreCheck;
+  try {
+    const articles = await listArticles({ archived: false });
+    value = { name: STORE, articles: articles.length };
+    if (articles.length === 0) {
+      mine.push("the shelf is empty — nothing has been imported, or the query found nothing");
+    }
+  } catch (err) {
+    /* The whole error to the log, a bounded amount to the caller. This endpoint
+       is unauthenticated and a driver's message can name a role or a host —
+       and at the same time it is the *only* diagnostic a broken deployment has,
+       so removing it entirely would be trading a real tool for a small
+       exposure. Truncated rather than hidden, with the full text one
+       `vercel logs` away. */
+    const message = (err as Error).message ?? "";
+    console.error("[health] store check failed", { message });
+    value = { name: STORE, error: message.slice(0, 200) };
+  }
+
+  cached = { at: now, value, warnings: mine };
+  warnings.push(...mine);
+  return value;
+}
+
 const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
 
 /**
@@ -107,8 +157,23 @@ async function bodyCheck(req: IncomingMessage, res: ServerResponse): Promise<voi
        here would be answered by src/vercel.ts's last-resort catch as a plain
        500, which says nothing. */
     if (size > MAX_PROBE_BYTES) {
+      /* **413, not a successful truncated report.** The first version broke out
+         of the loop and answered 200 with `truncated: true`, which is a storage
+         cap rather than a transport one: it still accepted the whole stream and
+         it still told the sender they had succeeded. GPT Sol, 2026-08-27. */
       truncated = true;
-      break;
+      res.statusCode = 413;
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(
+        JSON.stringify({
+          ok: false,
+          error: `This probe reads at most ${MAX_PROBE_BYTES} bytes.`,
+        }),
+      );
+      /* Stop reading. Whatever is still coming is the sender's problem now. */
+      req.destroy();
+      return;
     }
     chunks.push(chunk as Buffer);
   }
@@ -229,17 +294,16 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
   /* The real read path, not a `select 1`. A `select 1` proves the pool can
      connect, which is the half that was never in doubt; listing the shelf
      proves the schema is applied, the runtime role can see it, and the rows are
-     there. Those are the three that are actually missing on a fresh project. */
-  let store: { name: string; articles: number } | { name: string; error: string };
-  try {
-    const articles = await listArticles({ archived: false });
-    store = { name: STORE, articles: articles.length };
-    if (articles.length === 0) {
-      warnings.push("the shelf is empty — nothing has been imported, or the query found nothing");
-    }
-  } catch (err) {
-    store = { name: STORE, error: (err as Error).message };
-  }
+     there. Those are the three that are actually missing on a fresh project.
+
+     **But it is behind a cache, because this endpoint is public.** `listArticles`
+     is not one cheap query — src/store/pg.ts loads articles and revisions and
+     then does per-article work — so an anonymous caller could ask for it in a
+     loop and make us do an expanding amount of database work per request, HEAD
+     included. Caching does not weaken the check: nothing this reports changes
+     between one second and the next, and a deployment that has just been fixed
+     is worth waiting `CACHE_MS` to see. GPT Sol, 2026-08-27. */
+  const store = await cachedStoreCheck(warnings);
 
   if (STORE !== "postgres") {
     warnings.push(`SPIDERYARN_STORE is '${STORE}', so reads come from a filesystem this host has no durable copy of`);

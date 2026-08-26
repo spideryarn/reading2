@@ -120,3 +120,43 @@ describe("requireUser", () => {
     }
   });
 });
+
+/**
+ * Which failures are ours and which are the token's.
+ *
+ * The first version of `isUnavailable` mapped every `AuthApiError` to 503, and
+ * Supabase uses that class for 4xx token failures as well as for its own. The
+ * result did not fail open — the request was still refused — but a 503 does not
+ * trigger `apiFetch`'s refresh-and-retry, so polling code would sit retrying an
+ * error that could never clear instead of sending the reader to sign in.
+ * GPT Sol, 2026-08-27.
+ */
+describe("telling our outage from their bad token", () => {
+  const withError = (error: unknown) => async (): Promise<VerifyResult> => {
+    const e = error as { status?: number };
+    const unavailable =
+      (error as { name?: string }).name === "AuthRetryableFetchError" ||
+      typeof e.status !== "number" ||
+      e.status >= 500;
+    return { ok: false, kind: unavailable ? "unavailable" : "bad-token" };
+  };
+
+  it("calls a 4xx from the auth API a bad token, not an outage", async () => {
+    for (const status of [400, 401, 403, 404, 422]) {
+      const verify = withError({ name: "AuthApiError", status });
+      expect(await statusOf(requireUser(req("Bearer t"), verify)), String(status)).toBe(401);
+    }
+  });
+
+  it("calls a 5xx, a retryable fetch, and a bare throw an outage", async () => {
+    for (const error of [
+      { name: "AuthApiError", status: 500 },
+      { name: "AuthApiError", status: 503 },
+      { name: "AuthRetryableFetchError" },
+      { name: "TypeError" },
+    ]) {
+      const verify = withError(error);
+      expect(await statusOf(requireUser(req("Bearer t"), verify)), error.name).toBe(503);
+    }
+  });
+});

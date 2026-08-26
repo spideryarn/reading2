@@ -41,7 +41,17 @@ import { CALLBACK_HREF, LIBRARY_HREF, navigate } from "./router.js";
 import { supabase } from "./lib/supabase.js";
 
 /** Everything either end of the OAuth exchange leaves behind. */
-const AUTH_PARAMS = ["code", "state", "error", "error_code", "error_description"];
+const AUTH_PARAMS = [
+  "code",
+  "state",
+  "error",
+  "error_code",
+  "error_description",
+  /* The SDK's own, and it is not obvious from the outside. A failed exchange
+     leaves it on the URL, so a list without it does not do what this list says
+     it does. GPT Sol, 2026-08-27. */
+  "sb_flow_id",
+];
 
 /**
  * How long to wait for the SDK to settle before calling it a failure.
@@ -94,8 +104,14 @@ export function AuthCallback() {
       /* Google said no, or somebody arrived at this address with nothing on it.
          Either way there is nothing to wait for. */
       clearParams();
-      if (said) setError(said);
-      else leave();
+      if (said) {
+        setError(said);
+        /* **Consume the stored destination even though we are not going there.**
+           auth-return.ts promises a failed sign-in does not survive to redirect
+           the next one, and leaving it here on the denial path would have made
+           that promise false. GPT Sol, 2026-08-27. */
+        takeReturn(CALLBACK_HREF);
+      } else leave();
       return;
     }
 
@@ -108,22 +124,41 @@ export function AuthCallback() {
       setError("Signing in is taking longer than it should. Try again. [auth-slow]");
     }, DEADLINE_MS);
 
+    /* **`initialize()`, not `getSession()`** — and the difference is a wrong
+       answer rather than a slow one.
+     *
+       `getSession()` returns whatever session exists. Supabase **keeps an
+       existing session when a new callback exchange fails** — deliberately, so
+       that a reused magic link does not log you out of a perfectly good
+       session. So a reader who was already signed in, arriving here with a
+       stale or wrong code, would have been redirected as though the sign-in
+       they just attempted had worked. Which matters most for the case where
+       they were trying to switch account.
+     *
+       `initialize()` is public, and its own docs say it returns "any error
+       encountered while detecting it from the URL" — i.e. the verdict on *this*
+       attempt rather than on the state of the world. GPT Sol, 2026-08-27. */
     void supabase.auth
-      .getSession()
-      .then(({ data }) => {
+      .initialize()
+      .then(async ({ error: initError }) => {
         if (!live) return;
         clearTimeout(timer);
         clearParams();
-        if (data.session) leave();
-        else {
-          /* The exchange failed and told nobody. The commonest real cause is a
-             PKCE verifier that is not in this browser — the reader started the
-             sign-in somewhere else, or cleared their storage in between. */
+        if (initError) {
+          /* The commonest real cause is a PKCE verifier that is not in this
+             browser — the reader started the sign-in somewhere else, or cleared
+             their storage in between. */
           setError(
             "That sign-in could not be completed. If you started it in another browser or " +
               "window, start again in this one. [auth-exchange]",
           );
+          takeReturn(CALLBACK_HREF);
+          return;
         }
+        const { data } = await supabase.auth.getSession();
+        if (!live) return;
+        if (data.session) leave();
+        else setError("That sign-in did not produce a session. Try again. [auth-nosession]");
       })
       .catch(() => {
         if (!live) return;

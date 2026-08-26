@@ -44,6 +44,25 @@ export interface SessionState {
   loading: boolean;
 }
 
+/**
+ * How long to stay in `loading` before giving up and showing the sign-in screen.
+ *
+ * **The whole app renders `null` while loading** (App.tsx), which is the right
+ * call for the one frame it normally takes and a catastrophe if it never ends:
+ * a stuck PKCE or refresh request leaves a permanently blank page, with no
+ * error, nothing to click, and nothing in the console. `pageshow` does not
+ * rescue it either, because `getSession()` waits on the same unresolved
+ * initialisation.
+ *
+ * Supabase does emit `INITIAL_SESSION` even after an initialisation *error*, so
+ * this only fires when initialisation **hangs** rather than fails. That is rare
+ * and it is exactly the case with no other way out. GPT Sol, 2026-08-27.
+ *
+ * Eight seconds: past any plausible round trip, short of the point where a
+ * reader concludes the site is broken and leaves.
+ */
+const SETTLE_MS = 8_000;
+
 export function useSession(): SessionState {
   const [state, setState] = useState<SessionState>({
     session: null,
@@ -55,7 +74,16 @@ export function useSession(): SessionState {
     /* `onAuthStateChange` fires INITIAL_SESSION by itself once the client has
        finished initialising, so there is no separate `getSession()` call here
        to race with it. One source of truth. */
+    /* Armed before subscribing, cleared by the first event. If initialisation
+       never settles, this is the only thing that ends `loading` — and ending it
+       as "signed out" is right: the reader gets a sign-in screen they can act
+       on rather than a blank page they cannot. */
+    const settle = setTimeout(() => {
+      setState((current) => (current.loading ? { ...current, loading: false } : current));
+    }, SETTLE_MS);
+
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      clearTimeout(settle);
       setState({ session, user: session?.user ?? null, loading: false });
     });
 
@@ -69,6 +97,7 @@ export function useSession(): SessionState {
     window.addEventListener("pageshow", resync);
 
     return () => {
+      clearTimeout(settle);
       data.subscription.unsubscribe();
       window.removeEventListener("pageshow", resync);
     };

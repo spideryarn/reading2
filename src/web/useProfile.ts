@@ -94,7 +94,18 @@ export function useProfile(): UseProfile {
     // Nothing typed, or nothing changed. Not an early return for tidiness: a
     // PATCH per blur would rewrite the row every time the reader tabbed past.
     if (saved === null || current === saved) return;
-    if (inFlight.current === current) return;
+    /* **`leaving` ignores what is in flight, and that is deliberate.**
+     *
+       The de-duplication below stops a blur and a `visibilitychange` sending the
+       same body twice, which is right. But it also meant that a
+       `visibilitychange` starting an ordinary fetch would make the `pagehide`
+       that followed it decline to send — and the ordinary fetch is exactly the
+       one the browser is entitled to kill as the document goes away. The reader
+       would lose the sentence, with both mechanisms having "worked".
+     *
+       The PATCH is idempotent, so a duplicate costs one wasted request and the
+       row ends up the same either way. GPT Sol, 2026-08-27. */
+    if (!leaving && inFlight.current === current) return;
     inFlight.current = current;
     const mine = ++generation.current;
     const body = JSON.stringify({ profile: current === "" ? null : current });

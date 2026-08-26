@@ -9,6 +9,12 @@
  * SourceLink.tsx now, which fetches with a token and hands the tab a `blob:`.
  * This test is what will notice the third one.
  *
+ * **There are no exemptions, and there was one.** SourceLink kept its `href` at
+ * first and cancelled the click, so this file skipped it by name — which meant
+ * the test passed while the one component it was written about still reached the
+ * API without a token on every middle-click and "Open in new tab". An exemption
+ * for the only interesting case is not a test. GPT Sol, 2026-08-27.
+ *
  * ## What this cannot see, and where that is handled
  *
  * **Article HTML.** The sanitiser deliberately keeps relative links and images
@@ -48,11 +54,6 @@ describe("no plain links to our own API", () => {
         .split("\n")
         .map((line, i) => ({ line, n: i + 1 }))
         .filter(({ line }) => API_HREF.test(line))
-        /* SourceLink.tsx keeps the href on purpose — it is what makes the
-           element read as a link — and cancels the navigation in `onClick`.
-           Named rather than pattern-matched, so a second file cannot quietly
-           inherit the exemption. */
-        .filter(() => path.basename(file) !== "SourceLink.tsx")
         .map(({ n }) => `${path.relative(WEB, file)}:${n}`),
     );
     expect(offenders).toEqual([]);

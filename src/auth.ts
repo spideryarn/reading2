@@ -148,10 +148,11 @@ export const verifyWithSupabase: Verifier = async (token) => {
   }
 
   if (result.error || !result.data) {
-    const name = result.error?.name ?? "";
-    const unreachable = name === "AuthRetryableFetchError" || name === "AuthApiError";
-    if (unreachable) {
-      log("auth").error({ err: name }, "could not verify against the JWT key set");
+    if (isUnavailable(result.error as { name: string; status?: number } | null)) {
+      log("auth").error(
+        { err: result.error?.name, status: (result.error as { status?: number })?.status },
+        "could not verify against the JWT key set",
+      );
       return { ok: false, kind: "unavailable" };
     }
     return { ok: false, kind: "bad-token" };
@@ -162,6 +163,36 @@ export const verifyWithSupabase: Verifier = async (token) => {
     : never;
   return { ok: true, claims };
 };
+
+/**
+ * Is this error us failing, or the token being bad?
+ *
+ * **Classified by status, not by class name**, and the first version got this
+ * wrong in a way that does not fail open but is still a bug. It mapped every
+ * `AuthApiError` to "unavailable", and Supabase uses `AuthApiError` for **4xx
+ * token failures too** — including the ones `getClaims` hits when it falls back
+ * to `getUser`. So a genuinely bad token could come back 503.
+ *
+ * That still refuses the request. What it breaks is the client: a 503 does not
+ * trigger `apiFetch`'s refresh-and-retry, and polling code sits there retrying
+ * an error that will never clear instead of sending the reader to sign in
+ * again. GPT Sol, 2026-08-27; confirmed by reading `AuthApiError`, which
+ * carries a `status`.
+ *
+ * So: 5xx and anything with no status at all (a network throw, a DNS failure)
+ * is ours. 4xx is the token's.
+ */
+function isUnavailable(error: { name: string; status?: number } | null | undefined): boolean {
+  if (!error) return false;
+  // Its whole purpose is to say "try again", so it never means a bad token.
+  if (error.name === "AuthRetryableFetchError") return true;
+  const status = error.status;
+  /* No status is a fetch that never got an answer — our side, or the network
+     between us and the key set. A verifier that could not run has not decided
+     anything about the token. */
+  if (typeof status !== "number") return true;
+  return status >= 500;
+}
 
 /**
  * Is this signed-in person allowed in?

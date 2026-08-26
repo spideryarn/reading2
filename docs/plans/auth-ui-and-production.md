@@ -1001,6 +1001,66 @@ reaches no data.
 
 ---
 
+## The review of the built code, and what it changed
+
+Ran 2026-08-27 (GPT Sol, high effort, read-only), on the commit rather than on the plan. Kept at
+[auth-ui-code-review-sol.md](auth-ui-code-review-sol.md). **This is the one AGENTS.md says to weight
+higher**, and it earned that: a plan-stage review cannot run five malformed URLs through
+`sanitizeHtml` and watch them come out the other side.
+
+Its verdict — *"not safe to deploy merely once the dashboards are configured"* — and its six-item
+bar. Five were code and are done; the sixth is Greg's.
+
+| Finding | Verified how | Done |
+|---|---|---|
+| **Blocker** — the authenticated user is discarded, so every account shares one shelf and one budget | Confirms [§ whose shelf this is](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is), reached independently | **No — Greg's call** |
+| **High** — `/api/health` calls `listArticles()` unauthenticated: an N+1 amplification, HEAD included | Read `pg.ts` | Cached 30s; error truncated to 200 chars with the full text logged |
+| **High** — five sanitiser bypasses | **Ran all five through `sanitizeHtml`** — see below | All five closed, `SANITIZER_VERSION` 1 → 2 |
+| **High** — the 8KB "cap" read the whole chunk then answered 200 | Read the loop | 413, and the socket destroyed |
+| **Medium** — `AuthCallback` treats *any* session as proof *this* attempt worked | Read the SDK | `initialize()`, whose error is about this attempt |
+| **Medium** — `useSession` can leave the whole app blank for ever if init hangs | Read it against `App.tsx` returning `null` | An 8s settle that ends as "signed out" |
+| **Medium** — every `AuthApiError` mapped to 503, and Supabase uses it for 4xx too | `AuthApiError` carries a `status` | Classified by status; 4xx → 401, 5xx/no-status → 503 |
+| `leavingFetch` swallows a body over the ~64KiB keepalive budget | Reasoned; guard added | Refuses and says so |
+| A `visibilitychange` save made the following `pagehide` decline to send | Read `useProfile` | `leaving` ignores in-flight; the PATCH is idempotent |
+| `SourceLink` still rendered an API `href` — middle-click and "Open in new tab" bypass the handler | Read it | A `<button>`, and **the test's exemption removed** |
+
+### The five bypasses, because the shape of the mistake matters more than the fix
+
+The rule I wrote stripped `<img src="/api/health">` and let all of these through:
+
+```
+SURVIVES  a mixed srcset       "/safe.png 1x, /api/health 2x"
+SURVIVES  <table background="/api/health">
+SURVIVES  <rect fill="url(/api/health)">
+SURVIVES  https://<our own production host>/api/library
+SURVIVES  //<our own production host>/api/library
+stripped  /api/health
+```
+
+Three separate errors. The whole `srcset` value is not a URL, so `new URL()` threw and the code
+concluded there was nothing to see. `background` and SVG's functional IRIs were not in the
+attribute list — and `fill="url(…)"` is not a URL attribute at all, it is an attribute that
+*contains* one. And resolving everything against a placeholder origin made **our own host foreign**,
+which is why the fully-qualified spelling walked through the check written to stop it.
+
+**My own test passed the whole time**, because I wrote the cases I had thought of. That is finding
+#10 of the review — *"the passing tests overstate what was verified"* — and it is fair. The five are
+now named individually in `tests/sanitize-own-api.test.ts`, together with the legitimate markup they
+must not eat: `url(#gradient)`, a clean multi-candidate `srcset`, `//example.com/api/x`.
+
+**And `SANITIZER_VERSION` was still 1.** The paragraph directly above that constant says to bump it
+whenever a hook gets stricter, because otherwise an artefact stored under the old policy claims to
+have been cleaned by one it has never seen. I made the policy stricter and did not bump it. It is 2.
+
+### What it did not find
+
+*"The application-handler gate itself did hold up under review: nothing before `requireUser()`
+invokes a route handler, parses a request body, writes streaming headers or spends model money.
+OPTIONS and HEAD do not bypass it, and route-specific errors occur after it."* And on `apiFetch`:
+one retry so no loop, replayable bodies, and the success body untouched so `useChat` still streams.
+
+---
+
 ## See also
 
 - [auth-supabase.md](auth-supabase.md) — the decisions, and everything this plan builds on
