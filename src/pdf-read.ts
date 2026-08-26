@@ -63,7 +63,7 @@ import {
   type RecordType,
   TooManyPages,
 } from "./pdf.js";
-import { type Check, check } from "./pdf-score.js";
+import { type Check, check, report } from "./pdf-score.js";
 import type { Meta } from "./types.js";
 
 /**
@@ -579,8 +579,14 @@ export interface PdfExtractOptions {
   dataDir: string;
   slug: string;
   reader?: PdfReader;
-  /** Called once per finished chunk, for the job's progress line. */
-  onProgress?: (done: number, total: number, pages: number[]) => void;
+  /**
+   * Called once per finished chunk, with what the check made of it.
+   *
+   * The queue uses the counts for its progress line and ignores the rest; the
+   * command line prints the whole table, which is the only way to see *how*
+   * well a page was read rather than whether it passed.
+   */
+  onProgress?: (done: number, total: number, pages: number[], result: Check) => void;
   signal?: AbortSignal;
 }
 
@@ -733,7 +739,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       pagesChecked += result.scored.length;
     }
     all.push(...emitted);
-    opts.onProgress?.(i + 1, chunks.length, chunk.pages);
+    opts.onProgress?.(i + 1, chunks.length, chunk.pages, result);
   }
 
   if (failures.length) {
@@ -1007,16 +1013,28 @@ async function main() {
     outFile,
     dataDir,
     slug,
-    onProgress: (done, total, pages) => console.log(`  ${done}/${total}  pages ${pages.join(", ")}`),
+    onProgress: (done, total, pages, checked) => {
+      console.log(`\n  ${done}/${total}  pages ${pages.join(", ")}`);
+      console.log(
+        report(checked)
+          .split("\n")
+          .map((l) => `  ${l}`)
+          .join("\n"),
+      );
+    },
   });
   console.log(`\nTitle:   ${result.meta.title}`);
   console.log(
     `Records: ${result.records}, mean recall ${result.recall ?? "— (nothing to check it against)"}` +
       ` over ${result.meta.pagesChecked} of ${result.pages} page(s)`,
   );
-  console.log(`Tokens:  ${result.usage.input} in, ${result.usage.output} out`);
+  console.log(
+    `Tokens:  ${result.usage.input} in, ${result.usage.output} out` +
+      `${result.usage.input === 0 ? "   (every chunk came from the cache)" : ""}` +
+      `${result.retries.length ? `, ${result.retries.length} chunk(s) asked twice` : ""}`,
+  );
   console.log(`Written: ${path.resolve(result.outFile)}`);
-  for (const note of result.notes) console.log(`note  ${note}`);
+
 }
 
 const isMain =
