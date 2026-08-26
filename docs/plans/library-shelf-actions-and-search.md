@@ -394,6 +394,26 @@ Two findings were **not** acted on, deliberately:
   articles in arbitrary languages; wrong to fix speculatively while every article is English. Named
   here so the next person finds the decision rather than the omission.
 
+### The browser pass
+
+A Sonnet subagent drove the page in Chrome, per
+[browser-testing.md](../project/browser-testing.md). All ten checks passed, including the two most
+worth confirming with a real pointer and a real keyboard: **the action row is reachable by Tab** and
+becomes visible without any hover (title link → pencil → refresh → external link → copy, each with a
+focus ring), and **Delete → Undo restores the article to its correct sorted position**, verified
+against `GET /api/library?archived=1` as well as on screen.
+
+It found one thing, small and real: after saving a rename, the helper line under the input still read
+*"empty to restore “…”"* naming the **just-saved** title — because `entry.title` is the reader's own
+once an override exists. Clearing the field restores the *extracted* title, which the card
+deliberately does not carry (`LibraryEntry` ships a `titleOverridden` flag rather than both strings).
+So the line now names the title only when it is the extractor's, and otherwise says what will happen
+without naming it. Saying less beats saying something false.
+
+One transient React error was seen and is **not** an app bug: it coincided exactly with another
+agent's HMR reload of `SearchPanel.tsx` mid-keystroke, and did not recur. Worth knowing that several
+agents sharing one dev server can produce that.
+
 ### The review that did not run first time
 
 [AGENTS.md](../../AGENTS.md) and Greg's standing preference say a plan gets a cross-family review

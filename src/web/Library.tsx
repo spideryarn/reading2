@@ -783,7 +783,20 @@ function TitleEditor({
         className="tw:w-full tw:rounded tw:border tw:border-highlight tw:bg-background tw:px-2 tw:py-1 tw:font-prose tw:text-xl tw:leading-snug tw:text-foreground tw:outline-none"
       />
       <span className="tw:mt-1 tw:block tw:text-xs tw:text-muted-foreground">
-        Enter to save · Escape to cancel · empty to restore “{entry.title}”
+        Enter to save · Escape to cancel ·{" "}
+        {/* Named only when it IS the extractor's title. Once the reader has
+            renamed the article, `entry.title` is their own — so naming it here
+            offered to "restore" the very title they were looking at, which is
+            not what clearing the field does. The card does not carry the
+            superseded title (`LibraryEntry` ships a `titleOverridden` flag
+            rather than both strings, so nothing puts a string on the wire that
+            nothing renders), and saying less is better than saying something
+            false. Found in a browser pass, 2026-08-26. */}
+        {entry.titleOverridden ? (
+          <>empty to restore the extracted title</>
+        ) : (
+          <>empty to restore “{entry.title}”</>
+        )}
       </span>
     </form>
   );
