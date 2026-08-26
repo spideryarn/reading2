@@ -1537,6 +1537,35 @@ beside it, because a mean of one page is arithmetically fine and means nothing.
 built in v2 can be run retroactively over scans already ingested. Saying that here is what removes
 the pressure to build it now.
 
+### What a re-read costs, measured: 11 block ids of 43
+
+Re-running `extract` on the **same PDF with the same model and the same prompt** and then re-running
+stage 3 keeps **32 of 43 block ids and mints 11**. Same bytes, same reader, an hour apart.
+
+That is not a bug in the matcher — [it does what it says](../project/block-ids.md#two-passes-and-the-second-one-refuses-to-guess), and it
+refuses to guess when a paragraph's words have changed. It is the honest cost of a
+**nondeterministic extractor** meeting an id scheme built for a deterministic one. Readability run
+twice over the same HTML produces the same paragraphs; a model run twice over the same page produces
+one more record than last time and a comma in a different place, and a quarter of the ids do not
+survive it.
+
+Nothing in the reader is anchored to a block id yet except the ToC and the scroll position, both of
+which are rebuilt in the same run — so today this costs nothing. It costs something the moment
+[notes and highlights](../project/vision.md#where-this-goes-after-granularity-zoom) exist, which is
+the feature random ids were chosen for in the first place. Three ways out, none built:
+
+- **Don't re-extract.** The chunk cache already means a re-run is free and identical; only a
+  *forced* extract or a prompt bump re-reads. Making that the default is a one-line change and most
+  of the answer.
+- **Fuzzy-match on re-read, for PDFs only.** Explicitly rejected for HTML, and the reasoning
+  ("guessing would silently attach a reader's note to a sentence that no longer says what they
+  annotated") is weaker here, because the two candidates came from the same ink rather than from an
+  author's edit.
+- **Anchor to the page and the quote** rather than to the block, which is what
+  [comments](../project/comments.md) already do and what survives re-segmentation by construction.
+
+Worth deciding before anything is anchored, not after.
+
 ## Greg's answers (2026-08-26)
 
 Asked one at a time; his wording where it changes something.

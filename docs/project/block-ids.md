@@ -123,6 +123,15 @@ Measured on the test article, re-extracted *and* with a new paragraph inserted a
 **138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to
 match on and which nobody annotates.
 
+**A PDF re-read costs more than a web page re-extraction, and it is measured.** Re-running stage 2 on
+the *same PDF with the same model and the same prompt*, then stage 3, keeps **32 of 43 ids and mints
+11**. Readability run twice over the same HTML produces the same paragraphs; a model run twice over
+the same page produces one more record than last time and a comma in a different place. The matcher
+is doing exactly what it says here — refusing to guess when the words have changed — and the cost is
+real. What to do about it is being decided in
+[pdf-ingestion.md § What a re-read costs](../plans/pdf-ingestion.md#what-a-re-read-costs-measured-11-block-ids-of-43),
+and it wants deciding before anything a reader owns is anchored to an id.
+
 Two honest limits:
 
 - **An edited paragraph gets a new id** and loses whatever was anchored to it. We cannot distinguish
@@ -159,6 +168,52 @@ pull-quotes that repeat body text verbatim. They stay addressable — the ToC ma
 at a diagram — they simply must not generate a row of their own. On the test article all 11
 pull-quotes are word-for-word repeats of body sentences, so without this the ToC would grow eleven
 phantom rows quoting text it had already listed.
+
+## The article's own links
+
+Stage 3 does not only *add* an id. Where the author already put one on a paragraph or a heading, it
+**overwrites** it — a block can only have one id, and everything here addresses text by ours.
+
+That quietly broke a link the reader can see. A published page often points at its own sections, and
+the Anthropic constitution has five, "see the section on
+[how we think about corrigibility](https://www.anthropic.com/constitution) for more on this" among
+them. Those are `<a href="#how-we-think-about-corrigibility">`, aimed at an `id` the author put on a
+heading. The sanitiser has no reason to touch the link, so it arrived in the reading view intact and
+pointing at a fragment that existed nowhere in the document. Clicking it put the fragment in the
+address bar and moved the page not at all — the shape of failure this project keeps meeting
+([silent-success.md](../reusable/silent-success.md)), since nothing throws and nothing looks wrong
+until somebody follows one.
+
+The id is not really destroyed, it is **renamed**, so `retargetAnchors` in
+[`src/blocks.ts`](../../src/blocks.ts) renames the references with it: every `href="#author-id"` in
+the document becomes `href="#spya-…"`. It has to happen there, because that is the only moment both
+names are known at once — one stage-3 run later the author's id is gone from the HTML for good.
+`stats.retargeted` counts them, and the pipeline logs it.
+
+Four things it deliberately leaves alone, and one it cannot reach:
+
+- **A link out to the web** that happens to carry a fragment. `#` has to be the first character.
+- **A fragment that was never a block's id** — a footnote span, a `<section>` wrapper. Only block
+  elements are restamped, so those ids are still in the document and those links still resolve.
+- **A fragment nothing answers to.** A dead link stays dead rather than being pointed somewhere
+  plausible.
+- **Anything on a re-run**, where every href already says `#spya-…` and there is nothing left to
+  rename. Idempotent, like the rest of the stage — including across a re-extraction, where the
+  author's ids come back and ours are carried over by matching text (above).
+- And the one it cannot: **an id DOMPurify deleted before we ever saw it.** Its `SANITIZE_DOM` drops
+  any `id` naming a property of `document` or of a form element — `target`, `title`, `name`,
+  `method`, `action`, `links`, `images`, `forms`. A link to `#target` therefore stays dead, as it
+  would have in a browser, for want of anything left to rename it to.
+
+**The click is then ours, not the browser's.** Left alone, a hash jump puts the target's top edge at
+the top of the viewport — behind two sticky bars — and leaves `?at=` claiming the reader never
+moved. Every other way of moving through this article goes through `scrollToBlock` and records where
+it went, so [`internal-links.ts`](../../src/web/internal-links.ts) resolves the click to a block and
+hands it to the same jump a gist, a spine segment and an arrow key use. A fragment smaller than a
+block resolves to the row containing it, which is the finest thing this view can put under the
+reader's eye; anything it cannot resolve is handed back to the browser untouched. ⌘-click still
+opens a tab, and lands correctly, because an arriving `#spya-…` is rewritten to `?at=` before React
+mounts ([url-state.md](url-state.md)).
 
 ## Showing an id
 
