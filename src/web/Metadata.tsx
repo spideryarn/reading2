@@ -247,7 +247,10 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
 
   return (
     <>
-      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-10 tw:font-sans ${DOCK_CLEARANCE}`}>
+      {/* `pt-14` rather than `pt-10`: the corner wordmark is fixed
+          (HomeLogo.tsx), so on a window narrow enough that this centred column
+          reaches the left edge it would otherwise sit on the back-link. */}
+      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-14 tw:font-sans ${DOCK_CLEARANCE}`}>
         <Link
           href={backHref}
           className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
@@ -331,7 +334,15 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
                 icon={Clock}
                 label="Read time"
                 value={`${stats.minutes} min`}
-                tip={`Words ÷ ${WPM} a minute, rounded, and never less than one. A flat rate: it does not know how hard this particular article is.`}
+                /* The bottom bar carried a dimmed "Reading time" placeholder
+                   until 2026-08-26, when Greg said it *"should be part of
+                   Metadata"* — and it already was, right here. What only the
+                   placeholder knew is now in this sentence: the original
+                   version dropped the standard readability formulas for a
+                   model's judgement, then scaled the estimate by how confident
+                   the model said it was. See Dock.tsx, and
+                   original-version/difficulty-and-reading-time.md. */
+                tip={`Words ÷ ${WPM} a minute, rounded, and never less than one. A flat rate: it does not know how hard this particular article is. The original version asked a model instead of counting syllables, and scaled its answer by how confident the model was — we have not.`}
               />
               <Stat
                 icon={Blocks}

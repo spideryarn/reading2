@@ -83,34 +83,104 @@ So the choice was not left-versus-right. It was *horizontal versus vertical*, an
 
 ## What is in it
 
+Eight buttons, and the order was set by hand. Greg, 2026-08-26:
+
+> Rearrange the buttons in the bottom-bar. It should be Contents, Summary, Glossary, Search, Chat,
+> Questions, Thread (renamed to "Tweets"), Metadata.
+
 | | | |
 |---|---|---|
-| ⌂ | **Home** | A link, not a panel. The masthead has one too and this is not a duplicate: the masthead scrolls away, so that one is for the reader who has just arrived and this one is for the reader three screens in |
+| ☰ | **Contents** · **Summary** · **Glossary** · **Search** · **Chat** | The five modes, and one control rather than five: `role="radiogroup"`, exactly one on at a time. They choose what the middle band **is**. First in the bar because they are the only buttons that change the page you are already looking at rather than sending you somewhere else. See [chat-mode.md](chat-mode.md) for the band, and `MODES_UI` in [`Dock.tsx`](../../src/web/Dock.tsx) for the table that owns the order |
 | ✳ | **Questions** | Every question asked about this article, in reading order, with a count on the button and the count turning orange while anything is still with the model. Clicking one closes the drawer and opens its answer where the passage is. **A drawer on the reading view only** — on the metadata and tweets pages it is a link back, carrying `?panel=questions`, because `useComments` fetches on mount and those pages have no passages to scroll to |
-| ⓘ | **Metadata** | Source, slug, shape, which model built the tree and the arc. **Moved out of the masthead**, see below. Since 2026-08-25 it is a *link* rather than a panel — the details grew into a page, [metadata-page.md](metadata-page.md) — and it is labelled after that page rather than after the `About` panel it used to open |
+| ≡ | **Tweets** | The article as a numbered thread. Labelled `Thread` until 2026-08-26 and named after its own page and route now — the same rule that turned `About` into `Metadata`. See [tweet-thread-page.md](tweet-thread-page.md) |
+| ⓘ | **Metadata** | Source, slug, shape, which model built the tree and the arc. **Moved out of the masthead**, see below. Since 2026-08-25 it is a *link* rather than a panel — the details grew into a page, [metadata-page.md](metadata-page.md) — and it is labelled after that page rather than after the `About` panel it used to open. Last in the bar: it is the machinery behind the article rather than a way of reading it |
 
-Then five dimmed placeholders — Summaries, Glossary, Highlights, Search, Reading time — each with a
-tooltip saying what it would be *and the one thing the original version learned the hard way about
-it*. Greg, 2026-08-25: *"Also see docs/project/original-version/overview.md for ideas - for now, add
-extra ideas as placeholders with rich tooltips."*
+The shape underneath that order is **the five modes, then the things that leave the band**, and
+inside the modes it runs from the article restated (Contents, Summary), through the ways into it
+(Glossary, Search), to the conversation about it (Chat). A new mode is a row in `MODES_UI`;
+anything else goes after them.
 
-**Three of those five have since been built** and are buttons rather than dimmed labels: Glossary
-and Search as modes in the band on 2026-08-25, and Summary on 2026-08-26
-([summaries.md](../project/summaries.md)). Each cost the bar one row in a table and cost the layout
-nothing at all, which is the strongest evidence so far that the mode band was the right shape —
-see [chat-mode.md](chat-mode.md), where that slot was argued for. Highlights and Reading time are
-still dimmed.
+### Home left the bar, and the app got a logo
 
-**That shape is now the house convention for "this is an intention, not an oversight"**, and it has
-one owner: `SOON` in [`Dock.tsx`](../../src/web/Dock.tsx) and the `.tip-soon` rules it added to
-[`styles.css`](../../src/web/styles.css). The metadata page reuses both for its own three —
-reading purpose, re-run a stage, delete this article
-([metadata-page.md § A second pass over theirs](metadata-page.md#a-second-pass-over-theirs-2026-08-25))
-— so a reader who has met a dimmed button in the bar already knows what a dimmed row on a page
-means. Anything else that needs to say the same thing should reuse it too rather than invent a
-second good way.
+Greg, 2026-08-26:
 
-They are not a backlog. The standing rule from
+> Get rid of "Home". Instead, add a Spideryarn logo in the very top-left of the window that takes
+> us Home.
+
+The bar had a `Home` link at its left end from the day it was built. It was the odd one out and
+always had been: every other button is about *this article*, and the way out of a document is not
+one of the things the document can be. It is now the wordmark fixed in the very top-left corner of
+the window — [`HomeLogo.tsx`](../../src/web/HomeLogo.tsx) — which is where the web has kept both
+the brand and the way home for twenty years, so it costs the reader nothing to learn. It also gave
+the app's name somewhere to live: the wordmark used to be tucked in the drawer header, visible only
+while a panel that is shut nearly all the time was open, and that copy is gone.
+
+**The one thing to know before moving it again.** On the reading view the corner is genuinely empty
+at every scroll position — the spine is fixed at `top: var(--bar-h)`, and the masthead and controls
+bar are both inset by `left: calc(var(--spine-w) + var(--mode-w))`. But `--spine-w` is not a
+constant: [`layout.ts`](../../src/web/layout.ts) narrows the spine as the window shrinks, and
+**turns it off entirely whenever the reader hides the prose** — `!showText`, at any width at all.
+That last part is the trap. The first draft of this note said the spine only disappeared on a
+narrow window, which would have made `--spine-w: 0` a rare edge case; it is in fact one toggle
+away on a full-size screen, and `?text=0` is the whole reproduction. (Measured with the spine off:
+the logo runs 0→136px and the title starts at 160.)
+
+It is `!showText` **and no mode band**, mind. A band is laid out by `fitMode`, a different
+function, and that one never returns `"off"` — inside a band the prose is always on. So the two
+smallest terms cannot happen together, and with today's constants the `--mode-w` term never
+changes the answer at all: a band means at least `SPINE_NARROW` + `MODE_MIN` = 312px against the
+logo's 160px reach, and the expression floors at 1.5rem. It is in there anyway because the bars are
+*positioned* by `--spine-w + --mode-w`, and an offset expression that does not mirror its own
+positioning is a trap for whoever changes one of them.
+
+So both bars reserve the space, with one expression written twice:
+
+```css
+padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
+```
+
+Both are positioned at `left: calc(--spine-w + --mode-w)`, so `--logo-w` minus that offset is
+exactly how far the logo reaches into them, and the `+ 1.5rem` keeps the gutter they have
+everywhere else rather than letting the title start flush against the wordmark. At full spine the
+whole term goes negative and the ordinary 1.5rem wins, so the wide case costs nothing rather than
+needing a second rule. Change `--logo-w` and both follow; change the logo's size without the token
+and they will not, and the wordmark lands on the article's title — in a state that is one keystroke
+away and that nobody testing at their own screen width would think to try.
+
+### The dimmed placeholders are gone
+
+The bar's right end used to carry five dimmed placeholders — Summaries, Glossary, Highlights,
+Search, Reading time — each with a tooltip saying what it would be *and the one thing the original
+version learned the hard way about it*. Greg, 2026-08-25: *"Also see
+docs/project/original-version/overview.md for ideas - for now, add extra ideas as placeholders with
+rich tooltips."*
+
+The "for now" ran out, and it ran out the good way: **four of the five were built.** Glossary and
+Search became modes in the band on 2026-08-25, Summary on 2026-08-26
+([summaries.md](../project/summaries.md)), and Highlights turned out not to be a feature at all —
+highlighting is what search *does to the page* ([search.md](../project/search.md)). Each cost the
+bar one row in a table and cost the layout nothing, which is the strongest evidence so far that the
+mode band was the right shape; see [chat-mode.md](chat-mode.md), where that slot was argued for.
+
+The last one standing was Reading time. Greg, 2026-08-26:
+
+> And get rid of "Reading time" - that should be part of "Metadata".
+
+It already was — the metadata page has read time as one of its six stat cards. So the bar was
+advertising a button for something a page already answered. The one thing the placeholder carried
+that the page did not, that the original version dropped the readability formulas for a model's
+judgement and then scaled the estimate by how confident the model was, is now in that card's
+tooltip, where somebody wondering about the number will actually meet it.
+
+**The convention itself is not dead**, and it did not lose its owner — it moved. `SOON` and the
+`.tip-soon` rules now live for the metadata page's own three (reading purpose, re-run a stage,
+delete this article,
+[metadata-page.md § A second pass over theirs](metadata-page.md#a-second-pass-over-theirs-2026-08-25)),
+and anything else that needs to say "this is an intention, not an oversight" should reuse them
+rather than invent a second good way. What died is the narrower idea that a *bar* is a good place
+to advertise unbuilt features. A bar is for pressing.
+
+They were never a backlog. The standing rule from
 [original-version/overview.md](../project/original-version/overview.md) is *a library to consult, not
 a backlog to import*.
 

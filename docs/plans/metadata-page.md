@@ -466,11 +466,17 @@ Three things this page should say and cannot yet, as dimmed rows with tooltips:
 label, a `not built yet` flag, what the thing would be, and — set apart in italics — what the
 previous version's attempt at it taught us.
 
-**That shape is not new here.** It is `SOON` in [`Dock.tsx`](../../src/web/Dock.tsx) and the
+**That shape is not new here.** It began as `SOON` in [`Dock.tsx`](../../src/web/Dock.tsx) and the
 `.tip-soon` styles it already added to [`styles.css`](../../src/web/styles.css), reused rather than
 reinvented, so a reader who has met a dimmed button in the bottom bar already knows what a dimmed
 row on this page means. One convention for *"this is an intention, not an oversight"* is worth more
 than two good ones.
+
+**This page is the convention's only owner now.** The bar's own placeholders are gone — four were
+built, and the last, `Reading time`, was answered by this page's own stat card
+([bottom-bar.md](bottom-bar.md#the-dimmed-placeholders-are-gone), 2026-08-26). The shape did not
+lose an argument; the bar did, on the narrower point that a row of buttons is a bad place to
+advertise something you cannot press.
 
 ### One new fact, and where it had to come from
 

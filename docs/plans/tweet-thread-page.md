@@ -348,8 +348,9 @@ and the tooltip says 280. Ours should say one number in one place.)
   Running generation through the job queue rather than a `useEffect` avoids it structurally.
 - **A dead button.** *"Post to Bluesky"* shipped fully styled, next to a working copy button, wired
   to `alert('Coming soon!…')`. Don't. A control that looks live and isn't is worse than an absent
-  one — which is why the bottom bar's unbuilt ideas are dimmed and say *"not built yet"* in their
-  tooltips ([bottom-bar.md](bottom-bar.md)).
+  one — which is why this repo's unbuilt ideas are dimmed and say *"not built yet"* in their
+  tooltips. That convention started in the bottom bar and lives on the metadata page now, the bar
+  having run out of unbuilt ideas ([bottom-bar.md](bottom-bar.md#the-dimmed-placeholders-are-gone)).
 
 ## What it costs
 
@@ -504,7 +505,8 @@ only way to see that the cache predicate is stable rather than merely strict.
 
 Landed 2026-08-25 as [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx), wired into
 [`src/web/App.tsx`](../../src/web/App.tsx) in place of the placeholder that was holding the route,
-with a `Thread` button in [`src/web/Dock.tsx`](../../src/web/Dock.tsx) and tests in
+with a `Thread` button in [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — relabelled `Tweets` on
+2026-08-26, after this page's own name and route ([bottom-bar.md](bottom-bar.md#what-is-in-it)) — and tests in
 [`tests/tweets-page.test.ts`](../../tests/tweets-page.test.ts). No CSS: it is chrome, so it is
 Tailwind utilities, exactly as [`Metadata.tsx`](../../src/web/Metadata.tsx) is
 ([web-client.md § Tailwind and shadcn](../project/web-client.md#tailwind-and-shadcn-components)).
@@ -578,7 +580,7 @@ turn that into a "Couldn't copy" that might be false, so it is left alone and wr
 ### Seen working
 
 Against `data/writes` at `/read/writes/tweets`: five posts, counts `156`, `230`, `241`, `274`, `230`
-against 280, none flagged, the `Thread` button in the bar carrying `aria-current="page"`, and the
+against 280, none flagged, the bar's button for this page (`Thread` then, `Tweets` now) carrying `aria-current="page"`, and the
 last line clear of the fixed bar by about 32px. `/read/noema/tweets` shows the empty state and its
 button. No console errors, no failed requests. The empty state's button was deliberately **not**
 pressed — that is a model call, and the two states that matter were both already on disk.

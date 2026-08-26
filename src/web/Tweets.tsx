@@ -223,7 +223,10 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
 
   return (
     <>
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-10 tw:font-sans ${DOCK_CLEARANCE}`}>
+      {/* `pt-14` rather than `pt-10`: the corner wordmark is fixed
+          (HomeLogo.tsx), so on a window narrow enough that this centred column
+          reaches the left edge it would otherwise sit on the back-link. */}
+      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-14 tw:font-sans ${DOCK_CLEARANCE}`}>
         <Link
           href={backHref}
           className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"

@@ -77,6 +77,13 @@
   --depth-3: oklch(0.44 0.045 40);
 
   --bar-h: 2.75rem; /* .controls */
+  /* The wordmark fixed in the top-left corner — HomeLogo.tsx. A token because
+     three rules need the same number: the logo's own width, and the left
+     padding the masthead and the controls bar reserve so that a narrow window
+     (where the spine has been shrunk or dropped by layout.ts) does not paint
+     the article's title underneath it. Change it here or the other two go
+     silently wrong. */
+  --logo-w: 8.5rem;
   --head-h: 2.5rem; /* thead */
   /* The bottom bar — Dock.tsx. Read by the comment dialog and the overflow
      fade, both of which have to stop above it, so it is a token rather than a
@@ -151,6 +158,17 @@ body {
   width: calc(100vw - var(--spine-w) - var(--mode-w));
   background: var(--page);
   padding: 1.25rem 1.5rem 0.9rem;
+  /* Room for the corner wordmark, but only when there is not already room.
+     This bar starts at `left: --spine-w + --mode-w`, so the logo reaches
+     `--logo-w` minus that offset into it; when the spine is at its full 13rem
+     the term is negative and the ordinary 1.5rem wins. That is the whole
+     mechanism — see HomeLogo.tsx for why the corner is otherwise free.
+
+     The `+ 1.5rem` is not slack. Without it the title starts at exactly the
+     wordmark's right edge, which does not overlap and still reads as broken:
+     it is the ordinary gutter this bar has everywhere else, kept rather than
+     eaten. */
+  padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
 }
 
 .masthead-inner { max-width: 62rem; }
@@ -219,6 +237,10 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   align-items: center;
   gap: 0.4rem;
   padding: 0 1.5rem;
+  /* Same expression as .masthead above, and for the same reason. Both bars are
+     inset by the spine, so both need it, and it has to be the same number in
+     both or the title and the granularity pills stop lining up. */
+  padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)));
   background: var(--page);
   border-bottom: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
@@ -1913,6 +1935,34 @@ td.text.has-hit {
 }
 .logo-image { display: block; }
 
+/* The way home, fixed in the very top-left of the window — HomeLogo.tsx.
+   Height matches `--bar-h` so it sits on the same line as the reading view's
+   controls bar rather than floating above it. */
+.logo-home {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--logo-w);
+  height: var(--bar-h);
+  padding: 0 0.7rem;
+  /* Above the spine (45) and the controls bar (40), and below the drawer's dim
+     (92). The drawer is modal — while it is open, leaving the page is not one
+     of the things you are being offered, and Escape or the dim closes it. */
+  z-index: 60;
+  text-decoration: none;
+  /* Opacity rather than a second colour: the wordmark is already `--highlight`
+     (see .logo above), and every other colour in the palette would be a step
+     *down* from it on hover, which reads as the control going away when you
+     point at it. */
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.logo-home:hover { opacity: 1; }
+.logo-home:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
+
 .dock-close {
   flex: none;
   display: inline-flex;
@@ -2047,7 +2097,10 @@ td.text.has-hit {
 .design {
   max-width: 62rem;
   margin: 0 auto;
-  padding: 2.5rem 1.5rem 6rem;
+  /* Top padding clears the corner wordmark (HomeLogo.tsx), which is fixed and
+     therefore sits over this page's own heading on any window narrow enough
+     that the centred column reaches the left edge. */
+  padding: 3.5rem 1.5rem 6rem;
   font-family: var(--font-ui);
   color: var(--ink);
 }
@@ -3899,4 +3952,36 @@ td.text.has-hit {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* ---------------------------------------------------------------- touch -- */
+
+/* A vertical swipe over a gist column steps one item instead of scrolling —
+   src/web/swipe.ts, docs/project/touch.md. This is the half of that feature
+   the browser has to be told about: `touch-action` is what hands the gesture
+   to us *before* any listener runs, which is why there is no non-passive
+   `touchmove` listener anywhere in this codebase. Safari, unlike Chrome and
+   Firefox, does not make touch listeners passive by default, so the
+   `preventDefault` route would have worked here and silently done nothing
+   elsewhere; the declarative route behaves the same in every engine and keeps
+   scrolling off the main thread.
+
+   `any-pointer: coarse` rather than `hover: none`: an iPad with a Magic
+   Keyboard has a pointer *and* a touchscreen, and the rule has to hold for the
+   finger without waiting for the trackpad to go away.
+
+   **The two declarations are a deliberate fallback pair, not a duplicate.**
+   `pinch-zoom` is the keyword that keeps zooming alive, and WebKit lists it as
+   non-standard — an unsupported keyword invalidates the whole declaration, and
+   a dropped declaration here means the swipe stops working with no error
+   anywhere. So the plain `pan-x` is stated first and survives on its own, and
+   the richer one overrides it wherever it parses. The cost if it does not parse
+   is that pinch-zoom is unavailable *on the gist columns only* — the prose,
+   which is what anyone zooms, is untouched either way.
+
+   Nothing here applies on a desktop: the hook ignores any pointer that is not
+   a touch, and this query never matches a mouse-only machine. */
+@media (any-pointer: coarse) {
+  [data-swipe-step] { touch-action: pan-x; }
+  [data-swipe-step] { touch-action: pan-x pinch-zoom; }
 }

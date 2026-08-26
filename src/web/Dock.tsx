@@ -2,9 +2,14 @@
  * The bottom bar, and the drawer that rises out of it.
  *
  * The app's furniture: the things that are about *this article* but are not the
- * article — the questions you have asked, where it came from, the way home —
- * plus the app finally naming itself. Everything here is one click from the
- * reading view and none of it is in the way of it.
+ * article — the questions you have asked, where it came from, what else it can
+ * be turned into. Everything here is one click from the reading view and none
+ * of it is in the way of it.
+ *
+ * **The way home is not here any more.** It was the leftmost button until
+ * 2026-08-26; it is now the wordmark fixed in the very top-left of the window
+ * (HomeLogo.tsx), which is where every site on the web has kept it for twenty
+ * years. Greg's call, and it buys the bar a slot back.
  *
  * ## Why the bottom
  *
@@ -36,8 +41,9 @@
  * ## Three kinds of button, said out loud
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
- * `Home`, `Metadata` and `Thread` navigate; `Questions` opens a drawer *on the
- * reading view* and navigates everywhere else; `Contents` / `Chat` / `Glossary`
+ * `Tweets` and `Metadata` navigate; `Questions` opens a drawer *on the
+ * reading view* and navigates everywhere else; `Contents` / `Summary` /
+ * `Glossary` / `Search` / `Chat`
  * choose what the middle of the page **is**. That is three real differences and
  * the markup has to tell the truth about each — a link gets
  * `aria-current="page"`, a drawer trigger gets `aria-expanded`, and the mode
@@ -64,6 +70,25 @@
  *
  * So there is no About panel here any more, and the markup it used to render
  * lives in Metadata.tsx. See docs/plans/metadata-page.md.
+ *
+ * ## The order, which Greg set by hand
+ *
+ * Left to right: Contents, Summary, Glossary, Search, Chat, Questions, Tweets,
+ * Metadata. Greg, 2026-08-26 — *"Rearrange the buttons in the bottom-bar. It
+ * should be Contents, Summary, Glossary, Search, Chat, Questions, Thread
+ * (renamed to 'Tweets'), Metadata."*
+ *
+ * It is not arbitrary, and the shape is worth naming so the next button knows
+ * where to go: **the five modes come first, then the things that leave the
+ * band.** Inside the modes it runs from the article's own words outwards —
+ * Contents and Summary are the article restated, Glossary and Search are ways
+ * into it, Chat is a conversation about it. Then Questions (yours), Tweets
+ * (the article rewritten for somewhere else) and Metadata (the machinery).
+ * A new mode goes in MODES_UI; anything else goes after them.
+ *
+ * `Thread` became `Tweets` in the same breath, matching the page's own name
+ * (Tweets.tsx, `/read/<slug>/tweets`) and the route the button already pointed
+ * at. The label was the only place the old word survived.
  */
 // `ReactKeyboardEvent`, aliased: React's KeyboardEvent and the DOM's are different
 // types, and this file uses both — the drawer's Escape listener is on `window`
@@ -72,7 +97,6 @@ import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type React
 import {
   BookA,
   ChevronUp,
-  Home,
   Info,
   Layers,
   ListOrdered,
@@ -80,13 +104,12 @@ import {
   MessageSquareText,
   MessagesSquare,
   Search,
-  Timer,
   X,
 } from "lucide-react";
 import type { Comment } from "../types.js";
 import type { Mode, Panel } from "./params.js";
 import { Link } from "./Link.js";
-import { type ArticleView, carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
+import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 
 interface Props {
@@ -136,42 +159,44 @@ interface Props {
 }
 
 /**
- * The ideas we have not built, kept where their shape is visible.
+ * ## The dimmed placeholders are gone, and where the last one went
  *
- * Greg, 2026-08-25: *"Also see docs/project/original-version/overview.md for
- * ideas - for now, add extra ideas as placeholders with rich tooltips."*
+ * This file used to end with a `SOON` list — ideas built once in the original
+ * version, kept as dimmed buttons with a tooltip saying the one thing that
+ * project learned the hard way. Greg, 2026-08-25: *"Also see
+ * docs/project/original-version/overview.md for ideas - for now, add extra
+ * ideas as placeholders with rich tooltips."* The "for now" ran out. Search
+ * and Highlights became the Search mode; the last one standing was **Reading
+ * time**, and Greg, 2026-08-26:
  *
- * Every one of these was built once already, over in the original version, and
- * every tooltip says the one thing that project learned the hard way — because
- * that is the part worth carrying and the code is not. They are dimmed and they
- * do nothing when clicked.
+ * > And get rid of "Reading time" - that should be part of "Metadata".
  *
- * This is not a backlog. The standing rule from
- * docs/project/original-version/overview.md is *a library to consult, not a
- * backlog to import*.
+ * It already was: the metadata page has read time as one of its six stat cards
+ * (Metadata.tsx § At a glance), with a tooltip that says it is words ÷ 230 and
+ * a flat rate. So the bar was offering a button for something a page already
+ * answered. The one thing the placeholder carried that the page did not — that
+ * the original version dropped the readability formulas for a model's
+ * judgement, then scaled the estimate by how confident the model was — is now
+ * written into that card's tooltip, which is where somebody wondering about
+ * the number will actually meet it.
  *
- * **Both of the features this list used to say we would never build are now
- * buttons in this bar**, and that is worth reading before adding a third
- * refusal here. Tweet threads were "simply not what this is", written a few
- * hours before Greg asked for them. Chat was the stronger objection — its own
- * docs single it out as the one to be most suspicious of, and it sits closest
- * to our anti-goals (vision.md). Neither objection was waved away; both are
- * answered at length, in
+ * The convention is not dead: Metadata.tsx keeps its own `SOON` list in the
+ * same shape, for things *that page* should say and cannot yet. What died here
+ * is the idea that the bar is a good place to advertise unbuilt features — a
+ * bar is for pressing.
+ *
+ * **Both of the features that list used to say we would never build are now
+ * buttons in this bar**, and that is worth reading before writing a third
+ * refusal anywhere. Tweet threads were "simply not what this is", written a
+ * few hours before Greg asked for them. Chat was the stronger objection — its
+ * own docs single it out as the one to be most suspicious of, and it sits
+ * closest to our anti-goals (vision.md). Neither objection was waved away;
+ * both are answered at length, in
  * docs/plans/tweet-thread-page.md#say-the-awkward-thing-first and in
  * docs/plans/chat-mode.md#say-the-awkward-thing-first. The chat that was built
  * is not the one that was refused: every claim it makes carries a block id and
  * the article stays on screen beside it.
  */
-const SOON: { key: string; label: string; icon: typeof Layers; blurb: string; learned: string }[] = [
-  {
-    key: "reading-time",
-    label: "Reading time",
-    icon: Timer,
-    blurb: "How long this will take you, and how hard it is going to be.",
-    learned:
-      "They dropped the standard readability formulas for a model's judgement, then adjusted the estimate by how confident it was.",
-  },
-];
 
 /**
  * Everything the middle band can be, in the order they sit in the bar.
@@ -184,26 +209,20 @@ const SOON: { key: string; label: string; icon: typeof Layers; blurb: string; le
  * The order is deliberate and is not alphabetical: **contents first, because it
  * is the default** and the one you come back to. Left-to-right in the bar is
  * also the order the arrow keys travel, so the resting state being leftmost
- * means every other mode is reached by going right from home.
+ * means every other mode is reached by going right from the resting state.
+ *
+ * The other four were reordered by hand on 2026-08-26 — Summary, Glossary,
+ * Search, Chat — and the reasoning is in the file header under "The order".
+ * Short version: it runs from the article restated, through the ways into it,
+ * to the conversation about it, and Chat is last because it is the one furthest
+ * from the article's own words.
  */
-const MODES_UI: { mode: Mode; icon: typeof Home; label: string; blurb: string }[] = [
+const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[] = [
   {
     mode: "toc",
     icon: ListTree,
     label: "Contents",
     blurb: "The article's own shape, one column per level of detail",
-  },
-  {
-    mode: "chat",
-    icon: MessagesSquare,
-    label: "Chat",
-    blurb: "Ask about this article — answers point back at the paragraphs they came from",
-  },
-  {
-    mode: "glossary",
-    icon: BookA,
-    label: "Glossary",
-    blurb: "The terms this piece uses in a non-obvious way, defined from the piece itself",
   },
   {
     mode: "summary",
@@ -212,10 +231,16 @@ const MODES_UI: { mode: Mode; icon: typeof Home; label: string; blurb: string }[
     blurb:
       "The article, its parts and its sections, each at whichever length you ask for — a sentence, a few, or a page",
   },
-  /* Search was **two** dimmed placeholders in `SOON` below until 2026-08-26 —
-     `Search` and `Highlights`, side by side — and is one mode now. That is the
-     design rather than a tidy-up: highlighting is what search *does to the
-     page*, not a separate thing to press. Greg's call; see
+  {
+    mode: "glossary",
+    icon: BookA,
+    label: "Glossary",
+    blurb: "The terms this piece uses in a non-obvious way, defined from the piece itself",
+  },
+  /* Search was **two** dimmed placeholders in the `SOON` list this file used to
+     carry — `Search` and `Highlights`, side by side — and is one mode now. That
+     is the design rather than a tidy-up: highlighting is what search *does to
+     the page*, not a separate thing to press. Greg's call; see
      docs/project/search.md.
 
      The `Highlights` placeholder's note has not been lost. It said overlapping
@@ -228,6 +253,12 @@ const MODES_UI: { mode: Mode; icon: typeof Home; label: string; blurb: string }[
     icon: Search,
     label: "Search",
     blurb: "Find a passage by the words it uses, or by what it says",
+  },
+  {
+    mode: "chat",
+    icon: MessagesSquare,
+    label: "Chat",
+    blurb: "Ask about this article — answers point back at the paragraphs they came from",
   },
 ];
 
@@ -297,23 +328,14 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
       {panel !== null && drawer && (
         <div className="dock-drawer" role="dialog" aria-modal="true" aria-label={TITLES[panel]}>
           <div className="dock-drawer-head">
-            {/* The app names itself here and nowhere else. Deliberate: the
-                drawer is shut while you read, so the brand is present without
-                ever sitting beside the article's own title. The class names are
-                the original app's, so its fifteen CSS-only logo animations can
-                be dropped in as one file later — see
-                docs/project/original-version/design-system.md. */}
-            <span className="logo">
-              <img className="logo-image" src="/spideryarn-logo.png" alt="" width={18} height={18} />
-              <span className="logo-text">
-                {"Spideryarn".split("").map((ch, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: fixed string, rebuilt whole
-                  <span className="logo-letter" key={i}>
-                    {ch}
-                  </span>
-                ))}
-              </span>
-            </span>
+            {/* The wordmark used to sit here, and the note beside it said the
+                app named itself *here and nowhere else* — true at the time, and
+                the reason was that the drawer is shut while you read, so the
+                brand was present without ever sitting beside the article's own
+                title. That sentence stopped being true on 2026-08-26, when the
+                logo took the top-left corner of the window (HomeLogo.tsx). Two
+                wordmarks on screen at once is one too many, and the one in the
+                corner is the one that is always there, so this one went. */}
             <h2>{TITLES[panel]}</h2>
             <button
               type="button"
@@ -335,10 +357,35 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
       )}
 
       <div className="dock">
-        <Link href={LIBRARY_HREF} className="dock-btn" title="Back to the library">
-          <Home size={15} />
-          <span>Home</span>
-        </Link>
+        {/* **The modes, as one control, and first in the bar.** Chat and
+            Glossary used to be two independent toggles beside each other, with
+            `toc` unrepresented — you left a mode by pressing the one you were
+            in. That worked and it lied about the shape of the thing: the middle
+            band is always in exactly one state, and only some of them had
+            buttons.
+
+            Greg, 2026-08-25: *"Yes, make them a radio group, but as buttons,
+            with nice icons and tooltips."*
+
+            Giving `toc` a button of its own is what makes the radiogroup
+            honest, and it is the trigger the previous note in this file named —
+            not the arrival of a third mode, but the third mode being *visible*.
+            See DockModes below. Off the reading view there is no band to switch,
+            so the same five degrade to links back to it. */}
+        {mode !== undefined && onMode ? (
+          <DockModes mode={mode} onMode={onMode} />
+        ) : (
+          MODES_UI.map((m) => (
+            <DockLink
+              key={m.mode}
+              href={readHref(slug, withMode(search, m.mode), "article")}
+              current={false}
+              icon={m.icon}
+              label={m.label}
+              title={`${m.blurb} — back in the article itself`}
+            />
+          ))
+        )}
 
         {/* Two shapes of the same button. On the reading view it opens the
             drawer in place. Everywhere else it goes back to the reading view
@@ -372,9 +419,22 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
           />
         )}
 
-        {/* A link, not a drawer trigger — the details are a page now. It still
-            sits between Questions and the placeholders, because where a button
-            is is part of how people find it again. */}
+        {/* Labelled `Thread` until 2026-08-26, and `Tweets` now — after its own
+            page and its own route, which is the same rule that renamed `About`
+            to `Metadata`. The thread is written on demand and costs a model
+            call, but that is a button on the page rather than a reason to hide
+            the page. */}
+        <DockLink
+          href={readHref(slug, search, "tweets")}
+          current={view === "tweets"}
+          icon={ListOrdered}
+          label="Tweets"
+          title="The article as a numbered thread of short posts"
+        />
+
+        {/* A link, not a drawer trigger — the details are a page now. Last in
+            the bar, which is the right end for it: it is the machinery behind
+            the article rather than a way of reading it. */}
         <DockLink
           href={readHref(slug, search, "metadata")}
           current={view === "metadata"}
@@ -382,74 +442,6 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
           label="Metadata"
           title="Where this article came from, what shape it is, and what the pipeline wrote"
         />
-
-        {/* A built button among the built ones, not a dimmed idea. The thread
-            is written on demand and costs a model call, but that is a button on
-            the page rather than a reason to hide the page. */}
-        <DockLink
-          href={readHref(slug, search, "tweets")}
-          current={view === "tweets"}
-          icon={ListOrdered}
-          label="Thread"
-          title="The article as a numbered thread of short posts"
-        />
-
-        {/* **The modes, as one control.** Chat and Glossary used to be two
-            independent toggles beside each other, with `toc` unrepresented —
-            you left a mode by pressing the one you were in. That worked and it
-            lied about the shape of the thing: the middle band is always in
-            exactly one of three states, and two of them had buttons.
-
-            Greg, 2026-08-25: *"Yes, make them a radio group, but as buttons,
-            with nice icons and tooltips."*
-
-            Giving `toc` a button of its own is what makes the radiogroup
-            honest, and it is the trigger the previous note in this file named —
-            not the arrival of a third mode, but the third mode being *visible*.
-            See DockModes below. Off the reading view there is no band to switch,
-            so the same three degrade to links back to it. */}
-        {mode !== undefined && onMode ? (
-          <DockModes mode={mode} onMode={onMode} />
-        ) : (
-          MODES_UI.map((m) => (
-            <DockLink
-              key={m.mode}
-              href={readHref(slug, withMode(search, m.mode), "article")}
-              current={false}
-              icon={m.icon}
-              label={m.label}
-              title={`${m.blurb} — back in the article itself`}
-            />
-          ))
-        )}
-
-        <span className="dock-gap" />
-
-        {/* Not yet built. Tooltips rather than labels, because the point of
-            these is what they would be, and that does not fit on a button. */}
-        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          {SOON.map((idea) => (
-            <Tooltip
-              key={idea.key}
-              placement="top"
-              className="tip-soon"
-              content={
-                <>
-                  <div className="tip-soon-head">
-                    {idea.label} <span className="tip-soon-flag">not built yet</span>
-                  </div>
-                  <p>{idea.blurb}</p>
-                  <p className="tip-soon-learned">{idea.learned}</p>
-                </>
-              }
-            >
-              <button type="button" className="dock-btn soon" aria-disabled="true">
-                <idea.icon size={15} />
-                <span>{idea.label}</span>
-              </button>
-            </Tooltip>
-          ))}
-        </TooltipGroup>
       </div>
     </>
   );
@@ -658,7 +650,7 @@ function DockLink({
 }: {
   href: string;
   current: boolean;
-  icon: typeof Home;
+  icon: typeof Info;
   label: string;
   title: string;
 }) {
@@ -687,7 +679,7 @@ function DockTab({
   panel: Panel;
   current: Panel | null;
   onPanel(next: Panel | null): void;
-  icon: typeof Home;
+  icon: typeof Info;
   label: string;
   title: string;
   children?: ReactNode;

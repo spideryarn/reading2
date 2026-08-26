@@ -76,9 +76,12 @@ export function Masthead({ article }: Props) {
             `stickyOffset()`, so anything added to it changes where every deep
             link and arrow jump lands (scroll.ts). Browser Back does the same
             job; this is for the reader who arrived by pasted link and has no
-            Back to press. The bottom bar has a Home button too, and that is not
-            a duplicate: this one scrolls away with the masthead, and that one
-            is the way back once you are three screens into the piece.
+            Back to press. The bottom bar had a Home button too until
+            2026-08-26; the way home is the wordmark fixed in the top-left
+            corner of the window now (HomeLogo.tsx), and this is still not a
+            duplicate of it for the reason it was not a duplicate of the
+            button: this one is named after where it goes and scrolls away with
+            the title, and that one is a brand mark that is always there.
             Utilities rather than a rule in styles.css: chrome is what Tailwind
             is here for (web-client.md#tailwind-and-shadcn-components). */}
         <Link
