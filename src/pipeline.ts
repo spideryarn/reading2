@@ -24,10 +24,18 @@ import { generateArc } from "./arc.js";
 import { runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchHtml } from "./fetch.js";
-import { generateGlossary, glossaryIsCurrent } from "./glossary.js";
+import { generateGlossary, PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "./glossary.js";
 import { generateSummaries, summariesAreCurrent } from "./summarise.js";
 import { log } from "./log.js";
-import { type ArticleStage, STAGE_EFFORT } from "./models.js";
+import { type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
+import { hashBlocks } from "./source-hash.js";
+import { fsArtifacts, fsLocations } from "./store/artifacts-fs.js";
+import {
+  type ArtifactKind,
+  type ArtifactStore,
+  sameStamp,
+  type StepStamp,
+} from "./store/artifacts.js";
 import { generateToc } from "./toc.js";
 import { generateTweets, threadIsCurrent } from "./tweets.js";
 import type { Meta, StepName } from "./types.js";
@@ -146,8 +154,8 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
  * freshness check of its own and it belongs here too.
  *
  * `glossary` is here for both halves of the same argument: it reads the blocks
- * and the tree, nothing reads what it writes, and `glossaryIsCurrent` compares
- * its stored `sourceHash` against the blocks on disk. **And one thing more that
+ * and the tree, nothing reads what it writes, and its `stamp` below compares the
+ * stored `sourceHash` against the blocks on disk. **And one thing more that
  * `tweets` does not have to worry about** — forcing this step *appends* a batch
  * of terms rather than replacing the list (src/glossary.ts § `generateGlossary`),
  * so being swept into the cascade would not merely waste a model call, it would
@@ -225,6 +233,41 @@ export interface PipelineStep {
    */
   outputs(ctx: StepContext): string[];
   /**
+   * The same list said the other way: **what** this step produces, rather than
+   * where it lands.
+   *
+   * `outputs` is repo paths, and after the move to Postgres there are no paths
+   * — the tree is a column, not a file. So a step names the *kinds* of thing it
+   * makes (src/store/artifacts.ts) and an `ArtifactStore` decides where those
+   * go. The file adapter maps them back to exactly the paths `outputs` returns,
+   * which is what tests/pipeline-artifact-store.test.ts asserts step by step.
+   *
+   * **Both are here on purpose, for now.** Landing the new declaration beside
+   * the old one, with a test holding them together, is what makes the swap
+   * checkable before anything depends on it. `outputs` goes when the Postgres
+   * adapter lands and `assertProduced` stops needing a path — see
+   * docs/plans/postgres-storage-implementation.md § The order.
+   */
+  produces: readonly ArtifactKind[];
+  /**
+   * Optional: what stamp would this step write if it ran right now?
+   *
+   * The **currency** half of "is this step done", and the replacement for the
+   * three near-identical `…IsCurrent` functions. The store reads the recorded
+   * stamp (`stampFor`); this says what it ought to be; `sameStamp` compares
+   * them once, in one place, instead of the same three lines living in
+   * src/tweets.ts, src/glossary.ts and src/summarise.ts.
+   *
+   * `null` means *we cannot tell* — the blocks it would be hashed against are
+   * not readable — and that answers not-current. The safe way to be wrong here
+   * is a model call; the other way round is a stale artefact served for ever.
+   *
+   * Adding one to `toc` or `arc` is now four lines rather than a whole
+   * function, which is the point. Neither has one yet, and the interface says
+   * so out loud rather than letting bare existence look like freshness.
+   */
+  stamp?(ctx: StepContext, store: ArtifactStore): Promise<StepStamp | null>;
+  /**
    * Optional: is this step's artefact not merely present but **current**?
    *
    * Existence is the default because it is all most steps can afford to check.
@@ -245,6 +288,15 @@ export interface PipelineStep {
    * gets it wrong burns a model call every run. Adding one is a deliberate act.
    * `assertProduced` still uses `outputs`, because "did you write the file"
    * stays a separate question from "was it worth writing".
+   *
+   * **`stamp` above is what replaces this, and two steps are still here.**
+   * `tweets` and `summary` keep their `PROMPT_VERSION` as a module-private
+   * const, so a `stamp` for either would have to write the version out a second
+   * time in this file — two copies of one string, free to drift, and the drift
+   * would show up as an artefact that never regenerates. Exporting those two
+   * constants belongs to those stages' owners; the day it happens, each becomes
+   * one `stamp` line here and one deletion there. `glossary` already exports
+   * its version and has made the move.
    */
   isDone?(ctx: StepContext): Promise<boolean>;
   /** Do the work. The returned string is the one-line summary kept on the finished step. */
@@ -312,15 +364,57 @@ async function exists(file: string): Promise<boolean> {
  * Has this step already produced everything it produces, and is what it
  * produced still current?
  *
- * All of them, not any of them — see the note on `outputs`. The files must be
- * there whatever else is true, so the existence check runs first and a step's
- * own `isDone` only ever narrows the answer, never widens it: a freshness check
- * cannot accidentally declare a missing file fine.
+ * Two questions, asked in that order, and the order matters: the artefacts must
+ * be there whatever else is true, so presence runs first and a freshness check
+ * only ever narrows the answer. It can never declare a missing artefact fine.
+ *
+ * **Presence is the store's answer now, and the store parses.** This used to be
+ * `access()` over `outputs(ctx)` — pure existence — and that is how a
+ * half-written file reported its step finished. A `writeFile` killed midway
+ * leaves a file that exists and will not parse; the step skipped, and the stage
+ * after it consumed half a JSON document (docs/reusable/silent-success.md).
+ * Five steps were exposed and three were not, purely because the three had an
+ * `isDone` that happened to parse on its way to asking a different question.
+ * tests/pipeline-artifact-store.test.ts is that bug, one case per step.
+ *
+ * All of them, never any of them — `extract` writes the HTML *and* `meta.json`,
+ * and a crash between the two must not report a finished step.
+ *
+ * The `store` argument is what lets this run against Postgres unchanged. It
+ * defaults to the filesystem, so every caller that has one article directory in
+ * mind keeps working; src/api.ts passes its own, because the metadata page
+ * falls back to the `example/` fixture.
  */
-export async function stepIsDone(step: PipelineStep, ctx: StepContext): Promise<boolean> {
-  const present = await Promise.all(step.outputs(ctx).map(exists));
-  if (!present.every(Boolean)) return false;
+export async function stepIsDone(
+  step: PipelineStep,
+  ctx: StepContext,
+  store: ArtifactStore = fsArtifacts,
+): Promise<boolean> {
+  if (!(await store.has(ctx.slug, step.name, step.produces))) return false;
+  if (step.stamp) {
+    const expected = await step.stamp(ctx, store);
+    if (!expected) return false;
+    return sameStamp(await store.stampFor(ctx.slug, step.name), expected);
+  }
   return step.isDone ? await step.isDone(ctx) : true;
+}
+
+/**
+ * The fingerprint of the blocks a late stage would be written against today.
+ *
+ * `data/<slug>/blocks.json` — stage 4's copy, not stage 3's — because that is
+ * the one the late stages read and the one their `sourceHash` was computed
+ * from. Reading the other would make every artefact look stale the moment
+ * stage 3 ran without stage 4.
+ *
+ * `null` when the blocks cannot be read at all, which is *"we cannot tell"* and
+ * must not be confused with a hash that fails to match. Both answer
+ * not-current; only one of them is a stale artefact.
+ */
+async function inputHashFor(ctx: StepContext, store: ArtifactStore): Promise<string | null> {
+  const file = await store.read(ctx.slug, "toc", "blocks");
+  if (!file?.blocks) return null;
+  return hashBlocks(file.blocks);
 }
 
 /**
@@ -355,12 +449,15 @@ export async function urlForSlug(slug: string): Promise<string | undefined> {
   }
 }
 
-/** Everything a step needs to know about where this article's files go. */
+/**
+ * Everything a step needs to know about where this article's files go.
+ *
+ * The definition itself is `fsLocations` in src/store/artifacts-fs.ts, because
+ * the store is the layer allowed to know about paths at all. This stays here,
+ * and stays exported, so the callers that already use it did not have to move.
+ */
 export function contextPaths(slug: string): { dir: string; htmlFile: string } {
-  return {
-    dir: path.join(ROOT, "data", slug),
-    htmlFile: path.join(ROOT, "output", `${slug}.html`),
-  };
+  return fsLocations(slug);
 }
 
 /** The URL a step needs, or a clear error rather than a fetch of `undefined`. */
@@ -397,6 +494,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     name: "fetch",
     label: "Fetching the page",
     outputs: (ctx) => [path.join(ctx.dir, "raw.html")],
+    produces: ["raw"],
     async run(ctx) {
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
@@ -425,6 +523,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     name: "extract",
     label: "Extracting the article",
     outputs: (ctx) => [ctx.htmlFile, path.join(ctx.dir, "meta.json")],
+    produces: ["extractedHtml", "meta"],
     async run(ctx) {
       const url = requireUrl(ctx);
       const html = await readFile(path.join(ctx.dir, "raw.html"), "utf8");
@@ -457,6 +556,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
      * skip itself.
      */
     outputs: (ctx) => [blocksPathFor(ctx), ctx.htmlFile],
+    produces: ["blocks", "stampedHtml"],
     async run(ctx) {
       // Read before the stage runs, because the stage overwrites blocks.json
       // with its own output. Afterwards there is no way to ask what was there.
@@ -532,6 +632,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
       path.join(ctx.dir, "labels.json"),
       path.join(ctx.dir, "blocks.json"),
     ],
+    produces: ["tree", "labels", "blocks"],
     async run(ctx) {
       const run = await generateToc({
         blocksPath: blocksPathFor(ctx),
@@ -568,6 +669,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     name: "arc",
     label: "Writing the arc",
     outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
+    produces: ["arc"],
     async run(ctx) {
       const run = await generateArc({
         dir: ctx.dir,
@@ -608,6 +710,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     name: "tweets",
     label: "Writing the thread",
     outputs: (ctx) => [path.join(ctx.dir, "tweets.json")],
+    produces: ["tweets"],
     isDone: (ctx) => threadIsCurrent(ctx.dir),
     async run(ctx) {
       const run = await generateTweets({
@@ -654,7 +757,23 @@ export const STEPS: Record<StepName, PipelineStep> = {
     name: "glossary",
     label: "Finding the terms",
     outputs: (ctx) => [path.join(ctx.dir, "glossary.json")],
-    isDone: (ctx) => glossaryIsCurrent(ctx.dir),
+    produces: ["glossary"],
+    /* The first step through the new seam, and the shape the other two follow.
+       Three values — the blocks it would be written from, the prompt that would
+       write it, the model that would run — where `glossaryIsCurrent` was a
+       function doing the same three comparisons by hand. That function is still
+       exported from src/glossary.ts because its CLI uses it; nothing in the
+       pipeline calls it any more.
+
+       `stamp` rather than `isDone` because the *comparison* belongs in one
+       place (`sameStamp`) and only the four values belong to the stage. It is
+       glossary that goes first purely because glossary is the one of the three
+       that already exports its `PROMPT_VERSION` — see the note on `isDone`. */
+    stamp: async (ctx, store) => {
+      const inputHash = await inputHashFor(ctx, store);
+      if (!inputHash) return null;
+      return { inputHash, promptVersion: GLOSSARY_PROMPT_VERSION, model: CAPABLE_MODEL };
+    },
     async run(ctx) {
       const run = await generateGlossary({
         dir: ctx.dir,
@@ -694,6 +813,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
     name: "summary",
     label: "Writing the summaries",
     outputs: (ctx) => [path.join(ctx.dir, "summary.json")],
+    produces: ["summary"],
     isDone: (ctx) => summariesAreCurrent(ctx.dir),
     async run(ctx) {
       const run = await generateSummaries({
