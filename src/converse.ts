@@ -791,6 +791,41 @@ export async function* converse({
    * A function rather than an object because every one of these moves during
    * the loop, and the point is what they were at the moment of the failure.
    */
+  /**
+   * One record per round, so that a turn is legible after it fails.
+   *
+   * `finishReason`, `roundText` and `calls` are all **reset at the top of every
+   * round**, which means that at the moment anything throws, every round but the
+   * last is unrecoverable. That is not a small gap: a middle round that hit
+   * `max_tokens` reports `finish_reason: "length"` and is then overwritten, so
+   * the turn ends on some other reason and *"the budget was not the problem"*
+   * looks proven when it has only been checked for the final request.
+   *
+   * An array on the existing lines rather than a line per round, deliberately:
+   * logging.md's rule is that a caller which emits a line per item deletes the
+   * end of its own request's logs on Vercel. This is bounded by
+   * `MAX_TOOL_ROUNDS + 1` either way, but one line stays one line.
+   */
+  const roundLog: { finishReason: string | null; chars: number; calls: number }[] = [];
+
+  /**
+   * A finish reason fit to log, which is not quite the same as the one we got.
+   *
+   * `finish_reason` is a **provider-supplied string**. In practice it is one of
+   * half a dozen short words, and every line in this file has logged it raw
+   * since the day it was written. But logging.md's privacy rule is structural
+   * rather than trusting — redaction here is path-based and cannot reach inside
+   * a string — so "in practice it is short" is the wrong kind of argument to
+   * rest on, and this array puts three or four of them on a line instead of
+   * one. Anything that is not a plain lower-case word is replaced rather than
+   * truncated, because a truncated leak is still a leak. Raised by a GPT Sol
+   * review, 2026-08-27.
+   */
+  const plainReason = (reason: string | null): string => {
+    if (reason === null) return "none";
+    return /^[a-z_]{1,32}$/.test(reason) ? reason : "unexpected";
+  };
+
   const turnSoFar = () => {
     /* What this round reported and has not been added to the totals yet.
        Cleared the moment it *is* added, so this can never count it twice. */
@@ -799,6 +834,13 @@ export async function* converse({
     return {
     rounds,
     tools: toolRuns.length,
+    /* Per round, oldest first, and `"none"` for a round that never reported one
+       — a stream that died mid-flight. The scalar `finishReason` on these lines
+       is the *last* round's, which is the one the guards act on; this is the
+       only place a middle round's is visible at all. */
+    finishReasons: roundLog.map((r) => plainReason(r.finishReason)),
+    roundChars: roundLog.map((r) => r.chars),
+    roundCalls: roundLog.map((r) => r.calls),
     /* How much the reader had already watched arrive. The difference between
        "it died before saying anything" and "it died two paragraphs in" is the
        difference between a provider problem and a network one. */
@@ -879,6 +921,26 @@ export async function* converse({
     let roundText = "";
     /** This round's web-search count, added to the turn's total after the stream. */
     let roundSearches = 0;
+    /* Pushed now and filled in by `noteRound` below, so that a round which dies
+       mid-stream still leaves a record rather than a gap. */
+    const record: { finishReason: string | null; chars: number; calls: number } = {
+      finishReason: null,
+      chars: 0,
+      calls: 0,
+    };
+    roundLog.push(record);
+    /* **Idempotent, and called from the catch as well as the finally.** Putting
+       it only in the `finally` looked complete and was not: a `catch` runs
+       *before* its own `finally`, so the one log line written about a stream
+       that broke mid-flight — the line most in need of the round's shape —
+       reported the untouched placeholder, `"none"` and two zeros. Which is a
+       neat miniature of the bug this whole array exists for: a record that
+       looks present and says nothing. Found by a GPT Sol review, 2026-08-27. */
+    const noteRound = () => {
+      record.finishReason = finishReason;
+      record.chars = roundText.length;
+      record.calls = calls.size;
+    };
 
     /* **Say out loud that the tools are gone.**
 
@@ -1074,6 +1136,7 @@ export async function* converse({
     } catch (err) {
       /* Was that the reader? A stop is not an error, so it is not logged as one
          and it does not throw — see `stoppedByReader`. */
+      noteRound();
       if (stoppedByReader(err, signal, deadline, stall.signal)) {
         stopped = true;
         clearTimeout(stallTimer);
@@ -1097,6 +1160,10 @@ export async function* converse({
       }
     } finally {
       clearTimeout(stallTimer);
+      // In the `finally` rather than after it, so a throw on the way past does
+      // not skip it. The catch above has already called this on the one path
+      // where the difference shows; calling it twice costs three assignments.
+      noteRound();
     }
 
     /* **The round's numbers, added to the turn's.** Everything OpenRouter
@@ -1425,7 +1492,7 @@ export async function* converse({
      text, so the model is never sent a turn where it said nothing. */
   if (answer === "" && !stopped) {
     line.error(
-      { ...turnSoFar(), model: used, ms: since(started), finishReason },
+      { ...turnSoFar(), model: used, ms: since(started), finishReason: plainReason(finishReason) },
       `${used} returned no text`,
     );
     throw new Error(saidNothing(finishReason).message);
@@ -1492,7 +1559,7 @@ export async function* converse({
            `tools` is how many calls that bought. `rounds: 4` — the cap — on a
            run of answers means the model is going round in circles and the
            descriptions in src/chat-tools.ts need looking at. */
-        finishReason,
+        finishReason: plainReason(finishReason),
         truncated,
         stopped,
       },

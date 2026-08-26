@@ -28,8 +28,9 @@
  * ## What it reproduces
  *
  * Greg's turn, deterministically and for nothing: three rounds that ask for
- * tools — three calls, then three, then two, **eight in total**, which is how
- * eight calls fit inside a cap of three rounds — and then the fourth round,
+ * tools — three calls, then three, then two, **eight in total**, which is one
+ * way eight calls fit inside a cap of three rounds (nothing recorded how Greg's
+ * actually fell, which is what `roundCalls` now fixes) — and then the round,
  * which is offered no tools of ours and writes nothing. The tool is
  * `search_article_words`, which runs against the blocks in memory and touches
  * neither network nor disk.
@@ -76,6 +77,28 @@ const REPORTING = [...Array(ROUNDS).keys()].filter((r) => r !== SILENT_ROUND);
 
 /** Output tokens reported by the stream that then dies. See the second turn. */
 const DIED_OUTPUT = 777;
+/**
+ * Words that arrive before that stream dies.
+ *
+ * They exist so the round record can be told apart from the placeholder it
+ * starts as. A round that reports nothing and a round whose record was never
+ * filled in both read `"none"`, `0`, `0` — so a test using a silent stream
+ * would pass whether or not the record was ever written, which is the vacuous
+ * green this repo keeps a document about.
+ */
+const DIED_TEXT = "Half a sen";
+
+/**
+ * The round that ends on `finish_reason: "length"` — 0-based, so the third.
+ *
+ * `finishReason` is reset at the top of every round, so the scalar on the
+ * failure line is the *last* round's and a middle round that ran out of room is
+ * invisible. Which matters more than it sounds: `[ai-empty]` proves the final
+ * request did not hit `max_tokens`, and it is easy to read that as "the budget
+ * was not the problem" when it has only been checked for one request out of
+ * four.
+ */
+const LENGTH_ROUND = 2;
 
 let stdout = "";
 let stderr = "";
@@ -131,7 +154,11 @@ beforeAll(() => {
         }] } }] }));
       }
       if (!silent) frames.push(usage(200));
-      frames.push(frame({ choices: [{ finish_reason: "tool_calls", delta: {} }] }));
+      /* One middle round ends on finish_reason "length" — a real thing a
+         provider does, and the case the scalar finishReason on the failure line
+         cannot show, because it is reset at the top of every round. The turn
+         still asks for its tools; only the reason it stopped differs. */
+      frames.push(frame({ choices: [{ finish_reason: round === ${LENGTH_ROUND} + 1 ? "length" : "tool_calls", delta: {} }] }));
       return { ok: true, body: stream(frames) };
     };
 
@@ -174,7 +201,7 @@ beforeAll(() => {
           pull(c) {
             const enc = new TextEncoder();
             n++;
-            if (n === 1) return void c.enqueue(enc.encode(frame({ model: "test/model", choices: [{ delta: {} }] })));
+            if (n === 1) return void c.enqueue(enc.encode(frame({ model: "test/model", choices: [{ delta: { content: ${JSON.stringify(DIED_TEXT)} } }] })));
             if (n === 2) return void c.enqueue(enc.encode(usage(${DIED_OUTPUT})));
             c.error(new Error("the connection went away"));
           },
@@ -266,6 +293,26 @@ describe("a turn that spends itself on tools and answers with nothing", () => {
     expect(line.chars).toBe(0);
   });
 
+  it("says how each round ended, so a middle one that ran out of room is visible", () => {
+    const line = emptyAnswerLine();
+    const reasons = line.finishReasons as string[];
+    expect(reasons).toHaveLength(ROUNDS);
+    // The scalar is the last round's, and it says nothing about the others.
+    expect(line.finishReason).toBe("stop");
+    expect(reasons[LENGTH_ROUND]).toBe("length");
+    expect(reasons.filter((r) => r === "length")).toHaveLength(1);
+  });
+
+  it("says what each round wrote and asked for, not just the turn's totals", () => {
+    const line = emptyAnswerLine();
+    // Not one character of prose in any round — the sharpest fact about this
+    // failure, and one the turn-level `chars: 0` states less precisely.
+    expect(line.roundChars).toEqual(Array(ROUNDS).fill(0));
+    // And where the eight calls actually fell, which is what shows that the
+    // round cap is not a call cap.
+    expect(line.roundCalls).toEqual([...CALLS_PER_ROUND, 0]);
+  });
+
   it("counts tokens the provider already billed, even on a round that died", () => {
     /* The other way a turn ends without an answer. The totals are banked when a
        round's stream closes cleanly, so a stream that reported its usage and
@@ -282,6 +329,20 @@ describe("a turn that spends itself on tools and answers with nothing", () => {
     // And it is the first round of a fresh turn, with no tools behind it.
     expect(line?.rounds).toBe(1);
     expect(line?.tools).toBe(0);
+  });
+
+  it("says what the dying round had done, not what its blank record was", () => {
+    /* A `catch` runs before its own `finally`, so filling the round's record
+       there alone left the one line written about a broken stream reporting the
+       untouched placeholder. Which is a miniature of the bug the whole array
+       exists for: a record that looks present and says nothing. Found by a GPT
+       Sol review, 2026-08-27. */
+    const line = lines().find((l) => String(l.msg ?? "").includes("broke off"));
+    expect(line?.roundChars).toEqual([DIED_TEXT.length]);
+    // No finish_reason ever arrived — the stream died first — and "none" is the
+    // honest word for that rather than a guess.
+    expect(line?.finishReasons).toEqual(["none"]);
+    expect(line?.roundCalls).toEqual([0]);
   });
 
   it("keeps the reader's question and the article out of the log", () => {

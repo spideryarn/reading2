@@ -222,6 +222,52 @@ in Anthropic's shape rules (text after tool-result blocks) and in OpenRouter's t
 against `anthropic/claude-sonnet-5` with exactly that shape returned 200 and answered from the tool
 result.
 
+## The eleventh, found by a different reader entirely
+
+A subagent sent to root-cause the same bug came back late, and found the one thing five review passes
+and I had all walked past: **`finishReason`, `roundText` and the tool-call map are reset at the top of
+every round**, so at the moment anything throws, every round but the last is unrecoverable.
+
+Which matters more than it sounds. `[ai-empty]` proves the *final* request did not hit `max_tokens` —
+`length` has its own code. It is very easy to read that as "the budget was not the problem", and it is
+only true of one request out of four. A middle round that ran out of room reports `length`, is
+overwritten, and leaves no trace anywhere.
+
+The failure lines carry `finishReasons`, `roundChars` and `roundCalls` as arrays now — bounded by
+`MAX_TOOL_ROUNDS + 1`, and arrays rather than a line per round because a caller that emits a line per
+item deletes the end of its own request's logs on Vercel.
+
+A sixth review pass then found the fix incomplete in a way that is a miniature of the whole
+postmortem: the record was filled in from the stream's `finally`, and **a `catch` runs before its own
+`finally`** — so the one line written about a stream that broke mid-flight, the line most in need of
+the round's shape, reported the untouched placeholder. A record that looks present and says nothing.
+It is filled from both now.
+
+That pass also caught two things in the prose. `finish_reason` is a provider-supplied string logged
+raw since the day this file was written, and this array puts three or four of them on a line instead
+of one — so it is normalised to a plain lower-case word now, because logging.md's privacy rule is
+structural rather than trusting. And a claim about Greg's turn — that his eight calls fell across two
+rounds — was **invented**: nothing recorded how they fell, and the test fixture's three-three-two is
+*a* shape that fits rather than his. Writing down a specific number for something nobody measured is
+the same fault as the comment this postmortem is named after, committed while documenting it.
+
+## The suspect I downgraded on a bad argument
+
+The subagent also argued that missing reasoning replay could not be the cause, because we never
+*receive* thinking blocks — `ChatWireMessage` has no field for one — so we cannot be filtering any
+out. I believed it and rewrote the bullet in chat-tools.md from suspect to unmeasured quality risk.
+
+That is wrong, and Sol caught it: **not having somewhere to put them is the filtering.** The model
+produced them; we replay the turn without them. Adaptive thinking permits a turn generated with no
+thinking in it; it does not permit dropping thinking that was generated. And the 200 proves the
+request was *accepted*, which rules out rejection and says nothing about whether the continuation was
+damaged — which is the failure mode in question. The bullet is a suspect again.
+
+Worth noticing how it got past me: the paragraph I wrote immediately after the downgrade said a model
+re-entering with "nothing recoverable of its own plan" was "a plausible route to writing nothing".
+**The same two paragraphs said it cannot be this bug and that it plausibly is.** Neither I nor the
+subagent noticed; a reader who was not invested in the conclusion did, in one line.
+
 ## Three claims that had rotted, and one that was never written
 
 The same pass turned up three comments that were true when written and are not now, in three

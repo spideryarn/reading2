@@ -478,6 +478,34 @@ alone, in order.
   provider — a 413, which reaches the reader as `[ai-too-big]`. That is a visible failure rather than
   a silent one, which is why this is a note and not a bug, but the honest position is that the caps
   in `chat-tools.ts` were chosen per tool and never added up.
+- **A round can still end the turn without ever reaching the withheld one.** The nudge and
+  `[ai-tool-loop]` above only fire on the fourth round. If the model stops asking for tools on round
+  two and writes nothing, the loop breaks there and the reader still gets `[ai-empty]` — accurately,
+  since the model really did say nothing, but with *"asking again usually gets an answer"* attached to
+  a turn that has already burned its tool budget. The discriminator `converse` holds and does not use
+  is `toolRuns.length > 0`. The fix is a fourth branch in `saidNothing` — a `[ai-spent]`, `blocked`
+  rather than `retry`, saying the turn spent itself researching and suggesting a narrower question —
+  which is exactly the reasoning already applied to `[ai-no-room]`. Not built: it changes a
+  reader-facing message on a path nobody has yet observed, and the log now says whether that path is
+  the one that happens.
+- **The tool *call* budget is not the round budget.** `wanted` is uncapped, so a model may ask for
+  eight tools in as few as two rounds, which is why the round cap is not the bound it looks like.
+  (How Greg's eight actually fell across his rounds is not known — nothing recorded it at the time,
+  which is what the `roundCalls` array now fixes. The fixture in the test uses three, three and two,
+  because that is *a* shape which fits, not because it is his.) At `TOOL_TIMEOUT_MS` each that is up to 160 seconds against a 120-second turn
+  deadline, so this turn was near a second failure mode. Since 2026-08-27 the deadline does at least
+  reach the tools and ends the batch, so it fails honestly rather than overrunning; a real per-turn
+  call cap, **announced to the model in a tool message** rather than applied by silently withdrawing
+  tools, is still the right shape. OpenRouter's own server-tool loop does exactly that.
+- **`tool_choice: "none"` may be a better final round than withholding the array.** It would make the
+  model *unable* to emit a tool call rather than merely asked not to — the invariant enforced by the
+  provider instead of by a nudge — and it would remove the need for the nudge message entirely. Two
+  things to check first, neither of them assumable: whether OpenRouter passes the parameter through
+  for `anthropic/*` or drops it silently (which is the documented hazard in
+  [setup-dev.md](setup-dev.md)), and the cache arithmetic. Changing `tool_choice` invalidates cached
+  *message* blocks while leaving tools and system cached — and the article lives in a message here, so
+  it may well be worse than the tools-array invalidation it replaces. Measure `cacheReadTokens` before
+  believing it.
 - **The logged `model` is whichever one answered last.** OpenRouter can route different rounds of one
   turn to different providers or models, and `used` is overwritten each round, so a turn that changed
   hands mid-way reports only where it ended. Nobody has seen this happen; it would be invisible if it
@@ -497,12 +525,27 @@ alone, in order.
   matter more: the hostname used to come from the reader and now comes from the model, which can be
   argued into one by a page. The proper fix is connecting to a pinned address rather than re-resolving,
   which belongs to `src/fetch.ts` and its owner. Also raised by the review.
-- **Reasoning blocks are not replayed across a tool round.** Anthropic asks that thinking blocks be
-  returned unmodified alongside tool results, and we send `content` and `tool_calls` only. It works
-  today — every live run in this file's history completed — but "works today" is the whole of the
-  evidence, and the failure it invites is a quietly worse continuation rather than an error. Raised by
-  the review; the fix is to carry `reasoning_details` on the assistant turn and it needs measuring
-  rather than assuming.
+- **Reasoning blocks are not replayed across a tool round**, and this **stays a suspect** for the
+  empty answer above. Anthropic asks that thinking blocks be returned unmodified alongside tool
+  results, and we send `content` and `tool_calls` only.
+
+  It was briefly downgraded here on an argument that does not hold, and the argument is worth keeping
+  written down because it is a tempting one: *we never receive thinking blocks — `ChatWireMessage` has
+  no field for one — so we cannot be filtering any out.* **Not having somewhere to put them is the
+  filtering.** The model produced them; we replay the turn without them. Adaptive thinking permits
+  Claude to generate a turn with no thinking in it; it does not permit dropping thinking it did
+  generate. And the 200 we got proves the request was *accepted*, which is a different thing from the
+  continuation being undamaged — rejection is the failure mode this rules out, and degradation is the
+  one that matters. Two claims from that argument do survive and are useful: Sonnet 5 is
+  adaptive-only (`thinking: {type: "enabled"}` is a 400 on it), and adaptive drops the "final turn
+  must begin with a thinking block" rule.
+
+  There is a concrete version of the worry here. Every replayed assistant turn in Greg's failing
+  conversation was `{ content: "", tool_calls: [...] }`, so by the third round the model was looking
+  at eight tool calls of its own with no words and no reasoning attached to any of them. A model
+  asked to "take its time", re-entering with nothing recoverable of its own plan, is a plausible
+  route to writing nothing at all. Plausible, not shown. The fix is to carry `reasoning_details` on
+  the assistant turn and it needs measuring rather than assuming.
 - **The final round changes the tools array, which changes the cached prefix.** Tools are rendered
   ahead of system and messages, so withholding them on the last round costs a cache write on the one
   path that has already been expensive. It only happens after three tool rounds, which is rare, and

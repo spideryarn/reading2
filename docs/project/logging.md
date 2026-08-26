@@ -218,6 +218,18 @@ are looking when you write the numbers, and an error already feels informative b
 error in it. It usually is not. `err` says what broke; it says nothing about what the request had
 already done, and that is most of what a diagnosis is.
 
+**The same rule has a second half, which took a second look to see: per-*item* state is lost too.**
+`converse` resets `finishReason`, `roundText` and its tool-call map at the top of every round, so at
+the moment anything throws, every round but the last is unrecoverable. A middle round that hit
+`max_tokens` reports `length` and is then overwritten — and a turn that ends on some other reason
+then reads as proof that the budget was fine, when the budget has only been checked for one request
+out of four. The failure lines carry `finishReasons`, `roundChars` and `roundCalls` as arrays now.
+
+Arrays rather than a line per round, and that is this file's own rule rather than a taste: a caller
+that emits a line per item deletes the end of its own request's logs on Vercel
+([§ Vercel](#vercel)). Four rounds would have been safely under the cap either way; one line is still
+one line.
+
 It is checked rather than trusted:
 [`tests/chat-empty-answer-log.test.ts`](../../tests/chat-empty-answer-log.test.ts) reproduces Greg's
 turn exactly — three rounds asking for three, three and two tools, then a fourth round offered no
