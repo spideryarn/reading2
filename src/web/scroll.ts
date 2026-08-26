@@ -177,7 +177,7 @@ function glide(to: number) {
 }
 
 /** Whoever asked for motion, this reader has said no. */
-function reducedMotion(): boolean {
+export function reducedMotion(): boolean {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 

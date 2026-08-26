@@ -205,6 +205,16 @@ el.getBoundingClientRect()                          // for anything sticky, alwa
 Read the *resolved* value, not the declaration. Both traps below declare correctly and resolve
 wrong.
 
+**But `backgroundColor` specifically is not trustworthy while the rendering step is asleep.** Found
+2026-08-26, checking the summary panel's "you are here" wash: in a tab whose rAF frame count was
+zero (§ A background tab will lie to you), `getComputedStyle(el).backgroundColor` on a `.summ-body`
+came back transparent — and stayed transparent after setting `background-color: red !important`
+inline from JS on that very element. `border` and custom-property reads on the same element were
+correct throughout, and a zoomed screenshot showed the real colour painting perfectly. So the rule
+above still holds for everything else; for backgrounds in a suspended tab, the screenshot is the
+reliable one and the computed value is the liar, which is the exact reverse of the usual advice on
+this page. Wake the tab before believing a transparent background.
+
 ## Three traps this codebase has actually hit
 
 Each of these looked right in review and was wrong on the page.

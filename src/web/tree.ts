@@ -371,3 +371,54 @@ export function rungText(
   }
   return null;
 }
+
+/**
+ * Which entry the reader is actually in, as the panel is currently drawn.
+ *
+ * Greg, 2026-08-26: *"If I'm in 'Summary' mode, can we highlight and scroll to
+ * the relevant Summary section that corresponds to the current position of the
+ * text?"* — and "the relevant one" is the question this function exists to
+ * answer once, in one place.
+ *
+ * `here` in SummaryPanel.tsx marks **every** ancestor of the reader's section,
+ * deliberately: at a shallow depth cut-off, the part you are inside is the
+ * honest answer to *where am I*. But a highlight that strong on four nested
+ * rows says nothing, and there is only one row to scroll to. So this picks the
+ * **deepest entry that is actually on screen**, which is not the same as the
+ * deepest entry that contains the reader:
+ *
+ *  - a node below the `deep` cut-off is not drawn, so its parent is where the
+ *    reader is *as far as this panel goes*;
+ *  - a node inside a section the reader closed is not drawn either, and closing
+ *    a section must not put the mark somewhere invisible.
+ *
+ * **The walk mirrors `Entry`'s own three lines** — `tooDeep`, `openable`,
+ * `showChildren` — and that agreement is the whole risk in this function. Get
+ * it wrong and nothing errors: the panel scrolls to an element that is not
+ * there (no move at all), or marks a row the reader cannot see, which reads as
+ * "the highlight is broken" rather than as a rule disagreeing with itself.
+ * docs/reusable/silent-success.md.
+ *
+ * Returns `null` above the first section, and for the root — which covers the
+ * whole article and is therefore "here" the entire time, a light that is always
+ * on. At `deep: 0` only the root is drawn, so there is correctly nothing to
+ * mark and nothing to scroll to.
+ */
+export function currentEntryId(
+  root: SummaryNode,
+  atRow: number | null,
+  deep: number,
+  closed: ReadonlySet<string>,
+): string | null {
+  if (atRow === null) return null;
+  let node: SummaryNode | undefined = root;
+  let deepest: string | null = null;
+  while (node) {
+    if (node !== root) deepest = node.node.id;
+    const showChildren =
+      node.children.length > 0 && node.node.depth < deep && !closed.has(node.node.id);
+    if (!showChildren) break;
+    node = node.children.find((c) => atRow >= c.startRow && atRow <= c.endRow);
+  }
+  return deepest;
+}

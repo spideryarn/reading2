@@ -307,6 +307,135 @@ cells in the table have always done with a whole `<td>`. Two things keep that ho
   or a link, so opening a section does not also scroll the article, and a block id goes to *its*
   paragraph rather than to the top of the section it is in.
 
+## Following the reader
+
+**Added 2026-08-26.** Greg:
+
+> If I'm in "Summary" mode, can we highlight and scroll to the relevant Summary section that
+> corresponds to the current position of the text?
+
+Two halves, and the interesting one is the second.
+
+### Which row is "the relevant one"
+
+The panel already marked the reader's position: `here` runs the **whole chain** of ancestors, and
+that is deliberate — at a shallow depth cut-off the part you are inside is the honest answer to
+*where am I*, and marking only the innermost node would leave the panel with nothing lit whenever the
+cut-off sits above it.
+
+But there is only one row to scroll to, and a mark strong enough to find at a glance is a stripe down
+the whole panel if it is repeated on four nested rows. So there is a second, stronger mark, `now`,
+and it goes on exactly one row: [`currentEntryId`](../../src/web/tree.ts) walks down from the root and
+stops at **the deepest entry that is actually drawn**, which is not the same as the deepest entry
+containing the reader:
+
+- a node below the `deep` cut-off is not drawn, so its parent is where the reader is as far as this
+  panel goes;
+- a node inside a section the reader closed is not drawn either — closing a section must not move the
+  mark somewhere invisible;
+- a part's range can cover blocks that none of its sections do, so the walk stops on the parent rather
+  than returning nothing in the middle of an article.
+
+That walk mirrors `Entry`'s own three lines — `tooDeep`, `openable`, `showChildren` — and **that
+agreement is the whole risk in the function**. Get it wrong and nothing errors: the panel scrolls to
+an element that is not in the DOM, which moves nothing, or marks a row nobody can see. Another
+[silent success](../reusable/silent-success.md), and the reason the rule is written once, in
+`tree.ts`, rather than decided independently by the component and the scroller.
+
+The scroller finds its row by a `data-follow` attribute rather than by the `now` class, so restyling
+the mark cannot quietly break the scrolling — and the attribute is on the row's **body**, not on its
+`<li>`. That one is worth the sentence it costs: an open `<li>` contains its whole descendant `<ol>`,
+so measuring it asks whether the row's *children* are in view. A part whose own two lines are sitting
+in the middle of the panel would read as out of view because a dozen sections under it run off the
+bottom, and the panel would scroll for no reason the reader could see. Caught by GPT Sol's review of
+the built code, not by a browser — it needs a part that is current while its sections are open, which
+is exactly the case a quick look does not produce.
+
+### Scrolling without taking the scroll off the reader
+
+The precedent in this repo is [`ContextPanel`](../../src/web/ContextPanel.tsx), which centres the
+current item on a focus line — and it can, because it is `overflow: hidden` and **nothing but that
+file ever touches its `scrollTop`**. The summary panel is not that. It is a list the reader scrolls
+themselves, and a panel that springs back to where the code wants it is hostile.
+
+So [`follow.ts`](../../src/web/follow.ts) has two rules, and between them the panel never takes the
+scroll off somebody using it:
+
+1. **Move only when the target changes.** Not on every render, not on a timer. The trigger is the
+   reader crossing into a different section of the article — a thing they did — so a response to it
+   is not a surprise. Browsing the outline while the article stays put moves nothing at all.
+2. **Move only if the row is not already comfortably visible.** If they have it on screen, wherever
+   they put it is better than wherever we would.
+
+Rule 1 is also why there is **no scroll listener here**, and that is the part worth copying. The
+obvious implementation watches the panel's own `scroll` events to tell "the reader moved it" from "I
+moved it" — and that check is where the bug lives, because a programmatic scroll fires exactly the
+same event, and a smooth one fires dozens of them, arriving *after* the flag meant to cover them has
+been cleared. Keying on the target means the question is never asked.
+
+The row lands with a margin — `min(72px, a quarter of the panel)` — rather than nudged to the nearest
+edge, because a row sitting exactly on the bottom edge is visible and useless: the next section's
+title, which is what a reader moving forwards is about to want, is off the bottom. The margin is the
+lookahead. And a row taller than the panel keeps its **top**: of the two ends, the title is the one
+worth having.
+
+The first placement is instant, later ones slide, and `prefers-reduced-motion` makes them all instant.
+That is a decision the code makes per call, which is why there is deliberately no `scroll-behavior:
+smooth` on `.summ-scroll` — a stylesheet rule would animate the instant ones too, with nothing to
+switch it off. The first placement also runs in a `useLayoutEffect` rather than a `useEffect`, so the
+reader never sees a frame of the outline scrolled to the top before it jumps to where they are.
+
+### Why the slide is ours and not the browser's
+
+`scrollTo({ behavior: "smooth" })` was the first version and it is wrong here, for a reason that only
+shows up when two moves overlap: **a native smooth scroll has no handle**. Cross into a new section
+while the last move is still running, and if the new row happens to be in view already the correct
+thing to do is *stop* — and there is no way to say so. The old animation carries on towards a number
+chosen for a row that is no longer current, and drags the new one off the screen. Nothing errors; the
+panel just drifts somewhere nobody asked for. Also found in review.
+
+So `follow.ts` animates `scrollTop` over `requestAnimationFrame`, hands back the function that stops
+it, and stops whatever was running at the top of every run — before anything is measured. That also
+buys the other half: **a wheel or a finger on the panel cancels the move**, which is the same bail-out
+[`scroll.ts`](../../src/web/scroll.ts) gives the article.
+
+### What it costs
+
+Stated rather than smoothed over:
+
+- Opening or closing a section, moving either control, or the summaries arriving reflows the list
+  without changing which row is current, so `rung`, `deep`, `closed` and the joined tree are passed to
+  the hook as re-run triggers. A re-run with the row already in view costs one
+  `getBoundingClientRect` and moves nothing. `root` is the one that was missing at first: it changes
+  when a rewrite lands, which can turn every one-sentence gist into a paragraph.
+- **The animation cannot be checked in a background tab**, because it is `requestAnimationFrame` and
+  a suspended tab runs none. A browser pass on 2026-08-26 verified every landing position and could
+  not verify the motion; that half is still eyeball-only. See
+  [browser-testing.md](browser-testing.md).
+- **A window resize or a late font swap is not covered.** Neither changes any of those triggers, so
+  the row can drift out of view and stay there until the reader crosses a section boundary. A
+  `ResizeObserver` would close it — [`ContextPanel`](../../src/web/ContextPanel.tsx) has one — and is
+  deliberately not here, because it would also be a way for the panel to move when the reader has
+  scrolled it somewhere on purpose and touched nothing since.
+- **One hole that did need a timer**, and it is worth saying why the timer is not the thing this
+  design was avoiding. `?at=` is debounced by `POSITION_SETTLE_MS`, so the target changes *late*: a
+  reader who stops scrolling the article, moves to the panel and gives it a flick can have the delayed
+  update arrive on top of them. So the panel is left alone for `POSITION_SETTLE_MS + 120` after the
+  reader scrolls it — **derived from the debounce, not written down as a number**, because that is
+  exactly the window it exists to cover. The signal is `wheel` and `touchmove`, which are the reader's
+  hand and nothing else; no programmatic scroll has ever fired one. A `scroll` event would have been
+  the ambiguous signal, and there is still deliberately no listener for it. `pointerdown` is left out
+  too — a click on a summary row is a pointer event on this panel, and counting it would suppress the
+  follow that the click's own jump is supposed to cause.
+
+  **Fable, asked the same question independently, wanted four seconds rather than four hundred
+  milliseconds**, on the argument that "only when out of view" does not protect a reader who browsed
+  away — they are out of view *by definition*. That argument is right about the geometry and wrong
+  about the trigger: nothing ticks while the reader is in the panel, because `?at=` only moves when
+  they scroll the *article*, and scrolling the article is them going back to reading. A four-second
+  hold would buy nothing for the case it names and would make the panel feel dead for four seconds
+  after any flick. So the window covers the handoff — the debounce — and nothing more.
+
 ## Steering a rewrite
 
 **Added 2026-08-26.** A box beside the write button, in
@@ -390,6 +519,11 @@ interpreted. Rendering arbitrary model output as HTML is what [security.md](secu
   [chat-mode.md](../plans/chat-mode.md) records for the band generally.
 - **No keyboard shortcut** switches into the mode or moves the ladder. The app still has no shortcut
   map at all.
+- **The panel follows the reader but never leads them.** There is no "the reader scrolled the panel
+  away, offer them a way back" affordance — no *jump to where I am* button, no edge indicator saying
+  the marked row is off-screen above. Deliberate for now (one control fewer, and crossing a section
+  boundary brings it back on its own), but it is the obvious next thing if anyone reports losing the
+  mark.
 - **A section whose summary is subtly wrong** is undetectable from here. `missing` catches an absent
   summary; nothing catches a plausible one about the wrong thing, which is the same residual risk the
   citation counting in [chat-mode.md](../plans/chat-mode.md) leaves behind. A steer makes this risk
@@ -444,5 +578,7 @@ interpreted. Rendering arbitrary model output as HTML is what [security.md](secu
 - [../plans/chat-mode.md](../plans/chat-mode.md) — where the mode band came from
 - [../plans/bottom-bar.md](../plans/bottom-bar.md) — the bar the Summary button lives in, where it was
   a dimmed placeholder until now
+- [column-context.md](column-context.md) — the other panel that holds the current item in view, and
+  why it can centre and this one cannot
 - [../reusable/silent-success.md](../reusable/silent-success.md) — the pattern `missing` and the
   fallback tag exist to defeat

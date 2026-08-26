@@ -43,7 +43,7 @@ import {
   textOf,
 } from "../src/summarise.js";
 import { SummaryPanel } from "../src/web/SummaryPanel.js";
-import { buildSummaryTree, rungText } from "../src/web/tree.js";
+import { buildSummaryTree, currentEntryId, rungText } from "../src/web/tree.js";
 import type { Block, Summaries, Tree, TreeNode } from "../src/types.js";
 
 /* ------------------------------------------------------------- fixtures -- */
@@ -613,6 +613,54 @@ describe("countCitations", () => {
   });
 });
 
+describe("currentEntryId", () => {
+  /* "The relevant one" is the deepest entry that is **actually drawn**, which
+     is not the same as the deepest entry containing the reader. The walk has to
+     mirror Entry's own `tooDeep` / `openable` / `showChildren` lines, and
+     nothing errors when it stops doing so — the panel simply scrolls to an
+     element that is not there, or marks a row nobody can see. */
+  const tree = () => buildSummaryTree(TREE, BLOCKS, SUMMARIES)!;
+  const none: ReadonlySet<string> = new Set();
+
+  it("picks the deepest section on screen", () => {
+    expect(currentEntryId(tree(), 2, 2, none)).toBe("sec-1");
+  });
+
+  it("stops at the depth cut-off rather than naming a row that is not drawn", () => {
+    // At `deep: 1` the sections are gone, and the part the reader is inside is
+    // the honest answer to "where am I" as far as this panel goes.
+    expect(currentEntryId(tree(), 2, 1, none)).toBe("part-a");
+  });
+
+  it("stops at a section the reader closed", () => {
+    // Closing a section must not put the mark somewhere invisible.
+    expect(currentEntryId(tree(), 2, 2, new Set(["part-a"]))).toBe("part-a");
+  });
+
+  it("names the parent when the reader is between its children", () => {
+    /* A part's range can cover blocks that none of its sections do. The walk
+       finds no child containing the row and correctly stops on the parent,
+       rather than returning null and leaving the panel unmarked in the middle
+       of an article. */
+    const gappy: Tree = {
+      ...TREE,
+      nodes: {
+        ...TREE.nodes,
+        "sec-2": node({ id: "sec-2", depth: 2, parent: "part-a", range: [id(4), id(4)] }),
+      },
+    };
+    const root = buildSummaryTree(gappy, BLOCKS, SUMMARIES)!;
+    expect(currentEntryId(root, 5, 2, none)).toBe("part-a");
+  });
+
+  it("never names the root, and names nothing above the first section", () => {
+    // The root covers the whole article, so marking it is a light that is
+    // always on. At `deep: 0` it is the only row drawn — correctly nothing.
+    expect(currentEntryId(tree(), 2, 0, none)).toBeNull();
+    expect(currentEntryId(tree(), null, 2, none)).toBeNull();
+  });
+});
+
 describe("SummaryPanel", () => {
   /* Typed as the component's own props rather than inferred: an object literal
      infers `status: "ready"` as a literal type, so a spread that overrides it
@@ -700,8 +748,42 @@ describe("SummaryPanel", () => {
     // atRow 7 is inside part-b (blocks 6-9). The root covers everything and is
     // therefore "here" the whole time, which is a light that is always on.
     const out = html({ atRow: 7 });
-    expect(out).toContain('class="summ-entry d1 here"');
-    expect(out).not.toContain('class="summ-entry d0 here"');
+    expect(out).toContain("summ-entry d1 here");
+    expect(out).not.toContain("summ-entry d0 here");
+  });
+
+  it("marks the one row the reader is in, and only its ancestors as `here`", () => {
+    /* Greg, 2026-08-26: "highlight and scroll to the relevant Summary section
+       that corresponds to the current position of the text". `here` runs the
+       whole chain — that is what keeps a shallow cut-off honest — and `now` is
+       the single row at the end of it, which is also the row the panel scrolls
+       to. Both marks on one row and only the weak one on its parent. */
+    const out = html({ atRow: 2 }); // inside sec-1, which is inside part-a
+    expect(out).toContain('class="summ-entry d2 here now"');
+    expect(out).toContain('class="summ-entry d1 here"'); // part-a: ancestor only
+    expect(out).not.toContain('class="summ-entry d1 here now"');
+  });
+
+  it("hangs the scroller's target on the row body, never on the `<li>`", () => {
+    /* Two rules in one assertion, and the second is a real bug that was caught
+       in review rather than in a browser.
+
+       An attribute rather than the `now` class, because a class is a style and
+       restyling the mark must not be able to break the scrolling.
+
+       And on `.summ-body` — the header, the summary and the range — rather than
+       on the `<li>`, which *contains its whole descendant `<ol>`*. Measured on
+       the `<li>`, "is the current row in view" is a question about the row's
+       children: a part whose own two lines sit in the middle of the panel reads
+       as out of view because a dozen sections under it run off the bottom, and
+       the panel scrolls for no reason the reader can see. */
+    const out = html({ atRow: 2 });
+    expect(out).toContain('class="summ-body" data-follow="sec-1"');
+    expect(out).not.toMatch(/<li[^>]*data-follow/);
+  });
+
+  it("marks nothing when the reader is above the first section", () => {
+    expect(html({ atRow: null })).not.toContain(" now\"");
   });
 
   it("renders with no tree at all rather than throwing", () => {

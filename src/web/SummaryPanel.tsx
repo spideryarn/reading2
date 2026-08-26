@@ -55,7 +55,7 @@
  * give you the one you asked for: a partly-written artefact must not read as a
  * complete one (src/summarise.ts § partial salvage).
  */
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, useRef, useState } from "react";
 import { ChevronRight, Compass, Layers, RotateCcw, TriangleAlert } from "lucide-react";
 import type { BlockId, Job } from "../types.js";
 import { BlockRange } from "./BlockRef.js";
@@ -63,7 +63,8 @@ import { CitedText } from "./Cited.js";
 import { TooltipGroup } from "./Tooltip.js";
 import type { Rung } from "./params.js";
 import { MAX_SUMMARY_DEPTH, RUNGS } from "./params.js";
-import { rungText, type SummaryNode } from "./tree.js";
+import { FOLLOW_ATTR, useFollow } from "./follow.js";
+import { currentEntryId, rungText, type SummaryNode } from "./tree.js";
 import type { UseSummaries } from "./useSummaries.js";
 import { JobProgress } from "./JobProgress.js";
 
@@ -134,6 +135,29 @@ export function SummaryPanel({
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  /**
+   * The one row the reader is actually on, and the row the panel follows.
+   *
+   * Computed here rather than decided by each `Entry`, because two things need
+   * the same answer — the class that marks it and the scroll that finds it —
+   * and a rule written twice is a rule that will disagree with itself. It lives
+   * in tree.ts beside the shape it walks; see the note there on why "deepest"
+   * means *deepest drawn* and not simply deepest.
+   */
+  const current = root ? currentEntryId(root, atRow, deep, closed) : null;
+
+  /* Follow the reader, without taking the scroll off them: the panel moves when
+     `current` changes and the row is not already comfortably visible, and never
+     otherwise. The four extras are re-run triggers rather than reasons to move —
+     each reflows the list without necessarily changing which row is current, and
+     a re-run with the row in view moves nothing. `root` is the one that is easy
+     to leave out and was: it changes when the summaries finish loading or a
+     rewrite lands, which can turn every one-sentence gist into a paragraph and
+     push the current row off the bottom without any id changing. follow.ts has
+     the argument. */
+  const scroll = useRef<HTMLDivElement>(null);
+  useFollow(scroll, current, [rung, deep, closed, root]);
 
   /**
    * What the reader wants these summaries to lean towards.
@@ -243,7 +267,7 @@ export function SummaryPanel({
         </div>
       )}
 
-      <div className="summ-scroll">
+      <div className="summ-scroll" ref={scroll}>
         {root ? (
           /* One group for the whole outline, so running the pointer down a
              column of block ids shows each card immediately rather than
@@ -258,6 +282,7 @@ export function SummaryPanel({
                 closed={closed}
                 onToggle={toggle}
                 atRow={atRow}
+                current={current}
                 onJump={onJump}
                 blocks={blocks}
                 root
@@ -367,6 +392,7 @@ function Entry({
   closed,
   onToggle,
   atRow,
+  current,
   onJump,
   blocks,
   root = false,
@@ -377,6 +403,8 @@ function Entry({
   closed: ReadonlySet<string>;
   onToggle(id: string): void;
   atRow: number | null;
+  /** The one entry the reader is on — see SummaryPanel § current. */
+  current: string | null;
   onJump(id: BlockId): void;
   blocks: Map<string, string>;
   root?: boolean;
@@ -402,6 +430,14 @@ function Entry({
      always on and so tells you nothing. */
   const here = !root && atRow !== null && atRow >= entry.startRow && atRow <= entry.endRow;
 
+  /* And the one row of that chain the reader is *in*, rather than merely under.
+     Two marks rather than one because they answer different questions: `here`
+     draws the path down to the reader, which is what makes a shallow cut-off
+     honest, and `now` says which single row the summary beside the reading line
+     belongs to. One mark strong enough to find at a glance, on four nested
+     rows, is four marks and no answer. */
+  const now = entry.node.id === current;
+
   /** A click anywhere in the entry that nothing else has already claimed. */
   const jumpFromBody = (event: MouseEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest("button, a")) return;
@@ -409,7 +445,7 @@ function Entry({
   };
 
   return (
-    <li className={`summ-entry d${entry.node.depth}${here ? " here" : ""}`}>
+    <li className={`summ-entry d${entry.node.depth}${here ? " here" : ""}${now ? " now" : ""}`}>
       {/* Both of these are the same statement, and it is the one in the header:
           the keyboard path is the real `.summ-title` button inside this div,
           which is unchanged and still focusable. This handler only widens the
@@ -419,7 +455,23 @@ function Entry({
           it would take the twist out of the tab order.
           biome-ignore lint/a11y/useKeyWithClickEvents: as above
           biome-ignore lint/a11y/noStaticElementInteractions: as above */}
-      <div className="summ-body" onClick={jumpFromBody}>
+      <div
+        className="summ-body"
+        onClick={jumpFromBody}
+        /* How the panel's scroller finds this row, and **it is on the body
+           rather than on the `<li>` above**. That is not a detail: an open
+           `<li>` contains its whole descendant `<ol>`, so its rectangle is the
+           height of the entire subtree — and "is the current row in view"
+           measured against that is a question about the section's children.
+           A part whose own two lines are sitting in the middle of the panel
+           would read as out of view because a dozen sections under it run off
+           the bottom, and the panel would scroll for no reason the reader
+           could see. Caught by GPT Sol's review, 2026-08-26.
+
+           An attribute rather than the `now` class, so that restyling the mark
+           cannot quietly break the scrolling — follow.ts § FOLLOW_ATTR. */
+        {...{ [FOLLOW_ATTR]: entry.node.id }}
+      >
         {!root && (
           <div className="summ-title-row">
             <button
@@ -512,6 +564,7 @@ function Entry({
               closed={closed}
               onToggle={onToggle}
               atRow={atRow}
+              current={current}
               onJump={onJump}
               blocks={blocks}
             />
