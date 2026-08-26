@@ -1422,16 +1422,74 @@ article made from a local file offered a "view the original" link that 404'd; an
 own copy of the prompt, which would have gone on testing the wording the product had stopped using.
 
 **Everything above came out of the review's activity log rather than its report**, because the run
-was killed before it wrote one — it had finished all four of its own planned steps. A second review,
-of the changes the fourteen-page fixture then forced (the chunk-level gate, `bibliographyPages`, the
-`/api/source/:slug` route), **did not happen**: the `CODEX_API_KEY` account has no credits and the
-first run exhausted the subscription that was standing in for it. So these three are reviewed by
-nobody but their author, and that is worth knowing before trusting them:
+was killed before it wrote one — it had finished all four of its own planned steps. Worth knowing for
+next time: `codex exec -o` writes the report only at the very end, so a run that dies after doing all
+the work leaves an empty file and its findings sitting in the log, reading like narration.
 
-- **the gate moving from the page to the chunk**, which is a real loosening in exchange for not
-  failing every page boundary;
-- **`bibliographyPages`**, which takes prose on a trailing reference page out of the gate entirely;
-- **`GET /api/source/:slug`**, which serves a stranger's PDF back inline from our own origin.
+The three things this review could not cover — the chunk-level gate, `bibliographyPages` and
+`/api/source/:slug`, all of which came *after* it — went to
+[a second review](#gpt-sols-second-review-2026-08-26-three-probes-that-landed), which found real
+problems in all three.
+
+### GPT Sol's second review (2026-08-26): three probes that landed
+
+The first review read the plan and the measurement. This one read the *code*, and then built inputs
+against it. All three landed, and two of them were holes I had just made while closing others —
+which is the argument for a second pass rather than a thorough first one.
+
+**1. Chunk gating let a short page hide behind a long one.** Moving the gate from the page to the
+chunk fixed page boundaries and opened this: a 100-word page keeping every eighth word, followed by
+a perfect 2,700-word page, scores **0.969 for the chunk and 0.130 for the small page** — and passes.
+Averaging by tokens does it, and no better average fixes it, because a short page cannot move a long
+one. So each page is now *also* asked whether its own words appear **anywhere in the chunk's
+output** — boundary-proof, since a paragraph filed under the neighbour is still in the chunk, and
+still fatal to a page nobody read. Both directions are tests.
+
+**2. `bibliographyPages` counted records, not words** — so three tiny `reference` entries could
+outvote two long paragraphs and take a page out of the gate. Worse, Sol's real attack: an
+adversarial PDF with a reference-looking tail in front of real prose, where the model labels the
+tail, the references satisfy the page-set assertion, and the prose goes unchecked. Against that,
+*"the model said so"* is worth nothing — the model is the party being checked. So the **page has to
+corroborate out of its own text layer** before its word is taken:
+
+| Condition | Was | Is |
+|---|---|---|
+| how much of the page is references | 60% of *records* | 80% of *transcribed words* |
+| how near the end | last 3 pages | last 2 pages |
+| what the page itself says | — | ≥ 30% of its own lines carry a year |
+
+That third number is measured rather than guessed: the two reference pages of `harder` are 0.47 and
+0.34, `easy`'s is 0.50, and `easy`'s body pages are 0.00–0.13. The awkward case is `harder` page 7
+at **0.37** — a paper about dated observations reads a lot like a bibliography by this measure — and
+it is precisely why this is one of three conditions rather than the whole test. What is still given
+up: a paragraph of prose at the top of a genuine, year-dense, final-page bibliography.
+
+**3. The duplication guard was defeated in one move.** `withoutRepeats` only dropped exact repeats of
+twenty words or more, so Sol split a complete context page into ten ten-word records and relabelled
+them: every one under the floor, every one kept, and the duplicated page scored 1.0 on recall,
+precision *and* order — because precision now treats the context page as legitimate source text,
+which it is. It now recognises the context page **by its own words**, from the text layer, rather
+than by an exact match against what a previous chunk happened to emit. The twenty-word rule stays as
+the fallback for a scan, which has no text layer to read.
+
+**And one silent-success bug worth its own line.** `tabledata` changed the prompt *and* the schema
+and left `PROMPT_VERSION` at `pdf-v1`, while the chunk cache hashed the version string. Every chunk
+cached under the old prompt would have been replayed as if read under the new one, with nothing
+saying so. The cache key is derived from `SYSTEM` and `SCHEMA` themselves now: a constant that has
+to be remembered is a check that shares its author's blind spot, and the person who forgets to bump
+it is the person who just changed the prompt.
+
+**On security**, Sol called the account *"directionally honest, but incomplete"*, and it was wrong
+about one thing:
+
+- It omitted the **second** unsandboxed parser — `pdf-lib` loads the whole hostile file again, once
+  per chunk, to cut page ranges out of it. Now named.
+- *"The same exposure as clicking the publisher's link"* was unsupported, and the origin is the
+  whole difference: served `inline` from **our** origin, what stands between a hostile PDF and us is
+  the browser viewer's own isolation, which we neither document nor test. Corrected, with the
+  `attachment` trade-off written down.
+- pdf.js `6.2.108` is the patched version for the current high-severity advisory, so there is no
+  version-specific vulnerability outstanding.
 
 ### What the bake-off raised, and what Fable said about it
 
@@ -1475,6 +1533,16 @@ So, three things, in this order:
   3. ON FAILURE ONLY, re-score the failing page's records against the ±1 neighbouring baselines
        and put it in the error: "records claiming page 7 match page 8's baseline at 0.94"
 ```
+
+> [!NOTE]
+> **Steps 2 and 3 are not what was built, and the difference is not a detail.**
+> Running the fourteen-page fixture showed that step 2 cannot be per page — a paragraph crossing a
+> page break is filed under one side or the other and the model and the text layer disagree, so a
+> word-perfect chunk failed twice. The gate is the **chunk**, with a **per-page floor** under it
+> (each page's own words, looked for anywhere in the chunk's output) so that a long good page cannot
+> pay for a short bad one — which is [GPT Sol's probe](#gpt-sols-second-review-2026-08-26-three-probes-that-landed).
+> Step 3 is gone: gating on the chunk answers its question before it is asked.
+> [`src/pdf-score.ts`](../../src/pdf-score.ts) is the current account.
 
 Step 1 is a dozen lines and converts "recall 0.05, mysterious" into a sentence naming the fault.
 Step 3 is the cheap half of content-based alignment: it separates *read well, labelled badly* from
