@@ -470,19 +470,40 @@ than a failure. (This section was revised after GPT Sol's second review — [bel
 
 **Three PDFs, one of each difficulty**, and each must be **obscure enough that a model cannot
 reconstruct text it failed to read** — GPT's point about BERT, which is memorised well enough to
-corrupt the eval. BERT and Nagel stay as *informal probes* (they're already the plan's measurement
-cases); the golden three are:
+corrupt the eval.
 
-| | Shape | What it adds | Licence |
-|---|---|---|---|
-| **easy** | a short, born-digital, single-column paper or essay, 8–12 pages, a few figures, a references list | clean text layer, headings, captions, lists, a references section to *leave out* | CC-BY (PLOS, an ACL Anthology paper nobody cites) — `source.pdf` and `gold.html` committed with attribution |
-| **harder** | an **obscure** two-column paper with figures, tables, footnotes and equations | column order, footnote attachment, tables, maths | CC-BY, committed |
-| **much harder** | an openly licensed or public-domain **scan with no text layer** (archive.org has thousands) | the branch that disables v1's principal check — the highest-risk path, so it belongs in the golden set, not only in the probes | public domain, committed |
+**Chosen 2026-08-26**, each downloaded, page-counted, layout-checked by rendering and hashed:
 
-Nagel's gold is **not committed**: a private repo does not settle JSTOR's terms, and a full-text
-transcription is as sensitive as the PDF. It remains a probe with `source.url + sha256` and no
-gold. **Decided (2026-08-26)**: it stays a probe, and the golden three are obscure, openly-licensed
-documents instead ([below](#gregs-answers-2026-08-26)).
+| | Document | Why it earns the slot |
+|---|---|---|
+| **easy** | Lyn McCredden, *Forms of Memory in Post-colonial Australia* (Coolabah, 2009) — 8pp, 144,779 bytes, `5e0eba41…` | Deliberately unglamorous: single column, born-digital, title/abstract/keywords block, one subheading, running header, page numbers. **This is the one v1 has to get essentially perfect.** CC BY 4.0, and the PDF itself carries an explicit redistribution notice. |
+| **harder** | Alexander G. Keul, *A brief history of ball lightning observations by scientists and trained professionals* (History of Geo- and Space Sciences, 2021) — 14pp, 11,575,040 bytes, `18d0d66a…` | **Genuinely** two-column, verified twice — by x-position histogram *and* by rendering the page and looking at it. Three tables, five captioned figures including a colour reproduction of an 1868 drawing, running headers, footnote-size text, numeric calculations. CC BY 4.0 (Copernicus). |
+| **much harder** | L. N. Fowler, *Utility of Phrenology: A Lecture* (London: W. Tweedie, c. 1873–79), Wellcome Collection — 17pp (16 content + Wellcome's generated rights page), 6,107,493 bytes, `dc66ec70…` | **Zero extractable characters on every content page**, confirmed with pdf.js — so it forces real image reading and disables v1's principal check. A genuine photographic scan: foxing, toning, hyphenation across line-ends. Public Domain Mark. |
+
+Three findings from the hunt worth keeping, because each is a way this could have gone quietly wrong:
+
+- **A PLOS paper looked two-column by x-position histogram and wasn't** — it was a single wide column
+  with a large left margin. Caught only by rendering the page and looking at it. The lesson
+  generalises past fixture-picking: a layout check that never looks at the page can agree with itself.
+- **Internet Archive's mirror of the same Fowler pamphlet was rejected**: IA bakes in an ABBYY OCR
+  text layer, ~3,000 legible characters a page, which would have quietly handed the extractor the
+  answer and defeated the whole point of the slot. Only Wellcome's own generated PDF is image-only.
+- **The ball-lightning PDF is 11.5 MB**, which is over [Vercel's 4.5 MB request-body
+  limit](#upload) — so it is also, for free, the fixture that proves the upload path has to go
+  direct to storage rather than through us.
+
+Runners-up, so nobody re-runs the search: a Pulse review of *Weird Fiction and Science at the Fin de
+Siècle* (3pp, perfect fit, disqualified by an ND clause); Walleczek & von Stillfried on the Radin
+double-slit experiment (18pp, CC BY, genuinely two-column — the reserve if ball lightning proves
+unsuitable). Blocked rather than rejected: MDPI, Taylor & Francis and De Gruyter all refuse
+automated download behind bot challenges, and Lund's OJS instance — which hosts several good short
+CC-BY candidates in the *Journal of Anomalous Experience and Cognition* — has been down for
+maintenance since 2026-08-25 and is worth revisiting.
+
+BERT and Nagel stay as *informal probes* — they are already the plan's measurement cases, and Nagel
+in particular is the kind of document this feature exists for. They are simply not what we score
+against. Nagel's gold is **not committed**: a private repo does not settle JSTOR's terms, and a
+full-text transcription is as sensitive as the PDF.
 
 **How a gold is made.** The first draft had one frontier model transcribe the whole PDF in one
 call. That repeats the exact failure v1 is built around — long output drifts into summarising late
