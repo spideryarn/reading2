@@ -87,11 +87,26 @@ experiment and a demo. Explicitly *not* time-in-app or articles-completed
 
 ## Q7 — Which model, and how much does a tree cost? <a id="q7"></a>
 
-Unmeasured. A ~54-minute article is on the order of 400 blocks; bottom-up generation is roughly one
-call per node plus one per leaf batch.
+Still unmeasured **for the tree**, but no longer unmeasured for everything. A ~54-minute article is
+on the order of 400 blocks; bottom-up generation is roughly one call per node plus one per leaf batch.
 
-**Recommendation:** measure on the Noema article before optimising. Load the `claude-api` skill for
-current model ids before writing the calls; don't hardcode a model from memory.
+What 2026-08-26 established, from `npm run eval:caching` against the live API
+([evals/results/](../../evals/results/README.md)) — these are *search* calls, not tree generation, so
+they answer the per-token economics rather than the question as asked:
+
+| | tokens | cold | warm | uncached |
+|---|---:|---:|---:|---:|
+| `constitution`, 360 blocks | 47,739 | $0.11945 | $0.00965 | $0.09558 |
+| `noema`, 141 blocks | 18,793 | — | $0.00386 | $0.03769 |
+
+So one pass over the constitution's text costs about **10 cents** uncached, and about **1 cent** once
+the prefix is cached. A tree is more than one pass — the structure call plus a label batch per
+section — but the unit price is now known rather than guessed, and
+[prompt-caching.md](prompt-caching.md) means the repeat passes are the cheap ones.
+
+**What is left:** log a real ingest end to end. `src/pipeline.ts` already logs `inputTokens`,
+`outputTokens`, `cacheReadTokens` and `cacheWriteTokens` per step, so the number now falls out of one
+run rather than needing an experiment built for it.
 
 ---
 

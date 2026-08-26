@@ -166,11 +166,17 @@ the data."
 from `src/chat.ts` and `src/searches.ts`, which use `node:fs/promises` and never read `STORE`. The
 glossary writes are refused loudly only because they go through the store.
 
-**Fixed the same day, in the only place it could go**: `save()` in each of those two modules throws
-the same 501, from a new leaf module `src/store/live.ts` that both they and the store can import
-without closing a cycle. Held by `tests/store-not-migrated.test.ts`. The wiring — which is the real
-end state — is still step 10. See
-[postgres-storage-implementation.md § Step 10](postgres-storage-implementation.md#step-10-chat-searches-and-glossary-lookups-writes).
+**Fixed twice the same day, and the second fix deleted the first.** The interim was a 501 from
+`save()` in each of those two modules, from a new leaf module `src/store/live.ts` that both they and
+the store can import without closing a cycle. Then step 10 landed — `chatStore` and `searchStore`
+wired through `src/store/index.ts`, routes.ts calling them — and the two guards came out again.
+`live.ts` stayed, because the cycle it exists to avoid is still there.
+
+What survived is the test, and only because it was rewritten to stop pinning the scaffolding:
+`tests/store-writes-land-in-postgres.test.ts` asserts the write comes back out of Postgres **and
+that no file appears**, which is what both fixes had in common and what any third would have to
+satisfy too. Its predecessor asserted "the write is refused" and went red when the proper fix
+landed — a test describing *how* a bug was avoided rather than that it was.
 
 The lesson generalises past this bug: **a guard can only be written where the call goes.** Two
 documents proposed extending a guard to calls that never reach it, and both were written by people
