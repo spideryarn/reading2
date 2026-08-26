@@ -605,6 +605,84 @@ from the screen, back on the next reload. It is deleted, with a note in its plac
 empty conversation exists only in the tab that started it, because that is now an invariant two
 files depend on. Found by GPT-5.6, 2026-08-26.
 
+### What a row of the list says, and the delete inside a conversation
+
+Greg, 2026-08-26:
+
+> In the Chat list view, it shows all the chat titles. That has a button to delete chats. Also add a
+> Delete button **within** a chat. And add more metadata about the chats (even if it makes each row
+> multi-line), with a slightly longer title, hover-tooltip, recency (e.g. "3d ago").
+
+A row used to be one line: the title, cut at the panel's width, and a bare number beside it. The
+trouble is what the title *is* — the first thing the reader typed. Days later that is often the
+least useful sentence in the conversation: it says what they went in wanting, not what they came out
+with. So a row is now three lines:
+
+- **the title**, wrapped over two lines rather than cut at one. A stored title is up to sixty
+  characters and the panel fits rather fewer than that on a line, so one line was throwing away the
+  end of the sentence that said what the question was about; two lines shows all of it;
+- **the last thing said in it**, one dimmed line, which is the "where did this get to" the title
+  cannot answer;
+- **turns and recency** — `4 turns · 3 days ago`, using the relative dates from
+  [`relative-time.ts`](../../src/web/relative-time.ts) that the shelf already prints, and `useNow`
+  so that a panel left open does not quietly rot.
+
+The exact timestamps did not go anywhere: they are in the row's hover `title`, along with the whole
+title, which is the same division the shelf makes — the row answers *how long ago*, because that is
+the question a reader is actually asking, and the tooltip keeps the answer they occasionally need.
+
+**The rename and delete icons only appear on hover** — three lines of metadata is enough in a row
+without two permanent buttons competing with it — and they are hidden with `opacity` *and*
+`pointer-events: none`. The second half is the one that matters, and it came out of the review: a
+finger has no hover, so on a tablet the icons would sit invisible at the right edge of every row and
+a tap landing on one of them would delete a conversation with nothing on screen to explain it.
+Transparent is not the same as absent. `:focus-within` brings them back for the keyboard, which
+cannot hover either.
+
+**Delete inside a conversation asks twice.** The list's delete is one press, and that is right
+there: the row is one of several and its title is under the mouse. Inside a conversation the thing
+you are about to destroy is the page you are reading, and there is no Undo strip to offer — unlike a
+shelf card, a deleted conversation is really gone rather than archived. So the head's bin arms on
+the first press (red, and its tooltip changes to say what the next press does) and deletes on the
+second, disarming itself after four seconds. Not `window.confirm`, which blocks the tab and cannot
+be styled. It is keyed by the open thread's id, so changing conversation always gives you an unarmed
+one.
+
+**Driven in a real browser**, on an article with five stored conversations. The three lines are
+there and separated, a long title wraps to two and a short one does not, nothing overflows the panel
+sideways at 1300px, and the icons appear at the top-right of the row — level with the *first* line of
+the title, which is the thing `align-items: flex-start` is for — on hover and on focus alike. The
+tooltip was read off the DOM rather than the screen, because a native `title` does not appear in a
+screenshot; it read exactly:
+
+```
+Summarize the main argument in two sentences.
+
+Started 26 Aug 2026, 15:06
+Last message 26 Aug 2026, 15:29
+6 turns
+```
+
+The header's bin was pressed once and read back: `title` became "Press again to delete this
+conversation" and the class gained `armed`, and it disarmed itself afterwards. There is one thing in
+that worth writing down, because it is the sort of thing that reads as a bug. **In a hidden tab it
+did not disarm on time** — it was still armed at six seconds and at eleven — and went back to grey
+the moment the tab came to the front. That is the browser throttling `setTimeout` in a background
+tab, not the timer being wrong, and it is one more entry in the list
+[browser-testing.md](../project/browser-testing.md) keeps of the ways a hidden tab lies to you. No
+console warnings at all: no key warnings, and no nested-interactive complaint, which is the one a row
+with a button beside a button would have earned.
+
+**What was tried and backed out.** The stored title cut was going to go from sixty characters to
+ninety, with `titleFrom` moved into a shared pure module so that the optimistic title the client
+writes and the one the server stores stopped being two implementations of the same rule. The review
+killed it on scope rather than on merit: it touches `src/chat.ts`, which at the time held another
+agent's uncommitted removal of the not-migrated guard, and there is no way to commit half a file
+safely in a shared tree — see [version-control.md](../project/version-control.md). It is worth doing
+on its own once that has landed, and it would carry a real bug with it: **a rename longer than the
+cut is displayed and sent whole**, while both stores apply `titleFrom`, so it stays long until the
+next reload and then changes under the reader.
+
 ## What is still open
 
 - **Three of the review's fixes have no regression test**, because this repo has no way to render a
