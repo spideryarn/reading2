@@ -56,23 +56,76 @@ shell profile reaches every process you ever start, and a *login* shell re-expor
 child that was deliberately given a sanitised environment — which is measured in
 [codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md#it-is-not-sufficient-and-here-is-the-measurement).
 
+### `.env.local` beats what the shell exported
+
+> Where are we getting OPENROUTER_API_KEY from? Use the one in .env.local for local stuff.
+>
+> — Greg, 2026-08-26
+
+**This reversed on 2026-08-26**, and the reversal is worth a paragraph because the old rule sounded
+more sensible than it was. `src/env.ts` used to say *"a variable already in the environment wins …
+`.env.local` is the convenience, not the authority"*, so that `OPENROUTER_API_KEY=… npm run dev`
+would do what it looks like it does.
+
+The trouble is that a deliberate `FOO=x npm run dev` and a line in `~/.zshrc` are **the same thing**
+to a child process. On this machine both `~/.zshrc` and `~/.zprofile` exported an
+`OPENROUTER_API_KEY` that was a *different key on a different OpenRouter account* from the one in
+`.env.local` — so every command in every shell used the wrong account, and the file that names the
+key was ignored. It surfaced as an eval that could not reach Voyage at all, returning
+`404 No endpoints available matching your guardrail restrictions`, which reads exactly like a
+mistyped model id and is really one account's privacy settings refusing a provider the other allows.
+
+So the file wins, and **when it overrides something it says so on stderr, by name and never by
+value**:
+
+```
+[env] .env.local overrode OPENROUTER_API_KEY from the shell environment.
+```
+
+One thing still beats the file: a variable **this process set for itself** after startup. `env.ts`
+snapshots the environment at module load, so "unchanged since startup" means inherited and loses,
+while "different from the snapshot" means deliberate and wins. Without that,
+`tests/explain.test.ts` — which sets `OPENROUTER_API_KEY = "test-key"` and then calls code that
+loads the file — would have had the real key put back underneath it, and a test that makes no model
+call could have started making one.
+
+**To override for one command, edit `.env.local`.** Prefixing the command no longer does it, which
+is the price of the file being authoritative, and the warning above tells you when it bit.
+
+In production there is no `.env.local`, so `process.env` is the only source and none of this
+applies.
+
 ## Which model everything uses
 
-**One file: [`src/models.ts`](../../src/models.ts).** Every in-app call is Claude Sonnet, named
-there in both spellings the app needs — `claude-sonnet-5` for the Anthropic SDK (the pipeline
-stages) and `anthropic/claude-sonnet-5` for OpenRouter (explain and chat). Change it there and
-everything moves together; before 2026-08-25 the same constant was declared separately in four
-files and one of them had drifted a version behind.
+**One file: [`src/models.ts`](../../src/models.ts).** It names two tiers and a table saying which
+tier each job is on. Change it there and everything moves together; before 2026-08-25 the same
+constant was declared separately in four files and one of them had drifted a version behind.
 
-Two things that file will tell you and this one will not: why the two spellings are not derived
-from each other, and why editing that line marks stored tweet threads stale.
+| Tier | The model | Reached through |
+|---|---|---|
+| **capable** | Claude Sonnet 5 — `claude-sonnet-5`, or `anthropic/claude-sonnet-5` | the Anthropic SDK *and* OpenRouter, one spelling each |
+| **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter only |
 
-Per-call overrides, for a one-off comparison run:
+**Every job is on the capable tier today.** The quick tier is about a tenth the price and nothing
+here has been measured on it, so it exists as a named option rather than as a change: moving a job
+means running an eval under [`evals/`](../../evals/README.md) first and writing down what it cost.
+Greg, 2026-08-26 — *"use your judgment about which tasks to use for which (default to capable-model
+for now)."*
+
+Four things that file will tell you and this one will not: why the two spellings are not derived
+from each other, why the quick tier has no Anthropic-SDK spelling *and cannot have one*, why the
+provider pin and the cache breakpoint have to move with the model, and why editing the capable
+model marks stored tweet threads stale.
+
+Per-call overrides, for a one-off comparison run. These take a model id, not a tier, and they
+bypass the table entirely:
 
 | Variable | Overrides |
 |---|---|
 | `SPIDERYARN_EXPLAIN_MODEL` | the explain-a-passage call |
 | `SPIDERYARN_CHAT_MODEL` | the chat |
+| `SPIDERYARN_SEARCH_MODEL` | the meaning-based passage search |
+| `SPIDERYARN_PIPELINE_EFFORT` | all three article-reading stages' effort at once |
 
 ## The database, locally
 
