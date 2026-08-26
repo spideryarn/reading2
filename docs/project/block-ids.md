@@ -79,25 +79,39 @@ several identical short paragraphs cannot hand the same id to two blocks.
 ### Two passes, and the second one refuses to guess
 
 ```
-  pass 1   the text exactly as written (or, with no text, the src)   → keep the id
-  pass 2   the same words with case and punctuation folded away,
-           and only where one old block and one new block claim it   → keep the id
-  else                                                               → mint a fresh one
+  pass 1   the tag + the text exactly as written (or, with no text, the src)  → keep the id
+  pass 2   the tag + the same words, case and punctuation folded away,
+           and only where one old block and one new block claim it            → keep the id
+  else                                                                        → mint a fresh one
 ```
 
-**Pass one needs no judgement**, which is why it goes first: two runs that produced the same
+**Pass one asks the least of us**, which is why it goes first: two runs that produced the same
 paragraph agree on it exactly. It is also what stops two paragraphs trading ids when a re-render
 merely reorders them.
 
+**The tag is part of both keys.** Text alone is not enough: `<h2>Same words</h2>` and
+`<p>Same words</p>` keyed identically, so swapping them swapped their ids while reporting a clean
+carry-over. Two blocks with the *same* tag that really do read alike still share a key and still
+take their ids in order — that is right, because they are alike, and minting instead would drop the
+id of every repeated `<li>Yes</li>` on the page.
+
 **Pass two is the drift allowance** — a curly apostrophe going straight, an entity decoding
-differently, a line break moving. The fold is Unicode-aware: NFKC, then everything that isn't a
-letter, number, mark or space removed.
+differently, a ligature composing. The fold is Unicode-aware: NFKC, then everything that isn't a
+letter, number, mark or space removed. A folded key with no letter or number in it is thrown away
+rather than used, because `❤️` and `☀️` both fold to the same invisible variation selector.
 
 **The ambiguity rule is the part with design in it.** Folding creates equivalence classes the raw
 text does not have — `Ⅳ` and `IV` both become `iv`, `①` and `1` both become `1` — so one bucket can
 hold two genuinely different paragraphs. When it does, stage 3 **mints rather than choosing**. That
 follows the rule this page states everywhere else: a lost anchor is safer than one silently attached
 to a different claim.
+
+**What this still does not promise.** NFKC folds compatibility characters, so an edit from `x²` to
+`x2` carries the old id onto changed text. That is the trade for folding `ﬁ` to `fi`, which is real
+extraction drift and about to be much more common — see
+[pdf-ingestion.md](../plans/pdf-ingestion.md). And an id already in the document is trusted, except
+that a *duplicate* of one is not: the second element carrying it mints, because two blocks with one
+id corrupts every artefact keyed on it.
 
 Until 2026-08-26 there was one pass, the fold deleted every character outside `a-z0-9`, and an
 ambiguous bucket was handed out first-come. In English that stripped punctuation; in Cyrillic, Greek,

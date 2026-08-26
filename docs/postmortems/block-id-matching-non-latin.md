@@ -4,10 +4,11 @@
 Nobody has pasted a Russian article in yet. When they do, every paragraph in it will lose its id on
 every re-extraction, and some of them will hand their id to the wrong paragraph on the way.
 
-> **Fixed the same day**, in [`src/blocks.ts`](../../src/blocks.ts) — all three parts below, with
-> eight tests in [`tests/blocks.test.ts`](../../tests/blocks.test.ts) that were red first. See
-> [what landed](#what-landed). Everything in the present tense above that line describes the code as
-> it was.
+> **Fixed the same day**, in [`src/blocks.ts`](../../src/blocks.ts) — all three parts below, plus
+> four more that a cross-family review of the landed code turned up
+> ([the second review](#the-second-review-and-four-more-ways-to-guess)). Fifteen tests in
+> [`tests/blocks.test.ts`](../../tests/blocks.test.ts), red first. See [what landed](#what-landed).
+> Everything in the present tense above this line describes the code as it was.
 
 The line was [`src/blocks.ts:84`](../../src/blocks.ts):
 
@@ -220,6 +221,41 @@ every id stripped out — the re-extraction case:
 The counts the estimate predicted, and the one casualty is the horizontal rule that has never had
 anything to match on. `npm test` is green apart from one pre-existing failure in another agent's
 file; `npm run lint` on `src/blocks.ts` reports exactly what it reported before.
+
+## The second review, and four more ways to guess
+
+GPT Sol reviewed the landed code the same afternoon (`gpt-5.6-sol`, high effort, read-only, against
+the diff rather than the plan) and opened **"fix these first"**. It was right four times, and each
+one is the same shape as the original bug: a confident carry-over onto content a reader would call
+different, reported as a success.
+
+| What it found | Why it happened | What it does now |
+|---|---|---|
+| `<h2>Same words</h2>` and `<p>Same words</p>` **swap ids** when re-rendered in the other order | the key was the text alone, so pass one — the pass with "no judgement" in it — was quietly guessing | the **tag is part of both keys** |
+| A document arriving with **the same `spya-` id on two elements** emitted two blocks with one id, `reused: 2` | `taken` is seeded from every id in the document, so it cannot answer "has a block been given this yet?" | a separate `assigned` set; the second occurrence mints |
+| `❤️` and `☀️` **carry the same id** | the fold strips both symbols and keeps U+FE0F, which is a mark, and marks are kept for Devanagari's sake — so both keys are one invisible character | a folded key with **no letter or number** in it is discarded |
+| `<span>\u200B</span>` became a paragraph; `<p><img>\u200B</p>` stopped being image-only | `hasContent` was `/\S/u`, and a zero-width space, a soft hyphen and a lone variation selector are all non-whitespace | strip `\p{Default_Ignorable_Code_Point}` first |
+
+Three of its other suggested tests turned out to pass already — folded drift in Cyrillic, a lopsided
+folded bucket in either direction, and the exact pass skipping past an id the document had reused.
+They are in the suite now anyway, because a behaviour nobody has pinned is a behaviour that can
+change without anyone noticing.
+
+**Where it was pushed back on.** Sol wanted *any* exact bucket that is not one-old-to-one-new to
+mint, and NFC rather than NFKC.
+
+- **Exact buckets stay first-come**, now that the tag is in the key. Two `<li>Yes</li>` items really
+  are alike; minting for them would drop the ids of every repeated short item on the page, on every
+  re-extraction, to protect against a case where the anchor lands on text that says the same thing.
+- **NFKC stays**, and the reason is the next feature rather than this one. NFC composes NFD `café`,
+  which is the case that made normalisation necessary at all, but it does not fold `ﬁ` to `fi` — and
+  a ligature surviving into extracted text is ordinary in a PDF. Sol's counter-example, `x²` editing
+  to `x2` and keeping its id, is real and is now written down in
+  [block-ids.md](../project/block-ids.md#two-passes-and-the-second-one-refuses-to-guess) as the cost.
+
+**And one claim of mine it deflated**, which is the useful kind of correction: "pass one needs no
+judgement" was in this file and in block-ids.md, and it was false in exactly the case the tag now
+covers. Both now say "pass one asks the least of us".
 
 ## Sequencing
 

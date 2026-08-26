@@ -408,3 +408,94 @@ describe("text in a script other than Latin", () => {
     expect(second.stats.carried).toBe(0);
   });
 });
+
+/**
+ * GPT Sol reviewed the fix above and found four more wrong-anchor paths in the
+ * same matcher, 2026-08-26. Each one carries a real id onto content a reader
+ * would call different, and every one of them reports success.
+ * See docs/postmortems/block-id-matching-non-latin.md § The second review.
+ */
+describe("the matcher's remaining ways to guess", () => {
+  it("does not trade ids between a heading and a paragraph that read alike", () => {
+    // Both sides are exact matches, so the fold's ambiguity rule never sees
+    // them. What tells them apart is the tag, and the key did not carry it.
+    const before = `<article><h2>Same words</h2><p>Same words</p></article>`;
+    const after = `<article><p>Same words</p><h2>Same words</h2></article>`;
+    const first = splitIntoBlocks(before);
+    const second = splitIntoBlocks(after, first.blocks);
+    const idOf = (r: typeof first, tag: string) => r.blocks.find((b) => b.tag === tag)!.id;
+    expect(idOf(second, "h2")).toBe(idOf(first, "h2"));
+    expect(idOf(second, "p")).toBe(idOf(first, "p"));
+  });
+
+  it("never emits one id twice, even when the document arrives with a duplicate", () => {
+    // Nothing stops an author, a CMS or a bad hand-edit putting the same id on
+    // two elements. Seeding `taken` from a Set hid it: both were "already
+    // ours", both were reused, and blocks.json came out with a duplicate key
+    // that would corrupt every artefact built on it.
+    const { blocks, stats } = splitIntoBlocks(
+      `<article><p id="spya-aaaaaa">one</p><p id="spya-aaaaaa">two</p></article>`,
+    );
+    expect(new Set(blocks.map((b) => b.id)).size).toBe(blocks.length);
+    expect(stats.reused).toBe(1);
+    expect(stats.minted).toBe(1);
+  });
+
+  it("carries an id through ordinary punctuation drift in Cyrillic", () => {
+    // The fold's actual job, in a script the old one deleted. Exact matching
+    // cannot do this one, so it proves pass two runs at all.
+    const first = splitIntoBlocks(`<article><p>Это — тест матчера.</p></article>`);
+    const second = splitIntoBlocks(`<article><p>ЭТО - тест матчера!</p></article>`, first.blocks);
+    expect(second.blocks[0]?.id).toBe(first.blocks[0]?.id);
+    expect(second.stats.carried).toBe(1);
+  });
+
+  it("mints when a folded bucket is lopsided in either direction", () => {
+    // Two old, one new — and one old, two new. Both used to be decided by
+    // whichever `.shift()` happened to reach first.
+    const twoOld = splitIntoBlocks(`<article><p>Note ①.</p><p>Note 1.</p></article>`);
+    const oneNew = splitIntoBlocks(`<article><p>Note ①!</p></article>`, twoOld.blocks);
+    expect(oneNew.stats.minted).toBe(1);
+    expect(oneNew.stats.carried).toBe(0);
+
+    const oneOld = splitIntoBlocks(`<article><p>Note ①.</p></article>`);
+    const twoNew = splitIntoBlocks(`<article><p>Note ①!</p><p>Note 1!</p></article>`, oneOld.blocks);
+    expect(twoNew.stats.minted).toBe(2);
+    expect(twoNew.stats.carried).toBe(0);
+  });
+
+  it("does not carry an id between two different emoji", () => {
+    // U+FE0F is a mark, so keeping \p{M} kept it — and stripping the heart and
+    // the sun left both paragraphs keyed on the same invisible character. One
+    // old, one new, a confident match, and completely different content.
+    const first = splitIntoBlocks(`<article><p>❤️</p></article>`);
+    const second = splitIntoBlocks(`<article><p>☀️</p></article>`, first.blocks);
+    expect(second.blocks[0]?.id).not.toBe(first.blocks[0]?.id);
+  });
+
+  it("treats invisible characters as no content at all", () => {
+    // Zero-width space, soft hyphen and a lone variation selector are all
+    // non-whitespace to /\S/, so a presence test built on it admits paragraphs
+    // that render as nothing.
+    for (const invisible of ["​", "­", "️", "‍"]) {
+      const { blocks } = splitIntoBlocks(`<article><span>${invisible}</span></article>`);
+      expect(blocks.length, JSON.stringify(invisible)).toBe(0);
+    }
+    const { blocks } = splitIntoBlocks(`<article><p><img src="/x.png">​</p></article>`);
+    expect(blocks[0]?.note).toBe("image-only paragraph");
+  });
+
+  it("skips past a previous id the document has already reused", () => {
+    // Two paragraphs that read identically, one of which kept its id in the
+    // HTML. The other must reach the *second* id in that bucket rather than
+    // failing on the first, which is taken.
+    const twice = `<article><p>Time is short.</p><p>Time is short.</p></article>`;
+    const first = splitIntoBlocks(twice);
+    const keptOne = `<article><p id="${first.blocks[0]!.id}">Time is short.</p><p>Time is short.</p></article>`;
+    const second = splitIntoBlocks(keptOne, first.blocks);
+    expect(second.stats.reused).toBe(1);
+    expect(second.stats.carried).toBe(1);
+    expect(second.stats.minted).toBe(0);
+    expect(new Set(second.blocks.map((b) => b.id)).size).toBe(2);
+  });
+});

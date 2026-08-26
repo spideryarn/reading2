@@ -106,8 +106,16 @@ const normalize = (s: string) =>
  * asked separately. `normalize` folds `★ ★ ★` and `©` to nothing, so a
  * paragraph made of symbols reads as empty to it — and three call sites used to
  * take that answer as permission to drop the paragraph.
+ *
+ * Bare `/\S/` is not the test, though, which is what the first version of this
+ * used. A zero-width space, a soft hyphen and a lone variation selector are all
+ * non-whitespace and all render as nothing, so `<span>&#8203;</span>` became a
+ * paragraph and `<p><img>&#8203;</p>` stopped being an image-only one. Every
+ * one of those is `Default_Ignorable_Code_Point`, which is precisely the
+ * category "present in the text, absent from the page".
  */
-const hasContent = (s: string) => /\S/u.test(s);
+const IGNORABLE = /\p{Default_Ignorable_Code_Point}/gu;
+const hasContent = (s: string) => /\S/u.test(s.replace(IGNORABLE, ""));
 
 /** Lists nested directly inside this element. */
 const nestedLists = (el: Element) =>
@@ -171,7 +179,7 @@ function describeBlock(
   el: Element,
   text: string,
   proseText: string[],
-): { kind: BlockKind; level?: number; gistable: boolean; note?: string } {
+): { kind: BlockKind; level: number | undefined; gistable: boolean; note: string | undefined } {
   let { kind, level } = classify(el);
   let gistable = true;
   let note: string | undefined;
@@ -303,24 +311,40 @@ export interface SplitResult {
  * hand the same id to two blocks.
  */
 /**
- * Pass one's key: the text as written, whitespace collapsed. Two runs that
- * produced the same paragraph agree here, and an exact agreement is the only
- * kind that needs no judgement at all.
+ * Pass one's key: the tag, plus the text as written with whitespace collapsed.
+ * Two runs that produced the same paragraph agree here.
+ *
+ * **The tag is in the key because the text alone is not enough**, which GPT
+ * Sol's review of the first version of this file caught: `<h2>Same words</h2>`
+ * and `<p>Same words</p>` keyed identically, so re-rendering them the other way
+ * round swapped their ids and reported `carried: 2`. Two paragraphs that really
+ * do read alike still share a key, and still take their ids in order — that is
+ * correct, because they *are* alike, and minting instead would drop the ids of
+ * every repeated `<li>Yes</li>` on the page.
  */
-function exactKey(text: string, html: string): string | null {
+function exactKey(tag: string, text: string, html: string): string | null {
   const written = text.replace(/\s+/gu, " ").trim();
-  if (written) return `x:${written}`;
+  if (written) return `x:${tag}:${written}`;
   // Images and rules carry no text, so match them on what they point at —
   // otherwise every figure is re-minted on each re-extraction and any ToC row
   // aimed at a diagram goes stale.
   const src = /\bsrc="([^"]+)"/.exec(html)?.[1];
-  return src ? `s:${src}` : null;
+  return src ? `s:${tag}:${src}` : null;
 }
 
-/** Pass two's key: the same words, once punctuation and case are folded away. */
-function foldedKey(text: string): string | null {
+/**
+ * Pass two's key: the same words, once punctuation and case are folded away.
+ *
+ * **A key with no letter or number in it is not a key**, and returning one is
+ * how `❤️` and `☀️` came to share an id: the fold strips both symbols and keeps
+ * the variation selector, because U+FE0F is a mark and marks are kept for
+ * Devanagari's sake. One old block, one new one, an unambiguous bucket, and
+ * completely different content. Anything that folds down to marks and spaces
+ * alone gets a fresh id instead.
+ */
+function foldedKey(tag: string, text: string): string | null {
   const words = normalize(text);
-  return words ? `f:${words}` : null;
+  return words && /[\p{L}\p{N}]/u.test(words) ? `f:${tag}:${words}` : null;
 }
 
 function bucketBy<T>(items: T[], key: (item: T) => string | null): Map<string, T[]> {
@@ -336,6 +360,7 @@ function bucketBy<T>(items: T[], key: (item: T) => string | null): Map<string, T
 }
 
 interface Candidate {
+  tag: string;
   text: string;
   html: string;
 }
@@ -387,10 +412,10 @@ function carryOverIds(
 
   // Pass one. Each previous id is consumed once, so a page with several
   // identical short paragraphs cannot hand the same id to two blocks.
-  const byExact = bucketBy(previous, (b) => exactKey(b.text, b.html));
+  const byExact = bucketBy(previous, (b) => exactKey(b.tag, b.text, b.html));
   const unmatched: number[] = [];
   candidates.forEach((c, i) => {
-    const key = exactKey(c.text, c.html);
+    const key = exactKey(c.tag, c.text, c.html);
     const bucket = key === null ? undefined : byExact.get(key);
     let id: string | undefined;
     while (bucket?.length && id === undefined) {
@@ -404,9 +429,9 @@ function carryOverIds(
   // Pass two, over what is left on both sides.
   const byFolded = bucketBy(
     previous.filter((b) => !taken.has(b.id)),
-    (b) => foldedKey(b.text),
+    (b) => foldedKey(b.tag, b.text),
   );
-  const claimants = bucketBy(unmatched, (i) => foldedKey(candidates[i]!.text));
+  const claimants = bucketBy(unmatched, (i) => foldedKey(candidates[i]!.tag, candidates[i]!.text));
   for (const [key, indices] of claimants) {
     const bucket = byFolded.get(key);
     if (indices.length !== 1 || bucket?.length !== 1) continue; // ambiguous → mint
@@ -465,18 +490,29 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
   // Three ways to get an id, in descending order of confidence: it is already
   // in the document; the previous run had a block with these words; or this is
   // genuinely new text.
+  /* `taken` is seeded from every id in the document, so it cannot answer "has
+     this one been given to a block yet?" — and a document can arrive with the
+     same id on two elements, from a hand-edit or a CMS that duplicated a node.
+     Both used to be reused, and blocks.json came out with a duplicate key that
+     would corrupt everything addressed by it. The second one mints. */
+  const assigned = new Set<string>();
   const ids: (string | undefined)[] = found.map(({ el }) => {
     const existing = el.getAttribute("id");
-    if (!isSpideryarnId(existing)) return undefined;
+    if (!isSpideryarnId(existing) || assigned.has(existing!)) return undefined;
     reused++;
     taken.add(existing!);
+    assigned.add(existing!);
     return existing!;
   });
 
   const pending = ids.flatMap((id, i) => (id === undefined ? [i] : []));
   const recovered = carryOverIds(
     previous,
-    pending.map((i) => ({ text: found[i]!.text, html: found[i]!.content.outerHTML })),
+    pending.map((i) => ({
+      tag: found[i]!.el.tagName.toLowerCase(),
+      text: found[i]!.text,
+      html: found[i]!.content.outerHTML,
+    })),
     taken,
   );
   pending.forEach((i, n) => {
