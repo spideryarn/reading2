@@ -172,16 +172,16 @@ describe("fitView in a mode — the band replaces the columns", () => {
     // No gist columns at all — they are not squeezed, they are gone.
     expect(f.columns).toEqual([]);
     expect(f.modeW).toBe(MODE_IDEAL);
-    // 1600 - 208 of spine - 400 of band.
-    expect(f.widths).toEqual([992]);
+    // 1600 - 24 of spine - 400 of band.
+    expect(f.widths).toEqual([1176]);
     expect(f.overflowing).toBe(false);
     expect(f.minWidth).toBe(1600);
   });
 
   it("the band gives way to the prose before the prose gives way to it", () => {
-    // 1150 - 208 spine = 942 available; the prose floor is 544, so the band
+    // 966 - 24 spine = 942 available; the prose floor is 544, so the band
     // takes 398 rather than its ideal 400.
-    const f = band(1150);
+    const f = band(966);
     expect(f.modeW).toBe(398);
     expect(f.widths).toEqual([544]);
     expect(f.overflowing).toBe(false);
@@ -196,13 +196,12 @@ describe("fitView in a mode — the band replaces the columns", () => {
     expect(f.overflowing).toBe(true);
   });
 
-  /* The ToC layout has a tie-break that keeps the rail narrow when widening it
-     would cost a column — widening the window must never REMOVE context. There
-     are no columns to lose in a mode, so the rule does not apply and the labels
-     appear as soon as they fit. */
-  it("keeps the spine's labels wherever they fit", () => {
-    expect(band(1100).spine).toBe("full");
-    expect(band(1099).spine).toBe("narrow");
+  /* There is one rail since 2026-08-26 — the labelled form is gone — so in a
+     mode the rail is simply on unless the reader turned it off. */
+  it("shows the rail at every width", () => {
+    expect(band(1100).spine).toBe("on");
+    expect(band(1099).spine).toBe("on");
+    expect(band(600).spine).toBe("on");
   });
 
   /* `?spine=0` is a choice about the page, not about the mode you are in, so
@@ -218,7 +217,7 @@ describe("fitView in a mode — the band replaces the columns", () => {
       showSpine: false,
     });
     expect(f.spine).toBe("off");
-    // The 208px goes to the prose; the band keeps its ideal width.
+    // The 24px goes to the prose; the band keeps its ideal width.
     expect(f.modeW).toBe(MODE_IDEAL);
     expect(f.widths).toEqual([1200]);
     expect(f.minWidth).toBe(1600);

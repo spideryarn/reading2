@@ -322,20 +322,26 @@ Four decisions worth keeping:
   once one is open the neighbours open with no second wait and running the pointer down the rail
   reads the article's sections one after another. Built on Floating UI — why that library, and what
   it is doing for us: [tooltips.md](tooltips.md).
-- **Where you are is spelled out in a header strip** at the top of the rail, naming the current L1
-  and L2. The bands can be one pixel tall; that strip never is. This is what lets the rail stay
-  strictly proportional without becoming unreadable.
-- **The labels appear only when they are free.** The rail collapses to a tick-only 1.5rem below
-  1100px, and *also* at any width where widening it from 1.5rem to 13rem would cost a gist column —
-  which for a three-level tree means the labels arrive at about 1280px, not 1100px. A plain width
-  threshold made the fit non-monotonic: at 1099px you got three gist columns and at 1100px one, so
-  dragging the window *wider* removed two levels of context and handed back a rail nobody had asked
-  for. Whatever the right trade between labels and columns is, "wider window, less article" is not
-  it. An explicit `cols=` skips the check, since a fixed column count can't be reduced by the rail.
-  "Where am I" stays exactly as useful on a small screen; the words are what stops being affordable.
-  (Found by `spideryarn2-cd`, 2026-08-25, by sweeping widths — at any single width the old behaviour
-  looked like a considered trade. The sweep is now a test: `tests/layout.test.ts` asserts that no
-  width ever shows fewer columns than a narrower one.)
+- **There is one rail, and it is the collapsed one** — 1.5rem of bands, ticks and marks, at every
+  window width. Greg, 2026-08-26: *"There are two versions of the Spine — a collapsed and an
+  expanded view. Let's get rid of the expanded view, so it's always collapsed."*
+
+  What went with it: a 13rem form that carried the part titles inside the bands, and a header strip
+  at the top of the rail naming the current L1 and L2. Names now live in the hover card only, which
+  is where a proportional rail was always going to have to put most of them — most bands are too
+  thin for a label even at 13rem, so the wide rail was buying words for the few longest parts at the
+  cost of 184px taken from the reading column on every screen wide enough to trigger it.
+
+  It also deletes the fiddliest arithmetic in [`layout.ts`](../../src/web/layout.ts). Deciding
+  *when* the labels were affordable was a real problem: a plain width threshold made the fit
+  **non-monotonic** — at 1099px you got three gist columns and at 1100px one, because the rail's own
+  growth ate 184px, so dragging the window wider removed two levels of context and handed back a
+  rail nobody had asked for. The fix was to show labels only at widths where they cost no column
+  (~1280px for a three-level tree). With one width there is nothing left to decide. (The
+  non-monotonicity was found by `spideryarn2-cd`, 2026-08-25, by sweeping widths — at any single
+  width the old behaviour looked like a considered trade. The sweep is still a test:
+  `tests/layout.test.ts` asserts that no width ever shows fewer columns than a narrower one, which
+  is the check that would catch the next width spent conditionally.)
 - **In outline mode it disappears by default.** The table there *is* a whole-article overview, so a
   bird's-eye rail beside it would be a second copy of the same thing; the width goes back to the
   columns. Decided in [`layout.ts`](../../src/web/layout.ts) § `fitView`, not in the rail itself, so
@@ -348,12 +354,10 @@ Four decisions worth keeping:
   reading mode, and it is what the `auto` control puts back — `auto` now clears `?spine=` as well as
   `?cols=`, and the word `fit` beside the pills means neither has been touched.
 
-  Two things the pill deliberately does *not* do. It says **on or off and nothing else**: whether an
-  on rail shows its labels or collapses to ticks stays with the window width, because that is a
-  question about how much room there is rather than about what the reader wants. And it is the one
-  granularity-bar control that **stays on screen in a mode** (chat, glossary, search, summary),
-  where the rail is otherwise unconditional — the rest are hidden there because the columns they
-  name are gone, which is the opposite case.
+  On or off is the whole of it, and since the expanded rail went there is nothing else it could
+  say. It is the one granularity-bar control that **stays on screen in a mode** (chat, glossary,
+  search, summary), where the rail is otherwise unconditional — the rest are hidden there because
+  the columns they name are gone, which is the opposite case.
 
   One consequence worth knowing before you touch it: the rail's width is taken out of the prose
   column's, so hiding it **rewraps every paragraph in the article**. Every row changes height, which
@@ -473,7 +477,7 @@ So the view now **chooses which columns to show, and how wide**, in
 - **Give up the coarse levels first.** They are what the spine is already showing; the finest gist is
   the one that earns its place next to the paragraph it summarises. So L0 goes, then L1.
 - **The reading column takes the slack**, so the table fills the window exactly when it can and
-  overflows by a known amount when it can't. At 1600px: L0/L1/L2 at 240px and 672px of prose. At
+  overflows by a known amount when it can't. At 1600px: L0/L1/L2 at 240px and 856px of prose. At
   760px: one gist column and prose, fitting exactly. At 700px it overflows by 44px, and that is the
   first width where it does.
 - **Touching a granularity button takes the columns off automatic** and leaves them where you put

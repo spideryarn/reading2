@@ -181,9 +181,11 @@ eventually have to decide whether they are a system or an accident:
   45, the tooltip 80 *because* it must clear the spine and both sticky bars. Written as a comment
   on one line of `styles.css`, nowhere else. This is the most likely thing to break next.
 - **Spacing.** No scale. `rem` values chosen per rule.
-- **Breakpoints.** Exactly one, `max-width: 760px`, plus the collapse widths the spine and the
-  columns compute in JS rather than in CSS ([`layout.ts`](../../src/web/layout.ts)). The
-  interesting responsive behaviour is not in the stylesheet at all.
+- **Breakpoints.** Exactly one, `max-width: 760px`, plus the widths at which the columns are given
+  up, computed in JS rather than in CSS ([`layout.ts`](../../src/web/layout.ts)). The interesting
+  responsive behaviour is not in the stylesheet at all. (The spine used to be in that sentence too,
+  collapsing from 13rem to 1.5rem on width; the expanded rail was deleted on 2026-08-26 and it is
+  now one width, on or off.)
 - **Motion.** Settled, mostly. One global guard in `@layer base` at the foot of
   [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; four
   narrower blocks in `styles.css` remain, for the things that are *wrong* when reduced rather than

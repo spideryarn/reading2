@@ -24,7 +24,7 @@
  * whole length negotiating width — it shrinks the gist columns, and when that
  * is not enough it starts dropping levels. Anything permanent down the left
  * joins that negotiation: a new `--rail-w` term in five CSS rules, a new
- * constant beside `SPINE_FULL`, a new interaction with the spine's three modes,
+ * constant beside `SPINE_W`, a new interaction with the spine's on/off,
  * and a band of window widths where a column is dropped that used to fit. A bar
  * at the bottom takes height, and height is the axis where nothing is scarce —
  * the page simply scrolls. `fitView` never hears about this file.

@@ -27,16 +27,16 @@
  * underneath them, rather than guessing from a viewport breakpoint.
  */
 
-/** px at a 16px root. Mirrors --spine-w in styles.css; change both together. */
-const SPINE_FULL = 208; // 13rem
-const SPINE_NARROW = 24; // 1.5rem
-
 /**
- * Below this the spine's labels cost more width than they are worth and it
- * collapses to ticks. "Where am I" is exactly as useful on a small screen;
- * the words are what stops being affordable.
+ * px at a 16px root. Mirrors --spine-w in styles.css; change both together.
+ *
+ * One width, not two. There used to be a labelled 13rem rail as well, shown
+ * whenever the window could afford it — Greg took it out on 2026-08-26, so the
+ * rail is now always the collapsed one. That deletes a whole negotiation from
+ * this file (labels-versus-a-gist-column, and the non-monotonic fit it caused)
+ * and leaves the spine as a fixed 24px the layout simply subtracts.
  */
-const SPINE_LABELS_MIN_WINDOW = 1100;
+const SPINE_W = 24; // 1.5rem
 
 const GIST_IDEAL = 240; // 15rem — comfortable for a one-sentence gist
 const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
@@ -58,7 +58,7 @@ const PROSE_MIN = 544; // 34rem — the narrowest the reading column may be
 export const MODE_IDEAL = 400; // 25rem
 export const MODE_MIN = 288; // 18rem — narrower and an answer stops reading as prose
 
-export type SpineMode = "full" | "narrow" | "off";
+export type SpineMode = "on" | "off";
 
 export interface Layout {
   /** Explicit pixel widths, one per rendered column, in render order. */
@@ -108,7 +108,7 @@ export function proseVisible(showText: boolean, modeBand: boolean): boolean {
 }
 
 export function spineWidth(mode: SpineMode): number {
-  return mode === "full" ? SPINE_FULL : mode === "narrow" ? SPINE_NARROW : 0;
+  return mode === "on" ? SPINE_W : 0;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -143,8 +143,9 @@ export interface FitInput {
    * comes back. `false` also survives a trip through a mode, where the rail is
    * otherwise unconditional.
    *
-   * It decides on or off and nothing else. Full-vs-narrow stays with the window
-   * width, which is a question about room rather than about preference.
+   * On or off is now the whole of it: there is one rail rather than a labelled
+   * one and a collapsed one, so the window width no longer has anything to say
+   * about the spine.
    */
   showSpine?: boolean | null;
 }
@@ -186,30 +187,18 @@ export function fitView({
    * back to the columns instead. That is what the reader gets by default, and
    * `showSpine` is how they say otherwise in either direction.
    *
-   * Otherwise the labels are affordable only when they cost nothing. The rail
-   * widening from 1.5rem to 13rem eats 184px, which at some widths is exactly a
-   * gist column — and a pure width threshold then makes the fit
-   * **non-monotonic**: at 1099px you got three columns and at 1100px one, so
-   * widening the window *removed* two levels of context. Whatever the right
-   * trade between labels and columns is, "wider window, less article" is not
-   * it, so the labels wait until they are free. In practice that is ~1280px for
-   * a three-level tree.
+   * Automatic is therefore "on wherever there is prose", which is that rule
+   * written as one word. An explicit `?spine=` wins outright, both ways: the
+   * reader may keep the rail in outline mode, and may take it away in reading
+   * mode. Same rule `chosen` follows — the window must not overrule a choice
+   * somebody made.
+   *
+   * The window width is not consulted at all, and used to be: the rail had a
+   * labelled 13rem form that appeared when it was affordable, and deciding
+   * *when* was the fiddliest arithmetic in this file. One width means the
+   * question no longer exists.
    */
-  /** Which of the two on-states an on rail takes. */
-  const labelled: SpineMode =
-    windowWidth >= SPINE_LABELS_MIN_WINDOW &&
-    (chosen !== null ||
-      gistsThatFit(windowWidth - SPINE_FULL) ===
-        gistsThatFit(windowWidth - SPINE_NARROW))
-      ? "full"
-      : "narrow";
-
-  /* Automatic is "on wherever there is prose", which is the outline-mode rule
-     above written as one word. An explicit `?spine=` wins outright, both ways:
-     the reader may keep the rail in outline mode, and may take it away in
-     reading mode. Same rule `chosen` follows — the window must not overrule a
-     choice somebody made. */
-  const spine: SpineMode = (showSpine ?? showText) ? labelled : "off";
+  const spine: SpineMode = (showSpine ?? showText) ? "on" : "off";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   let gists =
@@ -272,14 +261,9 @@ export function fitView({
  *
  * Three things are decided here and each is a judgement rather than arithmetic:
  *
- *  - **The spine keeps its labels** whenever the window is wide enough for
- *    them. The non-monotonic trap the ToC layout works around cannot happen
- *    here — there are no columns to drop, so widening the window can never
- *    take anything away — which means the tie-break that exists over there is
- *    not needed and would only make the rail flicker between two modes as the
- *    band resized. A reader who has hidden the rail still has it hidden here:
- *    `?spine=0` is a choice about the page, not about the mode they happen to
- *    be in, and it is the only thing that turns the rail off in a mode.
+ *  - **The spine is on unless the reader turned it off.** `?spine=0` is a
+ *    choice about the page, not about the mode they happen to be in, and it is
+ *    the only thing that turns the rail off in a mode.
  *  - **The prose wins.** The band shrinks from `MODE_IDEAL` to `MODE_MIN`
  *    before the reading column drops below `PROSE_MIN`, and past that the page
  *    overflows and scrolls rather than either of them getting narrower. Same
@@ -290,12 +274,7 @@ export function fitView({
  *    only other caller did not know about.
  */
 function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
-  const spine: SpineMode =
-    showSpine === false
-      ? "off"
-      : windowWidth >= SPINE_LABELS_MIN_WINDOW
-        ? "full"
-        : "narrow";
+  const spine: SpineMode = showSpine === false ? "off" : "on";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
   const modeW = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
   const proseW = Math.max(PROSE_MIN, avail - modeW);

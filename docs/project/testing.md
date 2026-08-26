@@ -179,6 +179,9 @@ its output over the whole range rather than its value at a few widths someone th
 `fitView` is the case that earned this. It was checked by hand at 1600, 1400, 1000, 860 and 700, and
 looked right at every one. It was wrong between them: the spine's labels appeared at a fixed 1100px
 and the rail's own growth ate two gist columns, so 1099px showed three levels and 1100px showed one.
+(The labelled rail was deleted on 2026-08-26 and the spine is now one fixed width, so that
+particular cliff cannot come back. The sweep stays — it is what would catch the next width somebody
+spends conditionally.)
 Widening the window removed context. **Non-monotonicity is invisible to sampling by construction** —
 every sampled point is individually plausible, and the defect lives only in the relationship between
 them. A sweep from 320 to 2600 asserting "no width ever shows fewer columns than a narrower one"

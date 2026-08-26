@@ -16,12 +16,12 @@ const fit = (o: Partial<FitInput> & { windowWidth: number }) =>
   fitView({ ...article, showText: true, chosen: null, ...o });
 
 describe("the widths granularity-zoom.md promises", () => {
-  it("1600px: three gist columns at 240 and 672 of prose", () => {
+  it("1600px: three gist columns at 240 and 856 of prose", () => {
     const f = fit({ windowWidth: 1600 });
     expect(f.columns).toEqual([0, 1, 2]);
-    expect(f.widths).toEqual([240, 240, 240, 672]);
+    expect(f.widths).toEqual([240, 240, 240, 856]);
     expect(f.overflowing).toBe(false);
-    // Fills the window exactly: 208 of spine + 1392 of table.
+    // Fills the window exactly: 24 of spine + 1576 of table.
     expect(f.minWidth).toBe(1600);
   });
 
@@ -68,6 +68,11 @@ describe("a wider window never shows less of the article", () => {
   // 1100px, and the rail widening from 1.5rem to 13rem ate 184px — so 1099px
   // gave three gist columns and 1100px gave one. Widening the window removed
   // two levels of context, which is indefensible whatever the labels are worth.
+  //
+  // The labelled rail was deleted on 2026-08-26 (Greg: the spine is always the
+  // collapsed one), so the rail is a constant 24px and nothing here can go
+  // non-monotonic any more. The sweep stays: it is cheap, and it is the check
+  // that would catch the next width that gets spent conditionally.
   it("column count is monotonic in window width", () => {
     let prev = 0;
     const regressions: number[] = [];
@@ -83,11 +88,12 @@ describe("a wider window never shows less of the article", () => {
     expect(fit({ windowWidth: 1099 }).columns).toEqual(fit({ windowWidth: 1100 }).columns);
   });
 
-  it("the labels wait until they are free", () => {
-    expect(fit({ windowWidth: 1279 }).spine).toBe("narrow");
-    expect(fit({ windowWidth: 1280 }).spine).toBe("full");
-    // And buying them costs no column.
-    expect(fit({ windowWidth: 1280 }).columns).toEqual([0, 1, 2]);
+  it("the rail is the same width at every window size", () => {
+    for (const w of [700, 1099, 1100, 1279, 1280, 1600, 2400]) {
+      const f = fit({ windowWidth: w });
+      expect(f.spine).toBe("on");
+      expect(f.minWidth - f.tableW).toBe(24);
+    }
   });
 });
 
@@ -135,7 +141,7 @@ describe("the table always has room for its own width", () => {
   it("minWidth covers the rail plus the table at every width", () => {
     for (let w = 320; w <= 2600; w += 7) {
       const f = fit({ windowWidth: w });
-      expect(f.minWidth).toBe(f.tableW + (f.spine === "full" ? 208 : f.spine === "narrow" ? 24 : 0));
+      expect(f.minWidth).toBe(f.tableW + (f.spine === "on" ? 24 : 0));
       expect(f.widths.reduce((a, b) => a + b, 0)).toBe(f.tableW);
     }
   });
@@ -148,7 +154,7 @@ describe("the table always has room for its own width", () => {
  */
 describe("hiding the spine", () => {
   it("is off by default in outline mode and on in reading mode", () => {
-    expect(fit({ windowWidth: 1600 }).spine).toBe("full");
+    expect(fit({ windowWidth: 1600 }).spine).toBe("on");
     expect(fit({ windowWidth: 1600, showText: false }).spine).toBe("off");
   });
 
@@ -156,28 +162,30 @@ describe("hiding the spine", () => {
     const on = fit({ windowWidth: 1600 });
     const off = fit({ windowWidth: 1600, showSpine: false });
     expect(off.spine).toBe("off");
-    expect(off.tableW).toBe(on.tableW + 208);
+    expect(off.tableW).toBe(on.tableW + 24);
     expect(off.minWidth).toBe(1600);
   });
 
   it("stays when asked, even in outline mode where nothing would show it", () => {
     const f = fit({ windowWidth: 1600, showText: false, showSpine: true });
-    expect(f.spine).toBe("full");
+    expect(f.spine).toBe("on");
     // Still the whole outline: the rail is bought out of the detail column.
     expect(f.columns).toEqual([0, 1, 2, 3]);
     expect(f.minWidth).toBe(1600);
   });
 
-  it("says on or off, and leaves full-vs-narrow to the window", () => {
-    expect(fit({ windowWidth: 900, showText: false, showSpine: true }).spine).toBe("narrow");
-    expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("full");
+  // There is one rail rather than a labelled one and a collapsed one, so on is
+  // on at every width — the window has nothing left to say about the spine.
+  it("is the same rail at every width", () => {
+    expect(fit({ windowWidth: 900, showText: false, showSpine: true }).spine).toBe("on");
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("on");
   });
 
   // The reason the parameter has no default: `null` has to keep meaning
   // "nobody has touched this", or the `auto` control has nothing to put back.
   it("absent is not the same as true", () => {
     expect(fit({ windowWidth: 1600, showText: false, showSpine: null }).spine).toBe("off");
-    expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("full");
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("on");
   });
 
   it("keeps the fit monotonic in window width", () => {

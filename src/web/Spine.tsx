@@ -4,8 +4,14 @@
  * It read "always visible" here until 2026-08-26, and that was already only
  * nearly true (outline mode drops it); it is now a `Spine` pill in the controls
  * bar and a `?spine=` parameter, so the reader can put it away in any mode.
- * Whether it is on screen at all, and whether it shows labels or ticks, are
- * both decided in layout.ts § fitView — never here.
+ * Whether it is on screen at all is decided in layout.ts § fitView — never here.
+ *
+ * **There is one rail, and it is the collapsed one.** Until 2026-08-26 a wide
+ * enough window got a 13rem version carrying part labels in the bands and a
+ * header strip naming the current L1 and L2; Greg took that form out, so the
+ * rail is always the 1.5rem strip of bands, ticks and marks. What a band is
+ * lives in its hover card, which is where a proportional rail always had to put
+ * it — most bands were too thin for a label even at 13rem.
  *
  * Greg, 2026-08-25:
  *
@@ -38,11 +44,10 @@
  * See BandCard at the bottom of this file, and docs/project/tooltips.md.
  *
  * L2 lives in the rail as tick marks and invisible click targets, never as
- * labels in the band. Labels in the band cannot work: children exactly
- * partition their parent, so the first child's label always starts at exactly
- * the same pixel as its parent's and the two collide. The current L1 and L2 are
- * named in the header strip at the top of the rail instead, where they are
- * legible however thin the band is.
+ * labels in the band. That was true of L1 labels too, in the end: children
+ * exactly partition their parent, so the first child's label always starts at
+ * exactly the same pixel as its parent's and the two collide. Names live in the
+ * hover card, where they are legible however thin the band is.
  *
  * ## Search results down the rail
  *
@@ -198,8 +203,6 @@ interface Props {
   outline: OutlineEntry[];
   /** Changes whenever the table's layout could have changed, forcing a re-measure. */
   layoutKey: string;
-  /** Collapsed to a tick-only rail, with no room for labels. */
-  narrow: boolean;
   /**
    * Which searches matched in which blocks — `blockMatches` in search-hits.ts.
    *
@@ -218,7 +221,7 @@ const READING_LINE = 0.35;
 /** Nothing to draw, and a stable identity so the memos below do not rerun. */
 const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
 
-export function Spine({ outline, layoutKey, narrow, matches = NO_MATCHES, onJump }: Props) {
+export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [viewportH, setViewportH] = useState(() => window.innerHeight);
@@ -281,18 +284,15 @@ export function Spine({ outline, layoutKey, narrow, matches = NO_MATCHES, onJump
     [docHeight],
   );
 
-  /** The bands the reading line currently falls in. */
+  /** The part the reading line currently falls in — the band drawn as active. */
   const here = useMemo(() => {
-    if (!metrics) return { l1: null as Band | null, l2: null as Band | null };
+    if (!metrics) return null;
     const pos = scrollY + viewportH * READING_LINE - metrics.docTop;
     const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
     // Past the end of the last band (a short document, or the footer) we stay
     // on the last part rather than showing nothing.
     const last = metrics.l1[metrics.l1.length - 1] ?? null;
-    return {
-      l1: metrics.l1.find(inBand) ?? (pos >= 0 ? last : metrics.l1[0] ?? null),
-      l2: metrics.l2.find(inBand) ?? null,
-    };
+    return metrics.l1.find(inBand) ?? (pos >= 0 ? last : metrics.l1[0] ?? null);
   }, [metrics, scrollY, viewportH]);
 
   /**
@@ -348,39 +348,24 @@ export function Spine({ outline, layoutKey, narrow, matches = NO_MATCHES, onJump
 
   return (
     <aside
-      /* `marked` only while there is something in the lanes — it is what pulls
-         the part labels clear of them, and paying that width on every article
-         nobody is searching would shorten every label in the app for a feature
-         that is off. */
-      className={`spine${narrow ? " narrow" : ""}${marks.length > 0 ? " marked" : ""}`}
+      className="spine"
       aria-label="Article outline"
       /* The whole rail is one keyboard-navigation zone, meaning L1: it draws
-         parts as bands and names the current one in the header strip, so ↑ / ↓
-         over it step part by part. Its click targets are L2 — finer than its
+         parts as bands and marks the current one, so ↑ / ↓ over it step part by
+         part. Its click targets are L2 — finer than its
          bands, because a 1px tick is unhittable — but that is a pointing
          concession, not what the rail is *about*. See keynav.ts. */
       data-nav-depth={1}
     >
-      {/* Where you are, spelled out. The bands below can be one pixel tall;
-          this never is. */}
-      {!narrow && (
-        <div className="spine-here">
-          <div className="spine-here-part">{here.l1?.entry.node.title ?? "—"}</div>
-          {here.l2 && <div className="spine-here-sub">{here.l2.entry.node.title}</div>}
-        </div>
-      )}
-
       <div className="spine-track">
         {metrics.l1.map((b) => {
-          const active = b.entry.node.id === here.l1?.entry.node.id;
+          const active = b.entry.node.id === here?.entry.node.id;
           return (
             <div
               key={b.entry.node.id}
               className={`spine-part${active ? " active" : ""}`}
               style={{ top: pct(b.top), height: pct(b.height) }}
-            >
-              <span className="spine-label">{b.entry.node.title}</span>
-            </div>
+            />
           );
         })}
 

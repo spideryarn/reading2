@@ -24,19 +24,19 @@
  * `left: calc(var(--spine-w) + var(--mode-w))`. Nothing is ever painted there.
  * See styles.css § shell.
  *
- * **But `--spine-w` is not a constant.** layout.ts narrows the spine to 1.5rem
- * and then drops it entirely as the window shrinks (`fitView`), and at that
- * point the corner belongs to the masthead and the controls bar again. So both
- * of those reserve the space instead, with one expression written twice:
+ * **But `--spine-w` is not a constant.** layout.ts drops the spine entirely in
+ * outline mode, and whenever the reader hides it (`fitView`), and at that point
+ * the corner belongs to the masthead and the controls bar again. So both of
+ * those reserve the space instead, with one expression written twice:
  *
  *     padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem - var(--spine-w) - var(--mode-w)))
  *
  * Both bars are positioned at `left: calc(--spine-w + --mode-w)`, so
  * `--logo-w` minus that offset is exactly how far the logo reaches into them,
  * and the `+ 1.5rem` keeps the gutter those bars have everywhere else rather
- * than letting the title start flush against the wordmark. When the spine is
- * full the whole term goes negative and the ordinary 1.5rem wins — which is
- * what makes the wide case cost nothing rather than needing a second rule.
+ * than letting the title start flush against the wordmark. With a mode band
+ * open the whole term goes negative and the ordinary 1.5rem wins — which is
+ * what makes that case cost nothing rather than needing a second rule.
  * Change `--logo-w` and both bars follow; change the logo's size without
  * changing the token and they will not, and the failure is a wordmark sitting
  * on top of the article's title.

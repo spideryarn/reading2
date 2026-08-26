@@ -71,9 +71,9 @@ whichever column you walk it to.
 | The spine, anywhere on it | **parts (L1)** |
 | The masthead, the controls bar, anywhere else | sections — the same unit `?at=` stores |
 
-The spine is one zone rather than two. It draws parts as bands and names the current one in its
-header strip, so L1 is what it is *about*; its click targets are L2 only because a 1px tick is
-unhittable, which is a pointing concession rather than a statement about the rail
+The spine is one zone rather than two. It draws parts as bands and marks the one you are in, so L1
+is what it is *about*; its click targets are L2 only because a 1px tick is unhittable, which is a
+pointing concession rather than a statement about the rail
 ([`Spine.tsx`](../../src/web/Spine.tsx)).
 
 ## Choosing the level without a mouse
