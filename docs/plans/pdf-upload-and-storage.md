@@ -38,10 +38,10 @@ uncommitted files.
 | `[storage] enabled = true` in [`supabase/config.toml`](../../supabase/config.toml) | **there**, 50 MiB global limit, every `[storage.buckets.*]` still commented out |
 | The `supabase_storage_spideryarn2` container | **running**, and it works — see the probes below |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | **in `.env.local` already** |
-| `@supabase/supabase-js` or `@supabase/storage-js` | **not installed** |
+| `@supabase/supabase-js` | **already a direct dependency** (`^2.112.4`), and `@supabase/storage-js` is installed under it — corrected 2026-08-26 after [Sol's review](#the-cross-family-review-what-sol-said-and-what-changed); this table originally said "not installed" and was wrong |
 | Any `put`/`get` blob seam | **does not exist** — nothing in `src/store/` |
 | A file picker, `/api/upload`, multipart, `FormData` | **none** — no such string anywhere in `src/` |
-| `GET /api/source/:slug` serving a stored PDF | **built**, [`src/routes.ts`](../../src/routes.ts) `sendSource` — reusable unchanged |
+| `GET /api/source/:slug` serving a stored PDF | **built**, [`src/routes.ts`](../../src/routes.ts) `sendSource` — but **not** reusable unchanged: it is hardwired to `fsLocations`, `readRaw` and `readFile`, so it serves only a filesystem-backed article |
 | The whole URL→PDF→article pipeline | **built and measured** — which is the point: stages 3–6 already cannot tell where a PDF came from |
 
 So the work is genuinely the front of the pipe, and only the front.
@@ -76,6 +76,23 @@ happen. Each row is a real request against `http://127.0.0.1:54361`.
 | Is the bucket's MIME allowlist enforced at upload? | **Yes** — `text/plain` into a PDF-only bucket gives `415 InvalidMimeType` |
 | Is the bucket's size limit enforced at upload? | **Yes** — 3 MB into a 1 MB bucket gives `413 EntityTooLarge` |
 | Do the bytes survive intact? | **Yes** — server-side `GET /storage/v1/object/<bucket>/<path>` returned 3,000,009 bytes with a SHA-256 identical to the file that went in |
+| Can a token be **replayed** while the object still exists? | **No** — `409 Duplicate`. The grant is `upsert:false` and the object is the lock |
+| Can a hostile `x-upsert: true` header override that? | **No** — still `409`. The header does not beat the token's baked-in flag |
+| **Can a token be replayed after the object is deleted?** | **Yes — `200`, re-uploaded.** The grant outlives the object it created. This is the one that changes the design |
+| Can a caller mint an upsert-enabled grant? | **No** — `POST …/upload/sign/…` with `{"upsert":true}` returns `200` and a payload that still says `upsert:false` |
+
+The last four were added on 2026-08-26 **because [Sol's review](#the-cross-family-review-what-sol-said-and-what-changed) pointed out that the original table
+asserted "one-time" while having measured only "path-bound"** — two different properties. Measured,
+they are: path-bound yes, non-upsertable yes, and **one-time only for as long as the object
+survives.**
+
+**What follows from row 3 is a rule, and it is not obvious.** A signed grant is a bearer credential
+live for two hours, and deleting the object it wrote re-arms it. So **nothing may delete an object
+while a grant over its key could still be live** — the orphan sweep's grace period has to exceed the
+two-hour TTL, and a cancelled job must not tidy up its own object promptly. Get that wrong and the
+sequence is: we verify bytes A, a sweep removes them, the still-valid token uploads bytes B to the
+same key, and extraction reads B. We would have checksummed one document and spent model money on
+another.
 
 The probe bucket was deleted afterwards; nothing was left behind.
 
@@ -100,8 +117,9 @@ Two things follow that change the design:
 - **Above ~6 MB Supabase recommends resumable (TUS) uploads**, because a failed plain `PUT`
   restarts from nothing. Our 11.5 MB fixture is over that line. See
   [What we are deliberately not doing in v1](#what-we-are-deliberately-not-doing-in-v1).
-- `@supabase/storage-js` is the Storage-only package, and is what `supabase-js`'s `.storage`
-  wraps. We need no auth, realtime or PostgREST client, so it is the smaller correct dependency.
+- ~~`@supabase/storage-js` is the smaller correct dependency.~~ **Struck 2026-08-26.**
+  `@supabase/supabase-js` is already in `package.json`, so `.storage` is already paid for and a
+  second package would need a measured reason. Use what is there.
 
 ## The shape
 
@@ -199,6 +217,17 @@ adapter's `signUpload` returns a URL to a **local-only** route that says so in i
 live on a serverless host. A seam whose two sides differ in what they can *do* has to say so
 loudly; see [silent-success.md](../reusable/silent-success.md).
 
+**Sol's answer to that is better than the warning: split the interface.** If the filesystem adapter
+cannot implement `signUpload`, `signUpload` does not belong on the same interface as `get`/`put` —
+a health check cannot repair a shape that lies. So: a `RawSourceStore` (bounded read, metadata,
+put-if-absent, remove), a separate `UploadGrantIssuer`, and an upload repository owning claim /
+verify / expire. Two further corrections it makes, both checked: the sketch above has no streaming,
+no abort signal and no way to do its own ranged read; and `head` must distinguish **absent** from
+**Storage returned 503**, which [`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)
+already does and is worth copying rather than reinventing. Blob selection should also **not** hang
+off `SPIDERYARN_STORE`, which selects article reads
+([`src/store/live.ts`](../../src/store/live.ts)) and is a different question.
+
 ### 3. Three endpoints
 
 - **`POST /api/uploads`** `{ filename, bytes, sha256 }` → `{ uploadId, url, token, expiresAt }`.
@@ -233,8 +262,17 @@ Concretely, on `POST /api/jobs {uploadId}`:
    the thing the reader chose.
 5. Only then is a job enqueued.
 
-Steps 3 and 4 need the bytes, so they happen in the worker rather than in the request if the object
-is large — but they happen **before extraction**, which is the expensive irreversible part.
+~~Steps 3 and 4 need the bytes, so they happen in the worker rather than in the request if the object
+is large — but they happen **before extraction**.~~
+
+**Corrected 2026-08-26.** That sentence and the heading above it describe two different API
+contracts, which [Sol](#the-cross-family-review-what-sol-said-and-what-changed) was right to call a
+blocking problem: one of them has an unverified object already in the queue. Say it honestly
+instead. **The request** checks ownership, upload state, the claimed size and that the upload has
+not already been claimed — all cheap, all metadata. **The job's first step is `verify-source`**, and
+it does 2–4 over the bytes it downloads **once**, hashing and extracting from that same copy rather
+than reading the object twice. No article, no slug and no ingest exists until it passes. That also
+puts the byte-dependent work inside `beginStep`/`finishStep`, so cancellation and retry see it.
 
 ### 5. The pipeline's URL assumptions
 
@@ -257,6 +295,11 @@ from the diagram:
   a provisional upload id, run pass 0, reserve the final slug atomically through the same collision
   rule `freeSlug` uses, and **never rename on a later re-read**. `freeSlug` is currently private and
   URL-only, so it needs opening up.
+  **Corrected 2026-08-26:** `freeSlug` is already exported, and the problem is worse than
+  "open it up" — it is keyed on `urlKey(url)` throughout, and [`src/jobs.ts:583`](../../src/jobs.ts)
+  reads `request.url ? await freeSlug(...) : request.slug`, so a URL-less request **skips collision
+  handling altogether**. Two uploads called `paper.pdf` would land on one slug, which is the
+  opposite of what the test in this plan asserts.
 
 ### 6. The file picker
 
@@ -314,6 +357,10 @@ An end-to-end check by hand, in a browser, with the 11.5 MB fixture — the one 
 4.5 MB limit is genuinely bypassed rather than merely thought about.
 
 ## Build order
+
+> **Superseded 2026-08-26** by
+> [Build order, revised after the review](#build-order-revised-after-the-review). Kept because the
+> reasoning in the steps below is still good; the *order* and the scope of step 4 were both wrong.
 
 1. The bucket in `config.toml`, and `npm run db:reset` proving it appears. Cheapest possible start,
    and it makes the rest testable.
@@ -394,34 +441,118 @@ therefore be built so that it does not stand in the way — the blob store seam 
 follow-on rather than a rewrite, which is why `pdf-ingestion.md` was right to insist on the seam
 before the feature.
 
-### The cross-family review has not happened, and that is not a formality
+### The cross-family review: what Sol said, and what changed
 
-**Attempted twice on 2026-08-26 and blocked by billing, not by anything about the plan.** Both
-credentials are dry: `CODEX_API_KEY` returns *"You have no credits remaining"*, and the logged-in
-ChatGPT subscription returns *"Your workspace is out of credits"*. The second attempt read about
-279,000 tokens of this repo, compacted its context, and then hit the wall before writing a word —
-**exiting 0 with no answer file**, which is exactly the failure
-[codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md) warns is indistinguishable from a
-review that found nothing.
+**Ran 2026-08-26** (GPT-5.6 Sol, high effort, read-only), after two earlier attempts died on billing
+rather than on anything about the plan. The full answer is in
+[pdf-upload-storage-review-sol.md](pdf-upload-storage-review-sol.md). Every code reference below was
+checked against this repo before being acted on, as [AGENTS.md](../../AGENTS.md) requires — two of
+Sol's findings corrected *this file*, and two of its security worries turned out to be already
+handled, which is worth as much as the findings.
 
-So **the recommendation above is one model family's opinion, unreviewed**, and
-[AGENTS.md](../../AGENTS.md)'s rule — every plan goes to GPT Sol before it is built — is not yet
-satisfied for this file. Treat the appendix as a proposal, not a decision, and do not start step 4
-of the build order on the strength of it.
+**On the bytes question it agrees with the appendix and then goes further.** One authority per
+revision is right; an object key sitting directly on the revision row is not enough. Sol wants a
+`raw_sources` table — owner, immutable key, **server-computed** SHA-256, length, kind, content type,
+encoding — with `article_revisions.raw_source_id` pointing at it, and short-lived `uploads` rows
+owning the pre-verification state. The argument is good: the same source survives retries and
+revisions without copying bytes or metadata, and deletion and integrity checks get one place to
+work from. Its third option, **content-addressing the canonical key by the actual SHA-256**, makes
+conditional writes idempotent for free and stops revision retention multiplying blobs.
 
-The prompt is saved at
-[pdf-upload-storage-review-prompt.md](pdf-upload-storage-review-prompt.md), which carries the exact
-command; re-running it is one command once either account has credit. It
-asks Sol to answer the bytes question first and at length — including the transactionality
-argument, whether HTML should move to objects too, what the move breaks in `has`/`sameStamp`,
-export/import and `tests/store-artefact-manifest.test.ts`, and the orphan lifecycle — and then to
-attack the upload flow's security, the worker-side verification split, the seam's shape, and the
-build order's step 4.
+It also kills my "write the object, then the row" mitigation as *necessary but not sufficient*, and
+it is right. That sequence handles the happy path and not: object written and row failed; row
+committed and object later removed (**data loss for an upload, since unlike a URL it cannot be
+re-acquired**); a `HEAD` returning 503 being read as absent; a re-run minting a new key and leaking
+an object per attempt.
 
-*Sol's verdict, and what changed as a result, belongs directly below.*
+**Four findings I checked and confirmed, that change the build rather than the prose:**
+
+1. **The 100-page cap fires far too late, and this feature is what makes that reachable.**
+   `readPdf` checks `pass.pages.length > MAX_PAGES` only *after* `pass0` returns
+   ([`src/pdf-read.ts:590`](../../src/pdf-read.ts)), and `pass0` has by then opened the document and
+   walked **every page and every text item into memory**
+   ([`src/pdf.ts:222-265`](../../src/pdf.ts)). A small, valid, ten-thousand-page PDF defeats the cap
+   before it fires, and there is no parser timeout or memory bound behind it. This is pre-existing
+   and today unreachable-ish, because the only way in is a URL we fetched. **An upload hands a
+   stranger the parser directly.** The check belongs immediately after `getDocument`, on
+   `doc.numPages`, before any page loop — and that is a prerequisite of shipping uploads, not a
+   follow-on.
+2. **There is no pipeline step that produces `raw` for an upload.** My "write `raw.json` + `raw.pdf`
+   from the blob store" floats outside the step list, which means it bypasses `beginStep`,
+   `finishStep`, cancellation, retry and `assertProduced` — the exact machinery built to make
+   interrupted work visible. It has to be a real step. Sol's name for it, a common **acquisition**
+   step with one `raw` output contract that both fetch and upload satisfy, is better than two.
+3. **`sameWork` and slug allocation have no upload identity.** `sameWork` compares steps, guidance
+   and profile only ([`src/jobs.ts:700-718`](../../src/jobs.ts)), and `freeSlug` is keyed on the URL
+   and skipped entirely without one — see the correction in
+   [§ 5](#5-the-pipelines-url-assumptions) above.
+4. **The verification story contradicts itself.** This plan says `POST /api/jobs` verifies before
+   enqueue and then says the byte-dependent checks happen in the worker. Those are two different
+   API contracts. Sol's fix is to say it honestly: the request checks ownership, upload state and
+   cheap metadata, and enqueues a job whose **first step is `verify-source`**, with no article, slug
+   or ingest existing until it passes.
+
+**Two worries I measured and can close.** Sol flagged that a grant might be replayable or coaxed
+into upserting. Measured against the running stack: a hostile `x-upsert: true` header is ignored,
+and a mint asking for `{"upsert":true}` comes back with `upsert:false` — but **a grant is replayable
+once its object is deleted**, which is real and now has its own rule in
+[§ What was measured](#what-was-measured-not-read).
+
+**And one correction to Sol.** It says the interface "conflates missing with every other `head`
+failure" — true of my sketch, and the fix is the one
+[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) already uses, distinguishing absence
+from operational failure. Worth naming because we do not have to invent it.
+
+**What this does to the build order.** Sol's central process point is that routes cannot be built
+before the invariant is settled, and I accept it: the source/upload model and the acquisition-step
+contract come first, then the bucket, then the routes. The revised order is
+[below](#build-order-revised-after-the-review). Step 4 was also badly under-scoped — it is not
+`requireUrl` and `freeSlug`, it is `RawManifest`, `FetchedDocument`, `Job`, `EnqueueRequest`, retry,
+`sameWork`, slug reservation, step stamps, source serving, import/export and their tests.
+
+**What I am not taking.** Sol wants HTML moved into Storage too, on the grounds that the 32 MiB
+fetch ceiling means "HTML is kilobytes" is not an invariant. That is correct and it is still a
+follow-on: it is a migration of every existing article, and nothing about uploading a PDF is blocked
+by it. It belongs in the appendix's eventual design, which is where it now is, and not in v1.
+
+### Build order, revised after the review
+
+0. **The source model on paper** — discriminated `SourceOrigin` (url | upload) and `RawDocument`
+   (html | pdf), the `uploads` state machine, and the acquisition step's `raw` contract. Sol is
+   right that `Meta.source` already means *"pdf"* and must not be overloaded to mean *"upload"*.
+1. **The `numPages` cap moved before the page loop**, with a test that a many-page file is refused
+   without being walked. Independently valuable, and a prerequisite.
+2. The bucket in `config.toml`, and `npm run db:reset` proving it appears.
+3. The source/upload store and its state machine, with both adapters and their tests. No routes.
+4. `POST /api/uploads`, and `POST /api/jobs` enqueuing a job whose first step is `verify-source`.
+5. The pipeline's URL assumptions — **the big one**, scoped as above.
+6. The file picker and the progress bar.
+7. The 11.5 MB fixture end to end, in a browser, plus the failure cases Sol lists — double and
+   concurrent finalisation, cancellation mid-download, object missing, Storage 5xx, expired upload,
+   a tiny PDF with a huge page count.
+8. Docs.
+
+### Questions Sol says this plan should be asking, and isn't
+
+Sol raised twelve; these are the ones that change what gets built, and they are
+**for Greg** alongside the three already [above](#open-questions-for-greg):
+
+4. **Same PDF uploaded twice** — one article, two articles sharing one source object, or two of
+   everything? Content-addressing makes "share the object" nearly free, but the product answer
+   comes first.
+5. **Must the beta gate land before upload-token minting is deployed?**
+   [security.md](../project/security.md) records that the API is neither authenticated nor
+   rate-limited. Minting grants and spending model money from an open endpoint is an open storage
+   quota and an open wallet, and this feature is what makes that concrete.
+6. **Retention** — are raw sources kept for every historical revision, or only the current one? And
+   what does permanent deletion mean next to archive, which today is only `articles.archived_at`?
+7. **The recovery promise** — once bytes are objects, a Postgres dump is no longer a whole backup.
+   Database-only restore, or coordinated restore, and what data-loss window is acceptable?
 
 ## See also
 
+- [pdf-upload-storage-review-sol.md](pdf-upload-storage-review-sol.md) — the cross-family review in
+  full, and [pdf-upload-storage-review-prompt.md](pdf-upload-storage-review-prompt.md), the prompt
 - [pdf-ingestion.md](pdf-ingestion.md) — the plan this is step 7 of; § Upload is its short form
 - [../project/ingest-queue.md](../project/ingest-queue.md) — the queue an upload job joins
 - [../project/fetching.md](../project/fetching.md) — `raw.json`, the manifest that makes the
