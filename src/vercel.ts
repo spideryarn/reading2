@@ -39,6 +39,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { errorFields, log } from "./log.js";
+import { UNEXPECTED_FAILURE } from "./messages.js";
 import { handleApi } from "./routes.js";
 import { health } from "./vercel-health.js";
 
@@ -153,7 +154,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!res.headersSent) {
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ error: (err as Error).message }));
+      /* Not `(err as Error).message`. This is the last-resort catch, so what
+         is in here is the raw text of whatever escaped every other handler — a
+         database driver's message, a parse error quoting its own input, an SDK
+         error built from an upstream response body. None of that is ours to
+         publish, and the reader could not act on it anyway. The whole error is
+         already in the log line above, where somebody can. */
+      res.end(JSON.stringify({ error: UNEXPECTED_FAILURE.message }));
     } else {
       res.end();
     }

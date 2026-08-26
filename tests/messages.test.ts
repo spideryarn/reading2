@@ -17,6 +17,7 @@ import {
   ENDED_UNFINISHED,
   MODEL_REFUSED,
   NOT_CONFIGURED,
+  UNEXPECTED_FAILURE,
   type FailureKind,
   PROVIDER_FAILED_MID_ANSWER,
   PROVIDER_UNREADABLE,
@@ -39,6 +40,7 @@ const EVERY: ReaderFacingFailure[] = [
   NOT_CONFIGURED,
   ANSWER_OVERFLOWED,
   MODEL_REFUSED,
+  UNEXPECTED_FAILURE,
   tookTooLong(60),
   wentQuiet(20),
   saidNothing(null),
@@ -157,6 +159,20 @@ describe("the sentence must agree with the kind", () => {
       if (!canRetry(f.kind)) continue;
       expect(f.message, `nothing for the reader to do: ${f.message}`).toMatch(
         /again|narrower|shorter/i,
+      );
+    }
+  });
+
+  it("never invites another go when another go cannot work", () => {
+    /* The direction the sibling tests did not cover, and it let one straight
+       through: `UNEXPECTED_FAILURE` shipped as kind `bug` — so no retry button —
+       while its own sentence said "trying again is worth a go". The reader is
+       then told two things and can act on neither. Exactly the contradiction
+       this whole file exists to prevent, written by the person fixing it. */
+    for (const f of EVERY) {
+      if (canRetry(f.kind)) continue;
+      expect(f.message, f.message).not.toMatch(
+        /trying again is worth a go|trying again often works|asking again (usually|generally) (works|gets)/i,
       );
     }
   });

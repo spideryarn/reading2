@@ -352,7 +352,39 @@ describe("cancellation", () => {
     }
     expect(events.some((e) => e.type === "hit")).toBe(true); // the preview really did stream
     expect(events.some((e) => e.type === "done")).toBe(false); // but it was never treated as the answer
-    expect(thrown).toBeDefined();
+    // The point of this test, not just that SOMETHING was thrown: a reader
+    // disconnecting must not be reported as a provider failure or logged as
+    // a parse error — see READER_LEFT and where `stopped` is declared in
+    // src/search.ts. Before that fix this threw ANSWER_OVERFLOWED,
+    // [ai-overflowed], which told whoever eventually read it to ask for
+    // something narrower — nonsensical advice for a search nobody is
+    // waiting on any more.
+    expect(thrown?.message).toBe("The reader disconnected before this search finished.");
+    expect(thrown?.message).not.toMatch(/\[ai-/);
+  });
+
+  it("cancelling before any content arrives at all throws the same honest disconnect message", async () => {
+    // The empty-text sibling of the test above: the response arrived, but
+    // nothing had streamed yet when the reader left. Not "the model
+    // returned no text" (saidNothing, an ai-coded sentence) — the model may
+    // never even have been asked to finish.
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      stubFetch(() => ({ ok: true, body: hangingBody([]) }) as Response), // opens, then sends nothing
+    );
+    const events: { type: string }[] = [];
+    let thrown: Error | undefined;
+    setTimeout(() => controller.abort(new Error("stopped by the reader")), 5);
+    try {
+      for await (const e of findPassagesStream({ ...req(), signal: controller.signal })) {
+        events.push(e);
+      }
+    } catch (err) {
+      thrown = err as Error;
+    }
+    expect(events).toEqual([]);
+    expect(thrown?.message).toBe("The reader disconnected before this search finished.");
   });
 
   it("cancelling once the text is already complete still produces a `done` — nothing was lost, only the wire's own [DONE] never arrived", async () => {

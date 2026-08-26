@@ -177,6 +177,7 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-upstream": "retry",
   "ai-interrupted": "retry",
   "ai-unreadable": "retry",
+  "ai-unexpected": "bug",
   "ai-not-set-up": "ours",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
@@ -388,6 +389,29 @@ export const MODEL_REFUSED: ReaderFacingFailure = {
   message:
     "The AI service declined to do this one, and what it said about why is not something this app " +
     "passes on. Running it again will most likely get the same answer. [ai-model-refused]",
+};
+
+/**
+ * The app hit something it had no plan for, on a request.
+ *
+ * **This is the one message here that is not about a model call**, which is a
+ * deliberate widening of what this file covers and worth knowing about: the
+ * rules in docs/project/copy.md are about what the reader sees when something
+ * fails, and a 500 is that whether or not a model was involved.
+ *
+ * It exists because the last-resort catch in src/vercel.ts sent
+ * `(err as Error).message` straight to the client. That is the raw text of
+ * whatever escaped every other handler — a driver's message, a parse error
+ * quoting its input, an SDK error built from an upstream body. None of it is
+ * ours to publish, and the reader could do nothing with it either way. The
+ * whole error still goes to the log, where somebody can act on it.
+ */
+export const UNEXPECTED_FAILURE: ReaderFacingFailure = {
+  kind: "bug",
+  message:
+    "Something went wrong inside this app while handling that request, and it was not something the " +
+    "app knew how to explain. It has been recorded, and it needs fixing here rather than by you. " +
+    "[ai-unexpected]",
 };
 
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */

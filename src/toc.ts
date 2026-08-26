@@ -31,6 +31,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CAPABLE_MODEL } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
+import { anthropicCallFailed } from "./anthropic-call.js";
 import { isSpideryarnId } from "./ids.js";
 import { generateLabels, mergeLabels } from "./labels.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -633,31 +634,40 @@ export async function generateToc(opts: {
   const maxTokens = budgetFor("table of contents", answerTokens);
 
   const client = new Anthropic();
-  const stream = client.messages.stream({
-    model: CAPABLE_MODEL,
-    max_tokens: maxTokens,
-    thinking: { type: "adaptive" },
-    output_config: { effort: EFFORT },
-    system: SYSTEM,
-    messages: [{ role: "user", content: renderBlocks(blocks) }],
-  }, { signal: opts.signal });
+  /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
+     anywhere upstream of here, and the installed SDK builds `Error.message`
+     from the upstream error body — the one place it can echo back part of
+     what we sent, which is the whole article. See src/anthropic-call.ts. */
+  let message: Anthropic.Message;
+  try {
+    const stream = client.messages.stream({
+      model: CAPABLE_MODEL,
+      max_tokens: maxTokens,
+      thinking: { type: "adaptive" },
+      output_config: { effort: EFFORT },
+      system: SYSTEM,
+      messages: [{ role: "user", content: renderBlocks(blocks) }],
+    }, { signal: opts.signal });
 
-  if (opts.onProgress) {
-    const report = opts.onProgress;
-    let chars = 0;
-    let last = 0;
-    stream.on("text", (delta) => {
-      chars += delta.length;
-      // Throttled, because the model emits deltas far faster than anyone can
-      // read them and every one of these is a write the poller may pick up.
-      const now = Date.now();
-      if (now - last < 500) return;
-      last = now;
-      report(`${Math.round(chars / 1000)}k characters of tree so far`);
-    });
+    if (opts.onProgress) {
+      const report = opts.onProgress;
+      let chars = 0;
+      let last = 0;
+      stream.on("text", (delta) => {
+        chars += delta.length;
+        // Throttled, because the model emits deltas far faster than anyone can
+        // read them and every one of these is a write the poller may pick up.
+        const now = Date.now();
+        if (now - last < 500) return;
+        last = now;
+        report(`${Math.round(chars / 1000)}k characters of tree so far`);
+      });
+    }
+
+    message = await stream.finalMessage();
+  } catch (err) {
+    throw anthropicCallFailed(err);
   }
-
-  const message = await stream.finalMessage();
   const raw = message.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)

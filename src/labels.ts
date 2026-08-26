@@ -36,6 +36,7 @@ import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
 import { CAPABLE_MODEL } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
+import { anthropicCallFailed } from "./anthropic-call.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -808,7 +809,9 @@ export function parseLabels(raw: string, batch: Batch): Record<string, string> {
     }
     const [n, label] = entry as [unknown, unknown];
     if (typeof n !== "number" || !Number.isInteger(n)) {
-      throw new Error(`Nav labels: paragraph number is not an integer: ${JSON.stringify(n)}`);
+      // Shape, not value — `n` is `entry[0]` from model output and can be a
+      // string of arbitrary prose rather than the integer it was asked for.
+      throw new Error(`Nav labels: paragraph number is not an integer, got ${describeShape(n)}.`);
     }
     if (typeof label !== "string" || label.trim() === "") {
       throw new Error(`Nav labels: paragraph ${n} has an empty label`);
@@ -1115,29 +1118,38 @@ async function runBatch(
   const maxTokens = budgetFor("nav labels", answerTokens, headroom);
   const { shared, own } = batchParts(batch, blocks, outline);
 
-  const message = await client.messages.stream(
-    {
-      model: CAPABLE_MODEL,
-      max_tokens: maxTokens,
-      thinking: { type: "adaptive" },
-      output_config: { effort: EFFORT },
-      system: SYSTEM,
-      /* Two parts, breakpoint on the first. Everything from the top of the
-         request through that part — tools, system, and the outline — is the
-         cached prefix, and it is the same bytes for all four batches running at
-         once. See `batchParts`. */
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text" as const, text: shared, cache_control: { type: "ephemeral" as const } },
-            { type: "text" as const, text: own },
-          ],
-        },
-      ],
-    },
-    { signal },
-  ).finalMessage();
+  /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
+     anywhere upstream of here, and the installed SDK builds `Error.message`
+     from the upstream error body — the one place it can echo back part of
+     what we sent, which is the whole article. See src/anthropic-call.ts. */
+  let message: Anthropic.Message;
+  try {
+    message = await client.messages.stream(
+      {
+        model: CAPABLE_MODEL,
+        max_tokens: maxTokens,
+        thinking: { type: "adaptive" },
+        output_config: { effort: EFFORT },
+        system: SYSTEM,
+        /* Two parts, breakpoint on the first. Everything from the top of the
+           request through that part — tools, system, and the outline — is the
+           cached prefix, and it is the same bytes for all four batches running at
+           once. See `batchParts`. */
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text" as const, text: shared, cache_control: { type: "ephemeral" as const } },
+              { type: "text" as const, text: own },
+            ],
+          },
+        ],
+      },
+      { signal },
+    ).finalMessage();
+  } catch (err) {
+    throw anthropicCallFailed(err);
+  }
 
   const raw = message.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")

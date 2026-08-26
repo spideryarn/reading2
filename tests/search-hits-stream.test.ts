@@ -254,4 +254,56 @@ describe("hitExtractor", () => {
       expect(out).toEqual([validHit]);
     });
   });
+
+  /**
+   * The third way this safety property broke: a reply with duplicate
+   * top-level `hits` keys. `JSON.parse` — what the final, authoritative pass
+   * uses — silently keeps the LAST one; this extractor locks onto the FIRST.
+   * So without the bail-out, a preview built from the first array would be
+   * shown while the stored result came from a different, later one — the one
+   * genuinely WRONG-hit case, since the two arrays here are deliberately
+   * different rather than merely differently spelled.
+   */
+  describe("a second `hits` key stops every future emission, not just the second array's", () => {
+    // A JS object literal can't express a duplicate key — has to be built as
+    // a raw string, same as src/search.ts's own integration test for this.
+    const HIT_A = { blockId: "spya-arrA1", quote: "from the first array", confidence: 80, reasoning: "a" };
+    const HIT_B = { blockId: "spya-arrB1", quote: "from the second array", confidence: 80, reasoning: "b" };
+    const twoKeys = `{"hits":[${JSON.stringify(HIT_A)}],"hits":[${JSON.stringify(HIT_B)}]}`;
+
+    it("streams the first array's hit before the duplicate is even seen — it cannot be un-emitted", () => {
+      const ex = hitExtractor();
+      const out = ex.push(twoKeys);
+      expect(out).toEqual([HIT_A]);
+    });
+
+    it("emits nothing from the second array once the duplicate key is detected", () => {
+      const ex = hitExtractor();
+      const out = ex.push(twoKeys);
+      expect(out.some((h) => (h as { blockId: string }).blockId === HIT_B.blockId)).toBe(false);
+    });
+
+    it("reports the duplicate through duplicateHitsKey()", () => {
+      const ex = hitExtractor();
+      expect(ex.duplicateHitsKey()).toBe(false); // nothing fed yet
+      ex.push(twoKeys);
+      expect(ex.duplicateHitsKey()).toBe(true);
+    });
+
+    it("is false for an ordinary reply with one `hits` key", () => {
+      const ex = hitExtractor();
+      ex.push(JSON.stringify({ hits: [HIT_A] }));
+      expect(ex.duplicateHitsKey()).toBe(false);
+    });
+
+    it("does not depend on where the duplicate key arrives relative to a chunk boundary", () => {
+      // Split partway through the second occurrence of `"hits"`.
+      const secondHitsAt = twoKeys.indexOf('"hits"', twoKeys.indexOf('"hits"') + 1);
+      const splitAt = secondHitsAt + 3;
+      const ex = hitExtractor();
+      const out = [...ex.push(twoKeys.slice(0, splitAt)), ...ex.push(twoKeys.slice(splitAt))];
+      expect(out).toEqual([HIT_A]);
+      expect(ex.duplicateHitsKey()).toBe(true);
+    });
+  });
 });

@@ -124,7 +124,7 @@ export function explainAbort(
  *
  * A fourth thing is a per-caller trade rather than a fact about the wire
  * format, so it is a parameter rather than baked in: **what to do with a
- * `data:` frame that isn't valid JSON.** `strict` (default `false`) decides.
+ * `data:` frame that isn't valid JSON.** `options.malformedFrames` decides.
  * See it below.
  */
 /**
@@ -133,6 +133,33 @@ export function explainAbort(
  */
 export interface StreamEnd {
   terminated: boolean;
+}
+
+export interface SseChunksOptions {
+  /**
+   * What to do with a `data:` frame that is not valid JSON.
+   *
+   * `"skip"` (the default) is chat (converse.ts) and explain.ts's trade,
+   * unchanged: their payload is prose, a dropped frame costs a few words, and
+   * ending a working answer over one bad line is the wrong call. **Do not
+   * change what the default means** — that is exactly what this being a
+   * named string rather than a bare boolean is for. A boolean `strict` was
+   * the first version of this parameter, and Sol's review called it out as
+   * an API footgun: a 5th positional `true`/`false` reads as noise at the
+   * call site, and a slip from `true` to `false` (or the reverse, on a
+   * future caller) changes behaviour silently, with nothing at the call
+   * site to say what either value means. `malformedFrames: "skip"` /
+   * `"throw"` cannot be inverted by a typo without the diff saying so in
+   * words.
+   *
+   * `"throw"` is search.ts's opt-in. Its payload is JSON, not prose, and the
+   * same trade is wrong there: a dropped frame can be exactly one element of
+   * the `hits` array, and the text either side can still go on to parse as
+   * valid JSON — so silently skipping it would let search store a
+   * confidently wrong result rather than noticing anything went missing.
+   * Found by a GPT Sol review, 2026-08-26.
+   */
+  malformedFrames?: "skip" | "throw";
 }
 
 export async function* sseChunks(
@@ -152,24 +179,9 @@ export async function* sseChunks(
   onActivity: () => void,
   /** Set to `terminated: true` only when `data: [DONE]` actually arrives. */
   end: StreamEnd,
-  /**
-   * Throw rather than silently skip a `data:` frame that is not valid JSON.
-   *
-   * Defaults to `false` — chat (converse.ts) and explain.ts both rely on
-   * this, unchanged: their payload is prose, a dropped frame costs a few
-   * words, and ending a working answer over one bad line is the wrong trade.
-   * **Do not flip this default** — it would change their behaviour, which is
-   * exactly what this parameter exists to avoid needing to do.
-   *
-   * search.ts opts in with `true`. Its payload is JSON, not prose, and the
-   * same trade is wrong there: a dropped frame can be exactly one element of
-   * the `hits` array, and the text either side can still go on to parse as
-   * valid JSON — so silently skipping it would let search store a
-   * confidently wrong result rather than noticing anything went missing.
-   * Found by a GPT Sol review, 2026-08-26.
-   */
-  strict = false,
+  options?: SseChunksOptions,
 ): AsyncGenerator<StreamChunk> {
+  const strict = options?.malformedFrames === "throw";
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -226,8 +238,8 @@ export async function* sseChunks(
           // and one unparseable line loses a few words rather than the
           // reply. Not logged: at one line per token this could be
           // thousands of lines, and the answer's own length is already in
-          // the summary line above. See `strict` on this function for why
-          // search.ts cannot make the same trade.
+          // the summary line above. See `SseChunksOptions.malformedFrames`
+          // on this function for why search.ts cannot make the same trade.
           continue;
         }
         yield parsed;

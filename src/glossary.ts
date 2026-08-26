@@ -45,6 +45,7 @@ import { partsOf } from "./arc.js";
 import { mintUniqueId } from "./ids.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
+import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -1069,63 +1070,72 @@ export async function generateGlossary(opts: {
   const maxTokens = budgetFor("glossary", answerTokens);
 
   const client = new Anthropic();
-  const stream = client.messages.stream(
-    {
-      model: CAPABLE_MODEL,
-      max_tokens: maxTokens,
-      thinking: { type: "adaptive" },
-      output_config: { effort: effortFor("glossary") },
-      /* Two system blocks, breakpoint on the first. The article goes *before*
-         this stage's instructions because the cache prefix runs from the very
-         top of the request — tools, then system, then messages — so anything
-         ahead of the article that differs between stages breaks the match
-         before it starts.
+  /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
+     anywhere upstream of here, and the installed SDK builds `Error.message`
+     from the upstream error body — the one place it can echo back part of
+     what we sent, which is the whole article. See src/anthropic-call.ts. */
+  let message: Anthropic.Message;
+  try {
+    const stream = client.messages.stream(
+      {
+        model: CAPABLE_MODEL,
+        max_tokens: maxTokens,
+        thinking: { type: "adaptive" },
+        output_config: { effort: effortFor("glossary") },
+        /* Two system blocks, breakpoint on the first. The article goes *before*
+           this stage's instructions because the cache prefix runs from the very
+           top of the request — tools, then system, then messages — so anything
+           ahead of the article that differs between stages breaks the match
+           before it starts.
 
-         **This stage makes one call per invocation, not several.** A top-up is a
-         separate run, so it reads what the previous one wrote only if it lands
-         inside the 5-minute TTL — a question about when somebody clicks, not
-         something the code can promise. The reliable win here is cross-stage:
-         the arc and the thread send these same bytes, and in one ingest the
-         three share an entry. docs/research/prompt-caching-callsites.md. */
-      system: [
-        {
-          type: "text" as const,
-          text: articleText(meta, blocks),
-          ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
-        },
-        { type: "text" as const, text: SYSTEM },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: renderPrompt({
-            tree,
-            count,
-            existing: existing?.entries ?? [],
-          }),
-        },
-      ],
-    },
-    { signal: opts.signal },
-  );
+           **This stage makes one call per invocation, not several.** A top-up is a
+           separate run, so it reads what the previous one wrote only if it lands
+           inside the 5-minute TTL — a question about when somebody clicks, not
+           something the code can promise. The reliable win here is cross-stage:
+           the arc and the thread send these same bytes, and in one ingest the
+           three share an entry. docs/research/prompt-caching-callsites.md. */
+        system: [
+          {
+            type: "text" as const,
+            text: articleText(meta, blocks),
+            ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+          },
+          { type: "text" as const, text: SYSTEM },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: renderPrompt({
+              tree,
+              count,
+              existing: existing?.entries ?? [],
+            }),
+          },
+        ],
+      },
+      { signal: opts.signal },
+    );
 
-  if (opts.onProgress) {
-    const report = opts.onProgress;
-    const verb = existing ? "more terms" : "terms";
-    let chars = 0;
-    let last = 0;
-    stream.on("text", (delta) => {
-      chars += delta.length;
-      // Throttled: the model emits deltas far faster than anyone can read them,
-      // and every one of these is a write the job poller may pick up.
-      const now = Date.now();
-      if (now - last < 500) return;
-      last = now;
-      report(`up to ${count} ${verb}, ${Math.round(chars / 1000)}k characters so far`);
-    });
+    if (opts.onProgress) {
+      const report = opts.onProgress;
+      const verb = existing ? "more terms" : "terms";
+      let chars = 0;
+      let last = 0;
+      stream.on("text", (delta) => {
+        chars += delta.length;
+        // Throttled: the model emits deltas far faster than anyone can read them,
+        // and every one of these is a write the job poller may pick up.
+        const now = Date.now();
+        if (now - last < 500) return;
+        last = now;
+        report(`up to ${count} ${verb}, ${Math.round(chars / 1000)}k characters so far`);
+      });
+    }
+
+    message = await stream.finalMessage();
+  } catch (err) {
+    throw anthropicCallFailed(err);
   }
-
-  const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") {
     /* `stop_details` is deliberately neither thrown nor logged — it is the
        provider's own words about a request that carried the whole article,

@@ -511,6 +511,16 @@ export type SearchEvent =
   | { type: "done"; result: SearchResult };
 
 /**
+ * Thrown when the reader has disconnected and there is nothing left to say to
+ * them. Deliberately NOT one of the `[ai-*]` reader-facing sentences in
+ * src/messages.ts — those exist for somebody who is still there to read one
+ * and act on it, and a disconnect is neither the model's failure nor the
+ * reader's mistake. See where `stopped` is declared in `findPassagesStream`
+ * for the three outcomes this is one of.
+ */
+const READER_LEFT = "The reader disconnected before this search finished.";
+
+/**
  * Search a whole article, a few hits at a time.
  *
  * This is the whole implementation; `findPassages` below drains it. Modelled
@@ -677,11 +687,13 @@ export async function* findPassagesStream({
   let stopped = false;
 
   try {
-    // strict: true — a dropped SSE frame here can drop a whole hits-array
-    // element while leaving JSON either side that still parses, which is
-    // the opposite of the trade chat and explain make. See sseChunks's own
-    // doc on `strict` in src/openrouter-stream.ts.
-    for await (const chunk of sseChunks(response.body, composite, touch, end, true)) {
+    // malformedFrames: "throw" — a dropped SSE frame here can drop a whole
+    // hits-array element while leaving JSON either side that still parses,
+    // which is the opposite of the trade chat and explain make. See
+    // `SseChunksOptions` in src/openrouter-stream.ts.
+    for await (const chunk of sseChunks(response.body, composite, touch, end, {
+      malformedFrames: "throw",
+    })) {
       if (chunk.model) used = chunk.model;
       // A 200 that carries an error in the stream — a mid-generation provider
       // failure. It arrives as data, not as a broken connection.
@@ -784,6 +796,13 @@ export async function* findPassagesStream({
 
   const rawText = extractor.text();
   if (rawText.trim() === "") {
+    if (stopped) {
+      // The reader left before any content arrived at all. Not "the model
+      // returned no text" — the model may never have been asked to finish.
+      // See where `stopped` is declared for the three outcomes.
+      line.info({ model: used, ms: since(started) }, `search from ${used} was abandoned`);
+      throw new Error(READER_LEFT);
+    }
     line.error({ model: used, ms: since(started), finishReason }, `${used} returned no text`);
     throw new Error(saidNothing(finishReason).message);
   }
@@ -796,6 +815,20 @@ export async function* findPassagesStream({
   try {
     ({ hits, dropped } = validateHits(parseHits(rawText), blocks));
   } catch (err) {
+    if (stopped) {
+      /* The reader already left, and what's buffered is an incomplete or
+         otherwise unparseable object — the ORDINARY shape a disconnect
+         leaves behind, not a provider failure and not something the model
+         got wrong. Logging it as a parse error and reporting
+         ANSWER_OVERFLOWED/PROVIDER_UNREADABLE, as the branch below does for
+         a genuine failure, would blame the model for an answer nobody is
+         waiting on any more. See where `stopped` is declared. */
+      line.info(
+        { model: used, ms: since(started), chars: rawText.length },
+        `search from ${used} was abandoned before its answer finished`,
+      );
+      throw new Error(READER_LEFT);
+    }
     /* Two different throws land here, both reduced to one reader-facing
        sentence — PROVIDER_UNREADABLE, or ANSWER_OVERFLOWED for a cut-off
        answer — because none of "no object", "malformed JSON", or "hits is

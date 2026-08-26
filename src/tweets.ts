@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
+import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
@@ -412,42 +413,51 @@ export async function generateTweets(opts: {
   const maxTokens = budgetFor("thread", answerTokens);
 
   const client = new Anthropic();
-  const stream = client.messages.stream({
-    model: CAPABLE_MODEL,
-    max_tokens: maxTokens,
-    thinking: { type: "adaptive" },
-    output_config: { effort: effortFor("tweets") },
-    /* Article first, this stage's instructions second — the prefix runs from the
-       top of the request, so the article has to precede anything stage-specific
-       for the arc, the glossary and this to share one entry.
-       docs/plans/prompt-caching.md. */
-    system: [
-      {
-        type: "text" as const,
-        text: articleText(meta, blocks),
-        ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
-      },
-      { type: "text" as const, text: SYSTEM },
-    ],
-    messages: [{ role: "user", content: renderPrompt({ meta, tree, posts }) }],
-  }, { signal: opts.signal });
+  /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
+     anywhere upstream of here, and the installed SDK builds `Error.message`
+     from the upstream error body — the one place it can echo back part of
+     what we sent, which is the whole article. See src/anthropic-call.ts. */
+  let message: Anthropic.Message;
+  try {
+    const stream = client.messages.stream({
+      model: CAPABLE_MODEL,
+      max_tokens: maxTokens,
+      thinking: { type: "adaptive" },
+      output_config: { effort: effortFor("tweets") },
+      /* Article first, this stage's instructions second — the prefix runs from the
+         top of the request, so the article has to precede anything stage-specific
+         for the arc, the glossary and this to share one entry.
+         docs/plans/prompt-caching.md. */
+      system: [
+        {
+          type: "text" as const,
+          text: articleText(meta, blocks),
+          ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+        },
+        { type: "text" as const, text: SYSTEM },
+      ],
+      messages: [{ role: "user", content: renderPrompt({ meta, tree, posts }) }],
+    }, { signal: opts.signal });
 
-  if (opts.onProgress) {
-    const report = opts.onProgress;
-    let chars = 0;
-    let last = 0;
-    stream.on("text", (delta) => {
-      chars += delta.length;
-      // Throttled: the model emits deltas far faster than anyone can read them,
-      // and every one of these is a write the job poller may pick up.
-      const now = Date.now();
-      if (now - last < 500) return;
-      last = now;
-      report(`about ${posts} posts, ${Math.round(chars / 1000)}k characters so far`);
-    });
+    if (opts.onProgress) {
+      const report = opts.onProgress;
+      let chars = 0;
+      let last = 0;
+      stream.on("text", (delta) => {
+        chars += delta.length;
+        // Throttled: the model emits deltas far faster than anyone can read them,
+        // and every one of these is a write the job poller may pick up.
+        const now = Date.now();
+        if (now - last < 500) return;
+        last = now;
+        report(`about ${posts} posts, ${Math.round(chars / 1000)}k characters so far`);
+      });
+    }
+
+    message = await stream.finalMessage();
+  } catch (err) {
+    throw anthropicCallFailed(err);
   }
-
-  const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") {
     /* `stop_details` is deliberately neither thrown nor logged — it is the
        provider's own words about a request that carried the whole article,

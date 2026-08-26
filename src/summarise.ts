@@ -73,6 +73,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CAPABLE_MODEL } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
+import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -857,30 +858,39 @@ async function runBatch(opts: {
        will beat the model to the end. Nothing subscribes to the deltas here —
        progress is reported per batch, since three of these are in flight at
        once and a character count would be three streams added together. */
-    const stream = opts.client.messages.stream(
-      {
-        model: CAPABLE_MODEL,
-        max_tokens: maxTokens,
-        thinking: { type: "adaptive" },
-        output_config: { effort: "medium" },
-        system: SYSTEM,
-        messages: [
-          {
-            role: "user",
-            content: renderPrompt({
-              meta: opts.meta,
-              tree: opts.tree,
-              blocks: opts.blocks,
-              batch,
-              ...(opts.guidance !== undefined && { guidance: opts.guidance }),
-              ...(repair !== undefined && { repair }),
-            }),
-          },
-        ],
-      },
-      { signal: opts.signal },
-    );
-    const message = await stream.finalMessage();
+    /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
+       anywhere upstream of here, and the installed SDK builds `Error.message`
+       from the upstream error body — the one place it can echo back part of
+       what we sent, which is the whole article. See src/anthropic-call.ts. */
+    let message: Anthropic.Message;
+    try {
+      const stream = opts.client.messages.stream(
+        {
+          model: CAPABLE_MODEL,
+          max_tokens: maxTokens,
+          thinking: { type: "adaptive" },
+          output_config: { effort: "medium" },
+          system: SYSTEM,
+          messages: [
+            {
+              role: "user",
+              content: renderPrompt({
+                meta: opts.meta,
+                tree: opts.tree,
+                blocks: opts.blocks,
+                batch,
+                ...(opts.guidance !== undefined && { guidance: opts.guidance }),
+                ...(repair !== undefined && { repair }),
+              }),
+            },
+          ],
+        },
+        { signal: opts.signal },
+      );
+      message = await stream.finalMessage();
+    } catch (err) {
+      throw anthropicCallFailed(err);
+    }
 
     opts.onTokens(message.usage.input_tokens, message.usage.output_tokens);
 

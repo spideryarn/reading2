@@ -1128,14 +1128,18 @@ describe("generateLabels, resuming", () => {
        hand, because the wiring is the part that can be wrong: a check that
        computes both sides itself passes just as happily when the resume path
        never consults it. With no credentials, a run that refuses to resume has
-       to go to the model, and going to the model throws. */
+       to go to the model, and going to the model throws — with the SDK's own
+       "Could not resolve authentication method", which src/anthropic-call.ts
+       now catches and replaces with NOT_CONFIGURED before it can reach here,
+       so the code at the end of that sentence is what proves a real request
+       was attempted. */
     const { tree, blocks } = fixture(6, 7);
     await checkpointFor(dir, tree, blocks);
     const moved = withMovedBoundary(tree, blocks);
 
     await noAuth(async () => {
         await expect(generateLabels({ tree: moved, blocks, slug: "test", dir })).rejects.toThrow(
-          /Could not resolve authentication/,
+          /\[ai-not-set-up\]/,
         );
     });
 
@@ -1222,11 +1226,14 @@ describe("generateLabels, resuming", () => {
       // No `dir`, so the checkpoint sitting right there is not read — the run
       // would go to the model, and with no key that throws. The point is that
       // checkpointing is opt-in rather than inferred from a path lying around.
-      // Matched on the message, because a test that only asks "did it throw"
+      // Matched on the code, because a test that only asks "did it throw"
       // passes just as happily when the throw came from somewhere else — and
       // what it would then stop checking is whether the model was called.
+      // `[ai-not-set-up]` rather than the SDK's own "Could not resolve
+      // authentication method": src/anthropic-call.ts catches that and
+      // replaces it with NOT_CONFIGURED before it can reach a caller.
       await expect(generateLabels({ tree, blocks, slug: "test" })).rejects.toThrow(
-        /Could not resolve authentication/,
+        /\[ai-not-set-up\]/,
       );
     });
   });
