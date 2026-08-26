@@ -7,7 +7,15 @@
  * is broken rather than like the link was.
  */
 import { describe, expect, it } from "vitest";
-import { addHref, addUrlFrom, carriedSearch, parseRoute, readHref } from "../src/web/router.js";
+import {
+  addHref,
+  addUrlFrom,
+  addUrlFromQuery,
+  canonicalAddHref,
+  carriedSearch,
+  parseRoute,
+  readHref,
+} from "../src/web/router.js";
 
 describe("parseRoute", () => {
   it("reads the slug out of /read/<slug>", () => {
@@ -170,9 +178,14 @@ describe("the add route", () => {
     expect(parseRoute("/add/%E0%A4%A")).toEqual({ kind: "add", url: "%E0%A4%A" });
   });
 
-  it("does not encode twice when it is already encoded", () => {
-    const once = addHref("https://example.com/a b");
-    expect(parseRoute(once)).toEqual({ kind: "add", url: "https://example.com/a b" });
+  /* Not a round trip: the point is that the ENCODED form of a URL which is
+     itself full of escapes survives being read as an encoded segment, rather
+     than being decoded a second time down to the bare characters. */
+  it("decodes exactly once, however many escapes the URL itself carries", () => {
+    const url = "https://example.com/a%2Fb%20c";
+    expect(parseRoute(addHref(url))).toEqual({ kind: "add", url });
+    // And the segment really is doubly-escaped in the address.
+    expect(addHref(url)).toContain("%252F");
   });
 });
 
@@ -197,5 +210,136 @@ describe("addUrlFrom", () => {
   it("is empty for anything that is not an add address", () => {
     expect(addUrlFrom("/read/example")).toBe("");
     expect(addUrlFrom("/add/")).toBe("");
+  });
+});
+
+/**
+ * The rewrite that runs before React mounts — `canonicalAddHref`, called from
+ * main.tsx.
+ *
+ * It is a function rather than four lines inside main.tsx **because of this
+ * block**. Module-init side effects cannot be tested, and every case below was
+ * a real bug found by reading rather than by running: GPT Sol's review,
+ * 2026-08-26.
+ */
+describe("canonicalAddHref", () => {
+  const encoded = (url: string) => addHref(url);
+
+  it("canonicalises a raw pasted URL, query string and all", () => {
+    expect(canonicalAddHref("/add/https://x.test/a", "?utm=1", "")).toBe(
+      encoded("https://x.test/a?utm=1"),
+    );
+  });
+
+  /* Each of these was eaten by one of the three legacy rewrites in main.tsx,
+     which used to run first. They read `location.search` and `location.hash`,
+     and on a raw add address those belong to the PASTED url. */
+  describe("survives the query strings the legacy rewrites are looking for", () => {
+    it("?slug=, which used to navigate to /read/ and queue nothing at all", () => {
+      expect(canonicalAddHref("/add/https://x.test/a", "?slug=story", "")).toBe(
+        encoded("https://x.test/a?slug=story"),
+      );
+    });
+
+    it("?about=, which used to strip the query and add a different page", () => {
+      expect(canonicalAddHref("/add/https://x.test/a", "?about=1", "")).toBe(
+        encoded("https://x.test/a?about=1"),
+      );
+    });
+
+    it("#spya-…, which used to become a real ?at= parameter", () => {
+      expect(canonicalAddHref("/add/https://x.test/a", "", "#spya-k6fpme")).toBe(
+        encoded("https://x.test/a#spya-k6fpme"),
+      );
+    });
+  });
+
+  it("keeps a query string on a scheme-less URL, which has no : and no / to go by", () => {
+    // The classifier reads a segment with neither as already-encoded. A query
+    // string settles it before the segment's shape is looked at — without that
+    // this lost `?edition=2` and added a different article.
+    expect(canonicalAddHref("/add/example.com", "?edition=2", "")).toBe(
+      encoded("example.com?edition=2"),
+    );
+  });
+
+  it("takes the whole rest of the query for ?add=, & and ? included", () => {
+    expect(canonicalAddHref("/", "?add=https://x.test/a?x=1&y=2", "")).toBe(
+      encoded("https://x.test/a?x=1&y=2"),
+    );
+  });
+
+  it("leaves a + alone in ?add=, because a URL is not a form", () => {
+    expect(canonicalAddHref("/", "?add=https://x.test/a+b", "")).toBe(
+      encoded("https://x.test/a+b"),
+    );
+  });
+
+  it("accepts an encoded ?add= too", () => {
+    expect(canonicalAddHref("/", `?add=${encodeURIComponent("https://x.test/a?x=1")}`, "")).toBe(
+      encoded("https://x.test/a?x=1"),
+    );
+  });
+
+  /* Each of these is a second-pass finding (GPT Sol, 2026-08-26): the first
+     round of fixes introduced two of them and left one. */
+  describe("does not let the target URL's own shape hijack the rewrite", () => {
+    it("keeps an add= that belongs to the article, not to us", () => {
+      // With ?add= consulted before the path, this canonicalised to /add/2 —
+      // the target URL's own parameter read as ours, and replaced it.
+      expect(canonicalAddHref("/add/https://x.test/article", "?add=2", "")).toBe(
+        encoded("https://x.test/article?add=2"),
+      );
+    });
+
+    it("ignores an add= that is not at a parameter boundary", () => {
+      // Only the first `?` in a URL begins its query; `[?&]` matched the one
+      // inside a value too.
+      expect(addUrlFromQuery("?next=/somewhere?add=x")).toBe("");
+      expect(canonicalAddHref("/", "?next=/somewhere?add=x", "")).toBeNull();
+    });
+
+    it("decodes an encoded segment before putting its query back on", () => {
+      // Reading the mere presence of a query as proof the segment was raw
+      // double-encoded this into something that is not a URL at all.
+      expect(canonicalAddHref("/add/https%3A%2F%2Fx.test%2Fa", "?edition=2", "")).toBe(
+        encoded("https://x.test/a?edition=2"),
+      );
+      expect(parseRoute(addHref("https://x.test/a?edition=2"))).toEqual({
+        kind: "add",
+        url: "https://x.test/a?edition=2",
+      });
+    });
+  });
+
+  it("is null when there is nothing to rewrite", () => {
+    expect(canonicalAddHref("/", "", "")).toBeNull();
+    expect(canonicalAddHref("/read/example", "?at=spya-k6fpme", "")).toBeNull();
+    expect(canonicalAddHref("/add/", "", "")).toBeNull();
+    // Already canonical: no second replaceState, and no rewrite loop.
+    const href = encoded("https://x.test/a?x=1");
+    expect(canonicalAddHref(href, "", "")).toBeNull();
+  });
+
+  it("is idempotent, so a rewrite can never chase its own tail", () => {
+    const once = canonicalAddHref("/add/https://x.test/a", "?x=1", "");
+    expect(once).not.toBeNull();
+    expect(canonicalAddHref(once as string, "", "")).toBeNull();
+  });
+});
+
+describe("addUrlFromQuery", () => {
+  it("ignores a parameter that merely ends in add", () => {
+    expect(addUrlFromQuery("?padd=https://x.test/a")).toBe("");
+    expect(addUrlFromQuery("?at=spya-k6fpme")).toBe("");
+  });
+
+  it("reads add= from the middle, taking everything after it", () => {
+    expect(addUrlFromQuery("?cols=0,1&add=https://x.test/a?b=1")).toBe("https://x.test/a?b=1");
+  });
+
+  it("is empty for an empty value", () => {
+    expect(addUrlFromQuery("?add=")).toBe("");
+    expect(addUrlFromQuery("")).toBe("");
   });
 });

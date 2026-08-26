@@ -128,12 +128,20 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
           Add an article
         </label>
         <div className="tw:flex tw:gap-2">
+          {/* `type="text"`, not `type="url"`. The browser's own URL validation
+              will not submit a value without a scheme, and typing
+              `example.com/an-essay` is meant to work — see `normaliseUrl` in
+              src/ingest.ts. `inputMode` still asks a phone keyboard for the
+              URL layout, and the validation that matters is `slugFromUrl`
+              below, which is the same function the server uses. */}
           <input
             id="add-url"
-            type="url"
+            type="text"
+            inputMode="url"
+            autoComplete="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.com/an-essay-worth-reading"
+            placeholder="example.com/an-essay-worth-reading"
             spellCheck={false}
             className="tw:min-w-0 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight/60"
           />

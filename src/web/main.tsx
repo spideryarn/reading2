@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { LucideProvider } from "lucide-react";
 import { App } from "./App.js";
-import { addHref, addUrlFrom, parseRoute, readHref } from "./router.js";
+import { canonicalAddHref, parseRoute, readHref } from "./router.js";
 import { isSpideryarnId } from "../ids.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
 // styles.css inside `@layer app` — importing the two side by side would
@@ -54,10 +54,49 @@ history.scrollRestoration = "manual";
  * not the mechanism: the emitter it patches is the same one every
  * `useQueryState` in this app subscribes to.
  *
- * Called here, above the four rewrites below, so there is never a window in
+ * Called here, above all four rewrites below, so there is never a window in
  * which a history write is invisible. Patching is idempotent per adapter.
  */
 enableHistorySync();
+
+/**
+ * `/add/<a whole URL>` and `/?add=<a whole URL>` become `/add/<encoded>`.
+ *
+ * > Add a url that I can use to add something directly, e.g.
+ * > `/add/[my-full-url-here]` or `/?add=[my-full-url-here]` or similar
+ * >
+ * > — Greg, 2026-08-26
+ *
+ * Both, because both are things a person types, and neither is a spelling React
+ * should have to know about. Fourth rewrite in this file and the same shape as
+ * the other three: recognise every entrance, leave by one door.
+ *
+ * **First, though, and that is not tidiness — it is three bugs.** The three
+ * rewrites below all read `location.search` and `location.hash`, and on a raw
+ * `/add/…` address those belong to the *pasted* URL rather than to us. Running
+ * them first meant (GPT Sol's review, 2026-08-26):
+ *
+ *  - `/add/https://x.test/a?slug=story` became `/read/story`. Nothing was
+ *    queued at all; the reader was sent to an article that may not exist.
+ *  - `/add/https://x.test/a?about=1` queued `https://x.test/a` — the query
+ *    string stripped, so a different page.
+ *  - `/add/https://x.test/a#spya-k6fpme` queued `https://x.test/a?at=spya-k6fpme`,
+ *    turning a fragment that never reaches a server into a real query parameter.
+ *
+ * Canonicalising first fixes all three at once rather than one at a time,
+ * because what it leaves behind — `/add/<encoded>` with no query and no hash —
+ * is an address none of the three can match.
+ *
+ * **The decision itself is `canonicalAddHref` in router.ts**, not here. This
+ * file is module-init side effects, which nothing can test; that function is
+ * pure and is tested, which is the difference between the three bugs above
+ * being caught by a reviewer and being caught by `npm test`.
+ *
+ * `replaceState`, as with the others: the address you typed is a spelling, not
+ * a page you visited, and pressing Back should not offer to re-add anything.
+ */
+const canonicalAdd = canonicalAddHref(location.pathname, location.search, location.hash);
+if (canonicalAdd) history.replaceState(history.state, "", canonicalAdd);
 
 /**
  * Deep links used to be `/#spya-k6fpme`; position now lives in `?at=`.
@@ -146,43 +185,6 @@ if (aboutish) {
       ? readHref(route.slug, rest, "metadata")
       : `${location.pathname}${rest ? `?${rest}` : ""}`;
   history.replaceState(history.state, "", `${href}${location.hash}`);
-}
-
-/**
- * `/add/<a whole URL>` and `/?add=<a whole URL>` become `/add/<encoded>`.
- *
- * > Add a url that I can use to add something directly, e.g.
- * > `/add/[my-full-url-here]` or `/?add=[my-full-url-here]` or similar
- * >
- * > — Greg, 2026-08-26
- *
- * Both, because both are things a person types, and neither is a spelling React
- * should have to know about. Fourth rewrite in this file and the same shape as
- * the other three: recognise every entrance, leave by one door.
- *
- * **The raw spelling is the reason this is here rather than in `parseRoute`.**
- * `parseRoute` is handed `location.pathname` and nothing else, and a pasted
- * `/add/https://example.com/x?utm=1` has already had its `?utm=1` sliced off
- * into `location.search` by the time anyone looks. From there it is
- * indistinguishable from one of our own view parameters — `?at=`, `?cols=` —
- * and the article would be added without it. So the whole location is reeled
- * back in here, while it is still all in one place.
- *
- * `?add=` is the same URL by the other door. It is read with `URLSearchParams`,
- * unlike the query-string edits above, because here we want exactly the
- * decoding a query parameter is supposed to get; those edit *our* parameters as
- * text specifically to avoid re-encoding them.
- *
- * `replaceState`, as with the others: the address you typed is a spelling, not
- * a page you visited, and pressing Back should not offer to re-add anything.
- */
-const addParam = new URLSearchParams(location.search).get("add");
-const rawAdd = addParam ?? addUrlFrom(location.pathname, location.search, location.hash);
-if (rawAdd) {
-  const href = addHref(rawAdd);
-  if (href !== location.pathname + location.search + location.hash) {
-    history.replaceState(history.state, "", href);
-  }
 }
 
 /**

@@ -50,43 +50,44 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
-import { slugFromUrl } from "../ingest.js";
+import { normaliseUrl, slugFromUrl } from "../ingest.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
-/**
- * Whether we are willing to hand this to the queue.
- *
- * The scheme test is the half the homepage got for free and this page does not:
- * there the box is an `<input type="url">`, which the browser will not submit
- * without one. Here the string came out of the address bar, so `javascript:`
- * and `file:` can reach us — and `slugFromUrl` says yes to both, because it
- * only ever looks at the last path segment. Neither would do any harm (the
- * fetch happens on the server and would simply fail), but "Fetching the page"
- * followed a minute later by a stack-shaped error is a much worse answer than
- * "that is not a web address".
- */
-function addable(url: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url.trim());
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-  return slugFromUrl(url) !== "";
-}
-
 export function AddPage({ url }: { url: string }) {
   const queue = useJobs();
   const [started, setStarted] = useState<string | null>(null);
-  const ok = addable(url);
 
-  // Not state: it must be read and written inside the effect below without
-  // re-running it, and it has to survive StrictMode's remount, which state
-  // does not.
-  const posted = useRef(false);
+  /* What the server will actually fetch, worked out here so the page can show
+     it. Typing `example.com/an-essay` into the address bar is meant to work
+     (Greg, 2026-08-26), and the reader should be able to see the `https://`
+     they did not type before the fetch rather than after it.
+
+     There is deliberately no scheme check beside this. `slugFromUrl` refuses
+     anything it could not fetch — `javascript:`, `file:`, a mistyped `htp:` —
+     and it is the same function the server derives the slug with, so a second
+     opinion here could only ever be a way for the two to disagree. */
+  const source = normaliseUrl(url);
+  const ok = slugFromUrl(source) !== "";
+
+  /* Which URL we have already posted, **not a boolean**. It was a boolean, and
+     the difference is a bug GPT Sol found (2026-08-26): this component does not
+     remount when only the URL changes, so going from one `/add/…` address to
+     another left the flag set and the second article was never queued — a page
+     that says "Adding an article" and is not. Holding the URL means "have we
+     posted *this* one", which is the question the effect is actually asking.
+
+     A ref rather than state for two reasons: it must be read and written inside
+     the effect without re-running it, and it has to survive StrictMode's
+     remount, which state does not. */
+  const posted = useRef<string | null>(null);
+
+  /* Bumped by Retry. The effect's guard is on the URL, and after a failed POST
+     the URL is the same one — so without something that changes, pressing Retry
+     would do nothing at all. */
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
 
   // Through a ref, the same way `useJobs` holds `onFinished`. `queue.add` is a
   // fresh closure on every poll, so depending on it directly would re-run this
@@ -97,12 +98,35 @@ export function AddPage({ url }: { url: string }) {
   addRef.current = queue.add;
 
   useEffect(() => {
-    if (!ok || posted.current) return;
-    posted.current = true;
-    void addRef.current(url).then((job) => {
+    /* Cleared rather than simply skipped. Going from a URL we would add to one
+       we would not — by editing the address bar, which does not remount this
+       component — used to leave the previous job on screen, still running, and
+       still able to navigate away when it finished. */
+    if (!ok) {
+      setStarted(null);
+      setFailed(false);
+      return;
+    }
+    const want = `${attempt}\u0000${source}`;
+    if (posted.current === want) return;
+    posted.current = want;
+    setStarted(null);
+    setFailed(false);
+    void addRef.current(source).then((job) => {
+      /* **Only if this is still the POST we are waiting for.** Two `/add/`
+         addresses in quick succession, or Retry, leave two requests in flight,
+         and the first can land last — which would put the *first* article's job
+         on screen and then navigate to it. The ref is the current request's
+         name, so comparing against it is the check. GPT Sol, 2026-08-26.
+
+         `null` means the POST itself failed, and `useJobs` has put the reason
+         in `queue.error`. Without that branch the page sat on "Queueing it…"
+         for ever, with the error above it and no way to try again. */
+      if (posted.current !== want) return;
       if (job) setStarted(job.id);
+      else setFailed(true);
     });
-  }, [url, ok]);
+  }, [source, ok, attempt]);
 
   const job = queue.jobs.find((j) => j.id === started) ?? null;
 
@@ -120,15 +144,15 @@ export function AddPage({ url }: { url: string }) {
             link to an unvisited address on a page they may have arrived at from
             a bookmarklet is a click we have no reason to offer. */}
         <p className="tw:mt-2 tw:mb-0 tw:font-mono tw:text-[13px] tw:break-all tw:text-muted-foreground">
-          {url}
+          {ok ? source : url}
         </p>
       </header>
 
       {!ok && (
         <p className="tw:rounded-md tw:border tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground">
-          That isn't a web address we can fetch. It needs to start with{" "}
-          <code className="tw:font-mono">http://</code> or{" "}
-          <code className="tw:font-mono">https://</code>.
+          That isn't a web address we can fetch. A host and a path is enough —{" "}
+          <code className="tw:font-mono">example.com/an-essay</code> — and the{" "}
+          <code className="tw:font-mono">https://</code> is optional.
         </p>
       )}
 
@@ -141,7 +165,23 @@ export function AddPage({ url }: { url: string }) {
           behind `useSlow` like the shelf's "Reading the shelf…": there the page
           is full of cards while you wait, and here it would be a heading and
           nothing else. */}
-      {ok && !job && <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>}
+      {ok && !job && !failed && (
+        <p className="tw:text-sm tw:text-muted-foreground">Queueing it…</p>
+      )}
+
+      {failed && (
+        <p className="tw:mb-0 tw:text-sm tw:text-muted-foreground">
+          It didn't get as far as the queue.{" "}
+          <button
+            type="button"
+            className="tw:cursor-pointer tw:border-0 tw:bg-transparent tw:p-0 tw:text-highlight tw:underline"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            Try again
+          </button>
+          .
+        </p>
+      )}
 
       {job && <JobCard job={job} queue={queue} onHide={() => navigate(LIBRARY_HREF)} />}
 

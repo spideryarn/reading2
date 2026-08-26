@@ -69,17 +69,140 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
   reader to wherever they came from rather than dropping them here to watch a job that has already
   finished.
 
+### Three ways the address can lie about itself
+
+All three were found by review rather than by use, and together they are the argument for the
+rewrite being a pure `canonicalAddHref` that main.tsx calls rather than four lines inside it:
+
+- **The target URL's own `add=`.** `/add/https://x.test/article?add=2` canonicalised to `/add/2` —
+  the article's own parameter read as ours, and replacing it. The path form is asked first now.
+- **An `add=` that is not a parameter.** `?next=/somewhere?add=x` matched, because only the *first*
+  `?` in a URL begins its query and the pattern accepted any of them. Anchored to a real boundary now.
+- **An encoded segment carrying a query.** `/add/https%3A%2F%2Fx.test%2Fa?edition=2` was
+  double-encoded into something that is not a URL at all, because a query string's mere presence was
+  being read as proof the segment was raw. The query is now always put back, whichever spelling the
+  segment is in — which is what the first of these three needed anyway.
+
 An article already on the shelf takes about a second — every step finds its artefact and skips — so
 adding the same URL twice is a blink and then the article, rather than an error telling you that you
 already have it.
 
-**One check the shelf gets for free and this page does not.** The box there is an
-`<input type="url">`, which the browser will not submit without a scheme; a string out of the address
-bar has no such filter, and `slugFromUrl` says yes to `javascript:` and `file:` because it only ever
-looks at the last path segment. Neither could do any harm — the fetch happens on the server and would
-simply fail — but "Fetching the page" followed a minute later by a stack-shaped error is a much worse
-answer than *that is not a web address*. So `addable` in
-[`AddPage.tsx`](../../src/web/AddPage.tsx) requires `http:` or `https:` before anything is queued.
+**The add box stopped being an `<input type="url">` for this.** The browser will not submit one
+without a scheme, and `example.com/an-essay` is meant to work — so it is a plain text input whose
+validation is `slugFromUrl`, the same function the server derives the slug with. The one check that
+used to live on the page has moved into `slugFromUrl` itself; see the next section.
+
+## Two URLs, one article
+
+> And will this de-dupe correctly if near-identical versions of the url are used, e.g. http vs https
+> or without url protocol or capitalised similar non-significant changes, or if we already have the
+> article?
+>
+> — Greg, 2026-08-26
+
+It did not. `freeSlug` compared the URL you gave against the one in `meta.json` **as strings**, so
+adding `http://x.test/piece` when the shelf held `https://x.test/piece` read as a different article:
+it stepped aside to `x-piece`, fetched it again, extracted it again, and paid for a second tree and
+a second arc — then put two cards on the shelf under one headline. Nothing errored, and the check
+anyone would run said the article was there. [Silent success](../reusable/silent-success.md) again.
+
+The fix is two functions in [`src/ingest.ts`](../../src/ingest.ts), and **the reason there are two
+rather than one is the whole design**:
+
+| | Answers | May it change the address? |
+|---|---|---|
+| `normaliseUrl` | *what do we fetch and store?* | **No.** Whatever comes out is what gets fetched. |
+| `urlKey` | *is this the article we already have?* | It is never fetched, so yes — freely. |
+
+`normaliseUrl` is therefore limited to what the URL spec itself calls insignificant: it supplies a
+missing scheme (`example.com/x`, `//example.com/x` → `https://…`), lower-cases the scheme and host,
+drops a default port, and drops the fragment — which is never sent to a server, so an article whose
+stored URL carried one would be claiming we fetched something we did not. It leaves `http` alone.
+Turning `http` into `https` is a different request to a possibly different server, and that is not a
+call to make on the reader's behalf. Anything it will not fetch comes back as `""`, which is one rule
+with one answer — an early version handed the input back instead, which reads well in an error
+message and is indistinguishable from *already normal*, so `http://127.0.0.1/x` was refused and then
+happily slugged as `x` one function later.
+
+`urlKey` is where `http` and `https` become one article. On top of the above it drops the scheme
+entirely, a leading `www.`, one trailing slash, and the tracking parameters a share button staples on
+(`utm_*`, `fbclid`, `igshid` and a dozen more).
+
+### The rule it is written to, which is an asymmetry
+
+**Failing to merge two spellings of one article costs a duplicate** — a second card on the shelf,
+visible, deletable, paid for once. **Merging two different articles costs the wrong article**,
+silently, under the headline the reader pasted, with nothing anywhere saying so. So a merge has to be
+one the spec or universal practice actually guarantees, never one that is merely usually right.
+
+That rule arrived from [GPT Sol's review](../../scripts/run-codex.ts) of the first version, which
+merged four things it should not have, and each is now a test:
+
+| Merged before | Why it must not |
+|---|---|
+| `/Why-Trees` and `/why-trees` | plenty of servers are case-sensitive and mean it |
+| `?tag=a&tag=b` and `?tag=b&tag=a` | a repeated parameter's order is part of the request |
+| `?a=x%26b%3Dy` and `?a=x&b=y` | decoding and re-joining on `=` and `&` is ambiguous — the first is **one** parameter whose value contains an ampersand |
+| `alice:pw@host/x` and `bob:pw@host/x` | two readers' credentialled views of a page are not one article |
+| `?a=1&&b=2` and `?a=1&b=2` | an empty query field is part of the request target; only *tracking* pairs are dropped |
+
+The path-case one is worth dwelling on, because the argument *for* lower-casing was not silly: the
+slug is lower-cased already, so `/Why-Trees` and `/why-trees` collide on the slug whatever the key
+says. But that collision is exactly what `freeSlug`'s ladder is for, and it resolves it into the
+cheap failure rather than the expensive one. Credentials are not dropped from the key — they are
+refused by `normaliseUrl` outright, since an `/add/…` URL now lives in browser history and in
+whatever access log sees the request, and percent-encoding hides a password from nobody.
+
+Query-string **order between different names** stays significant for the same reason, and that is a
+deliberate non-merge: nobody reorders a URL they copied, so the merge buys nothing, and it cannot be
+had without the sort that broke the repeated-parameter case.
+
+**What else it will not merge:** a different host (`a.example/news` and `b.example/news` are what
+`freeSlug`'s ladder exists for), a real subdomain (`blog.example.com` is a site; only `www.` is
+decoration), a non-default port, and any query parameter not on the tracking list — `?ref=`, `?s=`
+and `?id=` are used both ways, so they stay.
+
+Both are tested exhaustively in [`tests/ingest.test.ts`](../../tests/ingest.test.ts), and the ladder
+built on top of them in [`tests/jobs.test.ts`](../../tests/jobs.test.ts) § `freeSlug`.
+
+### Two things claim a slug, and one of them only exists for a minute
+
+`freeSlug` now takes its claim lookup as an argument, which is what makes every decision above
+testable without a filesystem, a network or a queue. The default consults **`meta.json` first, and
+then the live queue** — because a job that is queued or running has taken a slug and not yet written
+a `meta.json` for it. Without that second half, two different articles with the same last path
+segment added within a minute of each other both get the bare slug, and the later one is then handed
+the earlier one's job by `activeFor` and quietly never happens.
+
+### What it still cannot know
+
+Two addresses that are genuinely different and serve the same piece — a syndication, a canonical URL
+and an AMP one, a link-shortener — are two articles here, and nothing short of fetching both could
+say otherwise. `<link rel="canonical">` is in the HTML we already fetch and would close most of that
+gap; it is not read yet.
+
+## Opening a link starts a fetch, and that is new
+
+Nothing else in this app does anything expensive because you *arrived* somewhere. The add page does:
+the POST is on mount, which is what makes a bookmarklet work and also what turns a link a stranger
+sends into a server-side fetch of their choosing. `normaliseUrl` therefore refuses a host that is on
+this machine or this network — loopback, link-local (`169.254.169.254` is the one worth naming),
+`10./172.16-31./192.168.`, the IPv6 equivalents, and `localhost` — and it refuses them *after*
+`new URL` has expanded the compressed spellings, so `127.1` and `0x7f.0.0.1` are caught by a check
+for `127.0.0.1`.
+
+**The obvious version of that check has a hole, and it took a second review pass to find.**
+`http://[::ffff:127.0.0.1]/` is loopback, and `new URL` re-spells it as `[::ffff:7f00:1]` — neither
+a dotted quad nor `::1`, so a check for those two waves it straight through. An IPv4-mapped address
+now has its IPv4 half decoded and checked properly, so `::ffff:8.8.8.8` stays fetchable; the rest of
+`::/96` — `::`, `::1`, the deprecated v4-compatible form — is refused outright, being unroutable
+anyway.
+
+**That is a smaller claim than "no SSRF" and the gap is stated in
+[security.md](security.md).** A *name* that resolves into the private range still gets through, as
+does a redirect into it, as does a rebind between the check and the connection; only the fetch itself
+can catch those. Refusing `localhost` also costs the ability to add a page from a dev server on this
+machine, which is a real loss and a small one — this reads published articles.
 
 ## The pipeline is a list, not a function
 

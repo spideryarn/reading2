@@ -228,14 +228,83 @@ export function addUrlFrom(pathname: string, search = "", hash = ""): string {
   if (!pathname.startsWith(ADD_PREFIX)) return "";
   const segment = pathname.slice(ADD_PREFIX.length);
   if (segment === "") return "";
-  if (segment.includes(":") || segment.includes("/")) return segment + search + hash;
-  // A hand-mangled escape throws here, and this runs during a render: an
-  // uncaught URIError would blank the page over a typo in the address bar.
+  /* **The query string and fragment are always put back, whichever spelling
+     the segment is in.** They can only have come from the pasted URL —
+     `encodeURIComponent` escapes `?` and `#`, so a canonical address has
+     neither — and the two mistakes here were both about that. Dropping them
+     lost `?edition=2` from `/add/example.com?edition=2`, which is a different
+     article added silently. Then reading their mere presence as proof the
+     segment was raw double-encoded `/add/https%3A%2F%2Fx.test%2Fa?edition=2`
+     into something that is not a URL at all. Both from GPT Sol, 2026-08-26. */
+  return (looksRaw(segment) ? segment : safeDecode(segment)) + search + hash;
+}
+
+/**
+ * A URL somebody typed, rather than one `addHref` wrote.
+ *
+ * Exact rather than heuristic: `encodeURIComponent` escapes both `:` and `/`,
+ * so a canonical segment can contain neither, and every URL with a scheme or a
+ * path contains at least one. The case it cannot decide alone is a bare host —
+ * `example.com` — where both readings give the same answer anyway.
+ */
+function looksRaw(value: string): boolean {
+  return value.includes(":") || value.includes("/");
+}
+
+/** A hand-mangled escape throws, and this runs during a render. */
+function safeDecode(value: string): string {
   try {
-    return decodeURIComponent(segment);
+    return decodeURIComponent(value);
   } catch {
-    return segment;
+    return value;
   }
+}
+
+/**
+ * The URL in a `?add=` query, which is Greg's second spelling.
+ *
+ * **Read out of the raw query text, not through `URLSearchParams`**, and both
+ * of the reasons are bugs the obvious version had (GPT Sol, 2026-08-26):
+ * `URLSearchParams` decodes `+` as a space, so `?add=https://x.test/a+b` asked
+ * for a URL with a space in it; and it stops a value at the next `&`, so
+ * `?add=https://x.test/a?x=1&y=2` quietly dropped `y=2` and added a different
+ * page.
+ *
+ * So **`add=` takes the rest of the query string**, however many `&`s and `?`s
+ * are in it. That is the only rule under which an unencoded URL can survive
+ * being a query parameter, and it costs nothing: there is no other parameter
+ * that means anything on this route.
+ */
+export function addUrlFromQuery(search: string): string {
+  /* Anchored to a real parameter boundary — the start, or an `&`. `[?&]` also
+     matched the `?` *inside* a value, so `?next=/somewhere?add=x` was read as
+     an add request. Only the first `?` in a URL begins its query. */
+  const m = /(?:^[?]?|&)add=(.*)$/.exec(search);
+  const value = m?.[1] ?? "";
+  if (value === "") return "";
+  return looksRaw(value) ? value : safeDecode(value);
+}
+
+/**
+ * Where an `/add/…` or `?add=…` address should really be, or `null` if it is
+ * already there (or is not one at all).
+ *
+ * Pulled out of main.tsx so the rewrite can be tested as a pure function rather
+ * than as a side effect of loading a module — which is what let three of its
+ * failure modes go unnoticed until GPT Sol read it. See
+ * [`tests/router.test.ts`](../../tests/router.test.ts).
+ */
+export function canonicalAddHref(pathname: string, search: string, hash: string): string | null {
+  /* **The path is asked first, and the order is the whole of this line's
+     content.** With `?add=` consulted first, `/add/https://x.test/article?add=2`
+     canonicalised to `/add/2`: the target URL's *own* `add` parameter was read
+     as ours and replaced it. And since this now runs before every other rewrite
+     in main.tsx, nothing downstream could have repaired it. GPT Sol, 2026-08-26. */
+  const fromPath = addUrlFrom(pathname, search, hash);
+  const url = fromPath !== "" ? fromPath : addUrlFromQuery(search);
+  if (url === "") return null;
+  const href = addHref(url);
+  return href === pathname + search + hash ? null : href;
 }
 
 /**

@@ -19,7 +19,7 @@ import PQueue from "p-queue";
 import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mintId } from "./ids.js";
-import { isSlug } from "./ingest.js";
+import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { errorFields, log, since } from "./log.js";
 import {
   assertProduced,
@@ -669,15 +669,51 @@ function sameWork(
  * The add box's preview can therefore be one slug out on a collision. That is
  * the right way round: the box guesses before asking, the server knows, and the
  * job card shows what the server decided.
+ *
+ * ## "A different URL" is a judgement, not a string comparison
+ *
+ * > And will this de-dupe correctly if near-identical versions of the url are
+ * > used, e.g. http vs https or without url protocol or capitalised similar
+ * > non-significant changes, or if we already have the article?
+ * >
+ * > — Greg, 2026-08-26
+ *
+ * It did not. This compared the two URLs as **strings**, so every one of those
+ * spellings read as a different article: adding `http://x.test/piece` when the
+ * shelf held `https://x.test/piece` stepped aside to `x-piece`, re-fetched it,
+ * re-extracted it, and paid for a second tree and a second arc — and then put
+ * two cards on the shelf under the same headline. Nothing errored, and the
+ * check anyone would run said the article was there. `urlKey` (src/ingest.ts)
+ * is the comparison now, and it is the only thing in the codebase that decides
+ * whether two addresses are one article.
+ *
+ * ## The claim lookup, and why it is an argument
+ *
+ * A slug can be spoken for by two different things, and the second only exists
+ * for a few minutes: a `meta.json` on disk, or **a job that is queued or
+ * running right now** and has not written one yet. Without the second, two
+ * different articles with the same last path segment added within a minute of
+ * each other both get the bare slug — and the later one is then handed the
+ * earlier one's job by `activeFor` below and quietly never happens.
+ *
+ * Passing the lookup in also means every decision above can be tested without a
+ * filesystem, a network or a queue, which is
+ * [`tests/jobs.test.ts`](../tests/jobs.test.ts) § freeSlug. The default is the
+ * one line those tests do not cover.
  */
-async function freeSlug(slug: string, url: string): Promise<string> {
+export async function freeSlug(
+  slug: string,
+  url: string,
+  claimedBy: (candidate: string) => Promise<string | undefined> = onShelfOrInFlight,
+): Promise<string> {
+  const wanted = urlKey(url);
   const taken = async (candidate: string) => {
-    const existing = await urlForSlug(candidate);
-    return existing !== undefined && existing !== url;
+    const claim = await claimedBy(candidate);
+    return claim !== undefined && urlKey(claim) !== wanted;
   };
   if (!(await taken(slug))) return slug;
 
-  const host = new URL(url).hostname.replace(/^www\./, "").replace(/\.[a-z]+$/, "");
+  const host = new URL(normaliseUrl(url)).hostname.replace(/^www\./, "").replace(/\.[a-z]+$/, "");
   const withHost = `${host.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${slug}`;
   if (isSlug(withHost) && !(await taken(withHost))) return withHost;
 
@@ -686,6 +722,18 @@ async function freeSlug(slug: string, url: string): Promise<string> {
     if (!(await taken(numbered))) return numbered;
   }
   throw Object.assign(new Error(`Too many articles already called "${slug}".`), { status: 409 });
+}
+
+/**
+ * What already lays claim to a slug: the article on disk, or the job on its way
+ * to becoming one.
+ *
+ * `meta.json` first and it wins outright — a finished article is a fact, and an
+ * in-flight job for the same slug is by definition working on that same
+ * article, since it got the slug from here in the first place.
+ */
+async function onShelfOrInFlight(candidate: string): Promise<string | undefined> {
+  return (await urlForSlug(candidate)) ?? activeFor(candidate)?.url;
 }
 
 /**

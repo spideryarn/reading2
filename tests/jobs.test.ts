@@ -617,13 +617,25 @@ describe("freeSlug", () => {
       "http://www.example.com/why-trees",
       "https://example.com/why-trees",
       "https://example.com/why-trees/",
-      "https://EXAMPLE.com/Why-Trees",
+      "https://EXAMPLE.com/why-trees",
       "example.com/why-trees",
       "https://example.com/why-trees#conclusion",
       "https://example.com/why-trees?utm_source=twitter",
     ]) {
       expect(await freeSlug("why-trees", spelling, have), spelling).toBe("why-trees");
     }
+  });
+
+  /* The one spelling on Greg's list that deliberately does NOT merge. A
+     case-sensitive server may serve two different pages at `/Why-Trees` and
+     `/why-trees`, so the key keeps them apart and this is what resolves the
+     slug collision that follows — into a visible duplicate rather than into
+     the wrong article under the right headline. See `urlKey`. */
+  it("steps aside when only the path's capitalisation differs", async () => {
+    const have = shelf({ "why-trees": "https://www.example.com/why-trees" });
+    expect(await freeSlug("why-trees", "https://example.com/Why-Trees", have)).toBe(
+      "example-why-trees",
+    );
   });
 
   it("steps aside for a different article with the same last path segment", async () => {
