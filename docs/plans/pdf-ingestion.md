@@ -425,6 +425,12 @@ Measured on this laptop already: pass 0 on Nagel is 392 ms.
 
 ### Upload
 
+> **Worked out in full in [pdf-upload-and-storage.md](pdf-upload-and-storage.md)** (2026-08-26) —
+> the bucket, the signed-upload flow measured against the running local stack rather than read out
+> of the docs, the blob-store seam, the checks before a job is queued, and an appendix on where raw
+> bytes should finally live. Everything below still stands; that file is this section at the size
+> somebody could build from. This remains [build order](#build-order) step 7, and still unbuilt.
+
 The homepage add box gains a file drop beside the URL field.
 
 ```
