@@ -59,6 +59,21 @@ const REVISION_ID = "00000000-0000-4000-8000-0000000000d2";
 /** An older revision, so the `current_revision_id` join has something to exclude. */
 const OLD_REVISION_ID = "00000000-0000-4000-8000-0000000000d3";
 
+/**
+ * A second article, so `excludeSlug` has something to prove.
+ *
+ * One article is not enough to tell the two designs apart: excluding a slug
+ * *after* the cap and excluding it *inside the query* both return nothing when
+ * there is nowhere else for a hit to come from. This one holds a single
+ * deliberately low-ranked match, so it only shows up if the exclusion happened
+ * before the limit. See LibrarySearchOptions in src/store/contracts.ts.
+ */
+const OTHER_SLUG = "test-pg-shelf-other";
+const OTHER_ARTICLE_ID = "00000000-0000-4000-8000-0000000000d4";
+const OTHER_REVISION_ID = "00000000-0000-4000-8000-0000000000d5";
+/** Its one block. Kept out of `B` below, which is all one article's ids. */
+const FAINT = "spya-pgaaqf";
+
 /** A word no real article contains, so a hit cannot be a coincidence. */
 const RARE = "zibbleflux";
 
@@ -201,6 +216,59 @@ when("the Postgres shelf and library search", () => {
       // Attached to the OLD revision, so it must never be found.
       block(B.old, OLD_REVISION_ID, 0, `${RARE} in an older draft.`),
     ]);
+
+    /* The second article. One mention in a very long paragraph, so length
+       normalisation puts it below both of the first article's matches — which
+       is what makes `excludeSlug` testable: at a limit of two it is invisible
+       unless the exclusion happened inside the query. */
+    await db.insert(articles).values({
+      id: OTHER_ARTICLE_ID,
+      ownerId: currentOwnerId(),
+      slug: OTHER_SLUG,
+    });
+    await db.insert(articleRevisions).values({
+      id: OTHER_REVISION_ID,
+      articleId: OTHER_ARTICLE_ID,
+      status: "published",
+      title: "Something Else Entirely",
+      fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
+      tree: {
+        version: "1",
+        generator: "test",
+        slug: OTHER_SLUG,
+        rootId: "n0",
+        nodes: {
+          n0: {
+            id: "n0",
+            depth: 0,
+            parent: null,
+            children: [],
+            range: [FAINT, FAINT],
+            title: "Root",
+            gist: "Another test article about nothing.",
+          },
+        },
+      },
+    });
+    await db
+      .update(articles)
+      .set({ currentRevisionId: OTHER_REVISION_ID })
+      .where(eq(articles.id, OTHER_ARTICLE_ID));
+    await db.insert(blockIdentities).values({ articleId: OTHER_ARTICLE_ID, blockId: FAINT });
+
+    const faintText = `A single ${RARE} ${"buried among a good many other words besides ".repeat(40)}`;
+    await db.insert(revisionBlocks).values({
+      articleId: OTHER_ARTICLE_ID,
+      revisionId: OTHER_REVISION_ID,
+      blockId: FAINT,
+      ordinal: 0,
+      tag: "p",
+      kind: "text",
+      text: faintText,
+      words: faintText.split(/\s+/).length,
+      html: `<p>${faintText}</p>`,
+      gistable: true,
+    });
   });
 
   afterAll(async () => {
@@ -210,11 +278,13 @@ when("the Postgres shelf and library search", () => {
 
   async function cleanUp() {
     const db = getDb();
-    await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, ARTICLE_ID));
-    await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, ARTICLE_ID));
-    await db.delete(articleRevisions).where(eq(articleRevisions.articleId, ARTICLE_ID));
-    await db.delete(blockIdentities).where(eq(blockIdentities.articleId, ARTICLE_ID));
-    await db.delete(articles).where(eq(articles.id, ARTICLE_ID));
+    for (const id of [ARTICLE_ID, OTHER_ARTICLE_ID]) {
+      await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, id));
+      await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
+      await db.delete(articleRevisions).where(eq(articleRevisions.articleId, id));
+      await db.delete(blockIdentities).where(eq(blockIdentities.articleId, id));
+      await db.delete(articles).where(eq(articles.id, id));
+    }
   }
 
   const mine = async (query: string, limit = 20) =>
@@ -301,6 +371,30 @@ when("the Postgres shelf and library search", () => {
 
     it("answers an empty query with nothing, rather than everything", async () => {
       expect((await pgLibrarySearch.searchLibrary("   ", 10)).hits).toEqual([]);
+    });
+
+    it("leaves an excluded article out before the cap, not after it", async () => {
+      /* The order is the whole assertion, and it takes two articles to make it.
+         At a limit of two, this article supplies both hits — so an exclusion
+         applied to the RESULTS would hand back an empty list. Because it is a
+         `ne` in the WHERE clause, the second article's faint match gets a place
+         instead. tests/library-search.test.ts holds the filesystem adapter to
+         the same rule; src/store/contracts.ts § LibrarySearchOptions says why. */
+      const both = await pgLibrarySearch.searchLibrary(RARE, 2);
+      expect(both.hits.map((h) => h.slug)).toEqual([SLUG, SLUG]);
+
+      const without = await pgLibrarySearch.searchLibrary(RARE, 2, { excludeSlug: SLUG });
+      expect(without.hits.map((h) => h.blockId)).toEqual([FAINT]);
+      // And `capped` describes the list the caller got, not a longer one it was
+      // never shown.
+      expect(without.capped).toBe(false);
+    });
+
+    it("excludes nothing when asked for a slug that is not there", async () => {
+      const { hits } = await pgLibrarySearch.searchLibrary(RARE, 20, {
+        excludeSlug: "no-such-article",
+      });
+      expect(hits.some((h) => h.slug === SLUG)).toBe(true);
     });
   });
 

@@ -42,7 +42,8 @@ import { currentOwnerId } from "../src/owner.js";
 import { ADDED_AT } from "../src/store/pg.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
-import { fsArticleReader, fsCommentStore } from "../src/store/fs.js";
+import { fsArticleReader, fsCommentStore, fsLibrarySearch } from "../src/store/fs.js";
+import { pgLibrarySearch } from "../src/store/pg-shelf.js";
 import { importArticle } from "../src/store/import.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import type { LibraryEntry } from "../src/types.js";
@@ -367,6 +368,66 @@ when("the filesystem and Postgres stores agree", () => {
     expect(fromPg.map((e) => e.slug).filter((slug) => onDisk.has(slug))).toEqual(
       fromFiles.filter((e) => !e.fixture && onDisk.has(e.slug)).map((e) => e.slug),
     );
+  });
+
+  /**
+   * **The one thing the two searches must agree about exactly.**
+   *
+   * `src/store/contracts.ts` is explicit that a parity test may NOT demand the
+   * two adapters find the same blocks — Postgres stems and drops stop words,
+   * the filesystem adapter matches substrings, and they genuinely disagree on
+   * single words. `excludeSlug` is different in kind: it is not a matching rule
+   * but a promise that a named article is absent, and a promise one store keeps
+   * and the other does not is the exact shape of failure this whole suite is for.
+   *
+   * So the assertion is per-adapter and matcher-independent: whatever each one
+   * finds, excluding an article removes every hit from it and leaves the rest
+   * alone. That the exclusion happens *before* the cap rather than after is
+   * pinned separately, by tests/library-search.test.ts and
+   * tests/store-shelf-pg.test.ts, which each build a corpus rigged for it —
+   * real articles cannot be relied on to supply that shape.
+   */
+  describe.each(slugs)("%s — excluded from a library search", (slug) => {
+    /**
+     * A long word from this article's own prose.
+     *
+     * Long, because a short one is a stop word in Postgres and a substring of
+     * something else on the filesystem. From the article itself, because a word
+     * we invented would be found by neither store and the test would pass for
+     * having asked nothing.
+     */
+    async function distinctiveWord(): Promise<string> {
+      const article = await fsArticleReader.loadArticle(slug);
+      const words = article.blocks
+        .filter((b) => b.gistable)
+        .flatMap((b) => b.text.toLowerCase().split(/[^a-z]+/))
+        .filter((w) => w.length >= 9);
+      const word = words.sort((a, b) => b.length - a.length)[0];
+      if (!word) throw new Error(`no word of nine letters or more in ${slug}`);
+      return word;
+    }
+
+    /* A limit far above anything either store will return for one word, so a
+       missing hit means "not found" rather than "pushed off the end". */
+    const LOTS = 500;
+
+    it.each([
+      ["the filesystem store", fsLibrarySearch],
+      ["Postgres", pgLibrarySearch],
+    ])("is gone from %s's results, and nothing else is", async (_name, store) => {
+      const word = await distinctiveWord();
+
+      const all = await store.searchLibrary(word, LOTS);
+      // The test has to be able to fail: if the store cannot find the article
+      // by its own longest word, excluding it proves nothing.
+      expect(all.hits.some((h) => h.slug === slug)).toBe(true);
+
+      const without = await store.searchLibrary(word, LOTS, { excludeSlug: slug });
+      expect(without.hits.some((h) => h.slug === slug)).toBe(false);
+      // Every OTHER hit survives, in the same order. An exclusion that quietly
+      // reshuffled or dropped a second article would pass the line above.
+      expect(without.hits).toEqual(all.hits.filter((h) => h.slug !== slug));
+    });
   });
 
   it("refuses a traversal slug the same way, and before it reaches a query", async () => {

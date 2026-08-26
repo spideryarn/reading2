@@ -28,6 +28,7 @@ import path from "node:path";
 import { log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { loadShelf } from "./shelf.js";
+import type { LibrarySearchOptions } from "./store/contracts.js";
 import type { Block, LibraryHit, Meta } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -174,6 +175,7 @@ async function readArticle(
 export async function searchLibrary(
   query: string,
   limit: number,
+  opts: LibrarySearchOptions = {},
 ): Promise<{ hits: LibraryHit[]; capped: boolean }> {
   const { terms, phrases } = parseQuery(query);
   const needles = [...phrases, ...terms];
@@ -193,6 +195,15 @@ export async function searchLibrary(
   // The committed fixture is searchable too, for the same reason it is always
   // on the shelf: a fresh clone with no data/ should still find something.
   dirs.push({ dir: path.join(ROOT, "example"), slug: "example" });
+
+  /* Dropped here, before anything is read — not from the hits, and not by the
+     caller afterwards. The whole point of the argument is that the cap at the
+     bottom of this function must never spend a place on an article nobody
+     asked for; filtering later is what produced "nothing found" for a query
+     with a good answer in it. See `LibrarySearchOptions` in
+     src/store/contracts.ts. Excluding it before the read is also simply
+     cheaper: one fewer blocks.json off the disk. */
+  if (opts.excludeSlug) dirs = dirs.filter((d) => d.slug !== opts.excludeSlug);
 
   const articles = (await Promise.all(dirs.map((d) => readArticle(d.dir, d.slug)))).filter(
     (a): a is NonNullable<typeof a> => a !== null,

@@ -720,22 +720,24 @@ async function searchTheLibrary(
 ): Promise<ToolOutcome> {
   const query = typeof args.query === "string" ? args.query : "";
   const label = `searched your library for “${query}”`;
-  /* **Ask for more than we need, because the filter below comes after the cap.**
-     The store has no idea which article the reader has open, so it happily
-     returns eight hits from that one — and filtering them out afterwards left
-     "nothing found" for a query whose ninth hit was in a different article and
-     was the whole point. Asking for a multiple is a fix with a hole in it (an
-     article can supply more than `MAX_LIBRARY_HITS * 4` matches on its own) and
-     it is the right size of fix for the shape of the problem: the real answer is
-     a `notSlug` argument on the store contract, which belongs to
-     docs/plans/semantic-search.md, since that is when this matcher is replaced
-     anyway. Found by a GPT-5.6 review, 2026-08-26. */
-  const { hits, capped } = await librarySearch.searchLibrary(query, MAX_LIBRARY_HITS * 4);
-  /* The article the reader has open is dropped from its own library results. It
-     is already in the prompt in full, so a hit in it is a paragraph the model
-     can see anyway — and presenting it as "something else you have read" would
-     be actively wrong. */
-  const elsewhere = hits.filter((h) => h.slug !== ctx.slug).slice(0, MAX_LIBRARY_HITS);
+  /* **The exclusion goes into the query, not over the results.** The article
+     the reader has open is already in the prompt in full, so a hit in it is a
+     paragraph the model can see anyway, and offering it back as "something else
+     you have read" would be actively wrong.
+
+     Doing that with a filter here was the bug. The store capped the list first,
+     so an article that supplied every hit in the capped list left this function
+     with nothing to show — `nothing found` for a query whose good answer sat
+     one place below the cut. Over-fetching (`MAX_LIBRARY_HITS * 4`) narrowed
+     the window without closing it: one article can supply more than four times
+     the cap on its own. `excludeSlug` closes it, and the over-fetch is gone
+     with it — it was paying for rows nobody read. See
+     `LibrarySearchOptions` in src/store/contracts.ts and
+     tests/chat-library-exclusion.test.ts, which is the test the over-fetch
+     could not pass. Found by a GPT-5.6 review, 2026-08-26; fixed 2026-08-26. */
+  const { hits: elsewhere, capped } = await librarySearch.searchLibrary(query, MAX_LIBRARY_HITS, {
+    excludeSlug: ctx.slug,
+  });
   if (elsewhere.length === 0) {
     return {
       label,
@@ -753,11 +755,13 @@ async function searchTheLibrary(
   /* `capped` is passed on rather than swallowed, for exactly the reason
      `search_article_words` reports its `total`: a truncated list that does not
      say it is truncated is a list the model will either over-trust or go and
-     redo by hand. */
-  const more =
-    capped || hits.length > elsewhere.length
-      ? "\n\nThere were more matches than are shown. This is the top of the list, not all of it."
-      : "";
+     redo by hand. It is the whole test now — it used to be ORed with
+     "did the filter drop anything", which was a second, worse way of asking the
+     same question, and one that said "there were more matches" when the only
+     extra matches were in the article the reader is already looking at. */
+  const more = capped
+    ? "\n\nThere were more matches than are shown. This is the top of the list, not all of it."
+    : "";
   return {
     label,
     detail: `${elsewhere.length} passage${elsewhere.length === 1 ? "" : "s"} in ${articles} article${articles === 1 ? "" : "s"}`,

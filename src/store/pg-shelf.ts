@@ -19,14 +19,14 @@
  *    find. See docs/plans/postgres-storage-implementation.md § Rules.
  */
 
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articles, articleRevisions, revisionBlocks } from "../db/schema.js";
 import { MAX_TITLE_CHARS } from "../shelf.js";
 import { log } from "../log.js";
 import { notFound, requireSlug, shelfFrom } from "./pg.js";
-import type { LibrarySearch, ShelfStore } from "./contracts.js";
+import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import type { LibraryEntry, LibraryHit, ShelfState } from "../types.js";
 import { pgArticleReader } from "./pg.js";
 
@@ -131,7 +131,7 @@ async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry> 
 }
 
 export const pgLibrarySearch: LibrarySearch = {
-  async searchLibrary(query: string, limit: number) {
+  async searchLibrary(query: string, limit: number, opts: LibrarySearchOptions = {}) {
     const trimmed = query.trim();
     if (!trimmed) return { hits: [], capped: false };
 
@@ -191,6 +191,14 @@ export const pgLibrarySearch: LibrarySearch = {
           // Archived articles are out of the index, not filtered from the
           // results: a hit that opens an article you deleted reads as a ghost.
           isNull(articles.archivedAt),
+          /* In the WHERE clause, so it happens before `limit` below. Chat's
+             `search_library` asks for this to leave out the article the reader
+             already has open, and removing it from the returned rows instead
+             would let it spend every place in the list first — which is
+             exactly the bug `LibrarySearchOptions` in ./contracts.ts describes.
+             An unknown slug simply excludes nothing; `ne` on a column with no
+             such value is true for every row. */
+          ...(opts.excludeSlug ? [ne(articles.slug, opts.excludeSlug)] : []),
           // Headings and media carry no prose worth a snippet, and a hit on a
           // one-word heading is noise at the top of the list.
           eq(revisionBlocks.gistable, true),

@@ -283,6 +283,54 @@ called `search_article_words`, got `nothing found`, and said so.
 
 **The check for this is the strip against the words**, and it stays a human one. Nothing counts it.
 
+## The reader's own article ate its own search results
+
+`search_library` is for the reader's **other** articles. The one they have open is already in the
+prompt in full, so a hit in it is a paragraph the model can see anyway, and offering it back as
+"something else you have read" is actively wrong.
+
+That was done by filtering the store's results, and the order was the bug. The store caps the list
+first. So an article that supplied every hit in the capped list left the tool with an empty list —
+and it said **`nothing found`**, for a query whose good answer was sitting one place below the cut.
+The reader had no way to tell the difference between "you have not read about this" and "you have
+read about this so much that we lost it".
+
+The first patch asked the store for four times as many hits and filtered those. That narrowed the
+window; it did not close it, because one article can supply more than four times the cap on its own —
+which this file said out loud at the time, and it stayed true.
+
+The fix is an argument on the store contract, `excludeSlug`, so the exclusion happens **inside the
+query, before the cap** — `LibrarySearchOptions` in [`src/store/contracts.ts`](../../src/store/contracts.ts),
+kept by both adapters ([`src/library-search.ts`](../../src/library-search.ts) drops the directory
+before it reads it, [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) puts a `ne` in the `WHERE`
+clause). The over-fetch is gone with it: once nothing is filtered afterwards, asking for four times
+the cap is paying to rank and return rows nobody reads. `capped` and the hit count now mean what they
+say, which they did not before — the tool used to tell the model "there were more matches than are
+shown" when the only extra matches were in the article on the reader's screen.
+
+**This landed before the semantic matcher, and that reverses what this file recommended.** The
+argument for waiting was that `search_library` is literal, the literal matcher is being replaced by
+[semantic-search.md](../plans/semantic-search.md), and work on a thing that is about to be deleted is
+usually wasted. Three things make it wrong here:
+
+- **`excludeSlug` is not matcher work.** It is one line in each adapter's filter, and it survives the
+  matcher swap untouched — a vector search excludes an article by the same `WHERE` clause. The
+  semantic matcher inherits a seam that already has parity tests on it rather than acquiring a new
+  argument on its first day.
+- **The bug is live and it is the silent kind.** Nothing anywhere reports it. The tool says
+  `nothing found`, the model says the reader has not read about this, and the strip above the answer
+  agrees — a search *did* run. See [silent-success](../reusable/silent-success.md).
+- **Waiting had a running cost.** The over-fetch was fetching and ranking 32 rows to use 8, on every
+  `search_library` call, for as long as the plan took.
+
+The tests are [`tests/chat-library-exclusion.test.ts`](../../tests/chat-library-exclusion.test.ts) —
+which builds a library where the open article supplies more matches than the over-fetch, so the old
+mitigation cannot pass it — plus the before-the-cap case in each adapter's own suite, and the rule
+itself in [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts). Parity here is narrower
+than it sounds and deliberately so: the two matchers are *allowed* to find different blocks, so what
+they are held to is that excluding an article removes every hit from it and leaves every other hit
+alone, in order.
+
 ## Still open
 
 - **Tools run one at a time.** Two web pages fetched at once would be twice as fast; what it costs is
@@ -306,10 +354,6 @@ called `search_article_words`, got `nothing found`, and said so.
   matter more: the hostname used to come from the reader and now comes from the model, which can be
   argued into one by a page. The proper fix is connecting to a pinned address rather than re-resolving,
   which belongs to `src/fetch.ts` and its owner. Also raised by the review.
-- **`search_library`'s exclusion of the current article happens after the store's cap.** Mitigated by
-  asking for four times as many hits and filtering, which is a fix with a hole in it — an article can
-  supply more matches than that on its own. The clean version is a `notSlug` argument on the store
-  contract, and it should land with the semantic matcher rather than before it.
 - **Reasoning blocks are not replayed across a tool round.** Anthropic asks that thinking blocks be
   returned unmodified alongside tool results, and we send `content` and `tool_calls` only. It works
   today — every live run in this file's history completed — but "works today" is the whole of the

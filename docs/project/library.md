@@ -233,6 +233,16 @@ length on the other. The divergence is written down rather than papered over, be
 near-copy of `websearch_to_tsquery` would be worse than an obviously simpler thing that admits what
 it is.
 
+**The one thing they must agree about exactly is `excludeSlug`**, because it is not a matching rule.
+It is a promise that a named article is absent from the results, and both adapters keep it the same
+way: inside the query, before the cap. Nothing on this page uses it — the shelf's box searches
+everything — but chat's `search_library` does, to leave out the article the reader has open, and it
+had to become a store argument rather than a filter over the results for a reason worth knowing about
+before you write the next one of these. Filtering afterwards means the cap is spent first, so one
+loud article can empty the list and the caller reports finding nothing. The whole story is in
+[chat-tools.md § The reader's own article ate its own search results](chat-tools.md#the-readers-own-article-ate-its-own-search-results);
+the contract is `LibrarySearchOptions` in [`src/store/contracts.ts`](../../src/store/contracts.ts).
+
 The hit carries **the whole paragraph**, not a snippet, and the client cuts it. Trimming on the
 server would mean the two adapters trimming differently — Postgres knows which *stems* matched, not
 which characters, so it would either return the whole thing anyway or call `ts_headline` and hand
@@ -303,7 +313,10 @@ The queue, the choice of p-queue over the Redis- and Postgres-backed alternative
 
 Two things stayed the same and are worth repeating here. The slug is derived with **the same
 function the extractor uses** — [`src/ingest.ts`](../../src/ingest.ts) — so the name on screen is
-the name you get, rather than approximately the name you get. And the box is still honest about
+the name you get, rather than approximately the name you get. (That function grew a normalising
+step on 2026-08-26, so the box now accepts `example.com/an-essay` and adding an article you already
+have lands you back on it instead of shelving a second copy —
+[ingest-queue.md § Two URLs, one article](ingest-queue.md#two-urls-one-article).) And the box is still honest about
 failure: a stage that goes wrong stops the job, says which stage and why, and offers a Retry that
 skips whatever already worked.
 

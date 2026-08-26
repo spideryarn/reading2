@@ -259,13 +259,53 @@ export interface ShelfStore {
  * exact word that appears verbatim, is not a stop word, and has no inflections
  * in the corpus is found by both, in the same blocks. Ranking is never
  * comparable. See docs/plans/library-shelf-actions-and-search.md.
+ *
+ * **`excludeSlug` is the one thing they must agree about exactly**, because it
+ * is not a matching rule — it is a promise that a named article is absent. Both
+ * adapters keep it the same way: inside the query, before the cap. See
+ * `LibrarySearchOptions`.
  */
 export interface LibrarySearch {
   /**
    * @param query what the reader typed, raw. Each adapter parses it its own way.
    * @param limit the most hits to return. The caller says whether the answer was cut.
+   * @param opts see `LibrarySearchOptions`. Absent means the whole library.
    */
-  searchLibrary(query: string, limit: number): Promise<{ hits: LibraryHit[]; capped: boolean }>;
+  searchLibrary(
+    query: string,
+    limit: number,
+    opts?: LibrarySearchOptions,
+  ): Promise<{ hits: LibraryHit[]; capped: boolean }>;
+}
+
+/**
+ * Narrowing what a library search looks at.
+ *
+ * **Why this is an argument and not a filter the caller applies afterwards.**
+ * Chat's `search_library` tool exists to show the reader their *other* articles;
+ * the one they have open is already in the prompt in full, so a hit in it is a
+ * paragraph the model can see anyway and presenting it as "something else you
+ * have read" is actively wrong. Removing it after the search sounds equivalent
+ * and is not: the store caps the list first, so an article that supplies every
+ * hit in the capped list leaves the caller with nothing while a perfectly good
+ * match from another article sits one place below the cut. The tool reported
+ * "nothing found" and the reader had no way to know it had been lied to.
+ *
+ * That was mitigated by asking for four times as many hits and filtering — a
+ * fix with a hole in it, since one article can supply more than four times the
+ * cap on its own. `excludeSlug` closes it rather than narrowing it, and both
+ * `capped` and the hit count then mean what they say. `tests/chat-library-exclusion.test.ts`
+ * is the test the mitigation could not pass.
+ */
+export interface LibrarySearchOptions {
+  /**
+   * An article to leave out of the search entirely — not out of the results.
+   *
+   * The same distinction archiving already makes: it is not in the index, so
+   * it cannot use up a place in the list. An unknown slug is not an error; it
+   * simply excludes nothing.
+   */
+  readonly excludeSlug?: string;
 }
 
 /* ------------------------------------------------- the reader's own state -- */

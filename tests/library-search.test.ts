@@ -120,6 +120,30 @@ describe("searching the library", () => {
     expect((await searchLibrary(RARE, 10)).hits.some((h) => h.slug === SLUG)).toBe(false);
   });
 
+  it("leaves an excluded article out before the cap, not after it", async () => {
+    /* The order is the whole point. Five matches in this article and a cap of
+       two: if the exclusion ran over the results it would take two hits from
+       here and hand back nothing. Because it runs inside the search, the two
+       places go to whatever else the library has. See LibrarySearchOptions in
+       src/store/contracts.ts. */
+    await makeArticle(Array.from({ length: 5 }, (_, i) => `${RARE} number ${i}.`));
+
+    const all = await searchLibrary(RARE, 2);
+    expect(all.hits.every((h) => h.slug === SLUG)).toBe(true);
+
+    const without = await searchLibrary(RARE, 2, { excludeSlug: SLUG });
+    expect(without.hits.some((h) => h.slug === SLUG)).toBe(false);
+    // And `capped` now describes the list the caller actually got, rather than
+    // a longer one it was never shown.
+    expect(without.capped).toBe(false);
+  });
+
+  it("excludes nothing when asked for a slug that is not there", async () => {
+    await makeArticle([`The ${RARE} is here.`]);
+    const { hits } = await searchLibrary(RARE, 10, { excludeSlug: "no-such-article" });
+    expect(hits.some((h) => h.slug === SLUG)).toBe(true);
+  });
+
   it("ignores an empty query rather than returning the whole library", async () => {
     await makeArticle([`The ${RARE} is here.`]);
     expect((await searchLibrary("   ", 10)).hits).toEqual([]);
