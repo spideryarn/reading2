@@ -1,0 +1,1387 @@
+{
+  "what": "First-hour bake-off for PDF ingestion \u2014 step 1 of docs/plans/pdf-ingestion.md.",
+  "when": "2026-08-26",
+  "how": "pdf-lib cuts page-range chunks; each reader gets the same system prompt and the same JSON schema; scored against the pdf.js text layer minus lines repeating on 3+ pages. recall = baseline tokens found in output; precision = output tokens found in baseline; order = LCS / baseline. Multisets, so a duplicated paragraph cannot pay for a dropped one.",
+  "readers": {
+    "haiku-native": "claude-haiku-4-5-20251001, Anthropic SDK, document block BEFORE the instruction text",
+    "haiku-native-textfirst": "same, instruction text BEFORE the document block",
+    "haiku-via-openrouter": "anthropic/claude-haiku-4.5 through OpenRouter, file-parser engine=native",
+    "haiku-text-only": "Anthropic SDK, pdf.js text layer pasted in, no image at all",
+    "gemini-flash-native": "google/gemini-3.7-flash through OpenRouter, file-parser engine=native",
+    "mistral-ocr": "OpenRouter file-parser engine=mistral-ocr; a parser, not a model \u2014 its output arrives as file annotations"
+  },
+  "calls": [
+    {
+      "doc": "easy",
+      "chunk": 0,
+      "reader": "gemini-flash-native",
+      "run": "run1/2",
+      "ms": 20561,
+      "finish": "stop",
+      "nativeFinish": "STOP",
+      "records": 18,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 1661,
+      "outputTokens": 3758,
+      "costUsd": 0.007669125,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 0,
+      "reader": "haiku-native-textfirst",
+      "run": "run1/2",
+      "ms": 23792,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 19,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 5462,
+      "outputTokens": 1777,
+      "costUsd": 0.014347,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 0,
+      "reader": "haiku-native",
+      "run": "run1/2",
+      "ms": 22636,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 19,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 5463,
+      "outputTokens": 1653,
+      "costUsd": 0.013728,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 0,
+      "reader": "haiku-text-only",
+      "run": "run1/2",
+      "ms": 12737,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 18,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 2247,
+      "outputTokens": 1752,
+      "costUsd": 0.011007,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 0,
+      "reader": "haiku-via-openrouter",
+      "run": "run1/2",
+      "ms": 25946,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 20,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 5462,
+      "outputTokens": 1804,
+      "costUsd": 0.014482,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 1,
+      "reader": "gemini-flash-native",
+      "run": "run1/2",
+      "ms": 17962,
+      "finish": "stop",
+      "nativeFinish": "STOP",
+      "records": 17,
+      "pagesEmitted": [
+        5,
+        6
+      ],
+      "inputTokens": 2229,
+      "outputTokens": 3070,
+      "costUsd": 0.006592125,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 1,
+      "reader": "haiku-native-textfirst",
+      "run": "run1/2",
+      "ms": 22724,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 12,
+      "pagesEmitted": [
+        5,
+        6
+      ],
+      "inputTokens": 7836,
+      "outputTokens": 1458,
+      "costUsd": 0.015126,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 1,
+      "reader": "haiku-native",
+      "run": "run1/2",
+      "ms": 22501,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 17,
+      "pagesEmitted": [
+        5,
+        6
+      ],
+      "inputTokens": 7837,
+      "outputTokens": 1457,
+      "costUsd": 0.015122,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 1,
+      "reader": "haiku-text-only",
+      "run": "run1/2",
+      "ms": 10008,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 14,
+      "pagesEmitted": [
+        5,
+        6
+      ],
+      "inputTokens": 2967,
+      "outputTokens": 1498,
+      "costUsd": 0.010457,
+      "error": null
+    },
+    {
+      "doc": "easy",
+      "chunk": 1,
+      "reader": "haiku-via-openrouter",
+      "run": "run1/2",
+      "ms": 24625,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 17,
+      "pagesEmitted": [
+        5,
+        6
+      ],
+      "inputTokens": 7836,
+      "outputTokens": 1459,
+      "costUsd": 0.015131,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 0,
+      "reader": "gemini-flash-native",
+      "run": "run1/2",
+      "ms": 42652,
+      "finish": "stop",
+      "nativeFinish": "STOP",
+      "records": 20,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 1677,
+      "outputTokens": 7259,
+      "costUsd": 0.0142395,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 0,
+      "reader": "haiku-native-textfirst",
+      "run": "run1/2",
+      "ms": 40604,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 23,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 6541,
+      "outputTokens": 3027,
+      "costUsd": 0.021676,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 0,
+      "reader": "haiku-native",
+      "run": "run1/2",
+      "ms": 40569,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 23,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 6542,
+      "outputTokens": 3033,
+      "costUsd": 0.021707,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 0,
+      "reader": "haiku-text-only",
+      "run": "run1/2",
+      "ms": 34936,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 20,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 3586,
+      "outputTokens": 2945,
+      "costUsd": 0.018311,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 0,
+      "reader": "haiku-via-openrouter",
+      "run": "run1/2",
+      "ms": 40981,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 22,
+      "pagesEmitted": [
+        1,
+        2
+      ],
+      "inputTokens": 6541,
+      "outputTokens": 3002,
+      "costUsd": 0.021551,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "gemini-flash-native",
+      "run": "run1/2",
+      "ms": 92659,
+      "finish": "error",
+      "nativeFinish": null,
+      "records": 0,
+      "pagesEmitted": [],
+      "inputTokens": null,
+      "outputTokens": null,
+      "costUsd": 0,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "gemini-flash-native",
+      "run": "run3",
+      "ms": 46169,
+      "finish": "stop",
+      "nativeFinish": "STOP",
+      "records": 16,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 2253,
+      "outputTokens": 6771,
+      "costUsd": 0.0135405,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-native-textfirst",
+      "run": "run1/2",
+      "ms": 54308,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 16,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 9721,
+      "outputTokens": 3225,
+      "costUsd": 0.025846,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-native-textfirst",
+      "run": "run3",
+      "ms": 51825,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 16,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 9721,
+      "outputTokens": 3227,
+      "costUsd": 0.025856,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-native",
+      "run": "run1/2",
+      "ms": 36388,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 10,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 9722,
+      "outputTokens": 2004,
+      "costUsd": 0.019742,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-native",
+      "run": "run3",
+      "ms": 41160,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 11,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 9722,
+      "outputTokens": 2491,
+      "costUsd": 0.022177,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-text-only",
+      "run": "run1/2",
+      "ms": 36318,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 15,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 5288,
+      "outputTokens": 3202,
+      "costUsd": 0.021298,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-text-only",
+      "run": "run3",
+      "ms": 37467,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 16,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 5288,
+      "outputTokens": 3313,
+      "costUsd": 0.021853,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-via-openrouter",
+      "run": "run1/2",
+      "ms": 63887,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 16,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 9721,
+      "outputTokens": 3225,
+      "costUsd": 0.025846,
+      "error": null
+    },
+    {
+      "doc": "harder",
+      "chunk": 1,
+      "reader": "haiku-via-openrouter",
+      "run": "run3",
+      "ms": 54758,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 16,
+      "pagesEmitted": [
+        7,
+        8
+      ],
+      "inputTokens": 9721,
+      "outputTokens": 3120,
+      "costUsd": 0.025321,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "gemini-flash-native",
+      "run": "run1/2",
+      "ms": 27786,
+      "finish": "stop",
+      "nativeFinish": "STOP",
+      "records": 12,
+      "pagesEmitted": [
+        2,
+        3
+      ],
+      "inputTokens": 1661,
+      "outputTokens": 3550,
+      "costUsd": 0.007279125,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "gemini-flash-native",
+      "run": "run3",
+      "ms": 22561,
+      "finish": "stop",
+      "nativeFinish": "STOP",
+      "records": 12,
+      "pagesEmitted": [
+        2,
+        3
+      ],
+      "inputTokens": 1661,
+      "outputTokens": 3222,
+      "costUsd": 0.006664125,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "haiku-native-textfirst",
+      "run": "run1/2",
+      "ms": 15866,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 5,
+      "pagesEmitted": [
+        2
+      ],
+      "inputTokens": 3928,
+      "outputTokens": 822,
+      "costUsd": 0.008038,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "haiku-native-textfirst",
+      "run": "run3",
+      "ms": 14401,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 5,
+      "pagesEmitted": [
+        2
+      ],
+      "inputTokens": 3928,
+      "outputTokens": 823,
+      "costUsd": 0.008043,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "haiku-native",
+      "run": "run1/2",
+      "ms": 15273,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 5,
+      "pagesEmitted": [
+        1
+      ],
+      "inputTokens": 3929,
+      "outputTokens": 813,
+      "costUsd": 0.007994,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "haiku-native",
+      "run": "run3",
+      "ms": 13724,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 5,
+      "pagesEmitted": [
+        2
+      ],
+      "inputTokens": 3929,
+      "outputTokens": 813,
+      "costUsd": 0.007994,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "haiku-text-only",
+      "run": "run1/2",
+      "ms": 1040,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 0,
+      "pagesEmitted": [],
+      "inputTokens": 792,
+      "outputTokens": 8,
+      "costUsd": 0.000832,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "haiku-via-openrouter",
+      "run": "run1/2",
+      "ms": 22266,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 5,
+      "pagesEmitted": [
+        2
+      ],
+      "inputTokens": 3928,
+      "outputTokens": 813,
+      "costUsd": 0.007993,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "haiku-via-openrouter",
+      "run": "run3",
+      "ms": 18155,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 5,
+      "pagesEmitted": [
+        2
+      ],
+      "inputTokens": 3928,
+      "outputTokens": 813,
+      "costUsd": 0.007993,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "mistral-ocr",
+      "run": "run1/2",
+      "ms": 6618,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 0,
+      "pagesEmitted": [],
+      "inputTokens": 1141,
+      "outputTokens": 4,
+      "costUsd": 0.004,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 0,
+      "reader": "mistral-ocr",
+      "run": "run3",
+      "ms": 6139,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 0,
+      "pagesEmitted": [],
+      "inputTokens": 1141,
+      "outputTokens": 4,
+      "costUsd": 0.004,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 1,
+      "reader": "gemini-flash-native",
+      "run": "run1/2",
+      "ms": 33670,
+      "finish": "stop",
+      "nativeFinish": "STOP",
+      "records": 9,
+      "pagesEmitted": [
+        10,
+        11
+      ],
+      "inputTokens": 2233,
+      "outputTokens": 6189,
+      "costUsd": 0.01244175,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 1,
+      "reader": "haiku-native-textfirst",
+      "run": "run1/2",
+      "ms": 17571,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 5,
+      "pagesEmitted": [
+        10,
+        11
+      ],
+      "inputTokens": 5538,
+      "outputTokens": 868,
+      "costUsd": 0.009878,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 1,
+      "reader": "haiku-native",
+      "run": "run1/2",
+      "ms": 15130,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 3,
+      "pagesEmitted": [
+        10
+      ],
+      "inputTokens": 5539,
+      "outputTokens": 809,
+      "costUsd": 0.009584,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 1,
+      "reader": "haiku-text-only",
+      "run": "run1/2",
+      "ms": 1369,
+      "finish": "end_turn",
+      "nativeFinish": null,
+      "records": 0,
+      "pagesEmitted": [],
+      "inputTokens": 836,
+      "outputTokens": 8,
+      "costUsd": 0.000876,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 1,
+      "reader": "haiku-via-openrouter",
+      "run": "run1/2",
+      "ms": 22039,
+      "finish": "stop",
+      "nativeFinish": "end_turn",
+      "records": 4,
+      "pagesEmitted": [
+        10
+      ],
+      "inputTokens": 5538,
+      "outputTokens": 839,
+      "costUsd": 0.009733,
+      "error": null
+    },
+    {
+      "doc": "much-harder",
+      "chunk": 1,
+      "reader": "mistral-ocr",
+      "run": "run1/2",
+      "ms": 4915,
+      "finish": "error",
+      "nativeFinish": null,
+      "records": 0,
+      "pagesEmitted": [],
+      "inputTokens": null,
+      "outputTokens": null,
+      "costUsd": null,
+      "error": "{\"message\":\"Failed to parse much-harder.pdf: The document parsing engine is currently rate limited. Please retry shortly.\",\"code\":400,\"metadata\":{\"provider_name\":null,\"previous_errors\":[{\"code\":400,\"m"
+    }
+  ],
+  "scores": [
+    {
+      "doc": "easy",
+      "page": 1,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 358,
+      "outputTokens": 357,
+      "recall": 0.997,
+      "precision": 1.0,
+      "order": 0.905
+    },
+    {
+      "doc": "easy",
+      "page": 1,
+      "reader": "haiku-native",
+      "baselineTokens": 358,
+      "outputTokens": 324,
+      "recall": 0.905,
+      "precision": 1.0,
+      "order": 0.905
+    },
+    {
+      "doc": "easy",
+      "page": 1,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 358,
+      "outputTokens": 324,
+      "recall": 0.905,
+      "precision": 1.0,
+      "order": 0.905
+    },
+    {
+      "doc": "easy",
+      "page": 1,
+      "reader": "haiku-text-only",
+      "baselineTokens": 358,
+      "outputTokens": 324,
+      "recall": 0.905,
+      "precision": 1.0,
+      "order": 0.905
+    },
+    {
+      "doc": "easy",
+      "page": 1,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 358,
+      "outputTokens": 324,
+      "recall": 0.905,
+      "precision": 1.0,
+      "order": 0.905
+    },
+    {
+      "doc": "easy",
+      "page": 2,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 507,
+      "outputTokens": 506,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 2,
+      "reader": "haiku-native",
+      "baselineTokens": 507,
+      "outputTokens": 506,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 2,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 507,
+      "outputTokens": 506,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 2,
+      "reader": "haiku-text-only",
+      "baselineTokens": 507,
+      "outputTokens": 506,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 2,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 507,
+      "outputTokens": 506,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 5,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 445,
+      "outputTokens": 444,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 5,
+      "reader": "haiku-native",
+      "baselineTokens": 445,
+      "outputTokens": 444,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 5,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 445,
+      "outputTokens": 444,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 5,
+      "reader": "haiku-text-only",
+      "baselineTokens": 445,
+      "outputTokens": 444,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 5,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 445,
+      "outputTokens": 444,
+      "recall": 0.998,
+      "precision": 1.0,
+      "order": 0.998
+    },
+    {
+      "doc": "easy",
+      "page": 6,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 291,
+      "outputTokens": 290,
+      "recall": 0.997,
+      "precision": 1.0,
+      "order": 0.997
+    },
+    {
+      "doc": "easy",
+      "page": 6,
+      "reader": "haiku-native",
+      "baselineTokens": 291,
+      "outputTokens": 290,
+      "recall": 0.997,
+      "precision": 1.0,
+      "order": 0.997
+    },
+    {
+      "doc": "easy",
+      "page": 6,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 291,
+      "outputTokens": 290,
+      "recall": 0.997,
+      "precision": 1.0,
+      "order": 0.997
+    },
+    {
+      "doc": "easy",
+      "page": 6,
+      "reader": "haiku-text-only",
+      "baselineTokens": 291,
+      "outputTokens": 290,
+      "recall": 0.997,
+      "precision": 1.0,
+      "order": 0.997
+    },
+    {
+      "doc": "easy",
+      "page": 6,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 291,
+      "outputTokens": 290,
+      "recall": 0.997,
+      "precision": 1.0,
+      "order": 0.997
+    },
+    {
+      "doc": "harder",
+      "page": 1,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 633,
+      "outputTokens": 587,
+      "recall": 0.912,
+      "precision": 0.983,
+      "order": 0.912
+    },
+    {
+      "doc": "harder",
+      "page": 1,
+      "reader": "haiku-native",
+      "baselineTokens": 633,
+      "outputTokens": 595,
+      "recall": 0.912,
+      "precision": 0.97,
+      "order": 0.91
+    },
+    {
+      "doc": "harder",
+      "page": 1,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 633,
+      "outputTokens": 595,
+      "recall": 0.912,
+      "precision": 0.97,
+      "order": 0.91
+    },
+    {
+      "doc": "harder",
+      "page": 1,
+      "reader": "haiku-text-only",
+      "baselineTokens": 633,
+      "outputTokens": 656,
+      "recall": 0.915,
+      "precision": 0.883,
+      "order": 0.91
+    },
+    {
+      "doc": "harder",
+      "page": 1,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 633,
+      "outputTokens": 656,
+      "recall": 0.916,
+      "precision": 0.884,
+      "order": 0.912
+    },
+    {
+      "doc": "harder",
+      "page": 2,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 957,
+      "outputTokens": 918,
+      "recall": 0.931,
+      "precision": 0.971,
+      "order": 0.93
+    },
+    {
+      "doc": "harder",
+      "page": 2,
+      "reader": "haiku-native",
+      "baselineTokens": 957,
+      "outputTokens": 909,
+      "recall": 0.923,
+      "precision": 0.971,
+      "order": 0.922
+    },
+    {
+      "doc": "harder",
+      "page": 2,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 957,
+      "outputTokens": 909,
+      "recall": 0.923,
+      "precision": 0.971,
+      "order": 0.922
+    },
+    {
+      "doc": "harder",
+      "page": 2,
+      "reader": "haiku-text-only",
+      "baselineTokens": 957,
+      "outputTokens": 848,
+      "recall": 0.865,
+      "precision": 0.976,
+      "order": 0.862
+    },
+    {
+      "doc": "harder",
+      "page": 2,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 957,
+      "outputTokens": 848,
+      "recall": 0.865,
+      "precision": 0.976,
+      "order": 0.862
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 706,
+      "outputTokens": 680,
+      "recall": 0.943,
+      "precision": 0.979,
+      "order": 0.942
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-native",
+      "baselineTokens": 706,
+      "outputTokens": 1058,
+      "recall": 0.496,
+      "precision": 0.331,
+      "order": 0.169
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-native",
+      "baselineTokens": 706,
+      "outputTokens": 1058,
+      "recall": 0.496,
+      "precision": 0.331,
+      "order": 0.169
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 706,
+      "outputTokens": 677,
+      "recall": 0.938,
+      "precision": 0.978,
+      "order": 0.936
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 706,
+      "outputTokens": 678,
+      "recall": 0.941,
+      "precision": 0.979,
+      "order": 0.939
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-text-only",
+      "baselineTokens": 706,
+      "outputTokens": 742,
+      "recall": 0.949,
+      "precision": 0.903,
+      "order": 0.942
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-text-only",
+      "baselineTokens": 706,
+      "outputTokens": 692,
+      "recall": 0.979,
+      "precision": 0.999,
+      "order": 0.979
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 706,
+      "outputTokens": 677,
+      "recall": 0.938,
+      "precision": 0.978,
+      "order": 0.936
+    },
+    {
+      "doc": "harder",
+      "page": 7,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 706,
+      "outputTokens": 678,
+      "recall": 0.941,
+      "precision": 0.979,
+      "order": 0.939
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 1090,
+      "outputTokens": 1058,
+      "recall": 0.952,
+      "precision": 0.981,
+      "order": 0.951
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-native",
+      "baselineTokens": 1090,
+      "outputTokens": 84,
+      "recall": 0.055,
+      "precision": 0.714,
+      "order": 0.032
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-native",
+      "baselineTokens": 1090,
+      "outputTokens": 385,
+      "recall": 0.211,
+      "precision": 0.597,
+      "order": 0.09
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 1090,
+      "outputTokens": 1057,
+      "recall": 0.95,
+      "precision": 0.98,
+      "order": 0.95
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 1090,
+      "outputTokens": 1058,
+      "recall": 0.952,
+      "precision": 0.981,
+      "order": 0.951
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-text-only",
+      "baselineTokens": 1090,
+      "outputTokens": 996,
+      "recall": 0.895,
+      "precision": 0.98,
+      "order": 0.895
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-text-only",
+      "baselineTokens": 1090,
+      "outputTokens": 1079,
+      "recall": 0.989,
+      "precision": 0.999,
+      "order": 0.989
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 1090,
+      "outputTokens": 1057,
+      "recall": 0.95,
+      "precision": 0.98,
+      "order": 0.95
+    },
+    {
+      "doc": "harder",
+      "page": 8,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 1090,
+      "outputTokens": 1057,
+      "recall": 0.95,
+      "precision": 0.98,
+      "order": 0.95
+    },
+    {
+      "doc": "much-harder",
+      "page": 1,
+      "reader": "haiku-native",
+      "baselineTokens": 104,
+      "outputTokens": 523,
+      "recall": 0.212,
+      "precision": 0.042,
+      "order": 0.163
+    },
+    {
+      "doc": "much-harder",
+      "page": 2,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 0,
+      "outputTokens": 319,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 2,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 0,
+      "outputTokens": 319,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 2,
+      "reader": "haiku-native",
+      "baselineTokens": 0,
+      "outputTokens": 523,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 2,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 0,
+      "outputTokens": 532,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 2,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 0,
+      "outputTokens": 532,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 2,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 0,
+      "outputTokens": 523,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 2,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 0,
+      "outputTokens": 523,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 3,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 0,
+      "outputTokens": 533,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 3,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 0,
+      "outputTokens": 533,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 10,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 0,
+      "outputTokens": 552,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 10,
+      "reader": "haiku-native",
+      "baselineTokens": 0,
+      "outputTokens": 559,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 10,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 0,
+      "outputTokens": 560,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 10,
+      "reader": "haiku-via-openrouter",
+      "baselineTokens": 0,
+      "outputTokens": 560,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 11,
+      "reader": "gemini-flash-native",
+      "baselineTokens": 0,
+      "outputTokens": 559,
+      "recall": null,
+      "precision": null,
+      "order": null
+    },
+    {
+      "doc": "much-harder",
+      "page": 11,
+      "reader": "haiku-native-textfirst",
+      "baselineTokens": 0,
+      "outputTokens": 1,
+      "recall": null,
+      "precision": null,
+      "order": null
+    }
+  ]
+}
