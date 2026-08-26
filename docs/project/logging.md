@@ -152,7 +152,7 @@ the name you meant.
 | `jobs` | [`src/jobs.ts`](../../src/jobs.ts) | the queue: enqueued, each step's transition, the outcome. See [ingest-queue.md](ingest-queue.md) |
 | `pipeline` | [`src/pipeline.ts`](../../src/pipeline.ts) | **what a step cost** — model, tokens in and out, `ms` |
 | `store` | [`src/api.ts`](../../src/api.ts), [`src/comments.ts`](../../src/comments.ts) | the silent fallbacks, chiefly the fixture one |
-| `model` | [`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts) | the model calls with a reader waiting on them — explaining a selection, and chat |
+| `model` | [`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts), [`src/search.ts`](../../src/search.ts) | the model calls with a reader waiting on them — explaining a selection, chat, and semantic search |
 
 ### The one that answers an open question
 
@@ -166,6 +166,20 @@ They are logged from [`src/pipeline.ts`](../../src/pipeline.ts), and that locati
 already in scope in the `STEPS` closures, so no stage file has to be reached into
 ([architecture.md § Stage ownership](architecture.md#stage-ownership)). The one exception is `model`,
 which was a private const in `src/toc.ts` and `src/arc.ts` and is now on their returned run objects.
+
+### The two counts that are the only alarm there is
+
+`cacheReadTokens` and `cacheWriteTokens` ride alongside `inputTokens` and `outputTokens`, on both the
+`pipeline` line and the three `model` lines, and they are there for a reason worth stating plainly:
+**a prompt cache that has silently stopped working is invisible.** The answer is still correct, no
+error is raised, and the only symptom is a larger bill. A `cacheReadTokens` of 0 on a call that
+should have been a repeat is the whole of the warning system.
+
+The request-path lines also carry `tooShortToCache`, because under the model's minimum prefix a
+breakpoint is accepted and does nothing — returning the same zeros as a broken cache. The boolean is
+what tells those two apart. See [prompt-caching.md](prompt-caching.md#how-to-tell-whether-it-is-working).
+
+Counts only, like everything else here: no prose, no article text, no criterion, no question.
 
 The same seam gives the block-id counts for free — `{ total, minted, carried, reused }` from stage 3.
 An article re-run that mints new ids instead of carrying the old ones has **orphaned every comment on
