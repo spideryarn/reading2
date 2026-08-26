@@ -183,21 +183,6 @@ export const CAPABLE_MODEL_OPENROUTER = "anthropic/claude-sonnet-5";
  */
 export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
 
-/**
- * **The old name, kept for as long as it takes one file to land.**
- *
- * `MODEL` is what this file exported before the tiers, and it is the same string
- * `CAPABLE_MODEL` now carries. Every call site in the working tree has moved;
- * src/toc.ts could not be committed with the rest, because another agent is
- * mid-refactor inside it and committing it would have published someone else's
- * unfinished work under this change's name.
- *
- * So this exists to keep the committed tree building across that gap, and for
- * nothing else. **Delete it, and this comment, once src/toc.ts lands** —
- * `git grep -w MODEL` is the whole check. Added 2026-08-26.
- */
-export const MODEL = CAPABLE_MODEL;
-
 /** The two tiers a task can be on. */
 export type Tier = "capable" | "quick";
 

@@ -29,7 +29,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL } from "./models.js";
+import { CAPABLE_MODEL } from "./models.js";
 import { isSpideryarnId } from "./ids.js";
 import { generateLabels, mergeLabels } from "./labels.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -522,7 +522,7 @@ export function buildTree(
     );
   }
 
-  return { version: PROMPT_VERSION, generator: MODEL, slug, rootId, nodes };
+  return { version: PROMPT_VERSION, generator: CAPABLE_MODEL, slug, rootId, nodes };
 }
 
 /** The slug a blocks.json path implies — `foo.blocks.json` and `foo.json` both give `foo`. */
@@ -533,14 +533,25 @@ export function slugForBlocksPath(blocksPath: string): string {
 export interface TocRun {
   tree: Tree;
   outDir: string;
-  /** Which model wrote it. `MODEL` is private here, and the queue logs what a tree cost. */
+  /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what a tree cost. */
   model: string;
   blocks: number;
   gistable: number;
   labelled: number;
   internal: number;
-  /** How many model calls the labels took. See src/labels.ts. */
+  /**
+   * How many batches the labels were cut into. **Not the same as calls** once a
+   * run can resume: a batch taken from a checkpoint is one of these and cost
+   * nothing. `labelCalls` is the one that answers "what did we pay for", and
+   * the two are reported separately because the first version reported only
+   * this one under a comment saying "model calls" — which would have said three
+   * calls after making two. GPT-5.6-sol, 2026-08-26.
+   */
   labelBatches: number;
+  /** Batches this run actually asked the model for. */
+  labelCalls: number;
+  /** Batches taken from a checkpoint left by an earlier, failed run. */
+  labelsResumed: number;
   inputTokens: number;
   outputTokens: number;
   /* From the label pass only — the structure call is one call per article and
@@ -622,7 +633,7 @@ export async function generateToc(opts: {
 
   const client = new Anthropic();
   const stream = client.messages.stream({
-    model: MODEL,
+    model: CAPABLE_MODEL,
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: EFFORT },
@@ -719,12 +730,14 @@ export async function generateToc(opts: {
   return {
     tree,
     outDir,
-    model: MODEL,
+    model: CAPABLE_MODEL,
     blocks: blocks.length,
     gistable,
     labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
+    labelCalls: labelRun.calls,
+    labelsResumed: labelRun.resumed,
     /* Both passes together. What this number answers is "what did a tree cost",
        and a structure figure alone would now understate it by most of the bill. */
     inputTokens: message.usage.input_tokens + labelRun.inputTokens,
@@ -744,16 +757,21 @@ async function main(): Promise<void> {
   const argOutDir = process.argv[3];
   // Before the call, not after: this is the only thing on screen for the two
   // minutes the model takes.
-  console.log(`Building the tree with ${MODEL}\u2026`);
+  console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
   const run = await generateToc({
     blocksPath,
     ...(argOutDir ? { outDir: argOutDir } : {}),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
-  console.log(`\n${run.blocks} blocks (${run.gistable} gistable) → ${MODEL}`);
+  console.log(`\n${run.blocks} blocks (${run.gistable} gistable) → ${CAPABLE_MODEL}`);
   console.log(`\nNodes:     ${Object.keys(run.tree.nodes).length} (${run.internal} internal)`);
-  console.log(`Labelled:  ${run.labelled} / ${run.gistable} gistable blocks, in ${run.labelBatches} calls`);
+  console.log(
+    `Labelled:  ${run.labelled} / ${run.gistable} gistable blocks, in ${run.labelCalls} call(s)` +
+      (run.labelsResumed > 0
+        ? ` (${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`
+        : ""),
+  );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`\nWrote:     ${path.resolve(run.outDir)}/tree.json`);
