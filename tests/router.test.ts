@@ -7,7 +7,7 @@
  * is broken rather than like the link was.
  */
 import { describe, expect, it } from "vitest";
-import { carriedSearch, parseRoute, readHref } from "../src/web/router.js";
+import { addHref, addUrlFrom, carriedSearch, parseRoute, readHref } from "../src/web/router.js";
 
 describe("parseRoute", () => {
   it("reads the slug out of /read/<slug>", () => {
@@ -118,5 +118,84 @@ describe("carriedSearch", () => {
     expect(carriedSearch("text=0")).toBe("text=0");
     expect(carriedSearch("")).toBe("");
     expect(carriedSearch("?")).toBe("");
+  });
+});
+
+/**
+ * `/add/<a whole URL>` — the one route whose parameter is somebody else's
+ * address rather than one of our slugs.
+ *
+ * Two spellings reach `parseRoute`: the raw paste Greg asked for, and the
+ * percent-encoded one `addHref` mints. The tests that matter are the ones where
+ * telling them apart could go wrong — a URL with a query string, which the
+ * browser splits off into `location.search` unless it has been encoded, and a
+ * URL with a port, whose extra colon must not confuse the raw/encoded test.
+ */
+describe("the add route", () => {
+  it("reads a raw pasted URL straight out of the path", () => {
+    expect(parseRoute("/add/https://example.com/an-essay")).toEqual({
+      kind: "add",
+      url: "https://example.com/an-essay",
+    });
+  });
+
+  it("reads the encoded spelling addHref mints", () => {
+    expect(parseRoute(addHref("https://example.com/an-essay?utm=1"))).toEqual({
+      kind: "add",
+      url: "https://example.com/an-essay?utm=1",
+    });
+  });
+
+  it("round-trips a URL with a query string, which raw form cannot", () => {
+    const url = "https://example.com/x?a=1&b=2#frag";
+    const route = parseRoute(addHref(url));
+    expect(route).toEqual({ kind: "add", url });
+  });
+
+  it("is not confused by a port, whose colon is not an encoding signal", () => {
+    expect(parseRoute("/add/http://localhost:3000/x")).toEqual({
+      kind: "add",
+      url: "http://localhost:3000/x",
+    });
+  });
+
+  it("sends /add and /add/ to the shelf, where the add box is", () => {
+    expect(parseRoute("/add")).toEqual({ kind: "library" });
+    expect(parseRoute("/add/")).toEqual({ kind: "library" });
+  });
+
+  it("survives a hand-mangled escape rather than blanking the page", () => {
+    // `decodeURIComponent` throws on this; an uncaught URIError during render
+    // is a white screen over a typo in the address bar.
+    expect(parseRoute("/add/%E0%A4%A")).toEqual({ kind: "add", url: "%E0%A4%A" });
+  });
+
+  it("does not encode twice when it is already encoded", () => {
+    const once = addHref("https://example.com/a b");
+    expect(parseRoute(once)).toEqual({ kind: "add", url: "https://example.com/a b" });
+  });
+});
+
+/**
+ * The half `parseRoute` cannot do, because it is only ever handed a pathname:
+ * a raw paste has had its query string and fragment taken off it by the browser
+ * before anybody looks, and main.tsx is the only place they can be put back.
+ */
+describe("addUrlFrom", () => {
+  it("puts a raw URL's query string and fragment back on", () => {
+    expect(addUrlFrom("/add/https://example.com/x", "?a=1&b=2", "#frag")).toBe(
+      "https://example.com/x?a=1&b=2#frag",
+    );
+  });
+
+  it("leaves an encoded segment alone — its search belongs to us, not to it", () => {
+    expect(addUrlFrom(addHref("https://example.com/x?a=1"), "", "")).toBe(
+      "https://example.com/x?a=1",
+    );
+  });
+
+  it("is empty for anything that is not an add address", () => {
+    expect(addUrlFrom("/read/example")).toBe("");
+    expect(addUrlFrom("/add/")).toBe("");
   });
 });

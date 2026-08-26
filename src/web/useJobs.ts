@@ -34,7 +34,18 @@ export interface UseJobs {
   /** False until the first poll lands, so the UI can tell "none" from "don't know yet". */
   loaded: boolean;
   error: string | null;
-  add(url: string): Promise<void>;
+  /**
+   * Queue a fresh add, and hand back the job so the caller can watch that one.
+   *
+   * It returned `void` until the add page arrived (AddPage.tsx), on the
+   * reasoning — written down here — that no caller had a use for the job. One
+   * does now: the page's whole content *is* that job, and picking it out of the
+   * list by slug would be a guess, because a second add of the same article
+   * hands back the first job rather than making a new one (`enqueue` in
+   * src/jobs.ts). Null on failure, with the reason in `error`, the same as
+   * `run` below.
+   */
+  add(url: string): Promise<Job | null>;
   /**
    * Run named steps on an article that is already on the shelf, and hand back
    * the job so the caller can watch that one rather than the whole list.
@@ -201,12 +212,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
     jobs,
     loaded,
     error,
-    // `await` rather than returning `act`'s promise: this one is declared as
-    // `Promise<void>` and always was, and widening it would put a `Job | null`
-    // in front of callers who have no use for one.
-    add: async (url) => {
-      await act(() => post({ url }));
-    },
+    add: (url) => act(() => post({ url })),
     run: (request) => act(() => post(request)),
     cancel: async (id) => {
       await act(() => send(`/api/jobs/${id}/cancel`, { method: "POST" }));

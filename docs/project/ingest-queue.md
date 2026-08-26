@@ -1,7 +1,8 @@
 # The ingest queue
 
 Paste a URL on the homepage and an article appears on the shelf a minute or two later, with the
-stages ticking over while you watch.
+stages ticking over while you watch. Since 2026-08-26 the watching happens on a page of its own,
+`/add/<the URL>` — [§ The add page](#the-add-page).
 
 > Now let's think about the "Add" functionality that takes a URL as an argument. There should be
 > some kind of queue that processes things (e.g. fetch, Mozilla Readability, sanitiser), and ideally
@@ -21,9 +22,64 @@ the progress list.
 | [`src/jobs.ts`](../../src/jobs.ts) | the queue, the job records, and the restart sweep |
 | [`src/routes.ts`](../../src/routes.ts) | six HTTP routes, all of which return immediately |
 | [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the poll |
-| [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) | the box and the progress list |
+| [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) | the box on the shelf, the progress list, and `JobCard` |
+| [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | `/add/<a whole URL>` — [§ The add page](#the-add-page) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl` and `isSlug` — what an article gets called, and whether that name is safe |
 | [`src/fetch.ts`](../../src/fetch.ts) | stage 1, somebody else's — [fetching.md](fetching.md) |
+
+## The add page
+
+> Add a url that I can use to add something directly, e.g. `/add/[my-full-url-here]` or
+> `/?add=[my-full-url-here]` or similar … And then modify the Home page so that when you add a url
+> and click add, it takes you to this page.
+>
+> — Greg, 2026-08-26
+
+`/add/https://example.com/an-essay` queues that article, shows the stages ticking over, and takes you
+to the reading view when the last one goes green. Pressing **Add** on the shelf now goes here rather
+than queueing where it stands, so there is exactly one thing that starts an ingest and it has an
+address. The spellings the address bar accepts, and why the app's own is percent-encoded, are in
+[url-state.md § `/add/<a whole URL>`](url-state.md#which-article-is-the-path).
+
+**Two things this buys, and neither is the redirect.**
+
+*An ingest has somewhere to be.* The progress list on the shelf was fine for something you were
+watching and could not be reloaded, bookmarked or sent to anybody, because it was a state of that
+page rather than a place. Reload `/add/…` and you are still watching the same job — `enqueue` hands
+back the job already working on that article rather than starting a second one, so the page picks up
+where it was rather than starting again ([§ Idempotent is the goal](#idempotent-is-the-goal-this-is-a-step-towards-it)).
+
+*An article can be handed to us from outside.* A bookmarklet, a share sheet, or a shortcut is now
+`spideryarn/add/` plus wherever you are, with nothing to paste.
+
+### The three traps in a page whose whole job is one effect
+
+- **Queue it once.** `<StrictMode>` mounts, unmounts and mounts again in development, so a plain
+  effect POSTs twice. The guard is a ref, which survives that where state does not. Worth knowing
+  *why this had to be got right rather than noticed*: `enqueue` would have handed the second request
+  the same job, so both POSTs would have looked completely successful and the only trace of the bug
+  would have been a duplicate line in the log — [silent-success.md](../reusable/silent-success.md)
+  again, and the same trap the article open-count fell into on the same day.
+- **Watch that one.** By the job id `queue.add` returned, not by slug. `useJobs` polls the whole
+  queue, and the same article being re-run from another tab is the same slug and a different job.
+  This is what widened `add` from `Promise<void>` to `Promise<Job | null>`; its docstring in
+  [`useJobs.ts`](../../src/web/useJobs.ts) used to argue against that, and the argument was sound
+  until a caller existed that needed the receipt.
+- **Leave properly.** The navigation to the article `replace`s rather than pushes, so Back takes the
+  reader to wherever they came from rather than dropping them here to watch a job that has already
+  finished.
+
+An article already on the shelf takes about a second — every step finds its artefact and skips — so
+adding the same URL twice is a blink and then the article, rather than an error telling you that you
+already have it.
+
+**One check the shelf gets for free and this page does not.** The box there is an
+`<input type="url">`, which the browser will not submit without a scheme; a string out of the address
+bar has no such filter, and `slugFromUrl` says yes to `javascript:` and `file:` because it only ever
+looks at the last path segment. Neither could do any harm — the fetch happens on the server and would
+simply fail — but "Fetching the page" followed a minute later by a stack-shaped error is a much worse
+answer than *that is not a web address*. So `addable` in
+[`AddPage.tsx`](../../src/web/AddPage.tsx) requires `http:` or `https:` before anything is queued.
 
 ## The pipeline is a list, not a function
 

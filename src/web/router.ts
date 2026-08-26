@@ -22,6 +22,18 @@
  * same article seen differently, so they are the same route with a `view`
  * rather than three routes.
  *
+ * ## /add/<a whole URL>
+ *
+ * > Add a url that I can use to add something directly, e.g.
+ * > `/add/[my-full-url-here]` or `/?add=[my-full-url-here]` or similar
+ * >
+ * > — Greg, 2026-08-26
+ *
+ * The odd one out: every other route names something of ours by a slug, and
+ * this one carries somebody else's address. Both of Greg's spellings work, plus
+ * an encoded one, and only the encoded one reaches React — see `addHref` below
+ * and the fourth rewrite in main.tsx. The page itself is AddPage.tsx.
+ *
  * ## Why this is fifty lines and not react-router
  *
  * There are two routes and one parameter. React Router would bring a provider,
@@ -56,6 +68,13 @@ export type ArticleView = "article" | "metadata" | "tweets";
 export type Route =
   | { kind: "library" }
   | { kind: "read"; slug: string; view: ArticleView }
+  /**
+   * Add this URL, right now — `/add/<a whole URL>`. See AddPage.tsx.
+   *
+   * The parameter is somebody else's address, not one of ours, which is why it
+   * is the only route here that carries an arbitrary string rather than a slug.
+   */
+  | { kind: "add"; url: string }
   /** The design reference — every primitive on one page. See DesignPage.tsx. */
   | { kind: "design" };
 
@@ -81,6 +100,14 @@ const VIEW_SEGMENT: Record<ArticleView, string> = {
 const NAVIGATED = "spideryarn:navigated";
 
 /**
+ * Spelled once, because `parseRoute`, `addHref` and `addUrlFrom` all know it.
+ *
+ * Not exported: everything outside this file should be asking `addHref` where
+ * an add goes, not building the path itself. See `addHref`.
+ */
+const ADD_PREFIX = "/add/";
+
+/**
  * Anything that isn't an article is the library, including nonsense.
  *
  * No 404 page, deliberately: a mistyped path lands you on the shelf, which is
@@ -96,6 +123,14 @@ export function parseRoute(pathname: string): Route {
   // Not under /read/, because it is not about an article. It is the one page in
   // the app with no data behind it at all.
   if (/^\/design\/?$/.test(pathname)) return { kind: "design" };
+  // Before the /read/ regex, and it cannot use one: what follows /add/ is a
+  // whole other URL, slashes and all. A bare /add — nothing to add — falls
+  // through to the shelf, which is where the add box is.
+  if (pathname.startsWith(ADD_PREFIX)) {
+    const url = addUrlFrom(pathname);
+    if (url) return { kind: "add", url };
+    return { kind: "library" };
+  }
   const m = /^\/read\/([^/]+)(?:\/(metadata|tweets))?\/?$/.exec(pathname);
   if (!m) return { kind: "library" };
   // A malformed escape would throw out of decodeURIComponent and take the whole
@@ -151,6 +186,57 @@ export function carriedSearch(search: string): string {
 
 export const LIBRARY_HREF = "/";
 export const DESIGN_HREF = "/design";
+
+/**
+ * The canonical address for "add this URL": `/add/<the URL, percent-encoded>`.
+ *
+ * **Encoded, even though a raw paste also works.** Greg asked for an address he
+ * could type by hand — `/add/https://example.com/an-essay` — and that is what
+ * `addUrlFrom` accepts. But an address the *app* generates has to survive being
+ * re-parsed, and a raw URL does not: the browser splits its `?a=1` off into
+ * `location.search`, where it is indistinguishable from one of our own view
+ * parameters. Encoding puts the whole thing in one path segment, where nothing
+ * can take a bite out of it.
+ *
+ * So the two spellings are not equals. The raw one is an *entrance*, rewritten
+ * to this one by main.tsx before React mounts — the same trick the three legacy
+ * rewrites there use, and for the same reason: one spelling reaches React.
+ */
+export function addHref(url: string): string {
+  return `${ADD_PREFIX}${encodeURIComponent(url.trim())}`;
+}
+
+/**
+ * The URL an `/add/…` address is carrying, in either spelling.
+ *
+ * Called two ways, which is why `search` and `hash` are arguments rather than
+ * reads of `location`:
+ *
+ *  - `parseRoute(pathname)` — after main.tsx has canonicalised, so the segment
+ *    is percent-encoded and there is nothing in the query string to collect.
+ *  - main.tsx, with the whole of `location` — a raw paste, whose query string
+ *    and fragment belong to the *pasted* URL and have to be put back on.
+ *
+ * Telling the two apart is one test and it is exact rather than heuristic:
+ * `encodeURIComponent` escapes both `:` and `/`, so a canonical segment can
+ * contain neither, and every URL worth adding contains both.
+ *
+ * Returns `""` for `/add/` with nothing after it, which `parseRoute` reads as
+ * "go to the shelf".
+ */
+export function addUrlFrom(pathname: string, search = "", hash = ""): string {
+  if (!pathname.startsWith(ADD_PREFIX)) return "";
+  const segment = pathname.slice(ADD_PREFIX.length);
+  if (segment === "") return "";
+  if (segment.includes(":") || segment.includes("/")) return segment + search + hash;
+  // A hand-mangled escape throws here, and this runs during a render: an
+  // uncaught URIError would blank the page over a typo in the address bar.
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
 
 /**
  * Go somewhere, without a page load.

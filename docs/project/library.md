@@ -24,6 +24,8 @@ disk but is shaped like rows**, so the day it becomes Postgres is a change to on
 | `/read/<slug>` | the reading view — [web-client.md](web-client.md) |
 | `/read/<slug>/metadata` | everything we know about the article — [metadata-page.md](../plans/metadata-page.md) |
 | `/read/<slug>/tweets` | the article as a numbered thread — [tweet-thread-page.md](../plans/tweet-thread-page.md) |
+| `/add/<a whole URL>` | queue that article and watch it — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
+| `/design` | every token, face and component variant on one page — [design-css-overview.md](design-css-overview.md) |
 
 The shelf's own API surface grew on 2026-08-26: `GET /api/library` (now taking `?archived=1`),
 `GET /api/library/search?q=`, `PATCH /api/library/:slug` and `POST /api/library/:slug/open`.
@@ -281,6 +283,14 @@ have told us the card said 47 minutes and the masthead 54 — see
 Paste a URL, press Add, and the five stages tick over while you watch. The article appears on the
 shelf the moment the last one finishes — no reload, and no "it'll show up eventually".
 
+**Since 2026-08-26 the watching happens somewhere else.** Add navigates to `/add/<the URL>`, which
+queues the job and shows the same progress card this page does, then takes you to the article. Greg
+asked for that address so an article could be handed to us from a bookmarklet or a shortcut, and
+pointing the button at it means there is one thing that starts an ingest rather than two —
+[ingest-queue.md § The add page](ingest-queue.md#the-add-page). The progress list below the box
+stays, and its job is now the one it always covered: showing you the runs *this* page did not start,
+from another tab, from an article page, or from the CLI.
+
 **This section used to describe a stub.** It said the box printed four commands for you to run
 yourself, and that *"running the pipeline from a request handler means background jobs, progress,
 partial failure and a retry path — real work, and not what the experiment is about yet"*. That was
@@ -365,6 +375,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 |---|---|
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the cards |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the add box and the progress list — [ingest-queue.md](ingest-queue.md) |
+| [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | where Add takes you: `/add/<a whole URL>` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl`, `isSlug` — shared by the extractor, the add box and the server |

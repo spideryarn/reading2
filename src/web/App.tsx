@@ -12,6 +12,7 @@ import type { Article, BlockId } from "../types.js";
 import { Library } from "./Library.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { DesignPage } from "./DesignPage.js";
+import { AddPage } from "./AddPage.js";
 import { type ArticleView, useRoute } from "./router.js";
 import { Metadata } from "./Metadata.js";
 import { Tweets } from "./Tweets.js";
@@ -104,6 +105,15 @@ export function App() {
   // already on is a dead control, and Library.tsx names the app in its own
   // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
   if (route.kind === "library") return <Library />;
+  // The corner logo, because this is not home and the reader may have arrived
+  // straight here from a bookmarklet with no shelf behind them.
+  if (route.kind === "add")
+    return (
+      <>
+        <HomeLogo />
+        <AddPage url={route.url} />
+      </>
+    );
   if (route.kind === "design")
     return (
       <>

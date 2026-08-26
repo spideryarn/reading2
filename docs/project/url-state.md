@@ -136,6 +136,36 @@ one thing left behind, because a drawer is not a place you were. See `carriedSea
 [`router.ts`](../../src/web/router.ts) and
 [library.md § The routes](library.md#the-routes).
 
+**`/add/<a whole URL>` is the one path whose parameter is not ours**, added 2026-08-26:
+
+> Add a url that I can use to add something directly, e.g. `/add/[my-full-url-here]` or
+> `/?add=[my-full-url-here]` or similar
+>
+> — Greg, 2026-08-26
+
+It bends the rule above rather than breaking it — the path still says *what*, the query string still
+says *how you are looking at it* — but what it names is somebody else's address rather than one of
+our slugs. Three spellings arrive and one reaches React:
+
+| You type | What happens |
+|---|---|
+| `/add/https://example.com/x` | rewritten to the encoded form before React mounts |
+| `/?add=https://example.com/x` | the same |
+| `/add/https%3A%2F%2Fexample.com%2Fx` | what the app itself mints, and what the address bar ends up showing |
+
+**The encoding is not tidiness.** A raw pasted URL with a query string — `/add/https://x.test/a?utm=1`
+— has already been split by the browser into a pathname and a `location.search` by the time anything
+looks at it, and from there `utm=1` is indistinguishable from one of the parameters in the table
+above. Percent-encoding puts the whole address in one path segment, where nothing can take a bite out
+of it. `addUrlFrom` in [`router.ts`](../../src/web/router.ts) is handed the whole location for
+exactly that reason, and tells the two spellings apart on an exact test rather than a guess:
+`encodeURIComponent` escapes both `:` and `/`, so an encoded segment can contain neither and every
+URL worth adding contains both.
+
+`/add` and `/add/` with nothing after them are the shelf, where the add box is — the same
+"anything else is the shelf" rule as everywhere else on this page. See
+[ingest-queue.md § The add page](ingest-queue.md#the-add-page) for what the page then does.
+
 Old `/?slug=x` links keep working. [`main.tsx`](../../src/web/main.tsx) rewrites them to `/read/x`
 before React mounts, carrying every other parameter across untouched — the same trick, and for the
 same reason, as the `/#spya-…` rewrite below. It uses `replaceState`: the old address is not a page

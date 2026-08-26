@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, ChevronRight, Circle, LoaderCircle, Plus, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
+import { addHref, navigate } from "./router.js";
 import type { Job, JobStep } from "../types.js";
 import type { UseJobs } from "./useJobs.js";
 
@@ -91,14 +92,29 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
     // every poll, which is what made the first version never fire at all.
   }, [nextDeadline]);
 
+  /**
+   * Add goes to the add page rather than queueing here.
+   *
+   * > And then modify the Home page so that when you add a url and click add,
+   * > it takes you to this page.
+   * >
+   * > — Greg, 2026-08-26
+   *
+   * So there is one place that starts an ingest, and it is the one with an
+   * address — which means the thing you just did is now something you can
+   * bookmark, reload, or send to somebody. The progress list below stays: it is
+   * for jobs this page did not start (another tab, the CLI, a re-run from an
+   * article page), which is the case it always covered.
+   *
+   * The box is not cleared. This navigates away, so it unmounts with the state
+   * in it; pressing Back should bring you home to the URL you typed rather than
+   * to an empty box, and the double-add that clearing used to guard against is
+   * now a second click on a button that is no longer on screen.
+   */
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!slug) return;
-    void queue.add(url.trim());
-    // Cleared straight away rather than on success: the job list below is the
-    // acknowledgement, and leaving the URL sitting there invites a second click
-    // that would queue the same article twice.
-    setUrl("");
+    navigate(addHref(url));
   }
 
   return (
@@ -160,7 +176,15 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
   );
 }
 
-function JobCard({
+/**
+ * One job, its steps, and the two things you can do to it.
+ *
+ * Exported because the add page (AddPage.tsx) shows the same card for the one
+ * job it started. Same card on purpose rather than a second one that looks like
+ * it: the words in these rows come off the server, and two renderers of the
+ * same job would be two chances to disagree about what "skipped" looks like.
+ */
+export function JobCard({
   job,
   queue,
   onHide,
