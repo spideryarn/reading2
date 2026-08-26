@@ -44,6 +44,7 @@ import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { assertSlug } from "./slug.js";
+import { notMigratedError, STORE } from "./store/live.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -115,6 +116,16 @@ export async function loadRuns(slug: string): Promise<SearchRun[]> {
  * filesystem.
  */
 async function save(slug: string, runs: SearchRun[]): Promise<void> {
+  /* **Temporary scaffolding**, and the same guard as `save` in src/chat.ts —
+     see the longer note there. In `postgres` mode a saved search written to
+     this file would report success and be invisible to every read. On `save`
+     because every write in this module funnels through it, and because it fires
+     before the model call rather than after it.
+
+     Deleted by step 10 of docs/plans/postgres-storage-implementation.md, which
+     wires the `pgSearchStore` that already exists. */
+  if (STORE === "postgres") throw notMigratedError("Saving a search");
+
   const file = fileFor(slug);
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.tmp`;

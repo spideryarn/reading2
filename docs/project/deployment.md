@@ -209,15 +209,35 @@ Reading an article, the shelf, and comments come from Postgres. These four still
 write to a local filesystem, which a serverless host does not have, and will
 **error** when used:
 
-- **chat** ([`src/chat.ts`](../../src/chat.ts)) — `data/<slug>/chat.json`
-- **meaning-search** ([`src/searches.ts`](../../src/searches.ts))
+- **chat** ([`src/chat.ts`](../../src/chat.ts)) — was `data/<slug>/chat.json`,
+  now a 501 from its own `save()`
+- **meaning-search** ([`src/searches.ts`](../../src/searches.ts)) — the same
 - **glossary web lookups** — refused loudly by `notMigrated` in
-  [`src/store/index.ts`](../../src/store/index.ts), which is the right failure
+  [`src/store/index.ts`](../../src/store/index.ts), which is the right failure,
+  and is now the failure all three give
 - **adding an article** ([`src/jobs.ts`](../../src/jobs.ts)) — and this one is
   more than storage: the queue assumes one long-lived process
 
 Greg, 2026-08-26, chose to ship with these broken rather than wait for them. They
 are steps 7–10 of [postgres-migration.md](../plans/postgres-migration.md).
+
+**All four now refuse rather than fail, and until 2026-08-26 two of them did
+not.** Chat and meaning-search did not check `SPIDERYARN_STORE` — they called
+`node:fs/promises` unconditionally, so what stopped them here was the host
+refusing the write rather than the app refusing to try. That was fine in
+production and quietly wrong everywhere else: on a laptop running
+`SPIDERYARN_STORE=postgres` there is a writable disk, and the same two calls
+**succeeded, reported success, and landed in a store every Postgres read
+ignores** — the outcome `src/store/index.ts` calls the worst available. Both now
+throw the same 501 as the glossary, from `save()` in each module. Two plans had
+proposed extending `notMigrated` to cover them, which cannot work, and why is
+in
+[postgres-storage-implementation.md § Step 10](../plans/postgres-storage-implementation.md#step-10-chat-searches-and-glossary-lookups-writes).
+
+Note the halves that still differ: **reads** of chat and searches answer from the
+filesystem, which on this host is empty, so the panels show nothing rather than
+erroring. That is the right answer today — nothing writes those rows to Postgres
+either — and the wrong one the moment the stores are wired.
 
 ## What the reader sees when the server fails
 

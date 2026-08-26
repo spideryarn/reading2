@@ -26,9 +26,32 @@
  * rather than quietly write a file that the reader will never read back. A
  * write that lands in the store nobody is reading is the worst available
  * outcome: it reports success and loses the data.
+ *
+ * **`notMigrated` can only guard what comes through this file, and chat and
+ * meaning-search do not.** src/routes.ts imports their writes straight from
+ * src/chat.ts and src/searches.ts, which write to disk with `node:fs/promises`.
+ * So in `postgres` mode those two did the thing the paragraph above calls the
+ * worst available outcome, and no line written *here* could change it — which
+ * matters, because two plans proposed extending `notMigrated` to cover them and
+ * it cannot: the call never arrives.
+ *
+ * They now refuse at their own `save()`, using the same 501 from
+ * [live.ts](live.ts) so the reader gets the same answer whichever door the call
+ * came through. That is scaffolding. The end state is wiring `pgChatStore` and
+ * `pgSearchStore` — both built, both reviewed, both still unwired — through
+ * this file and switching routes.ts to them, which is step 10 of
+ * docs/plans/postgres-storage-implementation.md.
+ *
+ * ## The other thing this file is the boundary for
+ *
+ * Every error leaving a Postgres store is translated on the way out, by
+ * `guardDbStore` in [db-errors.ts](db-errors.ts). A failed Drizzle query puts
+ * **every bound parameter into `Error.message`**, and the bound parameters here
+ * are the reader's quote and the model's answer. Read that file before
+ * exporting anything new from this one — a store wired in without the guard is
+ * a store that can publish the article in a 500.
  */
 
-import { loadEnvLocal } from "../env.js";
 import { log } from "../log.js";
 import type {
   ArticleReader,
@@ -37,6 +60,7 @@ import type {
   LibrarySearch,
   ShelfStore,
 } from "./contracts.js";
+import { guardDbStore } from "./db-errors.js";
 import {
   fsArticleReader,
   fsCommentStore,
@@ -44,42 +68,27 @@ import {
   fsLibrarySearch,
   fsShelfStore,
 } from "./fs.js";
+import { notMigrated, STORE } from "./live.js";
 import { pgArticleReader } from "./pg.js";
 import { pgCommentStore } from "./pg-comments.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
 
-loadEnvLocal();
-
-export type StoreName = "files" | "postgres";
-
 /**
- * Which store is live. **Unset means `files`; a wrong value is an error.**
+ * The flag and the refusal both live in [live.ts](live.ts), which imports
+ * nothing of ours.
  *
- * Those are not the same rule and the difference is the whole point. Unset is
- * the ordinary state of every machine that has not opted in yet, so it has to
- * mean something. `SPIDERYARN_STOER=postgres`, or `postgress`, or `Postgres`
- * with a capital, is somebody who *has* opted in and does not know it did not
- * take — and the first version of this line handed all three of them the
- * filesystem in silence, which is the shape of failure this whole migration
- * keeps tripping over: the check you would naturally run comes back saying
- * everything is fine, because it is asking the same wrong question.
+ * They were here until 2026-08-26 and had to move, for a reason worth knowing
+ * before anybody moves them back: `src/chat.ts` and `src/searches.ts` need to
+ * ask which store is live, and this file imports [fs.ts](fs.ts), which imports
+ * both of them. Asking from here would be an import cycle, and `npm run check`
+ * gates on cycles.
  *
- * Failing at import is deliberate. The alternative is a server that boots,
- * serves the wrong store all afternoon, and is discovered by someone wondering
- * why their comment did not survive a restart. GPT Sol raised this in review,
- * 2026-08-26.
+ * Re-exported rather than merely imported, because `STORE` is what
+ * `src/vercel-health.ts` reports and `storeFromEnv` is what
+ * `tests/store-selection.test.ts` drives — neither should have to know the flag
+ * moved house.
  */
-export function storeFromEnv(value: string | undefined): StoreName {
-  if (value === undefined || value === "") return "files";
-  if (value === "files" || value === "postgres") return value;
-  throw new Error(
-    `SPIDERYARN_STORE is ${JSON.stringify(value)}, which is neither "files" nor "postgres". ` +
-      "Unset it for files, or spell it exactly. Refusing to guess, because guessing " +
-      "would serve the store you did not ask for and say nothing about it.",
-  );
-}
-
-export const STORE: StoreName = storeFromEnv(process.env.SPIDERYARN_STORE);
+export { type StoreName, STORE, storeFromEnv } from "./live.js";
 
 if (STORE === "postgres") {
   // info, not debug: which store is serving reads is the first thing anybody
@@ -87,21 +96,23 @@ if (STORE === "postgres") {
   log("store").info({ store: STORE }, "serving article reads from Postgres");
 }
 
-/** A write with no Postgres implementation yet. Loud on purpose — see the header. */
-function notMigrated(what: string): () => never {
-  return () => {
-    throw Object.assign(
-      new Error(
-        `${what} has no Postgres implementation yet, and SPIDERYARN_STORE=postgres. ` +
-          "Refusing rather than writing a file nothing will read back. " +
-          "See docs/plans/postgres-storage-implementation.md.",
-      ),
-      { status: 501 },
-    );
-  };
+/**
+ * Every Postgres store goes through here, and only the Postgres ones do.
+ *
+ * The filesystem stores are not wrapped, deliberately. They bind no parameters,
+ * so they cannot leak one — and routes.ts reads `err.code === "ENOENT"` off
+ * them to answer 404, which a translation would take away. Narrower blast
+ * radius, and the honest reason: the hazard is Drizzle's, not storage's.
+ */
+function guarded<T extends object>(what: string, pg: T, files: T): T {
+  return STORE === "postgres" ? guardDbStore(what, pg) : files;
 }
 
-const reader: ArticleReader = STORE === "postgres" ? (pgArticleReader as ArticleReader) : fsArticleReader;
+const reader: ArticleReader = guarded(
+  "reader",
+  pgArticleReader as ArticleReader,
+  fsArticleReader,
+);
 
 export const loadArticle = reader.loadArticle.bind(reader);
 export const listArticles = reader.listArticles.bind(reader);
@@ -126,8 +137,7 @@ export const deleteGlossary = glossary.deleteGlossary;
  * the article came from Postgres would mean the reader's questions and the
  * paragraphs they point at living in two stores that nothing keeps in step.
  */
-export const commentStore: CommentStore =
-  STORE === "postgres" ? pgCommentStore : fsCommentStore;
+export const commentStore: CommentStore = guarded("comments", pgCommentStore, fsCommentStore);
 
 /**
  * The shelf's write side, and the library-wide search box.
@@ -139,6 +149,6 @@ export const commentStore: CommentStore =
  * prevent above, and it is why these are wired here rather than imported
  * directly by routes.ts.
  */
-export const shelfStore: ShelfStore = STORE === "postgres" ? pgShelfStore : fsShelfStore;
+export const shelfStore: ShelfStore = guarded("shelf", pgShelfStore, fsShelfStore);
 
-export const librarySearch: LibrarySearch = STORE === "postgres" ? pgLibrarySearch : fsLibrarySearch;
+export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch, fsLibrarySearch);

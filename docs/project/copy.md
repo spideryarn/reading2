@@ -106,6 +106,22 @@ copy should be freely rewritable without turning a test suite red, and a test
 that pins a sentence quietly makes the sentence permanent. If you are writing a
 test about a failure, match `/\[ai-stalled\]/`.
 
+**The prefix says which thing failed.** `ai-` is a model call. `db-` is this
+app's own database, and there are two of them: `[db-busy]` for a connection that
+dropped or a deadlock that lost, `[db-failed]` for a database that answered "no"
+and will answer "no" again. A reader quoting four characters, and whoever they
+quote them to, can tell those apart without looking anything up — which was the
+argument for not folding a failed write in with `[ai-unexpected]`.
+
+The `db-` pair also marks the **second widening of `src/messages.ts`**, after
+`UNEXPECTED_FAILURE`: these sentences exist because a failed Drizzle query puts
+every bound parameter into `Error.message`, and the bound parameters are the
+reader's quote and the model's answer. Rule 4 above, arriving from a direction
+nobody was watching — the provider whose words must not be repeated turned out
+to include the database. See
+[error-boundary.md](../plans/error-boundary.md) and
+[`src/store/db-errors.ts`](../../src/store/db-errors.ts).
+
 **A code names a branch, not a status.** 500, 502 and 503 all answer to
 `[ai-upstream]`, because there is one thing to say about all three. What must
 never happen is two *different* sentences sharing a code, which

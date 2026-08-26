@@ -29,6 +29,7 @@ import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { assertSlug } from "./slug.js";
+import { notMigratedError, STORE } from "./store/live.js";
 
 /**
  * What may be logged from this file: ids, slugs, counts, statuses.
@@ -97,6 +98,19 @@ export async function loadThreads(slug: string): Promise<ChatThread[]> {
  * in the same directory because `rename` is only atomic within one filesystem.
  */
 async function save(slug: string, threads: ChatThread[]): Promise<void> {
+  /* **Temporary scaffolding, and it belongs here rather than at each caller.**
+     In `postgres` mode the conversations are supposed to be rows, and there is
+     no Postgres chat store wired yet — so a write landing in this file would
+     report success and be invisible to every read, which src/store/index.ts
+     calls the worst available outcome. It is on `save` because every write in
+     this module funnels through here, so a write added later cannot skip it;
+     and because `save` runs before the model call on the paths that make one.
+
+     Deleted when step 10 of docs/plans/postgres-storage-implementation.md
+     lands: `pgChatStore` exists and is reviewed, and wiring it through
+     src/store/index.ts and src/routes.ts is what actually fixes this. */
+  if (STORE === "postgres") throw notMigratedError("Saving a conversation");
+
   const file = fileFor(slug);
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.tmp`;

@@ -158,7 +158,23 @@ Two Knip findings are **false positives**, checked by hand: `DEFAULT_MODEL` in t
 have tables and an importer but no Postgres store, so in `postgres` mode **their writes still go to
 files**. The two glossary writes refuse loudly with a 501; chat and search writes do not.
 `store/index.ts`'s own header calls that "the worst available outcome: it reports success and loses
-the data." The cheap mitigation is to extend `notMigrated` to chat and search writes.
+the data."
+
+~~The cheap mitigation is to extend `notMigrated` to chat and search writes.~~ **Checked
+2026-08-26, and it cannot be done.** `notMigrated` can only refuse a call that comes through
+`src/store/index.ts`, and these do not: `src/routes.ts` imports the chat and search writes straight
+from `src/chat.ts` and `src/searches.ts`, which use `node:fs/promises` and never read `STORE`. The
+glossary writes are refused loudly only because they go through the store.
+
+**Fixed the same day, in the only place it could go**: `save()` in each of those two modules throws
+the same 501, from a new leaf module `src/store/live.ts` that both they and the store can import
+without closing a cycle. Held by `tests/store-not-migrated.test.ts`. The wiring — which is the real
+end state — is still step 10. See
+[postgres-storage-implementation.md § Step 10](postgres-storage-implementation.md#step-10-chat-searches-and-glossary-lookups-writes).
+
+The lesson generalises past this bug: **a guard can only be written where the call goes.** Two
+documents proposed extending a guard to calls that never reach it, and both were written by people
+reading the store's own header, which said what it refuses without saying what never arrives.
 
 It is not in this plan because it is item 10 on someone else's tracked list and they are editing
 those files now. Flagged here so it is not lost.
