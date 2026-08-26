@@ -477,11 +477,19 @@ The rules are drawn as a gradient inside the mark's own box, in `padding-bottom`
 mark's background downward into the leading **without touching the line box**, so switching a search
 on cannot reflow the article. The band caps at 6px and the stripes inside it get thinner rather than
 the band growing; past four they are not drawn at all (`HUE_STRIPES` in
-[`annotate.ts`](../../src/web/annotate.ts)). One thing there is load-bearing and easy to lose:
-`box-decoration-break: clone`. The default, `slice`, positions a background against the box the mark
-*would* have had if it had never wrapped — so a bottom-anchored stripe on a phrase that breaks across
-two lines is drawn once, on the second line, with the first bare. Invisible until an article happens
-to wrap a match.
+[`annotate.ts`](../../src/web/annotate.ts)). There is a `box-decoration-break: clone` on that rule, and the story of it is worth keeping
+because it is a good example of a plausible rationale that was simply untrue. The comment beside it
+claimed the default, `slice`, would draw a bottom-anchored stripe once at the foot of the last line
+and leave the first line of a wrapped phrase bare. A GPT Sol review disputed it; a browser pass
+toggled the property live on a real wrapped match and pixel-diffed the result. **Chrome renders the
+two identically** — 12 differing pixels out of 42,780 across the line boundary, which is
+antialiasing.
+
+The reason is what to remember: the stripe is sized and positioned in *percentages*, which resolve
+against each fragment's own box. `slice` only differs where a declaration reaches for the unwrapped
+box — an absolute background size, the inline-start/end padding, the corners a radius rounds. So
+`clone` is kept as insurance (it is free, Safari and Firefox are untested, and the day someone
+replaces that `100%` with a pixel width it starts mattering), not as the thing making this work.
 
 **The bar down the left of the paragraph is divided too**, and it answers a coarser question on
 purpose: *is any of my searches in this paragraph*, which is the thing you catch while scrolling

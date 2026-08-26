@@ -1215,14 +1215,28 @@ mark.hit {
      and land on the line below. */
   --hue-band: 2px;
   padding-bottom: var(--hue-band);
-  /* **Load-bearing, and the default is wrong here.** `slice` — the initial
-     value — positions the background against the box the mark *would* have had
-     if it had never wrapped, so a bottom-anchored stripe on a phrase that
-     breaks across two lines is drawn once, at the bottom of the second line,
-     with the first line bare. `clone` gives each fragment its own box, its own
-     padding and its own stripe. The failure without it is not subtle but it is
-     conditional on the line break, so it is invisible until an article happens
-     to wrap a match. */
+  /* **Insurance, not a fix — and this comment used to claim otherwise.**
+     It said `slice` (the initial value) would draw a bottom-anchored stripe
+     once, at the foot of the last line, leaving the first line of a wrapped
+     phrase bare. A GPT Sol review disputed it and a browser pass settled it:
+     in Chrome, `slice` and `clone` render this mark *pixel-identically*,
+     wrapped or not — 12 differing pixels out of 42,780 across the line
+     boundary, which is antialiasing. Both measured 2026-08-26.
+
+     The reason is the interesting part, because it says what would change
+     that. The stripe is positioned with `background-size: 100% <band>` and
+     `background-position: 0 100%` — **percentages, resolved against each
+     fragment's own box.** `slice` only differs from `clone` where a
+     declaration reaches for the *unwrapped* box: absolute background sizes,
+     the inline-start/end padding, the true corners a border-radius rounds.
+     This one never does, so the two modes have nothing to disagree about.
+
+     So `clone` stays, because it costs nothing and it is the mode this rule
+     is written as though it were in — and because the day somebody replaces
+     that `100%` with a pixel width, `slice` starts mattering and the bug is
+     conditional on a line break, which is the kind that hides. Untested in
+     Safari and Firefox, where `box-decoration-break` has a history of
+     diverging; that is the other reason to keep it rather than tidy it away. */
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
