@@ -47,10 +47,20 @@ Legend: ✅ done · 🔵 in progress · ⬜ not started
 | 7 | Reads served from Postgres behind `SPIDERYARN_STORE` | ✅ |
 | 8 | Artefact manifest test — the guard against the next file | ✅ |
 | 9 | Comments — writes | ✅ |
+| 9b | Shelf state — archive, rename, opens — and library-wide search | ✅ **added 2026-08-26**, both adapters. See [library-shelf-actions-and-search.md](library-shelf-actions-and-search.md) |
 | 10 | Chat, searches, glossary lookups — writes | ⬜ |
 | 11 | Pipeline writes to draft revisions (+ carry-forward) | ⬜ **needs coordination** |
 | 12 | Jobs and claiming | ⬜ |
 | 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ |
+
+**One thing found on 2026-08-26 that step 13 needs, and nothing currently does.** `scripts/db-import.ts`
+upserts rows but never **deletes** ones that have gone from disk. A comment deleted on the filesystem
+stays in Postgres for ever, so `tests/store-parity.test.ts` and `tests/store-roundtrip.test.ts` go red
+on drift that is not a code bug — and, worse, cutover day would resurrect deleted comments while
+reporting a clean import. The fix is a reconciling import (delete reader-state rows for an article
+that the files no longer have) or an explicit "import is only ever run into an empty article", said
+out loud. Not fixed here because it is squarely step 10–13's business, but it is the reason those two
+tests are currently failing on this machine.
 
 ### Step 0 — done
 
@@ -228,12 +238,83 @@ Their reports arrived late, after the reads were already committed. One of them 
    directory to walk out of, and the Postgres reader deliberately 404s instead of falling through,
    so the ambiguity is gone. That is a behaviour change, and it is the right one.
 
+## What the cross-family review found
+
+GPT Sol reviewed the four commits on 2026-08-26 (`gpt-5.6-sol`, high effort, via
+[run-codex.ts](../../scripts/run-codex.ts)). Its answer is kept verbatim in
+[postgres-storage-review-sol.md](postgres-storage-review-sol.md); the prompt is in
+[postgres-storage-review-prompt.md](postgres-storage-review-prompt.md). Its verdict was
+**NO-SHIP for this tranche**.
+
+> The first attempt died out of credits after 170k tokens spent crawling `git log -p`. The prompt
+> that worked names the files to read and says not to walk the repo. Keep it that way.
+
+**Every claim below was checked against the code before acting on it.** Two did not survive that,
+and the one it led with turned out not to be this work at all — which is the reason to check.
+
+| What Sol said | Verified? | What happened |
+|---|---|---|
+| **Blocker:** `archived_at`, `title_override`, `opens`, `last_opened_at` are in the schema and in `pg.ts` but in no migration | **Real, not mine** | Those columns arrived in the working tree *after* commit `351c054`, in another agent's uncommitted shelf work. Sol reviewed the tree, not the commits, and even noticed `schema.ts` growing under it mid-review. Passed on rather than fixed — see [Rules for this work](#rules-for-this-work) on staying inside your stage |
+| The exporter filters chat messages on `thread_id` alone, so two articles sharing a thread id mix | **Real** | Fixed. Thread ids are per-article by design, so this was one reader's conversation landing under someone else's article. [tests/store-export-isolation.test.ts](../../tests/store-export-isolation.test.ts) reproduces it |
+| `create()` in the comment store races: two overlapping requests both insert | **Real** | Fixed — one `insert … on conflict do update` instead of select-then-branch. The red test holds a transaction open by hand, because two concurrent calls pass either way |
+| `on conflict do nothing` means a re-import never removes what the files dropped | **Real, and already happening** | `data/writes/comments.json` held two comments while Postgres held three. The importer now replaces reader state inside its transaction, and `tests/store-import-convergence.test.ts` asserts it — **both are in the working tree and NOT in this commit**, see the note below |
+| The exporter has no `order by`, so array order is luck | **Real** | Fixed. It broke the same afternoon: the convergence fix changed the physical row order and `searches.json` came back shuffled |
+| `order by created_at, id` does not reproduce the file's array order | **Real** | `data/noema-…/comments.json` has a hand-written comment sitting out of date order. Not fixed and deliberately so: nothing reads array order — [comment-nav.ts](../../src/web/comment-nav.ts) sorts into document order first — so the round trip now says "every row, unchanged" rather than "byte-identical" |
+| `isLocalDatabaseUrl` pattern-matches the whole URL, and that answer authorises destructive commands | **Real** | Fixed — parse the URL, compare the hostname, fail closed on anything unparseable |
+| The parity test's `wire()` cannot see `undefined` versus absent, though its comment claims it can | **Real** | Comment corrected, and `toStrictEqual` added beside it so the claim is now true. It passed first time, which is the answer to Sol's question 3: the conditional spreads were complete |
+| `schema.ts` still says "nothing reads this yet"; `owner.ts` says every table has `owner_id` and that it is the only file auth touches | **Real** | All three corrected. Six of thirteen tables carry `owner_id`; no read filters on it yet |
+| The parity test says the slug list is taken twice | **Real** | It is taken once. Comment corrected |
+| The importer's uuid is described as RFC-4122 v5 | **Real** | It is sha256 with the v5 bits stamped on. Not yet reworded — see below |
+| The importer mutates an already-published revision, and only some of its fields | **Real** | **Not fixed.** The fingerprint is `hashBlocks` alone, so changing only `meta.json` re-uses the revision id and updates a subset. Needs a decision, not a patch — see below |
+| `SPIDERYARN_STORE` typos fall back to files | Real, but documented and deliberate for the staged phase | Left. Worth tightening to reject unknown non-empty values |
+| A second user would see the first one's library; `articles.slug` is globally unique | **Real** | Recorded in `owner.ts` rather than fixed. Global slug uniqueness is a recorded decision (it is the URL contract), so this is the beta gate's problem |
+| The round-trip claim is overstated: `raw.html` is not in `ARTEFACTS` and stamped HTML is only asserted absent | Real | Left as a known gap |
+
+### Two files this commit deliberately leaves behind
+
+`src/store/import.ts` and `src/db/schema.ts` both hold another agent's in-flight shelf work at the
+same time as they hold my changes — the `archived_at` / `title_override` / `opens` /
+`last_opened_at` columns and the code that reads them, with **no migration yet**, which is the
+blocker Sol led with. Committing my half would have swept theirs in, and committing a schema whose
+columns no migration creates is a fresh-checkout breakage rather than an untidy diff. `import.ts`
+cannot even be staged by the hunk, because until the NUL byte is committed git still calls it
+binary.
+
+So the importer's convergence fix, its two corrected comments, the `schema.ts` header, and
+`tests/store-import-convergence.test.ts` are all sitting in the working tree, verified green, for
+whoever commits the shelf work to carry in. Nothing else depends on them.
+
+Two things Sol did **not** find, both turned up while checking its work:
+
+- **`src/store/import.ts` contained a raw NUL byte** — `parts.join("\0")` had been written with an
+  actual `0x00` rather than the two-character escape. Valid JavaScript, and it did the right thing.
+  It also made git call the file binary and made **`grep` silently never match anything in it**,
+  which cost twenty minutes of believing a function did not exist. Fixed.
+- The `toStrictEqual` added for Sol's point 3 passes on every article, which is positive evidence
+  the conditional spreads in `pg.ts` are complete rather than merely untested.
+
 ## What is not done
 
-- **GPT Sol never reviewed this.** The Codex workspace is out of credits — confirmed on
-  `gpt-5.6-luna` as well, so it is account-wide rather than model-specific. Fable arbitrated
-  instead, which is a second opinion but **not** the cross-family review the house process asks for.
-  Re-run `scripts/run-codex.ts` against this plan once credits are back.
+- **The importer can mutate an already-published revision, and only some of its fields.** The
+  revision id is derived from `slug + hashBlocks(blocks)`, but a revision is far more than its
+  blocks: change only `meta.json` and the fingerprint is unchanged, so the import re-uses the
+  revision id and takes the `on conflict do update` branch, which refreshes the tree and the
+  optional artefacts and leaves title, byline, urls, `fetched_at` and the raw bytes stale.
+  `article_revisions` says "immutable once published". GPT Sol found this and it is **not fixed**,
+  because the fix is a choice rather than a patch: either fingerprint the whole canonical revision
+  and keep published revisions genuinely immutable, or keep a separate full-source idempotency key
+  and replace every field as one unit. Worth deciding before the pipeline starts writing revisions.
+- **Two imports of the same slug can race for the pointer.** Different fingerprints produce two
+  complete revisions, and whichever updates `articles.current_revision_id` last wins regardless of
+  which extraction is newer. Lock the article row and say what the winner is. This is also the best
+  candidate for the flaky failure at the bottom of this list.
+- **`revision_step_runs` are inferred and never removed.** An artefact deleted from disk leaves its
+  "done" row behind, so the metadata page keeps reporting a step that no longer has output. Left
+  alone because the pipeline is about to own this table properly.
+- **The exporter is not a full rollback.** `raw.html` is outside the round trip's `ARTEFACTS` list,
+  and the stamped HTML is only asserted to be in the right *place*, never compared.
+- **`SPIDERYARN_STORE` falls back to files on a typo.** Deliberate while the cutover is staged, but
+  it should reject any non-empty value that is not `files` or `postgres`.
 - **The on-demand artefacts do not yet survive re-extraction, and the schema is why.** Today
   `tweets.json`, `glossary.json` and `summary.json` are files that outlive a re-run of `blocks`;
   `stale` is computed at read time and the panel shows the old artefact with a banner. As revision

@@ -1,16 +1,27 @@
 /**
  * Who owns a row.
  *
- * Every table in `spideryarn` carries `owner_id uuid not null references
+ * Every table that a **person** owns carries `owner_id uuid not null references
  * auth.users(id)`, decided before there was any auth to populate it —
- * docs/project/database.md. The point of that decision was that **no query
- * above the storage adapter changes when a second person is let in**: the
- * column is already there, already indexed, already not-null, and the only
- * thing that changes is where the value comes from.
+ * docs/project/database.md. Not every table: six of the thirteen carry it, and
+ * `article_revisions`, `revision_blocks`, `block_identities`,
+ * `revision_step_runs`, `ai_calls`, `chat_messages` and `queue_state` do not —
+ * each belongs to a row that does (an article, a revision, a thread), and
+ * carrying the owner twice is a second copy to disagree with the first.
  *
- * This file is that "where". Today it is a constant; when the beta gate lands
- * (docs/plans/deploy-and-repo-move.md#the-beta-gate) it becomes the session
- * user, and this is the only file that has to know.
+ * This file is where the value comes from. Today it is a constant; when the
+ * beta gate lands (docs/plans/deploy-and-repo-move.md#the-beta-gate) it becomes
+ * the session user, and this is the only file that has to know *who* the owner
+ * is.
+ *
+ * **It is not the only file that changes when a second person arrives**, and an
+ * earlier version of this comment said it was. Nothing in src/store/pg.ts
+ * filters on `owner_id` — with one owner there is nothing to filter — so a
+ * second user would see the first one's library until those queries are
+ * written. `articles.slug` is globally unique as well, deliberately, because it
+ * is the URL contract; two people ingesting the same URL is a question the beta
+ * gate has to answer rather than a bug to fix here. GPT Sol raised both in
+ * review, 2026-08-26; docs/plans/postgres-storage-review-sol.md.
  *
  * **`not null` on purpose**: a row with no owner is not a state this system
  * has. So there is no "anonymous" fallback here and there should never be one —

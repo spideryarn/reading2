@@ -8,11 +8,17 @@
  * every assertion here goes through `JSON.parse(JSON.stringify(…))` — the wire
  * form, exactly what `src/routes.ts` would send.
  *
- * That also catches the failure that `toEqual` alone would miss.
- * `exactOptionalPropertyTypes` is on, Postgres returns `null` where a file had
- * *no key at all*, and `{ byline: null }` and `{}` are different documents on
- * the wire while being nearly indistinguishable in a diff. Serialising first
- * makes the difference visible rather than clever.
+ * **What serialising does and does not buy.** It asserts what the client
+ * actually receives, which is the point. It does NOT catch the
+ * `exactOptionalPropertyTypes` distinction, and an earlier version of this
+ * comment claimed it did — `JSON.stringify` deletes an `undefined` value
+ * outright, so `{ byline: undefined }` and `{}` are the same string and no
+ * assertion here can tell them apart. `toEqual` already separates
+ * `{ byline: null }` from `{}` without any help, so serialising adds nothing on
+ * that front either. GPT Sol caught the overclaim in review, 2026-08-26;
+ * docs/plans/postgres-storage-review-sol.md. The absent-versus-undefined
+ * distinction is checked by `toStrictEqual` and by explicit `in` assertions,
+ * not by this.
  *
  * **These import into the local database as part of the run.** That is
  * deliberate: a parity test that needed someone to have run the importer first
@@ -63,11 +69,15 @@ function wire<T>(value: T): unknown {
  * of this test duly failed in the full suite while passing on its own, which is
  * the least useful kind of red.
  *
- * So the list is taken twice: once at module load to decide what to compare,
- * and once again immediately before importing. A slug that has stopped existing
- * in between was somebody's fixture, not an article, and dropping it is
- * correct. The count is asserted afterwards so that "everything vanished"
- * cannot pass as "nothing to do".
+ * So the scan happens once, in `beforeAll`, after the probe — not at module
+ * load — and it skips any directory whose name begins with `test-`, which is
+ * the naming every fixture here follows. A fixture that appears or vanishes
+ * mid-run is therefore never in the list to begin with. The count is asserted
+ * afterwards so that "everything vanished" cannot pass as "nothing to do".
+ *
+ * (An earlier version of this comment said the list was taken twice, once at
+ * module load and once before importing. It never was. GPT Sol caught it in
+ * review, 2026-08-26.)
  */
 async function importableSlugs(): Promise<string[]> {
   const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
@@ -155,6 +165,15 @@ when("the filesystem and Postgres stores agree", () => {
         pgArticleReader.loadArticle(slug),
       ]);
       expect(wire(fromPg)).toEqual(wire(fromFiles));
+      /* And again WITHOUT serialising, because the two assertions catch
+         different things. `toStrictEqual` is the only one that separates
+         `{ byline: undefined }` from `{}` — `JSON.stringify` deletes the key
+         and `toEqual` ignores it — and that difference is the whole reason
+         `exactOptionalPropertyTypes` is on: src/store/pg.ts spreads
+         conditionally so that a null column becomes an absent property rather
+         than an explicit `undefined` one, and nothing was checking that it
+         had. Added after GPT Sol's review, 2026-08-26. */
+      expect(fromPg).toStrictEqual(fromFiles);
     });
 
     it("returns the blocks in the same order, by id", async () => {
@@ -195,6 +214,8 @@ when("the filesystem and Postgres stores agree", () => {
 
         expect(fromPg).not.toBeInstanceOf(Error);
         expect(wire(fromPg)).toEqual(wire(fromFiles));
+        // See the note on `toStrictEqual` above: absent is not `undefined`.
+        expect(fromPg).toStrictEqual(fromFiles);
       });
     }
   });

@@ -50,6 +50,7 @@ const ARTEFACTS = [
   "chat.json",
   "searches.json",
   "glossary-lookups.json",
+  "shelf.json",
 ] as const;
 
 /** Sort every object's keys, recursively. See the header for why. */
@@ -63,6 +64,46 @@ function sorted(value: unknown): unknown {
     );
   }
   return value;
+}
+
+/**
+ * Put the reader-state lists in one known order, on both sides.
+ *
+ * A table has no array order, so a round trip cannot promise to return
+ * `comments.json`'s. It usually did, by the accident of Postgres handing back
+ * rows in the order they were written — and the accident ran out the day
+ * src/store/import.ts started deleting and re-inserting reader state. Nor was
+ * the accident ever right: data/noema-.../comments.json has a hand-written
+ * comment sitting out of date order, so the file's order is *insertion* order,
+ * and no column records it.
+ *
+ * That is fine, and worth saying why rather than just sorting and moving on.
+ * Nothing reads the array order: src/web/comment-nav.ts sorts comments into
+ * document order before the reader sees any of them, breaking ties on
+ * `createdAt` then `id` — the same chain used here and in src/store/export.ts.
+ * So the promise this test makes is "every row comes back, unchanged", not
+ * "the file is byte-identical", which is the same bar the JSONB key order
+ * already set. GPT Sol raised it in review, 2026-08-26.
+ *
+ * Chat MESSAGES are deliberately not reordered: `chat_messages.ordinal` does
+ * record their position, so their order is a real promise and sorting them here
+ * would hide the day it breaks.
+ */
+function canonical(artefact: string, value: unknown): unknown {
+  const key = { "comments.json": "comments", "searches.json": "runs", "chat.json": "threads" }[
+    artefact
+  ];
+  if (!key || !value || typeof value !== "object") return value;
+  const list = (value as Record<string, unknown>)[key];
+  if (!Array.isArray(list)) return value;
+  const rank = (x: unknown) => {
+    const o = x as { createdAt?: string; id?: string };
+    return `${o.createdAt ?? ""}|${o.id ?? ""}`;
+  };
+  return {
+    ...value,
+    [key]: [...list].sort((a, b) => rank(a).localeCompare(rank(b))),
+  };
 }
 
 async function readJsonIfPresent(file: string): Promise<unknown | undefined> {
@@ -170,7 +211,9 @@ when("a round trip through Postgres", () => {
       }
 
       expect(returned).toBeDefined();
-      expect(sorted(returned)).toEqual(sorted(original));
+      expect(sorted(canonical(artefact, returned))).toEqual(
+        sorted(canonical(artefact, original)),
+      );
     });
   });
 

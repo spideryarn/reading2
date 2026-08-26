@@ -210,6 +210,66 @@ when("the Postgres comment store", () => {
     ).rejects.toThrow();
   });
 
+  it("survives an identical create arriving while another is uncommitted", async () => {
+    /* The reset-on-retry test above sends the two creates one after the other,
+       and that is the easy half. The hard half is the same two requests
+       overlapping: a double-clicked button, or the client retrying while the
+       first request is still in flight. Both transactions look for the row,
+       both find nothing — a transaction cannot lock a row that does not exist
+       yet — and both insert. GPT Sol found this in review, 2026-08-26.
+
+       The primary key stops the second row, so the damage was never corruption;
+       it was the second request failing with a raw uniqueness error, which
+       src/routes.ts turns into a 500. The reader sees their question fail for a
+       reason that has nothing to do with their question.
+
+       **Two concurrent `create` calls do not reproduce it.** I tried that
+       first: they pass either way, because each transaction is short enough
+       that Node happens to run them end to end. A test that cannot fail proves
+       nothing, so this holds the losing side open by hand — an uncommitted row
+       nobody can see, which is exactly the window the bug lives in. */
+    const id = "spya-jjj000";
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const db = getDb();
+    const holder = db.transaction(async (tx) => {
+      await tx.insert(commentsTable).values({
+        articleId: ARTICLE_ID,
+        id,
+        ownerId: currentOwnerId(),
+        blockId: BLOCK_ID,
+        quote: "the first request",
+        start: 7,
+        status: "pending",
+      });
+      await held; // the row exists, and nothing outside this transaction can see it
+    });
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+    await settle();
+    const second = pgCommentStore.create(SLUG, {
+      id,
+      blockId: BLOCK_ID,
+      quote: "the second request",
+      start: 7,
+    });
+    await settle(); // long enough for the second insert to be blocking on the key
+    release();
+    await holder;
+
+    const stored = await second;
+    expect(stored.id).toBe(id);
+    expect(stored.status).toBe("pending");
+    // The second request wins the field, as a retry should — it is the same
+    // question, asked again.
+    expect(stored.quote).toBe("the second request");
+    // One comment, not two, and not one plus an exception.
+    expect((await pgCommentStore.load(SLUG)).filter((c) => c.id === id)).toHaveLength(1);
+  });
+
   it("404s for an article that is not there", async () => {
     await expect(pgCommentStore.load("no-such-article-at-all")).rejects.toMatchObject({
       status: 404,

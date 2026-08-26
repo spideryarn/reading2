@@ -67,7 +67,24 @@ export type SslDecision =
  * packets go".
  */
 export function isLocalDatabaseUrl(url: string): boolean {
-  return /@(127\.0\.0\.1|localhost)[:/]/.test(url);
+  /* Parse it, do not pattern-match it. The first version was
+     `/@(127\.0\.0\.1|localhost)[:/]/` and it read the wrong `@`: userinfo runs
+     to the LAST one, so `postgres://user:p@localhost:5432@remote.example.com/db`
+     has its host at remote.example.com and a loopback address sitting in the
+     password. The regex found that one and called the remote database local,
+     which turns TLS off AND lets db-migrate past its guard. GPT Sol found it in
+     review, 2026-08-26. An unescaped `@` in a password is an ordinary mistake,
+     not a contrived one.
+
+     Fail closed on anything that will not parse: "I cannot tell what this is"
+     must never come out as "yes, it is the throwaway container". */
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return false;
+  }
+  return host === "127.0.0.1" || host === "localhost";
 }
 
 /**

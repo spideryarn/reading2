@@ -30,7 +30,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import {
@@ -176,13 +176,54 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
     written.push(path.join(target.outputRoot, `${slug}.html`));
   }
 
+  /* shelf.json — what the reader did to the card, from the four columns on
+     `articles` rather than on the revision. Written only when there is
+     something to say: an untouched article has no shelf file, and inventing an
+     empty one would mean every round trip added a file the app never wrote —
+     which the round-trip test checks for, and rightly. */
+  const shelf = compact({
+    archivedAt: article.archivedAt?.toISOString() ?? null,
+    title: article.titleOverride,
+    // Not `compact`ed away: zero is a real answer to "how many times", and a
+    // shelf file that omits it would read back as `undefined` where the
+    // filesystem store writes `0`.
+    opens: article.opens,
+    lastOpenedAt: article.lastOpenedAt?.toISOString() ?? null,
+  });
+  if (article.archivedAt || article.titleOverride || article.opens > 0) {
+    await put("shelf.json", shelf);
+  }
+
   /* Reader state. Each file wraps its payload in a single-key object, and
      getting that wrapper wrong is what made the importer lose 17 KB of
-     comments while reporting success. Same shapes, written back the same way. */
+     comments while reporting success. Same shapes, written back the same way.
+
+     `shelf.json` above is the one that does NOT wrap — it is the state itself,
+     not a list of anything, and src/shelf.ts reads it that way. */
+  /* **Every list here is ordered explicitly, and none of them was.**
+
+     A `select` with no `order by` returns rows in whatever order Postgres finds
+     them, which is usually the order they were written and is guaranteed to be
+     nothing. The round-trip test passed on that for weeks; the day
+     src/store/import.ts started deleting and re-inserting reader state, the
+     physical order changed and searches.json came back shuffled. An export
+     whose row order moves on its own makes `git diff` useless during a
+     rollback, which is the one moment anybody is reading it.
+
+     `created_at, id` is the order, and `id` is there so that two rows written
+     in the same millisecond cannot swap between exports. It is NOT the array
+     order the file originally had — data/noema-.../comments.json has a
+     hand-written comment sitting out of date order, and nothing can recover
+     that from a table. It does not matter: src/web/comment-nav.ts sorts
+     comments into document order before showing them, using this same
+     `createdAt` then `id` chain to break ties, so the file's array order is
+     insertion order and nothing reads it. GPT Sol raised both the missing
+     order and the array-order claim in review, 2026-08-26. */
   const commentRows = await db
     .select()
     .from(commentsTable)
-    .where(eq(commentsTable.articleId, article.id));
+    .where(eq(commentsTable.articleId, article.id))
+    .orderBy(asc(commentsTable.createdAt), asc(commentsTable.id));
   if (commentRows.length) {
     const comments: Comment[] = commentRows.map((row) =>
       compact({
@@ -205,14 +246,23 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
   const threadRows = await db
     .select()
     .from(chatThreads)
-    .where(eq(chatThreads.articleId, article.id));
+    .where(eq(chatThreads.articleId, article.id))
+    .orderBy(asc(chatThreads.createdAt), asc(chatThreads.id));
   if (threadRows.length) {
     const threads = [];
     for (const thread of threadRows) {
+      /* `article_id` AND `thread_id`, never `thread_id` alone. A thread id is
+         unique only within its article — `chat_threads`'s primary key is
+         `(article_id, id)`, the same rule as block ids — so two articles can
+         hold a thread called `thr-1`, and filtering on the id by itself would
+         write both articles' messages into one article's rollback file. That is
+         one reader's private conversation appearing under someone else's
+         article, and the round-trip test would not have noticed: it exports one
+         article at a time. */
       const messageRows = await db
         .select()
         .from(chatMessages)
-        .where(eq(chatMessages.threadId, thread.id))
+        .where(and(eq(chatMessages.articleId, article.id), eq(chatMessages.threadId, thread.id)))
         .orderBy(chatMessages.ordinal);
       threads.push({
         id: thread.id,
@@ -240,7 +290,11 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
     await put("chat.json", { threads });
   }
 
-  const runRows = await db.select().from(searchRuns).where(eq(searchRuns.articleId, article.id));
+  const runRows = await db
+    .select()
+    .from(searchRuns)
+    .where(eq(searchRuns.articleId, article.id))
+    .orderBy(asc(searchRuns.createdAt), asc(searchRuns.id));
   if (runRows.length) {
     const runs: SearchRun[] = runRows.map((row) =>
       compact({
@@ -259,7 +313,8 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
   const lookupRows = await db
     .select()
     .from(glossaryLookups)
-    .where(eq(glossaryLookups.articleId, article.id));
+    .where(eq(glossaryLookups.articleId, article.id))
+    .orderBy(asc(glossaryLookups.entryId));
   if (lookupRows.length) {
     const lookups: Record<string, unknown> = {};
     for (const row of lookupRows) {

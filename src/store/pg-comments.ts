@@ -100,81 +100,107 @@ export const pgCommentStore: CommentStore = {
    * `createdAt` survives the reset, because the reader asked the question once.
    * Everything from the previous attempt — answer, citations, searches, model,
    * error — goes, because it belonged to the attempt being replaced.
+   *
+   * ## Why this is one statement and not select-then-branch
+   *
+   * The first version read the row, then either updated it or inserted, inside
+   * a transaction. That is correct for a retry that arrives *after* the first
+   * request finished, and wrong for one that arrives *during* it: a transaction
+   * cannot lock a row that does not exist yet, so both requests see nothing and
+   * both insert, and the second gets a raw uniqueness error that src/routes.ts
+   * turns into a 500. The reader's question fails for a reason that is not
+   * about their question. GPT Sol found it in review, 2026-08-26;
+   * docs/plans/postgres-storage-review-sol.md.
+   *
+   * `on conflict (article_id, id) do update` is the fix, and it is the same
+   * statement for both cases — Postgres serialises the second writer on the
+   * key it is about to insert, then hands it the update. There is no window
+   * left to lose, because there is no gap between looking and writing.
+   *
+   * `created_at` is deliberately absent from the `set`. Leaving it out is what
+   * preserves it; adding it "for completeness" would silently restart the clock
+   * on a question the reader asked once.
    */
   async create(slug: string, input: NewComment): Promise<Comment> {
     const db = getDb();
     const articleId = await articleIdFor(slug);
+    const supplied = input.id !== undefined && isSpideryarnId(input.id) ? input.id : undefined;
 
-    return db.transaction(async (tx) => {
-      const existingRows = input.id
-        ? await tx
-            .select()
-            .from(commentsTable)
-            .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, input.id)))
-            .limit(1)
-        : [];
-      const existing = existingRows[0];
+    const fields = {
+      blockId: input.blockId,
+      quote: input.quote,
+      start: input.start,
+      status: "pending",
+      answer: null,
+      citations: null,
+      searches: null,
+      model: null,
+      error: null,
+    } as const;
 
-      if (existing) {
-        const [updated] = await tx
-          .update(commentsTable)
-          .set({
-            blockId: input.blockId,
-            quote: input.quote,
-            start: input.start,
-            status: "pending",
-            answer: null,
-            citations: null,
-            searches: null,
-            model: null,
-            error: null,
-          })
-          .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, existing.id)))
-          .returning();
-        // `updated!`: the row was selected in this transaction a moment ago, so
-        // the update matched it. `noUncheckedIndexedAccess` cannot know that.
-        const stored = toComment(updated!);
-        logger.info(
-          { slug, id: stored.id, blockId: stored.blockId, reset: true },
-          "comment created",
-        );
-        return stored;
-      }
-
-      /* Minting needs the ids already taken FOR THIS ARTICLE. Block ids are
-         unique only within an article and so are these — the primary key is
-         `(article_id, id)`. Passing every comment id in the database would be
-         both wrong and slower. */
-      const takenRows = await tx
-        .select({ id: commentsTable.id })
-        .from(commentsTable)
-        .where(eq(commentsTable.articleId, articleId));
-      const taken = new Set(takenRows.map((r) => r.id));
-
-      const id =
-        input.id !== undefined && isSpideryarnId(input.id) ? input.id : mintUniqueId(taken);
-
-      const [inserted] = await tx
+    const write = async (id: string, tx: typeof db = db) => {
+      const [row] = await tx
         .insert(commentsTable)
-        .values({
-          articleId,
-          id,
-          ownerId: currentOwnerId(),
-          blockId: input.blockId,
-          quote: input.quote,
-          start: input.start,
-          status: "pending",
+        .values({ articleId, id, ownerId: currentOwnerId(), ...fields })
+        .onConflictDoUpdate({
+          target: [commentsTable.articleId, commentsTable.id],
+          set: fields,
         })
         .returning();
+      // `row!`: an insert with `returning()` yields exactly the row it wrote,
+      // and `do update` yields the row it updated. `noUncheckedIndexedAccess`
+      // cannot know that either branch always produces one.
+      return toComment(row!);
+    };
 
-      // `inserted!`: an insert with `returning()` yields exactly the row it wrote.
-      const stored = toComment(inserted!);
+    if (supplied) {
+      const stored = await write(supplied);
+      /* `reset` is read off `createdAt` rather than off which branch ran,
+         because with one statement there are no branches to read. A row whose
+         `created_at` predates this call is a row that already existed. The
+         second is slack for clock skew between the app and the database; this
+         is a log field, and being approximately right about a retry is worth
+         more than a second round trip to be exactly right. */
+      const age = Date.now() - new Date(stored.createdAt).getTime();
       logger.info(
-        { slug, id: stored.id, blockId: stored.blockId, reset: false },
+        { slug, id: stored.id, blockId: stored.blockId, reset: age > 1000 },
         "comment created",
       );
       return stored;
-    });
+    }
+
+    /* No usable id from the client, so mint one. This half still has to look
+       before it writes — you cannot ask Postgres for "an id nothing is using" —
+       so it keeps the transaction, and it retries on a key collision.
+
+       Minting needs the ids already taken FOR THIS ARTICLE. Block ids are
+       unique only within an article and so are these; the primary key is
+       `(article_id, id)`. Passing every comment id in the database would be
+       both wrong and slower. */
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const stored = await db.transaction(async (tx) => {
+          const takenRows = await tx
+            .select({ id: commentsTable.id })
+            .from(commentsTable)
+            .where(eq(commentsTable.articleId, articleId));
+          return write(mintUniqueId(new Set(takenRows.map((r) => r.id))), tx as typeof db);
+        });
+        logger.info(
+          { slug, id: stored.id, blockId: stored.blockId, reset: false },
+          "comment created",
+        );
+        return stored;
+      } catch (err) {
+        /* 23505 is unique_violation, and here it means two requests minted the
+           same random id in the same instant — one chance in a billion, which
+           at enough requests is a Tuesday. Anything else is a real failure and
+           must not be swallowed: 23503 in particular is the block identity FK,
+           which means stage 3 re-minted ids and has to be seen. */
+        const code = (err as { code?: string }).code;
+        if (code !== "23505" || attempt >= 2) throw err;
+      }
+    }
   },
 
   async patch(

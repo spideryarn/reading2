@@ -44,6 +44,29 @@ describe("isLocalDatabaseUrl", () => {
     expect(isLocalDatabaseUrl("postgresql://user:127.0.0.1@example.com:5432/db")).toBe(false);
     expect(isLocalDatabaseUrl("postgresql://user:pw@example.com:5432/localhost")).toBe(false);
   });
+
+  it("is not fooled by an unescaped @ in the password", () => {
+    /* Everything before the LAST `@` is userinfo, so this URL points at
+       example.com. A regex looking for `@localhost:` anywhere in the string
+       finds one in the PASSWORD and calls a remote database local — which
+       turns TLS off and lets db-migrate run without DB_MIGRATE_ALLOW_REMOTE.
+       GPT Sol found this in review, 2026-08-26.
+
+       An unescaped `@` in a password is a mistake rather than a rarity: it is
+       what you get by pasting a generated password into a connection string
+       without percent-encoding it, which is how most of these are written. */
+    expect(isLocalDatabaseUrl("postgresql://user:p@localhost:5432@example.com:5432/db")).toBe(
+      false,
+    );
+    expect(isLocalDatabaseUrl("postgresql://user:pw@127.0.0.1@example.com:5432/db")).toBe(false);
+  });
+
+  it("says no rather than throwing when the URL will not parse", () => {
+    // Fail closed. "I cannot tell" must not read as "yes, local", because the
+    // answer authorises a destructive command against whatever this is.
+    expect(isLocalDatabaseUrl("not a url at all")).toBe(false);
+    expect(isLocalDatabaseUrl("")).toBe(false);
+  });
 });
 
 describe("sslDecisionFor", () => {
