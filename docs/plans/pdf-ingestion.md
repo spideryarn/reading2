@@ -1515,6 +1515,23 @@ are v1:
 3. **Render the model's own confessed uncertainty** — `⟦illegible⟧` and the `uncertain` flag, visible
    in the text. On a scan it is the one free signal there is.
 
+**And the third one is nearly empty, which is worth knowing before relying on it.** Run over the
+seventeen-page Wellcome scan — foxing, toning, broken type, hyphenation across line-ends — the reader
+marked **one record of 87 uncertain and emitted zero `⟦illegible⟧` markers**. The one flag is on a
+library shelf-mark (`mo - pam WM 700 127* F 78 a`), not on a word of the pamphlet.
+
+The bake-off's design said to *"note which reader admits it can't read something — that is the
+property we most want and the hardest to get."* Measured, the answer is that it essentially does not
+admit it. A general vision model faced with damaged ink reaches for a plausible word, which is what
+it is built to do, and the specialist-OCR honesty numbers in
+[the research](../research/pdf-parsing-options.md) were never about *this* model.
+
+So the mechanism is built and wired — the flag survives into the article as a `pdf-uncertain` class,
+and a marker would render — and **the signal it carries is close to absent**. That does not make it
+worth removing: it costs nothing, and it will start paying the moment a reader is used that admits
+more. It does mean the honest account of what protects a reader of a scan is the *other two*: the
+sentence saying nothing checked it, and the link to the ink.
+
 **All three are built, 2026-08-26.** The sentence and the link are in the masthead
 ([`src/web/Masthead.tsx`](../../src/web/Masthead.tsx), `.provenance` in
 [`styles.css`](../../src/web/styles.css)); the link goes to `GET /api/source/:slug`, which serves the
