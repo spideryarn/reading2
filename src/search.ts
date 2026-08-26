@@ -43,7 +43,7 @@
 import type { Block, Meta, SearchHit } from "./types.js";
 import { loadEnvLocal } from "./env.js";
 import { findQuote } from "./quote-match.js";
-import { OPENROUTER_MODEL } from "./models.js";
+import { modelForOpenRouter } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import {
   PROVIDER_ORDER,
@@ -51,6 +51,7 @@ import {
   providerRefused,
   providerSpokeNonsense,
 } from "./openrouter-stream.js";
+import { saidNothing } from "./messages.js";
 import {
   type OpenRouterMessage,
   articleWithIds,
@@ -58,8 +59,8 @@ import {
   underCacheFloor,
 } from "./article-prompt.js";
 
-/** Overridable with `SPIDERYARN_SEARCH_MODEL`; the default is app-wide. */
-export const DEFAULT_MODEL = OPENROUTER_MODEL;
+/** Overridable with `SPIDERYARN_SEARCH_MODEL`; the default is the tier src/models.ts puts `search` on. */
+export const DEFAULT_MODEL = modelForOpenRouter("search");
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -445,7 +446,7 @@ export async function findPassages({
   const finishReason = body.choices?.[0]?.finish_reason ?? "?";
   if (!answer) {
     line.error({ model, ms: since(started), finishReason }, `${model} returned no text`);
-    throw new Error(`The model returned no text (finish_reason: ${finishReason}).`);
+    throw new Error(saidNothing(finishReason).message);
   }
 
   const { hits, dropped } = validateHits(parseHits(answer), blocks);

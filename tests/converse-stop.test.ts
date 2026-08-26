@@ -242,7 +242,11 @@ describe("failures are loud", () => {
       }
     }
 
-    await expect(run()).rejects.toThrow(/stopped arriving after/);
+    /* Matched on the bracketed code rather than the sentence. The wording is
+       reader-facing copy and is expected to be revised (docs/project/copy.md);
+       the code is the stable part, and is there precisely so a test does not
+       pin prose. */
+    await expect(run()).rejects.toThrow(/\[ai-stalled\]/);
   });
 
   it("refuses without repeating what the provider said", async () => {
@@ -273,7 +277,7 @@ describe("failures are loud", () => {
       }
     }
 
-    await expect(run()).rejects.toThrow(/refused this request \(HTTP 429\)/);
+    await expect(run()).rejects.toThrow(/\[ai-busy\]/);
     await expect(run()).rejects.not.toThrow(/whole article, verbatim/);
   });
 });

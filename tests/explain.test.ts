@@ -266,14 +266,14 @@ describe("failures are loud", () => {
     } as unknown as Response);
     await expect(
       explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", stallMs: 20 }),
-    ).rejects.toThrow(/stopped arriving after/);
+    ).rejects.toThrow(/\[ai-stalled\]/);
   });
 
   it("refuses a 200 with no text rather than storing a blank answer", async () => {
     fetchMock.mockResolvedValue(
       sse(`${frame({ choices: [{ finish_reason: "length", delta: { content: "" } }] })}data: [DONE]\n\n`),
     );
-    await expect(ask()).rejects.toThrow(/returned no text/);
+    await expect(ask()).rejects.toThrow(/\[ai-empty\]/);
   });
 
   it("surfaces an error carried inside a 200 stream, without repeating what it said", async () => {
@@ -295,7 +295,7 @@ describe("failures are loud", () => {
       () => { throw new Error("expected a rejection"); },
       (e: unknown) => e as Error,
     );
-    expect(err.message).toMatch(/reported an error while answering/);
+    expect(err.message).toMatch(/\[ai-interrupted\]/);
     expect(err.message).not.toMatch(/upstream exploded/);
   });
 });

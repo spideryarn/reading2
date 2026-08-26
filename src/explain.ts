@@ -53,7 +53,7 @@
  */
 import type { Block, Citation, Meta } from "./types.js";
 import { loadEnvLocal } from "./env.js";
-import { OPENROUTER_MODEL } from "./models.js";
+import { modelForOpenRouter } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import {
 
@@ -69,6 +69,7 @@ import {
   stoppedByReader,
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
+import { ENDED_UNFINISHED, saidNothing } from "./messages.js";
 import { isWebUrl } from "./urls.js";
 import {
   type OpenRouterMessage,
@@ -79,11 +80,12 @@ import {
 } from "./article-prompt.js";
 
 /**
- * Overridable with `SPIDERYARN_EXPLAIN_MODEL`. The default is the app-wide one
- * in src/models.ts — this call used to name its own model, which is how it came
- * to be a version behind the rest of the app without anyone noticing.
+ * Overridable with `SPIDERYARN_EXPLAIN_MODEL`. The default is whichever tier
+ * src/models.ts puts the `explain` task on — this call used to name its own
+ * model, which is how it came to be a version behind the rest of the app
+ * without anyone noticing.
  */
-export const DEFAULT_MODEL = OPENROUTER_MODEL;
+export const DEFAULT_MODEL = modelForOpenRouter("explain");
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -678,7 +680,7 @@ export async function* explainStream({
       { model: used, ms: since(started), chars: text.length },
       `stream from ${used} ended without finishing`,
     );
-    throw new Error("The explanation stopped arriving before it was finished. Try again.");
+    throw new Error(ENDED_UNFINISHED.message);
   }
 
   const answer = text.trim();
@@ -691,7 +693,7 @@ export async function* explainStream({
      a `done` answer zero characters long would be a row nobody could act on. */
   if (answer === "") {
     line.error({ model: used, ms: since(started), finishReason }, `${used} returned no text`);
-    throw new Error(`The model returned no text (finish_reason: ${finishReason ?? "?"}).`);
+    throw new Error(saidNothing(finishReason).message);
   }
 
   /* The one line per successful explanation.

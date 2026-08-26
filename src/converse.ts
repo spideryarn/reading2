@@ -70,7 +70,8 @@ import {
   sseChunks,
   stoppedByReader,
 } from "./openrouter-stream.js";
-import { OPENROUTER_MODEL } from "./models.js";
+import { ENDED_UNFINISHED, saidNothing } from "./messages.js";
+import { modelForOpenRouter } from "./models.js";
 import { isWebUrl } from "./urls.js";
 import {
   type OpenRouterMessage,
@@ -80,8 +81,8 @@ import {
   underCacheFloor,
 } from "./article-prompt.js";
 
-/** Overridable with `SPIDERYARN_CHAT_MODEL`; the default is app-wide. */
-export const DEFAULT_MODEL = OPENROUTER_MODEL;
+/** Overridable with `SPIDERYARN_CHAT_MODEL`; the default is the tier src/models.ts puts `chat` on. */
+export const DEFAULT_MODEL = modelForOpenRouter("chat");
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -617,7 +618,7 @@ export async function* converse({
       { model: used, ms: since(started), chars: text.length },
       `stream from ${used} ended without finishing`,
     );
-    throw new Error("The answer stopped arriving before it was finished. Try again.");
+    throw new Error(ENDED_UNFINISHED.message);
   }
 
   const answer = text.trim();
@@ -638,7 +639,7 @@ export async function* converse({
      text, so the model is never sent a turn where it said nothing. */
   if (answer === "" && !stopped) {
     line.error({ model: used, ms: since(started), finishReason }, `${used} returned no text`);
-    throw new Error(`The model returned no text (finish_reason: ${finishReason ?? "?"}).`);
+    throw new Error(saidNothing(finishReason).message);
   }
 
   const known = idsOf(blocks);

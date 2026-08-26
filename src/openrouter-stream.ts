@@ -23,6 +23,13 @@
  * See docs/project/prompt-caching.md — the shape of the cached prefix is the
  * caller's business, not this file's.
  */
+import {
+  PROVIDER_FAILED_MID_ANSWER,
+  PROVIDER_UNREADABLE,
+  providerHttpFailure,
+  tookTooLong,
+  wentQuiet,
+} from "./messages.js";
 /**
  * Was that abort the *reader*, rather than one of our own clocks?
  *
@@ -83,12 +90,10 @@ export function explainAbort(
   stallMs: number,
 ): unknown {
   if (deadline.aborted) {
-    return new Error(`The model did not finish within ${Math.round(timeoutMs / 1000)}s. Try again.`);
+    return new Error(tookTooLong(Math.round(timeoutMs / 1000)).message);
   }
   if (stalled.aborted) {
-    return new Error(
-      `The answer stopped arriving after ${Math.round(stallMs / 1000)}s of silence. Try again.`,
-    );
+    return new Error(wentQuiet(Math.round(stallMs / 1000)).message);
   }
   return err;
 }
@@ -335,7 +340,7 @@ export const PROVIDER_ORDER = { order: ["anthropic"] } as const;
  * — the wording here is interim and Greg's to settle.
  */
 export function providerRefused(status: number): Error {
-  return new Error(`The model provider refused this request (HTTP ${status}). Try again.`);
+  return new Error(providerHttpFailure(status).message);
 }
 
 /**
@@ -343,7 +348,7 @@ export function providerRefused(status: number): Error {
  * mid-generation. Same rule as above: the provider's own words are dropped.
  */
 export function providerFailedMidAnswer(): Error {
-  return new Error("The model provider reported an error while answering. Try again.");
+  return new Error(PROVIDER_FAILED_MID_ANSWER.message);
 }
 
 /**
@@ -358,5 +363,5 @@ export function providerFailedMidAnswer(): Error {
  * think to check.
  */
 export function providerSpokeNonsense(): Error {
-  return new Error("The model provider returned an unreadable response. Try again.");
+  return new Error(PROVIDER_UNREADABLE.message);
 }
