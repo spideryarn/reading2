@@ -255,12 +255,17 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ purpose: sending === "" ? null : sending }),
     })
-      .then((r) => readJson<{ entry: { purpose?: string } }>(r))
+      .then((r) => readJson<{ purpose: string | null }>(r))
       .then((body) => {
         /* The server's answer, not what was typed: it trims and settles line
            endings, and the box must show the string that was actually stored —
-           otherwise every prompt carries something the reader cannot see. */
-        const stored = body.entry.purpose ?? "";
+           otherwise every prompt carries something the reader cannot see.
+
+           Read from `purpose` rather than from `entry`: the shelf card
+           deliberately does not carry it, because only this page renders it and
+           putting it on the card would send it with every card on the homepage.
+           src/routes.ts § patchShelf. */
+        const stored = body.purpose ?? "";
         setPurposeSaved(stored);
         setPurposeDraft(stored);
       })

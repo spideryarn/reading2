@@ -184,6 +184,39 @@ describe("the shelf routes", () => {
     expect(await loadShelf(SHELF)).toEqual({ opens: 0 });
   });
 
+  it("stores a purpose and answers with what it stored, not with what was sent", async () => {
+    await makeArticle();
+    const r = await call("PATCH", `/api/library/${SHELF}`, { purpose: "  the evidence\r\n " });
+    expect(r.status).toBe(200);
+    /* Normalised on the way in, and answered from the store rather than echoed.
+       A box showing one string while every prompt carries another is the exact
+       failure this feature is arranged around. */
+    expect(r.body.purpose).toBe("the evidence");
+    expect((await loadShelf(SHELF)).purpose).toBe("the evidence");
+  });
+
+  it("keeps the purpose off the shelf card", async () => {
+    /* Deliberate, and worth pinning: `LibraryEntry` is what every card on the
+       homepage is built from, and only the metadata page renders this. The same
+       argument `titleOverridden` already makes about the superseded title, one
+       field further on. */
+    await makeArticle();
+    const r = await call("PATCH", `/api/library/${SHELF}`, { purpose: "the evidence" });
+    expect(r.body.entry).not.toHaveProperty("purpose");
+  });
+
+  it("clears the purpose on null", async () => {
+    await makeArticle();
+    await call("PATCH", `/api/library/${SHELF}`, { purpose: "the evidence" });
+    const r = await call("PATCH", `/api/library/${SHELF}`, { purpose: null });
+    expect(r.body.purpose).toBeNull();
+  });
+
+  it("refuses a purpose that is not a string or null", async () => {
+    await makeArticle();
+    expect((await call("PATCH", `/api/library/${SHELF}`, { purpose: 42 })).status).toBe(400);
+  });
+
   it("refuses a PATCH with nothing in it, rather than answering 200", async () => {
     await makeArticle();
     const r = await call("PATCH", `/api/library/${SHELF}`, {});
@@ -286,8 +319,21 @@ describe("the shelf routes", () => {
 });
 
 describe("the reader routes", () => {
-  const FILE = path.resolve(import.meta.dirname, "..", "data", "reader.json");
-  afterEach(() => rm(FILE, { force: true }));
+  /* **A file of its own, not `data/reader.json`.** Every other reader-state
+     file is under `data/<slug>/`, so a test uses a fixture slug and cleans up
+     without touching anything real. The global profile has no such escape, and
+     the first version of this block wrote to the developer's own and deleted it
+     afterwards — which, with several agents running `npm test` in one working
+     tree, wiped Greg's profile mid-session and looked exactly like the save not
+     working. src/profile.ts reads the path at call time for this. */
+  const FILE = path.resolve(import.meta.dirname, "..", "data", "_test-reader.json");
+  beforeEach(() => {
+    process.env.SPIDERYARN_READER_FILE = FILE;
+  });
+  afterEach(() => {
+    delete process.env.SPIDERYARN_READER_FILE;
+    return rm(FILE, { force: true });
+  });
 
   it("answers null for a reader who has written nothing", async () => {
     const r = await call("GET", "/api/reader");

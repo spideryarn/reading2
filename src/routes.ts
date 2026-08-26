@@ -11,6 +11,7 @@
  *                                `?archived=1` for the other half
  *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
+ *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/models           which model writes what — { tasks: [{ task, model, effort? }] }
  *   GET    /api/reader           the reader's global profile — { profile: string | null }
@@ -43,6 +44,7 @@
  *   DELETE /api/jobs/:id         forget a finished job's record
  *   POST   /api/jobs/:id/cancel
  *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
+ *   POST   /api/jobs/:id/advance run the next step this job has not done yet
  *
  * The job routes return immediately; the work happens on the queue in
  * src/jobs.ts. See docs/project/comments.md, docs/project/library.md and
@@ -91,7 +93,7 @@ import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { readRaw } from "./fetch.js";
 import { isSlug, normaliseUrl, slugFromUrl } from "./ingest.js";
-import { cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
+import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
@@ -1423,7 +1425,10 @@ async function searchTheLibrary(url: string): Promise<LibrarySearchResponse> {
  * edit or one `UPDATE`, rather than as separate writes a reader can land
  * between.
  */
-async function patchShelf(slug: string, body: unknown): Promise<{ entry: LibraryEntry }> {
+async function patchShelf(
+  slug: string,
+  body: unknown,
+): Promise<{ entry: LibraryEntry; purpose: string | null }> {
   /* A JSON body that is not an object at all — `"hello"`, `42`, `null` — must
      be a 400 rather than a 500. `in` throws on a primitive, so this cannot be
      folded into the checks below. */
@@ -1462,7 +1467,21 @@ async function patchShelf(slug: string, body: unknown): Promise<{ entry: Library
     change.archived = archived;
   }
 
-  return { entry: await shelfStore.patch(slug, change) };
+  const entry = await shelfStore.patch(slug, change);
+  /* **`purpose` is answered beside the entry, not on it.** `LibraryEntry` is the
+     shelf card, and it already refuses to carry the superseded title for the
+     reason that a string nothing renders should not be on the wire for every
+     card on the homepage. The reader's note about why they are reading one
+     article is that argument one field further on: only the metadata page shows
+     it, and putting it on the card would send it with all thirty.
+
+     But the caller does need it back, and needs it as the *store* holds it
+     rather than as they sent it — the value is trimmed and its line endings
+     settled on the way in, and a box showing one string while every prompt
+     carries another is the failure this whole feature is arranged around. So
+     one extra read, on a write, on this route only. */
+  const { purpose } = await shelfStore.read(slug);
+  return { entry, purpose: purpose ?? null };
 }
 
 /**
@@ -1866,6 +1885,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   const allJobs = url === "/api/jobs";
   const job = /^\/api\/jobs\/([\w.%-]+)$/.exec(url);
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(url);
+  const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(url);
 
   /* Every response leaves by one of the ~14 `send` calls below, the catch, or
      the 404 at the end — so the log line lives in a single `finally` rather
@@ -2084,6 +2104,32 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       const result = action === "cancel" ? await cancelJob(id) : await retryJob(id);
       if (!result) throw httpError(404, "No such job");
       send(res, action === "cancel" ? 200 : 202, result);
+      return true;
+    }
+    /**
+     * Run one step of this job, here, now, and answer when it is finished.
+     *
+     * Its own branch rather than a third name in `jobAction` above, because it
+     * is the one job action that does not answer with a bare `Job`: the caller
+     * is a loop, and a loop needs to be told whether to come back — see
+     * `Advanced` in src/jobs.ts and docs/plans/job-queue-rethink.md.
+     *
+     * **A long request on purpose.** One step can be a minute of model calls,
+     * and that is the design: the browser holds the request open so the work
+     * happens inside an invocation somebody is waiting on, rather than in a
+     * floating promise a serverless runtime is free to freeze. `vercel.json`
+     * caps a function at 300 seconds, which is the real ceiling on a step.
+     *
+     * **200, not 409, when somebody else has it.** A second tab asking to
+     * advance a job that is already advancing is a correct thing for a correct
+     * client to do — it cannot know without asking — so it is an answer, not an
+     * error. `readJson` in src/web/lib/api.ts throws on any non-2xx, so a 409
+     * would turn the ordinary case into a message on the reader's screen.
+     */
+    if (jobAdvance && req.method === "POST") {
+      const advanced = await advanceJob(part(jobAdvance, 1));
+      if (!advanced) throw httpError(404, "No such job");
+      send(res, 200, advanced);
       return true;
     }
 

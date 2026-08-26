@@ -44,8 +44,23 @@ import { MAX_PROFILE_CHARS } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-/** `data/reader.json` — one reader, one file. See § Where this lives, below. */
-const FILE = path.join(ROOT, "data", "reader.json");
+/**
+ * `data/reader.json` — one reader, one file. See § Where this lives, below.
+ *
+ * **Overridable, and the reason is a bug this shipped with for an hour.** Every
+ * other reader-state file in this app lives under `data/<slug>/`, so a test can
+ * use a fixture slug and clean up after itself without touching anything real.
+ * This one is global and there is no such escape: `tests/routes.test.ts` wrote
+ * to the developer's own profile and then deleted it, which — with several
+ * agents running `npm test` in one working tree — quietly wiped Greg's profile
+ * mid-session, twice, and looked like the save simply not working.
+ *
+ * Read at call time rather than at module load, so a test can set it after
+ * importing. Same spelling as the other `SPIDERYARN_*` overrides in
+ * src/models.ts and src/store/index.ts.
+ */
+const fileFor = (): string =>
+  process.env.SPIDERYARN_READER_FILE ?? path.join(ROOT, "data", "reader.json");
 
 /* The caps live in src/types.ts, not here, and re-exported so that everything
    about a profile is still reachable from this module. The reason is
@@ -290,7 +305,7 @@ interface ReaderFile {
  */
 export async function loadReaderProfile(): Promise<string | null> {
   try {
-    const parsed = parseJsonFrom<ReaderFile>(await readFile(FILE, "utf8"), "reader.json");
+    const parsed = parseJsonFrom<ReaderFile>(await readFile(fileFor(), "utf8"), "reader.json");
     return normaliseProfileText(parsed.profile);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
@@ -319,11 +334,12 @@ export async function saveReaderProfile(text: string | null): Promise<string | n
     );
   }
   return serialised(async () => {
-    await mkdir(path.dirname(FILE), { recursive: true });
+    const file = fileFor();
+    await mkdir(path.dirname(file), { recursive: true });
     const body: ReaderFile = next ? { profile: next } : {};
-    const tmp = `${FILE}.tmp`;
+    const tmp = `${file}.tmp`;
     await writeFile(tmp, `${JSON.stringify(body, null, 2)}\n`, "utf8");
-    await rename(tmp, FILE);
+    await rename(tmp, file);
     return next;
   });
 }
