@@ -329,6 +329,391 @@ Two things Sol did **not** find, both turned up while checking its work:
 - The `toStrictEqual` added for Sol's point 3 passes on every article, which is positive evidence
   the conditional spreads in `pg.ts` are complete rather than merely untested.
 
+## Step 11 — the pipeline writes revisions
+
+Two problems in one step. **A** is publication and the carry-forward; **B** is the write seam inside
+the stages. They fail differently and are tested differently. ~~Neither needs a schema migration.~~ **Wrong** — see the review at the end: nothing today relates a
+job to the revision it is building, and the retry design needs that relationship stored.
+
+Designed 2026-08-26, then cross-reviewed by GPT Sol, **which found four critical faults in the
+design and one false claim about the code**. Those are in
+[What the review found](#what-the-review-found-and-what-it-changes) at the end, and they change the
+step's shape rather than only its size. Read them before building any of this.
+
+**The "no schema migration" claim above is one of the things the review broke.** The retry lineage
+needs a column, so it is one migration, not none.
+
+### A. What a new revision inherits
+
+On the filesystem, `data/<slug>/` outlives any one step: re-running `blocks` overwrites
+`blocks.json` and leaves `glossary.json` beside it, `stale` is computed at read time from the
+glossary's own `sourceHash`, and the panel shows the old glossary with a banner. As columns on
+`article_revisions` a new revision starts NULL, so a reader's paid-for glossary becomes *"nobody has
+found the terms for this one yet"* — under a green tick.
+
+**The three-column list in this document was too short, and its shape was the worse problem.** An
+allowlist is something somebody has to remember to extend, and this repo already knows how that ends:
+`tests/store-artefact-manifest.test.ts` exists because five artefacts appeared under a one-day-old
+schema. The rule that is actually true is the filesystem's own — *a new draft starts as a copy of the
+current published revision, and each step overwrites what it owns* — written as a **denylist**, so a
+new column carries by default:
+
+| List | Columns | Why |
+|---|---|---|
+| **MINT** — never copied | `id`, `article_id`, `status`, `created_at` | A copied `created_at` reorders the library; a copied `status` publishes a draft |
+| **DERIVE** — recomputed at publish | `word_count`, `block_count`, `part_count`, `section_count`, `root_gist` | **This is the resurrect-dead-data case.** They are derivations of `revision_blocks` and `tree`. A carried `block_count` beside changed blocks is not a stale artefact with a banner — it is a wrong number the library prints as fact, and nothing can tell |
+| **CARRY** — everything else | `title`, `byline`, `site_name`, `lang`, `excerpt`, `note`, `requested_url`, `final_url`, `fetched_at`, `raw_bytes`, `raw_content_type`, `raw_encoding`, `extracted_html`, `stamped_html`, `tree`, `arc`, `tweets`, `glossary`, `summary`, `labels` | Each is owned by a step. If the step runs it overwrites; if not, the filesystem would have kept the file |
+
+**Two more things carry, and the three-column reading missed both.** `revision_blocks`: a
+`{ steps: ["extract"] }` job creates a revision and never runs `blocks`, so without the copy that
+revision has no paragraphs at all. And `revision_step_runs`, copied row for row **with `input_hash`
+unchanged** — that is what keeps the metadata page honest, because the row then says *tweets ran
+against hash X* while the blocks hash Y, which is exactly the comparison that yields *present but not
+current*. Drop the copy and the page reports a stage that never ran while the column holds a thread.
+
+`beginRevision` builds its column list from `getTableColumns(articleRevisions)` minus MINT minus
+DERIVE, so a column added to the schema is carried without anyone editing the function.
+
+**`tree`, `labels` and `arc` carry too, and they are the uncomfortable case.** A `{ steps: ["blocks"] }`
+job publishes new paragraphs under the previous tree, whose `range` pairs may name block ids that no
+longer exist. On the filesystem this is invisible; in Postgres there is one copy, so the mismatch
+becomes visible. The answer is not to skip the carry — a NULL tree is an unreadable article — but to
+guard publication.
+
+#### Where it happens, and why the copy is at the beginning
+
+**There is no publication function today.** The only code that makes a revision current is the tail
+of `importArticle`'s transaction, which is a migration tool. So half A is not a patch; it is writing
+the path, in a new `src/store/revisions.ts`: `beginRevision`, `publishRevision`, `failRevision`.
+
+**The copy happens at `beginRevision`, not at `publishRevision`.** Three reasons, the first
+decisive:
+
+1. **A step reads its siblings.** `generateArc` reads the tree; `generateGlossary` reads blocks, tree
+   and the previous glossary, which it *appends* to. Filling NULLs at publish time means a
+   `blocks`-only draft has a NULL tree all job long, and `arc` in the same job fails.
+2. **Publish-time filling cannot tell "nobody produced it" from "the reader deleted it".**
+   `deleteGlossary` is a real, reachable write. Copying whatever is there, NULL included, means the
+   question never arises.
+3. Publish-time filling is a hand-written `coalesce` per column — the allowlist again.
+
+**Copy from the current published revision only.** Never walk back to the last revision that *had* a
+glossary; that is how a deleted glossary returns weeks later. One exception, and it is forced by
+step 12: on a **retry within the same job**, carry from that job's own previous draft, or a retry's
+draft lacks attempt 1's finished steps, `stepIsDone` says not-done, and every expensive step re-runs.
+The lookback is bounded to one job's drafts, so it still cannot resurrect what the reader deleted.
+
+#### A new revision only when the text changes
+
+Only `fetch`, `extract` and `blocks` mint one. `toc`, `arc`, `tweets`, `glossary` and `summary` write
+their column onto the current published revision in one `UPDATE`.
+
+This weakens *"immutable once published"* and belongs in `src/db/schema.ts` rather than arriving as a
+surprise. What the property is for is stated in the schema itself — *"a failed re-extraction
+overwrites a good article in place"* — and that is about the **text**. A revision per glossary
+regeneration would copy every `revision_blocks` row and every `raw_bytes` blob to add one JSONB
+value, and no reader could see the difference, because a single-column `UPDATE` is already atomic.
+The honest name for the property is **immutable in its text**.
+
+#### The publication guard
+
+`publishRevision` refuses, loudly, when the draft has no blocks and no tree, or when **any block id
+named in a tree node's `range` is absent from this revision's blocks**. The second turns today's
+invisible tree/blocks divergence into a failed publish, which makes `{ steps: ["blocks"] }` alone
+fail where today it succeeds and quietly diverges. **That is the right trade and it is a behaviour
+change worth saying out loud;** the fix for anyone who hits it is to run `toc` too, which
+`DEFAULT_INGEST_STEPS` and `cascadeForce` already do.
+
+It takes `SELECT … FOR UPDATE` on the `articles` row before moving the pointer — the same race the
+plan already records for two imports of one slug is a job race once the pipeline writes. And per
+step 12's fence, publication is fenced on the job row **and its status**, checked for
+`rowCount === 1` *before* the pointer moves, in the same transaction: without `AND status =
+'running'` a rescued job's stale worker publishes a draft the queue has already given up on, and
+reports success.
+
+#### Staleness stays computable — read, not taken on trust
+
+`TweetThread.sourceHash`, `Glossary.sourceHash`, `Summaries.sourceHash` and `LabelsFile.sourceHash`
+all exist and are all produced by the one `hashBlocks` in `src/source-hash.ts`, which
+`pgArticleReader` already compares against the revision's blocks. So carried columns stay
+stale-computable with no change at all.
+
+**`Arc` and `Tree` carry no `sourceHash`** — verified, and it is why `arc` stays in the force-cascade.
+Neither can say whether it still describes the article, in either store. The publication guard is the
+only thing that catches its worst case.
+
+#### The bug carry-forward will expose on its first day
+
+`pgArticleReader.articleMetadata` computes `done` from `revision_step_runs.status === 'done'` alone.
+The filesystem computes *present **and** current*. They agree today only because no revision has ever
+been superseded and the importer stamps every row `done`. The first carried-forward glossary makes
+them disagree: files say not done, Postgres says done, and the reader is offered no "regenerate".
+Fix it in this step — and note **parity cannot catch it**, for the same reason it cannot catch the
+carry-forward: there is no re-extraction in between.
+
+#### The test, and four one-line ways to make it red
+
+`tests/store-carry-forward.test.ts` builds its own article rather than using whichever of the four
+happens to have a `glossary.json` — the `ADDED_AT` lesson is that asserting a property against the
+data you happen to have can pass by luck. It publishes blocks B1 with all three on-demand artefacts
+stamped, then performs **an actual re-extraction** to B2 (one block's text changed, every id kept),
+and asserts the artefacts survive with `stale === true`, that `articleMetadata` reports them
+`done: false` in *both* stores, that `block_identities` still holds every B1 id, that `blockCount`
+and `wordCount` describe B2, and that `tree` and `arc` are non-null.
+
+- `beginRevision` inserts a bare row instead of copying → 404, "no glossary yet". The bug the step exists to prevent
+- move `word_count`/`block_count` from DERIVE to CARRY → the resurrect-dead-data direction
+- drop the `revision_step_runs` copy → "never ran" against a non-null column
+- make `beginRevision` walk back to the last non-null glossary → put a `deleteGlossary` before the re-extraction and watch a deleted glossary return
+
+Plus a **schema-drift guard** in the manifest test's spirit: assert that
+`getTableColumns(articleRevisions)` minus MINT minus DERIVE minus CARRY is empty, so a new column
+forces a decision instead of being carried or dropped by accident.
+
+### B. The write seam
+
+#### `outputs` is one table, not eight modules
+
+This document said *"implemented across the stage modules; there is no single file to swap"*. **That
+is wrong.** `outputs` is eight arrow functions in the `STEPS` table in `src/pipeline.ts`. What is
+spread across the stage modules is the **writing** — each of `runExtract`, `runBlocks`,
+`generateToc`, `generateArc`, `generateTweets`, `generateGlossary`, `generateSummaries` opens a file
+itself. So the *declaration* can move today, in one commit, by the pipeline's owner, with no stage
+module touched.
+
+**Most artefacts already cross the seam as a return value** — `TocRun.tree`, `ArcRun.arc`,
+`TweetsRun.thread`, `GlossaryRun.glossary`, `SummariesRun.summaries`, `BlocksRun.blocks` + `.html`.
+For those the write is duplication rather than the interface.
+
+**But "every stage already returns its artefact" is false, and so is the estimate built on it.**
+`fetch` returns a progress string and discards the bytes, encoding, content type and final URL;
+`extract` writes its transformed HTML and returns only metadata and a path; `toc` never exposes
+`labelRun.file`. **And the stages still *read* files**: `src/arc.ts` reads `blocks.json`, `tree.json`
+and `meta.json` directly, and tweets, glossary and summaries do the same. Moving the writes out while
+the reads stay in does not produce a pipeline that can run against Postgres — it produces one that
+still needs a disk. See the review.
+
+Also out of date: *"all eight pipeline stages use a plain `writeFile`"*. `src/toc.ts` and
+`src/labels.ts` both have a `writeAtomic` now, added after a GPT Sol review earlier the same day.
+Still on plain `writeFile`: `pipeline.ts`'s own `raw.html`, `extract.ts`, `blocks.ts`, `arc.ts`,
+`tweets.ts`, `glossary.ts`, `summarise.ts`. Leaving the "eight" claim standing invites somebody to
+fix `toc` twice.
+
+#### What replaces `outputs(ctx): string[]`
+
+A step declares **what it produces**, named by what the thing is (`raw`, `meta`, `extractedHtml`,
+`blocks`, `stampedHtml`, `tree`, `labels`, `arc`, `tweets`, `glossary`, `summary`) rather than where
+it lands. `isDone` then splits into two questions, and **that split is what accommodates both kinds
+of step**:
+
+1. **Present** — does the store hold every kind in `produces`? The *store* answers, from the
+   declaration. Never the step.
+2. **Current** — was it made from this article, by this prompt, by this model? A comparison of the
+   recorded stamp against the stamp the step would produce now.
+
+`threadIsCurrent`, `glossaryIsCurrent` and `summariesAreCurrent` are already the same three
+comparisons written three times — `sourceHash`, `generator !== MODEL`, version. Under the split the
+comparison is `sameStamp`, once, and each stage supplies four values instead of a function. `toc` and
+`arc` gain a real freshness check the day somebody writes four lines, rather than needing a whole
+function; today they fall back to bare existence and the interface says so out loud.
+
+The `ArtifactStore` interface is `has` / `read` / `write(slug, step, parts, stamp)` / `stampFor`. The
+file adapter keeps a `PATHS: Record<ArtifactKind, …>` — **the one place a path is written down** —
+and the Postgres adapter reads `revision_step_runs`. Same interface, so the seam lands file-backed
+first and the swap really is one adapter.
+
+It also kills a copy that already exists: `STEP_STORAGE` in `src/store/pg.ts` is a hand-maintained
+per-step list of where output lives, sitting beside `outputs` and free to drift from it. Once
+`produces` exists, both are rendered from it.
+
+#### Does the seam fix the truncation hazard?
+
+**Partly under files, completely under Postgres, and being precise about which matters more than the
+fix.** `write` is one call per step for all that step's parts, and the file adapter writes each to a
+temp file and renames — so "exists, will not parse, reports DONE" is gone. What files still cannot
+give: `extract` writes two artefacts, and a kill between the two renames leaves one. Both are
+well-formed; the *pair* is not complete. `has()` requires all of `produces`, so that state reports
+not-done — correct, but by the check rather than by atomicity.
+
+**`has()` must parse, not `stat`** — otherwise the truncation bug survives for the five steps with no
+stamp. A JSON parse per skip check is a few milliseconds on a 360-block article and worth it.
+
+In Postgres the question disappears: one `UPDATE` inside the job's transaction, so a killed process
+leaves the draft unpublished and the reader on the previous revision. That is the argument *for* the
+migration, not a task within it.
+
+#### The order, and why no step needs eight stages edited at once
+
+Steps 1–4 touch **no stage module at all**. Step 5 is one stage per commit, each with its owner, each
+independently shippable, and the file adapter means nothing on disk changes.
+
+1. `src/store/artifacts.ts` — the types only
+2. `src/store/artifacts-fs.ts` — the file adapter: `PATHS`, atomic `write`, parsing `has`, `stampFor`
+3. **`produces` added to `STEPS` beside `outputs`, both present**, plus the agreement test: `PATHS`
+   applied to `produces` equals `outputs(ctx)` as a set. *This is the move that matters* — it checks
+   the new declaration against the old one before anything depends on it
+4. `stepIsDone` takes a store and uses `has` + `stampFor`; the three `isDone:` lines leave `STEPS`
+   while `threadIsCurrent` and its two siblings stay exported for their CLIs. **The truncation test
+   goes green here**, and `articleMetadata` on both stores starts sharing one currency rule
+5. The writes move out, **one stage per commit**: `fetch` is free; `arc`, `tweets`, `glossary`,
+   `summary` are one artefact each and already returned; `extract` and `blocks` return both already;
+   `toc` needs `labels` added to `TocRun` and then stops writing its copy of `blocks.json` entirely,
+   since under one revision row the tree and the blocks it was built from are the same record
+6. `src/store/artifacts-pg.ts`, on `beginRevision` / `publishRevision`
+7. Flip the selection in `src/jobs.ts` under `SPIDERYARN_STORE`, and ingest a real URL end to end
+
+`ctx.dir` and `ctx.htmlFile` stay on `StepContext` throughout and are deleted at step 13.
+
+#### The test that starts red
+
+`tests/pipeline-artifact-store.test.ts`: declaration agreement per step; a round trip against the
+real `data/` artefacts; **the truncation test, which starts red against today's code** — write a
+valid `tweets.json`, truncate it to half its bytes, assert `stepIsDone` is `false`, where today it
+returns `true`, then repeat for `arc.json`, a step with no stamp, which is what forces `has()` to
+parse rather than `stat`; and a half-written `extract`, asserting the honest thing per adapter —
+under files one artefact survives and the step reports not-done, under Postgres the transaction rolls
+back and neither exists.
+
+A test that goes red-to-green on the change is worth more than one that was green all along.
+
+### What the review found, and what it changes
+
+GPT Sol reviewed the design above on 2026-08-26 and returned four critical faults. The design is
+**not safe to implement as written**. Each is kept with its correction, because the shape of the
+mistake is more useful than a tidied-up answer.
+
+**1. The seam leaves the *reads* behind, so it cannot run Postgres-only.** Half B moves the writes
+out of the stages and says nothing about the reads. `src/arc.ts` reads `blocks.json`, `tree.json` and
+`meta.json` off the disk; tweets, glossary and summaries do the same. Keeping `ctx.dir` until step 13
+does not make those files exist after a cutover. And two stages do not return their artefact at all:
+`fetch` hands back a progress string, discarding bytes, encoding, content type and final URL, and
+`extract` returns metadata and a path while writing the HTML itself.
+
+*The correction:* each stage core takes its artefacts **as values** and returns **every** artefact as
+a value; the pipeline alone calls `store.read` / `store.write`. `fetch` must use the richer
+`fetchDocument` rather than `fetchHtml`. A temporary filesystem workspace may bridge the migration,
+but it has to be an explicit decision rather than an accident of what nobody moved.
+
+**2. The publication guard accepts structurally wrong trees.** Checking that every `range` endpoint
+exists proves only *tree ids ⊆ block ids*. The real invariant is an exact, ordered partition. Two
+counterexamples that pass the proposed guard: **append a new block** keeping every old id — every old
+range endpoint still resolves, and the new block has no leaf; **reorder the same ids** — membership
+still passes while ranges reverse and stop partitioning.
+
+*The correction:* the full check already exists in `src/validate-tree.ts` — root extent, singleton
+leaves, exact coverage, order, child partitioning — but the file exports only `sameHeading`, so none
+of it is reusable. Refactor it into a pure validator and call it from `publishRevision`. Also require
+the copied `toc` stamp to match the draft's block hash, or a blocks-only text change that keeps every
+id publishes old gists and nav labels **with no stale banner**. Note the asymmetry: a valid tree is
+never rejected by the stronger check, so the dangerous outcome here is acceptance, not rejection.
+
+**3. "This job's previous draft" cannot be identified.** Nothing relates a job to a revision —
+neither `article_revisions` nor `jobs` carries the other's id — and Retry creates a **new job with a
+new id**, while step 12's rescue marks the old one `error` without requeueing. So "carry from this
+job's previous draft" has nothing to resolve, and "latest draft for this slug" would pick up another
+job's draft and resurrect exactly what the copy-from-published rule exists to prevent.
+
+*The correction:* an explicit `created_by_job_id` (or `draft_revision_id` the other way), fenced by
+attempt, with rescue marking that draft failed. **This is the schema migration the section opened by
+claiming it did not need.** And for a one-user first cut the boring answer wins: **re-run the
+completed steps.** Paying for a few model calls on a retry is safer and far simpler than an ungrounded
+draft lookback, and it can be improved once lineage exists.
+
+**4. In-place `toc` / `arc` updates break the atomic-publication promise.** The migration's stated
+guarantee is *"the previous complete revision or a complete new one, never a mixture"*. Writing `toc`
+and `arc` straight onto the published revision means that during a `toc → arc` job **readers see the
+new tree with the old arc for the entire model call** — and the exporter will faithfully export that
+mixture. "A single-column `UPDATE` is atomic" answers the wrong question: the problem is
+cross-*step* consistency, and `toc` owns tree, labels and a step-run row.
+
+*The correction:* any job containing `fetch` / `extract` / `blocks` / `toc` writes one job-owned
+draft and publishes once. Only genuinely independent on-demand artefacts may update in place, and
+then transactionally with their step-run row. A `toc`-only job either mints a structural revision
+with a matching arc, or clears the old arc rather than leaving it to contradict the new tree.
+
+#### Five smaller corrections, all confirmed against the code
+
+- **`revision_blocks.fts` is a generated column** (`generatedAlwaysAs`), so it must be *omitted* from
+  the block-copy insert and left for Postgres to recompute. Copying it explicitly would fail or
+  freeze a stale search vector.
+- **The `created_at` reasoning is backwards.** Copying it does not reorder the library; *minting* it
+  does, for any article with a null `fetched_at`, because the shelf orders on
+  `coalesce(fetched_at, revision.created_at)`. Mint the revision's own timestamp, and give the shelf
+  an article-level added-time to fall back on instead.
+- **`root_gist` is not purely derived from tree and blocks.** `describeArticle` falls back to
+  `meta.excerpt`, and the importer omits that fallback — a divergence step 11 must *resolve* rather
+  than reproduce. One shared `deriveLibraryScalars({ blocks, tree, excerpt })`, tested on all five
+  scalars including the fallback.
+- **The claim that the reader already compares `LabelsFile.sourceHash` is false.** `pgArticleReader`
+  does not read labels at all; it checks tweets, glossary and summary, and metadata trusts the
+  step-run status. More importantly **one `hashBlocks` is the wrong stamp for every step**: arc,
+  tweets, glossary and summaries all read the *tree*, and `src/labels.ts` already keeps a separate
+  `structureHash` precisely because boundaries can move without any block changing. `input_hash` has
+  to be step-specific.
+- **The `PATHS` agreement test is not expressible as described.** `ArtifactKind = "blocks"` has two
+  destinations today — `output/<slug>.blocks.json` from the `blocks` step and `data/<slug>/blocks.json`
+  from `toc` — so a `Record<ArtifactKind, path>` cannot reproduce both output sets, and removing
+  `toc`'s copy breaks the four stages that read it. Test `(step, kind) → destination` instead, and
+  separate working artefacts from durable ones.
+
+#### Two the review pushed back on, and it is right
+
+- **Carry-by-default is the dangerous default, not the safe one.** A later `validated_at`,
+  `published_at`, `based_on_revision_id`, `job_id` or `attempt_id` would be actively harmful copied:
+  new content inheriting an old certification or an old worker's ownership. The drift test helps only
+  if the column arrives through `schema.ts` (a SQL-only migration evades `getTableColumns`) and only
+  if nobody silences it by adding the column to CARRY. Build the list from an **exhaustive policy
+  map**: an unclassified column fails the test *and* is omitted at runtime.
+- **Begin-time copying has a retention cost nobody costed.** The 360-block article is ~1.31 MiB of
+  copied payload before overhead, and `raw_bytes` can be 32 MiB at the fetch ceiling. TOAST means
+  this is not a row-size problem — it is a storage, WAL and cleanup problem, and a crashed worker
+  leaves a complete copied draft that step 12's rescue never touches, because rescue only marks
+  *jobs*. Accept the copying for the boring first version, but add ownership, terminal cleanup and a
+  retention sweep **before** implementation, and make `beginRevision` one transaction so an in-place
+  artefact update cannot land between copying the row, the blocks and the step runs.
+
+On `has()` parsing rather than `stat`ing, the review measured the real cost and it is fine —
+0.381 ms for a 354 KB `blocks.json`. But it should be a typed decoder per kind with a size limit
+rather than a blanket `JSON.parse`, since raw HTML and raw bytes are not JSON at all.
+
+#### The single change that most reduces risk
+
+One explicit, **job-owned `draft_revision_id`** that every stage reads and writes, published only
+after the tree passes the full structural validator and its step stamps match that draft. That one
+change gives steps 11 and 12 a shared lifecycle, makes retry and cleanup decidable, and restores the
+publication boundary the migration promised.
+
+### What this section corrects in the rest of this document
+
+1. **The seam comes *out* of the stage modules, not into them.** This document recommended landing it
+   *inside* each stage, still file-backed, with the stage's owner. The strategy is right; the
+   direction is not. Followed literally it has an owner add a store handle to
+   `generateTweets({ dir, store })` and keep writing from inside — leaving seven modules holding a
+   store, seven still owning a path, and a second round of edits at cutover. It also asks for seven
+   owners' time up front, when steps 1–4 need none of it
+2. *"No single file to swap"* — `outputs` is one table in one file. This changes the estimate
+3. *"All eight stages use a plain `writeFile`"* — `toc.ts` and `labels.ts` write atomically now
+4. **The carry-forward is not three columns** — it must include `revision_blocks`,
+   `revision_step_runs` and `tree`/`labels`/`arc`, and must *exclude* the five derived scalars, which
+   are the real resurrect-dead-data hazard
+5. *"This must land before step 11"* is not quite coherent: carry-forward has nothing to attach to
+   until publication exists, and no publication function does. "Before" means writing
+   `beginRevision` / `publishRevision` and their test first, **inside** this step
+
+### Flagged, not determined
+
+- **`labels-progress.json`** is a mid-step checkpoint written into `data/<slug>/`, and it is in
+  neither `HOMES` nor `NOT_MIGRATED` in the manifest test — so that test goes red if one is left
+  behind. It is scratch, not an artefact, and wants either a column on the draft or an explicit
+  "stays a file". Belongs to whoever owns `toc`
+- **The importer's revision-id derivation interacts with this.** It derives the id from
+  `hashBlocks(blocks)`, so a `meta.json`-only change re-uses the id and mutates a published row. Once
+  `beginRevision` mints a fresh uuid per extraction, the importer is the only thing still deriving
+  one — decide it in the same change or the two paths disagree about what a revision id means
+- **Transaction scope across a job**, and the retry shape above, both depend on step 12's rescue path,
+  which this design pass did not read closely. It is the one place half A and step 12 have to agree,
+  and it wants a second opinion before it is built
+
 ## Step 12 — jobs and claiming, decided before it is built
 
 Scoped, argued out and cross-reviewed on 2026-08-26 before a line was written, because this is the
