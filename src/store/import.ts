@@ -18,21 +18,30 @@
  * row, upserted in place. A second run with changed blocks makes a second
  * revision, which is correct — that is a different extraction.
  *
+ * Convergence is the property, and it is stronger than "does not crash on a
+ * second run". A field that is written on the first import and left alone on
+ * the second breaks it silently, which is what `article_revisions` did until
+ * 2026-08-26: see the note on `revisionValues` below, and on the step rows
+ * further down. `data/` is the truth while the pipeline still writes it, so a
+ * re-import must be able to notice a DELETION as well as an addition — of a
+ * comment, of an artefact, and (with `--prune`) of a whole article.
+ *
  * ## What cannot be imported, and is not pretended
  *
- * - **`raw_content_type` and `raw_encoding` are null for every imported row.**
- *   `data/<slug>/raw.html` is not raw: src/pipeline.ts writes a *decoded string*
- *   there and throws away the bytes, the content type and the sniffed encoding.
- *   The bytes we store are therefore UTF-8 re-encoded, not what the server sent.
- *   Recording the loss is the honest move; inventing `text/html; charset=utf-8`
- *   would make a guess indistinguishable from a fact.
+ * - **`raw_content_type` and `raw_encoding` are null unless there is a
+ *   manifest.** `data/<slug>/raw.html` is not raw: src/pipeline.ts writes a
+ *   *decoded string* there and threw away the bytes, the content type and the
+ *   sniffed encoding. For a fetch made since `raw.json` existed they survive in
+ *   the manifest and are imported from it; for an older one they are gone, and
+ *   inventing `text/html; charset=utf-8` would make a guess indistinguishable
+ *   from a fact. A *backfilled* manifest counts as gone — see `recovered`.
  * - **`extracted_html` is null for every imported row.** Stage 2 writes
  *   `output/<slug>.html` and stage 3 overwrites the same path with the
  *   id-stamped version, so the intermediate no longer exists on disk. Only
  *   `stamped_html` survives, and that is what is imported.
  *
- * Both are recorded on the result so the caller can report them rather than
- * discovering them later as null columns.
+ * What is genuinely lost is recorded on the result, so the caller can report it
+ * rather than discovering it later as a null column.
  */
 
 import { createHash } from "node:crypto";
@@ -43,6 +52,7 @@ import { loadThreads } from "../chat.js";
 import { loadComments } from "../comments.js";
 import { getDb } from "../db/client.js";
 import { loadLookups } from "../glossary-lookups.js";
+import { readRaw, type RawManifest } from "../fetch.js";
 import { loadShelf } from "../shelf.js";
 import { loadRuns } from "../searches.js";
 import {
@@ -63,10 +73,20 @@ import { currentOwnerId, type OwnerId } from "../owner.js";
 import { parseJsonFrom } from "../parse-json.js";
 import type { LabelsFile } from "../labels.js";
 import type { Arc, Block, Glossary, Meta, Summaries, Tree, TweetThread } from "../types.js";
-import { eq } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const logger = log("store");
+
+/**
+ * The `implementation_version` every step row this file writes carries.
+ *
+ * A marker rather than a version: these rows are inferred from an artefact
+ * being on disk, not recorded when a step ran. It is also what makes the
+ * withdrawal below safe — the importer deletes only rows wearing its own name,
+ * so a real pipeline record can never be destroyed by a migration tool.
+ */
+const IMPORTED = "imported";
 
 /** What one article's import did, in enough detail to report honestly. */
 export interface ImportResult {
@@ -148,6 +168,21 @@ async function readMaybeBytes(file: string): Promise<Buffer | undefined> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw err;
   }
+}
+
+/**
+ * The manifest, but only where it still describes the bytes we are storing.
+ *
+ * **A backfilled manifest does not.** Backfill writes one for an article
+ * fetched before manifests existed: the original bytes are gone, only the
+ * decoded string survives, and so its `encoding` describes the UTF-8
+ * re-encoding sitting in `raw.html` rather than what the server actually sent.
+ * Copying that into `raw_encoding` would turn a known unknown into a confident
+ * wrong answer — the exact trap `sha256: null` exists to avoid on the same
+ * file. src/fetch.ts § `RawManifest`.
+ */
+function provenance(manifest: RawManifest | null): RawManifest | null {
+  return manifest?.backfilled ? null : manifest;
 }
 
 /**
@@ -258,9 +293,18 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
      listing it would make the importer's summary noisier for no information. */
   const shelf = await loadShelf(slug);
 
-  const rawBytes = await readMaybeBytes(path.join(dir, "raw.html"));
-  if (!rawBytes) absent.push("raw.html");
-  else unrecoverable.push("raw_content_type", "raw_encoding");
+  /* Whichever file stage 1's manifest names — `raw.html` for a web page,
+     `raw.pdf` for a PDF (docs/plans/pdf-ingestion.md). Articles fetched before
+     `raw.json` existed have no manifest and are all HTML, so that is the
+     fallback. A manifest also *recovers* the content type and encoding, which
+     is why the "unrecoverable" note below is now conditional: for a fetch made
+     since 2026-08-26 they are simply there. */
+  const manifest = await readRaw(dir);
+  const rawName = manifest?.file ?? "raw.html";
+  const rawBytes = await readMaybeBytes(path.join(dir, rawName));
+  const recovered = provenance(manifest);
+  if (!rawBytes) absent.push(rawName);
+  else if (!recovered?.contentType) unrecoverable.push("raw_content_type", "raw_encoding");
 
   const stampedHtml = await readMaybe(path.join(ROOT, "output", `${slug}.html`));
   if (!stampedHtml) absent.push(`output/${slug}.html`);
@@ -329,60 +373,90 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
         },
       });
 
+    /* **One object, used for both branches, and that is the whole fix.**
+
+       `article_revisions` says "immutable once published", and the revision id
+       is `slug + hashBlocks(blocks)` — so a change to `meta.json` alone hashes
+       to the SAME revision and lands in the `on conflict do update` branch. That
+       branch used to list twelve of these columns. A corrected title, a byline
+       that was missing, the URL after a redirect, the raw bytes: all of them
+       kept the first run's value for ever, while the tree sitting beside them
+       updated. Nothing said so, because both halves succeeded. GPT Sol found it
+       in review, 2026-08-26.
+
+       Two other fixes were on the table and both were rejected:
+
+       - **Fingerprint the whole revision**, so a metadata edit mints a new
+         revision and published rows really are immutable. It is the tidy answer
+         and it is the wrong shape for this schema: `revision_step_runs` is keyed
+         by `revision_id` precisely so that the pipeline can fill a revision in
+         one step at a time. If the id moved whenever `arc.json` or
+         `glossary.json` changed, every completed step would be orphaned by the
+         next one, and each re-run would duplicate the blocks and the raw bytes
+         under a new id. The revision is one EXTRACTION — `slug` plus the blocks
+         is exactly the identity of that.
+       - **Refuse to touch a published revision.** That reads as the safe
+         option and it makes the migration tool useless: re-running the importer
+         after fixing a typo, or after re-running one late stage, is the normal
+         case during a migration, and the honest response to it is to converge,
+         not to error.
+
+       So: the revision id stays the extraction's identity, and the row becomes
+       a pure function of the files — written the same way whether it is the
+       first import or the fifth. Sharing one object rather than keeping two
+       lists in step is the point; a column added to the insert alone was how
+       this happened, and now there is no insert alone to add it to.
+
+       **This is the importer's licence, not the schema's.** Immutability is
+       still what the pipeline must honour once it owns this table; the importer
+       is a migration tool whose contract is that the files win — the same rule
+       the reader-state delete below already follows, and the same reason
+       cutover is a step rather than a flag flip. */
+    const revisionValues = {
+      status: "published",
+      title: meta?.title ?? null,
+      byline: meta?.byline ?? null,
+      siteName: meta?.siteName ?? null,
+      lang: meta?.lang ?? null,
+      excerpt: meta?.excerpt ?? null,
+      note: meta?.note ?? null,
+      /* The manifest is the only thing that ever knew these two apart: `meta`
+         has one `url` and it is the one stage 2 saw, which is the FINAL url.
+         So `finalUrl` prefers `meta` — an exporter rebuilds `meta.json` from
+         it and the round trip has to come back byte-identical — and
+         `requestedUrl` prefers the manifest, which is the only place the
+         pre-redirect url survives at all. */
+      requestedUrl: manifest?.requestedUrl ?? meta?.url ?? null,
+      finalUrl: meta?.url ?? manifest?.url ?? null,
+      fetchedAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : null,
+      // In the update branch too, or a re-import leaves the first run's value
+      // behind and the library's order silently depends on which import ran first.
+      createdAt,
+      rawBytes: rawBytes ?? null,
+      // Null where there is no manifest, and that null is the honest answer —
+      // see the header, and `recovered` above for why a backfilled one does not count.
+      rawContentType: recovered?.contentType ?? null,
+      rawEncoding: recovered?.encoding ?? null,
+      // Genuinely gone: stage 3 overwrites stage 2's file at the same path.
+      extractedHtml: null,
+      stampedHtml: stampedHtml ?? null,
+      tree,
+      arc: arc ?? null,
+      tweets: tweets ?? null,
+      glossary: glossary ?? null,
+      summary: summaries ?? null,
+      labels: labels ?? null,
+      wordCount,
+      blockCount: blocks.length,
+      partCount,
+      sectionCount,
+      rootGist: rootGist ?? null,
+    } as const;
+
     await tx
       .insert(articleRevisions)
-      .values({
-        id: revisionId,
-        articleId,
-        status: "published",
-        title: meta?.title ?? null,
-        byline: meta?.byline ?? null,
-        siteName: meta?.siteName ?? null,
-        lang: meta?.lang ?? null,
-        excerpt: meta?.excerpt ?? null,
-        note: meta?.note ?? null,
-        requestedUrl: meta?.url ?? null,
-        finalUrl: meta?.url ?? null,
-        fetchedAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : null,
-        createdAt,
-        rawBytes: rawBytes ?? null,
-        rawContentType: null,
-        rawEncoding: null,
-        extractedHtml: null,
-        stampedHtml: stampedHtml ?? null,
-        tree,
-        arc: arc ?? null,
-        tweets: tweets ?? null,
-        glossary: glossary ?? null,
-        summary: summaries ?? null,
-        labels: labels ?? null,
-        wordCount,
-        blockCount: blocks.length,
-        partCount,
-        sectionCount,
-        rootGist: rootGist ?? null,
-      })
-      .onConflictDoUpdate({
-        target: articleRevisions.id,
-        set: {
-          tree,
-          arc: arc ?? null,
-          tweets: tweets ?? null,
-          glossary: glossary ?? null,
-          summary: summaries ?? null,
-          labels: labels ?? null,
-          stampedHtml: stampedHtml ?? null,
-          // In the update branch too, or a re-import leaves the first run's
-          // value behind and the library's order silently depends on which
-          // import happened first.
-          createdAt,
-          wordCount,
-          blockCount: blocks.length,
-          partCount,
-          sectionCount,
-          rootGist: rootGist ?? null,
-        },
-      });
+      .values({ id: revisionId, articleId, ...revisionValues })
+      .onConflictDoUpdate({ target: articleRevisions.id, set: { ...revisionValues } });
 
     // Identities FIRST, and never deleted. revision_blocks has a foreign key
     // onto this, so a block whose identity was not minted fails loudly — which
@@ -570,12 +644,21 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
        artefact is absent gets NO NEW row, which is the honest distinction
        between "did not run" and "ran and produced nothing".
 
-       Only no *new* row: unlike the reader-state tables above, these are not
-       cleared first, so a step whose artefact has since been deleted keeps
-       reporting itself done. GPT Sol found that in review, 2026-08-26. It is
-       left alone because the pipeline is about to own this table for real
-       (docs/plans/postgres-storage-implementation.md, "What is not done") and
-       inferring rows from files is the temporary half. */
+       **An inferred row is withdrawn when its artefact goes.** These used only
+       ever to be added, so deleting `arc.json` and re-importing left a `done`
+       row behind and the metadata page went on reporting a stage whose output
+       does not exist — the same shape as the reader-state bug above, where
+       `on conflict do nothing` made a re-import unable to notice a deletion.
+       GPT Sol found it in review, 2026-08-26.
+
+       **Scoped to `implementation_version = 'imported'`, which is the importer
+       saying it only clears up after itself.** The reader-state deletes above
+       are unconditional because a file really is the truth about a reader's
+       comment today. This table is different: the pipeline is about to own it
+       for real, and once it does, a `done` row for a step whose FILE is missing
+       is CORRECT — the file stopped being where the output lives. A migration
+       tool must not be able to delete that record, so it deletes only rows
+       carrying its own marker. Nothing else writes `imported`. */
     const produced: { step: string; present: boolean }[] = [
       { step: "fetch", present: Boolean(rawBytes) },
       { step: "extract", present: Boolean(meta) },
@@ -586,6 +669,18 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       { step: "glossary", present: Boolean(glossary) },
       { step: "summary", present: Boolean(summaries) },
     ];
+    const withdrawn = produced.filter((p) => !p.present).map((p) => p.step);
+    if (withdrawn.length) {
+      await tx
+        .delete(revisionStepRuns)
+        .where(
+          and(
+            eq(revisionStepRuns.revisionId, revisionId),
+            inArray(revisionStepRuns.stepName, withdrawn),
+            eq(revisionStepRuns.implementationVersion, IMPORTED),
+          ),
+        );
+    }
     for (const { step, present } of produced) {
       if (!present) continue;
       await tx
@@ -594,9 +689,12 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
           revisionId,
           stepName: step,
           inputHash: fingerprint,
-          implementationVersion: "imported",
+          implementationVersion: IMPORTED,
           status: "done",
         })
+        /* Nothing to update: for a given revision the blocks — and so the
+           fingerprint — cannot change, and a row already here under a real
+           implementation version is a pipeline record that outranks this one. */
         .onConflictDoNothing();
     }
 
@@ -643,4 +741,192 @@ export async function importableSlugs(): Promise<string[]> {
     if (blocks && tree) found.push(entry.name);
   }
   return found;
+}
+
+/* ---------------------------------------------------------------- prune -- */
+
+/**
+ * An article Postgres still has and `data/` no longer does, with what it holds.
+ *
+ * The counts are the point of the type: a person is about to be asked whether
+ * to delete this, and "1 article" and "1 article, 11 of your questions" are
+ * different questions.
+ */
+export interface Orphan {
+  readonly slug: string;
+  readonly articleId: string;
+  readonly comments: number;
+  readonly chatThreads: number;
+  readonly searchRuns: number;
+  readonly glossaryLookups: number;
+}
+
+/**
+ * Which slugs the database has that the disk does not — the whole rule, as a
+ * pure function of two lists.
+ *
+ * **Separated out because the dangerous failure is not "prunes too little".**
+ * It is `data/` being momentarily unreadable, or the process running from the
+ * wrong directory, and the tool then concluding that every article has been
+ * deleted. That decision is worth being able to test with no database and no
+ * filesystem in the way, so it lives here rather than inside the query.
+ *
+ * An empty disk **throws** rather than returning nothing. Returning nothing
+ * would be perfectly safe today and would silently stop pruning for ever the
+ * day the scan breaks — [silent-success](../../docs/reusable/silent-success.md)
+ * exactly. An empty *database* is not an error: that is a fresh machine.
+ *
+ * This is only the first of two checks. Being on this list makes a slug a
+ * candidate; `findOrphans` then asks the filesystem directly whether the
+ * directory is really gone, because `importableSlugs` deliberately omits
+ * directories that exist — `_`-prefixed ones, and any article whose extraction
+ * is half-written.
+ */
+export function orphanSlugs(inDatabase: readonly string[], onDisk: readonly string[]): string[] {
+  if (!inDatabase.length) return [];
+  if (!onDisk.length) {
+    throw new Error(
+      "refusing to prune: no directory under data/ has both blocks.json and tree.json. " +
+        "That is far more likely a wrong working directory or an unreadable data/ " +
+        "than every article having been deleted, and the difference is unrecoverable.",
+    );
+  }
+  const have = new Set(onDisk);
+  return inDatabase.filter((slug) => !have.has(slug));
+}
+
+/** Present, really gone, or we could not tell — and the three are not two. */
+async function directoryState(dir: string): Promise<"present" | "gone" | "unknown"> {
+  try {
+    return (await stat(dir)).isDirectory() ? "present" : "unknown";
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "ENOENT" ? "gone" : "unknown";
+  }
+}
+
+/**
+ * Every article this owner has in Postgres whose `data/` directory has gone.
+ *
+ * **`npm run db:import` has only ever added and updated.** `importArticle`
+ * reconciles the slug it is handed and has no way to notice that a DIFFERENT
+ * one has vanished, so a deleted article kept its row, kept its current
+ * revision, and went on being listed and served by src/store/pg.ts. It is also
+ * the confirmed cause of the parity suite failing in full runs and passing
+ * alone for an afternoon: `labels-checkpoint-check` was left behind by
+ * somebody's checkpoint run and neither store could explain the other.
+ *
+ * ## Two independent checks, because this is the input to a delete
+ *
+ * 1. `orphanSlugs` above — in the database, not in `importableSlugs()`.
+ * 2. `stat` on the directory itself, which must say ENOENT.
+ *
+ * They disagree often and on purpose. `importableSlugs` skips `_`-prefixed
+ * directories (`data/_jobs/` is the queue's) and skips any article missing
+ * `blocks.json` or `tree.json` — a re-extraction part-way through, a stage that
+ * failed, another process mid-write. Every one of those is a directory that is
+ * still there, and none of them means "the reader deleted this". Anything the
+ * second check cannot confirm is **skipped and logged**, never pruned: a
+ * momentary EACCES or EIO must cost nothing.
+ *
+ * Scoped to one owner. Nothing here ever considers a row it does not own.
+ */
+export async function findOrphans(ownerId: OwnerId = currentOwnerId()): Promise<Orphan[]> {
+  // Throws if `data/` cannot be read at all, which is the right answer: the
+  // whole judgement rests on that listing being complete.
+  const onDisk = await importableSlugs();
+  const db = getDb();
+  const rows = await db
+    .select({ id: articles.id, slug: articles.slug })
+    .from(articles)
+    .where(eq(articles.ownerId, ownerId));
+
+  const byId = new Map(rows.map((r) => [r.slug, r.id]));
+  const found: Orphan[] = [];
+  for (const slug of orphanSlugs(
+    rows.map((r) => r.slug),
+    onDisk,
+  )) {
+    const state = await directoryState(path.join(ROOT, "data", slug));
+    if (state !== "gone") {
+      logger.debug({ slug, state }, "not pruning: its directory is still there");
+      continue;
+    }
+    const articleId = byId.get(slug);
+    if (!articleId) continue;
+    /* Four `count(*)`s, spelled out rather than passed a table through a
+       helper: the four tables are four different drizzle types, and the only
+       way to share one call is a cast that tells the typechecker something
+       untrue about which columns exist. Repetition is the cheaper lie to nobody. */
+    const [nComments] = await db
+      .select({ n: count() })
+      .from(commentsTable)
+      .where(eq(commentsTable.articleId, articleId));
+    const [nThreads] = await db
+      .select({ n: count() })
+      .from(chatThreads)
+      .where(eq(chatThreads.articleId, articleId));
+    const [nRuns] = await db
+      .select({ n: count() })
+      .from(searchRuns)
+      .where(eq(searchRuns.articleId, articleId));
+    const [nLookups] = await db
+      .select({ n: count() })
+      .from(glossaryLookups)
+      .where(eq(glossaryLookups.articleId, articleId));
+    found.push({
+      slug,
+      articleId,
+      comments: nComments?.n ?? 0,
+      chatThreads: nThreads?.n ?? 0,
+      searchRuns: nRuns?.n ?? 0,
+      glossaryLookups: nLookups?.n ?? 0,
+    });
+  }
+  return found;
+}
+
+/**
+ * Delete these articles and everything under them. **This loses data.**
+ *
+ * Takes the orphans rather than finding them, so that the decision and the
+ * deletion are two calls with a person in between: `npm run db:import` lists
+ * them on every run and removes them only when asked with `--prune`. A default
+ * that deleted would be one mistyped working directory away from taking the
+ * reader's questions with it, and there is no export to get them back from —
+ * the directory they would have been exported to is the thing that has gone.
+ *
+ * One `delete` per article and the cascades work out the order themselves.
+ * Removing the rows by hand fails on `comments_identity_fk` and then on
+ * `revision_blocks_identity_fk`: neither is `on delete cascade`, on purpose, so
+ * that an identity cannot be dropped while something still points at it. The
+ * pointer has to let go first, since `articles.current_revision_id` is an
+ * ordinary FK onto a table that cascades from `articles`.
+ *
+ * Each article is its own transaction. A failure part-way leaves the rest of
+ * the list alone rather than rolling back work already reported as done.
+ */
+export async function pruneOrphans(orphans: readonly Orphan[]): Promise<Orphan[]> {
+  const db = getDb();
+  const removed: Orphan[] = [];
+  for (const orphan of orphans) {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(articles)
+        .set({ currentRevisionId: null })
+        .where(eq(articles.id, orphan.articleId));
+      await tx.delete(articles).where(eq(articles.id, orphan.articleId));
+    });
+    logger.warn(
+      {
+        slug: orphan.slug,
+        comments: orphan.comments,
+        chatThreads: orphan.chatThreads,
+        searchRuns: orphan.searchRuns,
+        glossaryLookups: orphan.glossaryLookups,
+      },
+      "article pruned: its data/ directory has gone",
+    );
+    removed.push(orphan);
+  }
+  return removed;
 }

@@ -88,9 +88,10 @@ step rather than a flag flip.
 > cover all four reader-state artefacts and not just the tested one. `block_identities` is
 > deliberately exempt: it never loses a row ([block-ids.md](../project/block-ids.md)).
 >
-> One gap left, and it is not the importer's to close: `importArticle` reconciles only the slug it is
-> handed, so an article whose `data/` directory has vanished entirely leaves an orphan row that
-> nothing visits.
+> One gap left, and it turned out to be the importer's to close after all: `importArticle` reconciles
+> only the slug it is handed, so an article whose `data/` directory has vanished entirely left an
+> orphan row that nothing visits. `npm run db:import -- --prune` now removes it — see
+> § The importer converges.
 
 ### Step 0 — done
 
@@ -217,6 +218,13 @@ npm run db:import         # data/<slug>/ → Postgres, idempotent
 SPIDERYARN_STORE=postgres npm run dev
 ```
 
+A full `db:import` also **lists** any article Postgres still has whose `data/` directory has gone.
+It does not delete one unless you ask:
+
+```bash
+npm run db:import -- --prune     # …and remove those. Cannot be undone.
+```
+
 And back out again, which is the point of having an exporter at all:
 
 ```bash
@@ -326,8 +334,8 @@ going red for a reason that was not the test's fault.
    row from somebody's checkpoint run is what made
    [tests/store-parity.test.ts](../../tests/store-parity.test.ts) fail in full runs and pass alone —
    almost certainly the "one flaky failure" recorded at the bottom of this document, which was never
-   about load. The parity comparison is now scoped to articles that exist on disk; **the pruning gap
-   itself is not fixed** and is listed below.
+   about load. The parity comparison is now scoped to articles that exist on disk. **The pruning gap
+   itself was fixed later the same day** — see § The importer converges, below.
 3. **`comments.json` accepts an anchor that is not a block id, and Postgres does not.** Something
    wrote a comment on `data/writes` anchored to `zzzz00` on 2026-08-26. `block_identities` has a
    format check, so the import died on it — one malformed row out of eleven stopping ten good ones.
@@ -345,6 +353,28 @@ Two things Sol did **not** find, both turned up while checking its work:
   the conditional spreads in `pg.ts` are complete rather than merely untested.
 
 ## Step 10 — chat, searches and glossary lookups (writes)
+
+> **2026-08-26: the stopgap this plan proposes for the gap does not work, and it is worth knowing
+> why before reaching for it again.** Both this document and
+> [simplification-audit.md](simplification-audit.md) say the cheap mitigation for chat and search
+> writes silently landing on disk in `postgres` mode is to *"extend `notMigrated` to chat and search
+> writes"*. It cannot be done. `notMigrated` lives in [`src/store/index.ts`](../../src/store/index.ts)
+> and can only refuse a call that comes through that file — and these do not:
+> [`src/routes.ts`](../../src/routes.ts) imports `beginTurn`, `finishTurn`, `editTurn`, `retryTurn`
+> and `update` straight from `src/chat.ts`, and `beginRun`, `finishRun`, `deleteRun` and `update`
+> straight from `src/searches.ts`. Those modules call `node:fs/promises` directly and never read
+> `STORE`. The glossary writes are refused loudly only because they *do* go through the store.
+>
+> So there are two real options and no third: wire `pgChatStore` and `pgSearchStore` (both built,
+> both reviewed, both unwired) through `src/store/index.ts` and switch those two import blocks in
+> `routes.ts` — which is this step, not a stopgap — or put the refusal inside `src/chat.ts` and
+> `src/searches.ts` themselves. The wiring is not free: routes.ts has to start carrying the
+> `attempt` token that `Turn.attempt` and `SearchStore.begin` hand back, which is the whole point of
+> those columns.
+>
+> The general lesson is the one worth keeping: **a guard can only be written where the call goes**,
+> and "extend the guard" was proposed twice by people reading the store's own header, which says
+> what it refuses without saying what never reaches it. That header now says it.
 
 `SPIDERYARN_STORE=postgres` serves all three from Postgres. After this step the file-backed writes
 left are the pipeline (step 11), jobs (step 12) — **and `deleteGlossary`, which stays 501**, so step 10
@@ -1398,33 +1428,122 @@ pipelines get paid for before one loses at publication. Reserve the slug transac
 expensive work, retrying suffixes on conflict. Give it its own two-transaction red test rather than
 entangling slug allocation with lease machinery.
 
+## The importer converges — three fixes, 2026-08-26
+
+All three were on the "what is not done" list below. They are one bug wearing three hats: **the
+importer could add and it could update, and it could not notice a deletion.** So a second run did
+not leave the database in the state a first run leaves it, which is the property the header of
+[`import.ts`](../../src/store/import.ts) has always claimed. Each was reproduced with a failing test
+before it was touched, and each fix was then deliberately broken again to check the test could still
+see it.
+
+### 1. A revision row is now written as one unit
+
+The revision id is `derivedUuid("revision", slug, hashBlocks(blocks))`, so a change to `meta.json`
+alone hashes to the *same* revision and lands in the `on conflict do update` branch — which listed
+twelve columns out of twenty-five. A corrected title, a byline that was missing, the URL after a
+redirect, the raw bytes: all kept the first run's value for ever while the tree beside them updated,
+and nothing said so because both halves succeeded.
+
+**The fix is the third of the three options this document listed: replace every field as one unit.**
+There is now a single `revisionValues` object and both the insert and the update use it, so it is
+structurally impossible for a column to be added to one and forgotten in the other — which is
+exactly how this happened.
+
+Why not the other two:
+
+- **Fingerprint the whole canonical revision**, so a metadata edit mints a new revision and
+  published rows really are immutable. It is the tidy answer and it is the wrong shape for this
+  schema. `revision_step_runs` is keyed by `revision_id` precisely so the pipeline can fill one
+  revision in one step at a time; if the id moved whenever `arc.json` or `glossary.json` changed,
+  every completed step would be orphaned by the next one, and each re-run would duplicate the blocks
+  and the raw bytes under a new id. A revision is one **extraction**, and `slug` plus the blocks is
+  exactly the identity of an extraction.
+- **Refuse to touch a published revision.** Reads as the safe option; makes the tool useless.
+  Re-running the importer after fixing a typo, or after re-running one late stage, is the normal
+  case during a migration.
+
+The schema's "immutable once published" still governs the **pipeline**. The importer is a migration
+tool whose contract is that the files win — the same licence the reader-state delete already takes,
+and the same reason cutover is a step rather than a flag flip.
+
+One thing fell out of writing the test: `raw_content_type` and `raw_encoding` were hardcoded to
+`null` even though the file's own header said a `raw.json` manifest recovers them, and
+`unrecoverable` was already reporting them conditionally on that basis. The comment described
+something the code had never done. They are imported from the manifest now, as is `requested_url` —
+the pre-redirect URL, which `meta.json` has never held. A **backfilled** manifest is excluded: its
+`encoding` describes the UTF-8 re-encoding sitting in `raw.html`, not what the server sent.
+
+### 2. An inferred step row is withdrawn when its artefact goes
+
+`revision_step_runs` rows are inferred from "the artefact is on disk" and were only ever added, so
+deleting `arc.json` and re-importing left a `done` row and the metadata page went on reporting a
+stage whose output does not exist.
+
+The delete is **scoped to `implementation_version = 'imported'`** — the importer clears up only
+after itself. The reader-state deletes are unconditional because a file really is the truth about a
+reader's comment today; this table is different, because once the pipeline owns it a `done` row for
+a step whose *file* is missing is correct. A migration tool must not be able to destroy that record.
+`stepIsDone` being a bare existence check is still open, and still belongs to whoever moves the
+pipeline onto this table.
+
+### 3. `--prune` removes an article whose directory has gone
+
+`importArticle` reconciles the slug it is handed and cannot know a different one has vanished, so a
+deleted article kept its rows and went on being listed and served. This is the confirmed cause of
+the parity suite's long-standing flaky failure.
+
+**Opt-in, not default, and never silent either way.** Every full run lists the orphans and what each
+one holds; `npm run db:import -- --prune` deletes them. Deleting takes the reader's questions,
+conversations and saved searches, and there is nothing to export them back *from* — the directory
+that would receive them is the thing that has gone. That asymmetry is the whole argument. `--prune`
+is refused alongside named slugs, because judging what is missing needs the complete picture.
+
+**"Gone" is two independent checks, because the dangerous failure is not pruning too little.** It is
+`data/` being momentarily unreadable, or the process running from the wrong directory, and the tool
+concluding that every article has been deleted.
+
+1. `orphanSlugs(inDatabase, onDisk)` — a pure function, so the rule can be tested with no database
+   and no filesystem in the way. An **empty disk throws**: returning nothing would be perfectly safe
+   today and would silently stop pruning for ever the day the scan breaks
+   ([silent-success](../reusable/silent-success.md) again). An empty *database* is not an error —
+   that is a fresh machine.
+2. `stat` on the directory, which must say `ENOENT`. Anything else — present, `EACCES`, `EIO` — is
+   skipped and logged.
+
+The two disagree often and on purpose: `importableSlugs` skips `_`-prefixed directories and skips
+any article missing `blocks.json` or `tree.json`, which is a re-extraction part-way through, a stage
+that failed, or another process mid-write. Every one of those is a directory that is still there.
+Everything is scoped to one owner.
+
+**It still must not run after cutover**, when the files are the stale copy — the same warning the
+reader-state delete carries, and the reason both live in a tool nobody runs by accident.
+
+### Tests
+
+- [`tests/store-import-revision.test.ts`](../../tests/store-import-revision.test.ts) — "replaces the
+  metadata columns, keeping the same revision"; "records the content type and encoding the manifest
+  recovered"; "drops the step row for an artefact that has been deleted"; "leaves a step row it did
+  not infer alone".
+- [`tests/store-import-prune.test.ts`](../../tests/store-import-prune.test.ts) — three pure tests of
+  the rule ("names a slug the database has and the disk does not"; "refuses to prune when the disk
+  looks empty"; "says nothing when the database is empty, even with an empty disk") and three
+  against the database ("does not call an article an orphan while its directory is there"; "does not
+  call it an orphan when only its artefacts have gone"; "finds it, counts what it holds, and removes
+  it once the directory is gone").
+
 ## What is not done
 
-- **The importer can mutate an already-published revision, and only some of its fields.** The
-  revision id is derived from `slug + hashBlocks(blocks)`, but a revision is far more than its
-  blocks: change only `meta.json` and the fingerprint is unchanged, so the import re-uses the
-  revision id and takes the `on conflict do update` branch, which refreshes the tree and the
-  optional artefacts and leaves title, byline, urls, `fetched_at` and the raw bytes stale.
-  `article_revisions` says "immutable once published". GPT Sol found this and it is **not fixed**,
-  because the fix is a choice rather than a patch: either fingerprint the whole canonical revision
-  and keep published revisions genuinely immutable, or keep a separate full-source idempotency key
-  and replace every field as one unit. Worth deciding before the pipeline starts writing revisions.
 - **Two imports of the same slug can race for the pointer.** Different fingerprints produce two
   complete revisions, and whichever updates `articles.current_revision_id` last wins regardless of
-  which extraction is newer. Lock the article row and say what the winner is. This is also the best
-  candidate for the flaky failure at the bottom of this list.
-- **`revision_step_runs` are inferred and never removed.** An artefact deleted from disk leaves its
-  "done" row behind, so the metadata page keeps reporting a step that no longer has output. Left
-  alone because the pipeline is about to own this table properly.
+  which extraction is newer. Lock the article row and say what the winner is.
 - **The exporter is not a full rollback.** `raw.html` is outside the round trip's `ARTEFACTS` list,
-  and the stamped HTML is only asserted to be in the right *place*, never compared.
-- **Nothing prunes an article whose `data/` directory has gone.** `npm run db:import` adds and
-  updates and never removes, so a deleted article goes on being served from Postgres. Reader state
-  within an article now converges; articles themselves do not. The fix is a bulk-import step that
-  deletes rows absent from disk, and it carries the same warning as the reader-state one: it must
-  not run after cutover, when the files are the stale copy.
-- **`SPIDERYARN_STORE` falls back to files on a typo.** Deliberate while the cutover is staged, but
-  it should reject any non-empty value that is not `files` or `postgres`.
+  and the stamped HTML is only asserted to be in the right *place*, never compared. Two more, found
+  while fixing the importer's convergence bugs on 2026-08-26 and left alone as out of scope:
+  `exportArticle` writes the raw bytes to `raw.html` whatever they are, so a PDF article comes back
+  as `raw.pdf` renamed; and it never writes `raw.json`, so the manifest — and with it the content
+  type, the encoding and the pre-redirect URL that the importer now *does* recover — does not
+  survive a round trip.
 - **The on-demand artefacts do not yet survive re-extraction, and the schema is why.** Today
   `tweets.json`, `glossary.json` and `summary.json` are files that outlive a re-run of `blocks`;
   `stale` is computed at read time and the panel shows the old artefact with a banner. As revision
