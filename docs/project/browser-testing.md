@@ -333,3 +333,24 @@ read 0 — so the window changed and the renderer's viewport did not. Earlier re
 session had worked. **Always confirm a resize by reading `innerWidth` back**, and treat any
 narrow-viewport finding taken without that check as unverified. Anything under 1000px in this repo
 is currently untested for that reason.
+
+**And resize *before* you navigate, not after.** A second session hit the same tooling failure from
+the other end, 2026-08-26: the page loaded, laid out against a ~99px-tall panel, and the resize that
+came afterwards silently did nothing. Every measurement downstream was then taken against a layout
+nobody could see, and the summary panel looked like it was refusing to scroll to a deep-linked row
+for two full seconds. Nothing about that reading was true. So: resize, read `innerWidth`/
+`innerHeight` back, *then* navigate — and if a panel appears to be positioned wrongly, check the
+viewport before you check the code.
+
+### Driving a rAF animation by hand
+
+A suspended tab runs no `requestAnimationFrame`, which means an rAF-driven animation cannot simply be
+watched — and "it did not move" is what both a broken animation and a sleeping tab look like. It can
+still be **driven**: replace `window.requestAnimationFrame` / `cancelAnimationFrame` with a
+manually-pumped queue, trigger the thing that starts the animation, and step it with synthetic
+timestamps. Used on 2026-08-26 to check that a wheel over the summary panel kills its slide dead
+([follow.ts](../../src/web/follow.ts)): pump to the animation's halfway timestamp and watch
+`scrollTop` jump, dispatch a real `WheelEvent`, then confirm the pending frame has left the queue and
+`scrollTop` is frozen — and that pumping again does nothing, which is what separates *cancelled* from
+*paused*. The same shim is how the column sampler was verified
+([column-context.md](column-context.md)).

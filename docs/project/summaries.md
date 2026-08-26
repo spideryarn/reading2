@@ -399,6 +399,14 @@ it, and stops whatever was running at the top of every run — before anything i
 buys the other half: **a wheel or a finger on the panel cancels the move**, which is the same bail-out
 [`scroll.ts`](../../src/web/scroll.ts) gives the article.
 
+That cancellation is checked rather than assumed, and checking it needed a trick, because a
+backgrounded tab runs no rAF and a suspended animation looks exactly like a cancelled one. The
+browser pass on 2026-08-26 replaced `requestAnimationFrame` with a queue it pumped by hand: step the
+slide to its halfway timestamp, watch `scrollTop` jump, dispatch a real wheel event, then confirm the
+pending frame has left the queue and that pumping again moves nothing — which is what tells
+*cancelled* apart from *paused*. Written up in
+[browser-testing.md § Driving a rAF animation by hand](browser-testing.md#driving-a-raf-animation-by-hand).
+
 ### What it costs
 
 Stated rather than smoothed over:
@@ -408,10 +416,6 @@ Stated rather than smoothed over:
   the hook as re-run triggers. A re-run with the row already in view costs one
   `getBoundingClientRect` and moves nothing. `root` is the one that was missing at first: it changes
   when a rewrite lands, which can turn every one-sentence gist into a paragraph.
-- **The animation cannot be checked in a background tab**, because it is `requestAnimationFrame` and
-  a suspended tab runs none. A browser pass on 2026-08-26 verified every landing position and could
-  not verify the motion; that half is still eyeball-only. See
-  [browser-testing.md](browser-testing.md).
 - **A window resize or a late font swap is not covered.** Neither changes any of those triggers, so
   the row can drift out of view and stay there until the reader crosses a section boundary. A
   `ResizeObserver` would close it — [`ContextPanel`](../../src/web/ContextPanel.tsx) has one — and is
