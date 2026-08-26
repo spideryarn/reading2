@@ -31,6 +31,9 @@ The view has two modes and the second is easy to forget:
 | `/?at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
 | `/?cols=0,1&text=1` | an explicit column choice, which pins the columns and takes them off auto-fit |
+| `/?spine=0` | the rail hidden by hand. Check the article **reflows into the reclaimed 208px** rather than leaving a gutter, and that the corner wordmark clears the controls bar — that padding compensation is the one thing `--spine-w: 0` is load-bearing for ([HomeLogo.tsx](../../src/web/HomeLogo.tsx)) |
+| `/?text=0&spine=1` | the rail kept in outline mode, where it is off by default. The one combination that proves `?spine=` is three-state rather than two |
+| `/?mode=chat&spine=0` | the rail hidden with a mode band open, which is the only way `fitMode` returns `off`. Both smallest terms of the sticky bars' `left` at once |
 | `/?slug=<slug>` | a different article; defaults to `example` |
 
 **Widths.** At the default three gist columns the table is 1120px wide. Anything under that

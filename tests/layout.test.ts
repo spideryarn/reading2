@@ -140,3 +140,54 @@ describe("the table always has room for its own width", () => {
     }
   });
 });
+
+/**
+ * The reader's own hand on the rail — `?spine=`, added 2026-08-26 for the pill
+ * in the controls bar. Three states, and the third one is the point: absent is
+ * not the same as on.
+ */
+describe("hiding the spine", () => {
+  it("is off by default in outline mode and on in reading mode", () => {
+    expect(fit({ windowWidth: 1600 }).spine).toBe("full");
+    expect(fit({ windowWidth: 1600, showText: false }).spine).toBe("off");
+  });
+
+  it("goes away when asked, and gives its width to the table", () => {
+    const on = fit({ windowWidth: 1600 });
+    const off = fit({ windowWidth: 1600, showSpine: false });
+    expect(off.spine).toBe("off");
+    expect(off.tableW).toBe(on.tableW + 208);
+    expect(off.minWidth).toBe(1600);
+  });
+
+  it("stays when asked, even in outline mode where nothing would show it", () => {
+    const f = fit({ windowWidth: 1600, showText: false, showSpine: true });
+    expect(f.spine).toBe("full");
+    // Still the whole outline: the rail is bought out of the detail column.
+    expect(f.columns).toEqual([0, 1, 2, 3]);
+    expect(f.minWidth).toBe(1600);
+  });
+
+  it("says on or off, and leaves full-vs-narrow to the window", () => {
+    expect(fit({ windowWidth: 900, showText: false, showSpine: true }).spine).toBe("narrow");
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("full");
+  });
+
+  // The reason the parameter has no default: `null` has to keep meaning
+  // "nobody has touched this", or the `auto` control has nothing to put back.
+  it("absent is not the same as true", () => {
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: null }).spine).toBe("off");
+    expect(fit({ windowWidth: 1600, showText: false, showSpine: true }).spine).toBe("full");
+  });
+
+  it("keeps the fit monotonic in window width", () => {
+    for (const showSpine of [true, false] as const) {
+      let prev = 0;
+      for (let w = 320; w <= 2600; w++) {
+        const n = fit({ windowWidth: w, showSpine }).columns.length;
+        expect(n).toBeGreaterThanOrEqual(prev);
+        prev = n;
+      }
+    }
+  });
+});

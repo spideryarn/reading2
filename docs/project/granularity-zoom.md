@@ -336,10 +336,29 @@ Four decisions worth keeping:
   (Found by `spideryarn2-cd`, 2026-08-25, by sweeping widths — at any single width the old behaviour
   looked like a considered trade. The sweep is now a test: `tests/layout.test.ts` asserts that no
   width ever shows fewer columns than a narrower one.)
-- **In outline mode it disappears entirely.** The table there *is* a whole-article overview, so a
+- **In outline mode it disappears by default.** The table there *is* a whole-article overview, so a
   bird's-eye rail beside it would be a second copy of the same thing; the width goes back to the
   columns. Decided in [`layout.ts`](../../src/web/layout.ts) § `fitView`, not in the rail itself, so
   that one function answers every "how wide is anything" question.
+- **The reader can overrule all of that** — a `Spine` pill in the controls bar, beside `L0`/`L1`/
+  `Text`, added 2026-08-26 at Greg's request for "a button in the top bar to show/hide the Spine
+  (just as we can with L0, L1, etc)". It writes [`?spine=`](url-state.md), and like `?cols=` it has
+  **three** states rather than two: absent is *automatic*, which is everything above, and is not the
+  same as on. That distinction is what lets a reader keep the rail in outline mode and lose it in
+  reading mode, and it is what the `auto` control puts back — `auto` now clears `?spine=` as well as
+  `?cols=`, and the word `fit` beside the pills means neither has been touched.
+
+  Two things the pill deliberately does *not* do. It says **on or off and nothing else**: whether an
+  on rail shows its labels or collapses to ticks stays with the window width, because that is a
+  question about how much room there is rather than about what the reader wants. And it is the one
+  granularity-bar control that **stays on screen in a mode** (chat, glossary, search, summary),
+  where the rail is otherwise unconditional — the rest are hidden there because the columns they
+  name are gone, which is the opposite case.
+
+  One consequence worth knowing before you touch it: the rail's width is taken out of the prose
+  column's, so hiding it **rewraps every paragraph in the article**. Every row changes height, which
+  is why `fit.spine` is part of `layoutKey` in [`App.tsx`](../../src/web/App.tsx) — the rail's own
+  measurements and the `?at=` tracker's both have to be redone.
 
 Because the spine now carries the coarse levels, the **L0 column is the first thing auto-fit gives
 up** on a narrow window (below), and what the article *is* lives in the masthead, so that giving it

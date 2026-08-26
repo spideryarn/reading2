@@ -133,6 +133,20 @@ export interface FitInput {
    * band takes their place.
    */
   modeBand?: boolean;
+  /**
+   * Whether the reader has said the rail should be on screen, or `null` for
+   * automatic — see params.ts § spineParam.
+   *
+   * Three states rather than two, for the same reason `chosen` has three: a
+   * reader who has hidden the rail and a reader who is in outline mode are both
+   * looking at a page with no rail, and they want opposite things when the text
+   * comes back. `false` also survives a trip through a mode, where the rail is
+   * otherwise unconditional.
+   *
+   * It decides on or off and nothing else. Full-vs-narrow stays with the window
+   * width, which is a question about room rather than about preference.
+   */
+  showSpine?: boolean | null;
 }
 
 export function fitView({
@@ -142,6 +156,7 @@ export function fitView({
   showText,
   chosen,
   modeBand = false,
+  showSpine = null,
 }: FitInput): Fit {
   /* A mode owns the middle band, so there are no gist columns to fit and no
      choice for the reader to have made about them. Handled first and returned
@@ -152,7 +167,7 @@ export function fitView({
      Note what this does NOT do: it does not consult `chosen`. `?cols=` survives
      the trip through chat untouched and means what it always meant when the
      reader comes back. */
-  if (modeBand) return fitMode(windowWidth);
+  if (modeBand) return fitMode(windowWidth, showSpine);
 
   // Outline mode has no prose; the leaf column is the detail column, and it
   // holds nav labels rather than paragraphs, so it needs far less room.
@@ -168,7 +183,8 @@ export function fitView({
   /**
    * In outline mode the table *is* a whole-article overview, so a bird's-eye
    * rail beside it would be a second copy of the same thing; the space goes
-   * back to the columns instead.
+   * back to the columns instead. That is what the reader gets by default, and
+   * `showSpine` is how they say otherwise in either direction.
    *
    * Otherwise the labels are affordable only when they cost nothing. The rail
    * widening from 1.5rem to 13rem eats 184px, which at some widths is exactly a
@@ -179,14 +195,21 @@ export function fitView({
    * it, so the labels wait until they are free. In practice that is ~1280px for
    * a three-level tree.
    */
-  const spine: SpineMode = !showText
-    ? "off"
-    : windowWidth >= SPINE_LABELS_MIN_WINDOW &&
-        (chosen !== null ||
-          gistsThatFit(windowWidth - SPINE_FULL) ===
-            gistsThatFit(windowWidth - SPINE_NARROW))
+  /** Which of the two on-states an on rail takes. */
+  const labelled: SpineMode =
+    windowWidth >= SPINE_LABELS_MIN_WINDOW &&
+    (chosen !== null ||
+      gistsThatFit(windowWidth - SPINE_FULL) ===
+        gistsThatFit(windowWidth - SPINE_NARROW))
       ? "full"
       : "narrow";
+
+  /* Automatic is "on wherever there is prose", which is the outline-mode rule
+     above written as one word. An explicit `?spine=` wins outright, both ways:
+     the reader may keep the rail in outline mode, and may take it away in
+     reading mode. Same rule `chosen` follows — the window must not overrule a
+     choice somebody made. */
+  const spine: SpineMode = (showSpine ?? showText) ? labelled : "off";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
 
   let gists =
@@ -254,7 +277,9 @@ export function fitView({
  *    here — there are no columns to drop, so widening the window can never
  *    take anything away — which means the tie-break that exists over there is
  *    not needed and would only make the rail flicker between two modes as the
- *    band resized.
+ *    band resized. A reader who has hidden the rail still has it hidden here:
+ *    `?spine=0` is a choice about the page, not about the mode they happen to
+ *    be in, and it is the only thing that turns the rail off in a mode.
  *  - **The prose wins.** The band shrinks from `MODE_IDEAL` to `MODE_MIN`
  *    before the reading column drops below `PROSE_MIN`, and past that the page
  *    overflows and scrolls rather than either of them getting narrower. Same
@@ -264,8 +289,13 @@ export function fitView({
  *    exactly how the outline-mode bug got in: a comment claiming a fact the
  *    only other caller did not know about.
  */
-function fitMode(windowWidth: number): Fit {
-  const spine: SpineMode = windowWidth >= SPINE_LABELS_MIN_WINDOW ? "full" : "narrow";
+function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
+  const spine: SpineMode =
+    showSpine === false
+      ? "off"
+      : windowWidth >= SPINE_LABELS_MIN_WINDOW
+        ? "full"
+        : "narrow";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
   const modeW = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
   const proseW = Math.max(PROSE_MIN, avail - modeW);

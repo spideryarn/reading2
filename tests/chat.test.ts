@@ -205,6 +205,25 @@ describe("fitView in a mode — the band replaces the columns", () => {
     expect(band(1099).spine).toBe("narrow");
   });
 
+  /* `?spine=0` is a choice about the page, not about the mode you are in, so
+     it is the one thing that takes the rail away here — the mode band's own
+     rule is that the rail is unconditional. */
+  it("hides the rail in a mode too, when the reader has hidden it", () => {
+    const f = fitView({
+      ...article,
+      showText: true,
+      chosen: null,
+      modeBand: true,
+      windowWidth: 1600,
+      showSpine: false,
+    });
+    expect(f.spine).toBe("off");
+    // The 208px goes to the prose; the band keeps its ideal width.
+    expect(f.modeW).toBe(MODE_IDEAL);
+    expect(f.widths).toEqual([1200]);
+    expect(f.minWidth).toBe(1600);
+  });
+
   it("leaves the ToC layout untouched when there is no mode band", () => {
     const f = fitView({ ...article, showText: true, chosen: null, windowWidth: 1600 });
     expect(f.modeW).toBe(0);

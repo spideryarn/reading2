@@ -47,17 +47,22 @@
  * screen reaches it in one keystroke. This rule has to be right rather than
  * being an edge case nobody meets — measured: logo 0→136, title starts at 160.
  *
- * It is `!showText` **and no mode band**, though. A band is laid out by
- * `fitMode`, a different function, and that one never returns `"off"` — the
- * prose is always on inside a band. So the two smallest terms cannot co-occur.
+ * `--spine-w: 0` is reached two ways, and **the second one arrived on
+ * 2026-08-26**: `?spine=0`, the reader's own hand on the rail
+ * (docs/project/url-state.md). Unlike `!showText` it is honoured inside a mode
+ * band too, so the claim this comment used to make — that `fitMode` never
+ * returns `"off"`, and the two smallest terms therefore cannot co-occur — is no
+ * longer true. Both terms can now be at their floor at once.
  *
- * Which makes the `--mode-w` term, today, **dead arithmetic that is still worth
- * keeping.** With a band open the spine is at least `SPINE_NARROW` (24px) and
- * the band at least `MODE_MIN` (288px), so the subtraction is 312px against a
- * 160px reach and the expression floors at 1.5rem every time. It is in there
- * because the bars are *positioned* by `--spine-w + --mode-w` and an offset
- * expression that does not mirror its own positioning is a trap for whoever
- * changes one of them. Drop `MODE_MIN` below ~112px and it starts to bind.
+ * The `--mode-w` term is **still dead arithmetic, and still worth keeping.**
+ * The reason is now the band rather than the rail: with a band open it is at
+ * least `MODE_MIN` (288px) whatever the spine is doing, so even a hidden rail
+ * leaves 288px against a 160px reach and the expression floors at 1.5rem. It is
+ * in there because the bars are *positioned* by `--spine-w + --mode-w` and an
+ * offset expression that does not mirror its own positioning is a trap for
+ * whoever changes one of them. Drop `MODE_MIN` below ~112px and it starts to
+ * bind — which is now the only thing that would make it bind, the spine having
+ * stopped being able to hold the floor up on its own.
  *
  * ## Where it is not rendered
  *

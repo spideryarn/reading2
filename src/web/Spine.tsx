@@ -1,5 +1,11 @@
 /**
- * The spine — a bird's-eye rail down the far left, always visible.
+ * The spine — a bird's-eye rail down the far left.
+ *
+ * It read "always visible" here until 2026-08-26, and that was already only
+ * nearly true (outline mode drops it); it is now a `Spine` pill in the controls
+ * bar and a `?spine=` parameter, so the reader can put it away in any mode.
+ * Whether it is on screen at all, and whether it shows labels or ticks, are
+ * both decided in layout.ts § fitView — never here.
  *
  * Greg, 2026-08-25:
  *
