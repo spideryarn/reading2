@@ -795,7 +795,7 @@ function Actions({
         onClick={() => void rerun()}
         disabled={rerunning}
       >
-        <RefreshCw size={14} className={rerunning ? "tw:animate-spin" : undefined} />
+        <RefreshCw size={14} className={rerunning ? "cmt-spinner" : undefined} />
       </IconButton>
       {entry.url && (
         <a

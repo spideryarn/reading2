@@ -387,6 +387,12 @@ into a checked one:
 POST /api/glossary/:slug/:id/lookup   →  { entry }   (~10s, one model call)
 ```
 
+**The answer does not stream, and that is not because it cannot.** The lookup drains `explain()` and
+appears whole, behind a spinner that says so. What it would take, and why it is waiting on the
+Postgres store seam rather than on the streaming, is in
+[streaming-the-slow-two.md](../plans/streaming-the-slow-two.md) — **whoever finishes the glossary
+store should do it then**, which is why this note is here rather than only in the plan.
+
 **Its answers live in their own file**, `data/<slug>/glossary-lookups.json`, keyed by entry id
 ([`src/glossary-lookups.ts`](../../src/glossary-lookups.ts)) — never inside `glossary.json`. A lookup
 is *reader state*, which by this repo's own rule lives beside the artefact rather than in it; and

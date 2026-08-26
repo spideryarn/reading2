@@ -96,14 +96,6 @@ export function JobProgress({
         <span>
           {job.status === "queued" ? "Waiting for the queue…" : (current?.label ?? runningLabel)}
         </span>
-        {/* `w-full` is what makes the wrap happen rather than merely allowing
-            it: a flex item at full width cannot share a line, so the detail
-            always lands below and Stop always follows it. */}
-        {current?.detail && (
-          <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
-            {current.detail}
-          </span>
-        )}
         <Button
           type="button"
           variant="ghost"
@@ -116,6 +108,18 @@ export function JobProgress({
           <X size={12} />
           {job.cancelling ? "Stopping…" : "Stop"}
         </Button>
+        {/* Last in the DOM, and that is the fix rather than an accident. `w-full`
+            is what makes the wrap happen rather than merely allowing it: a flex
+            item at full width cannot share a line. With the detail written
+            *before* Stop — which is the reading order, and how the first version
+            had it — that pushed Stop onto a third row. Two rows beats three in a
+            band this narrow, and the detail is progress text rather than
+            something the reader acts on, so it is the one that gives way. */}
+        {current?.detail && (
+          <span className="tw:w-full tw:font-mono tw:text-[0.7rem] tw:text-ink-faint">
+            {current.detail}
+          </span>
+        )}
       </div>
     );
   }

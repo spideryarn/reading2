@@ -9,19 +9,27 @@
  *
  * It has since grown a second job, at the bottom of the file: the parts of an
  * OpenRouter call that **three** callers must not answer differently — where to
- * route, and what may be repeated from a failure. `search.ts` is the third, and
- * it does not stream at all, which is why those live here rather than inside the
- * streaming machinery.
+ * route, and what may be repeated from a failure. Those sit outside the
+ * streaming machinery because they were shared before all three streamed, which
+ * they now do.
  *
  * **This module knows nothing about chat, comments, articles or readers.** It
  * parses a byte stream and tells aborts apart. If something here starts needing
  * a thread id or a block id, it belongs back in its caller.
  *
- * The two callers are src/converse.ts (chat) and src/explain.ts (explanations),
- * and they differ in one way that is deliberate rather than accidental: chat
- * sets `cache_control` at the top level and explain sets it on a content part.
- * See docs/project/prompt-caching.md — the shape of the cached prefix is the
- * caller's business, not this file's.
+ * The three callers are src/converse.ts (chat), src/explain.ts (explanations
+ * and glossary lookups) and src/search.ts (finding passages) — the last of
+ * which arrived on 2026-08-26, and this header said "it does not stream at all"
+ * until then.
+ *
+ * They differ in two ways, both deliberate. Chat sets `cache_control` at the
+ * top level and explain sets it on a content part — see
+ * docs/project/prompt-caching.md, because the shape of the cached prefix is the
+ * caller's business and not this file's. And **search reads the stream
+ * strictly**: the other two carry prose, where a dropped frame costs a few
+ * words, while search carries one JSON object, where a dropped frame can lose a
+ * whole result and still leave text that parses. See the note on the parse in
+ * `sseChunks`.
  */
 import {
   PROVIDER_FAILED_MID_ANSWER,
