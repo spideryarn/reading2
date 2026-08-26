@@ -24,10 +24,11 @@
  *
  * | File | What |
  * |---|---|
- * | library-sort.ts | the sorts as data, and the three rules a browser cannot check |
- * | ShelfControls.tsx | the chips: sort key, direction, Unread, cards-or-table |
+ * | lib/DataTable.tsx | **reusable**: the chips, the dense table, the TanStack options that are decisions |
+ * | lib/table-sort.ts | **reusable**: sorting state ⇄ URL, the collator, `sinkLast` |
+ * | library-columns.tsx | what the shelf can be sorted by, and how each column draws |
+ * | ShelfControls.tsx | the two controls that are the shelf's own: Unread, cards-or-table |
  * | ShelfEntry.tsx | the card, the five buttons, rename-in-place, the tooltip |
- * | ShelfTable.tsx | the dense table — the same list, painted the other way |
  *
  * **One sort state, two renderers**, which is the shape Greg asked for when he
  * said he liked the cards and wanted them sortable anyway. The order, the
@@ -46,18 +47,16 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
+import type { OnChangeFn, SortingState } from "@tanstack/react-table";
+import { functionalUpdate } from "@tanstack/react-table";
 import { Palette, Search, Undo2, User, X } from "lucide-react";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
+import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
+import { DataTable, naturalDirections, useSortedTable } from "./lib/DataTable.js";
+import { isAllNatural, sinkLast, sortingFromUrl, sortingToUrl } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { fold, foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
-import {
-  applyFilter,
-  sortEntries,
-  sortSpec,
-  type SortDir,
-  type SortKey,
-} from "./library-sort.js";
 import {
   libraryByParam,
   libraryDirParam,
@@ -67,10 +66,10 @@ import {
 } from "./params.js";
 import { DESIGN_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
-import { ShelfControls } from "./ShelfControls.js";
-import { ShelfTable } from "./ShelfTable.js";
+import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { useJobs } from "./useJobs.js";
 import { useLibrarySearch } from "./useLibrarySearch.js";
+import { useNow } from "./useNow.js";
 import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 
@@ -86,16 +85,16 @@ export function Library() {
      the server happened to send, so neither survived a reload. */
   const [rawQuery, setQuery] = useQueryState("q", libraryQueryParam);
   const [by, setBy] = useQueryState("by", libraryByParam);
-  const [chosenDir, setDir] = useQueryState("dir", libraryDirParam);
+  const [rawDir, setDir] = useQueryState("dir", libraryDirParam);
   const [view, setView] = useQueryState("view", libraryViewParam);
   const [show, setShow] = useQueryState("show", libraryShowParam);
 
   const query = rawQuery ?? "";
-  /* No `dir` in the URL means "whichever way this key naturally goes" — newest
-     first for a date, longest first for a length, A-to-Z for a title. Resolving
-     it here rather than defaulting the parser is what lets `?by=title` alone be
-     a sensible link; a parser default of `desc` would have made it Z-to-A. */
-  const dir = chosenDir ?? sortSpec(by).natural;
+  /* No `dir` in the URL means "each key goes whichever way it naturally goes",
+     which is a different answer per column — so this stays an empty list rather
+     than a default, and `sortingFromUrl` fills the gaps. See params.ts, where
+     giving it a default was briefly a bug. */
+  const dir = rawDir ?? [];
 
   /**
    * Make a `push` change to the view, taking any half-typed search with it.
@@ -105,9 +104,9 @@ export function Library() {
    * query then *replaces* itself into the new entry a moment later. Back then
    * undoes the sort **and** the search together, having appeared to record only
    * the sort. Writing `q` here with the limit lifted puts it in the same batch
-   * as the push, so one entry carries both. nuqs queues every synchronous
-   * write until the next tick and flushes them as one URL update, which is also
-   * why `setBy` and `setDir` below are one history entry rather than two.
+   * as the push, so one entry carries both. nuqs queues every synchronous write
+   * until the next tick and flushes them as one URL update, which is also why
+   * `setBy` and `setDir` are one history entry rather than two.
    *
    * Caught by a cross-family review, 2026-08-26.
    */
@@ -119,51 +118,127 @@ export function Library() {
     [query, setQuery],
   );
 
-  const onSort = useCallback(
-    (next: { by: SortKey; dir: SortDir }) =>
-      pushView(() => {
-        void setBy(next.by);
-        void setDir(next.dir);
-      }),
-    [pushView, setBy, setDir],
+  /* One clock reading, re-read once a minute and handed to everything that
+     prints a relative date — see useNow.ts for both halves of why. */
+  const now = useNow();
+
+  const columns = useMemo(() => libraryColumns(shelf, now), [shelf, now]);
+  const natural = useMemo(() => naturalDirections(columns), [columns]);
+  /* `DEFAULT_BY` as the fallback: a URL naming nothing we recognise lands on
+     the ordinary shelf rather than on an unsorted list with no chip pressed. */
+  const sorting = useMemo(
+    () => sortingFromUrl(by, dir, natural, DEFAULT_BY),
+    [by, dir, natural],
   );
+
+  /* Matcher one: the shelf itself, filtered in the browser, then narrowed by
+     the Unread chip. The *order* is no longer ours — TanStack owns it below —
+     but which rows exist still is.
+
+     `useMemo` because this runs on every keystroke over every article, and
+     because the identity of the array it returns is what decides whether the
+     whole table is rebuilt. */
+  const rows = useMemo(() => {
+    if (!articles) return null;
+    const found = filterEntries(articles, query);
+    return show === "unread" ? found.filter((a) => a.opens === 0) : found;
+  }, [articles, query, show]);
+
+  /**
+   * The sorting state, written straight back to the address bar.
+   *
+   * TanStack hands us an updater rather than a value — it computes what a click
+   * means, including which end a new column starts at and whether shift was
+   * held — so this applies it to the current state and serialises the result.
+   * That is the whole of what replaced a hand-written `nextSort`.
+   */
+  const onSortingChange = useCallback<OnChangeFn<SortingState>>(
+    (updater) => {
+      /* Applied to `sorting` — the very array TanStack was handed as its state,
+         so what it computed the update against and what we apply it to cannot
+         be two different things. */
+      const next = functionalUpdate(updater, sorting);
+      /* Never empty. `enableSortingRemoval: false` should make that impossible,
+         but an empty sort would fall back to whatever order the data arrived
+         in — a state the reader cannot name or ask for — so it is refused here
+         as well as configured against. */
+      if (next.length === 0) return;
+      const url = sortingToUrl(next);
+      pushView(() => {
+        void setBy(url.by);
+        /* Left out when it says nothing the columns would not have said
+           themselves, which keeps `?by=title` short — and correct, since an
+           absent `dir` is what makes the per-column fallback run at all. */
+        void setDir(isAllNatural(next, natural) ? null : url.dir);
+      });
+    },
+    [sorting, natural, pushView, setBy, setDir],
+  );
+
+  const table = useSortedTable({
+    data: rows ?? EMPTY,
+    columns,
+    sorting,
+    onSortingChange,
+    rowId: slugOf,
+  });
+
+  /* The fixture last, in every order and both directions. It is a committed
+     placeholder rather than something the reader added, and the server has
+     always kept it at the foot of the shelf — sorting in the browser without
+     carrying that over puts a demo excerpt above the reader's own library the
+     first time anybody sorts by length. */
+  const modelRows = table.getRowModel().rows;
+  const primary = sorting[0]?.id;
+  const sorted = useMemo(() => {
+    /* Two sinks, in this order.
+
+       **Missing values last, whichever way the arrow points.** `sortUndefined`
+       is the option for this and it is switched off, because TanStack gets it
+       wrong when two values are both missing — see lib/table-sort.ts §
+       numberOrMissing. So the columns sort missing *low*, consistently, and the
+       rows whose primary key is missing are moved down here. Ascending by "last
+       opened" must not fill the top of the shelf with everything you have never
+       opened: that is a useful thing to want, and it is what the Unread chip is
+       for.
+
+       **Then the fixture**, below even those. It is a committed placeholder
+       rather than something the reader added, and the server has always kept it
+       at the foot of the shelf. */
+    const missingLast = primary
+      ? sinkLast(modelRows, (r) => r.getValue(primary) === undefined)
+      : modelRows;
+    return sinkLast(missingLast, (r) => !!r.original.fixture);
+  }, [modelRows, primary]);
 
   // Reload the shelf the moment a job finishes, rather than telling the reader
   // to reload the page — they just watched the five steps go green, and an
   // empty shelf underneath would read as a failure.
   const queue = useJobs(reload);
 
-  /* Matcher one: the shelf itself, filtered in the browser, then narrowed by
-     the Unread chip, then ordered. Free, instant, and over exactly the fields a
-     card shows — a reader who can see a word on a card expects typing it to
-     find that card.
-
-     One `useMemo` for all three steps rather than three, because they are one
-     derivation and splitting them would only add two more arrays for React to
-     compare. It matters that this is memoised at all: it runs on every
-     keystroke over every article, and the identity of the array it returns is
-     what decides whether every card re-renders. */
-  const filtered = useMemo(() => {
-    if (!articles) return null;
-    return sortEntries(applyFilter(filterEntries(articles, query), show), by, dir);
-  }, [articles, query, show, by, dir]);
-
   // Matcher two: the passages inside the articles, from the server.
   const passages = useLibrarySearch(query);
 
   const searching = query.trim().length > 0;
-  /* The slugs the Unread chip lets through, whatever the search box says — the
-     passages are the answer to the search, so narrowing them by the search
-     twice would be wrong. `null` when the chip is off, which is "do not
-     narrow" rather than "narrow to nothing". */
-  const unread = useMemo(
-    () => (show === "unread" && articles ? new Set(applyFilter(articles, show).map((a) => a.slug)) : null),
-    [articles, show],
-  );
   const total = articles?.length ?? 0;
-  const showing = filtered?.length ?? 0;
+  const showing = rows?.length ?? 0;
   // Said only when something is actually being hidden. "12 of 12" is noise.
   const narrowed = (searching || show === "unread") && showing !== total;
+
+  /* The slugs the Unread chip lets through, whatever the search box says — the
+     passages are the answer to the search, so narrowing them by the search
+     twice would be wrong. `null` when the chip is off, which is "do not narrow"
+     rather than "narrow to nothing". */
+  const unread = useMemo(
+    () =>
+      show === "unread" && articles
+        ? new Set(articles.filter((a) => a.opens === 0).map((a) => a.slug))
+        : null,
+    [articles, show],
+  );
+
+  /* Whichever column is sorted first decides what a card says about itself. */
+  const note = CARD_NOTES[sorting[0]?.id ?? ""] ?? ADDED_NOTE;
 
   return (
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:py-10 tw:font-sans">
@@ -179,8 +254,8 @@ export function Library() {
             {/* Home is where a global thing gets a way in. The profile page
                 holds what is true of the reader on every article, so a link to
                 it from inside one article would be a link nobody finds —
-                docs/project/reader-profile.md. It sits before Design because it
-                is for the reader and Design is developer furniture. */}
+                docs/project/reader-profile.md. Before Design because it is for
+                the reader and Design is developer furniture. */}
             <Link
               href="/profile"
               className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
@@ -189,14 +264,14 @@ export function Library() {
               <User size={13} />
               You
             </Link>
-          <Link
-            href={DESIGN_HREF}
-            className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-            title="Every token, face and component variant on one page — look here after changing tokens.css"
-          >
-            <Palette size={13} />
-            Design
-          </Link>
+            <Link
+              href={DESIGN_HREF}
+              className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+              title="Every token, face and component variant on one page — look here after changing tokens.css"
+            >
+              <Palette size={13} />
+              Design
+            </Link>
           </div>
         </div>
         <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
@@ -232,9 +307,8 @@ export function Library() {
           there is a list. A sort control over an empty shelf is furniture. */}
       {total > 0 && (
         <ShelfControls
-          sort={by}
-          dir={dir}
-          onSort={onSort}
+          table={table}
+          chipOrder={CHIP_ORDER}
           view={view}
           onView={(v) => pushView(() => void setView(v))}
           filter={show}
@@ -260,38 +334,22 @@ export function Library() {
           Nothing on the shelf yet. Paste a URL above and it'll be here in a minute or two.
         </p>
       )}
-      {/* A shelf with articles on it and nothing matching is a different thing
-          from an empty shelf, and says which of the two narrowings emptied it —
-          otherwise pressing Unread on a shelf you have read all of looks like
-          the search box has broken. */}
       {showing === 0 && total > 0 && (
-        <p className="tw:text-sm tw:text-muted-foreground">
-          {searching && show === "unread"
-            ? `No unopened article matches “${query.trim()}”.`
-            : searching
-              ? `No article's title, author or blurb matches “${query.trim()}”.`
-              : "You have opened all of them."}
-        </p>
+        <p className="tw:text-sm tw:text-muted-foreground">{nothingLeft(query, show)}</p>
       )}
 
       {/* One list, two renderers. The sort, the filter and the search are all
           resolved above this line, so neither view can disagree with the other
           about what is on the shelf or what order it is in — see
           ShelfControls.tsx. */}
-      {filtered && filtered.length > 0 && view === "table" && (
-        <ShelfTable
-          entries={filtered}
-          shelf={shelf}
-          sort={by}
-          dir={dir}
-          onSort={onSort}
-        />
+      {sorted.length > 0 && view === "table" && (
+        <DataTable table={table} rows={sorted} caption="Your articles" />
       )}
-      {filtered && filtered.length > 0 && view === "cards" && (
+      {sorted.length > 0 && view === "cards" && (
         <ul className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
-          {filtered.map((a) => (
-            <li key={a.slug}>
-              <ShelfCard entry={a} shelf={shelf} sort={by} />
+          {sorted.map((row) => (
+            <li key={row.id}>
+              <ShelfCard entry={row.original} shelf={shelf} note={note(row.original, now)} />
             </li>
           ))}
         </ul>
@@ -303,14 +361,33 @@ export function Library() {
           very article — two answers to one question, on one screen. The hidden
           ones are counted rather than silently dropped, because "it is in
           something you have already read" is the useful half of that answer. */}
-      {searching && (
-        <Passages state={passages} query={query} only={show === "unread" ? unread : null} />
-      )}
+      {searching && <Passages state={passages} query={query} only={unread} />}
 
       {!searching && <Archived shelf={shelf} />}
     </main>
   );
 }
+
+/**
+ * Why nothing is on screen.
+ *
+ * A shelf with articles on it and nothing matching is a different thing from an
+ * empty shelf, and it has to say **which** of the two narrowings emptied it —
+ * otherwise pressing Unread on a shelf you have read all of looks like the
+ * search box has broken.
+ */
+function nothingLeft(query: string, show: ShelfFilter): string {
+  const q = query.trim();
+  if (q && show === "unread") return `No unopened article matches “${q}”.`;
+  if (q) return `No article's title, author or blurb matches “${q}”.`;
+  return "You have opened all of them.";
+}
+
+/** Stable identity, and — see lib/DataTable.tsx — the tiebreak behind every sort. */
+const slugOf = (entry: LibraryEntry) => entry.slug;
+
+/** One frozen empty array, so a shelf that has not loaded does not rebuild the table each render. */
+const EMPTY: LibraryEntry[] = [];
 
 /* ------------------------------------------------------------- searching -- */
 

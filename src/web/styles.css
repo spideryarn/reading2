@@ -5292,6 +5292,12 @@ td.text.has-hit[data-hues="8"] {
   align-items: center;
   gap: 0.5rem 0.75rem;
 }
+/* And in the foot, where "Find more" and "Start again" already sit. The
+   checkbox goes on its own line above them rather than in the row: two buttons
+   plus a label is more than 400px holds, and the checkbox describes what the
+   left-hand button would do rather than being a third thing to press.
+   `.gloss-actions` is already `flex-wrap: wrap`, so the basis is all it takes. */
+.gloss-actions .prof-use { flex-basis: 100%; }
 
 /* In the chat composer the checkbox sits on its own line under the input. The
    composer is `display: flex` with `align-items: flex-end`, so a third item
@@ -5650,8 +5656,10 @@ line.diag-now {
 }
 
 /* A conversation wants a steady frame; the ask box is three controls and should
-   not open as a 34rem rectangle. */
-.chat-dialog:has(.chat-turns) { height: min(34rem, calc(100vh - 8rem - var(--dock-h))); }
+   not open as a 34rem rectangle. `.chat-scroll` is `Conversation`'s own
+   transcript element, so this is "there is a conversation in here" said in CSS
+   rather than a second class threaded down for the stylesheet's benefit. */
+.chat-dialog:has(.chat-scroll) { height: min(34rem, calc(100vh - 8rem - var(--dock-h))); }
 
 .chat-dialog header,
 .chat-dialog footer { flex: 0 0 auto; }

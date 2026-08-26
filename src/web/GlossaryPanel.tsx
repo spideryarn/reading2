@@ -348,6 +348,9 @@ export function GlossaryPanel({
             onMore={more}
             onReset={reset}
             onCancel={cancel}
+            withProfile={withProfile}
+            onWithProfile={setWithProfile}
+            hasProfile={hasProfile}
           />
         </>
       )}
@@ -1274,13 +1277,19 @@ function Foot({
   job,
   failed,
   onMore,
+  withProfile,
+  onWithProfile,
+  hasProfile,
   onReset,
   onCancel,
 }: {
   glossary: Glossary;
   job: Job | null;
   failed: string | null;
-  onMore(): Promise<void>;
+  onMore(useProfile?: boolean): Promise<void>;
+  withProfile: boolean;
+  onWithProfile(next: boolean): void;
+  hasProfile: boolean;
   onReset(): Promise<void>;
   onCancel(id: string): void;
 }) {
@@ -1290,7 +1299,13 @@ function Foot({
   if (job) {
     return (
       <div className="gloss-foot">
-        <Progress job={job} failed={null} onRun={onMore} onCancel={onCancel} label="Find more" />
+        <Progress
+          job={job}
+          failed={null}
+          onRun={() => onMore(withProfile)}
+          onCancel={onCancel}
+          label="Find more"
+        />
       </div>
     );
   }
@@ -1324,11 +1339,21 @@ function Foot({
         </div>
       ) : (
         <div className="gloss-actions">
+          {/* **The common case, and the first version missed it.** The checkbox
+              was on the empty state and the two stale banners, so a reader with
+              a perfectly current glossary — which is most readers, most of the
+              time — never saw it at all. Found in a browser, not by a test.
+              src/web/WrittenForYou.tsx. */}
+          <UseProfile
+            checked={withProfile}
+            onChange={onWithProfile}
+            hasProfile={hasProfile}
+          />
           <button
             type="button"
             className="gloss-btn"
             title="Another model call, told what it has already found, looking for the quieter terms"
-            onClick={() => void onMore()}
+            onClick={() => void onMore(withProfile)}
           >
             <Search size={12} />
             Find more
@@ -1375,8 +1400,13 @@ function Progress(props: {
   );
 }
 
-/** `en.wikipedia.org`, so a link says where it goes without spending a line on it. */
-function hostOf(url: string): string {
+/**
+ * `en.wikipedia.org`, so a link says where it goes without spending a line on it.
+ *
+ * Exported for the hover card (TermTooltip.tsx), which shows the same link for
+ * the same entry and must shorten it the same way.
+ */
+export function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
