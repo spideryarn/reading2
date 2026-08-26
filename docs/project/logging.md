@@ -349,8 +349,20 @@ in [simplification-audit.md](../plans/simplification-audit.md) — *grep the gen
 and it was written after an earlier undercount, by the person who then went on to sweep by list
 twice more.
 
-The honest status: **three declarations that this class was closed, three of them wrong.** Treat a
-fourth with suspicion.
+**A fourth round then found what no amount of grepping this repo could have**, because the leak was
+a dependency's: JSDOM's default virtual console quotes the page it failed to parse (a malformed
+`@import` prints the page's own text *and* the full source URL to stderr, round Pino entirely), and
+the Anthropic SDK has a logger of its own that reads `ANTHROPIC_LOG` and, at `debug`, prints whole
+outgoing prompts — the whole article — plus raw upstream error bodies. Both closed:
+[`extract.ts`](../../src/extract.ts) passes an empty `VirtualConsole`, and all six stages construct
+their client with `logLevel: "off"`.
+
+The honest status: **four declarations that this class was closed, four of them wrong.** One is
+still open and written up in [error-boundary.md](../plans/error-boundary.md) — Drizzle puts every
+bound parameter into `Error.message`, so in Postgres mode a failed comment write puts the reader's
+quote, and then the model's answer, into an error that is returned, logged, streamed and stored.
+That plan also has the rule worth adopting instead of the habit, and the one test that would have
+caught all four rounds.
 
 The same review found the rule broken in a second shape, which is easier to miss because the leak and
 the log are in different files. `src/toc.ts` validated a node's range and threw
