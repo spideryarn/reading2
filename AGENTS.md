@@ -232,9 +232,19 @@ Not descriptions of code, which the code already provides.
   Commit only your own files, by naming them explicitly and doing it in one atomic command:
 
   ```
-  git reset && git add <your files> && git commit -m "…"
+  git reset && git add <your files> && git commit -F <msg> -- <your files>
   ```
 
   The leading `git reset` unstages anything someone else left staged. Never `git add -A`, `git add .`
   or `git commit -a`. And don't stress if someone sweeps up one of your changes anyway — it happens,
   it's recoverable, keep going.
+
+  **Name the files on `git commit` too — the `--` at the end is the load-bearing part**, and this
+  recipe did not have it until 2026-08-26, when it produced exactly the accident it exists to
+  prevent. `git reset && git add …` and `git commit …` are two commands, and **the index is shared**:
+  another agent running its own `git reset` in the gap unstages your files and stages its own, and
+  your commit then lands *their* work under *your* message. Not a race you can win by being quick —
+  the gap is however long the tool call takes. A pathspec on `git commit` bypasses the index
+  entirely and commits those paths whatever anybody has done to it, so the two commands stop being
+  a sequence you have to get through uninterrupted. Use `-F <file>` rather than `-m` while you are
+  at it; a long message in `-m` is one shell-quoting mistake away from the same mess.
