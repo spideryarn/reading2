@@ -360,7 +360,12 @@ describe("splitEmphasis — the only Markdown we interpret", () => {
 });
 
 describe("nextModeIndex — the mode switch's keyboard, without a browser", () => {
-  // Contents, Chat, Glossary — the order they sit in the bar (Dock.tsx § MODES_UI).
+  /* A count, not the real one. `nextModeIndex` is pure index arithmetic and
+     knows nothing about which modes exist, so pinning this to `MODES_UI.length`
+     would only mean the test changes shape every time a mode is added or the
+     bar is reordered — which happened twice in two days. The bar is Contents,
+     Summary, Glossary, Search, Chat today (Dock.tsx § MODES_UI); the wrapping
+     is checked at other counts below. */
   const N = 3;
 
   it("moves forward on Right and Down", () => {
@@ -553,14 +558,17 @@ const NOW = "2026-08-26T12:00:00.000Z";
 describe("withRetry — answering the same question again", () => {
   it("blanks the answer in place, keeping its id", () => {
     const before = conversation();
-    const { thread: after, reply, question } = withRetry([before], before.id, "a2", NOW);
+    const { thread: after, reply, user } = withRetry([before], before.id, "a2", NOW);
     expect(after.messages).toHaveLength(4);
     expect(reply.id).toBe("a2");
     expect(reply.status).toBe("pending");
     expect(reply.text).toBe("");
     // The question comes off the stored row, not from the caller — a stale tab
     // must not be able to store an answer under a question it was not asked.
-    expect(question).toBe("and the other one?");
+    expect(user.text).toBe("and the other one?");
+    // And the row itself, not just its words: the route names it in the `begin`
+    // frame so the client can stop calling it by a name it invented.
+    expect(user.id).toBe("u2");
   });
 
   it("drops everything the replaced answer carried", () => {

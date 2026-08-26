@@ -77,10 +77,98 @@ export interface ChatApi {
   stop(threadId: string, messageId: string): void;
   /** Start an empty conversation locally. Nothing is stored until you send. */
   begin(): string;
+  /**
+   * Forget an empty conversation. Local only, and a no-op on anything that has
+   * a message in it — see `withoutEmpty`.
+   */
+  discard(threadId: string): void;
   rename(threadId: string, title: string): void;
   remove(threadId: string): void;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
+}
+
+/**
+ * What the `begin` frame carries: the ids the server actually minted.
+ *
+ * The client guesses all of them — a thread id so `?thread=` can be in the URL
+ * before anything is sent, and two message ids so the reader's words and the
+ * empty answer beneath them can be on screen the instant Enter is pressed. Then
+ * the server writes the turn to disk under ids of its own, and every guess that
+ * is still on screen is a name for a row that does not exist anywhere else.
+ */
+export interface Begun {
+  threadId: string;
+  title: string;
+  /** The assistant row the answer streams into. */
+  messageId: string;
+  /** The question above it. Absent from older servers; see `withServerIds`. */
+  questionId?: string;
+}
+
+/**
+ * Replace this turn's provisional ids with the server's.
+ *
+ * Pure, and exported, for the reason `withRetry` and `withEdit` are in
+ * src/chat.ts: it is a rule about ids that nothing renders, so a mistake in it
+ * is invisible until something else needs one of those ids for real. That is
+ * exactly how the question id came to be missed — the assistant row was swapped
+ * from the first version and the user row was not, nothing on screen changed,
+ * and it surfaced weeks later as "That message is not in this conversation."
+ * the first time a reader edited a question without reloading first.
+ *
+ * The question is found by position rather than by id, because its id is the
+ * one thing here that is not trustworthy: it is the row immediately above the
+ * pending answer, which is what a turn *is*.
+ */
+export function withServerIds(
+  threads: ChatThread[],
+  current: string,
+  pendingId: string,
+  begun: Begun,
+): ChatThread[] {
+  return threads.map((t) =>
+    t.id !== current
+      ? t
+      : {
+          ...t,
+          id: begun.threadId,
+          // The title is cut on a word boundary on the server; the optimistic
+          // one is a blunt 60-character slice that would otherwise stay on
+          // screen until the next reload. Only the first turn names a thread,
+          // so only the first turn takes it.
+          title: t.messages.length <= 2 ? begun.title : t.title,
+          messages: t.messages.map((m, i) => {
+            if (m.id === pendingId) return { ...m, id: begun.messageId };
+            if (begun.questionId && m.role === "user" && t.messages[i + 1]?.id === pendingId) {
+              return { ...m, id: begun.questionId };
+            }
+            return m;
+          }),
+        },
+  );
+}
+
+/**
+ * Drop a conversation that never had anything said in it.
+ *
+ * The guard is the whole function, and it leans on an invariant that has to
+ * hold on the other side of the wire: **an empty thread exists only in the tab
+ * that started it.** Given that, dropping it costs nothing and touches no
+ * server. A thread with a message in it is on disk, and removing it here would
+ * take it off the screen while leaving it in the file — a deletion that did not
+ * delete, undone by the next reload. That is why the id alone is not enough to
+ * authorise this, and why `remove` (which does talk to the server) stays a
+ * separate call.
+ *
+ * The invariant is not free: src/chat.ts had an unused `createThread` that
+ * wrote an empty thread straight to disk, and one caller of it would have made
+ * this function exactly the deletion-that-does-not-delete above. It was deleted
+ * rather than left lying there, and the note in its place says why. Found by a
+ * GPT-5.6 review, 2026-08-26.
+ */
+export function withoutEmpty(threads: ChatThread[], id: string): ChatThread[] {
+  return threads.filter((t) => !(t.id === id && t.messages.length === 0));
 }
 
 export function useChat(slug: string): ChatApi {
@@ -155,6 +243,17 @@ export function useChat(slug: string): ChatApi {
     const at = new Date().toISOString();
     setThreads((prev) => [...prev, { id, title: "New chat", createdAt: at, updatedAt: at, messages: [] }]);
     return id;
+  }, []);
+
+  /**
+   * Forget an empty conversation the reader changed their mind about.
+   *
+   * No tombstone in `gone`, unlike `remove`: nothing is in flight for a thread
+   * with no messages — a send inserts its two rows before the request leaves —
+   * so there is no late frame that could put this one back.
+   */
+  const discard = useCallback((threadId: string) => {
+    setThreads((prev) => withoutEmpty(prev, threadId));
   }, []);
 
   /**
@@ -285,25 +384,8 @@ export function useChat(slug: string): ChatApi {
           let finished = false;
           for await (const event of readEvents(response.body)) {
             if (event.name === "begin") {
-              const begun = event.data as { threadId: string; title: string; messageId: string };
-              // The server's ids replace the provisional ones. `title` too: it
-              // is cut on a word boundary there, and the optimistic one above
-              // is a blunt 60-character slice that would otherwise stay on
-              // screen until the next reload.
-              setThreads((prev) =>
-                prev.map((t) =>
-                  t.id !== current
-                    ? t
-                    : {
-                        ...t,
-                        id: begun.threadId,
-                        title: t.messages.length <= 2 ? begun.title : t.title,
-                        messages: t.messages.map((m) =>
-                          m.id === pendingId ? { ...m, id: begun.messageId } : m,
-                        ),
-                      },
-                ),
-              );
+              const begun = event.data as Begun;
+              setThreads((prev) => withServerIds(prev, current, pendingId, begun));
               const wanted =
                 stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
               pendingId = begun.messageId;
@@ -534,7 +616,7 @@ export function useChat(slug: string): ChatApi {
     [write],
   );
 
-  return { threads, loaded, send, retry, edit, stop, begin, rename, remove, error };
+  return { threads, loaded, send, retry, edit, stop, begin, discard, rename, remove, error };
 }
 
 interface ServerEvent {

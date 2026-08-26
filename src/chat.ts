@@ -155,19 +155,20 @@ function taken(threads: ChatThread[]): Set<string> {
   return ids;
 }
 
-export async function createThread(
-  slug: string,
-  now: () => string = () => new Date().toISOString(),
-): Promise<ChatThread> {
-  let stored!: ChatThread;
-  await update(slug, (threads) => {
-    const at = now();
-    stored = { id: mintUniqueId(taken(threads)), title: "New chat", createdAt: at, updatedAt: at, messages: [] };
-    return [...threads, stored];
-  });
-  log("store").info({ slug, threadId: stored.id }, "chat thread created");
-  return stored;
-}
+/* There is deliberately no `createThread` here.
+
+   There was one — exported, and called by nothing — and it wrote an empty
+   thread to disk. It is gone because it contradicted the rule the rest of this
+   file and src/web/useChat.ts both depend on: **an empty conversation exists
+   only in the tab that started it.** That rule is what lets the panel throw one
+   away without asking the server, and what stops "New chat" rows accumulating
+   in the list for every time somebody pressed the button and changed their
+   mind — which is the bug Greg reported on 2026-08-26. One live caller of a
+   server-side create and `withoutEmpty` in useChat.ts becomes a deletion that
+   does not delete: gone from the screen, back on the next reload.
+
+   A conversation starts existing when its first question is asked. That is
+   `beginTurn`, which creates the thread if it is missing. */
 
 export async function renameThread(
   slug: string,
@@ -373,7 +374,7 @@ export function withRetry(
   threadId: string,
   messageId: string,
   at: string,
-): { threads: ChatThread[]; thread: ChatThread; reply: ChatMessage; question: string } {
+): { threads: ChatThread[]; thread: ChatThread; reply: ChatMessage; user: ChatMessage } {
   const existing = threads.find((t) => t.id === threadId);
   if (!existing) throw new ChatConflict("That conversation is not there any more.");
   const last = existing.messages.at(-1);
@@ -407,11 +408,16 @@ export function withRetry(
     updatedAt: at,
     messages: [...existing.messages.slice(0, -1), reply],
   };
+  /* The whole message rather than its text, so that all three of `beginTurn`,
+     `retryTurn` and `editTurn` hand back the same pair — the question and the
+     answer beneath it — and the route can name both in its first frame without
+     asking which kind of turn this was. The client needs the question's id to
+     edit it later; see `withServerIds` in src/web/useChat.ts. */
   return {
     threads: threads.map((t) => (t.id === thread.id ? thread : t)),
     thread,
     reply,
-    question: question.text,
+    user: question,
   };
 }
 
@@ -420,11 +426,11 @@ export async function retryTurn(
   threadId: string,
   messageId: string,
   now: () => string = () => new Date().toISOString(),
-): Promise<{ thread: ChatThread; reply: ChatMessage; question: string }> {
-  let out!: { thread: ChatThread; reply: ChatMessage; question: string };
+): Promise<{ thread: ChatThread; reply: ChatMessage; user: ChatMessage }> {
+  let out!: { thread: ChatThread; reply: ChatMessage; user: ChatMessage };
   await update(slug, (threads) => {
     const next = withRetry(threads, threadId, messageId, now());
-    out = { thread: next.thread, reply: next.reply, question: next.question };
+    out = { thread: next.thread, reply: next.reply, user: next.user };
     return next.threads;
   });
   log("store").info(

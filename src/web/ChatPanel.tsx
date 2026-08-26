@@ -61,6 +61,16 @@ interface Props {
   onThread(id: string | null): void;
   onSend(question: string): void;
   onNew(): void;
+  /**
+   * Forget a conversation nobody ever said anything in.
+   *
+   * Not the same call as `onDelete`, and the difference is that this one has
+   * nothing to delete: an empty conversation exists only in this tab, because
+   * nothing is written to disk until the first question is sent. So this is the
+   * panel admitting the reader changed their mind, and it is why it takes no
+   * confirmation — there is nothing to lose.
+   */
+  onDiscard(id: string): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
   /** Answer the last question again, over the top of the answer it has. */
@@ -155,6 +165,7 @@ export function ChatPanel({
   onThread,
   onSend,
   onNew,
+  onDiscard,
   onRename,
   onDelete,
   onRetry,
@@ -167,6 +178,71 @@ export function ChatPanel({
 }: Props) {
   const open = threads.find((t) => t.id === threadId) ?? null;
 
+  /**
+   * What the reader has typed and not sent yet, per conversation.
+   *
+   * Here rather than in the composer because two different things need it, and
+   * neither is the composer. Switching conversation used to carry the half-typed
+   * question across into the next one, because the composer kept it in its own
+   * state and nothing remounted it; and closing an empty conversation has to
+   * know whether there was anything in the box before it throws the
+   * conversation away.
+   *
+   * A ref rather than state: nothing above the composer renders from it, and
+   * putting it in state would repaint the whole transcript on every keystroke.
+   * The composer is keyed by thread id, so it reads this once on mount and owns
+   * the value from then on.
+   *
+   * Two limits worth knowing rather than discovering. It lives as long as this
+   * panel does, so a draft does not survive switching to another mode and back
+   * — chat mode is unmounted, and the empty conversation it belonged to goes
+   * with it. And it is keyed by thread id, so on the rare occasion the server
+   * overrules an optimistic thread id (`begin` in useChat.ts — a collision, or
+   * an id somebody typed into the URL) the composer remounts under the new id
+   * and the draft, the scroll position and the caret are lost with it.
+   */
+  const drafts = useRef(new Map<string, string>());
+
+  /**
+   * The highest `focusNonce` the composer has already acted on.
+   *
+   * Lives here, above the keyed composer, precisely because it has to survive
+   * the composer being remounted. Keying the conversation by thread id is what
+   * gives each one its own draft — and it also means a plain "open the
+   * conversation I was in yesterday" mounts a fresh composer, which would take
+   * the caret on the strength of a nonce raised minutes ago for a different
+   * conversation. Focus in the textarea turns the article's ↑/↓ into caret
+   * movement, so taking it uninvited is not cosmetic.
+   *
+   * It defeats a remount caused by the reader changing conversation, which is
+   * the one that happens. It does not defeat a remount caused by the *same*
+   * conversation being renamed underneath it — see `drafts` above — where the
+   * nonce is already spent and the caret is lost.
+   */
+  const focused = useRef(0);
+
+  /**
+   * Leave the open conversation, discarding it if it never became one.
+   *
+   * Greg, 2026-08-26: *"If I start a new conversation and then close it, it
+   * shouldn't store unless there was at least some text in the input box."*
+   *
+   * So the test is both halves: no messages **and** an empty box. A draft is
+   * enough to keep it, because the draft lives under the conversation's id and
+   * throwing the conversation away would take the reader's unsent words off the
+   * screen with it — which is the one outcome worse than a stray "New chat" in
+   * the list. Only off the screen, and only for as long as chat mode stays
+   * open: an unsent draft is not stored anywhere, so it does not survive
+   * switching modes or reloading. See `drafts` above.
+   */
+  const leave = () => {
+    if (open && open.messages.length === 0 && (drafts.current.get(open.id) ?? "").trim() === "") {
+      drafts.current.delete(open.id);
+      onDiscard(open.id);
+    }
+    onThread(null);
+  };
+
   return (
     /* `mode-band` is the slot — fixed between the spine and the prose, and
        shared with the glossary. `chat` is a hook for anything only this panel
@@ -175,7 +251,7 @@ export function ChatPanel({
       <div className="chat-head">
         <h2>{open ? open.title : "Chat"}</h2>
         {open ? (
-          <button type="button" className="chat-icon" title="All conversations" onClick={() => onThread(null)}>
+          <button type="button" className="chat-icon" title="All conversations" onClick={leave}>
             <X size={14} />
           </button>
         ) : (
@@ -189,6 +265,10 @@ export function ChatPanel({
 
       {open ? (
         <Conversation
+          /* Keyed, so that switching conversation gets a fresh transcript and a
+             fresh composer rather than the previous one's scroll position, open
+             editor and half-typed question. */
+          key={open.id}
           thread={open}
           onJump={onJump}
           blocks={blocks}
@@ -197,6 +277,9 @@ export function ChatPanel({
           onEdit={onEdit}
           onStop={onStop}
           focusNonce={focusNonce}
+          focused={focused}
+          draft={drafts.current.get(open.id) ?? ""}
+          onDraft={(text) => drafts.current.set(open.id, text)}
         />
       ) : (
         <ThreadList
@@ -344,6 +427,9 @@ function Conversation({
   onEdit,
   onStop,
   focusNonce,
+  focused,
+  draft,
+  onDraft,
 }: {
   thread: ChatThread;
   onJump(id: BlockId): void;
@@ -353,6 +439,11 @@ function Conversation({
   onEdit(messageId: string, question: string): void;
   onStop(messageId: string): void;
   focusNonce: number;
+  /** See `focused` in ChatPanel — it outlives this component on purpose. */
+  focused: { current: number };
+  /** Whatever was left in the box last time this conversation was open. */
+  draft: string;
+  onDraft(text: string): void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const last = thread.messages.at(-1);
@@ -504,6 +595,9 @@ function Conversation({
         busy={busy}
         onStop={busy && last ? () => onStop(last.id) : undefined}
         focusNonce={focusNonce}
+        focused={focused}
+        draft={draft}
+        onDraft={onDraft}
       />
     </>
   );
@@ -889,14 +983,23 @@ function Composer({
   busy,
   onStop,
   focusNonce,
+  focused,
+  draft,
+  onDraft,
 }: {
   onSend(question: string): void;
   busy: boolean;
   /** Present only while an answer is arriving. */
   onStop?: (() => void) | undefined;
   focusNonce: number;
+  focused: { current: number };
+  draft: string;
+  onDraft(text: string): void;
 }) {
-  const [value, setValue] = useState("");
+  /* Seeded from the draft and owned here from then on. The panel keeps the map
+     because it outlives this component; this keeps the value because typing
+     into it must not repaint the transcript above. */
+  const [value, setValue] = useState(draft);
   const box = useRef<HTMLTextAreaElement>(null);
 
   /**
@@ -910,8 +1013,11 @@ function Composer({
    * nothing on screen would say why.
    */
   useEffect(() => {
-    if (focusNonce > 0) box.current?.focus();
-  }, [focusNonce]);
+    if (focusNonce > focused.current) {
+      focused.current = focusNonce;
+      box.current?.focus();
+    }
+  }, [focusNonce, focused]);
 
   // Height follows content. Reset to `auto` first, or the box can only ever
   // grow: `scrollHeight` of an element already tall enough is its own height.
@@ -928,6 +1034,7 @@ function Composer({
     if (question === "" || busy) return;
     onSend(question);
     setValue("");
+    onDraft("");
   };
 
   return (
@@ -944,7 +1051,12 @@ function Composer({
         rows={1}
         value={value}
         placeholder={busy ? "Waiting for the answer…" : "Ask about this article…"}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          // The panel keeps the draft so it survives this component; see
+          // `drafts` in ChatPanel.
+          onDraft(e.target.value);
+        }}
         onKeyDown={(e) => {
           /* Every key press in here is stopped from bubbling, and that is not
              tidiness. The article's ↑/↓ navigation listens on the window
@@ -969,7 +1081,10 @@ function Composer({
              there is anything else Escape could still be for. */
           if (e.key === "Escape") {
             if (onStop) onStop();
-            else if (value !== "") setValue("");
+            else if (value !== "") {
+              setValue("");
+              onDraft("");
+            }
             else box.current?.blur();
           }
         }}

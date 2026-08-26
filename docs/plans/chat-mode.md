@@ -537,6 +537,56 @@ reasoned about but not once watched to work. Worth a human eyeball in an ordinar
   [Q6](../project/open-questions.md#q6) — how would we know this is helping — gets an answer, this
   is one of the things that answer might need. Not before.
 
+### The two Greg found by using it
+
+Both reported 2026-08-26, both in the first few minutes of ordinary use, and neither had a chance of
+being caught by anything already listed above.
+
+**Editing a question never worked.** Every edit answered *"That message is not in this
+conversation."* — for any question asked in the current tab, which is to say for every question
+anybody would actually want to edit. The client invents three ids per turn so the reader's words
+appear the instant they press Enter; the `begin` frame corrected two of them. The reader's own
+question kept a name the server had never heard of, and nothing renders an id, so the screen was
+correct in every respect until something needed that row by name. Written up in full — including why
+two reviews, a browser pass and a green test suite all went past it — in
+[half-swapped-message-ids.md](../postmortems/half-swapped-message-ids.md). The fix is one field in
+the frame and a positional lookup on the client; the test that now pins it,
+[`tests/chat-route.test.ts`](../../tests/chat-route.test.ts), is at the *join* between the two sides
+rather than inside either.
+
+**An abandoned "New chat" was kept.** Greg: *"If I start a new conversation and then close it, it
+shouldn't store unless there was at least some text in the input box."* Pressing new-chat and
+changing your mind left a row in the list for it. Nothing was written to disk — that part was
+already right — but the local list kept it, so the list filled up with conversations nobody had had.
+
+The test is deliberately **both halves: no messages *and* an empty box.** A draft is enough to keep
+the conversation, because the draft is filed under its id and dropping the conversation would take
+the reader's unsent words off the screen with it. That is the one outcome worse than a stray row.
+
+Three things fell out of it that are worth naming, because each was a bug in its own right:
+
+- **Drafts leaked between conversations.** The composer held what you had typed in its own state and
+  nothing remounted it, so switching conversation carried a half-written question into the next one.
+  Drafts now live in the panel, keyed by conversation, and the conversation view is keyed by id so
+  the composer starts again with the right one.
+- **The focus rule broke the moment the composer was keyed.** *"When a new chat is started, move
+  focus to the input box"* was implemented as "focus if the nonce is above zero", which a remount
+  re-runs — so opening yesterday's conversation would have taken the caret, and a focused textarea
+  turns the article's ↑ / ↓ into caret movement with nothing on screen to say why. The nonce that has
+  been spent is now remembered *above* the thing that remounts.
+- **Closing the last conversation bounced straight into a new one.** The rule
+  [added the same morning](#what-an-empty-conversation-offers) — no conversations, so start one —
+  fired again the instant the empty one was discarded, and the close button read as broken. It is
+  latched now: "by default" means on arrival, and a reader who has just closed the only conversation
+  asked for the list.
+
+**A third bug came from the review of the fix.** `src/chat.ts` had an exported `createThread` that
+wrote an empty thread to disk, called by nothing. It had been harmless; the moment the panel started
+discarding empty conversations locally it would have become a deletion that did not delete — gone
+from the screen, back on the next reload. It is deleted, with a note in its place saying that an
+empty conversation exists only in the tab that started it, because that is now an invariant two
+files depend on. Found by GPT-5.6, 2026-08-26.
+
 ## What is still open
 
 - **Three of the review's fixes have no regression test**, because this repo has no way to render a
@@ -617,6 +667,23 @@ build for the whole class.
   away with [postgres-migration.md](postgres-migration.md). What *was* done is the cheap half: the
   orphan sweep now leaves any `pending` message younger than 150s alone, so a second server no longer
   marks a live answer as failed while the reader watches it arrive.
+- **An unsent draft lives only as long as chat mode is open.** Type a question, do not send it,
+  switch to the table of contents and back: the panel was unmounted, the empty conversation went with
+  it, and so did the words. Storing drafts would mean `localStorage` or a server round trip for text
+  the reader has not decided to send, which is a bigger promise than "your box is as you left it
+  while you are looking at it". What it does buy is the case Greg reported — closing a conversation
+  and reopening it.
+- **A thread id the server overrules costs the reader their draft, their scroll position and their
+  caret.** The conversation view is keyed by thread id so that switching conversation gets a clean
+  one, and `beginTurn` may hand back a different id than the client guessed — a collision, or an id
+  somebody typed into the URL — which remounts it mid-turn. Collisions are ~1 in a billion and the
+  other case is URL tampering, so this is knowingly left. Fixing it means the panel learning about an
+  id correction it currently has no reason to know about.
+- **Sending, leaving chat mode and coming straight back can hide the conversation you just started.**
+  The panel is unmounted on a mode change, taking its in-flight state with it, and the fresh load on
+  the way back races the server writing the turn down. Lose that race and the new conversation is not
+  in the list until the next reload; the answer is on disk either way. The window is the few
+  milliseconds before `beginTurn` returns.
 - **Focus does not follow a mode change that came from outside the radio group** — browser Back, for
   instance. Focus can be left on a button that is now `tabIndex={-1}`. Moving it on every external
   change would be worse: it would steal focus from wherever the reader actually is. Recoverable with

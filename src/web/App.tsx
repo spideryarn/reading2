@@ -2,6 +2,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import { throttle, useQueryState } from "nuqs";
 import type { Article, BlockId } from "../types.js";
 import { Library } from "./Library.js";
+import { HomeLogo } from "./HomeLogo.js";
 import { DesignPage } from "./DesignPage.js";
 import { type ArticleView, useRoute } from "./router.js";
 import { Metadata } from "./Metadata.js";
@@ -82,9 +83,23 @@ import { PILL } from "./pill.js";
  */
 export function App() {
   const route = useRoute();
+  // The shelf is home, so it gets no way-home logo — a link to the page you are
+  // already on is a dead control, and Library.tsx names the app in its own
+  // `<h1>` anyway. Everywhere else, the corner. See HomeLogo.tsx.
   if (route.kind === "library") return <Library />;
-  if (route.kind === "design") return <DesignPage />;
-  return <ArticlePage slug={route.slug} view={route.view} />;
+  if (route.kind === "design")
+    return (
+      <>
+        <HomeLogo />
+        <DesignPage />
+      </>
+    );
+  return (
+    <>
+      <HomeLogo />
+      <ArticlePage slug={route.slug} view={route.view} />
+    </>
+  );
 }
 
 /**
@@ -727,7 +742,8 @@ function ChatBand({
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
 }) {
-  const { threads, loaded, send, retry, edit, stop, begin, rename, remove, error } = useChat(slug);
+  const { threads, loaded, send, retry, edit, stop, begin, discard, rename, remove, error } =
+    useChat(slug);
   const [thread, setThread] = useQueryState("thread", threadParam);
 
   /**
@@ -766,10 +782,44 @@ function ChatBand({
    *
    * It cannot loop: `begin` inserts its conversation into `threads` on the spot,
    * so the condition is false by the next render.
+   *
+   * **Once per visit to chat mode, and the latch is what makes closing a
+   * conversation work at all.** An empty conversation the reader closes is
+   * discarded (see `onDiscard` below), which puts the panel back into exactly
+   * the state this effect fires on — nothing stored, nothing open — so without
+   * the latch the close button would hand them a brand-new empty conversation
+   * and read as broken. "By default" means on arrival; a reader who has just
+   * closed the only conversation asked for the list.
+   *
+   * Be exact about "once", because the obvious reading is wrong: the latch is a
+   * ref in a component that is unmounted whenever the reader switches to
+   * another mode, so coming back to chat starts a conversation again. That is
+   * the behaviour we want — arriving in chat mode is the arrival this rule is
+   * about — but it does mean the latch does not survive a mode switch, and any
+   * future reasoning that assumes it does will be wrong. It is reset on `slug`
+   * as well, for the case the panel stays mounted across a change of article.
+   *
+   * `thread` is deliberately *not* in the condition. `?thread=` can name a
+   * conversation that no longer exists — leave chat mode with an empty new one
+   * open and the URL keeps its id while the panel takes the conversation with
+   * it — and a reader coming back to that URL should get a conversation, not a
+   * list they did not ask for. Starting one overwrites the stale id, which is
+   * why there is no separate effect clearing it: an effect that cleared the URL
+   * whenever the id was missing would also fire in the window between a first
+   * question being sent and the server having written it down.
    */
+  const started = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads nothing, and changing article is exactly when the latch stops meaning anything
   useEffect(() => {
-    if (loaded && threads.length === 0 && thread === null) startNew();
-  }, [loaded, threads.length, thread, startNew]);
+    started.current = false;
+  }, [slug]);
+  useEffect(() => {
+    if (!loaded || started.current) return;
+    if (threads.length === 0) {
+      started.current = true;
+      startNew();
+    }
+  }, [loaded, threads.length, startNew]);
   /* Read, never written, and not a subscription: `?at=` is already tracked by
      useReadingPosition in the parent, so this component re-renders whenever it
      changes and `location.search` is current. It is passed to the model so that
@@ -783,6 +833,9 @@ function ChatBand({
       threadId={thread}
       onThread={(id) => void setThread(id)}
       onNew={startNew}
+      /* Local only — an empty conversation was never written down. See
+         `withoutEmpty` in useChat.ts. */
+      onDiscard={discard}
       onSend={(question) => {
         // `send` returns the thread it went to, minted here when this is a new
         // conversation — so the URL can name it before the request lands.

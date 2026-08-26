@@ -401,12 +401,14 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     : wantsEdit
       ? await editTurn(slug, threadId, edit as string, (question as string).trim())
       : await beginTurn(slug, { threadId, question: (question as string).trim() });
-  const { thread, reply } = begun;
-  /* A retry answers the question already on disk. Taking it from the request
-     instead would let a stale tab retry one question and store the answer under
-     another — the row above saying one thing and the answer below it being to
+  const { thread, reply, user } = begun;
+  /* **The question that was stored is the question that gets asked** — one rule
+     for all three kinds of turn, rather than "the request's text, except on a
+     retry". A retry has no question in its request at all, and taking one from
+     there would let a stale tab retry one question and store the answer under
+     another: the row above saying one thing and the answer below it being to
      something else, with nothing on screen to show the two had parted. */
-  const asked = "question" in begun ? begun.question : (question as string).trim();
+  const asked = user.text;
   const key = `${slug}/${thread.id}/${reply.id}`;
   const stop = new AbortController();
   let release!: () => void;
@@ -459,7 +461,30 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        or an id that was not one of ours), so this frame is what the client
        believes rather than its own guess. It also gives the panel the message id
        to render the incoming text into. */
-    frame("begin", { threadId: thread.id, title: thread.title, messageId: reply.id });
+    frame("begin", {
+      threadId: thread.id,
+      title: thread.title,
+      messageId: reply.id,
+      /* The *question's* id as well as the answer's, and leaving it out was a
+         real bug rather than an omission.
+
+         On an ordinary send the client has invented a name for the question —
+         it puts the reader's words on screen the instant Enter is pressed,
+         before this server has seen them — and only the answer's id was ever
+         corrected here. Nothing renders an id, so nothing looked wrong, until
+         the reader edited a question without reloading first and posted a name
+         this server had never heard of: "That message is not in this
+         conversation." Reported by Greg, 2026-08-26.
+
+         Sent on all three kinds of turn even though only a send needs it. A
+         retry and an edit both reuse a row this server already named, so the
+         id is usually one the client has, and "usually" is the problem: the
+         client may still be holding an invented name from a send earlier in
+         the same session. One rule — the frame always says what both rows are
+         called — is cheaper to be sure of than three. */
+      questionId: user.id,
+
+    });
 
     for await (const event of converse({
       meta: article.meta,
