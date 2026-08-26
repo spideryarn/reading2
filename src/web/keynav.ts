@@ -72,7 +72,7 @@ export const NAV_DEPTH_ATTR = "data-nav-depth";
  * count exactly. Comfortably longer than the jump itself, short enough that a
  * press after any real pause measures the world afresh.
  */
-const CHAIN_MS = SCROLL_MS + 400;
+export const CHAIN_MS = SCROLL_MS + 400;
 
 /* ----------------------------------------------------------------- pure -- */
 
@@ -198,8 +198,13 @@ export function nextAim(
 
 /* ------------------------------------------------------------------ DOM -- */
 
-/** The row under the line we treat as "where you are reading". */
-function measureRow(): number {
+/**
+ * The row under the line we treat as "where you are reading".
+ *
+ * Exported for swipe.ts, which steps from the same place by the same rule — a
+ * finger and a key must not disagree about which item the reader is in.
+ */
+export function measureRow(): number {
   const rows = document.querySelectorAll<HTMLElement>("tbody tr[data-block]");
   const tops = Array.from(rows, (r) => r.getBoundingClientRect().top);
   return activeSectionIndex(tops, stickyOffset() + 1);

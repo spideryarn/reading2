@@ -37,6 +37,7 @@ import { ContextList } from "./ContextList.js";
 import { TooltipGroup } from "./Tooltip.js";
 import { FOCUS_LINE, type ColumnRect } from "./useColumnContext.js";
 import { NAV_DEPTH_ATTR } from "./keynav.js";
+import { SWIPE_ATTR } from "./swipe.js";
 
 /**
  * Long enough that crossing the list on the way to the prose fires nothing;
@@ -206,6 +207,11 @@ export function ContextPanel({
       }
       onMouseLeave={() => onHoverNode(null)}
       {...{ [NAV_DEPTH_ATTR]: navDepth }}
+      /* A vertical swipe here steps one item instead of scrolling — swipe.ts.
+         The panel is the surface a finger actually lands on in reading mode:
+         it covers the column, so the cells underneath are never touched. It
+         only exists in reading mode, which is exactly where swiping is on. */
+      {...{ [SWIPE_ATTR]: "" }}
     >
       <div ref={list} className="ctx-panel-list">
         <TooltipGroup delay={DELAY}>

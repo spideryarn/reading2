@@ -32,6 +32,7 @@ import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./con
 import { ContextPanel } from "./ContextPanel.js";
 import { useColumnContext } from "./useColumnContext.js";
 import { BlockRange, BlockRef } from "./BlockRef.js";
+import { SWIPE_ATTR } from "./swipe.js";
 
 interface Props {
   article: Article;
@@ -109,6 +110,22 @@ export function TableView({
    * the list, so the cells draw themselves as they always did.
    */
   const panels = showText;
+
+  /**
+   * Reading mode only: a vertical swipe over a gist column steps one item
+   * rather than scrolling (swipe.ts). The panel over the column is the surface
+   * a finger usually lands on, but not always — it is a bounded window, so the
+   * column above and below it is bare cell — and the two must behave the same,
+   * or the stride would depend on how far down the column you happened to
+   * touch.
+   *
+   * **Gated on reading mode, and the gate is the CSS's as much as the hook's.**
+   * `touch-action` takes native scrolling away wherever the attribute lands,
+   * and outline mode has no prose column — so tagging these cells there would
+   * leave the whole viewport unable to scroll continuously at all. The hook is
+   * disabled there too, but a disabled hook does not put the scrolling back.
+   */
+  const swipeable = panels ? { [SWIPE_ATTR]: "" } : {};
 
   // The items of each gist column, in document order, with the row each one
   // starts on. The arc column's items carry the sentence and a step marker
@@ -329,6 +346,7 @@ export function TableView({
                     key={depth}
                     rowSpan={arc.rowSpan}
                     data-nav-depth={depth}
+                    {...swipeable}
                     className={[
                       "gist arc depth-0",
                       activeChain.has(arc.node.id) ? "active" : "",
@@ -363,6 +381,7 @@ export function TableView({
                   key={depth}
                   rowSpan={cell.rowSpan}
                   data-nav-depth={depth}
+                  {...swipeable}
                   className={[
                     "gist",
                     // On the <td>, NOT the <col>: custom properties inherit

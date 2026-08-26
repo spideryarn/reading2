@@ -251,8 +251,21 @@ columns rather than replacing what is drawn in them. The zoom is still the `L0 /
 and `?cols=`. What the old sketch had right was the axis; what it could not have known was that the
 levels would stop being a thing you switch between and start being a thing you point at.
 
+## The same step, with a finger
+
+[touch.md](touch.md) is this file's twin for the iPad: a vertical swipe over a gist column takes the
+step, and the column decides the stride, exactly as the pointer does here. It runs on the same
+`stepTarget` and the same `scrollToBlock`, so the two inputs cannot disagree about where the next
+section starts.
+
+The one place they part company is the prose. A key pressed over the prose column steps one
+paragraph; a finger dragged over it scrolls normally, because
+[altering how scrolling behaves while someone reads](touch.md#why-the-prose-is-untouched) is the one
+thing the usability research is unambiguous about.
+
 ## See also
 
+- [touch.md](touch.md) — the swipe version of this, and why it stops at the prose column
 - [web-client.md](web-client.md) — the reading view and where every piece of its code lives
 - [granularity-zoom.md](granularity-zoom.md#interaction) — the feature the keys navigate
 - [url-state.md](url-state.md) — why a keypress replaces rather than pushes
