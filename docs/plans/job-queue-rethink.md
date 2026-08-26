@@ -285,6 +285,18 @@ wrong whichever design wins.
 2. **Answer the watch-versus-walk-away question.** It selects the design.
 3. Then either spike pg-boss's three unknowns, or build the advance endpoint — not both.
 
+## Resuming after the tab closes
+
+Asked separately and answered in [ingest-resume.md](ingest-resume.md): **yes, and most of it already
+works**, because `stepIsDone` derives what is finished from the *artefacts* rather than a job record.
+That makes "skip the bits it did" a fold over the step list rather than bookkeeping, and it means the
+two accounts can never drift because there is only one.
+
+Two things there bear directly on the cost recorded above. `sweepStopped` currently marks a job
+`error` when the process stops, so a closed tab reads as a *failure* rather than a pause — a one-line
+change, and worth making whichever design wins. And the mixed-generation fault in the artefact store
+matters more here than anywhere else, because **resume is exactly the situation that produces it**.
+
 ## See also
 
 - [postgres-storage-implementation.md § Step 12](postgres-storage-implementation.md#step-12-jobs-and-claiming-decided-before-it-is-built) — the design this reconsiders
