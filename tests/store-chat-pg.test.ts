@@ -123,6 +123,31 @@ when("the Postgres chat store", () => {
     ]);
   });
 
+  it("names a thread that exists but has never been asked anything", async () => {
+    /* An empty thread is not something the app makes, and it is something the
+       importer can: `chat.json` is whatever was on disk. `withTurn` titles a
+       thread from the first question whenever it has no messages, so the
+       conflict branch of the upsert has to carry the title through — and
+       nothing else in these tests exercises that branch, because every other
+       thread here is named at the moment it is created. Found by breaking the
+       line and watching the parity sequence stay green. */
+    await getDb().insert(chatThreads).values({
+      articleId: ARTICLE_ID,
+      id: THREAD,
+      ownerId: currentOwnerId(),
+      title: "New chat",
+      createdAt: new Date("2026-08-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+    });
+
+    const { thread } = await pgChatStore.begin(SLUG, {
+      threadId: THREAD,
+      question: "What is a squinch?",
+    });
+    expect(thread.title).toBe("What is a squinch?");
+    expect((await pgChatStore.load(SLUG))[0]?.title).toBe("What is a squinch?");
+  });
+
   it("orders messages by ordinal, not by the clock", async () => {
     /* **The clock is made to disagree with the order on purpose, and the first
        version of this test did not do that.**
