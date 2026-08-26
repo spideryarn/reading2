@@ -3070,9 +3070,6 @@ td.text.has-hit {
 .gloss-btn.primary { color: var(--ink); border-color: var(--highlight); }
 .gloss-btn.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
 
-.gloss-running { font-size: 0.76rem; color: var(--ink-soft); }
-.gloss-running .gloss-btn { margin-left: auto; }
-.gloss-detail-live { color: var(--ink-faint); }
 .gloss-spin { flex: none; color: var(--highlight); animation: gloss-spin 1s linear infinite; }
 @keyframes gloss-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
@@ -3867,47 +3864,12 @@ td.text.has-hit {
   line-height: 1.35;
 }
 
-.summ-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.28rem 0.6rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-}
-.summ-btn:hover { border-color: var(--highlight); color: var(--highlight-ink); }
-.summ-btn:disabled { opacity: 0.5; cursor: default; }
-.summ-btn.primary { border-color: var(--highlight); }
+/* The summary panel's run button, its running row and its spinner used to be
+   here — .summ-btn, .summ-running, .summ-detail-live, .summ-spin. They went on
+   2026-08-26 with the third copy of the component that used them: the glossary,
+   the summaries and the thread now share src/web/JobProgress.tsx, drawn with
+   shadcn's Button. See docs/project/web-client.md § Tailwind and shadcn. */
 
-.summ-running {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-}
-.summ-detail-live {
-  width: 100%;
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-}
-/* The spinner recipe from docs/project/icons.md — the rotation lives on the
-   class rather than on the SVG, so `prefers-reduced-motion` has one place to
-   stop it. The keyframes are named per section rather than shared, which is
-   what every other panel in this file does; a single global `spin` would be
-   nicer and is a tidy-up for whoever consolidates the four of them. */
-.summ-spin { flex: none; color: var(--highlight); animation: summ-spin 1s linear infinite; }
-@keyframes summ-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .summ-spin { animation: none; }
-}
 
 /* ------------------------------------ chat: suggestions and cited blocks --
    Two additions from 2026-08-26: what an empty conversation offers, and what a

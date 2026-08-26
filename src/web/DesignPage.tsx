@@ -40,6 +40,34 @@
 import { useEffect, useState } from "react";
 import { Circle, LoaderCircle, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { providerHttpFailure } from "../messages.js";
+import { JobProgress } from "./JobProgress.js";
+import type { Job } from "../types.js";
+
+/**
+ * Two jobs that never run, so the running states can be looked at.
+ *
+ * `queued` and `running` differ by one field and read completely differently —
+ * "Waiting for the queue…" against the step's own live label — which is the
+ * kind of thing you only notice side by side.
+ */
+const DESIGN_JOB = {
+  queued: {
+    id: "design-1",
+    slug: "example",
+    status: "queued",
+    steps: [{ name: "glossary", status: "queued" }],
+  },
+  running: {
+    id: "design-2",
+    slug: "example",
+    status: "running",
+    steps: [
+      { name: "glossary", status: "running", label: "Reading the article", detail: "batch 2 of 5" },
+    ],
+  },
+} as unknown as { queued: Job; running: Job };
+
 import { Toggle } from "@/components/ui/toggle";
 import { Link } from "./Link.js";
 import { PILL } from "./pill.js";
@@ -329,6 +357,65 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           </Button>
           <Button disabled>disabled</Button>
         </div>
+      </section>
+
+      <section>
+        <h2>Job progress</h2>
+        <p className="design-note">
+          One component — <code className="design-token">JobProgress</code> — shared by the
+          glossary, the summaries and the thread. It was three private copies until 2026-08-26, two
+          of them drawn with hand-written CSS that differed from each other only in two paddings and
+          two colours. All four states are here because three of them only appear while a model call
+          is in flight, which is exactly when nobody is looking at this page.
+        </p>
+        <div className="design-row" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+          <JobProgress
+            job={null}
+            failed={null}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={DESIGN_JOB.queued}
+            failed={null}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={DESIGN_JOB.running}
+            failed={null}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+          <JobProgress
+            job={null}
+            failed={providerHttpFailure(402).message}
+            onRun={async () => {}}
+            onCancel={() => {}}
+            label="Find the terms"
+            step="glossary"
+            icon={<Search size={13} />}
+            runningLabel="Finding…"
+          />
+        </div>
+        <p className="design-note">
+          The last one is a real message out of{" "}
+          <code className="design-token">src/messages.ts</code>, not a placeholder — the failure copy
+          has to be read at the width it will actually wrap at. Its rules are in
+          docs/project/copy.md, and the bracketed code at the end is deliberate.
+        </p>
       </section>
 
       <section>

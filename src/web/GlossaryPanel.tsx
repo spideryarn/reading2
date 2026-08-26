@@ -72,7 +72,6 @@ import {
   RotateCcw,
   Search,
   TriangleAlert,
-  X,
 } from "lucide-react";
 import type { BlockId, Glossary, GlossaryEntry, Job } from "../types.js";
 import type { TermSort } from "./params.js";
@@ -80,6 +79,7 @@ import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
 import { isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
+import { JobProgress } from "./JobProgress.js";
 
 interface Props extends UseGlossary {
   /** The selected term, from `?term=`. Null is a list nobody has picked from. */
@@ -1281,51 +1281,19 @@ function Foot({
  * is slow nor what is about to fail. Same component shape as the thread page's,
  * and for the same reasons.
  */
-function Progress({
-  job,
-  failed,
-  onRun,
-  onCancel,
-  label,
-}: {
+/**
+ * The glossary's run button. Everything but the three constants below is in
+ * `JobProgress`, which the summary panel and the thread page share.
+ */
+function Progress(props: {
   job: Job | null;
   failed: string | null;
   onRun(): Promise<void>;
   onCancel(id: string): void;
   label: string;
 }) {
-  if (job) {
-    const step = job.steps.find((s) => s.name === "glossary");
-    return (
-      <div className="gloss-running">
-        <Loader2 size={13} className="gloss-spin" />
-        <span>{job.status === "queued" ? "Waiting for the queue…" : (step?.label ?? "Finding…")}</span>
-        {step?.detail && <span className="gloss-detail-live">{step.detail}</span>}
-        <button
-          type="button"
-          className="gloss-btn"
-          title="Stop this job"
-          disabled={job.cancelling === true}
-          onClick={() => onCancel(job.id)}
-        >
-          <X size={12} />
-          {job.cancelling ? "Stopping…" : "Stop"}
-        </button>
-      </div>
-    );
-  }
   return (
-    <>
-      {/* `() => void onRun()` and not `onRun`: React hands a click handler a
-          MouseEvent, and a function whose first parameter is optional would
-          take that event as its argument. The thread page was bitten by
-          exactly this. */}
-      <button type="button" className="gloss-btn primary" onClick={() => void onRun()}>
-        <Search size={12} />
-        {label}
-      </button>
-      {failed && <p className="gloss-error">{failed}</p>}
-    </>
+    <JobProgress {...props} step="glossary" icon={<Search size={13} />} runningLabel="Finding…" />
   );
 }
 

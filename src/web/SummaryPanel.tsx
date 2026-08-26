@@ -56,7 +56,7 @@
  * complete one (src/summarise.ts § partial salvage).
  */
 import { type MouseEvent, useState } from "react";
-import { ChevronRight, Compass, Layers, Loader2, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { ChevronRight, Compass, Layers, RotateCcw, TriangleAlert } from "lucide-react";
 import type { BlockId, Job } from "../types.js";
 import { BlockRange } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
@@ -65,6 +65,7 @@ import type { Rung } from "./params.js";
 import { MAX_SUMMARY_DEPTH, RUNGS } from "./params.js";
 import { rungText, type SummaryNode } from "./tree.js";
 import type { UseSummaries } from "./useSummaries.js";
+import { JobProgress } from "./JobProgress.js";
 
 interface Props extends UseSummaries {
   /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
@@ -623,13 +624,14 @@ function Steer({
  * have been started in another tab or from the CLI, so this shows whatever the
  * queue is actually doing rather than what this session remembers clicking.
  */
+/**
+ * The summary panel's run button. `icon` is the one thing that varies here:
+ * "write these" and "write them again" are the same action with different
+ * intent, and the glyph is what says which.
+ */
 function Progress({
-  job,
-  failed,
-  onRun,
-  onCancel,
-  label,
   icon = "write",
+  ...props
 }: {
   job: Job | null;
   failed: string | null;
@@ -638,37 +640,12 @@ function Progress({
   label: string;
   icon?: "write" | "redo";
 }) {
-  if (job) {
-    const step = job.steps.find((s) => s.name === "summary");
-    return (
-      <div className="summ-running">
-        <Loader2 size={13} className="summ-spin" />
-        <span>{job.status === "queued" ? "Waiting for the queue…" : (step?.label ?? "Writing…")}</span>
-        {step?.detail && <span className="summ-detail-live">{step.detail}</span>}
-        <button
-          type="button"
-          className="summ-btn"
-          title="Stop this job"
-          disabled={job.cancelling === true}
-          onClick={() => onCancel(job.id)}
-        >
-          <X size={12} />
-          {job.cancelling ? "Stopping…" : "Stop"}
-        </button>
-      </div>
-    );
-  }
   return (
-    <>
-      {/* `() => void onRun()` and not `onRun`: React hands a click handler a
-          MouseEvent, and a function whose first parameter is optional would
-          take that event as its argument. The thread page was bitten by exactly
-          this, and `write(force?)` has exactly that shape. */}
-      <button type="button" className="summ-btn primary" onClick={() => void onRun()}>
-        {icon === "redo" ? <RotateCcw size={12} /> : <Layers size={12} />}
-        {label}
-      </button>
-      {failed && <p className="summ-error">{failed}</p>}
-    </>
+    <JobProgress
+      {...props}
+      step="summary"
+      icon={icon === "redo" ? <RotateCcw size={13} /> : <Layers size={13} />}
+      runningLabel="Writing…"
+    />
   );
 }

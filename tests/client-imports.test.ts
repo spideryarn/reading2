@@ -46,6 +46,13 @@ const SHARED = new Set([
   "term-match.js", // where a glossary term appears in a block
   "quote-match.js",
   "sanitize-policy.js", // the DOMPurify config, shared so both passes agree
+  // Every sentence a reader is shown when a model call fails. On the list
+  // because it qualifies rather than because it was convenient: it imports
+  // nothing at all. The client needs it so /design can render the real
+  // failure copy at the width it will actually wrap at — placeholder text is
+  // exactly what stops anyone noticing a message reads badly.
+  // See docs/project/copy.md.
+  "messages.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

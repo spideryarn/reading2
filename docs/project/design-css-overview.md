@@ -42,6 +42,15 @@ started. The rule of thumb:
   `button` and `toggle`, and nothing else. What is staying hand-written, and why,
   is in [web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components).
 
+  **A worked example of that boundary, 2026-08-26.** Every "run this job" button moved to shadcn's
+  `Button`, via [`JobProgress.tsx`](../../src/web/JobProgress.tsx). Not because shadcn is better,
+  but because there were three copies of one component and two of them carried their own
+  hand-written rules — `gloss-btn` and `summ-btn`, identical apart from two paddings, a gap and two
+  colours. A button that appears in three panels is a *system*, which by the first bullet would put
+  it in `styles.css`; but it is also chrome, which the third bullet puts in shadcn. Chrome won,
+  because the alternative was inventing a third set of numbers for something the thread page was
+  already drawing correctly. 38 lines of CSS went.
+
 The longer version, with the bugs that made each boundary necessary, is
 [shadcn-migration.md § Which mechanism does what](../plans/shadcn-migration.md#which-mechanism-does-what).
 
