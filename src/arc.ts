@@ -32,7 +32,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODEL } from "./models.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
-import type { Arc, ArcEntry, Block, Tree, TreeNode } from "./types.js";
+import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
+import { parseJsonFrom } from "./parse-json.js";
+import { articleText } from "./article-prompt.js";
 
 const PROMPT_VERSION = "arc/2";
 
@@ -110,7 +112,7 @@ export function partsOf(tree: Tree): TreeNode[] {
  * text is what keeps the sentences in the author's own words rather than in a
  * summary of a summary.
  */
-function renderPrompt(tree: Tree, blocks: Block[]): string {
+function renderPrompt(tree: Tree): string {
   const parts = partsOf(tree);
   const skeleton = parts
     .map((p, i) => {
@@ -123,17 +125,15 @@ function renderPrompt(tree: Tree, blocks: Block[]): string {
     })
     .join("\n\n");
 
-  const text = blocks.map((b) => b.text).filter(Boolean).join("\n\n");
-
+  /* The full text is no longer here — it moved to a cached `system` block, so
+     that this stage, the thread and the glossary all put the *same bytes* in
+     front of their own instructions and can share one cache entry for an
+     article. What is left is the part that is this stage's own. */
   return `The article has ${parts.length} parts. Write ${parts.length} arc sentences.
 
 === STRUCTURE ===
 
-${skeleton}
-
-=== FULL TEXT ===
-
-${text}`;
+${skeleton}`;
 }
 
 /**
@@ -166,10 +166,20 @@ export function buildArc(
   return { version: PROMPT_VERSION, generator: MODEL, slug, entries };
 }
 
-/** Strip a stray code fence if the model wraps its JSON despite instructions. */
+/**
+ * Strip a stray code fence if the model wraps its JSON despite instructions.
+ *
+ * The parse goes through src/parse-json.ts, and the reason is that **nothing in
+ * this file logs**. A step that throws is logged by src/jobs.ts with
+ * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
+ * quotes the first characters of whatever it was handed. So a plain
+ * `JSON.parse` here writes part of the model's writing about the article into
+ * the log, from a file that never calls the logger at all. An error is a value
+ * that travels, and where it is thrown is not where it is written down.
+ */
 function parseJson(raw: string): { arc: string[] } {
   const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  return JSON.parse(text);
+  return parseJsonFrom(text, "the arc response");
 }
 
 export interface ArcRun {
@@ -181,6 +191,12 @@ export interface ArcRun {
   blocks: number;
   inputTokens: number;
   outputTokens: number;
+  /* What the cache did on this call. Reported next to the token counts because
+     a cache that has silently stopped hitting is indistinguishable from one that
+     is working — same answer, no error, a bigger bill.
+     docs/reusable/silent-success.md. */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   elapsedMs: number;
 }
 
@@ -197,10 +213,26 @@ export async function generateArc(opts: {
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
 }): Promise<ArcRun> {
-  const { blocks } = JSON.parse(
+  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
+     own parse error quotes the first characters of what it was handed. Nothing
+     in this file logs, but a step that throws is logged by src/jobs.ts with
+     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
     await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-  ) as { blocks: Block[] };
-  const tree = JSON.parse(await readFile(path.join(opts.dir, "tree.json"), "utf-8")) as Tree;
+    "blocks.json",
+  );
+  const tree = parseJsonFrom<Tree>(
+    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
+    "tree.json",
+  );
+  /* Loaded only so the cached article block reads the same here as it does in
+     the thread and the glossary — the three share one cache entry per article,
+     and a head that differs by a line is a prefix that does not match. Optional,
+     like it is there: a missing meta.json is not worth failing the stage over,
+     and its absence is the same absence for all three. */
+  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
+    .then((raw) => JSON.parse(raw) as Meta)
+    .catch(() => null);
   const parts = partsOf(tree);
   const started = Date.now();
 
@@ -219,8 +251,18 @@ export async function generateArc(opts: {
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: "high" },
-    system: SYSTEM,
-    messages: [{ role: "user", content: renderPrompt(tree, blocks) }],
+    /* Article first, instructions second — the cache prefix starts at the top of
+       the request, so anything stage-specific ahead of the article stops two
+       stages ever matching. docs/plans/prompt-caching.md. */
+    system: [
+      {
+        type: "text" as const,
+        text: articleText(meta, blocks),
+        cache_control: { type: "ephemeral" as const },
+      },
+      { type: "text" as const, text: SYSTEM },
+    ],
+    messages: [{ role: "user", content: renderPrompt(tree) }],
   }, { signal: opts.signal });
 
   if (opts.onProgress) {
@@ -268,6 +310,8 @@ export async function generateArc(opts: {
     blocks: blocks.length,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
+    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
     elapsedMs: Date.now() - started,
   };
 }

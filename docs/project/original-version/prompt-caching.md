@@ -1,5 +1,15 @@
 # Prompt caching — researched thoroughly, never built
 
+> **Cashed, 2026-08-26.** Built here as
+> [prompt-caching.md](../prompt-caching.md), planned in
+> [docs/plans/prompt-caching.md](../../plans/prompt-caching.md). Their prerequisite — the one this
+> page says killed it, five prompts each wrapping the article differently — turned out to be real in
+> this repo too, and worse: two prompts were writing the reader's position *into the article body*,
+> so those calls could never have hit a cache at all. One renderer now
+> ([`src/article-prompt.ts`](../../../src/article-prompt.ts)), three caches, and the counts in every
+> log line. The rest of this page is kept as written, because the account of why it never shipped is
+> the useful part.
+
 **This is the one to actually implement.** They wrote a careful design for exactly our problem —
 many model calls over the same article — and then filed it under `later/` and never shipped it.
 Their doc is a usable spec; the point of this page is that we should cash it rather than admire it.

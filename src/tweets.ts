@@ -34,6 +34,8 @@ import { MODEL } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
+import { parseJsonFrom } from "./parse-json.js";
+import { articleText } from "./article-prompt.js";
 
 const PROMPT_VERSION = "tweets/1";
 
@@ -244,40 +246,47 @@ else — no summary, no title, no commentary about the thread.`;
 function renderPrompt(opts: {
   meta: Meta | null;
   tree: Tree;
-  blocks: Block[];
   posts: number;
 }): string {
-  const { meta, tree, blocks, posts } = opts;
+  const { meta, tree, posts } = opts;
   const skeleton = partsOf(tree)
     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
     .join("\n\n");
-  const text = blocks.map((b) => b.text).filter(Boolean).join("\n\n");
 
+  /* Stays here rather than moving into the cached block with the rest of the
+     metadata: it is an *instruction* about how to refer to the author, not a
+     fact about the article, and the cached block has to be the same bytes for
+     every stage that reads it. */
   const author = meta?.byline
     ? `Written by ${meta.byline}. Refer to them by surname.`
     : "The byline is unknown. Write \"the author\" — do not guess a name.";
 
+  /* The full text and the title moved to a cached `system` block — see
+     `generateThread`. What is left is what only this stage asks for. */
   return `Write about ${posts} posts. Adjust that up or down a little if the piece
 genuinely needs it.
 
-=== THE ARTICLE ===
-
-Title: ${meta?.title ?? tree.slug}
-${author}${meta?.siteName ? `\nPublished by ${meta.siteName}.` : ""}
+${author}
 
 === ITS SHAPE ===
 
-${skeleton}
-
-=== ITS FULL TEXT ===
-
-${text}`;
+${skeleton}`;
 }
 
-/** Strip a stray code fence if the model wraps its JSON despite instructions. */
+/**
+ * Strip a stray code fence if the model wraps its JSON despite instructions.
+ *
+ * The parse goes through src/parse-json.ts, and the reason is that **nothing in
+ * this file logs**. A step that throws is logged by src/jobs.ts with
+ * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
+ * quotes the first characters of whatever it was handed. So a plain
+ * `JSON.parse` here writes part of the model's writing about the article into
+ * the log, from a file that never calls the logger at all. An error is a value
+ * that travels, and where it is thrown is not where it is written down.
+ */
 function parseJson(raw: string): { tweets: string[] } {
   const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  return JSON.parse(text);
+  return parseJsonFrom(text, "the tweet-thread response");
 }
 
 /**
@@ -327,6 +336,12 @@ export interface TweetsRun {
   over: number;
   inputTokens: number;
   outputTokens: number;
+  /* What the cache did on this call. Reported next to the token counts because
+     a cache that has silently stopped hitting is indistinguishable from one that
+     is working — same answer, no error, a bigger bill.
+     docs/reusable/silent-success.md. */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   elapsedMs: number;
 }
 
@@ -349,10 +364,18 @@ export async function generateTweets(opts: {
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
 }): Promise<TweetsRun> {
-  const { blocks } = JSON.parse(
+  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
+     own parse error quotes the first characters of what it was handed. Nothing
+     in this file logs, but a step that throws is logged by src/jobs.ts with
+     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
     await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-  ) as { blocks: Block[] };
-  const tree = JSON.parse(await readFile(path.join(opts.dir, "tree.json"), "utf-8")) as Tree;
+    "blocks.json",
+  );
+  const tree = parseJsonFrom<Tree>(
+    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
+    "tree.json",
+  );
   // Optional, and only ever used for attribution. A missing meta.json costs the
   // thread the author's name, which the prompt handles; it is not worth failing
   // the whole stage over.
@@ -377,8 +400,19 @@ export async function generateTweets(opts: {
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
     output_config: { effort: "high" },
-    system: SYSTEM,
-    messages: [{ role: "user", content: renderPrompt({ meta, tree, blocks, posts }) }],
+    /* Article first, this stage's instructions second — the prefix runs from the
+       top of the request, so the article has to precede anything stage-specific
+       for the arc, the glossary and this to share one entry.
+       docs/plans/prompt-caching.md. */
+    system: [
+      {
+        type: "text" as const,
+        text: articleText(meta, blocks),
+        cache_control: { type: "ephemeral" as const },
+      },
+      { type: "text" as const, text: SYSTEM },
+    ],
+    messages: [{ role: "user", content: renderPrompt({ meta, tree, posts }) }],
   }, { signal: opts.signal });
 
   if (opts.onProgress) {
@@ -433,6 +467,8 @@ export async function generateTweets(opts: {
     over: overLimit(thread),
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
+    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
     elapsedMs: thread.elapsedMs,
   };
 }
