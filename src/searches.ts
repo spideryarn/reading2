@@ -43,17 +43,11 @@ import type { SearchRun } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { assertSlug } from "./slug.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "searches.json");
-
-/** A slug is a path segment. Anything else is refused rather than sanitised. */
-function assertSlug(slug: string): void {
-  if (!/^[\w.-]+$/.test(slug) || slug === "." || slug === "..") {
-    throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
-  }
-}
 
 /**
  * How many saved searches one article keeps.

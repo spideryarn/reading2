@@ -50,15 +50,9 @@ import path from "node:path";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import type { GlossaryLookup } from "./types.js";
+import { assertSlug } from "./slug.js";
 
 const ROOT = process.cwd();
-
-/** Refused rather than sanitised, exactly as src/comments.ts refuses it. */
-function assertSlug(slug: string): void {
-  if (!/^[\w.-]+$/.test(slug) || slug === "." || slug === "..") {
-    throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
-  }
-}
 
 function fileFor(slug: string): string {
   assertSlug(slug);

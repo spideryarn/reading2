@@ -20,6 +20,7 @@ import type { Comment } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { assertSlug } from "./slug.js";
 
 /**
  * What may be logged from this file: ids, slugs, counts, statuses.
@@ -34,16 +35,6 @@ import { parseJsonFrom } from "./parse-json.js";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "comments.json");
-
-/**
- * A slug is a path segment. Anything that isn't one is refused outright rather
- * than sanitised, because sanitising invites arguing about whether it worked.
- */
-function assertSlug(slug: string): void {
-  if (!/^[\w.-]+$/.test(slug) || slug === "." || slug === "..") {
-    throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
-  }
-}
 
 /**
  * Read-modify-write serialised per process.

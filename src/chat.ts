@@ -28,6 +28,7 @@ import type { ChatMessage, ChatThread } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { assertSlug } from "./slug.js";
 
 /**
  * What may be logged from this file: ids, slugs, counts, statuses.
@@ -43,13 +44,6 @@ import { parseJsonFrom } from "./parse-json.js";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "chat.json");
-
-/** A slug is a path segment. Anything else is refused rather than sanitised. */
-function assertSlug(slug: string): void {
-  if (!/^[\w.-]+$/.test(slug) || slug === "." || slug === "..") {
-    throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
-  }
-}
 
 /**
  * Read-modify-write serialised per process — see src/comments.ts for the full

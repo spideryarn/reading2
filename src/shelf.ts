@@ -32,6 +32,7 @@ import path from "node:path";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import type { ShelfState } from "./types.js";
+import { assertSlug } from "./slug.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -46,19 +47,6 @@ export const MAX_TITLE_CHARS = 300;
 
 /** Nothing recorded yet is not an error — it is a brand-new article. */
 const EMPTY: ShelfState = { opens: 0 };
-
-/**
- * A slug is a path segment. Anything that isn't one is refused outright rather
- * than sanitised, because sanitising invites arguing about whether it worked.
- * Copied deliberately from src/comments.ts rather than shared: the two files
- * are about to be deleted at different times, and a helper shared across a
- * seam is a helper somebody has to think about twice.
- */
-function assertSlug(slug: string): void {
-  if (!/^[\w.-]+$/.test(slug) || slug === "." || slug === "..") {
-    throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
-  }
-}
 
 /**
  * Read-modify-write serialised per process, exactly as src/comments.ts does it
