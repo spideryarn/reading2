@@ -197,6 +197,37 @@ npm run db:export -- --out /tmp/rollback     # --out is required, no default
   360-block article renders; there are no console errors. Every request across the session was 200,
   with the one deliberate 400 (traversal) and 404 (unknown slug) and **zero 5xx**.
 
+## What three investigation subagents found that I had not
+
+Their reports arrived late, after the reads were already committed. One of them cost me a bug.
+
+1. **The library was ordered on `fetched_at` alone, and Postgres sorts NULLs FIRST under DESC.**
+   So every article that never got a `fetched_at` went to the top of the shelf. The parity test
+   passed anyway, because the one real article with a null `fetched_at` happens to be the newest —
+   both stores agreed *by accident*. Fixed with `coalesce(fetched_at, created_at)`, exported as
+   `ADDED_AT` so a test can exercise the real expression against three rows built to be **unlucky**:
+   the null one in the middle by date. Asserting the ordering property against the articles we
+   happen to have could not fail, and a test that cannot go red proves nothing.
+2. **The pipeline stages do not write atomically, and everything else does.** `comments.ts`,
+   `chat.ts`, `searches.ts`, `glossary-lookups.ts` and `jobs.ts` all write to a temp file and
+   `rename()`; all eight pipeline stages use a plain `writeFile`. `writeFile` truncates first, so a
+   process killed mid-write leaves a file that exists and will not parse — and `stepIsDone` is an
+   existence check, so the step reports itself **done**. This is a real gap independent of the
+   migration, and it is an argument *for* the migration rather than a task within it: a transaction
+   makes it impossible.
+3. **Content-hash freshness is 3 of 8 stages, not "1 of 6".**
+   [postgres-migration.md § This codebase](postgres-migration.md#this-codebase) says one; `tweets`,
+   `glossary` and `summary` all have a real `isDone` now, while `toc` and `arc` still fall back to
+   bare existence. That paragraph should be corrected rather than left to mislead the next reader.
+4. **`comments.ts`'s write mutex is module-global, not per-slug** — one queue for every article. Not
+   a bug, but it means comment writes across the whole library serialise behind each other, and the
+   Postgres version does not.
+5. **The fixture fallback is a property of the design, not of the filesystem.** `loadArticle` falls
+   through to `example/` for any slug with no artefacts, so "refused" and "here is the demo" are
+   indistinguishable in the response — which is how a path traversal read as safe. Postgres has no
+   directory to walk out of, and the Postgres reader deliberately 404s instead of falling through,
+   so the ambiguity is gone. That is a behaviour change, and it is the right one.
+
 ## What is not done
 
 - **GPT Sol never reviewed this.** The Codex workspace is out of credits — confirmed on

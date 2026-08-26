@@ -28,7 +28,12 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { closeDb } from "../src/db/client.js";
+import { desc, eq, inArray } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { articleRevisions, articles } from "../src/db/schema.js";
+import { currentOwnerId } from "../src/owner.js";
+import { ADDED_AT } from "../src/store/pg.js";
 import { loadEnvLocal } from "../src/env.js";
 import { fsArticleReader } from "../src/store/fs.js";
 import { importArticle } from "../src/store/import.js";
@@ -38,6 +43,9 @@ import type { LibraryEntry } from "../src/types.js";
 loadEnvLocal();
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/** Thrown to roll a transaction back once its assertions have run. */
+class RollBack extends Error {}
 
 /** The wire form: what the client actually receives. */
 function wire<T>(value: T): unknown {
@@ -212,6 +220,63 @@ when("the filesystem and Postgres stores agree", () => {
       [...entries].sort((a, b) => a.slug.localeCompare(b.slug));
 
     expect(wire(bySlug(realOnly(fromPg)))).toEqual(wire(bySlug(realOnly(fromFiles))));
+  });
+
+  it("sorts an article with no fetchedAt by its createdAt, not to the top", async () => {
+    /* **This test is built around data that is deliberately unlucky.**
+       The query used to be `order by fetched_at desc`, which puts every article
+       that never got a `fetched_at` at the TOP, because Postgres sorts NULLs
+       first under DESC. Parity passed anyway — the one real article with a null
+       `fetched_at` happens to be the newest, so both stores agreed by accident.
+       Asserting the ordering property against the articles we happen to have
+       could not fail, and a test that cannot go red proves nothing.
+
+       So: three rows inside a transaction that is rolled back, with the null
+       one in the MIDDLE by date, ordered by the real exported expression. */
+    const db = getDb();
+    let order: string[] = [];
+
+    /* The assertion happens OUTSIDE the transaction. Asserting inside means the
+       failure is a thrown AssertionError that the rollback then masks — the
+       test reports "expected ... to be an instance of RollBack", which says
+       nothing about the ordering. Collect, roll back, then assert. */
+    try {
+      await db.transaction(async (tx) => {
+        const owner = currentOwnerId();
+        const mk = async (n: number, slug: string, fetchedAt: Date | null, createdAt: Date) => {
+          const articleId = `00000000-0000-4000-8000-00000000000${n}`;
+          const revisionId = `00000000-0000-4000-8000-00000000010${n}`;
+          await tx.insert(articles).values({ id: articleId, ownerId: owner, slug });
+          await tx
+            .insert(articleRevisions)
+            .values({ id: revisionId, articleId, status: "published", fetchedAt, createdAt });
+          await tx
+            .update(articles)
+            .set({ currentRevisionId: revisionId })
+            .where(eq(articles.id, articleId));
+        };
+        await mk(1, "order-newest", new Date("2026-03-03T00:00:00Z"), new Date("2020-01-01Z"));
+        // The unlucky one: no fetchedAt, and NOT the newest.
+        await mk(2, "order-middle", null, new Date("2026-02-02T00:00:00Z"));
+        await mk(3, "order-oldest", new Date("2026-01-01T00:00:00Z"), new Date("2020-01-01Z"));
+
+        const rows = await tx
+          .select({ slug: articles.slug })
+          .from(articles)
+          .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+          .where(inArray(articles.slug, ["order-newest", "order-middle", "order-oldest"]))
+          .orderBy(desc(ADDED_AT));
+        order = rows.map((r) => r.slug);
+
+        // Roll back: these rows must not outlive the test, or the library
+        // parity comparison below starts failing for an unrelated reason.
+        throw new RollBack();
+      });
+    } catch (err) {
+      if (!(err instanceof RollBack)) throw err;
+    }
+
+    expect(order).toEqual(["order-newest", "order-middle", "order-oldest"]);
   });
 
   it("orders the library the same way", async () => {

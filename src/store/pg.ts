@@ -29,7 +29,7 @@
  * § Rules. It would hide exactly the divergence the parity test is looking for.
  */
 
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 
 import { describeArticle } from "../api.js";
 import { getDb } from "../db/client.js";
@@ -174,6 +174,23 @@ const STEP_STORAGE: Record<string, string[]> = {
   summary: ["article_revisions.summary"],
 };
 
+/**
+ * What the library calls `addedAt`, as SQL.
+ *
+ * **`coalesce(fetched_at, created_at)`, never `fetched_at` alone.** On the
+ * filesystem `addedAt` is `meta.fetchedAt` where stage 2 recorded one and the
+ * mtime of `blocks.json` otherwise, and src/store/import.ts seeds `created_at`
+ * from that same mtime so the two agree exactly.
+ *
+ * Ordering on `fetched_at` by itself puts every article that never got one at
+ * the TOP, because Postgres sorts NULLs first under DESC. That is what this
+ * query did, and the parity test passed anyway: the one article with a null
+ * `fetched_at` happens to be the newest. Exported so the test can exercise the
+ * real expression against data that is not lucky — asserting the property
+ * against the articles we happen to have could not fail.
+ */
+export const ADDED_AT = sql`coalesce(${articleRevisions.fetchedAt}, ${articleRevisions.createdAt})`;
+
 export const pgArticleReader: Pick<
   ArticleReader,
   | "loadArticle"
@@ -209,7 +226,7 @@ export const pgArticleReader: Pick<
       .select({ article: articles, revision: articleRevisions })
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-      .orderBy(desc(articleRevisions.fetchedAt));
+      .orderBy(desc(ADDED_AT));
 
     const entries: LibraryEntry[] = [];
     for (const row of rows) {
