@@ -282,6 +282,31 @@ above still holds for everything else; for backgrounds in a suspended tab, the s
 reliable one and the computed value is the liar, which is the exact reverse of the usual advice on
 this page. Wake the tab before believing a transparent background.
 
+**And `opacity` is not trustworthy on anything mid-transition.** Found 2026-08-26, checking the
+spine's band tooltips. `getComputedStyle(tip).opacity` — and the raw inline `style.opacity` too —
+read `"0"` immediately after the hover call returned, *every time*, even after waiting; a screenshot
+taken moments later showed the same tooltip fully painted with the right content. The tooltips fade
+in through Floating UI's `useTransitionStyles`, so a synchronous read straight after a hover catches
+the pre-transition frame. Same shape as the `backgroundColor` trap above and the same conclusion:
+for an element that animates in, the screenshot is the reliable one.
+
+## Hover by element, never by pixel
+
+Found 2026-08-26, and it produced a bug report for a bug that did not exist — which is the expensive
+kind of measurement error, because somebody then goes looking for it.
+
+`computer.hover`'s requested coordinate and the coordinate the page actually receives **differ by
+about 5–6%**: asking for (100, 300) fired a `mousemove` at (94, 283), confirmed by a listener that
+logged the real `clientX`/`clientY`. On the spine — a rail of stacked bands a few pixels tall — that
+is easily a whole band. Comparing `document.elementFromPoint(requestedX, requestedY)` against
+whichever band's tooltip opened then "proves" the app is showing the neighbour's content, and the
+report writes itself. It was not: the two checks were asking about two different points.
+
+So: hover by **element reference** (`find`, then act on the ref), and if you must reason about a
+pixel, get the real one from a `mousemove` listener rather than from what you asked for. Anything
+that maps a coordinate back to an element — `elementFromPoint`, `document.caretPositionFromPoint` —
+has to be given the position the page saw.
+
 ## Three traps this codebase has actually hit
 
 Each of these looked right in review and was wrong on the page.

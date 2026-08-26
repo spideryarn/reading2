@@ -559,6 +559,14 @@ whole job is to be readable out of the corner of the eye. The cost is stated rat
 switching on a search that sorts before an existing one shifts the existing one's lane. The
 *colour*, which is what says whose match it is, does not move.
 
+**One lane may be wider than eight lanes are.** The gutter is a fixed 24px slice of the rail (15px
+when it collapses), divided between however many searches actually matched, and capped so that one
+search draws a tick rather than a slab. The cap is 8px, which is the width at which *three* lanes
+fill the gutter exactly — so one, two and three searches, which is nearly all real use, each get a
+7px bar, and eight searches get 2px. It was 6px until a browser pass called the bars "easy to miss
+with only one or two searches active, since the gutter isn't fully used then", which was right: a
+cap tuned for the crowded case leaves two thirds of the rail empty in the common one.
+
 **A mark is as tall as the paragraph it names**, floored at three pixels. That is the same
 proportional promise the bands themselves make, and it is what makes "how common" readable at a
 glance — a search that matched six long paragraphs paints far more of the rail than one that matched

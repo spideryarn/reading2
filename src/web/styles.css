@@ -876,9 +876,17 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   bottom: 0;
   width: var(--spine-w);
   /* How much of the rail's width the search lanes may take, and how wide one
-     lane may get when there are few of them — see § search marks below. */
+     lane may get when there are few of them — see § search marks below.
+
+     The cap is what makes one search a tick rather than a slab, and it was 6px
+     until a browser pass called the bars "visually delicate and easy to miss
+     with only one or two searches active, since the gutter isn't fully used
+     then" — which is the right complaint: a cap tuned for eight lanes leaves
+     two thirds of the rail's gutter empty at one. Eight is the width at which
+     three lanes fill the gutter exactly, so the common cases (one, two, three
+     searches) all get a bar you can see and nothing overflows. */
   --spine-gutter: 24px;
-  --lane-max: 6px;
+  --lane-max: 8px;
   z-index: 45;
   background: var(--panel);
   border-right: 1px solid var(--rule-strong);
@@ -1028,7 +1036,14 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
      A `max()` under it because the gutter is shared: with eight searches on,
      the pitch is 3px and a plain subtraction leaves 2px, but the narrow rail's
      is 1.875px and would leave under one. A lane that rounds to a sub-pixel
-     line is the fault the phrase stripes already cap for. */
+     line is the fault the phrase stripes already cap for.
+
+     Where that turns over, said out loud rather than discovered: the floor is
+     wider than the pitch once there are more than about a dozen lanes, so the
+     bars start overlapping and the gap disappears. There is no cap stopping it
+     — a cap would drop a search from the rail silently, which is worse — and
+     past a dozen simultaneously active searches no encoding in 24 pixels is
+     going to work anyway. The panel still lists every one of them. */
   right: calc(var(--lane) * var(--lane-w));
   width: max(1.5px, calc(var(--lane-w) - 1px));
   /* Percentages of the document's height, like everything else in the track —
@@ -1066,7 +1081,7 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 /* The collapsed rail is 24px wide in total, so the search gutter has to be a
    smaller share of it — and the cap comes down with it, or two searches would
    cover most of a rail that is also trying to show you where you are. */
-.spine.narrow { --spine-gutter: 15px; --lane-max: 4px; }
+.spine.narrow { --spine-gutter: 15px; --lane-max: 5px; }
 .spine.narrow .spine-label { display: none; }
 .spine.narrow .spine-part { padding: 0; }
 .spine.narrow .spine-part::before { width: 100%; opacity: 0.3; }
