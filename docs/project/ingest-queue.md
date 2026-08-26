@@ -449,6 +449,65 @@ the one before it wrote. Carrying on past a failure would run the two model call
 stale file happened to be on disk, and produce a tree for the previous version of the article —
 which looks entirely fine. A [silent success](../reusable/silent-success.md).
 
+## The failures Retry is not offered under
+
+Until 2026-08-26 the button appeared under every failure. That included the ones that are
+arithmetic. Greg pasted a long article, stage 4 worked out that its answer would not fit in one
+model response, said so, and offered him a Retry — which made the identical call and failed
+identically. The whole story is in [toc-max-tokens.md](../postmortems/toc-max-tokens.md).
+
+**A failure can now say what kind it is**, and the card asks before drawing the button. The kinds
+are the four in [`src/messages.ts`](../../src/messages.ts) — the same four the reader-facing failure
+sentences already use — and three of them mean another go cannot help.
+
+- A stage says so at the throw site with `stageFailure(kind, message)`
+  ([`src/job-failure.ts`](../../src/job-failure.ts)). Grep for that name to see every claim the
+  pipeline makes.
+- [`src/jobs.ts`](../../src/jobs.ts) copies it onto the job as `failureKind`, beside the message it
+  already copies. On the job and not on the step, because Retry is a job-level action and the runner
+  can fail with no step having failed.
+- [`AddArticle.tsx`](../../src/web/AddArticle.tsx) asks `jobWorthRetrying(job)`. Nothing takes the
+  button's place when it is hidden: the failed step's own message is already on the card and already
+  says why.
+
+**A structured field rather than a bracketed code**, which is the other half of how a failure can
+carry its kind. The codes exist because a stored chat message or comment keeps `err.message` and has
+nowhere else to put anything (see `kindOfMessage` in `src/messages.ts`). A job is a struct with room
+for a field, so it takes the field rather than inheriting a workaround it does not need. The one
+place `failureKindOf` still reads a code is a failure thrown by the model-call layer, which is the
+layer with nowhere else to put it.
+
+**Not a `permanent` flag.** Nothing here is permanent: configuration changes, providers change their
+policies, and websites change what they serve. The answerable question is narrower — *should this
+unchanged attempt be offered again now?*
+
+**Which way to be wrong.** A failure that says nothing gets the button. That is for compatibility:
+every job recorded before the field existed carries nothing, and so does one the restart sweep
+marked, which really is worth another go. It is not because a wasted click is cheap — here a false
+retry costs minutes of pipeline and another billed model call, which is a good deal worse than the
+same mistake on a chat message.
+
+**What makes a failure permanent is Retry's own shape.** `forceForRetry` forces from the first step
+that did not finish, so **a retry never re-runs a step that succeeded**. A stage that failed while
+reading an artefact an earlier step wrote will read that identical artefact again. That is what
+separates the two lists:
+
+| Cannot come out differently | Might |
+|---|---|
+| an answer too long for one response (`TooLongForOnePass`) | a model answer that would not parse |
+| a missing source URL — Retry asks the same `meta.json` | the wrong number of arc sentences |
+| a page Readability already refused, over cached bytes | an empty answer, a refusal, a timeout |
+| a tree that does not contain its own root | a fetch that failed at somebody else's server |
+| a PDF over the page cap | |
+
+Model-output validation failures are in the right-hand column on purpose. The next call is a fresh
+draw, and the whole reason those checks are loud is that the model does occasionally get it right on
+the second attempt.
+
+`FetchFailure.retryable` in [`src/fetch.ts`](../../src/fetch.ts) is deliberately **not** wired into
+this. It marks a plain HTTP 500 non-retryable while 502–504 are retryable, which is a sensible
+enough thing for a fetch layer to believe and not a claim that the page will never load.
+
 ## The one security check
 
 `isSlug` in [`src/ingest.ts`](../../src/ingest.ts) is a path-traversal guard, not a tidiness check.

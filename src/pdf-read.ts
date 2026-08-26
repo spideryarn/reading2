@@ -48,13 +48,14 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
+import { stageFailure } from "./job-failure.js";
 import { PDF_READER_MODEL } from "./models.js";
 import { type Pass0, pass0, type PdfRecord, RENDERED, type RecordType } from "./pdf.js";
-import { check, report } from "./pdf-score.js";
+import { check } from "./pdf-score.js";
 import type { Meta } from "./types.js";
 
 /**
@@ -70,8 +71,18 @@ export const MAX_PAGES = 100;
 /** No chunk larger than this, however sparse its pages. Long calls drift into summarising. */
 const MAX_CHUNK_PAGES = 6;
 
-/** Aim for about this many words of source per chunk, so a dense page makes a smaller chunk. */
-const CHUNK_WORDS = 1600;
+/**
+ * Aim for about this many words of source per chunk, so a dense page makes a
+ * smaller chunk than a sparse one.
+ *
+ * 1,600 was the first guess and it was too small: the 14-page `harder` fixture
+ * came out as **eleven chunks**, nine of them one page, which is eleven chances
+ * for a call to fail and eleven copies of the system prompt paid for. A dense
+ * page here is about a thousand words, so this is three or four of them —
+ * comfortably inside `MAX_TOKENS`, and nowhere near the length at which the
+ * previous version found a model starts summarising instead of transcribing.
+ */
+const CHUNK_WORDS = 3200;
 
 /** A page with fewer than this many words in the text layer tells us nothing about density. */
 const ASSUMED_WORDS = 500;
@@ -112,8 +123,9 @@ Rules, in order of importance:
    type "footnote"; an entry in a references or bibliography list is type "reference"; a publisher's
    or library's cover or rights page is type "cover". Label them and move on — do not leave them out.
 6. The ONLY things to leave out are running headers, running footers and page numbers.
-7. For a figure or a table, emit ONE record of type "figure" or "table" whose text is the caption
-   exactly as printed (empty string if there is none). Do not transcribe a table's cells.
+7. For a figure, emit ONE record of type "figure" whose text is the caption exactly as printed
+   (empty string if there is none). For a table, emit a "table" record for the caption AND then
+   record(s) of type "tabledata" carrying the cells as printed, reading across each row in turn.
 8. Emit only the schema's fields and enum values. No HTML, no markdown, no LaTeX, no links, no
    styling. Plain text only.
 
@@ -133,6 +145,7 @@ const RECORD_TYPES: RecordType[] = [
   "footnote",
   "reference",
   "cover",
+  "tabledata",
 ];
 
 export const SCHEMA = {
@@ -302,7 +315,11 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
       if (!key) throw new Error("OPENROUTER_API_KEY is not set — see docs/project/setup-dev.md.");
       const data = Buffer.from(pdf).toString("base64");
       if (data.length > MAX_ENCODED_BYTES) {
-        throw new Error(
+        /* `blocked`, for the same reason as the page cap above: the chunk plan
+           is worked out from the same cached bytes every time, so a retry
+           encodes the same megabytes and meets the same limit. */
+        throw stageFailure(
+          "blocked",
           `A chunk of this PDF encodes to ${Math.round(data.length / 1024 / 1024)} MB, over the ` +
             `${MAX_ENCODED_BYTES / 1024 / 1024} MB a request can carry. Fewer pages per chunk.`,
         );
@@ -440,6 +457,7 @@ const ELEMENT: Record<RecordType, string> = {
   footnote: "p",
   reference: "p",
   cover: "p",
+  tabledata: "p",
 };
 
 const escapeHtml = (s: string) =>
@@ -532,6 +550,8 @@ export interface PdfExtractResult {
   chunks: number;
   isScan: boolean;
   records: number;
+  /** Faults found in text v1 transcribes and does not show. Logged, never fatal. */
+  notes: string[];
   /** Meaningless characters removed from the model's output — logged, never silent. */
   stripped: number;
   /** `null` for a scan: there was no text layer to check the transcription against. */
@@ -564,7 +584,14 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const reader = opts.reader ?? openRouterReader();
   const pass = await pass0(opts.bytes);
   if (pass.pages.length > MAX_PAGES) {
-    throw new Error(
+    /* `blocked`, so the job card does not offer a Retry that cannot work. A
+       page count is arithmetic over bytes stage 1 has already cached, and Retry
+       skips the fetch that produced them — the same PDF has the same number of
+       pages every time it is counted. Raising the cap is the only thing that
+       changes this, and that is not something the reader can do from the card.
+       src/job-failure.ts. */
+    throw stageFailure(
+      "blocked",
       `This PDF has ${pass.pages.length} pages and the limit is ${MAX_PAGES}. That is a cost cap, ` +
         `not a technical one — see docs/plans/pdf-ingestion.md.`,
     );
@@ -578,7 +605,17 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const all: PdfRecord[] = [];
   const usage = { input: 0, output: 0 };
   let stripped = 0;
+  /* Accumulated as each chunk is checked, never recomputed over the whole
+     document at the end. Aligning a fourteen-page paper against itself is a
+     142-million-cell table, and src/pdf-score.ts refuses — correctly, and by
+     naming the chunking as the thing to look at, which is exactly what was
+     wrong: nothing needed the whole document scored, only the mean of what had
+     already been scored a chunk at a time. */
+  let baselineTokens = 0;
+  let matchedTokens = 0;
+  let pagesChecked = 0;
   const failures: string[] = [];
+  const notes: string[] = [];
 
   for (const [i, chunk] of chunks.entries()) {
     const key = createHash("sha256")
@@ -632,6 +669,12 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     const emitted = reading.records.filter((r) => !chunk.context || r.page !== chunk.context);
     const result = check(emitted, chunk.pages, pass);
     if (!result.ok) failures.push(...result.failures);
+    notes.push(...result.notes);
+    if (result.overall.recall !== null) {
+      baselineTokens += result.overall.base;
+      matchedTokens += result.overall.recall * result.overall.base;
+      pagesChecked += result.pages.filter((p) => p.recall !== null).length;
+    }
     all.push(...emitted);
     opts.onProgress?.(i + 1, chunks.length, chunk.pages);
   }
@@ -661,11 +704,8 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * So `recall` is absent entirely for a scan, and `pagesChecked` is always
    * there beside it for everything else.
    */
-  const scored = check(all, pass.pages.map((p) => p.page), pass).pages.filter((p) => p.recall !== null);
   const recall =
-    pass.isScan || !scored.length
-      ? null
-      : Math.round((scored.reduce((a, p) => a + p.recall!, 0) / scored.length) * 1000) / 1000;
+    pass.isScan || !baselineTokens ? null : Math.round((matchedTokens / baselineTokens) * 1000) / 1000;
 
   const meta: Meta = {
     slug: opts.slug,
@@ -677,7 +717,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     pages: pass.pages.length,
     rawSha256,
     ...(pass.isScan ? { unverified: true } : {}),
-    pagesChecked: pass.isScan ? 0 : scored.length,
+    pagesChecked: pass.isScan ? 0 : pagesChecked,
     ...(recall === null ? {} : { recall }),
   };
   await writeFile(
@@ -695,6 +735,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     isScan: pass.isScan,
     records: all.length,
     recall,
+    notes,
     usage,
     stripped,
   };
@@ -792,21 +833,7 @@ async function main() {
   );
   console.log(`Tokens:  ${result.usage.input} in, ${result.usage.output} out`);
   console.log(`Written: ${path.resolve(result.outFile)}`);
-  console.log(
-    `\n${report(check(await recordsFrom(dataDir), pass.pages.map((page) => page.page), pass))}`,
-  );
-}
-
-/** Every cached chunk's records, for the CLI's report. Nothing else reads these back. */
-async function recordsFrom(dataDir: string): Promise<PdfRecord[]> {
-  const dir = path.join(dataDir, "pdf-chunks");
-  const files = await readdir(dir).catch(() => []);
-  const out: PdfRecord[] = [];
-  for (const file of files.filter((f) => f.endsWith(".json"))) {
-    const reading = JSON.parse(await readFile(path.join(dir, file), "utf-8")) as ChunkReading;
-    out.push(...reading.records);
-  }
-  return out.sort((a, b) => a.page - b.page);
+  for (const note of result.notes) console.log(`note  ${note}`);
 }
 
 const isMain =

@@ -101,6 +101,14 @@ parsed. That widening is deliberate and it is what makes the stability rule
 below load-bearing rather than merely polite: renaming a code now changes which
 buttons appear under errors already stored on disk.
 
+The ingest queue reads it too, as a **fallback only**. A job is a struct, so it
+carries a `failureKind` field of its own rather than a code parsed out of a
+sentence — see
+[ingest-queue.md § The failures Retry is not offered under](ingest-queue.md#the-failures-retry-is-not-offered-under).
+The code is what `failureKindOf` ([`src/job-failure.ts`](../../src/job-failure.ts))
+falls back to for a failure thrown by the model-call layer, which is the layer
+with nowhere else to put it.
+
 **Tests match on the code, not the prose.** That is the other reason it exists:
 copy should be freely rewritable without turning a test suite red, and a test
 that pins a sentence quietly makes the sentence permanent. If you are writing a

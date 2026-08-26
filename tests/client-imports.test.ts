@@ -53,6 +53,11 @@ const SHARED = new Set([
   // exactly what stops anyone noticing a message reads badly.
   // See docs/project/copy.md.
   "messages.js",
+  // Whether a failed ingest job is worth offering a Retry for. It imports
+  // messages.js and nothing else, and the card is the only thing that asks —
+  // so the rule lives in one place rather than being spelled out at the
+  // button. See docs/postmortems/toc-max-tokens.md.
+  "job-failure.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

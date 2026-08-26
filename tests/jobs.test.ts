@@ -37,6 +37,7 @@ import {
   stepIsDone,
 } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
+import { jobWorthRetrying } from "../src/job-failure.js";
 import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
@@ -566,6 +567,11 @@ describe("running a job", () => {
     // arriving as a fetch of the string "undefined".
     expect(finished.error).toMatch(/No source URL/);
     expect(finished.steps[0]?.status).toBe("error");
+    // And the record says what kind of failure it was, which is what withholds
+    // the Retry button on the card. A retry copies the same absent URL and asks
+    // the same meta.json, so there is nothing for a second attempt to find.
+    expect(finished.failureKind).toBe("ours");
+    expect(jobWorthRetrying(finished)).toBe(false);
   });
 
   it("writes a readable record, still, after all that", async () => {
