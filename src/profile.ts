@@ -175,6 +175,8 @@ after. When one is present:
   this part is not for them is a line not spent on the part.
 - Never flatter them, never address them, and never mention the description.
   They wrote it; they do not need it read back.
+- Never put any of it into a web search query, a tool argument, or anything else
+  that leaves this conversation. It is what a person told us about themselves.
 
 NEVER write anything of this shape:
   "As a cognitive scientist, you'll appreciate that…"

@@ -91,8 +91,14 @@ all address, and a reader-specific tree is one that shifts under a reader who ed
 Structure stays shared; only the prose *about* it is personalised. **Not semantic search** either:
 "where does this piece say X" has an answer that does not depend on who is asking.
 
-**Not tool arguments.** Chat and explain can call web search; the profile must never reach a query
-string. It is the reader's description of themselves and a search provider is a third party.
+**Not tool arguments — and this one is an instruction, not a boundary.** Chat and explain can call
+web search, and the profile is in the same prompt as the tool. `PROFILE_RULES` tells the model not to
+put it in a query, and that is all we have: a prompt is not an enforcement mechanism, and nothing in
+the code inspects a search query before it goes out. Written down plainly because the first version
+of this doc claimed the promise rather than the instruction, and a privacy claim that is really a
+request is worse than no claim. GPT Sol's review, 2026-08-26. The real fence, if this ever matters
+enough, is a check on the tool call's arguments in [`src/chat-tools.ts`](../../src/chat-tools.ts) —
+not more prompt.
 
 ### The rules live in `SYSTEM`, and they are always there
 
@@ -141,8 +147,15 @@ profileHash?: string | null;
 **`null` is never stale**, and that line is the whole design. A reader who unticked the box and paid
 for a plain glossary must not then be told it is out of date — that would be a control whose result
 the app immediately complains about. `undefined` is never stale for a gentler reason: nobody's
-existing artefacts should light up about a profile they never had. And **clearing your profile marks
-nothing stale**: you have not changed what you want from the article, you have stopped telling us.
+existing artefacts should light up about a profile they never had.
+
+**Clearing your profile marks nothing stale — but only if you clear *both* boxes.** `profileIsStale`
+compares against the *rendered* profile, and that is the join of the global half and the article's
+purpose. Empty the global box while a purpose remains and the rendered string is still non-empty
+with a different hash, so the artefact really has gone stale — which is correct, since what the model
+would be told has genuinely changed. The rule is therefore about the whole profile going away, not
+about either box. An earlier version of this paragraph said it without the qualification; GPT Sol's
+review, 2026-08-26.
 
 `profileIsStale` in [`src/profile.ts`](../../src/profile.ts) is the one place those rules live.
 `GET /api/{glossary,summary,tweets}/:slug` answers it as `profileChanged`, a third boolean beside
@@ -220,7 +233,16 @@ artefact on screen was written with (`profileHash != null`), so the reader's
 last choice comes back off the file rather than out of a preference that could
 disagree with it. With no artefact yet, it starts ticked.
 
-**With no profile written, both are absent** — not disabled, not unchecked.
+**With no profile written, both are absent** — not disabled, not unchecked. "Written" means
+*either* box, resolved the way the prompts resolve it: a reader with only an article purpose has a
+profile as far as every prompt is concerned, and hiding the controls from them would mean they could
+not opt out of something they could not see. `useHasProfile(slug)` asks the server that exact
+question rather than checking the global box alone.
+
+One thing the label does **not** do: it goes on describing an artefact that was written for a profile
+after the reader clears theirs. That is deliberate — it *was* written for you, and the badge is about
+the text rather than about the current state of the world. The checkbox disappears; the label stays
+until the artefact is rewritten.
 
 Where each one is:
 

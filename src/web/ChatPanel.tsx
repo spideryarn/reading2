@@ -69,6 +69,8 @@ interface Props {
   /** The open conversation, or null for the thread list. From `?thread=`. */
   threadId: string | null;
   onThread(id: string | null): void;
+  /** The article, so the profile controls can ask about *this* one. */
+  slug: string;
   onSend(question: string, useProfile: boolean): void;
   onNew(): void;
   /**
@@ -192,6 +194,7 @@ export const SUGGESTIONS: { label: string; ask: string }[] = [
 ];
 
 export function ChatPanel({
+  slug,
   threads,
   threadId,
   onThread,
@@ -310,6 +313,7 @@ export function ChatPanel({
              fresh composer rather than the previous one's scroll position, open
              editor and half-typed question. */
           key={open.id}
+          slug={slug}
           thread={open}
           onJump={onJump}
           recovering={recovering}
@@ -452,11 +456,13 @@ function ThreadList({
                 <button
                   type="button"
                   className="chat-thread-open"
-                  /* Everything the row had to shorten, said in full. A `title`
+                  /* The title in full and the timestamps exactly — not the
+                     preview line, which is a hint rather than something to read
+                     here, and which the row has already cut. A `title` attribute
                      rather than the Tooltip component, because this one is plain
-                     text over several lines and wants the browser's own delay —
-                     a tooltip that appears the instant the pointer crosses a list
-                     is a list you cannot read. */
+                     text over several lines and wants the browser's own delay:
+                     a tooltip that appears the instant the pointer crosses a
+                     list is a list you cannot read. */
                   title={describe(t)}
                   onClick={() => onOpen(t.id)}
                 >
@@ -584,7 +590,8 @@ function RenameRow({
   );
 }
 
-function Conversation({
+export function Conversation({
+  slug,
   thread,
   onJump,
   recovering,
@@ -598,6 +605,8 @@ function Conversation({
   draft,
   onDraft,
 }: {
+  /** The article, so the composer's profile control can ask about *this* one. */
+  slug: string;
   thread: ChatThread;
   onJump(id: BlockId): void;
   /** See `recovering` in Props. */
@@ -772,6 +781,7 @@ function Conversation({
               : ""}
       </p>
       <Composer
+        slug={slug}
         onSend={onSend}
         busy={busy}
         onStop={busy && last ? () => onStop(last.id) : undefined}
@@ -1337,7 +1347,8 @@ function Answer({
  * what is in it up to a limit, because a question worth asking is often two
  * sentences and a single-line input makes it feel like it should not be.
  */
-function Composer({
+export function Composer({
+  slug,
   onSend,
   busy,
   onStop,
@@ -1346,6 +1357,7 @@ function Composer({
   draft,
   onDraft,
 }: {
+  slug: string;
   onSend(question: string, useProfile: boolean): void;
   busy: boolean;
   /** Present only while an answer is arriving. */
@@ -1360,7 +1372,7 @@ function Composer({
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
   const box = useRef<HTMLTextAreaElement>(null);
-  const hasProfile = useHasProfile();
+  const hasProfile = useHasProfile(slug);
   /* Per turn, and it stays where the reader left it for the rest of the
      session rather than resetting after each question — an answer written
      plainly is usually followed by another. There is nothing to seed it from:

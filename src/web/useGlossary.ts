@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryResponse, Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
 import { failure, readJson } from "./lib/api.js";
+import { useHasProfile } from "./useProfile.js";
 
 export type GlossaryStatus = "loading" | "none" | "ready" | "error";
 
@@ -48,6 +49,14 @@ export interface UseGlossary {
    */
   profiled: boolean;
   profileChanged: boolean;
+  /**
+   * The reader has a profile that applies to **this article** — either half.
+   *
+   * Resolved here rather than in the panel because the slug is here, and the
+   * question needs it: a reader who has written only "why you're reading this
+   * one" has a profile as far as every prompt is concerned. src/web/useProfile.ts.
+   */
+  hasProfile: boolean;
   /** A read failure, or the reason the last request could not be started. */
   error: string | null;
   /** The job writing this article's glossary, if one is. Null otherwise. */
@@ -86,6 +95,7 @@ export function useGlossary(slug: string): UseGlossary {
   const [outdated, setOutdated] = useState(false);
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
+  const hasProfile = useHasProfile(slug);
   const [error, setError] = useState<string | null>(null);
   const [looking, setLooking] = useState<string | null>(null);
   const [lookFailed, setLookFailed] = useState<string | null>(null);
@@ -288,6 +298,7 @@ export function useGlossary(slug: string): UseGlossary {
     outdated,
     profiled,
     profileChanged,
+    hasProfile,
     error,
     job,
     failed,

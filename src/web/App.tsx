@@ -30,6 +30,7 @@ import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
 import { useGlossary } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
+import { DiagramPanel } from "./DiagramPanel.js";
 import { useSummaries } from "./useSummaries.js";
 import { SearchPanel } from "./SearchPanel.js";
 import { useSearch } from "./useSearch.js";
@@ -59,6 +60,7 @@ import {
   atParam,
   colsParam,
   deepParam,
+  diagramParam,
   modeParam,
   noteParam,
   panelParam,
@@ -913,6 +915,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       {mode === "summary" && (
         <SummaryBand slug={slug} article={article} onJump={jumpTo} />
       )}
+      {mode === "diagram" && <DiagramBand article={article} onJump={jumpTo} />}
       {mode === "search" && (
         <SearchBand
           slug={slug}
@@ -1131,6 +1134,7 @@ function ChatBand({
 
   return (
     <ChatPanel
+      slug={slug}
       threads={threads}
       threadId={thread}
       onThread={(id) => void setThread(id)}
@@ -1560,6 +1564,62 @@ function SummaryBand({
       onRung={(next) => void setRung(next)}
       deep={deep}
       onDeep={(next) => void setDeep(next)}
+      atRow={atRow}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
+ * Diagram mode's band — the tree, drawn.
+ *
+ * Same shape as `SummaryBand` above and for the same reasons: `?diagram=` is
+ * read here rather than in `Reader`, because it is meaningless outside this mode
+ * and a subscription in the parent would cost every render of the reading view.
+ *
+ * **It takes no `slug` and fetches nothing.** Every number this panel needs is
+ * already on the page — stage 4 wrote a gist onto every internal node, and the
+ * block ranges give the sizes — so unlike chat, glossary, search and summary
+ * there is no artefact to wait for, no job to run, and nothing to pay a model
+ * for. That is the reason `strata` is the default picture: the one thing this
+ * mode says that nothing else in the app says (how much of the article a
+ * section is) is free on every article that has been through the pipeline at
+ * all. See docs/project/diagram.md.
+ */
+function DiagramBand({
+  article,
+  onJump,
+}: {
+  article: Article;
+  onJump(id: BlockId): void;
+}) {
+  const [kind, setKind] = useQueryState("diagram", diagramParam);
+
+  /* No summaries joined in: this panel shows titles, gists and sizes, all of
+     which are on the tree. Passing `null` is what keeps a diagram from ever
+     being blank on an article nobody has paid for. */
+  const root = useMemo(
+    () => buildSummaryTree(article.tree, article.blocks, null),
+    [article.tree, article.blocks],
+  );
+
+  /* Read, never written — `?at=` is tracked by useReadingPosition in the
+     parent, so this re-renders when it changes. Same read-at-render trick
+     SummaryBand uses, and turned into a row index for the same reason: the
+     question is "which node contains the reader", and containment is a
+     comparison of row indices. Block ids carry no order. */
+  const at = new URLSearchParams(location.search).get("at");
+  const atRow = useMemo(() => {
+    if (at === null) return null;
+    const i = article.blocks.findIndex((b) => b.id === at);
+    return i === -1 ? null : i;
+  }, [at, article.blocks]);
+
+  return (
+    <DiagramPanel
+      root={root}
+      kind={kind}
+      onKind={(next) => void setKind(next)}
       atRow={atRow}
       onJump={onJump}
     />

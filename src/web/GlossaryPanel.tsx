@@ -81,7 +81,6 @@ import { isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
-import { useHasProfile } from "./useProfile.js";
 
 interface Props extends UseGlossary {
   /** The selected term, from `?term=`. Null is a list nobody has picked from. */
@@ -113,6 +112,7 @@ export function GlossaryPanel({
   outdated,
   profiled,
   profileChanged,
+  hasProfile,
   error,
   job,
   failed,
@@ -141,7 +141,6 @@ export function GlossaryPanel({
   const order = effectiveSort(all, sort);
   const groups = glossary ? groupEntries(all, order, gate) : [];
 
-  const hasProfile = useHasProfile();
   /**
    * Whether the next run should use the profile.
    *

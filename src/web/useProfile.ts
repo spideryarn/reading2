@@ -31,7 +31,13 @@ export interface UseProfile {
   /** What is in the box right now — the draft, which may differ from `profile`. */
   draft: string;
   setDraft(next: string): void;
-  /** Save the draft if it differs from what the server holds. Safe to call twice. */
+  /**
+   * Save the draft if it differs from what the server holds.
+   *
+   * Safe to call twice — and that is enforced rather than hoped for: a body
+   * already in flight is not sent again, and a response that arrives after a
+   * newer save is dropped instead of writing its stale text back into the box.
+   */
   flush(): void;
   /**
    * Whether the last save failed, and with what.
@@ -73,20 +79,39 @@ export function useProfile(): UseProfile {
     };
   }, []);
 
-  const flush = useCallback(() => {
+  /* Which save is the newest. Bumped before each request and checked when the
+     response lands, so an earlier one that comes back late is dropped rather
+     than allowed to write its stale text over a newer edit — the classic
+     out-of-order-response bug, and here it would silently revert something the
+     reader had just typed. GPT Sol's review of the built code, 2026-08-26. */
+  const generation = useRef(0);
+  /* What is already in flight, so blur followed immediately by `pagehide` — or
+     two blurs — do not send the same body twice. */
+  const inFlight = useRef<string | null>(null);
+
+  const flush = useCallback((leaving = false) => {
     const { profile: saved, draft: current } = latest.current;
     // Nothing typed, or nothing changed. Not an early return for tidiness: a
     // PATCH per blur would rewrite the row every time the reader tabbed past.
     if (saved === null || current === saved) return;
+    if (inFlight.current === current) return;
+    inFlight.current = current;
+    const mine = ++generation.current;
     setSaving(true);
     setError(null);
     fetch("/api/reader", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profile: current === "" ? null : current }),
+      /* The page is going away, so the request has to outlive it. Without this
+         the browser is entitled to cancel it the moment the document unloads,
+         and the reader's last sentence is gone with no error anywhere —
+         `pagehide`'s whole reason for being here, undone. */
+      ...(leaving ? { keepalive: true } : {}),
     })
       .then((r) => readJson<{ profile: string | null }>(r))
       .then((body) => {
+        if (mine !== generation.current) return;
         /* The server's answer, not the draft — it normalises (trims, settles
            line endings), and the box must show the string that was actually
            stored. Otherwise a reader who pasted trailing whitespace sees one
@@ -96,8 +121,13 @@ export function useProfile(): UseProfile {
         setProfile(value);
         setDraft(value);
       })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setSaving(false));
+      .catch((e: Error) => {
+        if (mine === generation.current) setError(e.message);
+      })
+      .finally(() => {
+        if (inFlight.current === current) inFlight.current = null;
+        if (mine === generation.current) setSaving(false);
+      });
   }, []);
 
   /* The tab closing, or the reader navigating away, with the caret still in the
@@ -106,8 +136,9 @@ export function useProfile(): UseProfile {
      read on an iPad. The request may not complete — that is the honest limit of
      doing this at all — but not trying is strictly worse. */
   useEffect(() => {
-    window.addEventListener("pagehide", flush);
-    return () => window.removeEventListener("pagehide", flush);
+    const leave = () => flush(true);
+    window.addEventListener("pagehide", leave);
+    return () => window.removeEventListener("pagehide", leave);
   }, [flush]);
 
   return { profile, draft, setDraft, flush, error, saving };
@@ -134,13 +165,20 @@ export function useProfile(): UseProfile {
  * is a control appearing a moment late; the other way round it is a control
  * that appears and vanishes.
  */
-export function useHasProfile(): boolean {
+export function useHasProfile(slug?: string): boolean {
   const [has, setHas] = useState(false);
   useEffect(() => {
     let live = true;
-    fetch("/api/reader")
-      .then((r) => readJson<{ profile: string | null }>(r))
-      .then((body) => live && setHas(Boolean(body.profile)))
+    /* **With the slug, because there are two boxes.** A reader who has written
+       only "why you're reading this one" has a profile as far as every prompt
+       is concerned — `renderProfile` joins the two halves — and asking about
+       the global box alone would hide every control that offers to turn it off.
+       The server resolves it exactly as the prompts do, so the answer here and
+       the answer the model gets cannot disagree. */
+    const at = slug ? `?slug=${encodeURIComponent(slug)}` : "";
+    fetch(`/api/reader${at}`)
+      .then((r) => readJson<{ hasProfile: boolean }>(r))
+      .then((body) => live && setHas(body.hasProfile))
       // A reader whose profile could not be read is a reader with no profile as
       // far as this is concerned. There is nothing useful to say about it here,
       // and /profile will report the failure properly if they go and look.
@@ -148,6 +186,6 @@ export function useHasProfile(): boolean {
     return () => {
       live = false;
     };
-  }, []);
+  }, [slug]);
   return has;
 }

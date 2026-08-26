@@ -338,7 +338,7 @@ describe("the reader routes", () => {
   it("answers null for a reader who has written nothing", async () => {
     const r = await call("GET", "/api/reader");
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ profile: null });
+    expect(r.body).toEqual({ profile: null, hasProfile: false });
   });
 
   it("stores a profile and reads it back", async () => {
@@ -346,7 +346,10 @@ describe("the reader routes", () => {
     expect(w.status).toBe(200);
     // Normalised on the way in, so the value stored is the value hashed.
     expect(w.body).toEqual({ profile: "A physicist." });
-    expect((await call("GET", "/api/reader")).body).toEqual({ profile: "A physicist." });
+    expect((await call("GET", "/api/reader")).body).toEqual({
+      profile: "A physicist.",
+      hasProfile: true,
+    });
   });
 
   it("treats null and blank as clearing it", async () => {
@@ -364,6 +367,26 @@ describe("the reader routes", () => {
     expect(r.body.error).toMatch(/Nothing to change/);
   });
 
+  it("counts an article's own purpose as a profile, even with no global one", async () => {
+    /* The controls ask this question to decide whether to appear at all, and
+       asking only about the global box hid them from a reader who had filled in
+       "why you're reading this one" — who then could not opt out of something
+       they could not see. GPT Sol's review of the built code, 2026-08-26. */
+    const SLUG = "test-routes-purpose-only";
+    const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
+    await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
+    try {
+      await call("PATCH", `/api/library/${SLUG}`, { purpose: "the evidence" });
+      // No global profile at all…
+      expect((await call("GET", "/api/reader")).body.profile).toBeNull();
+      // …and the article still has one.
+      const r = await call("GET", `/api/reader?slug=${SLUG}`);
+      expect(r.body).toEqual({ profile: null, hasProfile: true });
+    } finally {
+      await rm(DIR, { recursive: true, force: true });
+    }
+  });
+
   it("refuses a profile that is not a string or null", async () => {
     expect((await call("PATCH", "/api/reader", { profile: 42 })).status).toBe(400);
     expect((await call("PATCH", "/api/reader", '"hello"')).status).toBe(400);
@@ -372,7 +395,10 @@ describe("the reader routes", () => {
   it("refuses one longer than the cap, and stores nothing", async () => {
     const r = await call("PATCH", "/api/reader", { profile: "x".repeat(2000) });
     expect(r.status).toBe(400);
-    expect((await call("GET", "/api/reader")).body).toEqual({ profile: null });
+    expect((await call("GET", "/api/reader")).body).toEqual({
+      profile: null,
+      hasProfile: false,
+    });
   });
 });
 

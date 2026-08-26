@@ -105,7 +105,11 @@ export function useDictation(onText: (text: string) => void): UseDictation {
     armed.current = false;
     setListening(false);
     setInterim("");
-    recognition.current?.stop();
+    const r = recognition.current;
+    /* Cleared before stopping, so the `onend` this provokes fails the identity
+       check in `start` and cannot restart anything. */
+    recognition.current = null;
+    r?.stop();
   }, []);
 
   const start = useCallback(() => {
@@ -133,19 +137,29 @@ export function useDictation(onText: (text: string) => void): UseDictation {
     };
 
     r.onerror = (e) => {
-      /* Everything except the two that are the reader's browser refusing is
-         swallowed. `no-speech` fires on every ordinary gap; `aborted` is what
-         our own `stop()` produces. Showing either would mean an error message
-         appearing while the feature was working perfectly, which is the fastest
-         way to teach somebody to ignore the error area. */
+      /* `no-speech` fires on every ordinary gap and `aborted` is what our own
+         `stop()` produces; showing either would mean an error appearing while
+         the feature worked perfectly, which is the fastest way to teach
+         somebody to ignore the error area. Everything else **disarms**, and
+         that is the fix for a real loop: a persistent `network` or `audio-
+         capture` failure used to leave `armed` set, so `onend` restarted a
+         recogniser that failed again immediately, for ever, with the button
+         still glowing. GPT Sol's review, 2026-08-26. */
+      if (e.error === "no-speech" || e.error === "aborted") return;
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setError("Your browser blocked the microphone. Allow it for this site and try again.");
-        armed.current = false;
-        setListening(false);
       }
+      armed.current = false;
+      setListening(false);
     };
 
     r.onend = () => {
+      /* **Only if this is still the current recogniser.** Stop then start in
+         quick succession leaves the old one's `onend` in the queue, and a bare
+         `armed.current` check would see the *new* session's flag and restart
+         the dead one — two recognisers, one microphone, duplicated phrases.
+         The identity check is what makes the flag safe to share. */
+      if (recognition.current !== r) return;
       // Safari ends the session on a pause. Restart while the reader still
       // wants it; otherwise this is the real stop.
       if (armed.current) {
@@ -153,8 +167,11 @@ export function useDictation(onText: (text: string) => void): UseDictation {
           r.start();
           return;
         } catch {
-          // Already starting. Not a failure — the next `onend` will handle it.
-          return;
+          /* The restart failed and there will be no further `onend` to try
+             again from — so this is the end, and saying so is the difference
+             between a stopped microphone and a button that claims to be
+             listening to nothing. */
+          armed.current = false;
         }
       }
       setListening(false);

@@ -59,20 +59,34 @@ export function ProfileBox({
      after the first rather than at the same spot. Reading `value` from the prop
      rather than the DOM: React owns this input, and the two can disagree for a
      frame. */
+  /* The caret to insert at, kept here rather than read off the DOM each time.
+     Two final phrases can arrive between renders — the recogniser does not wait
+     for React — and reading `value` and `selectionStart` fresh each time meant
+     the second overwrote the first. So the position is advanced by us, and the
+     text is read from a ref that is updated the moment we change it rather than
+     when the prop comes back round. GPT Sol's review, 2026-08-26. */
+  const live = useRef(value);
+  live.current = value;
+  const caret = useRef<number | null>(null);
+
   const dictation = useDictation((text) => {
     const el = box.current;
-    const at = el?.selectionStart ?? value.length;
-    const to = el?.selectionEnd ?? value.length;
+    const current = live.current;
+    const at = caret.current ?? el?.selectionStart ?? current.length;
+    const to = caret.current ?? el?.selectionEnd ?? current.length;
     /* A space between phrases, unless we are at the very start or there is
        already whitespace there. The recogniser hands back "the evidence" with
        no leading space, and three phrases in a row would otherwise read
        "the evidencenot the historyplease". */
-    const needsSpace = at > 0 && !/\s$/.test(value.slice(0, at));
+    const needsSpace = at > 0 && !/\s$/.test(current.slice(0, at));
     const insert = `${needsSpace ? " " : ""}${text}`;
-    onChange(value.slice(0, at) + insert + value.slice(to));
+    const next = current.slice(0, at) + insert + current.slice(to);
+    live.current = next;
+    caret.current = at + insert.length;
+    onChange(next);
     requestAnimationFrame(() => {
-      const next = at + insert.length;
-      el?.setSelectionRange(next, next);
+      const pos = caret.current;
+      if (pos !== null) el?.setSelectionRange(pos, pos);
     });
   });
 
@@ -94,7 +108,23 @@ export function ProfileBox({
             aria-pressed={dictation.listening}
             title={dictation.listening ? "Stop dictating" : "Dictate"}
             disabled={disabled}
-            onClick={dictation.toggle}
+            onClick={() => {
+              if (dictation.listening) {
+                /* Stopping is the moment the reader is finished, and the box
+                   never blurred — clicking the microphone took the focus, which
+                   already saved the *pre-dictation* text and then left
+                   everything dictated unsaved. So the stop commits.
+                   GPT Sol's review, 2026-08-26. */
+                caret.current = null;
+                dictation.toggle();
+                onCommit();
+                return;
+              }
+              // Where the reader had the caret when they pressed it. Read now,
+              // because the button is about to take the focus.
+              caret.current = box.current?.selectionStart ?? value.length;
+              dictation.toggle();
+            }}
           >
             {dictation.listening ? <MicOff size={14} /> : <Mic size={14} />}
           </button>

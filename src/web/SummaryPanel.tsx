@@ -68,7 +68,6 @@ import { currentEntryId, rungText, type SummaryNode } from "./tree.js";
 import type { UseSummaries } from "./useSummaries.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
-import { useHasProfile } from "./useProfile.js";
 
 interface Props extends UseSummaries {
   /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
@@ -109,6 +108,7 @@ export function SummaryPanel({
   stale,
   profiled,
   profileChanged,
+  hasProfile,
   error,
   job,
   failed,
@@ -172,7 +172,6 @@ export function SummaryPanel({
    * the box still gets an unsteered rewrite. One variable for the two would
    * make clearing it impossible: the artefact's note would keep reappearing.
    */
-  const hasProfile = useHasProfile();
   /* Seeded from what the artefact on screen was written with, so nothing has to
      remember the reader's last choice between visits — the file does. */
   const [withProfile, setWithProfile] = useState(() => (summaries ? profiled : true));

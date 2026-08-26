@@ -372,7 +372,7 @@ function Thread({
   onWrite(force?: boolean, useProfile?: boolean): Promise<void>;
   onCancel(id: string): void;
 }) {
-  const hasProfile = useHasProfile();
+  const hasProfile = useHasProfile(thread.slug);
   // Seeded from what the thread on screen was written with; the artefact is
   // the memory, so nothing here has to be.
   const [withProfile, setWithProfile] = useState(thread.profileHash != null);

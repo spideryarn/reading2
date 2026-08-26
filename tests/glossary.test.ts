@@ -1021,6 +1021,39 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
     expect(existingFor(null, "deadbeefdeadbeef")).toBeNull();
   });
 
+  it("refuses to append across a change of reader profile", () => {
+    /* **The gate is here, not in `isStale`.** Folding the profile into `isStale`
+       and stopping would have left this path untouched: the top-up would append
+       terms written for a physicist to terms written for nobody in particular,
+       and stamp the whole list with the new hash. A lie about provenance,
+       written by us, into a file. docs/project/reader-profile.md.
+
+       Note this is stricter than `profileIsStale`, where `null` never counts —
+       there the question is "should we warn them", here it is "may these two
+       lists be merged". */
+    const current = { ...v1, version: PROMPT_VERSION };
+    const HASH = "0123456789abcdef";
+    const OTHER = "fedcba9876543210";
+
+    // Written without a profile, and none now: mergeable.
+    expect(existingFor(current, "deadbeefdeadbeef")).not.toBeNull();
+    expect(existingFor(current, "deadbeefdeadbeef", null)).not.toBeNull();
+    // A list written before the field existed compares equal to one written
+    // without a profile. Neither was written for anybody in particular.
+    expect(existingFor({ ...current, profileHash: null }, "deadbeefdeadbeef", null)).not.toBeNull();
+
+    // Same profile: mergeable.
+    expect(
+      existingFor({ ...current, profileHash: HASH }, "deadbeefdeadbeef", HASH),
+    ).not.toBeNull();
+
+    // Every mismatch refuses, including in both directions across `null`.
+    expect(existingFor({ ...current, profileHash: HASH }, "deadbeefdeadbeef", OTHER)).toBeNull();
+    expect(existingFor({ ...current, profileHash: HASH }, "deadbeefdeadbeef", null)).toBeNull();
+    expect(existingFor({ ...current, profileHash: null }, "deadbeefdeadbeef", HASH)).toBeNull();
+    expect(existingFor(current, "deadbeefdeadbeef", HASH)).toBeNull();
+  });
+
   it("carries the ids across the rewrite, which is what refusing forgot", () => {
     /* The data-loss bug, and the shape of its real fix. Refusing to append was
        right; doing it without inheriting ids was not. `taken` was empty, every

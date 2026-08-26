@@ -24,6 +24,7 @@
  *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
  *   GET    /api/summary/:slug    the piece at more than one length, and whether it is stale
+ *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
  *   GET    /api/comments/:slug   every stored comment for the article
  *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
  *   DELETE /api/comments/:slug/:id
@@ -71,6 +72,7 @@ import {
   loadArticle,
   loadGlossary,
   lookUpTerm,
+  loadIdeas,
   loadSummaries,
   loadTweets,
 } from "./store/index.js";
@@ -109,6 +111,7 @@ import type {
   Job,
   LibrarySearchResponse,
   ShelfState,
+  IdeasResponse,
   SummariesResponse,
   ThreadResponse,
   ThreadSummary,
@@ -2202,6 +2205,13 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
      needs a patient deadline; `explain` has its own. */
   const lookup = /^\/api\/glossary\/([\w.%-]+)\/([\w.%-]+)\/lookup$/.exec(url);
   const summary = /^\/api\/summary\/([\w.%-]+)$/.exec(url);
+  /* Read only, and no DELETE beside it — for the same reason the summary has
+     none, plus one of its own: `ideas` replaces rather than appends, so
+     re-running the step already *is* "start again". The glossary needs a delete
+     precisely because running it again would add to the list it is trying to
+     throw away. Asking for these is
+     POST /api/jobs { slug, steps: ["ideas"] }. */
+  const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(url);
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(url);
   const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(url);
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
@@ -2334,6 +2344,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
         const at = slugPart(summary, 1);
         const found = await loadSummaries(at);
         send(res, 200, await withProfileChanged<SummariesResponse>(at, found, found.summaries));
+      }
+      return true;
+    }
+    if (ideas && req.method === "GET") {
+      {
+        const at = slugPart(ideas, 1);
+        const found = await loadIdeas(at);
+        send(res, 200, await withProfileChanged<IdeasResponse>(at, found, found.ideas));
       }
       return true;
     }

@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Job, Summaries, SummariesResponse } from "../types.js";
 import { useJobs } from "./useJobs.js";
 import { readJson } from "./lib/api.js";
+import { useHasProfile } from "./useProfile.js";
 
 export type SummariesStatus = "loading" | "none" | "ready" | "error";
 
@@ -39,6 +40,14 @@ export interface UseSummaries {
   /** Written from a reader profile, and whether that profile has changed since. */
   profiled: boolean;
   profileChanged: boolean;
+  /**
+   * The reader has a profile that applies to **this article** — either half.
+   *
+   * Resolved here rather than in the panel because the slug is here, and the
+   * question needs it: a reader who has written only "why you're reading this
+   * one" has a profile as far as every prompt is concerned. src/web/useProfile.ts.
+   */
+  hasProfile: boolean;
   /** A read failure, or the reason the last request could not be started. */
   error: string | null;
   /** The job writing this article's summaries, if one is. Null otherwise. */
@@ -75,6 +84,7 @@ export function useSummaries(slug: string): UseSummaries {
   const [stale, setStale] = useState(false);
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
+  const hasProfile = useHasProfile(slug);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -199,6 +209,7 @@ export function useSummaries(slug: string): UseSummaries {
     stale,
     profiled,
     profileChanged,
+    hasProfile,
     error,
     job,
     failed,
