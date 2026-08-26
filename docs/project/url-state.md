@@ -28,6 +28,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 |---|---|---|---|
 | `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
 | `text` | `1` reading mode, `0` outline mode | push | `?text=0` |
+| `spine` | whether the bird's-eye rail is on screen. **Absent means automatic** — off in outline mode, labelled only when the labels are free ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)). Present means the reader chose, in either direction. | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
@@ -36,7 +37,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `sort` | how the glossary list is ordered, absent for `prioritised` | push | `?sort=document` |
 | `gate` | how high the prioritised order's bar is — `difficulty × centrality` — **absent means nobody has touched it**, which the panel reads as `0.30` | **replace**, debounced | `?gate=0.45` |
-| `match` | which matcher search mode is using: the letters you typed, or what they mean — [search.md](search.md) | push | `?match=meaning` |
+| `match` | which matcher search mode is using: the letters you typed, or what they mean (default `meaning`) — [search.md](search.md) | push | `?match=words` |
 | `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
 | `order` | how the results list is stacked: `document` or `confidence` | push | `?order=confidence` |
@@ -50,11 +51,19 @@ either spelling are rewritten to that page before React mounts, by
 [`main.tsx`](../../src/web/main.tsx), keeping every other parameter they arrived with. `about=0` is
 left alone — it meant the panel was shut, which is not a reason to send anybody anywhere.
 
-The bird's-eye rail is deliberately **not** a parameter. Its visibility is derived, not chosen — it
-is off in outline mode and collapses to ticks when labels would cost a gist column, both decided by
-`fitView` ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)).
-Nothing the reader sets means there is nothing to remember. If it ever gains a toggle it gains a
-param, and `parseAsBit` is already the right parser for it.
+**`?spine=` is what this file said would happen, and it is worth keeping the sentence.** Until
+2026-08-26 the bird's-eye rail was deliberately *not* a parameter: its visibility was derived rather
+than chosen — off in outline mode, ticks rather than labels when the labels would cost a gist column,
+both decided by `fitView`
+([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them))
+— and nothing the reader set meant there was nothing to remember. This paragraph then said: *if it
+ever gains a toggle it gains a param, and `parseAsBit` is already the right parser for it.* It gained
+a toggle, and that is exactly what it cost.
+
+Note which half of the old rule survived. The parameter says **on or off** and the derivation keeps
+everything else: full-vs-narrow is still `fitView`'s, because how much room there is was never the
+reader's question. And absent still means derived, which is why this one has no default — see
+`?gate=` below for the same call made for the same reason.
 
 `cols=none` exists because the empty list would otherwise serialize to an empty string, which is
 indistinguishable from the parameter being absent — and absent means *automatic*, which is the
@@ -111,6 +120,12 @@ matcher, and then exactly one of `find` and `run` is the thing being matched. It
 deliberately not the glossary's `?sort=` — two modes' orderings have nothing in common but the word,
 and `sort=difficulty` arriving in search mode would be a value with no meaning that something would
 eventually have to guess at.
+
+`match` **defaults to `meaning`** since 2026-08-26, and the one consequence worth writing down here
+is a URL that carries `?find=` and no `?match=`. There is exactly one producer of those — the
+library's passage deep-link — and it now says `match=words` out loud rather than relying on the
+default to mean what it used to. Anywhere else, reaching words mode is something the reader did, and
+doing it pushed the parameter. See [search.md § The URL](search.md#the-url).
 
 **A third segment says which of the article's pages**, added the same day:
 `/read/<slug>/metadata` and `/read/<slug>/tweets`. That does not bend the rule — those are still the

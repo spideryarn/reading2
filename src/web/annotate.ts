@@ -43,16 +43,31 @@ import type { Block, BlockId } from "../types.js";
  * carries the ✳ marker at its end. `term` is a glossary occurrence: transient,
  * present only while that term is selected in the glossary panel, and inert —
  * nothing listens for a click on one, because pressing it should do what
- * pressing the prose has always done.
+ * pressing the prose has always done. `hit` is a search result: transient in
+ * the same way, inert in the same way, and the only kind whose *intensity*
+ * carries information — see `strength`.
  *
- * **The two can cover the same words**, and that is the case worth being
- * careful about: a reader can ask a question about a sentence that also
- * contains a term. So the merged `<mark>` carries whichever classes apply, and
- * the comment attributes are populated from the comment marks alone — a click
- * handler that read a term's id out of `data-comment` would try to open a
- * comment that does not exist.
+ * **Any two of them can cover the same words**, and that is the case worth
+ * being careful about: a reader can ask a question about a sentence that also
+ * contains a term and also matches what they searched for. So the merged
+ * `<mark>` carries whichever classes apply, and the comment attributes are
+ * populated from the comment marks alone — a click handler that read a term's
+ * id out of `data-comment` would try to open a comment that does not exist.
+ *
+ * **This is why we did not need the CSS Custom Highlight API.**
+ * docs/project/original-version/highlighting.md is emphatic that a third kind
+ * of mark over the same prose is where a wrapper-span library gives up, because
+ * HTML elements nest and two ranges that merely cross have no valid markup —
+ * and it recommends `::highlight()` over `Range` objects instead. That
+ * recommendation is right about the problem and was aimed at a different
+ * solution to it: `annotateHtml` below does not wrap a range, it **cuts every
+ * text node at every boundary and labels each piece with whichever marks cover
+ * it**. Nothing nests, so nothing can fail to nest. The third kind cost this
+ * file one entry in a union and one `if`, which is the evidence that the
+ * approach holds; if a fourth ever needs per-mark *styling* that classes cannot
+ * express, that is when to reconsider.
  */
-export type MarkKind = "cmt" | "term";
+export type MarkKind = "cmt" | "term" | "hit";
 
 export interface Mark {
   /** The comment, or the glossary term, this mark belongs to. */
@@ -63,8 +78,26 @@ export interface Mark {
   end: number;
   /** Defaults to `cmt`, which is what every mark was before the glossary. */
   kind?: MarkKind;
-  /** The comment whose dialog is open, so the prose can say which one it is. */
+  /**
+   * The comment whose dialog is open — or the search result the reader has
+   * pressed in the panel — so the prose can say which one it is.
+   */
   open?: boolean;
+  /**
+   * How strongly to wash these words, 0–1. **`hit` marks only.**
+   *
+   * The one piece of information a mark carries in its appearance rather than
+   * beside it, and it is here because a search hit has a confidence and the
+   * reader ought to be able to see which matches the model was sure about. A
+   * binary highlight hides the model's uncertainty, which is the opposite of
+   * what docs/project/vision.md § Principles asks for.
+   *
+   * Where two hits cover the same words the **strongest wins**, rather than the
+   * two adding up: opacity that accumulates would make an overlap of two
+   * middling matches look more certain than either of them is, which is a claim
+   * nobody made.
+   */
+  strength?: number;
 }
 
 /** A comment's stored anchor, before it has been matched against the block. */
@@ -175,11 +208,16 @@ export function annotateHtml(html: string, marks: Mark[]): string {
       const el = doc.createElement("mark");
       const comments = covering.filter((m) => (m.kind ?? "cmt") === "cmt");
       const terms = covering.filter((m) => m.kind === "term");
-      // Both classes when both kinds cover these words. `mark.cmt` is what the
-      // click handler in TableView.tsx selects on, so a term must never carry
-      // that class alone — and a comment must never lose it because a term
+      const hits = covering.filter((m) => m.kind === "hit");
+      // Every class that applies. `mark.cmt` is what the click handler in
+      // TableView.tsx selects on, so a term or a hit must never carry that
+      // class alone — and a comment must never lose it because one of them
       // happens to overlap it.
-      el.className = [comments.length > 0 ? "cmt" : "", terms.length > 0 ? "term" : ""]
+      el.className = [
+        comments.length > 0 ? "cmt" : "",
+        terms.length > 0 ? "term" : "",
+        hits.length > 0 ? "hit" : "",
+      ]
         .filter(Boolean)
         .join(" ");
       if (comments.length > 0) {
@@ -190,7 +228,26 @@ export function annotateHtml(html: string, marks: Mark[]): string {
         if (comments.some((m) => m.end === nodeStart + to)) el.setAttribute("data-mark-end", "");
       }
       if (terms.length > 0) el.setAttribute("data-term", terms.map((m) => m.id).join(" "));
-      if (comments.some((m) => m.open)) el.setAttribute("data-open", "");
+      if (hits.length > 0) {
+        el.setAttribute("data-hit", hits.map((m) => m.id).join(" "));
+        /* The wash intensity, as a custom property the stylesheet multiplies a
+           colour by (styles.css § search mode). Written as a *number* rather
+           than as a colour on purpose: the colour belongs to the design tokens
+           and the confidence belongs to the model, and a component that mixed
+           them here would put a hex value beyond the reach of the theme.
+
+           Strongest wins — see `strength` on Mark. `toFixed(3)` because this
+           string goes into an attribute on every marked run of every marked
+           block, and 17 digits of float noise is real bytes for no gain. */
+        const strength = Math.max(...hits.map((m) => clamp(m.strength ?? 1, 0, 1)));
+        el.setAttribute("style", `--hit-a:${strength.toFixed(3)}`);
+      }
+      // A hit the reader has pressed in the panel gets the same treatment as
+      // the comment whose dialog is open, and for the same reason: after a jump
+      // the panel and the passage need to be visibly the same thing.
+      if (comments.some((m) => m.open) || hits.some((m) => m.open)) {
+        el.setAttribute("data-open", "");
+      }
       el.textContent = piece;
       fragment.appendChild(el);
     }

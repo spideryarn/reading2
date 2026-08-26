@@ -280,3 +280,100 @@ describe("termMarks", () => {
     expect(host.querySelectorAll("mark mark")).toHaveLength(0);
   });
 });
+
+/**
+ * The third kind of mark, and the claim it rests on.
+ *
+ * docs/project/original-version/highlighting.md warns that a third layer of
+ * marks over the same prose is where a wrapper-span library gives up: HTML
+ * elements nest, two ranges that merely cross have no valid markup, and its
+ * recommendation was to abandon DOM marks for the CSS Custom Highlight API.
+ *
+ * These tests are the evidence that we did not have to. `annotateHtml` never
+ * wraps a *range* — it cuts each text node at every boundary and labels each
+ * piece with whichever marks cover it — so overlap is expressible by
+ * construction. If one of these ever fails, that recommendation becomes live
+ * again. See annotate.ts § MarkKind.
+ */
+describe("search hits — the third kind of mark", () => {
+  const html = "<p>He rejects the idea that mind is <em>software</em> running on wet hardware.</p>";
+
+  const host = (out: string) => {
+    const el = document.createElement("div");
+    el.innerHTML = out;
+    return el;
+  };
+
+  it("draws a hit as its own class, with no comment attributes on it", () => {
+    const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit" }]);
+    expect(out).toContain('class="hit"');
+    expect(out).toContain('data-hit="h1"');
+    expect(out).not.toContain("data-comment");
+    // No ✳ marker: a hit is not an artefact the reader made and cannot be opened.
+    expect(out).not.toContain("data-mark-end");
+  });
+
+  it("carries the confidence through as a number the stylesheet can multiply", () => {
+    const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit", strength: 0.4 }]);
+    expect(host(out).querySelector("mark.hit")?.getAttribute("style")).toBe("--hit-a:0.400");
+  });
+
+  it("gives a mark with no strength a full one, not an invisible one", () => {
+    // The failure of a missing property should be a mark you can see.
+    const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit" }]);
+    expect(host(out).querySelector("mark.hit")?.getAttribute("style")).toBe("--hit-a:1.000");
+  });
+
+  it("lets the strongest of two overlapping hits win, rather than adding them up", () => {
+    // Accumulating opacity would make two middling matches look more certain
+    // than either of them is — a claim nobody made.
+    const out = annotateHtml(html, [
+      { id: "h1", start: 0, end: 20, kind: "hit", strength: 0.3 },
+      { id: "h2", start: 10, end: 30, kind: "hit", strength: 0.9 },
+    ]);
+    const overlap = [...host(out).querySelectorAll("mark.hit")].find(
+      (m) => (m.getAttribute("data-hit") ?? "").split(" ").length === 2,
+    );
+    expect(overlap).toBeDefined();
+    expect(overlap?.getAttribute("style")).toBe("--hit-a:0.900");
+  });
+
+  /** The case the borrowed doc says cannot be expressed. It can. */
+  it("merges a comment, a term and a hit over the same words into ONE mark", () => {
+    const out = annotateHtml(html, [
+      { id: "c1", start: 3, end: 30 },
+      { id: "t1", start: 3, end: 30, kind: "term" },
+      { id: "h1", start: 3, end: 30, kind: "hit", strength: 0.7 },
+    ]);
+    const el = host(out).querySelector("mark.cmt.term.hit");
+    expect(el).not.toBeNull();
+    expect(el?.getAttribute("data-comment")).toBe("c1");
+    expect(el?.getAttribute("data-term")).toBe("t1");
+    expect(el?.getAttribute("data-hit")).toBe("h1");
+    // Nothing nested, which is the whole property.
+    expect(host(out).querySelectorAll("mark mark")).toHaveLength(0);
+  });
+
+  it("expresses three marks that only PARTIALLY overlap, which is the hard case", () => {
+    // a───────b
+    //     c───────d       <- crosses, does not nest
+    //         e───────f
+    const out = annotateHtml(html, [
+      { id: "c1", start: 0, end: 20 },
+      { id: "t1", start: 10, end: 30, kind: "term" },
+      { id: "h1", start: 25, end: 45, kind: "hit", strength: 0.5 },
+    ]);
+    const el = host(out);
+    expect(el.querySelectorAll("mark mark")).toHaveLength(0);
+    // The middle stretch belongs to two of them at once and to neither alone.
+    expect(el.querySelector("mark.cmt.term")).not.toBeNull();
+    expect(el.querySelector("mark.term.hit")).not.toBeNull();
+    // And the rendered text is unchanged, which is the thing a bad merge breaks.
+    expect(el.textContent).toBe(renderedText(html));
+  });
+
+  it("marks the pressed hit as open, the way an open comment is", () => {
+    const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit", open: true }]);
+    expect(host(out).querySelector("mark.hit")?.hasAttribute("data-open")).toBe(true);
+  });
+});

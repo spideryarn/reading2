@@ -3198,12 +3198,16 @@ td.text.has-hit {
   .srch-spin { animation: cmt-pulse 1.4s ease-in-out infinite; }
 }
 
+/* The row under the box: the matcher pair on the left, `find` pushed right.
+   The pair is a `role="radiogroup"` of its own rather than the whole row, so
+   that `find` is not one of its children — see SearchPanel.tsx. */
 .srch-modes {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   margin-top: 0.4rem;
 }
+.srch-matchers { display: flex; align-items: center; gap: 0.25rem; }
 .srch-mode {
   display: inline-flex;
   align-items: center;

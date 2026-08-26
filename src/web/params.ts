@@ -106,6 +106,26 @@ export const textParam = parseAsBit
   .withOptions({ history: "push" });
 
 /**
+ * Whether the bird's-eye rail down the left is on screen — see Spine.tsx.
+ *
+ * **No default, deliberately** — the same call `colsParam` makes below, for
+ * nearly the same reason. Absent means *nobody has touched this*, and the rail
+ * follows the window and the mode exactly as it always did: off in outline
+ * mode, where the table already is a whole-article overview, and labelled only
+ * when the labels are free (layout.ts § fitView). Giving it a default here
+ * would make "the reader hid the rail" indistinguishable from "outline mode
+ * dropped it", and those want opposite things when the text comes back.
+ *
+ * It only says on or off. Whether an on rail shows its labels or collapses to
+ * ticks stays with the window width, because that is a question about how much
+ * room there is rather than about what the reader wants to see.
+ *
+ * `push`, like `cols` and `text`: hiding a whole column of the view is a
+ * deliberate act, and Back should undo it.
+ */
+export const spineParam = parseAsBit.withOptions({ history: "push" });
+
+/**
  * Which gist columns are visible.
  *
  * No default, deliberately: the sensible default is "all of them", and how many
@@ -341,9 +361,21 @@ export const gateParam = createParser<number>({
  * meaning-based search answer different questions, and their version ran both,
  * side by side.* One box, two matchers, and the reader says which.
  *
- * `words` is the default because it is the free one. A reader who opens the
- * panel and types should get instant highlights, not a bill; choosing to spend
- * a model call is a thing you do on purpose, and the toggle is right there.
+ * **`meaning` is the default**, changed by Greg on 2026-08-26. It was `words`
+ * before, and the argument for that was that `words` is the free one — a reader
+ * who opens the panel and types should get instant highlights, not a bill.
+ *
+ * That argument was about the wrong thing. Nothing in `meaning` mode spends
+ * anything until the reader presses **find**; the free-ness of `words` was never
+ * at risk, because the cost is attached to the submit and not to the mode. What
+ * the old default actually decided was which *question* the panel opens on, and
+ * the interesting one — describe what you are looking for — is the one this app
+ * exists to offer. Find-on-page is the thing every reader already has a key for.
+ *
+ * The one URL that relied on the old default is the library's passage
+ * deep-link, which carries `?find=` and nothing else. It now says `match=words`
+ * out loud (Library.tsx). Nothing else produces a bare `?find=`: reaching words
+ * mode by hand pushes `match=words` on the way.
  *
  * `push`, like `cols` and `text`: switching matcher changes what the article
  * looks like, and Back should undo it.
@@ -354,9 +386,35 @@ export type Matcher = (typeof MATCHERS)[number];
 export const matchParam = createParser<Matcher>({
   parse: (v) => (MATCHERS.includes(v as Matcher) ? (v as Matcher) : null),
   serialize: (v) => v,
-})
-  .withDefault("words")
-  .withOptions({ history: "push" });
+}).withOptions({ history: "push" });
+
+export const DEFAULT_MATCHER: Matcher = "meaning";
+
+/**
+ * Which matcher a URL is asking for, when it may not say.
+ *
+ * **No `withDefault`, because absence has to stay visible.** The rule is one
+ * line and it is the whole reason this function exists rather than a constant:
+ * a URL that carries `?find=` and no `?match=` is a *words* search, whatever the
+ * default is today.
+ *
+ * That URL was the only spelling of a words search before 2026-08-26, so every
+ * one that was pasted into a message, bookmarked, or left in somebody's history
+ * is of that shape. Flipping the default without this would not have broken
+ * them loudly — it would have opened them in meaning mode with the words they
+ * were sent for sitting unread in a parameter nothing looks at, which is the
+ * quiet kind of wrong. Found by a GPT Sol review of this change, which is also
+ * where the point that updating `Library.tsx` is not the same as covering the
+ * URLs already in the world came from.
+ *
+ * It is safe in the other direction because **`?find=` is cleared on the way
+ * into meaning mode** (SearchPanel.tsx § Box): a live meaning search never has
+ * one set, so "has `find`" cannot mean anything but words.
+ */
+export function resolveMatcher(match: Matcher | null, find: string | null): Matcher {
+  if (match !== null) return match;
+  return find !== null && find.trim() !== "" ? "words" : DEFAULT_MATCHER;
+}
 
 /**
  * The literal text being matched, in `words` mode.
