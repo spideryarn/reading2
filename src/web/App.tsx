@@ -1172,14 +1172,27 @@ function SearchBand({
   const slots = useMemo(() => assignSlots(runs), [runs]);
 
   /* One list, two producers, and on the meaning side several searches merged.
-     Note that a `pending` or failed run contributes nothing rather than stale
-     results: a run that has not answered yet has no hits, and showing an older
-     run's marks under a newer run's colour would be the panel and the prose
-     saying different things. */
+
+     **A `pending` run contributes its hits now**, which is the whole of what
+     streaming search buys the reader: since 2026-08-26 the hook appends each
+     passage to `run.hits` as it arrives and leaves the status `pending` until
+     the authoritative result lands, so filtering on `done` here meant the marks
+     appeared in the prose all at once at the end anyway. Everything upstream
+     streamed and this line quietly undid it.
+
+     The comment this replaces said a pending run "has no hits", which was true
+     when it was written and is the reason to reread a filter rather than trust
+     the sentence above it.
+
+     A failed run still contributes nothing, and that half of the original
+     reasoning stands: it has no hits worth trusting, and showing an older run's
+     marks under a newer run's colour would be the panel and the prose saying
+     different things. Stale hits cannot leak in on a retry either — the hook
+     writes a fresh `hits: []` before it reopens the stream. */
   const answered = useMemo(
     () =>
       runs
-        .filter((r) => active.includes(r.id) && r.status === "done")
+        .filter((r) => active.includes(r.id) && r.status !== "error")
         .map((r) => ({ id: r.id, slot: slots.get(r.id) ?? 0, hits: r.hits })),
     [runs, active, slots],
   );

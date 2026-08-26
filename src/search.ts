@@ -286,6 +286,16 @@ export interface Dropped {
  * Exported for the tests, because this is the half of the file with the rules
  * in it and the half that must not be allowed to drift quietly.
  *
+ * **The top-level shape is asserted, not defaulted.** `raw.hits` must be
+ * present and an array — anything else (`{}`, `{hits:null}`, `{hits:"nope"}`,
+ * a bare array, `null`) throws `PROVIDER_UNREADABLE` rather than silently
+ * becoming `[]`. That used to be exactly the failure `parseHits`'s own
+ * docstring names as the one a reader could not possibly diagnose: a broken
+ * reply stored as the legitimate, meaningful answer "nothing in this article
+ * matches" — which is precisely what `{"hits": []}` is supposed to mean, and
+ * still does; only a genuinely missing or non-array `hits` is a failure here.
+ * Found by a GPT Sol review, 2026-08-26.
+ *
  * The order of the checks matters in one place: `quote` is checked against
  * `block.text` using src/quote-match.ts, which is **the same function the
  * browser uses to decide which characters to wash**. So a hit that survives
@@ -298,10 +308,11 @@ export function validateHits(
   raw: unknown,
   blocks: Block[],
 ): { hits: SearchHit[]; dropped: Dropped } {
+  const list = (raw as { hits?: unknown } | null | undefined)?.hits;
+  if (!Array.isArray(list)) {
+    throw new Error(PROVIDER_UNREADABLE.message, { cause: "hits-not-an-array" });
+  }
   const dropped: Dropped = { unknownIds: 0, unquoted: 0, clamped: 0, subOne: 0, truncated: 0 };
-  const list = Array.isArray((raw as { hits?: unknown })?.hits)
-    ? ((raw as { hits: unknown[] }).hits)
-    : [];
   const byId = new Map(blocks.map((b) => [b.id, b]));
   const hits: SearchHit[] = [];
 
@@ -363,6 +374,23 @@ export function validateHits(
  * is also the most likely real failure here, because the answer's size grows
  * with the number of hits and nothing else.
  *
+ * **Detected by balancing brackets from the opening `{` to the end of the
+ * text, not by `lastIndexOf("}")`.** That was the first version, and it had a
+ * bug that only showed up once streaming made "cut off after one complete
+ * hit" a real case rather than a hypothetical one: once one hit closes, ITS
+ * `}` is the last one anywhere in the text, so a genuinely truncated answer —
+ * `{"hits":[{...one whole hit...},{"blockId":"spy` — read as a *complete*
+ * object with trailing junk, fell into `JSON.parse` and failed there, and was
+ * reported as `[ai-unreadable]` ("could not be read at all") rather than
+ * `[ai-overflowed]` ("ask for something narrower") — sending the reader to
+ * blame the provider for a limit this app itself set. `isBalanced` below
+ * walks the whole remainder counting `{`/`[` opens against `}`/`]` closes
+ * (ignoring both inside quoted strings, the same way `hitExtractor` does),
+ * and a truncated answer is caught as soon as it does not return to zero,
+ * whether or not a hit happened to close first. See
+ * tests/search.test.ts § "says cut off, not malformed, once a complete hit
+ * has already streamed" for the case this fixes.
+ *
  * The other two outcomes — no object at all, and an object that is there but
  * malformed — read identically to a reader who did not write this code, so
  * both throw `PROVIDER_UNREADABLE` (docs/project/copy.md: every reader-facing
@@ -374,18 +402,52 @@ export function validateHits(
 export function parseHits(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const from = trimmed.indexOf("{");
-  const to = trimmed.lastIndexOf("}");
-  if (from !== -1 && to <= from) {
-    throw new Error(ANSWER_OVERFLOWED.message, { cause: "cut-off" });
-  }
   if (from === -1) {
     throw new Error(PROVIDER_UNREADABLE.message, { cause: "no-object" });
   }
+  if (!isBalanced(trimmed.slice(from))) {
+    throw new Error(ANSWER_OVERFLOWED.message, { cause: "cut-off" });
+  }
+  const to = trimmed.lastIndexOf("}");
   try {
     return JSON.parse(trimmed.slice(from, to + 1));
   } catch {
     throw new Error(PROVIDER_UNREADABLE.message, { cause: "malformed-json" });
   }
+}
+
+/**
+ * Does every `{`/`[` in `text` have a matching close by the end of it?
+ *
+ * Not a JSON validator — it does not check bracket TYPES match (`{` closed by
+ * `]` still counts as balanced) or that the result is otherwise well-formed;
+ * `JSON.parse` right after this is what actually validates the shape, and
+ * catches that case as "malformed" rather than "cut off". This only answers
+ * the narrower question `parseHits` needs: did the text stop partway through
+ * a structure, or did every brace and bracket that opened get closed. Braces
+ * and brackets inside a quoted string are ignored, the same way
+ * `hitExtractor` in src/search-hits-stream.ts ignores them, for the same
+ * reason — a literal `{` in a quoted example must not be counted as nesting.
+ */
+function isBalanced(text: string): boolean {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (const ch of text) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") depth--;
+  }
+  return depth === 0;
 }
 
 /**
@@ -535,7 +597,11 @@ export async function* findPassagesStream({
   let stopped = false;
 
   try {
-    for await (const chunk of sseChunks(response.body, composite, touch, end)) {
+    // strict: true — a dropped SSE frame here can drop a whole hits-array
+    // element while leaving JSON either side that still parses, which is
+    // the opposite of the trade chat and explain make. See sseChunks's own
+    // doc on `strict` in src/openrouter-stream.ts.
+    for await (const chunk of sseChunks(response.body, composite, touch, end, true)) {
       if (chunk.model) used = chunk.model;
       // A 200 that carries an error in the stream — a mid-generation provider
       // failure. It arrives as data, not as a broken connection.
@@ -626,23 +692,27 @@ export async function* findPassagesStream({
   }
 
   // The authoritative pass — a strict whole-text parse, not the extractor's
-  // best-effort one. See the module docstring § Streaming.
-  let parsed: unknown;
+  // best-effort one, then the same shape-and-content validation the mid-
+  // stream preview ran per item. See the module docstring § Streaming.
+  let hits: SearchHit[];
+  let dropped: Dropped;
   try {
-    parsed = parseHits(rawText);
+    ({ hits, dropped } = validateHits(parseHits(rawText), blocks));
   } catch (err) {
-    /* `parseHits`'s "no object at all" and "malformed JSON" branches share one
-       reader-facing sentence, PROVIDER_UNREADABLE — see its docstring — but
-       the distinction between them is real and worth keeping for whoever
+    /* Two different throws land here, both reduced to one reader-facing
+       sentence — PROVIDER_UNREADABLE, or ANSWER_OVERFLOWED for a cut-off
+       answer — because none of "no object", "malformed JSON", or "hits is
+       missing or not an array" is a distinction a reader can act on
+       differently. The distinction IS real and worth keeping for whoever
        reads this log, so it travels on the Error's `cause` rather than being
-       lost when the messages were merged. */
+       lost when the messages were merged: see parseHits's docstring for the
+       first two, and validateHits's for the third. */
     line.error(
       { model: used, ms: since(started), reason: (err as Error).cause ?? "?" },
       `${used}'s answer could not be parsed`,
     );
     throw err;
   }
-  const { hits, dropped } = validateHits(parsed, blocks);
 
   /* One line per finished search.
      The four `dropped` counts are the point of it, and each is invisible from

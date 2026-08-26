@@ -199,4 +199,59 @@ describe("hitExtractor", () => {
     const out = ex.push(raw);
     expect(out).toEqual([{ blockId: "spya-a", quote: "q", confidence: 10, reasoning: "r" }]);
   });
+
+  /**
+   * The defect GPT Sol found: a sibling array is not the hits array, however
+   * it is positioned. The old version keyed off "the first `[` one level
+   * inside the outer object", which made objects inside `notes` stream as
+   * hits — not a late hit, a WRONG one, since the reader would see a
+   * highlight the authoritative result never contained.
+   */
+  describe("only the array whose key is literally `hits`", () => {
+    it("ignores an array under an earlier sibling key", () => {
+      const validHit = { blockId: "spya-real1", quote: "the real hit", confidence: 80, reasoning: "r" };
+      const raw = JSON.stringify({
+        notes: [{ blockId: "spya-fake1", quote: "not a hit", confidence: 99, reasoning: "decoy" }],
+        hits: [validHit],
+      });
+      const ex = hitExtractor();
+      const out = ex.push(raw);
+      expect(out).toEqual([validHit]);
+    });
+
+    it("ignores an array under a LATER sibling key too — position alone never decides it", () => {
+      const validHit = { blockId: "spya-real2", quote: "the real hit", confidence: 80, reasoning: "r" };
+      const raw = JSON.stringify({
+        hits: [validHit],
+        notes: [{ blockId: "spya-fake2", quote: "not a hit", confidence: 99, reasoning: "decoy" }],
+      });
+      const ex = hitExtractor();
+      const out = ex.push(raw);
+      expect(out).toEqual([validHit]);
+    });
+
+    it("is not fooled by the word \"hits\" appearing as some OTHER key's value", () => {
+      // The real `"hits"` key still closes, immediately before the real
+      // array, overwriting whatever this unrelated value left behind — see
+      // the module docstring.
+      const validHit = { blockId: "spya-real3", quote: "the real hit", confidence: 80, reasoning: "r" };
+      const raw = JSON.stringify({ notes: "hits", hits: [validHit] });
+      const ex = hitExtractor();
+      const out = ex.push(raw);
+      expect(out).toEqual([validHit]);
+    });
+
+    it("still finds the key when it arrives split across a chunk boundary", () => {
+      const validHit = { blockId: "spya-real4", quote: "the real hit", confidence: 80, reasoning: "r" };
+      const raw = JSON.stringify({
+        notes: [{ blockId: "spya-fake4", quote: "not a hit", confidence: 99, reasoning: "decoy" }],
+        hits: [validHit],
+      });
+      // Split right inside the literal `"hits"` key itself.
+      const splitAt = raw.indexOf('"hits"') + 3;
+      const ex = hitExtractor();
+      const out = [...ex.push(raw.slice(0, splitAt)), ...ex.push(raw.slice(splitAt))];
+      expect(out).toEqual([validHit]);
+    });
+  });
 });

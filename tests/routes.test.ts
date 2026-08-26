@@ -11,10 +11,12 @@
 import { cp, rm } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleApi } from "../src/routes.js";
 import { createComment, loadComments } from "../src/comments.js";
 import { loadShelf } from "../src/shelf.js";
+import { deleteRun, loadRuns } from "../src/searches.js";
+import { mintId } from "../src/ids.js";
 
 const SLUG = "test-routes-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -501,5 +503,159 @@ describe("the tweets route", () => {
     const r = await call("POST", "/api/tweets/example");
     expect(r.status).toBe(404);
     expect(r.body).not.toHaveProperty("thread");
+  });
+});
+
+describe("POST /api/search/:slug is a stream too", () => {
+  // Its own slug, and its own OpenRouter mock, so stubbing `fetch` here cannot
+  // touch any other describe block in this file — none of the rest reach a
+  // model. loadArticle falls back to example/ for an unknown slug, same as
+  // every other route test here, so `data/<this slug>/` only ever holds
+  // searches.json.
+  const SEARCH_SLUG = "test-routes-search-fixture";
+  const SEARCH_DIR = path.resolve(import.meta.dirname, "..", "data", SEARCH_SLUG);
+
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(async () => {
+    await rm(SEARCH_DIR, { recursive: true, force: true });
+    vi.unstubAllGlobals();
+  });
+
+  // A quote genuinely inside example/blocks.json's spya-gp3g6s, so
+  // validateHits (src/search.ts) keeps it rather than dropping it as unquoted.
+  const HIT = {
+    blockId: "spya-gp3g6s",
+    quote: "Berggruen Prize",
+    confidence: 88,
+    reasoning: "names the prize the essay won",
+  };
+
+  /** An OpenRouter SSE reply carrying the given hits as one content delta. */
+  function openRouterReply(hits: unknown[]): Response {
+    const text =
+      `data: ${JSON.stringify({
+        model: "anthropic/claude-sonnet-4.5",
+        choices: [{ delta: { content: JSON.stringify({ hits }) } }],
+      })}\n\n` +
+      `data: ${JSON.stringify({ choices: [{ finish_reason: "stop", delta: {} }] })}\n\n` +
+      "data: [DONE]\n\n";
+    const bytes = new TextEncoder().encode(text);
+    return {
+      ok: true,
+      body: new ReadableStream<Uint8Array>({
+        pull(c) {
+          c.enqueue(bytes);
+          c.close();
+        },
+      }),
+    } as unknown as Response;
+  }
+
+  /** The `event:`/`data:` frames our own `sse()` writer produced, parsed back. */
+  function parseFrames(raw: string): { event: string; data: unknown }[] {
+    return raw
+      .split("\n\n")
+      .filter((chunk) => chunk.trim() !== "")
+      .map((chunk) => {
+        const lines = chunk.split("\n");
+        const event = lines.find((l) => l.startsWith("event:"))?.slice(6).trim() ?? "message";
+        const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim() ?? "{}";
+        return { event, data: JSON.parse(dataLine) };
+      });
+  }
+
+  it("emits begin, then a hit frame per hit, then exactly one done", async () => {
+    fetchMock.mockResolvedValue(openRouterReply([HIT]));
+    const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+      criterion: "the prize the essay won",
+    });
+    expect(r.status).toBe(200);
+    const frames = parseFrames(r.frames);
+    expect(frames.map((f) => f.event)).toEqual(["begin", "hit", "done"]);
+    expect((frames[0]!.data as { status: string }).status).toBe("pending");
+    expect((frames[1]!.data as { hit: { blockId: string } }).hit.blockId).toBe("spya-gp3g6s");
+    const done = frames[2]!.data as { status: string; hits: unknown[] };
+    expect(done.status).toBe("done");
+    expect(done.hits).toHaveLength(1);
+  });
+
+  it("a model failure arrives as a done frame with status: error, not an HTTP error", async () => {
+    fetchMock.mockRejectedValue(new Error("network exploded"));
+    const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+      criterion: "anything at all",
+    });
+    // The headers went out 200 before the model was ever called — see `sse`.
+    expect(r.status).toBe(200);
+    const frames = parseFrames(r.frames);
+    expect(frames.map((f) => f.event)).toEqual(["begin", "done"]);
+    const done = frames[1]?.data as { status: string; error?: string };
+    expect(done.status).toBe("error");
+    expect(done.error).toBeTruthy();
+  });
+
+  it("a run deleted before any hit streamed gets no done frame and does not come back", async () => {
+    const id = mintId();
+    fetchMock.mockImplementation(async () => {
+      // The reader deletes the run while the model is still thinking, before
+      // a single byte of its answer has been read.
+      await deleteRun(SEARCH_SLUG, id);
+      return openRouterReply([HIT]);
+    });
+    const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+      id,
+      criterion: "the prize the essay won",
+    });
+    const frames = parseFrames(r.frames);
+    // The model's hits still stream — the route has no cheap way to notice a
+    // delete mid-hit without a store read per hit, so it doesn't try.
+    expect(frames.map((f) => f.event)).toEqual(["begin", "hit"]);
+    expect(frames.some((f) => f.event === "done")).toBe(false);
+    expect(await loadRuns(SEARCH_SLUG)).toHaveLength(0);
+  });
+
+  it("a run deleted after a hit streamed, but before the search finishes, still gets no done frame", async () => {
+    const id = mintId();
+    const firstChunk = `data: ${JSON.stringify({
+      choices: [{ delta: { content: `{"hits":[${JSON.stringify(HIT)}` } }],
+    })}\n\n`;
+    const restChunk =
+      `data: ${JSON.stringify({ choices: [{ delta: { content: "]}" } }] })}\n\n` +
+      `data: ${JSON.stringify({ choices: [{ finish_reason: "stop", delta: {} }] })}\n\n` +
+      "data: [DONE]\n\n";
+    let pulls = 0;
+    fetchMock.mockResolvedValue({
+      ok: true,
+      body: new ReadableStream<Uint8Array>({
+        async pull(c) {
+          pulls++;
+          if (pulls === 1) {
+            c.enqueue(new TextEncoder().encode(firstChunk));
+            return;
+          }
+          if (pulls === 2) {
+            // The delete lands between the first hit arriving and the search
+            // finishing — after the reader has already seen it highlighted.
+            await deleteRun(SEARCH_SLUG, id);
+            c.enqueue(new TextEncoder().encode(restChunk));
+            return;
+          }
+          c.close();
+        },
+      }),
+    } as unknown as Response);
+
+    const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+      id,
+      criterion: "the prize the essay won",
+    });
+    const frames = parseFrames(r.frames);
+    expect(frames.map((f) => f.event)).toEqual(["begin", "hit"]);
+    expect(frames.some((f) => f.event === "done")).toBe(false);
+    expect(await loadRuns(SEARCH_SLUG)).toHaveLength(0);
   });
 });

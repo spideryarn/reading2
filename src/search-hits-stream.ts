@@ -17,28 +17,47 @@
  * value that is not a string, object or array needs no balancing, so nothing
  * here looks at numbers, `true`, `false` or `null` at all.
  *
- * It does not check which key the array belongs to, either: the first `[` it
- * meets one level inside the outer object is treated as the hits array,
- * because the prompt only ever puts one array there. Prose before the object
- * ("Here you go:") and a ```` ```json ```` fence are ignored the same way
- * `parseHits` ignores them — nothing before the outer `{` is looked at, and
- * once the outer object's matching `}` closes, nothing after it is either.
+ * **It DOES check which key the array belongs to.** An earlier version keyed
+ * off "the first `[` one level inside the outer object", on the theory that
+ * the prompt only ever puts one array there — which is true of a compliant
+ * model and was never the threat. A model that adds a stray sibling array
+ * (`{"notes":[...],"hits":[...]}`) is not rare enough to assume away, and
+ * treating `notes`'s contents as hits is not a late hit, it is a WRONG one —
+ * the reader sees a highlight the authoritative result never contained. So
+ * this tracks the most recently closed string literal seen directly inside
+ * the outer object (`stack.length === 1`), and only an array whose value that
+ * was — i.e. the array immediately follows a depth-1 key spelled `hits` — is
+ * ever treated as the hits array. In valid JSON a key string always closes
+ * immediately before its own value (only `:` and whitespace between), so a
+ * stray depth-1 string that happens to *contain* the word "hits" as a VALUE
+ * (`{"notes":"hits","hits":[...]}`) cannot fool this: the real `"hits"` key
+ * closes again, immediately before the real array, overwriting whatever the
+ * unrelated value left behind. See tests/search-hits-stream.test.ts for both
+ * of those cases, plus the key itself arriving split across a chunk boundary
+ * (`depth1StringStart` is an absolute index into `buf`, which is never
+ * truncated, so this needs no special handling — it falls out for free).
+ *
+ * Prose before the object ("Here you go:") and a ```` ```json ```` fence are
+ * ignored the same way `parseHits` ignores them — nothing before the outer
+ * `{` is looked at, and once the outer object's matching `}` closes, nothing
+ * after it is either.
  *
  * WHAT THIS DOES NOT DO: validate anything about a hit's shape. `validateHits`
  * in search.ts still owns that, and still needs the block list to check a
  * `blockId` and a `quote` against — this module is never given it, and
  * returns whatever `JSON.parse` produces.
  *
- * THE SAFETY PROPERTY THIS DEPENDS ON: `push` is allowed to miss a hit, split
- * one wrongly, or emit nothing at all — the worst that costs is a late hit,
- * never a wrong one. `text()` returns every character fed to it, unmodified
- * and in order, so the caller can still run the whole response through
- * `parseHits` + `validateHits` once the stream ends, exactly as it does
- * today; that final pass is the actual source of truth, and this module is
- * only ever showing the reader its answer sooner. That guarantee holds only
- * because `push` never mutates or drops anything from what it appends to the
- * buffer `text()` reads back — it only ever reads from that buffer, never
- * changes it.
+ * THE SAFETY PROPERTY THIS DEPENDS ON: `push` is allowed to miss a hit, or
+ * emit nothing at all — the worst that costs is a late hit, never a wrong
+ * one, now that the array a completed object is attributed to is pinned to
+ * the literal `hits` key rather than to position. `text()` returns every
+ * character fed to it, unmodified and in order, so the caller can still run
+ * the whole response through `parseHits` + `validateHits` once the stream
+ * ends, exactly as it does today; that final pass is the actual source of
+ * truth, and this module is only ever showing the reader its answer sooner.
+ * That guarantee holds only because `push` never mutates or drops anything
+ * from what it appends to the buffer `text()` reads back — it only ever reads
+ * from that buffer, never changes it.
  */
 export function hitExtractor(): {
   /** Feed the next chunk of streamed text. Returns any hit objects that completed within it, in order. */
@@ -60,9 +79,29 @@ export function hitExtractor(): {
   let inString = false;
   let escaped = false;
 
+  // Absolute index into `buf` of the opening `"` of a string literal
+  // currently being scanned directly inside the outer object (stack.length
+  // === 1), or -1 when not in one. Only tracked at that depth — a string
+  // nested inside a hit is irrelevant to which key it belongs to.
+  let depth1StringStart = -1;
+  // The most recently CLOSED string literal seen at that depth. Because a
+  // JSON key always closes immediately before its own `:` and value, this is
+  // always the correct key for whatever value comes next — see the module
+  // docstring.
+  let lastDepth1String: string | null = null;
+
   // stack.length at which we are directly inside the hits array, once found.
-  // -1 means "not found yet".
+  // -1 means "not found yet". This is a DEPTH NUMBER, and a sibling array at
+  // the same depth — one that comes AFTER `hits` closes, e.g.
+  // `{"hits":[...],"notes":[...]}` — reaches this exact same number. So depth
+  // alone cannot mean "currently inside the confirmed hits array"; that is
+  // what `hitsArrayOpen` is for.
   let hitsArrayDepth = -1;
+  // True from the moment the confirmed hits array's own `[` is pushed until
+  // its own matching `]` is popped. Gates every use of `hitsArrayDepth` below
+  // so a later sibling array reusing the same numeric depth is never mistaken
+  // for still being inside `hits`.
+  let hitsArrayOpen = false;
   // Absolute index into `buf` of the `{` that opened the hit currently being
   // scanned, or -1 when we are not inside a depth-1 hit.
   let hitStart = -1;
@@ -90,25 +129,41 @@ export function hitExtractor(): {
             escaped = true;
           } else if (ch === '"') {
             inString = false;
+            if (stack.length === 1 && depth1StringStart !== -1) {
+              lastDepth1String = buf.slice(depth1StringStart + 1, i);
+              depth1StringStart = -1;
+            }
           }
           continue;
         }
 
         if (ch === '"') {
           inString = true;
+          if (stack.length === 1) depth1StringStart = i;
           continue;
         }
 
         if (ch === "{" || ch === "[") {
-          // The first array one level inside the outer object is the hits
-          // array — see the module docstring on why the key isn't checked.
-          if (ch === "[" && hitsArrayDepth === -1 && stack.length === 1 && stack[0] === "{") {
+          // An array whose key, one level inside the outer object, was
+          // literally `hits` — see the module docstring. Not "the first
+          // array we meet there": a sibling array (or the word "hits"
+          // showing up as some OTHER key's value) must not be mistaken for
+          // it.
+          if (
+            ch === "[" &&
+            hitsArrayDepth === -1 &&
+            stack.length === 1 &&
+            stack[0] === "{" &&
+            lastDepth1String === "hits"
+          ) {
             hitsArrayDepth = stack.length + 1;
+            hitsArrayOpen = true;
           }
           // A '{' directly inside the hits array starts a new hit, unless
           // we're already inside one — then it's a nested object within a
-          // hit, which counts for depth but is not itself a hit.
-          if (ch === "{" && hitStart === -1 && stack.length === hitsArrayDepth) {
+          // hit, which counts for depth but is not itself a hit. Gated on
+          // `hitsArrayOpen`, not just the depth number — see its declaration.
+          if (ch === "{" && hitStart === -1 && hitsArrayOpen && stack.length === hitsArrayDepth) {
             hitStart = i;
           }
           stack.push(ch);
@@ -117,7 +172,7 @@ export function hitExtractor(): {
 
         if (ch === "}" || ch === "]") {
           stack.pop();
-          if (ch === "}" && hitStart !== -1 && stack.length === hitsArrayDepth) {
+          if (ch === "}" && hitStart !== -1 && hitsArrayOpen && stack.length === hitsArrayDepth) {
             const raw = buf.slice(hitStart, i + 1);
             hitStart = -1;
             try {
@@ -128,6 +183,19 @@ export function hitExtractor(): {
               // missed here is only ever late, never wrong. See the
               // docstring.
             }
+          }
+          // The confirmed hits array's OWN closing bracket: stack.length has
+          // just dropped from hitsArrayDepth to hitsArrayDepth - 1, which can
+          // only happen when the bracket that brought it up to hitsArrayDepth
+          // in the first place — the hits array's `[` — is the one closing
+          // (every hit's own `{`/`}` pair stays balanced within
+          // [hitsArrayDepth, deeper], never dipping below it). Closing this
+          // stops `hitsArrayOpen` gating from letting a LATER sibling array
+          // at the same numeric depth be mistaken for still being inside
+          // `hits` — the bug behind "ignores an array under a later sibling
+          // key too" in tests/search-hits-stream.test.ts.
+          if (hitsArrayOpen && stack.length === hitsArrayDepth - 1) {
+            hitsArrayOpen = false;
           }
           if (stack.length === 0) {
             done = true;

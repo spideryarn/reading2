@@ -97,6 +97,23 @@ describe("parseHits", () => {
     // sentence rather than being reported as a missing object.
     expect(() => parseHits('{"hits":[{"blockId":"spya-k3m9qt","quo')).toThrow(/\[ai-overflowed\]/);
   });
+
+  /**
+   * The bug `lastIndexOf("}")` had: once one hit closes, ITS `}` is the last
+   * one anywhere in the text, so a genuinely truncated answer looked exactly
+   * like a syntactically-complete-but-malformed one and was reported the
+   * wrong way — [ai-unreadable] ("could not be read at all") rather than
+   * [ai-overflowed] ("ask for something narrower") — sending the reader to
+   * blame the provider for a limit this app itself set. Only reachable once
+   * streaming made "cut off after one complete hit" a real case; the test
+   * above only ever truncates before the first hit closes, which is why it
+   * did not catch this.
+   */
+  it("says cut off, not malformed, once a complete hit has already streamed", () => {
+    const partial =
+      '{"hits":[{"blockId":"spya-k3m9qt","quote":"mind is software","confidence":90,"reasoning":"r1"},{"blockId":"spya-p7';
+    expect(() => parseHits(partial)).toThrow(/\[ai-overflowed\]/);
+  });
 });
 
 describe("validateHits", () => {
@@ -201,10 +218,30 @@ describe("validateHits", () => {
     expect(dropped.truncated).toBe(5);
   });
 
-  it("survives a reply with the wrong shape entirely", () => {
+  /**
+   * This used to be "survives a reply with the wrong shape entirely" and
+   * asserted `.hits` came back `[]` for every one of these — which was wrong,
+   * not merely lenient. `{"hits": []}` is a real, meaningful answer: the
+   * prompt explicitly asks the model to return it when nothing matches. A
+   * `hits` field that is missing, `null`, or the wrong type entirely is not
+   * that — it is a broken reply, and folding it into the same `[]` made it
+   * indistinguishable from "nothing in this article matches", which is
+   * exactly the failure parseHits's own docstring calls out as the one a
+   * reader could not possibly diagnose. Found by a GPT Sol review,
+   * 2026-08-26. It must throw instead.
+   */
+  it("throws on a reply whose `hits` is missing or the wrong shape, rather than returning an empty list", () => {
     for (const junk of [{}, { hits: null }, { hits: "nope" }, [], null]) {
-      expect(validateHits(junk, BLOCKS).hits).toEqual([]);
+      expect(() => validateHits(junk, BLOCKS)).toThrow(/\[ai-unreadable\]/);
     }
+  });
+
+  it("still treats `{\"hits\": []}` as a real, meaningful empty answer", () => {
+    // The one shape the check above must not catch: a present, empty array.
+    expect(validateHits({ hits: [] }, BLOCKS)).toEqual({
+      hits: [],
+      dropped: { unknownIds: 0, unquoted: 0, clamped: 0, subOne: 0, truncated: 0 },
+    });
   });
 
   it("skips a hit that is not an object without taking the rest down with it", () => {

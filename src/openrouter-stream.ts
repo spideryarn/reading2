@@ -121,6 +121,11 @@ export function explainAbort(
  *    parsed — and note they also count as activity for the stall timer, which
  *    is correct: the connection is alive.
  *  - **`data: [DONE]` is not JSON either.** It is the terminator.
+ *
+ * A fourth thing is a per-caller trade rather than a fact about the wire
+ * format, so it is a parameter rather than baked in: **what to do with a
+ * `data:` frame that isn't valid JSON.** `strict` (default `false`) decides.
+ * See it below.
  */
 /**
  * Whether a stream ended properly, shared with the caller through an object
@@ -147,6 +152,23 @@ export async function* sseChunks(
   onActivity: () => void,
   /** Set to `terminated: true` only when `data: [DONE]` actually arrives. */
   end: StreamEnd,
+  /**
+   * Throw rather than silently skip a `data:` frame that is not valid JSON.
+   *
+   * Defaults to `false` — chat (converse.ts) and explain.ts both rely on
+   * this, unchanged: their payload is prose, a dropped frame costs a few
+   * words, and ending a working answer over one bad line is the wrong trade.
+   * **Do not flip this default** — it would change their behaviour, which is
+   * exactly what this parameter exists to avoid needing to do.
+   *
+   * search.ts opts in with `true`. Its payload is JSON, not prose, and the
+   * same trade is wrong there: a dropped frame can be exactly one element of
+   * the `hits` array, and the text either side can still go on to parse as
+   * valid JSON — so silently skipping it would let search store a
+   * confidently wrong result rather than noticing anything went missing.
+   * Found by a GPT Sol review, 2026-08-26.
+   */
+  strict = false,
 ): AsyncGenerator<StreamChunk> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -187,15 +209,28 @@ export async function* sseChunks(
           end.terminated = true;
           return;
         }
+        /* Parsing and yielding are two separate steps, deliberately — the
+           `try` used to wrap the `yield` too, which means it was also
+           catching whatever a *consumer* threw while this generator sat
+           suspended at that yield (a `.throw()`, or the consumer's own
+           exception propagating back in). Folding "the frame didn't parse"
+           and "the caller broke" into the same catch is a different bug from
+           the one `strict` is about, and separating them costs nothing. */
+        let parsed: StreamChunk;
         try {
-          yield JSON.parse(payload) as StreamChunk;
+          parsed = JSON.parse(payload) as StreamChunk;
         } catch {
-          // A malformed chunk is not worth ending a working answer over — the
-          // stream carries many, and one unparseable line loses a few words
-          // rather than the reply. It is not logged: at one line per token this
-          // could be thousands of lines, and the answer's own length is already
-          // in the summary line above.
+          if (strict) throw providerSpokeNonsense();
+          // Lenient (the default — chat, explain): a malformed chunk is not
+          // worth ending a working answer over — the stream carries many,
+          // and one unparseable line loses a few words rather than the
+          // reply. Not logged: at one line per token this could be
+          // thousands of lines, and the answer's own length is already in
+          // the summary line above. See `strict` on this function for why
+          // search.ts cannot make the same trade.
+          continue;
         }
+        yield parsed;
       }
     }
   } finally {

@@ -49,6 +49,71 @@ offending input inside that message. Rule 1 again, one level further out than an
 
 Still open: 1.4 (18 sites), 1.5, 1.6, 1.8, Tier 2 apart from 2.7, all of Tier 3.
 
+### Then Greg answered the appendix, and a second review found the answers wrong
+
+Appendix A went to Greg; he settled A.2–A.5 and said to use my judgment on the rest. What landed
+(`0728fa1`, `6a94b4e`, `ce6ebfc`, `b59f9c5`) then went back to GPT Sol, which found five real
+defects in it. Fixed in `935a0d1`, `072cb52` and `f3f187e`:
+
+| What was wrong | Why it mattered |
+|---|---|
+| 403 folded in with 401, reported as a bad key | OpenRouter also returns 403 for guardrails, spend limits and model allowlists — wrong cause, and it claimed every AI feature was down when one call had been refused |
+| 413 fell through to "trying again is worth a go" | The same request, resent, is the same size |
+| `saidNothing("content_filter")` explained the refusal | As misread quoted material — which we do not know, cannot check, and a reader might repeat |
+| **`kind` discarded one line after it was computed** | `providerRefused` throws `new Error(failure.message)`, so the UI put a Retry button under "trying again will not help" — the exact mistake copy.md was written to prevent, made by the interface rather than the copy |
+| `JobProgress` used Tailwind's `animate-spin`, and dropped `flex-wrap` | icons.md rejects that spinner **by name**. Consolidating three spinners that each honoured reduced motion produced one that ignored it |
+
+Plus a false invariant: `slug.ts` claimed `data/_jobs/` could not be reached through a slug because
+`jobs.ts` builds its own path. True, and the wrong direction — nothing was arriving *from* the queue,
+the risk was arriving *at* it. `_jobs` is reserved now, and the test checks both directions instead
+of one.
+
+**The lesson worth keeping is the shape of the `kind` bug.** Every part of it was written down
+correctly: the taxonomy, the four rules, the sentence saying retrying will not help. The one line
+that connected the decision to the interface threw it away, and nothing tested that connection —
+because the tests checked the messages, and the messages were fine. *A rule can be documented,
+implemented and tested and still not reach the screen.*
+
+The fix keys the retry decision on the message's own bracketed code rather than a new persisted
+field, which is a **narrow widening of what that code is for** — copy.md introduces it as something a
+reader can quote. What makes it safe is not care but `tests/messages.test.ts`, which round-trips every
+message and fails if a code stops agreeing with its kind.
+
+### Then it went round twice more, and Rule 1 caught me out
+
+Fable and GPT Sol both reviewed the fixes, and between them found enough to be worth recording as a
+pattern rather than a list.
+
+**The provider-error leak was seven sites. It was thirteen.** Six pipeline stages — arc, labels,
+summarise, toc, glossary, tweets — each threw
+`` `Model refused: ${JSON.stringify(message.stop_details)}` `` on Anthropic's refusal, and `jobs.ts`
+copies a failed step's error onto the job, which the ingest card renders. **Rule 1 below says grep
+the genre, not the list**, and it was written after this same plan undercounted every duplication in
+it. I greped the OpenRouter genre and stopped; these are the Anthropic SDK's version of the identical
+moment. `MODEL_REFUSED` is the one sentence now.
+
+**Two safety properties were claimed in comments and false in the code.** The streaming extractor's
+docstring said "a miss costs a late hit, never a wrong one" — the entire justification for using a
+brace counter rather than a parser — while it keyed on *the first array at depth 1*, so a sibling
+array could preview a hit the stored result did not contain. And `slug.ts` reserved `_jobs`
+case-sensitively on APFS, where `data/_JOBS/` and `data/_jobs/` are the same directory. **A comment
+claiming a safety property is not the property.**
+
+**`validateHits` mapped `{hits: null}` to "nothing in this article matches"** — a broken reply stored
+as a legitimate answer, which `parseHits`'s own docstring calls the one failure a reader could not
+possibly diagnose. There was a test blessing it.
+
+**And one line quietly undid the whole feature.** `App.tsx` filtered the runs feeding the prose marks
+on `status === "done"`, so hits streamed to the panel and never reached the article until the end.
+Everything upstream streamed; the last filter did not. The comment above it — "a run that has not
+answered yet has no hits" — had been true when written.
+
+Two review-process notes worth keeping. **A test can stop testing and stay green**: the rule "only
+invite another go when retrying can work" matched a hand-written list of phrases, so rewording a
+message dropped it out of the check silently. And **two agents returned nothing and looked exactly
+like agents that found nothing** — the re-dispatch that wrote its answer to a file was what
+recovered it.
+
 ## Three rules for whoever implements this
 
 All three come from the review, and they are the difference between this plan working and
