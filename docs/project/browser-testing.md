@@ -50,6 +50,21 @@ measuring — a wrong measurement that looked like a finding. Use `find` and cli
 returns, or drive the control from the keyboard: a range input takes Home, End and arrow keys, which
 is also the only way to check that its whole track steps 1:1.
 
+**The same goes for hovering, and there the mismatch has a number.** Measured 2026-08-26 with a
+`mousemove` listener logging the real `clientX`/`clientY`: `computer.hover` asked for (100, 300) and
+the page received (94, 283) — about 5–6% out. On the spine, a rail of stacked bands a few pixels
+tall, that is easily a whole band.
+
+The expensive version of this is not a mis-click, it is a **bug report for a bug that does not
+exist**, because somebody then goes looking for it. A session hovered a band at a literal
+coordinate, then called `document.elementFromPoint` at *that same literal coordinate*, and found the
+open tooltip belonged to a different band — three times, reproducibly, including on a fresh page
+with one isolated hover. It wrote it up as a stale-content bug in the tooltip group. It was not: the
+two calls were asking about two different points, and a second agent hovering by element reference
+could not reproduce it once. So anything that maps a coordinate back to an element —
+`elementFromPoint`, `caretPositionFromPoint` — must be given the position **the page saw**, captured
+from a listener, never the one you asked for.
+
 **But only in a visible tab.** Keys into a hidden one are *intermittent* rather than dead — see
 [A background tab will lie to you](#a-background-tab-will-lie-to-you-about-scrolling) below, whose
 fourth point is the longer version. On 2026-08-26 a session pressed `ArrowRight` thirty times at a slider and the value did not
@@ -289,23 +304,6 @@ taken moments later showed the same tooltip fully painted with the right content
 in through Floating UI's `useTransitionStyles`, so a synchronous read straight after a hover catches
 the pre-transition frame. Same shape as the `backgroundColor` trap above and the same conclusion:
 for an element that animates in, the screenshot is the reliable one.
-
-## Hover by element, never by pixel
-
-Found 2026-08-26, and it produced a bug report for a bug that did not exist — which is the expensive
-kind of measurement error, because somebody then goes looking for it.
-
-`computer.hover`'s requested coordinate and the coordinate the page actually receives **differ by
-about 5–6%**: asking for (100, 300) fired a `mousemove` at (94, 283), confirmed by a listener that
-logged the real `clientX`/`clientY`. On the spine — a rail of stacked bands a few pixels tall — that
-is easily a whole band. Comparing `document.elementFromPoint(requestedX, requestedY)` against
-whichever band's tooltip opened then "proves" the app is showing the neighbour's content, and the
-report writes itself. It was not: the two checks were asking about two different points.
-
-So: hover by **element reference** (`find`, then act on the ref), and if you must reason about a
-pixel, get the real one from a `mousemove` listener rather than from what you asked for. Anything
-that maps a coordinate back to an element — `elementFromPoint`, `document.caretPositionFromPoint` —
-has to be given the position the page saw.
 
 ## Three traps this codebase has actually hit
 
