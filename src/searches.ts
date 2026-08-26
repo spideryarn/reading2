@@ -150,11 +150,22 @@ export function update(
  * the process.
  *
  * The id is **minted by the client** so `?run=` can name something real from
- * the first frame, exactly as a comment id and a thread id are. It is accepted
- * only if it is one of ours and free; a caller who sends anything else gets a
- * minted one back and is expected to believe the response rather than its own
- * guess. That is what makes a duplicate send harmless rather than a way to
- * overwrite somebody else's saved search.
+ * the first frame, exactly as a comment id and a thread id are.
+ *
+ * **An id already in the file is a retry, not a collision.** This is the branch
+ * `createComment` has always had, and its absence here was a real bug: the
+ * client's `retry()` resends the failed run's own id, so treating that as taken
+ * minted a *second* run and answered under the new id. The old row was never
+ * named again, which left the spinner the reader was watching turning forever —
+ * the exact failure `finishRun`'s comment below says appending must never cause,
+ * arriving from the other end of the same run's life. See
+ * docs/postmortems/search-retry-remints-instead-of-resetting.md.
+ *
+ * `createdAt` is kept from the original on a reset, because it is still the same
+ * search the reader asked for; only the attempt is new.
+ *
+ * Anything that is not one of our ids still gets a minted one back, and the
+ * caller is expected to believe the response rather than its own guess.
  */
 export async function beginRun(
   slug: string,
@@ -164,6 +175,31 @@ export async function beginRun(
 ): Promise<SearchRun> {
   let stored!: SearchRun;
   await update(slug, (runs) => {
+    /* A retry: the same id **and the same criterion**, so reset that row where
+       it sits rather than adding one.
+
+       The criterion is what makes this safe, and it is why this is not simply
+       "an id already here means reset". A duplicate send that asks a *different*
+       question under an id somebody already holds is still a collision and still
+       gets a minted id — the property the test below this one pins, and the one
+       that stops a stray id being a way to write over a saved search. A retry
+       resends `existing.criterion` verbatim (see `retry()` in
+       src/web/useSearch.ts), so the two cases are distinguishable, and when both
+       match, resetting is the right answer anyway: it is the same question. */
+    const existing = wantedId
+      ? runs.find((r) => r.id === wantedId && r.criterion === criterion)
+      : undefined;
+    if (existing) {
+      stored = {
+        id: existing.id,
+        criterion,
+        createdAt: existing.createdAt,
+        status: "pending",
+        hits: [],
+      };
+      return runs.map((r) => (r.id === stored.id ? stored : r));
+    }
+
     const taken = new Set(runs.map((r) => r.id));
     stored = {
       id:

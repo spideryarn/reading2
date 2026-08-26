@@ -167,4 +167,28 @@ describe("saved-search storage", () => {
     expect(runs).toHaveLength(3);
     expect(new Set(runs.map((r) => r.id))).toEqual(new Set([a.id, b.id, c.id]));
   });
+
+  it("resets a run in place when the retry sends its own id back", async () => {
+    /* The shape of a retry: beginRun, then finishRun with an error — the failed
+       row stays on disk, same as any other failure — then beginRun again with
+       the *same* id, which is exactly what useSearch.ts's retry() sends.
+
+       beginRun used to read any id already in the file as a collision to defend
+       against, so a retry minted a second run and answered under the new id.
+       The old row was never named again, so the spinner the reader was looking
+       at never stopped, and a reload showed an unexplained duplicate beside the
+       failure. createComment has had the reset-in-place branch all along; this
+       is the same rule for the same reason.
+       docs/postmortems/search-retry-remints-instead-of-resetting.md */
+    const first = await beginRun(SLUG, "arguments against the main claim", "spya-k3m9qt");
+    await finishRun(SLUG, first.id, { status: "error", error: "the model timed out" });
+
+    const retried = await beginRun(SLUG, "arguments against the main claim", "spya-k3m9qt");
+
+    expect(retried.id).toBe(first.id);
+    expect(retried.status).toBe("pending");
+    expect(retried.hits).toEqual([]);
+    const runs = await loadRuns(SLUG);
+    expect(runs).toHaveLength(1);
+  });
 });
