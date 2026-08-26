@@ -48,6 +48,11 @@ the one piece of this with real test coverage), and `§ mode band` at the end of
  └─────────────────────────────────────────────────────────────┘
 ```
 
+**Since 2026-08-26 chat has tools of its own** — it can search this article's exact words, search
+the reader's other saved articles, read a web page in full, and read its glossary. That is a
+[document of its own](../project/chat-tools.md); everything below still describes the panel, the
+mode band and the citation contract those tools answer to.
+
 ## Say the awkward thing first
 
 **Chat is a named anti-goal in this repo, and it was refused twice in writing before it was built.**
@@ -787,6 +792,28 @@ rather than about code.
 Two comments were corrected: the lock does **not** make two conversations independent (the store's
 `update` is one queue for the whole process — the lock is narrower than that queue, not wider), and
 focus after an edit box closes is restored only when the pencil is there to receive it.
+
+### What the browser said about all of it
+
+Driven in a real browser after the third round, with `curl /api/chat/<slug>` read back at every step
+— which is not belt and braces here but the method: three of the bugs above were states where the
+screen was right and the file was not, or the reverse.
+
+All eight checks passed. Stopping an answer and immediately retrying it produces a genuinely fresh
+stream rather than one that dies at birth, which is the attempt token doing its job. An edit box left
+open while another answer streams has its Ask-again button `disabled` with the right title (checked in
+the accessibility tree, not by eye — it is a 12px glyph and a screenshot cannot tell). Escape out of
+an edit box puts the caret back on the pencil (checked with `document.activeElement`). An answer
+finishing leaves the reader at the bottom rather than stranded above the sources. Drafts survive
+closing a conversation and do not follow the reader into another one.
+
+**Every apparent failure traced to something else.** The tree had four other agents editing it
+throughout, so the panel showed "Couldn't reach the dev server" and stuck spinners repeatedly — and
+every time, the backend had completed and stored the turn correctly. That is worth writing down
+because it is the trap this kind of testing sets: a shared dev server under hot reload produces
+symptoms indistinguishable from the bugs being looked for, and the only way to tell them apart is to
+ask the server directly. The one thing still unverified by anybody is the copy button, for the third
+time, because `navigator.clipboard.writeText()` does not resolve in an automation tab.
 
 ### What was deliberately not fixed
 
