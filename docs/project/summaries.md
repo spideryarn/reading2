@@ -407,6 +407,21 @@ pending frame has left the queue and that pumping again moves nothing — which 
 *cancelled* apart from *paused*. Written up in
 [browser-testing.md § Driving a rAF animation by hand](browser-testing.md#driving-a-raf-animation-by-hand).
 
+### The flick that moved the article
+
+Found in a browser pass, 2026-08-26, and only because the window was too narrow: wheeling the outline
+when it is already at its top scrolls **the article**. Chrome chains an over-scroll to the nearest
+scrollable ancestor by default, and here that ancestor is the page — so the chain runs *outward* from
+this panel into the piece, moves `?at=`, and moves the panel back. A flick in the outline is not a
+request to go somewhere, and it should not be able to become one.
+
+`overscroll-behavior: contain` on `.summ-scroll` stops it. Narrow windows only make it easy to do by
+accident; it was always there.
+
+**Testing note, because the obvious check gives a false pass**: a `WheelEvent` dispatched from
+JavaScript does not trigger native scroll chaining at all, so a synthetic wheel reports containment
+whether or not the rule is present. Only a trusted OS-level wheel exercises it.
+
 ### What it costs
 
 Stated rather than smoothed over:

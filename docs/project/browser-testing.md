@@ -342,6 +342,23 @@ for two full seconds. Nothing about that reading was true. So: resize, read `inn
 `innerHeight` back, *then* navigate — and if a panel appears to be positioned wrongly, check the
 viewport before you check the code.
 
+### A synthetic wheel is not a wheel
+
+`new WheelEvent('wheel', …)` dispatched from JavaScript runs your listeners and **does not scroll
+anything**, because scrolling is the browser's own default action and an untrusted event does not get
+one. Two consequences, opposite in sign:
+
+- It is the *right* tool for testing a listener — `follow.ts`'s hands-off window and its
+  cancel-the-slide bail-out are both listener behaviour, and a synthetic wheel exercises them exactly.
+- It is the *wrong* tool for testing anything the scroll itself does. `overscroll-behavior: contain`
+  reports as working under a synthetic wheel whether or not the rule exists, because nothing chained
+  in the first place. Use real wheel input through the `computer` tool for those. Found 2026-08-26.
+
+The same split applies to clicks, in the other direction: a real click through `computer` can fail to
+land, while `new MouseEvent('click', { bubbles: true })` reaches the identical React handler. Prefer
+the real one, and reach for the synthetic when the real one will not land — noting which you used,
+since they prove different things.
+
 ### Driving a rAF animation by hand
 
 A suspended tab runs no `requestAnimationFrame`, which means an rAF-driven animation cannot simply be
