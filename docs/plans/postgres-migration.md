@@ -959,8 +959,41 @@ lists four requirements. Answering its explicit question — **it is storage, no
    drafted, with a `tweets.json` per article and a real content hash. It should be a JSONB column on
    the revision plus a `revision_step_runs` row, like `tree` and `arc` — but confirm before writing
    the DDL rather than after.
-8. **Does the `example` fixture become a seed row, or go?** It is the fresh-clone empty state today
-   and the tests rely on it.
+8. ~~Does the `example` fixture become a seed row, or go?~~ **Answered 2026-08-26 by Greg: it goes
+   in, marked as a fixture.** A `fixture boolean` on `articles`, and `example/` imported like any
+   other article. The directory **stays on disk** as well — it is the seed's source, and six test
+   files read it as static data.
+
+   The reason it wins is the fresh clone. `data/` is gitignored, so a clone contains exactly one
+   readable article, and the product *is* the reading view: without the fixture, seeing the thing at
+   all needs API keys and a full pipeline run.
+
+   **And the security worry against it was aimed at the wrong thing.** What made the path traversal
+   read as a refusal was not the fixture existing — it was `loadArticle` **falling through** to it
+   for any slug with no artefacts, so "no" and "here is the demo" were the same response
+   ([security.md](../project/security.md)). Those are two separable things, and the fall-through is
+   already gone: `pg.ts` answers only `where slug = 'example'` and 404s everything else, with no
+   directory to traverse out of. A seed row re-creates no ambiguity. It is in fact cleaner than
+   today, where even the legitimate slug `example` is served through the fall-through path.
+
+   Two consequences to build to. `tests/store-parity.test.ts` currently asserts the fixture is the
+   *only* difference between the stores; once both list it, tighten that to plain equality. And keep
+   the "not yours to write" guards, re-keyed on the boolean — the original reason (writes would dirty
+   a committed directory) evaporates in Postgres, but they also keep re-seeding idempotent, so a
+   mutated fixture row cannot drift from `example/`.
+
+   **Worth revisiting when "paste a URL" onboarding is one step away.** The honest case against: the
+   fixture is hand-authored placeholder data — `tree.json` is admittedly fake, `labels.json` has
+   `batches: null` — so this puts a special-case row in `articles` that every future migration and
+   query has to remember to filter, distinguished by one boolean. That argument wins for a mature
+   product and loses here, where fresh-clone-shows-the-thing is doing real work for a team of agents
+   building stage 6.
+9. **What does a read say about an article that does not exist?** **Answered 2026-08-26 by Greg: it
+   says so.** The filesystem returns `[]` for the chat, searches or comments of an unknown slug —
+   ENOENT is ordinary — while Postgres 404s. Postgres is right, and the files side gets brought up to
+   it rather than the other way round. Not urgent: it is already shipped this way for comments, both
+   clients handle an error body, and an article that genuinely exists with no chat yet still returns
+   `[]` in both. It goes away entirely when the filesystem adapter is deleted at cutover.
 
 ## Related docs
 

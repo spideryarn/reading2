@@ -558,10 +558,13 @@ over" does not work under `postgres`**, and that belongs in the progress table r
 | A slug that is not a slug | throws **untagged** → 500 | `status: 400` |
 | Corrupt stored state | refuses to write | no such state exists |
 
-The first is **already shipped for comments**, so this step inherits it rather than introducing it —
-but it is a visible API difference between the two modes, and whether the filesystem side should be
-brought up to it instead is Greg's call. The second: Postgres is right, and the parity test already
-asserts 400 for reads.
+The first is **already shipped for comments**, so this step inherits it rather than introducing it.
+**Decided 2026-08-26 by Greg: Postgres is right — an article that does not exist should say so, and
+the files side gets brought up to it** rather than the other way round. Not urgent, and not part of
+this step: both clients handle an error body, an article that genuinely exists with no chat yet still
+returns `[]` in both, and the divergence goes away entirely when the filesystem adapter is deleted at
+cutover. The second row: Postgres is right there too, and the parity test already asserts 400 for
+reads.
 
 ### The tests
 
@@ -661,8 +664,8 @@ the finish conditional on that attempt.
 1. **Does Drizzle's `db.transaction` propagate a thrown `ChatConflict` unchanged?** Believed yes for a
    plain `throw`, not run. It decides whether a stale tab gets 409 or 500 — one assertion, written
    before the chat store is built around it.
-2. **Is the `[]`-versus-404 divergence acceptable**, or should the filesystem side be brought up to
-   Postgres's behaviour? Greg's call.
+2. ~~Is the `[]`-versus-404 divergence acceptable?~~ **Answered 2026-08-26: keep the 404, bring the
+   files side up to it later.** See the divergence table above.
 3. **Should `deleteGlossary` be dragged into step 10 anyway?** The SQL is trivial; leaving it 501 is a
    real hole for anyone testing `postgres` mode.
 
