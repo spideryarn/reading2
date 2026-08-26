@@ -154,34 +154,54 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump }: Props) {
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
+
+    /**
+     * The scroller's inner width and height.
+     *
+     * **`clientWidth` is the PADDING box, not the content box** — it excludes
+     * the border and the scrollbar and *includes* the padding (CSSOM View §
+     * clientWidth). This scroller has horizontal padding, so taking
+     * `clientWidth` as the picture's width makes every picture exactly the
+     * padding wider than the room it has, and `overflow-x: hidden` then quietly
+     * eats the right-hand edge — the tree's paragraph count first, since it is
+     * drawn at `w - 6`. Subtracting the *computed* padding rather than the
+     * literal `0.5rem` means changing the stylesheet cannot reintroduce it.
+     */
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const pad = Number.parseFloat(cs.paddingLeft) + Number.parseFloat(cs.paddingRight);
+      return {
+        w: Math.max(0, el.clientWidth - (Number.isFinite(pad) ? pad : 0)),
+        h: el.clientHeight,
+      };
+    };
+    const store = (next: { w: number; h: number }) =>
+      setBox((prev) => (prev && prev.w === next.w && prev.h === next.h ? prev : next));
+
+    /* **The first measure is synchronous, and that is the whole point of this
+       being a layout effect.** It used to go through `requestAnimationFrame`
+       like the resize path below, and rAF DOES NOT RUN IN A BACKGROUND TAB —
+       so a panel first rendered in a tab that was never focused stayed on its
+       "measuring" placeholder forever, with correctly-sized elements and a
+       clean console. It is a blank picture that reports nothing wrong, which is
+       exactly the shape docs/reusable/silent-success.md is about, and it is one
+       of the failure modes docs/project/browser-testing.md warns a browser
+       agent to expect. Measuring here also removes the one blank frame. */
+    store(measure());
+
     let raf = 0;
-    const run = () => {
-      // Through rAF: ResizeObserver fires during layout, and setting state
-      // straight from it is how you get "loop completed with undelivered
-      // notifications". Same guard the spine uses.
+    const ro = new ResizeObserver(() => {
+      /* The resize path keeps the frame, and needs to: ResizeObserver fires
+         *during* layout, and setting state straight from it is how you get
+         "loop completed with undelivered notifications". Same guard the spine
+         uses. A resize implies a visible tab, so the background-tab problem
+         above cannot reach this half. */
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        setBox((prev) => {
-          /* **`clientWidth` is the PADDING box, not the content box** — it
-             excludes the border and the scrollbar and includes the padding
-             (CSSOM View § clientWidth). This scroller has horizontal padding,
-             so taking `clientWidth` as the picture's width makes every picture
-             exactly the padding wider than the room it has, and
-             `overflow-x: hidden` then quietly eats the right-hand edge — the
-             tree's paragraph count first, since it is drawn at `w - 6`.
-             Subtracting the computed padding rather than the literal `0.5rem`
-             means changing the stylesheet cannot reintroduce this. */
-          const cs = getComputedStyle(el);
-          const pad = Number.parseFloat(cs.paddingLeft) + Number.parseFloat(cs.paddingRight);
-          const w = Math.max(0, el.clientWidth - (Number.isFinite(pad) ? pad : 0));
-          const h = el.clientHeight;
-          return prev && prev.w === w && prev.h === h ? prev : { w, h };
-        });
+        store(measure());
       });
-    };
-    run();
-    const ro = new ResizeObserver(run);
+    });
     ro.observe(el);
     return () => {
       ro.disconnect();

@@ -250,6 +250,51 @@ genuinely new information; Tree supplies the legible explanation of it."*
 
 ## The browser pass
 
+**It could not be done through the app, and that is worth recording.** A
+whole-app sign-in gate (`useSession` in `src/web/App.tsx`) landed while this was
+being built, so every browser agent sent at `/read/<slug>?mode=diagram` reached
+"Sign in with Google" instead. Signing in needs Greg
+(docs/project/auth.md), so a browser agent cannot get past it unaided.
+
+The way round: a throwaway `diagram-preview.html` + `.tsx` at the repo root,
+mounting the **real** `DiagramPanel` with the **real** stylesheet against the
+committed `example/` article, five times at the widths the band actually takes.
+Vite serves any `.html` in the root, so it needs no route and no config. Both
+files are deleted afterwards — note that `scripts/typecheck.ts` fails while they
+exist, because it checks that every file belongs to a tsconfig project and a
+throwaway at the root belongs to none.
+
+Two environment traps, each of which looks exactly like the feature being broken:
+
+- **Several agents run `npm run dev` at once**, so the port moves and a server
+  you started may be gone minutes later. Any peer's server serves the same
+  working tree.
+- **A browser subagent's Bash sandbox has no network**, so `curl localhost`
+  returns exit 7 while Chrome loads the page perfectly. Two agents reported the
+  server as down on that evidence.
+
+### What it found: the picture never drew at all
+
+Every one of the five panels sat on its `diag-measuring` placeholder forever —
+correctly-sized elements, correct toggles, correct footer, clean console, and no
+picture. **The first measure was gated on `requestAnimationFrame`, and rAF does
+not run in a background tab.** So a panel first rendered in a tab that was never
+focused never measured, never laid out, and never said anything was wrong.
+
+That is `silent-success` with a blank rectangle on it, and it is one of the
+failure modes [browser-testing.md](../project/browser-testing.md) tells a browser
+agent to expect — a hidden tab firing no events. The fix is not a workaround: the
+first measure belongs in the layout effect *synchronously*, which is what a
+layout effect is for, and it removes the one blank frame as well. Only the
+resize path still needs the frame, and a resize implies a visible tab.
+
+**`src/web/Spine.tsx` has the same shape** — `run()` called once and immediately
+gated on rAF — and so may have the same problem. Not changed here: different
+stage, different owner, and the spine degrades less badly because it renders
+something without metrics. Worth a look by whoever owns it.
+
+
+
 ## Open, and deliberately not done
 
 - **No cross-reference arcs.** The article's own internal links
