@@ -40,8 +40,14 @@ twice. **All three pass**: the second call reads the whole prefix back.
 The constitution row is the one to read, because it is a genuine cold start. It shows the whole
 bargain in two lines: the first call costs **25% more** than uncached ($0.119 against $0.096 — the
 1.25× write premium), and every call after it costs **10%** ($0.0097). Break-even is the second use,
-exactly as the pricing predicts. A reader who searches a piece, asks a question and explains a
-sentence crosses it immediately.
+exactly as the pricing predicts.
+
+**But "the second use" means the second use of the *same feature*.** An earlier version of this
+paragraph said a reader who searches a piece, asks a question and explains a sentence crosses
+break-even immediately. That is wrong, and it is the mistake this doc exists to prevent: those are
+three different caches, because the three requests differ before the article is reached, so all
+three are cold writes and the reader is 25% *down*. It is the second search, the second chat turn,
+the second explanation that pays. GPT Sol caught the claim in review, 2026-08-26.
 
 These runs also found two real bugs that no unit test could have:
 

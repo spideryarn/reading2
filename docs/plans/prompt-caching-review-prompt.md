@@ -1,24 +1,32 @@
 # GPT Sol review prompt — prompt caching
 
-Neither of the two reviews [the plan](prompt-caching.md) called for has produced a verdict. First the
-Codex workspace was out of credits; then a refill arrived and a `--effort high` run burned **165,802
-tokens** and exhausted it again *mid-review*, without writing an output file.
+**This review has been run.** The verdict is in
+[prompt-caching-sol-review.md](prompt-caching-sol-review.md), 2026-08-26, `gpt-5.6-sol` at
+`--effort high`. The prompt below is kept because it is what produced it.
 
-**So run this at `--effort medium` or lower.** The high tier researches from first principles — this
-run was mid-web-search on whether `output_config.effort` interacts with a `system` array's cache
-prefix, which is a good question and an expensive way to ask it. Medium gets a verdict; high gets a
-half-finished one and no credits.
+## What the two failed attempts were actually about
+
+Two earlier runs died without a verdict, and this file used to blame the effort tier — it said to run
+at `medium` or lower, because a `high` run had burned 165,802 tokens and stopped mid-review. That
+diagnosis was wrong. The workspace was out of credits, and the tier only decided how far the run got
+before the money ran out. The proof is a `gpt-5.6-luna` `--effort low` probe with a five-word prompt,
+which failed identically.
+
+What fixed it was **`CODEX_API_KEY`**, which takes precedence over a logged-in `~/.codex/auth.json`
+rather than being ignored because one exists — so a credits-exhausted subscription and a working key
+are a fallback pair. With the key set for the single command, `high` ran to completion in 13 minutes.
+See [../reusable/codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md).
+
+The general lesson is the one in that doc's gotchas: **running out of credit looks like a generic
+non-zero exit.** `codex exec` exits 1 and the wrapper says `codex exec exited 1`; the real reason is
+only in the activity log. Read it before theorising about the prompt, as I did twice.
 
 ```bash
-npx tsx scripts/run-codex.ts \
-  --model gpt-5.6-sol --effort medium \
+CODEX_API_KEY=… npx tsx scripts/run-codex.ts \
+  --model gpt-5.6-sol --effort high \
   --prompt-file docs/plans/prompt-caching-review-prompt.md \
-  --output /tmp/sol-caching-review.md \
-  --timeout-minutes 30
+  --output /tmp/sol-caching-review.md --quiet --timeout-minutes 45
 ```
-
-Then read `/tmp/sol-caching-review.md` and fold the findings back into
-[prompt-caching.md](prompt-caching.md) and [../project/prompt-caching.md](../project/prompt-caching.md).
 
 ---
 

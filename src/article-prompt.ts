@@ -187,7 +187,16 @@ export function underCacheFloor(text: string): boolean {
  *
  * A false "too short" is the costly direction to be wrong in: it is an alarm
  * that fires when nothing is wrong, and an alarm nobody believes is worse than
- * no alarm. So where the boundary is not explicit — converse uses OpenRouter's
+ * no alarm.
+ *
+ * **It still under-counts, and deliberately.** Tools are rendered ahead of both
+ * system and messages, so explain's and converse's real prefixes are larger
+ * than anything visible from here — this walks messages only. That errs the
+ * safe way (it can say "too short" about something long enough, never the
+ * reverse), but it means the result is a *hint* for a log line and not a
+ * measurement. Anything that needs the true number should read
+ * `cache_creation_input_tokens` off the response, which is the provider's own
+ * count of exactly this. Raised by GPT Sol's review, 2026-08-26. So where the boundary is not explicit — converse uses OpenRouter's
  * automatic mode, which marks a block we never name — this returns *all* the
  * message text, which errs towards "long enough" rather than towards crying
  * wolf.

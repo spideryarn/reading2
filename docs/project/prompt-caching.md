@@ -21,6 +21,16 @@ That is why there is one module — [`src/article-prompt.ts`](../../src/article-
 nothing else may render the article for a prompt. Nine hand-written near-copies is what this app had
 before, and two of them had already drifted.
 
+> [!CAUTION]
+> **Two live examples of getting the tier wrong, both from the explain feature, 2026-08-26.** A
+> "search the web properly" button needed to tell the model to look harder. The obvious place is the
+> system prompt — which costs a second cache write of the whole article, because system renders
+> *before* messages and the article's breakpoint is after it. Avoiding that, the first draft instead
+> raised `max_uses` on the web-search tool. That is **worse**: tools render at position 0, so a tool
+> edit invalidates all three tiers, for both variants. The instruction now rides in the last user
+> part, after the breakpoint, and the tool definition is byte-identical on every call.
+> [explain-deeper-answers.md](../plans/explain-deeper-answers.md#what-the-review-changed).
+
 ## Where the caches are
 
 Three, not one, and the reason is that the prefix starts at the top of the request: **tools, then
@@ -30,13 +40,54 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article | `articleWithIds` |
-| **pipeline** | arc, tweets, glossary — one shared entry per article | `articleText` |
+| **pipeline** | arc and tweets — one shared entry per article. **Not glossary; see below** | `articleText` |
 
-Note what the pipeline row does **not** mean. Each of those three makes *one* call per run, so none
+Note what the pipeline row does **not** mean. Each of those stages makes *one* call per run, so none
 of them caches anything for itself; the entry only pays off when two of them run close together —
 within one ingest, or a top-up landing inside the 5-minute TTL of the pass before it. That is
 opportunistic by nature, and the eval is what will say how often it actually happens. The labels row
 is the one that is reliable, because its four batches run together by construction.
+
+### Glossary is a third cache, and the reason is not the article
+
+`arc`, `tweets` and `glossary` do emit byte-identical article text — that part of the design worked.
+They still cannot share a cache, because **`output_config.effort` is part of the cache key**, and
+`glossary` runs at `medium` while the other two run at `high`
+([src/glossary.ts:1060](../../src/glossary.ts), [src/arc.ts:253](../../src/arc.ts),
+[src/tweets.ts:402](../../src/tweets.ts)).
+
+This is measured, not inferred — four calls with an identical 7,291-token cached block, varying only
+`effort`, in [../research/prompt-caching-anthropic.md](../research/prompt-caching-anthropic.md).
+Changing effort paid a full write; changing back read the original. GPT Sol's review raised it and
+the repo's own research doc said the opposite, so it had to be settled with an experiment.
+
+It is worth sitting with how this failed. Two stages can be made to agree on every byte of a 47,000
+token prompt, and one number sitting *outside* that prompt — a number about how hard to think, which
+has nothing to do with the article — silently puts them in different caches. Byte-identity of the
+text was necessary and it was not sufficient, and no amount of reading the two prompts side by side
+would have shown it.
+
+**What has not been decided** is which way to resolve it: raise glossary to `high`, which changes its
+output and its cost for reasons that have nothing to do with glossary quality, or accept two caches
+and stop describing this as three-way sharing. The doc now says two, because that is what the code
+does today.
+
+### And on the normal path, the pipeline breakpoints lose money
+
+`DEFAULT_INGEST_STEPS` is `fetch, extract, blocks, toc, arc`
+([src/pipeline.ts:102](../../src/pipeline.ts)) — `tweets`, `glossary` and `summary` are things a
+reader asks for later, by Greg's decision of 2026-08-25. So adding an article runs `arc` and nothing
+that could read what `arc` wrote, and a top-up minutes or days later has long missed the 5-minute
+TTL.
+
+That is a 25% write premium paid on every ingest against a read that, on the normal path, never
+comes. On the constitution it is about **2.4¢ an article** — small, and reliably wasted.
+
+The paragraph above already called this opportunistic. The correction GPT Sol supplied is that
+misses are not the unlucky case here, they are the *default* case, which is a different thing to
+write in a doc and a different thing to decide about. Two ways out: mark the prefix only when the
+job actually schedules a compatible stage behind it, or drop these breakpoints until the logs show
+reuse worth having. The counts are already logged, so the evidence will arrive on its own.
 | **labels** | the four parallel batches of one run | the outline, via `batchParts` |
 
 The request path gets three entries rather than one because the three differ *before* the article:

@@ -177,21 +177,47 @@ model.
    enough to find the earlier cache write, and it silently misses. Needs an intermediate breakpoint
    roughly every 15 blocks in long tool-use turns.
 
-**Full invalidation hierarchy** — not every change invalidates everything; the cache has three
-tiers (tools, system, messages) and a change only invalidates its own tier and the tiers after it:
+**Full invalidation hierarchy** — the cached region is a *prefix*, rendered in the order
+**tools → system → messages**. So the rule has one clause: a change invalidates its own tier and
+every tier after it, and nothing before it. Editing the last system block cannot cost you the tools
+cache; editing a tool definition costs you everything.
 
-| Change | Invalidates tools cache | Invalidates system cache | Invalidates messages cache |
+| Change | tools | system | messages |
 |---|:---:|:---:|:---:|
-| Tool definitions (add/remove/edit) | yes | yes | yes |
-| Model switch | yes | yes | yes |
-| `speed`, web search toggle, citations toggle | yes | no | no |
-| System prompt content | yes | no | no |
-| `tool_choice`, adding/removing images, thinking on/off | yes | yes | no |
-| Message content | yes | yes | no |
+| Tool definitions (add / remove / edit) | invalidated | invalidated | invalidated |
+| Model switch | invalidated | invalidated | invalidated |
+| `output_config.effort` — **measured, see below** | invalidated | invalidated | invalidated |
+| System prompt content | kept | invalidated | invalidated |
+| Message content | kept | kept | invalidated |
 
-Read that table as: a change to `tool_choice` or to `thinking` doesn't cost you the tools+system
-cache — only tool definitions and the model itself force a full rebuild. So it's safe to flip
-`tool_choice` or toggle thinking per-request without worrying about cache cost.
+> **This table replaces an earlier one that was wrong**, and wrong in the direction that matters: it
+> said a change to the system prompt invalidated the *tools* cache but left the *system* cache
+> intact, which is the hierarchy upside-down. It also listed `thinking on/off` as safe for
+> tools+system. Nothing in the repo had acted on it yet, but GPT Sol's review of the implementation
+> contradicted it (2026-08-26), and the measurement below is what settled the disagreement. Treat
+> the rows above that are not marked *measured* as still owing an experiment.
+
+**`output_config.effort` is part of the cache key — measured, not read.** Four calls, byte-identical
+cached system block of 7,291 tokens, `claude-sonnet-5`, only `effort` varying:
+
+| call | effort | cache write | cache read |
+|---|---|---:|---:|
+| 1 | `high` | 7,291 | 0 |
+| 2 | `high` | 0 | **7,291** |
+| 3 | **`medium`** | **7,291** | **0** |
+| 4 | `high` | 0 | **7,291** |
+
+Call 3 is the finding: the same bytes paid a full write because one generation parameter beside them
+changed. Call 4 shows the two prefixes then coexist rather than evicting each other, so this is a
+cache *per effort level*, not a cache that gets clobbered.
+
+The consequence for this repo is in [../project/prompt-caching.md](../project/prompt-caching.md):
+`arc` and `tweets` run at `high` and `glossary` at `medium`, so those three stages emit an identical
+article and still cannot share a cache.
+
+**Do not assume the same of `temperature` or `max_tokens`** — see below — and note that `effort`
+being in the key while `temperature` is not is not something you could have predicted from "it's a
+generation parameter". It had to be measured.
 
 **Whitespace and ordering do matter** — the match is byte-exact, so any change to serialized JSON
 key order, whitespace, or formatting in the cached region breaks the match. This is why
