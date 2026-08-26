@@ -25,7 +25,6 @@ import {
   type DiagramNode,
   GIST_PX,
   LABEL_PX,
-  layoutDiagram,
   MAX_DRAWN_DEPTH,
   layoutMindmap,
   layoutStrata,
@@ -34,6 +33,7 @@ import {
   walk,
   wrapText,
 } from "../src/web/diagram.js";
+import { layoutDiagram } from "../src/web/diagrams.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
 import { siblingRuns } from "../src/web/DiagramPanel.js";
 
