@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   ANSWER_OVERFLOWED,
   canRetry,
+  CODE_KINDS,
   kindOfMessage,
   worthRetrying,
   ENDED_UNFINISHED,
@@ -45,7 +46,7 @@ const EVERY: ReaderFacingFailure[] = [
 const codeOf = (m: string) => m.match(/\[([a-z0-9-]+)\]$/)?.[1];
 
 describe("the shape every message keeps", () => {
-  it("ends with a bracketed code, so a reader can quote four characters", () => {
+  it("ends with a bracketed code, so a reader can quote it instead of the sentence", () => {
     for (const f of EVERY) expect(codeOf(f.message), f.message).toBeTruthy();
   });
 
@@ -93,6 +94,22 @@ describe("the kind survives being stored as a bare sentence", () => {
   it("keeps its answer for a status it has no branch for", () => {
     expect(kindOfMessage(providerHttpFailure(451).message)).toBe("blocked");
     expect(kindOfMessage(providerHttpFailure(599).message)).toBe("retry");
+  });
+});
+
+describe("the code table and the messages are one fact, not two", () => {
+  /* `CODE_KINDS` and `EVERY` were both maintained by discipline: a new failure
+     that skipped `EVERY` skipped every invariant in this file, and a new code
+     that skipped the table fell quietly through to the status heuristic or to
+     null. Neither omission had a symptom. So the two lists check each other. */
+  it("has a table entry for every fixed code the messages carry", () => {
+    const fromMessages = new Set(
+      EVERY.map((f) => codeOf(f.message) as string)
+        // The `[ai-409]` family is minted from a status and belongs to the
+        // heuristic in `kindOfMessage`, not to the table.
+        .filter((c) => !/^ai-\d{3}$/.test(c)),
+    );
+    expect([...fromMessages].sort()).toEqual(Object.keys(CODE_KINDS).sort());
   });
 });
 
@@ -144,9 +161,12 @@ describe("the sentence must agree with the kind", () => {
   it("says so out loud when retrying cannot work", () => {
     for (const f of EVERY) {
       if (canRetry(f.kind)) continue;
-      expect(f.message, f.message).toMatch(
-        /will not help|will get the same|same answer|same result|same thing|needs to be smaller|needs fixing/i,
-      );
+      /* Deliberately broad. A narrow list of exact phrases is what let a
+         reworded message drop silently out of the sibling test above — see its
+         comment. "the same" catches every honest way of saying "this will come
+         back identical"; "needs fixing"/"needs somebody" catch the two that are
+         about setup rather than repetition. */
+      expect(f.message, f.message).toMatch(/will not help|the same|needs fixing|needs somebody/i);
     }
   });
 });

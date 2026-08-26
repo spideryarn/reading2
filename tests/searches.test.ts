@@ -15,6 +15,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { beginRun, deleteRun, finishRun, loadRuns, MAX_RUNS, update } from "../src/searches.js";
 import type { SearchHit } from "../src/types.js";
+import { kindOfMessage, providerHttpFailure, worthRetrying } from "../src/messages.js";
 
 const SLUG = "test-searches-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -217,5 +218,36 @@ describe("saved-search storage", () => {
     const again = await beginRun(SLUG, "evidence", "spya-k3m9qt");
 
     expect(again.id).not.toBe(first.id);
+  });
+});
+
+describe("a failure survives being written down and read back", () => {
+  /* The gap this closes: every other test of `kindOfMessage` hands it a message
+     straight from the factory, so all of them would keep passing if something
+     between the throw and the screen decorated the string — `Search failed:
+     ${msg} — tap to retry` is the plausible one, and it would move the bracket
+     off the end and silently turn every permanent failure back into a Retry
+     button. Nothing about that has a symptom.
+
+     So this one goes through the real path: store the failure the way the route
+     does, read it off disk, and ask the question the panel asks. */
+  it("still knows a topped-out account cannot be retried", async () => {
+    const permanent = providerHttpFailure(402);
+    expect(worthRetrying(permanent.message)).toBe(false); // before the round trip
+
+    const run = await beginRun(SLUG, "does this survive a write");
+    await finishRun(SLUG, run.id, { status: "error", error: permanent.message });
+
+    const [stored] = await loadRuns(SLUG);
+    expect(stored?.status).toBe("error");
+    expect(worthRetrying(stored?.error)).toBe(false);
+    expect(kindOfMessage(stored?.error ?? "")).toBe("ours");
+  });
+
+  it("still offers another go for a transient one", async () => {
+    const run = await beginRun(SLUG, "and the other direction");
+    await finishRun(SLUG, run.id, { status: "error", error: providerHttpFailure(429).message });
+    const [stored] = await loadRuns(SLUG);
+    expect(worthRetrying(stored?.error)).toBe(true);
   });
 });

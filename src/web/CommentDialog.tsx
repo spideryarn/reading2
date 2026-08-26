@@ -18,7 +18,7 @@
  */
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
-import { worthRetrying } from "../messages.js";
+import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import type { ClientComment } from "./useComments.js";
 import { Tooltip } from "./Tooltip.js";
 
@@ -167,7 +167,13 @@ export function CommentDialog({
       {comment.status === "error" && (
         <div className="cmt-error">
           <p>
-            {comment.error ?? "Something went wrong."}
+            {/* copy.md's avoid-list names "Something went wrong" by name, for
+                saying nothing. It can only appear if a comment reached `error`
+                status with no message stored, which nothing does today — but a
+                fallback nobody expects to see is exactly where a rule stops
+                being followed, and this one sat five lines from the button the
+                whole retry change was about. */}
+            {comment.error ?? PROVIDER_UNREADABLE.message}
             {/* Said out loud, because otherwise the answer below looks like the
                 one that just failed. A reader who pressed "search the web" and
                 got their old answer back with a red line above it deserves to

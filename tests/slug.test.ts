@@ -64,6 +64,12 @@ describe("assertSlug", () => {
        as a queued job, so reader state could be written into the queue and then
        parsed as work. `assertSlug` reserves the name now. Caught by review. */
     expect(() => assertSlug("_jobs")).toThrow(/Not a valid slug/);
+    /* And case-folded, because the read rule admits uppercase and this repo
+       develops on APFS, where `data/_JOBS/` and `data/_jobs/` are one
+       directory. A reservation that only holds in lower case does not hold. */
+    for (const spelling of ["_JOBS", "_Jobs", "_jObS"]) {
+      expect(() => assertSlug(spelling), spelling).toThrow(/Not a valid slug/);
+    }
     // And it could never be minted, which is the half that was always a rule.
     expect(isSlug("_jobs")).toBe(false);
 

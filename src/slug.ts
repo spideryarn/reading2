@@ -98,6 +98,14 @@ const MAX_SLUG = 255;
  * Names that are a directory under `data/` belonging to something other than an
  * article. `.` and `..` are handled below rather than here, because they are
  * about climbing out rather than about landing somewhere already taken.
+ *
+ * **Compared case-folded**, which is not fussiness. `SLUG` admits uppercase, so
+ * a set membership test on the raw string refuses `_jobs` and waves through
+ * `_JOBS` — and this repo develops on macOS, where APFS is case-insensitive by
+ * default, so `data/_JOBS/` and `data/_jobs/` are one directory. Reserving a
+ * name case-sensitively on a filesystem that does not distinguish case is a
+ * reservation that does not hold. Caught in review the same afternoon the
+ * reservation was added.
  */
 const RESERVED = new Set(["_jobs"]);
 
@@ -111,7 +119,7 @@ export function assertSlug(slug: string): void {
     !SLUG.test(slug) ||
     slug === "." ||
     slug === ".." ||
-    RESERVED.has(slug)
+    RESERVED.has(slug.toLowerCase())
   ) {
     throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
   }

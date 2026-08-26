@@ -56,8 +56,12 @@ narrower question. Nothing is misconfigured and nothing is broken.
 Its messages share a sentence pattern worth copying, because it states the
 futility and the way out in one breath:
 
-> Asking the same thing again will get the same answer; asking something
-> narrower sometimes gets through.
+> Asking the same thing again will most likely get the same refusal; asking
+> something narrower sometimes gets through.
+
+Note the hedge. "Will get the same answer" is false for the one `blocked` case
+that resets on its own — a spend limit at midnight — and a message that is wrong
+by tomorrow morning is worse than one that is vaguer today.
 
 Getting this wrong in the `ours` direction is the expensive mistake: **telling
 someone to try again when retrying cannot possibly work**, so they do it, four or
@@ -89,6 +93,14 @@ exists so that a person reporting a problem can quote a handful of characters
 instead of paraphrasing a sentence, and so that whoever is helping them can find
 the exact branch without guessing.
 
+**The interface reads it too, and that is newer than the rest of this section.**
+`kindOfMessage` in [`src/messages.ts`](../../src/messages.ts) recovers the
+`kind` from the code, and `worthRetrying` uses it to decide whether to offer the
+reader another go. So the code is no longer only a support reference — it is
+parsed. That widening is deliberate and it is what makes the stability rule
+below load-bearing rather than merely polite: renaming a code now changes which
+buttons appear under errors already stored on disk.
+
 **Tests match on the code, not the prose.** That is the other reason it exists:
 copy should be freely rewritable without turning a test suite red, and a test
 that pins a sentence quietly makes the sentence permanent. If you are writing a
@@ -104,8 +116,20 @@ the code orphans every support conversation that quoted it.
 
 ## Writing a new one
 
-Add it to `src/messages.ts`, give it a `kind`, give it a code, and check it
-against the four rules. Two habits worth having:
+Add it to `src/messages.ts`, give it a `kind`, give it a code, and then **two
+steps that are not optional**, because each has a failure with no symptom:
+
+1. **Register the code in `CODE_KINDS`.** Miss it and `kindOfMessage` returns
+   null, `worthRetrying` says yes, and a permanent failure quietly grows a Retry
+   button.
+2. **Add the failure to `EVERY` in [`tests/messages.test.ts`](../../tests/messages.test.ts).**
+   Miss it and your message skips every invariant in that file.
+
+Those two lists check each other — the test asserts the table's keys are exactly
+the codes the messages carry — so doing one and forgetting the other is a red
+test rather than a silent gap. Doing neither is not.
+
+Then check it against the four rules. Two habits worth having:
 
 - **Read it aloud as the reader.** "The AI service rejected this request as
   malformed" passes; "Request validation failed" does not.
