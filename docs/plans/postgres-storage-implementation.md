@@ -49,9 +49,9 @@ Legend: ✅ done · 🔵 in progress · 📐 designed, not built · ⬜ not star
 | 9 | Comments — writes | ✅ |
 | 9b | Shelf state — archive, rename, opens — and library-wide search | ✅ **added 2026-08-26**, both adapters. See [library-shelf-actions-and-search.md](library-shelf-actions-and-search.md) |
 | 10 | Chat, searches, glossary lookups — writes | 🔵 **stores built and reviewed 2026-08-26; not yet wired into `src/routes.ts`.** All three adapters exist on both sides, with a scripted parity sequence and the two criticals from the design review applied — then [a second review of the built code](#what-the-review-found-in-the-built-step-10) found two more races and four tests that passed for bad reasons. Those are fixed. **What is left is the wiring**, plus `lookUpTerm` moving out of `src/api.ts`; `deleteGlossary` stays 501 by construction |
-| 11 | Pipeline writes to draft revisions (+ carry-forward) | 📐 **designed and reviewed 2026-08-26, not built.** [The design](#step-11-the-pipeline-writes-revisions) · smaller than this document claimed — `outputs` is one table, not eight modules — but four criticals, and it does need one schema migration |
-| 12 | Jobs and claiming | 📐 **designed and reviewed 2026-08-26, not built.** [The decisions](#step-12-jobs-and-claiming-decided-before-it-is-built) · three criticals, including a fence this document had dropped |
-| 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ |
+| 11 | Pipeline writes to draft revisions (+ carry-forward) | 🔵 **half B stages 1–4 built 2026-08-26** (`39b9892`, `fa3945c`): the artefact store, the file adapter, `produces` beside `outputs` with an agreement test, and `stepIsDone` taking a store — `has()` now **parses** rather than `stat`s, which closes the truncation hazard for the five steps that had no freshness check. **Then [a review of the built code](#what-the-review-of-the-built-seam-found) found three criticals, none yet fixed** — a mixed generation still reports done, `extractedHtml`/`stampedHtml` are indistinguishable on disk, and the `store` argument defaults to the filesystem. **Half A (carry-forward and publication) is designed, not started**, and needs the one schema migration |
+| 12 | Jobs and claiming | ⚠️ **superseded 2026-08-26 — do not build what is below.** [job-queue-rethink.md](job-queue-rethink.md) replaced the autonomous queue with a **browser-driven advance endpoint**, on Greg's *"whichever's easiest"*: a queue library gives you a queue, not durable compute, and Vercel has no worker. Surviving from the old design: the attempt token, the **fenced output write**, a job-owned draft, and the single-running-step rule. Also found there: **ingest does not currently work on Vercel**, independent of all of this |
+| 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ Two decisions now made: the `example` fixture **goes in, marked as one** (a `fixture boolean` on `articles`, the directory staying on disk), and an unknown slug **404s** — the files side comes up to Postgres, not the reverse. Both in [postgres-migration.md § Open questions](postgres-migration.md#open-questions). The importer's reconciliation direction **reverses here**, and that is the reason this is a step rather than a flag flip |
 
 **What step 10 still needs before it is done**, all of it in `src/routes.ts` and deliberately left
 until that file settles — it is being heavily edited for the streaming work:
@@ -92,6 +92,39 @@ step rather than a flag flip.
 > only the slug it is handed, so an article whose `data/` directory has vanished entirely left an
 > orphan row that nothing visits. `npm run db:import -- --prune` now removes it — see
 > § The importer converges.
+
+## What happens next, in order
+
+Written down because by 2026-08-26 evening the answer was spread across five sections and three
+documents, and several agents work this tree at once.
+
+1. **Fix the three criticals in the built seam.** [What the review of the built seam
+   found](#what-the-review-of-the-built-seam-found). Start with the red test: leave a complete old
+   generation, replace exactly one of a step's outputs, assert the step reports **not** done. Today it
+   reports done. Nothing else in step 11 should be built on top until that is settled, because the
+   whole seam rests on "the store can tell you whether a step really finished".
+2. **Wire step 10 into `src/routes.ts`**, and move `lookUpTerm` out of `src/api.ts`. The three stores
+   exist, are reviewed twice and are still unreachable — which is the most dangerous state in this
+   table, because the work looks done from the file list. `deleteGlossary` stays 501 until step 11
+   decides whether a published revision may be mutated.
+3. **Step 11 half A** — `beginRevision` / `publishRevision` / `failRevision`, the CARRY / MINT /
+   DERIVE split, and the carry-forward test that performs a **real re-extraction**. This is where the
+   one schema migration lands (`draft_revision_id`, and the `fixture boolean` for step 13 may as well
+   ride along). **One migration writer at a time** — it is the only genuinely conflicting file in this
+   repo.
+4. **Step 11 half B stage 5** — the writes leave the eight stage modules, one commit each, by each
+   stage's owner. Remember the correction: the stages still **read** files too, so a stage is only
+   done when its inputs arrive as values.
+5. **The advance endpoint** ([job-queue-rethink.md](job-queue-rethink.md)), which depends on
+   `draft_revision_id` from step 3 above.
+6. **Step 13.** Flip the default, seed the fixture, delete the filesystem adapter — and **reverse the
+   importer's reconciliation direction**, or cutover day deletes every comment, thread and lookup
+   added since the last export while reporting a clean import.
+
+**Independent of all of it, and currently misdescribed nowhere now but worth doing:** ingest does not
+work on Vercel — `enqueue` starts a floating promise, there is no `waitUntil`, and the function is
+capped at 300 seconds. [deployment.md](../project/deployment.md) lists it as knowingly broken; the
+advance endpoint is what fixes it properly.
 
 ### Step 0 — done
 
@@ -365,15 +398,34 @@ Two things Sol did **not** find, both turned up while checking its work:
 > straight from `src/searches.ts`. Those modules call `node:fs/promises` directly and never read
 > `STORE`. The glossary writes are refused loudly only because they *do* go through the store.
 >
-> So there are two real options and no third: wire `pgChatStore` and `pgSearchStore` (both built,
-> both reviewed, both unwired) through `src/store/index.ts` and switch those two import blocks in
+> There were two real options and no third: wire `pgChatStore` and `pgSearchStore` (both built, both
+> reviewed, both unwired) through `src/store/index.ts` and switch those two import blocks in
 > `routes.ts` — which is this step, not a stopgap — or put the refusal inside `src/chat.ts` and
-> `src/searches.ts` themselves. The wiring is not free: routes.ts has to start carrying the
-> `attempt` token that `Turn.attempt` and `SearchStore.begin` hand back, which is the whole point of
-> those columns.
+> `src/searches.ts` themselves.
+>
+> **The refusal was taken, 2026-08-26**, and the wiring deliberately was not. `save()` in each of
+> those two modules now throws the same 501 the store's `notMigrated` throws, so the reader gets one
+> answer whichever door the call came through. It is on `save` because every write in each module
+> funnels through it, and because it fires *before* the model call rather than after it. Held by
+> `tests/store-not-migrated.test.ts`, and marked in both files as scaffolding this step deletes.
+>
+> Two things came with it and are worth knowing:
+>
+> **The flag had to move to a leaf module**, `src/store/live.ts`. `index.ts` imports `fs.ts`, which
+> imports `chat.ts` and `searches.ts` — so those two asking `index.ts` which store is live is a
+> cycle, and `npm run check` gates on cycles. `STORE`, `storeFromEnv` and the 501 live there now, and
+> `index.ts` re-exports them so no caller has to know.
+>
+> **Reads deliberately still answer from the filesystem.** `loadThreads` and `loadRuns` return `[]`
+> for an article nobody has chatted about, and in `postgres` mode that answer happens to be *correct*
+> rather than merely quiet: nothing writes chat or search rows to Postgres, so the Postgres side is
+> empty too. Refusing the read would put an error banner on every article for a feature whose only
+> honest answer is "there are none". **That flips the day this step lands** — once `pgChatStore` is
+> wired, a read that still comes off the disk is wrong, and the test that pins today's behaviour says
+> so at the assertion.
 >
 > The general lesson is the one worth keeping: **a guard can only be written where the call goes**,
-> and "extend the guard" was proposed twice by people reading the store's own header, which says
+> and "extend the guard" was proposed twice by people reading the store's own header, which said
 > what it refuses without saying what never reaches it. That header now says it.
 
 `SPIDERYARN_STORE=postgres` serves all three from Postgres. After this step the file-backed writes
