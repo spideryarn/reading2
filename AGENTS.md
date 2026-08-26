@@ -208,6 +208,18 @@ Not descriptions of code, which the code already provides.
   for the conclusion, not the page dumps.
 - Before writing any Anthropic SDK code, load the `claude-api` skill for current model ids and
   parameters; don't hardcode a model from memory.
+- **Stream any model call a person is waiting on.** A spinner for fifteen seconds and the first
+  sentence after two are the same call; only one of them lets the reader start reading. The plumbing
+  is already built and shared — `sseChunks` and the abort helpers in
+  [`src/openrouter-stream.ts`](src/openrouter-stream.ts), `sse(res)` in
+  [`src/routes.ts`](src/routes.ts), `readEvents` in [`src/web/lib/sse.ts`](src/web/lib/sse.ts) — so
+  a new streaming endpoint is a generator and a route, not a project. Write the generator as the
+  only implementation and let the waiting callers drain it, rather than keeping a second
+  non-streaming copy: `explain`/`explainStream` in [`src/explain.ts`](src/explain.ts) is the shape.
+  A batch call in the pipeline, which nobody is watching, does not need this.
+  [comments.md § The answer arrives a few words at a time](docs/project/comments.md#streaming) has
+  the two invariants that a stream needs and a single response does not — chiefly that **a stream
+  can end by simply stopping, and that looks exactly like finishing**.
 - **Never run a git command that throws work away.** Other agents' unsaved edits are sitting in
   this same tree and there is no second copy of them. So: no `git checkout -- …`, no `git restore`,
   no `git stash`, no `git reset --hard`, no `git clean`, no switching or rebasing branches — not

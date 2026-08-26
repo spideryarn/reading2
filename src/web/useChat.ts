@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, ChatThread, Citation } from "../types.js";
 import { mintId } from "../ids.js";
+import { readEvents } from "./lib/sse.js";
 import { describeFetchFailure } from "./useComments.js";
 
 export interface ChatApi {
@@ -617,60 +618,4 @@ export function useChat(slug: string): ChatApi {
   );
 
   return { threads, loaded, send, retry, edit, stop, begin, discard, rename, remove, error };
-}
-
-interface ServerEvent {
-  name: string;
-  data: unknown;
-}
-
-/**
- * Server-sent events off a `fetch` body.
- *
- * The mirror of `sseChunks` in src/converse.ts, and it has the same three
- * traps — a frame split across two reads, blank lines between frames, and the
- * fact that a `data:` line is not necessarily JSON. The difference is that
- * frames here are separated by a **blank line** and carry an `event:` name, so
- * the split is on `\n\n` rather than on `\n`.
- */
-async function* readEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<ServerEvent> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      // Frames are separated by a blank line; anything after the last one is a
-      // partial frame and waits for the next read.
-      let cut = buffer.indexOf("\n\n");
-      while (cut !== -1) {
-        const frame = buffer.slice(0, cut);
-        buffer = buffer.slice(cut + 2);
-        const parsed = parseFrame(frame);
-        if (parsed) yield parsed;
-        cut = buffer.indexOf("\n\n");
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-function parseFrame(frame: string): ServerEvent | null {
-  let name = "message";
-  const data: string[] = [];
-  for (const line of frame.split("\n")) {
-    if (line.startsWith("event:")) name = line.slice(6).trim();
-    else if (line.startsWith("data:")) data.push(line.slice(5).trim());
-  }
-  if (data.length === 0) return null;
-  try {
-    return { name, data: JSON.parse(data.join("\n")) };
-  } catch {
-    // A frame we cannot read loses a few words rather than the answer. Same
-    // judgement as the server side, and for the same reason.
-    return null;
-  }
 }

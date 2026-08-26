@@ -1328,6 +1328,63 @@ td.text.has-hit {
 }
 .cmt-answer p:last-child { margin-bottom: 0.3rem; }
 
+/* The answer that is being replaced, while a deeper search runs.
+   Dimmed rather than removed: the reader asked for something better than this,
+   not for nothing, and a panel that empties itself for twenty seconds has taken
+   away the thing they were reading. It comes back at full strength if the
+   re-ask fails — see `send` in useComments.ts. */
+.cmt-answer.stale p { color: var(--ink-faint); }
+
+/* The caret at the end of an explanation still arriving. Same recipe and the
+   same reason as `.chat-cursor`: a long pause between tokens should read as
+   "still coming" rather than as "finished, oddly". Not a shared class, because
+   the two live in panels with different type sizes and the caret has to match
+   the line it sits on. */
+.cmt-cursor {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.85em;
+  margin-left: 0.1rem;
+  background: var(--highlight);
+  vertical-align: text-bottom;
+  animation: chat-blink 1s steps(2, start) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmt-cursor { animation: none; opacity: 0.6; }
+}
+
+/* The follow-up box. Sits between the answer and the footer, so the footer
+   stays a row of small controls and the header keeps its prev/next. Typing in
+   it leaves for chat rather than growing a transcript in here — Greg's call,
+   see src/web/chat-handoff.ts. */
+.cmt-followup {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+.cmt-followup input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.32rem 0.5rem;
+  /* The same border, ground and focus ring as `.chat-input`, deliberately: this
+     box and that one take the same kind of thing, and the reader arriving in
+     chat should find the sentence they started in a box that looks like the one
+     they started it in. `--surface` and `--focus` do not exist — an earlier
+     draft of this rule invented both, and an undefined custom property is not
+     an error, it just silently does nothing. */
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+.cmt-followup input::placeholder { color: var(--ink-faint); }
+.cmt-followup input:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.cmt-followup button { font-size: 0.7rem; white-space: nowrap; }
+.cmt-followup button:disabled { opacity: 0.4; cursor: default; }
+
 .cmt-error {
   font-size: 0.78rem;
   color: var(--ink-soft);
@@ -1379,7 +1436,11 @@ td.text.has-hit {
   font-size: 0.66rem;
   color: var(--ink-faint);
 }
+/* Delete stays hard right; everything else in the footer packs to the left, in
+   the order it is written. `auto` on this one is what does it — see the note
+   further down about why the hover colour is a separate rule. */
 .cmt-delete { margin-left: auto; }
+.cmt-deepen { white-space: nowrap; }
 
 .cmt-transport-error {
   font-family: var(--font-mono);
@@ -3307,14 +3368,37 @@ td.text.has-hit {
   color: var(--ink);
 }
 
+/* ---- the gutter: how sure, and where ----
+
+   Two channels stacked in a fixed 2.6rem column down the left of every row —
+   the model's confidence and the passage's place in the article. Fixed, so the
+   quotes beside them line up down the list even though a words-search has no
+   confidence to show and a meaning-search does.
+
+   They are deliberately different colours and different shapes: the hue means
+   "a match" everywhere in this mode (the wash in the prose, the selected
+   matcher), so place gets neutral grey rather than a second reading of the same
+   blue. Neither carries its meaning by colour alone — the confidence prints its
+   number, the place bar has an accessible name and a legend above the list. */
+
+.srch-gutter {
+  flex: none;
+  width: 2.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  /* Top-aligned with the first line of the quote, not centred against a row
+     whose height is whatever three clamped lines came to. */
+  align-self: flex-start;
+  padding-top: 0.05rem;
+}
+
 /* The confidence, printed as well as drawn — see the note in SearchPanel.tsx.
    Their version encoded it only as opacity, and a reader cannot tell 40 from 55
    by looking at two washes. Tabular figures so a column of them lines up. */
 .srch-conf {
   --hit-a: 1;
-  flex: none;
-  align-self: flex-start;
-  min-width: 1.9rem;
   padding: 0.05rem 0.2rem;
   border-radius: 3px;
   background: rgb(var(--hit-rgb) / calc(var(--hit-a) * 0.35));
@@ -3323,6 +3407,58 @@ td.text.has-hit {
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+
+/* How far through the article the passage is, as a bar that fills up to it.
+
+   A 2px track and not a hairline: 1px lands on a half-device-pixel at the
+   fractional zoom levels people actually read at, and a track that disappears
+   at 110% is a track that looks like a rendering fault. The fill is the same
+   height, so the two read as one object rather than as a bar in a box.
+
+   `--at` is a percentage set inline. It has a default here so the element is
+   still meaningful if it ever renders without one — 0% draws an empty track at
+   the start of the piece, which is at least a place, where an invalid width
+   would collapse the whole bar and read as "no data" in a UI that has no such
+   state. */
+.srch-place {
+  --at: 0%;
+  position: relative;
+  height: 2px;
+  margin: 0.15rem 0 0.1rem;
+  border-radius: 1px;
+  background: var(--rule-strong);
+  overflow: hidden;
+}
+.srch-place-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  /* The very start of the article would otherwise draw nothing at all, which is
+     indistinguishable from a bar that failed to render. A minimum sliver keeps
+     "at the top" visible as a value. */
+  width: max(2px, var(--at));
+  border-radius: 1px;
+  background: var(--ink-soft);
+}
+
+/* One line saying what the two gutter marks are, so neither is hover-only —
+   a hover-only explanation is one nobody on a touchscreen ever sees. Built from
+   the same components as the rows, so it cannot drift from what it describes. */
+.srch-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.7rem;
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.35rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+.srch-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
+/* Sized down and pinned to a width, so the two specimens sit on the text
+   baseline rather than stretching to whatever the flex row is. */
+.srch-legend .srch-conf { flex: none; opacity: 0.75; }
+.srch-legend .srch-place { width: 1.6rem; margin: 0; flex: none; }
 
 .srch-hit-body { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
 .srch-hit-quote {
@@ -3342,6 +3478,21 @@ td.text.has-hit {
    it is to show more than the row could. */
 .tip-hit { max-width: 26rem; }
 .tip-hit p { margin: 0; font-size: 0.8rem; line-height: 1.5; }
+/* What the two numbers in the gutter mean, under the passage they belong to.
+   Ruled off and set smaller, because it is *about* the result rather than part
+   of it — the passage is the reader's, the note is ours. */
+/* Two classes deep, deliberately: `.tip-hit p` above is more specific than a
+   single class would be, and losing to it is how this ends up needing an
+   `!important` instead. */
+.tip-hit .tip-hit-meta {
+  margin-top: 0.45rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+}
+.tip-hit-meta b { color: var(--ink-soft); font-weight: 600; }
+.tip-hit-meta em { font-style: italic; }
 
 /* -------------------------------------------------------- § summary mode ----
    The article at more than one length, in the mode band. The shell is
@@ -3971,13 +4122,21 @@ td.text.has-hit {
    finger without waiting for the trackpad to go away.
 
    **The two declarations are a deliberate fallback pair, not a duplicate.**
-   `pinch-zoom` is the keyword that keeps zooming alive, and WebKit lists it as
-   non-standard — an unsupported keyword invalidates the whole declaration, and
-   a dropped declaration here means the swipe stops working with no error
-   anywhere. So the plain `pan-x` is stated first and survives on its own, and
-   the richer one overrides it wherever it parses. The cost if it does not parse
-   is that pinch-zoom is unavailable *on the gist columns only* — the prose,
-   which is what anyone zooms, is untouched either way.
+   `pinch-zoom` is the keyword that keeps zooming alive over these columns, and
+   it is a standard value that Safari has supported since 13 — so this is
+   belt-and-braces, not an expected failure. It costs one line and it guards
+   something disproportionate: an unsupported keyword invalidates the *whole*
+   declaration, so the swipe would stop working with no error anywhere. Plain
+   `pan-x` is stated first and survives on its own; the richer one overrides it
+   wherever it parses. If it ever does not, the cost is pinch-zoom on the gist
+   columns only — the prose, which is what anyone actually zooms, is untouched
+   either way.
+
+   **On the `<td>`, and it could not have gone on the `<tr>`.** `touch-action`
+   applies to "all elements except non-replaced inline elements, table rows, row
+   groups, table columns, and column groups" — so the obvious place to put a
+   per-row rule is the one place the property is defined to be ignored, with no
+   error and no warning. Another one for docs/reusable/silent-success.md.
 
    Nothing here applies on a desktop: the hook ignores any pointer that is not
    a touch, and this query never matches a mouse-only machine. */

@@ -41,6 +41,7 @@ matching before the article is even reached.
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article | `articleWithIds` |
 | **pipeline** | arc and tweets — one shared entry per article. **Not glossary; see below** | `articleText` |
+| **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 Note what the pipeline row does **not** mean. Each of those stages makes *one* call per run, so none
 of them caches anything for itself; the entry only pays off when two of them run close together —
@@ -96,8 +97,6 @@ misses are not the unlucky case here, they are the *default* case, which is a di
 write in a doc and a different thing to decide about. Two ways out: mark the prefix only when the
 job actually schedules a compatible stage behind it, or drop these breakpoints until the logs show
 reuse worth having. The counts are already logged, so the evidence will arrive on its own.
-| **labels** | the four parallel batches of one run | the outline, via `batchParts` |
-
 The request path gets three entries rather than one because the three differ *before* the article:
 search sends no tools, chat and explain send `openrouter:web_search`, and all three have their own
 system prompt. Unifying those to chase one shared entry would mean degrading three prompts to suit an

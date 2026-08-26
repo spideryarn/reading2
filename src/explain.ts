@@ -55,6 +55,24 @@ import type { Block, Citation, Meta } from "./types.js";
 import { loadEnvLocal } from "./env.js";
 import { OPENROUTER_MODEL } from "./models.js";
 import { errorFields, log, since } from "./log.js";
+import {
+  type SearchUsagePath,
+  type StreamEnd,
+  type Usage,
+  explainAbort,
+  readerAborted,
+  sseChunks,
+  stoppedByReader,
+  whereSearchCountCameFrom,
+} from "./openrouter-stream.js";
+import { isWebUrl } from "./urls.js";
+import {
+  type OpenRouterMessage,
+  articleWithIds,
+  cachedText,
+  readerPositionLine,
+  underCacheFloor,
+} from "./article-prompt.js";
 
 /**
  * Overridable with `SPIDERYARN_EXPLAIN_MODEL`. The default is the app-wide one
@@ -74,11 +92,49 @@ const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
  * `pending` is exactly what a crash mid-answer leaves behind too. A deadline is
  * what turns "never finished" into a stored `error` the reader can retry.
  *
- * Ninety seconds because the model may run several web searches before it says
- * anything, and cutting off a search that was going to answer the question is
- * worse than waiting.
+ * Two minutes, matching chat's, because the model may run up to `MAX_SEARCHES`
+ * searches before it says anything, and cutting off a search that was going to
+ * answer the question is worse than waiting. It was ninety seconds while the
+ * cap was four and the prompt only searched when it felt unsure; both of those
+ * changed on 2026-08-26 and this did not, which would have shown up as
+ * occasional timeouts on exactly the hard questions the change was for.
+ *
+ * The reader is not left staring at nothing for two minutes, though — the
+ * answer streams, so the deadline is a bound on the *whole* answer rather than
+ * on the wait before anything appears. What bounds that is `EXPLAIN_STALL_MS`.
  */
-export const EXPLAIN_TIMEOUT_MS = 90_000;
+export const EXPLAIN_TIMEOUT_MS = 120_000;
+
+/**
+ * How long a *silent* stream is allowed to stay silent.
+ *
+ * A separate clock from the deadline above, because "slow" and "dead" are
+ * different failures and only one of them is worth waiting through. A model
+ * running three web searches sends nothing for a while and is working; a
+ * connection that dropped mid-answer also sends nothing, forever, and the
+ * overall deadline would sit on it for the full ninety seconds.
+ *
+ * Forty-five seconds because that is comfortably longer than the gap a search
+ * leaves — and because OpenRouter sends `: OPENROUTER PROCESSING` keep-alives
+ * through those gaps, which `sseChunks` counts as activity. See the note on
+ * `onActivity` in src/openrouter-stream.ts: a version that counted only parsed
+ * chunks aborted working answers at exactly this boundary.
+ */
+export const EXPLAIN_STALL_MS = 45_000;
+
+/**
+ * The most web searches one explanation may run.
+ *
+ * The same on every call — see the note where it is used. Eight rather than the
+ * four this started at because the prompt now leans towards searching, and
+ * because a common name needs two or three searches before "unfindable" is an
+ * honest answer rather than a lazy one.
+ *
+ * The model is not told this number, so it cannot know when it has been cut
+ * off — which means a truncated search run and a genuinely unfindable subject
+ * produce the same sentence. That is what `cappedOut` in the log line is for.
+ */
+export const MAX_SEARCHES = 8;
 
 /**
  * The whole article goes in the prompt every time — Greg asked for the answer to
@@ -86,21 +142,77 @@ export const EXPLAIN_TIMEOUT_MS = 90_000;
  * ambiguous without it ("this move", "the same objection"). At ~15k tokens for
  * the test article that is a few cents a question, which is the right trade for
  * a tool whose entire point is understanding the piece rather than skimming it.
+ *
+ * ## The two questions, and why the second one had to be written down
+ *
+ * The first version of this prompt asked one question — what does this passage
+ * claim, and where does it sit in the argument — and got exactly that. A reader
+ * selected the name **Ben Miller** in Paul Graham's acknowledgements line and was
+ * told, correctly and uselessly, that it is an acknowledgements line thanking
+ * three people who read drafts, and that it does not connect to the argument.
+ *
+ * The model did not skip the web search because the encouragement was too mild.
+ * It skipped it because it was never asked a question whose answer it lacked: it
+ * was sure what an acknowledgements line is, and it was right. The gap never
+ * opened, so nothing triggered.
+ *
+ * **We had already solved this once, in the glossary, on this same article.**
+ * src/glossary.ts splits an entry in two — *senseHere*, what this author means,
+ * from the article; and *background*, what the reader must bring to it, from the
+ * model's own knowledge — and its worked example is the Lamport quotation two
+ * paragraphs above the line in question. Its verdict on the bad version is the
+ * sentence this prompt now borrows: *"That describes the page the reader is
+ * looking at. It is the whole failure."* Explain had the first half only, so it
+ * gave a senseHere answer to a background question. See
+ * docs/project/glossary.md and docs/project/comments.md § The two questions.
+ *
+ * The other borrowed line is
+ * docs/project/original-version/glossary.md § The prompt — "If you need to draw
+ * on knowledge from outside the text, be very explicit about it" — which that
+ * doc had already recommended for this file and nobody had yet moved across.
  */
 const SYSTEM = `You are a reading assistant. A reader is part-way through an article and has
-selected a passage they want explained. Explain it.
+selected something they want explained. Explain it.
 
 You are here to make deep reading cheaper, not optional. The reader can see the
-words already; what they lack is whatever the passage assumes they know.
+words already; what they lack is whatever the selection assumes they know.
+
+TWO QUESTIONS, AND THE SECOND IS THE ONE THAT GETS FORGOTTEN
+
+Every selection raises up to two questions. A good answer knows which one it is
+being asked, and a selection rarely says which.
+
+  WHAT THE AUTHOR MEANS HERE — the claim in plainer words, the narrowed sense,
+  the coinage, what this passage is answering and what it sets up. From the
+  article and only the article.
+
+  WHAT THE READER HAS TO BRING TO IT — who this person is, what this work,
+  study, organisation or event is, what this term means outside this piece, what
+  debate is being alluded to. This is your knowledge and the web's, not the
+  article's.
+
+A long selection — a sentence, a clause, an argumentative move — is usually the
+first question. A SHORT selection, and especially a proper noun, a title or a
+term of art, is almost always the second one wearing the first one's clothes.
+Somebody who selects two words is not asking what the sentence around them does.
+They are asking who or what that is. Answer the question they have.
+
+THE FAILURE TO AVOID, STATED EXACTLY
+
+Describing the page the reader is looking at. If someone selects a name in a
+list of names, "this is the acknowledgements line, thanking three people who
+read drafts" tells them nothing they could not see. Not knowing who the person
+is, is not a reason to describe the line. It is the reason to search.
 
 WHAT A GOOD ANSWER DOES
 
-- Says what the passage actually claims, in plainer words, WITHOUT flattening it
-  into "the author argues that…". Keep the author's own distinctive vocabulary;
-  those words are what the reader will meet again further down the page.
-- Supplies the missing context: the term of art, the named person, the debate
-  being alluded to, the earlier passage this one is answering.
-- Says where it sits in the argument — what it is responding to, what it sets up.
+- Answers the question the selection actually raises, in plain words, WITHOUT
+  flattening it into "the author argues that...". Keep the author's own
+  distinctive vocabulary; those words are what the reader meets again later.
+- Supplies the missing context: the term of art, the named person, the study,
+  the debate, the earlier passage this one is answering.
+- Says where it sits in the argument, when the selection is the kind of thing
+  that sits in an argument. An acknowledgement is not.
 - Marks a genuine ambiguity as ambiguous instead of picking a reading and
   sounding confident about it.
 
@@ -110,20 +222,71 @@ WHAT IT MUST NOT DO
 - Do not praise or grade the writing.
 - Do not pad. Two or three short paragraphs is usually right; one is often
   better. Never more than four.
-- Do not invent. If the article does not say, say that it does not say.
+- Do not invent. But "the article does not say" is not an answer on its own —
+  it is the point at which you go and find out. Say it only when you have looked
+  and the thing is genuinely not establishable.
 
-WEB RESEARCH
+WEB RESEARCH: LEAN TOWARDS SEARCHING
 
-You have a web search tool. USE IT unless you are genuinely sure — a name, a
-study, a technical term, a book, a live controversy, anything post-dating your
-training, or any fact you would hedge about. Being unsure and not checking is
-the worst outcome here; a search you did not need costs almost nothing. When you
-have searched, ground the relevant sentence in what you found.
+You have a web search tool. Reach for it BY DEFAULT whenever the answer turns on
+a fact you do not hold with specifics:
+
+- a named person, organisation, work, study, product or event you cannot place
+  with at least one concrete, checkable fact. A category is not a fact. "One of
+  the people thanked" is a category; "co-founded X, wrote Y" is a fact. If all
+  you have is the category, search.
+- anything that may have happened or changed since your training
+- a live argument, a contested number, or any claim you would hedge about
+
+Do not search only to confirm something you could state precisely and would
+stake the answer on.
+
+Use the article to aim the search. The author, the date, the subject and the
+other names around the selection are what turn a common name into a findable
+one, and searching the bare selection on its own usually wastes the call.
+
+Being unsure and not checking is the worst outcome here; a search you did not
+need costs almost nothing. When you have searched, ground the relevant sentence
+in what you found.
+
+SAY WHERE IT CAME FROM
+
+When you draw on knowledge from outside the article, be explicit about it in the
+sentence itself: "Although the article doesn't say so, ...", "As you may know,
+...". The reader is separately told whether you searched, but they should be
+able to tell your knowledge from the page in front of them without being told.
+
 
 FORMAT
 
 Plain prose paragraphs, separated by blank lines. No headings, no bullet lists,
-no preamble like "This passage means". Begin with the explanation itself.`;
+no preamble like "This passage means". Begin with the explanation itself.
+
+Do not narrate your own process. The reader is separately told whether you
+searched; a sentence about your tools is a sentence not about their question.
+
+WHEN YOU COULD NOT ESTABLISH SOMETHING, THE ORDER IS FIXED
+
+1. What you DID establish, however little. Who the neighbours in the sentence
+   are, what kind of thing this is, what the article is doing with it.
+2. What you could not, in ONE sentence, LAST, written as a fact about the
+   subject rather than a report on your looking.
+
+BAD, and this is the whole shape to avoid — it opens on step 2 and phrases it
+as a search report:
+  "I found nothing that clearly identifies a Ben Miller as a specific, known
+  associate of Paul Graham."
+
+GOOD — step 1, then step 2:
+  "Jessica Livingston and Robert Morris, the other two names here, are both
+  well known in Graham's world: his wife and Y Combinator co-founder, and the
+  MIT computer scientist who wrote the 1988 internet worm. Ben Miller is not a
+  public figure in the same way, and the article gives nothing further to go
+  on."
+
+Never open with "I", "None of", "The search", "Unfortunately", or "There is no
+information". If the very first thing you have to say is a negative, you have
+skipped step 1.`;
 
 export interface ExplainRequest {
   meta: Meta;
@@ -131,10 +294,20 @@ export interface ExplainRequest {
   /** The block the selection sits in — marked in the prompt so "this" resolves. */
   blockId: string;
   quote: string;
+  /**
+   * The reader pressed "Search the web properly" — they have read an answer and
+   * said it was not good enough.
+   *
+   * Adds an instruction after the cache breakpoint, and nothing else — see
+   * `DEEP` for why "and nothing else" is load-bearing rather than minimal.
+   */
+  deep?: boolean;
   model?: string;
   signal?: AbortSignal;
   /** Overridable so a test can use a deadline it can actually wait for. */
   timeoutMs?: number;
+  /** Overridable for the same reason as `timeoutMs`. */
+  stallMs?: number;
 }
 
 export interface ExplainResult {
@@ -144,31 +317,99 @@ export interface ExplainResult {
   model: string;
 }
 
-/** The article as a numbered block list, with the reader's block called out. */
-function renderArticle(meta: Meta, blocks: Block[], blockId: string): string {
-  const body = blocks
-    .map((b, i) => `[${i}]${b.id === blockId ? " ←READER IS HERE" : ""} ${b.id}: ${b.text}`)
-    .join("\n\n");
-  const head = [
-    `TITLE: ${meta.title}`,
-    meta.byline ? `BY: ${meta.byline}` : null,
-    meta.siteName ? `PUBLISHED IN: ${meta.siteName}` : null,
-    meta.url ? `URL: ${meta.url}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-  return `${head}\n\n---\n\n${body}`;
+/**
+ * What a streamed explanation emits: any number of `delta`, then exactly one
+ * `done`. A throw means no `done`, and the deltas so far are all there is —
+ * the same contract `converse` in src/converse.ts keeps, deliberately, so the
+ * two routes that consume them can be read side by side.
+ */
+export type ExplainEvent =
+  | { type: "delta"; text: string }
+  | ({ type: "done" } & ExplainResult);
+
+/**
+ * The extra instruction for a deep search, and where it has to go.
+ *
+ * **It rides in the LAST user part, after the cache breakpoint — never in
+ * `SYSTEM`.** `buildExplainMessages` puts the breakpoint on the article part,
+ * so the cached prefix is *system + article*. A `SYSTEM` that differed between
+ * an ordinary call and a deep one would be a different prefix, which means a
+ * cache miss **and a second cache write of the entire article** — paying twice
+ * for the thing docs/project/prompt-caching.md exists to stop us paying for
+ * once. Nothing about that failure is visible from outside: the answer is fine,
+ * it just costs more.
+ */
+const DEEP = `The reader has read an answer to this already and asked you to go and look properly.
+Treat that as a statement that your own knowledge was not enough. Search, more
+than once if the first result does not settle it, and use the article to narrow
+it: the author, the date, the publication, the other names in the same sentence.
+If the thing is genuinely unfindable, say so and say what you ruled out — that
+is a better answer than the one they have just rejected.`;
+
+/**
+ * The messages this call will send, as a value a test can inspect.
+ *
+ * **The article part is identical for every selection in a piece.** It used to
+ * carry the selected block inline, as `←READER IS HERE` inside the body, which
+ * meant no two explain calls in this app's history ever shared a prefix. The
+ * position now travels in the second part, with the quote — which tells the
+ * model the same thing and leaves the first part alone.
+ *
+ * `deep` travels in that second part too, for the reason on `DEEP` above.
+ *
+ * See src/article-prompt.ts for why that matters, and
+ * tests/article-prompt.test.ts for the test that stops it coming back.
+ */
+export function buildExplainMessages(
+  meta: Meta,
+  blocks: Block[],
+  blockId: string,
+  quote: string,
+  deep = false,
+): OpenRouterMessage[] {
+  return [
+    { role: "system", content: SYSTEM },
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: `Here is the whole article.\n\n${articleWithIds(meta, blocks)}`,
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: `${readerPositionLine(blockId)}\n\nThe reader has selected this passage, inside block ${blockId}:\n\n"""\n${quote}\n"""\n\nExplain it.${deep ? `\n\n${DEEP}` : ""}`,
+        },
+      ],
+    },
+  ];
 }
 
-export async function explain({
+/**
+ * Explain a selection, a few words at a time.
+ *
+ * This is the whole implementation; `explain` below drains it. There is one
+ * code path deliberately, because the alternative — a streaming version beside
+ * a non-streaming one — is two sets of the invariants at the bottom of this
+ * function, and those invariants are the reason a half-arrived answer is not
+ * filed as a complete one.
+ *
+ * Modelled line for line on `converse` in src/converse.ts, including the two
+ * clocks and the checks after the loop. Where the two differ, the difference is
+ * commented rather than left to be noticed.
+ */
+export async function* explainStream({
   meta,
   blocks,
   blockId,
   quote,
+  deep = false,
   model = process.env.SPIDERYARN_EXPLAIN_MODEL || DEFAULT_MODEL,
   signal,
   timeoutMs = EXPLAIN_TIMEOUT_MS,
-}: ExplainRequest): Promise<ExplainResult> {
+  stallMs = EXPLAIN_STALL_MS,
+}: ExplainRequest): AsyncGenerator<ExplainEvent> {
   // One child per call, carrying the block the selection sits in. An id, not the
   // selection itself: enough to line a log line up with the stored comment,
   // without putting the words the reader was puzzled by into the log.
@@ -187,38 +428,40 @@ export async function explain({
     );
   }
 
-  const user = `Here is the whole article.
+  const messages = buildExplainMessages(meta, blocks, blockId, quote, deep);
 
-${renderArticle(meta, blocks, blockId)}
+  /* Logged, not thrown — below the floor the breakpoint is accepted and does
+     nothing, and the zeros that result are indistinguishable from a cache that
+     has broken. Saying which it is costs one boolean. */
+  const tooShortToCache = underCacheFloor(cachedText(messages));
 
----
-
-The reader has selected this passage, inside block ${blockId}:
-
-"""
-${quote}
-"""
-
-Explain it.`;
-
-  // The caller's signal (if any) *and* our deadline — whichever fires first
-  // wins. `AbortSignal.any` rather than a bare timeout so a caller that wants to
-  // cancel early still can.
   const deadline = AbortSignal.timeout(timeoutMs);
+  /* The stall clock, and it has to be its own controller rather than another
+     `AbortSignal.timeout`: a stall timer is one that gets *restarted* every
+     time a chunk lands, and a timeout signal cannot be restarted. */
+  const stall = new AbortController();
+  let stallTimer: NodeJS.Timeout | undefined;
+  const touch = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+  };
 
   /* Our own clock, deliberately, rather than any timing the provider reports.
      The original version of this app was burned by exactly that: the SDK left
      its own timestamp fields out of every response, so a latency chart built on
      them was empty and looked like "no slow calls" rather than "no data".
-     `Date.now()` here cannot be omitted by anybody else. It starts before the
-     request and stops after the body is parsed, because that whole span is what
-     the reader spends watching the spinner. */
+     `Date.now()` here cannot be omitted by anybody else. */
   const started = Date.now();
+  const composite = AbortSignal.any(
+    signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],
+  );
 
   let response: Response;
+  touch();
   try {
-    response = await fetchOrExplainWhy(signal ? AbortSignal.any([signal, deadline]) : deadline, {
+    response = await fetch(ENDPOINT, {
       method: "POST",
+      signal: composite,
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
@@ -229,22 +472,51 @@ Explain it.`;
       body: JSON.stringify({
         model,
         max_tokens: 1500,
+        stream: true,
+        /* Without this, a streamed response carries no `usage` at all — so the
+           token counts, the cache counts and the web-search count all come back
+           null and the log line says the call was free. The one flag whose
+           absence looks like good news. */
+        stream_options: { include_usage: true },
         tools: [
           {
+            /* **Byte-identical on every call, including a deep one, and that is
+               not a stylistic preference.** Tools render at position 0, ahead of
+               the system prompt and the article, and editing a tool definition
+               invalidates all three cache tiers — see the invalidation table in
+               docs/research/prompt-caching-anthropic.md and note that neither of
+               Anthropic's escape hatches applies on Sonnet 5. A `max_uses` that
+               varied per request would mean two cached prefixes, each paying the
+               1.25x write premium, and the only symptom would be the bill: the
+               answer stays correct and `tooShortToCache` still reads false.
+
+               This file's first draft did exactly that — `deep ? 8 : 4` — after
+               taking pains to keep the deep instruction out of `SYSTEM` for the
+               weaker version of the same reason. Caught in review, 2026-08-26.
+
+               So the cap is a cap, not a quota: eight for everyone, and the
+               model still decides whether to search at all. `deep` buys an
+               instruction after the cache breakpoint and nothing else. */
             type: "openrouter:web_search",
-            // A cap, not a quota: the model still decides whether to search at
-            // all. Four is enough for the "who is this person, what is this
-            // study" questions a passage actually raises.
-            parameters: { max_uses: 4, max_results: 5 },
+            parameters: { max_uses: MAX_SEARCHES, max_results: 5 },
           },
         ],
-        messages: [
-          { role: "system", content: SYSTEM },
-          { role: "user", content: user },
-        ],
+        /* Ordered, **not** `allow_fallbacks: false`. A cache lives on the
+           upstream that wrote it, so naming Anthropic first is what keeps repeat
+           calls landing where the article already is — and OpenRouter's own
+           sticky routing hashes the first user message, which varies here, so
+           the heuristic would miss exactly the case this is for.
+
+           But forbidding fallback outright would turn an Anthropic outage into a
+           hard failure on a call a reader is sitting and waiting for. A cache
+           miss costs money; an unavailable feature costs the reader the feature.
+           Preference, not a ban. */
+        provider: { order: ["anthropic"] },
+        messages,
       }),
-    }, deadline, timeoutMs);
+    });
   } catch (err) {
+    clearTimeout(stallTimer);
     /* `timedOut` is the field that matters here, and it is why this is logged
        as an object rather than folded into the message. "The model took too
        long" and "the network refused us" want different reactions — wait and
@@ -252,78 +524,220 @@ Explain it.`;
        reaches the reader both are just a sentence in a dialog. The headers are
        *not* logged: `redact` is path-based, and one of them carries the key. */
     line.error(
-      { ...errorFields(err), model, ms: since(started), timedOut: deadline.aborted },
+      {
+        ...errorFields(err),
+        model,
+        ms: since(started),
+        timedOut: deadline.aborted,
+        stalled: stall.signal.aborted,
+      },
       `no reply from ${model}${deadline.aborted ? " — deadline fired" : ""}`,
     );
-    throw err;
+    throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
   }
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
+    clearTimeout(stallTimer);
     const detail = await response.text().catch(() => "");
     // The status, not the body. OpenRouter's error text is the one place a
     // provider might echo part of what we sent back at us, and what we sent is
     // the whole article plus the reader's selection.
-    line.error({ model, ms: since(started), status: response.status }, `OpenRouter refused: ${response.status}`);
+    line.error(
+      { model, ms: since(started), status: response.status },
+      `OpenRouter refused: ${response.status}`,
+    );
     throw new Error(`OpenRouter ${response.status}: ${detail.slice(0, 400)}`);
   }
 
-  let body: OpenRouterResponse;
+  let text = "";
+  const citations = new Map<string, Citation>();
+  let searches = 0;
+  let from: SearchUsagePath = "no-usage";
+  let used = model;
+  let finishReason: string | null = null;
+  /* Local, NOT module-scope: two readers asking about two passages at once run
+     two of these generators in one process, and a shared accumulator would
+     report one selection's token counts against the other's log line. */
+  let usage: Usage | undefined;
+
+  const end: StreamEnd = { terminated: false };
+  let stopped = false;
   try {
-    body = (await response.json()) as OpenRouterResponse;
+    for await (const chunk of sseChunks(response.body, composite, touch, end)) {
+      if (chunk.model) used = chunk.model;
+      // A 200 that carries an error in the stream — a mid-generation provider
+      // failure. It arrives as data, not as a broken connection, so nothing
+      // else would notice it.
+      if (chunk.error) throw new Error(`OpenRouter: ${chunk.error.message}`);
+      const choice = chunk.choices?.[0];
+      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      for (const a of choice?.delta?.annotations ?? []) {
+        const c = a.url_citation;
+        if (a.type !== "url_citation" || !c?.url || citations.has(c.url)) continue;
+        // Refused here rather than guarded at the point of render, because this
+        // is where model output stops being a string and starts being stored.
+        if (!isWebUrl(c.url)) {
+          line.warn({ model: used }, "dropped a citation whose URL was not http(s)");
+          continue;
+        }
+        citations.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
+      }
+      const piece = choice?.delta?.content;
+      if (typeof piece === "string" && piece.length > 0) {
+        text += piece;
+        yield { type: "delta", text: piece };
+      }
+      const counted = whereSearchCountCameFrom(chunk.usage);
+      if (counted.searches !== null) {
+        searches = counted.searches;
+        from = counted.from;
+      }
+      // Held for the log line after the loop: the usage chunk is normally the
+      // last of all and carries no choices, so it would otherwise be seen and
+      // dropped.
+      if (chunk.usage) usage = chunk.usage;
+    }
   } catch (err) {
-    // A 200 whose body is not JSON — a proxy's error page, or a truncated
-    // stream. Worth telling apart from a model failure, because nothing about
-    // it is the model's doing.
-    line.error({ ...errorFields(err), model, ms: since(started) }, `unreadable reply from ${model}`);
-    throw err;
-  }
-  if (body.error) {
-    // A 200 carrying a refusal — a bad model id, a quota. The provider's own
-    // message stays out of the log for the same reason as above: it is the one
-    // string here that could quote what we sent. That is a deliberate loss, and
-    // the reader still gets it in the thrown error.
-    line.error({ model, ms: since(started) }, `${model} returned an error`);
-    throw new Error(`OpenRouter: ${body.error.message}`);
+    if (stoppedByReader(err, signal, deadline, stall.signal)) {
+      /* The caller gave up — the reader closed the dialog, or navigated away.
+         Not an error, and not logged as one. Unlike chat there is no stop
+         button, so this is a disconnect rather than a decision, and there is no
+         partial answer worth keeping: it falls out below with whatever arrived. */
+      stopped = true;
+      clearTimeout(stallTimer);
+      line.info(
+        { model: used, ms: since(started), chars: text.length },
+        `explanation from ${used} was abandoned`,
+      );
+    } else {
+      line.error(
+        {
+          ...errorFields(err),
+          model: used,
+          ms: since(started),
+          timedOut: deadline.aborted,
+          stalled: stall.signal.aborted,
+          // How much the reader already watched arrive. "It died before saying
+          // anything" and "it died two paragraphs in" are different faults.
+          chars: text.length,
+        },
+        `stream from ${used} broke off`,
+      );
+      throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
+    }
+  } finally {
+    clearTimeout(stallTimer);
   }
 
-  const message = body.choices?.[0]?.message;
-  const answer = message?.content?.trim();
-  if (!answer) {
-    // An empty completion is the silent-success shape: a 200 with nothing in it.
-    // Fail loudly rather than storing a blank comment that looks answered.
-    const finishReason = body.choices?.[0]?.finish_reason ?? "?";
-    line.error({ model, ms: since(started), finishReason }, `${model} returned no text`);
-    throw new Error(`The model returned no text (finish_reason: ${finishReason}).`);
+  /* An abort can also end the loop *cleanly*, because `sseChunks` cancels the
+     reader on abort and a cancelled read resolves `{ done: true }` rather than
+     throwing. Without this the reader's own disconnect gets filed as "the
+     answer stopped arriving before it was finished". See the same guard, and
+     the longer account of how it was found, in src/converse.ts. */
+  if (!stopped && readerAborted(signal, deadline, stall.signal)) stopped = true;
+
+  /* **And our own clocks can end it cleanly too**, for the same reason and with
+     a worse consequence. When the stall timer fires, `sseChunks` cancels the
+     reader; if that cancel wins the race against the pending read's rejection,
+     the loop exits with no error at all — and the check immediately below then
+     files a 45-second silence as "the answer stopped arriving before it was
+     finished". Both sentences end in "try again", so the reader never notices;
+     what is lost is the log line, which says `ended without finishing` instead
+     of `stalled: true`, and that is the line somebody reads when explanations
+     start failing and they want to know whether to blame the network or the
+     provider.
+
+     Caught by tests/explain.test.ts § says a silence is a silence — which is
+     the test that mocks a body that opens and then says nothing, i.e. the one
+     failure a mock made of whole frames cannot produce. */
+  if (!stopped && (deadline.aborted || stall.signal.aborted)) {
+    line.error(
+      {
+        model: used,
+        ms: since(started),
+        timedOut: deadline.aborted,
+        stalled: stall.signal.aborted,
+        chars: text.length,
+      },
+      `stream from ${used} was cut off`,
+    );
+    throw explainAbort(
+      new Error("aborted"),
+      deadline,
+      stall.signal,
+      timeoutMs,
+      stallMs,
+    );
   }
 
-  const { searches, from } = searchCount(body.usage);
-  const used = body.model ?? model;
-  const result: ExplainResult = {
-    answer,
-    citations: dedupeCitations(message?.annotations ?? []),
-    searches,
-    model: used,
-  };
+  /* **The stream stopped; did it finish?** `[DONE]` is the only clean end an
+     SSE response has, and without this an ordinary EOF looks exactly like one:
+     a connection cut two paragraphs in would be stored as a complete answer,
+     `status: "done"`, with no error anywhere. `finish_reason` counts as a
+     second witness — a provider that omits the terminator but says why it
+     stopped has still told us the answer is whole. */
+  if (!stopped && !end.terminated && finishReason === null) {
+    line.error(
+      { model: used, ms: since(started), chars: text.length },
+      `stream from ${used} ended without finishing`,
+    );
+    throw new Error("The explanation stopped arriving before it was finished. Try again.");
+  }
+
+  const answer = text.trim();
+  /* An empty completion is the silent-success shape: a 200, a well-formed
+     stream, and nothing in it. Fail loudly rather than storing a blank comment
+     that looks answered.
+
+     Unlike chat, an abandoned explanation with no text throws too — there is no
+     stop button here, so a reader cannot have meant it, and a comment stored as
+     a `done` answer zero characters long would be a row nobody could act on. */
+  if (answer === "") {
+    line.error({ model: used, ms: since(started), finishReason }, `${used} returned no text`);
+    throw new Error(`The model returned no text (finish_reason: ${finishReason ?? "?"}).`);
+  }
 
   /* The one line per successful explanation.
-     `searchesFrom` is the point of it. The header says getting the usage path
-     wrong is invisible, because a missing field reads as `0` and "no web search
-     needed" is a thing readers see legitimately. This field says *why* the
+     `searchesFrom` is the point of it. A missing usage field reads as `0`, and
+     "no web search needed" is a thing readers legitimately see, so a broken
+     count looks exactly like a model that was sure. This field says *why* the
      number is what it is: `neither` on every call means OpenRouter moved the
      field and the count is now permanently zero, which is exactly the drift
      nobody would otherwise notice.
-     Wrapped because logging must not be able to fail an explanation that
-     already succeeded — the answer is built above and is returned either way. */
+     Wrapped because logging must not be able to fail an explanation that has
+     already arrived — the reader watched it appear. */
   try {
     line.info(
       {
         model: used,
         ms: since(started),
-        inputTokens: body.usage?.prompt_tokens ?? null,
-        outputTokens: body.usage?.completion_tokens ?? null,
+        deep,
+        inputTokens: usage?.prompt_tokens ?? null,
+        outputTokens: usage?.completion_tokens ?? null,
+        /* Explain is the call prompt caching was introduced for: before it, the
+           article was rendered afresh for every selection, so a reader who asked
+           about ten sentences paid for the article ten times. A `cacheReadTokens`
+           of 0 on a second selection in one article means that is still
+           happening and nothing else will say so. */
+        cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+        cacheWriteTokens:
+          usage?.prompt_tokens_details?.cache_write_tokens ?? usage?.cache_write_tokens ?? null,
+        tooShortToCache,
         searches,
         searchesFrom: from,
-        citations: result.citations.length,
+        /* Did it want more searching than it was allowed? The model is not told
+           `MAX_SEARCHES`, so from inside the answer a run that was cut off and a
+           subject that is genuinely unfindable produce the same honest sentence.
+           This is the only place the two can be told apart, and if it starts
+           reading `true` often the cap is the thing to raise. */
+        cappedOut: searches >= MAX_SEARCHES,
+        /* `length` means the answer stopped because it ran out of room, not
+           because it was finished — and it is stored as a clean `done` either
+           way, because there is nowhere on a `Comment` to say otherwise. Logged
+           so that "answers keep trailing off" is a thing somebody can check
+           rather than a thing somebody feels. */
+        finishReason,
+        citations: citations.size,
         answerChars: answer.length,
       },
       `explained a selection with ${used} (${searches} web search${searches === 1 ? "" : "es"})`,
@@ -332,92 +746,27 @@ Explain it.`;
     // Nothing to do about it, and nothing worth failing a reader's answer over.
   }
 
-  return result;
+  yield { type: "done", answer, citations: [...citations.values()], searches, model: used };
 }
 
 /**
- * Where a search count can come from — and it is worth knowing which.
+ * The same explanation, waited for rather than watched.
  *
- * `neither` is the interesting one: `usage` arrived, and neither field was in
- * it. That is what a third rename by OpenRouter would look like, and from the
- * outside it is indistinguishable from a model that chose not to search.
- * `no-usage` is a different fault again — the response carried no accounting at
- * all, so the token counts in the same log line are missing too.
+ * A thin drain of `explainStream`, so there is one implementation of the
+ * request, the clocks and the end-of-stream invariants rather than two. The
+ * glossary's per-term web lookup (`lookUpTerm`, src/api.ts) uses this: its panel
+ * shows one answer appearing at a time and has nowhere to put a half-written
+ * one, so it waits.
  */
-type SearchUsagePath = "server_tool_use_details" | "server_tool_use" | "neither" | "no-usage";
-
-/**
- * How many searches the model ran, under whichever name this response used —
- * and which name that was.
- *
- * See the header: the documented field and the observed one differ, so both are
- * accepted and whichever is actually present wins. The `from` half is returned
- * purely so it can be logged, because "0" on its own is a number a reader
- * believes and an operator cannot check.
- *
- * `typeof … === "number"` rather than `??` so that a genuine `0` counts as
- * *found*. Distinguishing "the model said it searched zero times" from "we
- * could not find the field" is the whole job of this function.
- */
-function searchCount(usage: OpenRouterResponse["usage"]): { searches: number; from: SearchUsagePath } {
-  const observed = usage?.server_tool_use_details?.web_search_requests;
-  if (typeof observed === "number") return { searches: observed, from: "server_tool_use_details" };
-  const documented = usage?.server_tool_use?.web_search_requests;
-  if (typeof documented === "number") return { searches: documented, from: "server_tool_use" };
-  return { searches: 0, from: usage ? "neither" : "no-usage" };
-}
-
-/** One entry per URL — the model cites the same page once per sentence it grounds. */
-function dedupeCitations(annotations: Annotation[]): Citation[] {
-  const seen = new Map<string, Citation>();
-  for (const a of annotations) {
-    const c = a.url_citation;
-    if (a.type !== "url_citation" || !c?.url || seen.has(c.url)) continue;
-    seen.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
-  }
-  return [...seen.values()];
-}
-
-/**
- * `fetch`, with an abort turned into a sentence a reader can act on.
- *
- * A timed-out fetch throws `AbortError: This operation was aborted`, which tells
- * the reader nothing and — stored on the comment — reads like a bug rather than
- * a slow model. `deadline` is passed separately so we can tell *our* timeout
- * apart from the caller cancelling.
- */
-async function fetchOrExplainWhy(
-  signal: AbortSignal,
-  init: RequestInit,
-  deadline: AbortSignal,
-  timeoutMs: number,
-): Promise<Response> {
-  try {
-    return await fetch(ENDPOINT, { ...init, signal });
-  } catch (err) {
-    if (deadline.aborted) {
-      throw new Error(`The model did not answer within ${Math.round(timeoutMs / 1000)}s. Try again.`);
+export async function explain(req: ExplainRequest): Promise<ExplainResult> {
+  for await (const event of explainStream(req)) {
+    if (event.type === "done") {
+      const { type: _type, ...result } = event;
+      return result;
     }
-    throw err;
   }
-}
-
-interface Annotation {
-  type: string;
-  url_citation?: { url?: string; title?: string };
-}
-
-interface OpenRouterResponse {
-  model?: string;
-  error?: { message: string };
-  choices?: { finish_reason?: string; message?: { content?: string; annotations?: Annotation[] } }[];
-  usage?: {
-    // OpenAI-shaped, because OpenRouter is. Optional because nothing guarantees
-    // they arrive — hence `null` rather than `0` in the log when they don't, so
-    // "we were not told" cannot be read as "the call was free".
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    server_tool_use_details?: { web_search_requests?: number };
-    server_tool_use?: { web_search_requests?: number };
-  };
+  /* Unreachable by the generator's own contract — it yields `done` or throws —
+     and here so that a future edit which breaks that contract fails loudly
+     instead of returning `undefined` as an answer. */
+  throw new Error("The explanation ended without an answer.");
 }

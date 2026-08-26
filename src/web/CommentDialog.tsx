@@ -18,11 +18,11 @@
  */
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
-import type { Comment } from "../types.js";
+import type { ClientComment } from "./useComments.js";
 import { Tooltip } from "./Tooltip.js";
 
 interface Props {
-  comment: Comment;
+  comment: ClientComment;
   /** 1-based position in reading order, and how many there are. */
   position: number;
   total: number;
@@ -36,6 +36,13 @@ interface Props {
   onClose(): void;
   onDelete(): void;
   onRetry(): void;
+  /** Ask again and search properly — for an answer the reader has judged thin. */
+  onDeepen(): void;
+  /**
+   * The reader typed a follow-up. Takes them to chat rather than growing a
+   * transcript in here — Greg's call, see chat-handoff.ts.
+   */
+  onDiscuss(question: string): void;
 }
 
 export function CommentDialog({
@@ -43,6 +50,8 @@ export function CommentDialog({
   position,
   total,
   pending,
+  onDeepen,
+  onDiscuss,
   onPrev,
   onNext,
   hasPrev,
@@ -51,6 +60,27 @@ export function CommentDialog({
   onDelete,
   onRetry,
 }: Props) {
+  const [followUp, setFollowUp] = useState("");
+
+  /**
+   * Is text arriving right now?
+   *
+   * `pending` alone cannot say: it is also the state of a question that has not
+   * started, and of an answer being replaced by a deeper search — which still
+   * has the *old* text on screen. So the cursor and the greying key off this,
+   * and the answer's own identity is what distinguishes them.
+   */
+  const stale = comment.replacing === true;
+  const streaming = comment.status === "pending" && Boolean(comment.answer) && !stale;
+
+  /* One box per comment. Stepping to the next comment with a half-typed
+     question used to carry it across, so the reader asked about a passage they
+     were no longer looking at. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the id is the trigger; the effect reads nothing
+  useEffect(() => {
+    setFollowUp("");
+  }, [comment.id]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -118,28 +148,50 @@ export function CommentDialog({
           or you have stepped to a comment somewhere else entirely. */}
       <blockquote className="cmt-quote">{comment.quote}</blockquote>
 
-      {comment.status === "pending" && (
+      {/* The spinner is only for the wait before any words. Once text is
+          arriving the answer below says everything this line would, and two
+          things saying it reads as a stall. `streaming` is the state a
+          non-streamed version of this panel had no name for. */}
+      {comment.status === "pending" && !streaming && (
         <div className="cmt-loading">
           <LoaderCircle className="cmt-spinner" size={13} />
-          <span>Reading the article, and searching if it needs to…</span>
+          <span>
+            {comment.answer
+              ? "Searching the web, and rewriting this…"
+              : "Reading the article, and searching if it needs to…"}
+          </span>
         </div>
       )}
 
       {comment.status === "error" && (
         <div className="cmt-error">
-          <p>{comment.error ?? "Something went wrong."}</p>
+          <p>
+            {comment.error ?? "Something went wrong."}
+            {/* Said out loud, because otherwise the answer below looks like the
+                one that just failed. A reader who pressed "search the web" and
+                got their old answer back with a red line above it deserves to
+                be told which is which. */}
+            {comment.answer ? " The answer below is the one you already had." : ""}
+          </p>
           <button type="button" className="linky" onClick={onRetry}>
             Try again
           </button>
         </div>
       )}
 
-      {comment.status === "done" && comment.answer && (
-        <div className="cmt-answer">
+      {/* Rendered whatever the status, because there are now four states that
+          can have text in them and only one of them is `done`: an answer
+          arriving a few words at a time, an answer being replaced by a deeper
+          search, a half answer kept from a stream that broke, and the finished
+          thing. Keying on `done` was right when the only way to have text was
+          to have all of it. */}
+      {comment.answer && (
+        <div className={`cmt-answer${stale ? " stale" : ""}`} aria-busy={streaming}>
           {paragraphs(comment.answer).map((p, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: rebuilt whole on each answer, no child state
             <p key={i}>{p}</p>
           ))}
+          {streaming && <span className="cmt-cursor" aria-hidden="true" />}
         </div>
       )}
 
@@ -159,8 +211,63 @@ export function CommentDialog({
         </div>
       )}
 
+      {/* Between the answer and the footer, so the footer keeps being the row of
+          small controls it is, and the header — with its prev/next — is
+          untouched. The panel scrolls, so this scrolls with the answer rather
+          than pinning to the bottom of a long one. */}
+      {comment.status !== "pending" && (
+        <form
+          className="cmt-followup"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const q = followUp.trim();
+            if (!q) return;
+            setFollowUp("");
+            onDiscuss(q);
+          }}
+        >
+          <input
+            type="text"
+            value={followUp}
+            onChange={(e) => setFollowUp(e.target.value)}
+            /* Escape closes the dialog from a window listener, which would eat
+               a half-typed question without warning. Stopped here so the first
+               Escape clears the box and the second closes the panel. */
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && followUp) {
+                e.stopPropagation();
+                setFollowUp("");
+              }
+            }}
+            placeholder="Ask a follow-up…"
+            aria-label="Ask a follow-up question about this passage"
+          />
+          <button type="submit" className="linky" disabled={!followUp.trim()}>
+            Ask in chat
+          </button>
+        </form>
+      )}
+
       <footer>
         {comment.status === "done" && <SearchBadge comment={comment} />}
+        {/* Not "Try again", which is what the error state offers and means
+            something else. This is the reader saying the answer was thin, and
+            the model is told exactly that. Hidden while one is running, because
+            two overlapping re-asks race to write the same row. */}
+        {comment.status !== "pending" && (
+          <Tooltip
+            content={
+              <>
+                <strong>Search the web properly.</strong> Replaces this answer with one that goes
+                and looks, rather than answering from what the model already knew.
+              </>
+            }
+          >
+            <button type="button" className="linky cmt-deepen" onClick={onDeepen}>
+              Search the web
+            </button>
+          </Tooltip>
+        )}
         {/* Said here rather than in the panel body, because the whole point of
             firing several at once is that you go on reading while they run. */}
         {pending > 0 && (
@@ -189,7 +296,7 @@ export function CommentDialog({
  * from "never looked". So the un-searched globe is drawn too, struck through and
  * dimmed, rather than omitted — Lucide's `GlobeOff` (see docs/project/icons.md).
  */
-function SearchBadge({ comment }: { comment: Comment }) {
+function SearchBadge({ comment }: { comment: ClientComment }) {
   const searched = (comment.searches ?? 0) > 0;
   const sources = comment.citations?.length ?? 0;
   return (

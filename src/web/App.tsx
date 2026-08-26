@@ -53,6 +53,7 @@ import {
   termParam,
   findParam,
   matchParam,
+  resolveMatcher,
   orderParam,
   runParam,
   spineParam,
@@ -1133,8 +1134,12 @@ function SearchBand({
   onOpenHit(next: string | null): void;
 }) {
   const { runs, ask, retry, remove, error } = useSearch(slug);
-  const [matcher, setMatcher] = useQueryState("match", matchParam);
+  const [match, setMatcher] = useQueryState("match", matchParam);
   const [find, setFind] = useQueryState("find", findParam);
+  /* `?match=` has no default of its own, so that a URL carrying `?find=` and
+     nothing else still opens on the words matcher it was written for. The rule
+     lives in params.ts § resolveMatcher; here it is one line. */
+  const matcher = resolveMatcher(match, find);
   const [runId, setRunId] = useQueryState("run", runParam);
   const [order, setOrder] = useQueryState("order", orderParam);
 

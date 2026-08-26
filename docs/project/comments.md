@@ -45,6 +45,51 @@ The cost is that only one answer is visible at a time, and there is no way to se
 the article at once. Marginal cards or a column remain the better long-term answer — this is
 explicitly "until we come up with a better plan".
 
+### The two questions a selection raises <a id="the-two-questions"></a>
+
+**A selection is ambiguous about what is being asked, and for a long time the prompt only heard one
+reading of it.** Greg, 2026-08-26, having selected the name *Ben Miller* in the acknowledgements line
+of *Writes and Write-Nots* and been told that it is an acknowledgements line:
+
+> I asked for more context on this person, Ben Miller, and I basically got an immediate response
+> like, oh, it's a person that's been acknowledged. Like, yeah, I get that. But I mean, it'd be much
+> more interesting if you'd done some web searching to try and figure out who Ben Miller is.
+
+The model did not decline to search. It was never asked a question whose answer it lacked: it was
+sure what an acknowledgements line is, and it was right. So the encouragement below could not fire,
+and turning it up would have changed nothing.
+
+The fix came from [glossary.md](glossary.md), which had solved this on *the same article* — an entry
+there says two things, not one:
+
+- **what the author means here**, from the article and only the article;
+- **what the reader has to bring to it** — who this person is, what this work is — from the model's
+  own knowledge, labelled as such.
+
+Explain had the first half only, so it gave the first kind of answer to a question of the second
+kind. [`src/glossary.ts`](../../src/glossary.ts)'s own worked example names the failure, and
+[`src/explain.ts`](../../src/explain.ts) now borrows the sentence: **that describes the page the
+reader is looking at, and it is the whole failure.**
+
+Three rules carry it:
+
+- **A short selection is almost always the second question.** "Somebody who selects two words is not
+  asking what the sentence around them does. They are asking who or what that is."
+- **The search trigger is about the selection, not the model's confidence** — because confidence was
+  the thing that failed. A named person it cannot place *with at least one concrete, checkable fact*
+  means search. "A category is not a fact."
+- **Outside knowledge is labelled in the sentence** — "Although the article doesn't say so…", "As
+  you may know…". Borrowed outright from
+  [original-version/glossary.md](original-version/glossary.md#the-prompt-which-is-the-best-written-one-over-there),
+  which had recommended it for this exact file and never had it moved across.
+
+> [!NOTE]
+> **Measured, not assumed.** Selecting `Ben Miller` went from 0 searches and a description of the
+> line, to one search and *"Ben Miller, by contrast, isn't a public figure in the same way"*.
+> Selecting `Robert Morris` in the same sentence runs **no** searches and still answers properly —
+> which is the result that says this is a fix rather than a bigger hammer. Full before/after in
+> [explain-deeper-answers.md](../plans/explain-deeper-answers.md#measured-not-assumed).
+
 ### Decision: the model decides whether to search <a id="decision-web-research"></a>
 
 Asked how much web research the explain call should do:
@@ -154,6 +199,78 @@ it was fine" from "nobody has said".
 > something the reader deliberately opened. That was wrong and visibly so: the panel has a tooltip
 > of its own, and at 90 it buried it. A tooltip is dismissed the instant the pointer moves, so it
 > cannot obstruct anything.
+
+## The answer arrives a few words at a time <a id="streaming"></a>
+
+Greg, 2026-08-26: *"see if you can make the text stream in (if that won't be too complex)"*. It was
+not, because chat had already built every piece and none of them were chat-shaped. The three that
+moved into shared modules are worth knowing about, because each carries comments that record a real
+bug:
+
+- [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) — `sseChunks` (a chunk of bytes is not
+  a line; `: OPENROUTER PROCESSING` is a keep-alive, not data; `data: [DONE]` is not JSON) and the
+  three abort helpers, which exist because a deadline, a stall and a reader leaving all throw the
+  same `AbortError`.
+- `sse(res)` in [`src/routes.ts`](../../src/routes.ts) — the frame writer and its headers, including
+  why the disconnect listener is on the **response** and not the request.
+- [`src/web/lib/sse.ts`](../../src/web/lib/sse.ts) — the client's reader loop.
+
+`explain()` did not become a second implementation: `explainStream` is the only one, and `explain`
+drains it. The glossary's per-term lookup uses the waiting version, because its panel has nowhere to
+put a half-written answer.
+
+> [!WARNING]
+> **A stream can end by simply stopping, and that looks exactly like finishing.** `[DONE]` is the
+> only clean end an SSE response has, so a connection cut two paragraphs in would be stored as a
+> complete answer with no error anywhere. `finish_reason` counts as a second witness. This is
+> [silent-success.md](../reusable/silent-success.md) and the check is in `explainStream`.
+>
+> **And an abort can end it cleanly too.** `sseChunks` cancels the reader on abort, and a cancelled
+> read resolves `{ done: true }` rather than throwing — so a 45-second silence exited the loop with
+> no error at all and was filed as "the answer stopped arriving before it was finished". Both
+> sentences end in "try again", so no reader would ever notice; the loss is the log line, which is
+> the only thing that says whether to blame the network or the provider.
+
+The `begin` frame carries the whole comment, and that is the point of it: `createComment` re-mints an
+id that is malformed or collides, and a stream has no response body to carry the real one back.
+Without it the client streams an answer into a row the server has never heard of.
+
+## Two more ways to push back on an answer <a id="pushing-back"></a>
+
+Both from Greg, 2026-08-26, on the same weak answer.
+
+**"Search the web"** — *"maybe add the 'Web search' button to do a deeper web search"*. It re-asks
+with an extra instruction saying the reader has read an answer and asked you to go and look
+properly. It **replaces** the answer rather than adding one: a comment is one question and one
+answer, and a second would need a schema that can hold two and a panel that can show them.
+
+> [!WARNING]
+> **The extra instruction goes after the cache breakpoint, and the tool definition does not change at
+> all.** The cached prefix is *tools + system + article*. Putting the instruction in `SYSTEM` costs a
+> second cache write of the whole article; changing `max_uses` on the tool is worse, because tools
+> render at position 0 and a tool edit invalidates all three tiers
+> ([prompt-caching.md](prompt-caching.md)). The first draft did the second of those while carefully
+> avoiding the first. The cap is now `MAX_SEARCHES` for everyone — a cap is not a quota, the model
+> still decides. `tests/explain.test.ts` pins the two tool arrays as **equal**, so the test fails on
+> the difference rather than on a number somebody might legitimately tune.
+
+The old answer stays on screen, dimmed, while the new one runs, and **comes back if the re-ask
+fails**. Losing a good answer to a failed attempt at a better one is the one outcome this button must
+not produce, and the server has overwritten the stored copy by then — the client's is the only one
+left.
+
+**A follow-up box that opens a chat** — *"if the user enters text into it, it should automatically
+open up as a new chat (rather than making the [dialog] itself too complex)"*. Which is what keeps a
+comment at one question and one answer: the dialog does not grow a transcript, the reader is moved to
+the thing that already is one. The mechanics, and the three silent ways a handoff goes wrong, are in
+[`src/web/chat-handoff.ts`](../../src/web/chat-handoff.ts).
+
+> [!WARNING]
+> **The question does not go in the URL.** [`useChat.ts`](../../src/web/useChat.ts) already argues
+> this for its own POST — the question is arbitrary length and it is the reader's private text,
+> which would then be in browser history, in any shared link, and in every access log on the way. It
+> travels in a module-level cell and is lost on reload, which is the right trade: the cost is
+> retyping one sentence.
 
 ## Anchoring <a id="anchoring"></a>
 

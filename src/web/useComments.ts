@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Comment } from "../types.js";
 import { mintId } from "../ids.js";
+import { readEvents } from "./lib/sse.js";
 import type { SelectionAnchor } from "./selection.js";
 
 /**
@@ -37,19 +38,41 @@ export function describeFetchFailure(error: Error): string {
     : error.message;
 }
 
+/**
+ * A stored comment, plus what only this tab knows about it.
+ *
+ * `replacing` marks the one state the stored shape cannot express: a `pending`
+ * row whose `answer` is the *previous* answer, kept on screen while a deeper
+ * search is running. Without it the panel cannot tell that from an answer
+ * arriving a few words at a time — both are `pending` with text — and would put
+ * a typing cursor on the end of an answer that finished five minutes ago.
+ *
+ * It is never sent and never stored. `createComment` builds its row from named
+ * fields (src/comments.ts), so there is nowhere for it to leak to even if it
+ * were sent.
+ */
+export interface ClientComment extends Comment {
+  replacing?: true;
+}
+
 export interface CommentsApi {
-  comments: Comment[];
+  comments: ClientComment[];
   /** Ask about a selection. Returns the id it minted, so the caller can open it. */
   ask(anchor: SelectionAnchor): string;
   /** Ask the same question again — for a comment whose model call failed. */
   retry(id: string): void;
+  /**
+   * Ask again, and search properly this time — for an answer the reader has
+   * read and judged thin. Replaces the answer in place.
+   */
+  deepen(id: string): void;
   remove(id: string): void;
   /** A failure of the *transport*, not of the model. Model failures live on the comment. */
   error: string | null;
 }
 
 export function useComments(slug: string): CommentsApi {
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<ClientComment[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -89,7 +112,7 @@ export function useComments(slug: string): CommentsApi {
   }, [slug]);
 
   /** Replace one comment in place, or append it if it is new. */
-  const put = useCallback((next: Comment) => {
+  const put = useCallback((next: ClientComment) => {
     setComments((prev) =>
       prev.some((c) => c.id === next.id)
         ? prev.map((c) => (c.id === next.id ? next : c))
@@ -118,57 +141,161 @@ export function useComments(slug: string): CommentsApi {
     [slug],
   );
 
+  /**
+   * Ask the server, and read the answer as it is written.
+   *
+   * `deep` is the reader saying the answer they have is not good enough — see
+   * src/explain.ts. It is passed straight through; nothing about the request
+   * shape changes, deliberately, because the tool definition is part of the
+   * cached prefix.
+   */
   const send = useCallback(
-    (input: Comment) => {
+    (input: Comment, deep = false) => {
+      /* What is on screen right now, kept so a failed re-ask can put it back.
+         Without this, pressing "Search the web properly" on a good answer and
+         having the second call fail leaves the reader with an error where their
+         answer used to be, and no way back to it. The server has already
+         overwritten the stored one by then, so this copy is the only one left. */
+      const previous = deep ? input.answer : undefined;
+
       // Drop whatever the previous attempt left behind, so a retry shows a
-      // spinner rather than the old error with a spinner under it.
-      const pending: Comment = {
+      // spinner rather than the old error with a spinner under it. A deep
+      // re-ask keeps the old answer on screen instead: the reader is replacing
+      // something they can still read, not waiting on nothing.
+      const pending: ClientComment = {
         id: input.id,
         blockId: input.blockId,
         quote: input.quote,
         start: input.start,
         createdAt: input.createdAt,
         status: "pending",
+        ...(previous ? { answer: previous, replacing: true as const } : {}),
       };
       put(pending);
       setError(null);
       // Asking again un-deletes: the reader is plainly no longer finished with
       // it, whatever they clicked a moment ago.
       deleted.current.delete(pending.id);
-      fetch(`/api/comments/${encodeURIComponent(slug)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: pending.id,
-          blockId: pending.blockId,
-          quote: pending.quote,
-          start: pending.start,
-        }),
-      })
-        .then(async (r) => {
-          const body = await r.json();
-          if (!r.ok) throw new Error(body.error ?? r.statusText);
-          return body as Comment;
-        })
-        // The server always answers with the whole comment, `status: "error"`
-        // included, so there is one code path for "the model failed" and it is
-        // the same one as for success.
-        .then((answered) => {
-          if (deleted.current.has(pending.id)) {
-            // Deleted while the answer was in the air. The DELETE we sent may
-            // have run *before* the POST finished writing, so the row can be
-            // back on disk; send it again now that nothing else will write it.
-            void forget(pending.id);
-            return;
+
+      /* The id the *server* is using. It is normally the one we minted, but
+         `commentStore.create` re-mints a malformed or colliding one, and the
+         `begin` frame is how we find out. Everything after that point addresses
+         the row by this, not by `pending.id`. */
+      let id = pending.id;
+      let text = "";
+      let settled = false;
+
+      void (async () => {
+        try {
+          const r = await fetch(`/api/comments/${encodeURIComponent(slug)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: pending.id,
+              blockId: pending.blockId,
+              quote: pending.quote,
+              start: pending.start,
+              ...(deep ? { deep: true } : {}),
+            }),
+          });
+          /* A failure before the stream opens is ordinary JSON — the server
+             validates before it writes a header. A failure after it opens is a
+             `done` frame carrying `status: "error"`. Two shapes, because they
+             are two different things, and only the first can be an HTTP code. */
+          if (!r.ok || !r.body) {
+            const body = (await r.json().catch(() => ({}))) as { error?: string };
+            throw new Error(body.error ?? r.statusText);
           }
-          put(answered);
-        })
-        .catch((e: Error) => {
-          if (deleted.current.has(pending.id)) return;
-          const message = describeFetchFailure(e);
+
+          for await (const event of readEvents(r.body)) {
+            /* **Read to the end even when the reader has deleted it.** Breaking
+               out here was the obvious thing and it loses the row: the server
+               writes the answer on its own `done`, *after* our DELETE has run,
+               so the comment comes back on the next reload. The `done` branch
+               below is what re-sends the DELETE once the write it is racing has
+               definitely landed — so the loop has to reach it. Until then the
+               deleted row is simply not drawn. */
+            const gone = deleted.current.has(id);
+            if (event.name === "begin") {
+              const begun = event.data as Comment;
+              if (begun.id !== id) {
+                /* The server re-minted. Drop the row we invented before the
+                   real one lands, or the reader ends up with two of the same
+                   comment — `put` appends anything it does not recognise, so
+                   the optimistic one would simply stay. */
+                const stale = id;
+                setComments((prev) => prev.filter((c) => c.id !== stale));
+                id = begun.id;
+              }
+              if (!gone) {
+                put({ ...begun, ...(previous ? { answer: previous, replacing: true as const } : {}) });
+              }
+              continue;
+            }
+            if (event.name === "delta") {
+              // The first delta is where the old answer goes: from here on the
+              // reader is watching the new one, and showing both would read as
+              // a rendering fault.
+              text += (event.data as { text: string }).text;
+              // `replacing` deliberately dropped: from the first word on, what
+              // is on screen is the new answer, not the old one being held.
+              if (!gone) {
+                put({
+                  id,
+                  blockId: pending.blockId,
+                  quote: pending.quote,
+                  start: pending.start,
+                  createdAt: pending.createdAt,
+                  status: "pending",
+                  answer: text,
+                });
+              }
+              continue;
+            }
+            if (event.name === "done") {
+              settled = true;
+              const done = event.data as Comment;
+              if (deleted.current.has(done.id)) {
+                /* Deleted while the answer was in the air. The DELETE we sent
+                   may have run *before* the server finished writing, so the row
+                   can be back on disk; send it again now that nothing else will
+                   write it. */
+                void forget(done.id);
+                return;
+              }
+              put(done);
+              return;
+            }
+          }
+
+          /* The stream ended without a `done`. The connection dropped, or a
+             proxy cut it — either way nobody is coming, and leaving the row
+             `pending` is a spinner that never stops. Chat learned this the same
+             way; see the `!finished` guard in useChat.ts. */
+          if (!settled && !deleted.current.has(id)) {
+            throw new Error("The answer stopped arriving. Try again.");
+          }
+        } catch (e) {
+          if (deleted.current.has(id)) return;
+          const message = describeFetchFailure(e as Error);
           setError(message);
-          put({ ...pending, status: "error", error: message });
-        });
+          put({
+            ...pending,
+            id,
+            status: "error",
+            error: message,
+            /* Whichever we have: what arrived before it broke, or — if nothing
+               did and this was a re-ask — the answer the reader already had.
+               Losing a good answer to a failed attempt at a better one is the
+               one outcome this button must not produce. */
+            ...(text.trim()
+              ? { answer: text.trim() }
+              : previous
+                ? { answer: previous, replacing: true as const }
+                : {}),
+          });
+        }
+      })();
     },
     [slug, put, forget],
   );
@@ -207,6 +334,26 @@ export function useComments(slug: string): CommentsApi {
     [comments, send],
   );
 
+  /**
+   * Ask again, and this time go and look.
+   *
+   * The same call as `retry`, with `deep` set — the reader has read an answer
+   * and said it was not enough, which is a different statement from "that
+   * failed" and gets a different sentence in the prompt (src/explain.ts).
+   *
+   * It **replaces** the answer rather than adding one. A comment is one
+   * question and one answer; a second would need a schema that can hold two and
+   * a panel that can show them. The old answer stays on screen until the new
+   * text starts arriving, and comes back if the re-ask fails — see `send`.
+   */
+  const deepen = useCallback(
+    (id: string) => {
+      const existing = comments.find((c) => c.id === id);
+      if (existing) send(existing, true);
+    },
+    [comments, send],
+  );
+
   const remove = useCallback(
     (id: string) => {
       deleted.current.add(id);
@@ -219,5 +366,5 @@ export function useComments(slug: string): CommentsApi {
     [forget],
   );
 
-  return { comments, ask, retry, remove, error };
+  return { comments, ask, retry, deepen, remove, error };
 }
