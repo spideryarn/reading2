@@ -57,10 +57,26 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
 ```
 
 **Chat can now run both of these matchers as tools** — `search_article_meaning` is `findPassages`,
-and `search_article_words` is the library box's literal matcher pointed at one article. The three
-share `parseQuery`/`fold`/`occurrences` from [`src/library-search.ts`](../../src/library-search.ts)
-rather than each having its own idea of what "matches" means, which is what stops the panel and the
-model disagreeing about whether the word is in the piece. See [chat-tools.md](chat-tools.md).
+and `search_article_words` is the library box's query language pointed at one article: it imports
+`parseQuery` and `fold` from [`src/library-search.ts`](../../src/library-search.ts) rather than
+inventing a second idea of what a quoted phrase means. See [chat-tools.md](chat-tools.md).
+
+Be exact about how far that sharing goes, because an earlier version of this paragraph said "the
+three share `parseQuery`/`fold`/`occurrences`" and **all three halves of that were wrong**. There
+are three word-matchers here and they are deliberately three:
+
+| | What "matches" means | Why |
+|---|---|---|
+| the reading view's box (`findLiteral`) | a plain case-insensitive substring | this is find-on-page, and find-on-page has a meaning readers already hold — including matching inside a longer word |
+| the library box (`searchLibrary`) | `parseQuery` terms and quoted phrases, accent- and punctuation-folded, ANDed | you are looking for an article, not a place in one |
+| chat's `search_article_words` | the same parsed query, matched on **whole words** | a model asking "does this piece discuss *ion*" must not be told yes by "opinion"; chat-tools.ts § the tool says why it diverges from `occurrences` |
+
+The reading view's box shares nothing with the other two, and that is the design rather than an
+oversight. What it does share is the *offset* discipline: since a GPT Sol review on 2026-08-26 its
+case folding is length-aware, because `toLowerCase` is not length-preserving — one `İ` earlier in a
+paragraph used to put every later offset out by one, which moved the wash and the snippet a letter
+to the right and threw nothing. `library-search.ts` had that trap written down already, in a
+function doing the same job.
 
 ## The one decision everything else follows from
 
@@ -347,9 +363,12 @@ describes. Its place-bar specimen is `aria-hidden`: it is a picture of the contr
 reading of anything, and announcing "30% of the way through the article" there would be a screen
 reader stating a fact about the article that is not true.
 
-What this deliberately is **not** is ticks on the spine. Three results scattered through a long
-article are still three places you have to scroll to find, and a shared rail is the thing that would
-actually fix that — it stays in [what is still open](#what-is-still-open) below.
+What this deliberately is **not** is a map. A number per row says *where*, and it does it for one
+result at a time; seeing the shape of a whole search takes a picture of the article, which is the
+rail. That arrived on the same day — [The rail, and the shape of a
+search](#the-rail-and-the-shape-of-a-search) — and the two are complementary rather than
+overlapping: the bar under a row places one result against the piece, the rail places all of them
+against each other.
 
 ## The counts in the log line
 
@@ -476,8 +495,11 @@ faint nothing.
 The rules are drawn as a gradient inside the mark's own box, in `padding-bottom` — which grows the
 mark's background downward into the leading **without touching the line box**, so switching a search
 on cannot reflow the article. The band caps at 6px and the stripes inside it get thinner rather than
-the band growing; past four they are not drawn at all (`HUE_STRIPES` in
-[`annotate.ts`](../../src/web/annotate.ts)). There is a `box-decoration-break: clone` on that rule, and the story of it is worth keeping
+the band growing; past **six** they are not drawn at all (`HUE_STRIPES` in
+[`annotate.ts`](../../src/web/annotate.ts)). It was four, and a GPT Sol review pointed out that the
+justification for that — a fifth stripe would be sub-pixel — was simply arithmetic nobody had done:
+six stripes in six pixels is one pixel each. The bar down the paragraph has no such cap, because it
+is as tall as the paragraph and can show all eight. There is a `box-decoration-break: clone` on that rule, and the story of it is worth keeping
 because it is a good example of a plausible rationale that was simply untrue. The comment beside it
 claimed the default, `slice`, would draw a bottom-anchored stripe once at the foot of the last line
 and leave the first line of a wrapped phrase bare. A GPT Sol review disputed it; a browser pass
@@ -507,6 +529,155 @@ a sub-list per search — keeps provenance obvious but makes "the strongest matc
 the panel can no longer answer. So provenance moves into the row instead: the dot, the edge, the
 criterion in the hover card, and the criterion in the row's accessible name.
 
+## The rail, and the shape of a search
+
+> And also show the Spine by default when "Search" mode is active, and add dots/thin vertical lines
+> of the relevant search-colour in all the places where there's a match in the Spine so it's easy to
+> see at a glance where the results are in the doc (and how common).
+>
+> — Greg, 2026-08-26
+
+The results list can tell you *what* matched and the marks in the prose can tell you *where a
+particular one is*. Neither can tell you the thing you actually want to know after running a search:
+**what shape is it.** Thirty passages clustered in one section and thirty spread evenly through the
+piece are the same list. They are not the same finding, and only one of them means "this article is
+about my question".
+
+The [spine](granularity-zoom.md#the-spine-a-birds-eye-rail) is already a squashed picture of the
+whole article, so it is the one place that shape exists. Search results now paint into it:
+[`spine-marks.ts`](../../src/web/spine-marks.ts) does the arithmetic,
+[`Spine.tsx`](../../src/web/Spine.tsx) measures and draws.
+
+**One lane per search, down the right-hand edge.** With several searches on at once, a single
+stacked column could only say "something matched here" — which is exactly the question the colours
+were introduced so that it would not be the only one anybody could ask. Parallel lanes say *whose*
+match, and where each search is dense. The lanes are **packed** rather than fixed to slot numbers:
+two searches get two lanes whichever of the eight palette slots they happen to wear. Fixing them to
+the slot would mean nothing ever moved sideways, at the price of a rail permanently divided into
+eight tracks, six of them empty and each under three pixels wide — the wrong trade for a rail whose
+whole job is to be readable out of the corner of the eye. The cost is stated rather than hidden:
+switching on a search that sorts before an existing one shifts the existing one's lane. The
+*colour*, which is what says whose match it is, does not move.
+
+**A mark is as tall as the paragraph it names**, floored at three pixels. That is the same
+proportional promise the bands themselves make, and it is what makes "how common" readable at a
+glance — a search that matched six long paragraphs paints far more of the rail than one that matched
+six list items, which is true and is what you want to know.
+
+**The count *within* one paragraph is deliberately not a visual channel.** Three matches in one
+paragraph and one match in it are the same mark. The rail has no room to say otherwise without
+inventing a width or an opacity the reader would have to learn, and it already has two channels in
+use. The number goes in the band's hover card instead — *"4 matches"* beside the word count and the
+percentage — and into the band button's accessible name, where there is room for the word.
+
+### The ruler, which is the thing this could have got silently wrong
+
+A result row already says how far through the article it falls, and that number is measured in
+**characters** — deliberately, because it is computed where there is no DOM and characters are the
+cheap stand-in for height ([§ Where in the article](#where-in-the-article-on-every-result)). Reusing
+it here would have been one line and wrong: twenty one-line list items hold very few characters and
+a great many pixels, so a mark placed by the character ruler drifts out of the band it belongs to.
+A bird's-eye rail that points at the wrong section is worse than no rail, because it is still
+pointing confidently.
+
+So the marks are placed from the **measured pixel geometry the spine already reads out of the DOM**
+— the same `tr[data-block]` rects the bands are sized from, in the same coordinate system. It is the
+same reasoning that made the bands measure heights rather than count words in the first place. None
+of this is visible in a screenshot, which is why [`tests/spine-marks.test.ts`](../../tests/spine-marks.test.ts)
+exists: every failure in this file renders perfectly.
+
+### The words matcher has a lane too
+
+`blockHues`, which divides the bar down the left of a paragraph, drops a `null` slot — a literal
+match belongs to no saved search, and the bar falls back to the one fixed search hue it always had.
+The rail has no such fallback, and reusing `blockHues` there would have meant it showed every search
+that cost money and **nothing at all** for the free one, which is the matcher a reader is most
+likely to be using. So `blockMatches` carries the `null` through and
+[`spine-marks.ts`](../../src/web/spine-marks.ts) turns it into a lane in `--hit-rgb`. The two
+functions are one implementation and two views of it, and a test pins that they agree.
+
+### Entering search mode brings the rail back
+
+`?spine=0` is a choice about the page rather than about the mode you happen to be in, so it
+survives a trip through chat or the glossary ([layout.ts § fitMode](../../src/web/layout.ts)). But a
+reader who has put the rail away and then opens search would find half of this feature drawn
+somewhere they cannot see. So **pressing Search in the bottom bar clears `?spine=`** — back to
+automatic, which in a mode means on.
+
+On the transition and **not** as a standing rule, which is the part worth getting right. A rule that
+re-asserted the rail whenever search mode was open would make the `Spine` pill dead in exactly the
+mode this is about: press it off, and it comes straight back. "By default" is a fact about arriving,
+not a fact about staying — so it is also gated on actually changing mode, since the dock calls its
+handler for a press on the mode you are already in.
+
+The cost is real and is not hidden: this **throws the preference away rather than suspending it**.
+Come back to reading mode afterwards and the rail is there, with no memory that you had hidden it.
+Suspending it would mean `?spine=` growing a per-mode shape — a lot of machinery for one bit — and
+the alternative of leaving it alone means a reader who has hidden the rail opens search and finds
+half a feature drawn somewhere they cannot see. The pill is one press away.
+
+## Prioritised: place order with a bar under it
+
+> add a "Prioritised" ordering/filtering (kinda like how we do with Glossary) that orders by place
+> but thresholds by confidence, and a threshold slider to the UI
+>
+> — Greg, 2026-08-26
+
+A third option beside *by place* and *by confidence*. It sorts exactly as *by place* does and
+**hides** every passage the model was less than `?conf=` sure of — 50 to start with, on a slider.
+50 is the midpoint of the scale the rows already print, and is chosen for that and not because it
+means *more likely than not*: this confidence is
+[not a probability](#what-the-number-means-which-printing-it-does-not-say), and a starting position
+described as one would be the flattering reading the hover card was rewritten to avoid.
+
+**It hides rather than groups, and that is the one place it departs from the glossary it is modelled
+on.** A prioritised glossary shows every term and lifts the ones that clear the bar to the top,
+because a glossary is a reference list and a term you cannot find is a term you have lost. A search
+is the opposite errand: the reader is hunting, and what they want done with a weak match is for it
+to go away. (The prompt does tell the model to leave weak matches out, so this is not a claim that
+the matcher is careless — it is that *the model's* bar and *this reader's* bar are different
+bars, and only one of them can be moved.) It also fits *"orders by place"* better than grouping
+does: two groups is not place order, it is group order with place inside it. The phrase is
+ambiguous and this is a reading of it rather than the only one — GPT's review, which agreed with
+the call, was right that the first draft of this paragraph overstated that.
+
+**And hiding buys something a list cannot show.** The dropped results lose their marks in the prose
+too, because [`App.tsx`](../../src/web/App.tsx) computes one array and hands it to both the panel and
+the article — the same single-source rule the `hitMarks` prop in
+[`TableView.tsx`](../../src/web/TableView.tsx) already existed for. So the bar declutters the page,
+not just the list. Grouping would have left every weak wash exactly where it was. That is the
+argument for the design rather than merely a consequence of it.
+
+### The four ways a filter lies, and what stops each
+
+A threshold can swallow the reader's results and look like an ordinary empty list, which is
+[silent success](../reusable/silent-success.md) with a slider on it. So:
+
+- **A result with no confidence always survives, at any bar.** Every result in words mode has a null
+  confidence, so treating null as low would empty that list the moment an `?order=prioritised` link
+  was opened there. Absent is not low — the same rule `orderFound` already followed when it sorted a
+  literal match as certain. It is one line, `clears` in [`search-hits.ts`](../../src/web/search-hits.ts),
+  and it has a test of its own.
+- **The count says `3 of 11`, never `3`.** A filter that hides eight things must not look like a
+  search that found three.
+- **"Nothing matched" is not printed when the reader hid it all.** That empty state would have taken
+  the slider off the screen along with the results, leaving no way back. The zero case keeps the
+  slider and says what actually happened.
+- **`?conf=0.5` parses to nothing rather than to zero.** `?gate=` is a 0–1 fraction and sits beside
+  this in the same URL, so a fraction is exactly what somebody writes here by mistake;
+  `Number.parseInt` would have made it `0`, a bar that hides nothing with nothing to see. `conf` is
+  in the **same 0–100 unit the rows print**, which is the whole point given
+  [the unit that changed silently](#the-confidence-and-the-unit-that-changed-silently) above — a
+  threshold in a different unit from the numbers it hides would be that bug wearing a slider.
+
+The slider is the glossary's `GateSlider` in every respect that can be shared: the number on screen,
+the count on screen, a track that ends where the data does so no part of it is dead, a note in words
+when it has divided nothing, and a reset that only appears once there is something to reset.
+
+**Not the default.** The glossary's prioritised order is its default; this one is not, and
+deliberately: the glossary's default reorders, and this one would hide. A reader who has not asked
+for a filter should not have results kept from them.
+
 ### What this removed
 
 Worth recording, because each of these looked like a feature and was a consequence.
@@ -532,7 +703,7 @@ reader pressed**. Every part of that is silent. The key is now `runId:blockId:n`
 
 ## The URL
 
-Five parameters, which is more than any other mode wants, because search mode has two matchers in it
+Six parameters, which is more than any other mode wants, because search mode has two matchers in it
 rather than one feature. The division: `match` says which matcher, and then exactly one of `find` and
 `runs` is the thing being matched. (`run` is the sixth and is legacy — read on load, never written.)
 
@@ -543,7 +714,8 @@ rather than one feature. The division: `match` says which matcher, and then exac
 | `find` | any string | replace, debounced 200ms | Written on every keystroke. A Back button that walked back through a half-typed word one letter at a time would be useless — same call `?at=` makes |
 | `runs` | comma-separated minted ids | replace | Which saved searches are switched on. Ticking one while you read is browsing; `mode` already put the entry on the stack Back should use |
 | `run` | a minted id | replace | **Read, never written.** The single-search spelling from before 2026-08-26, kept so the links already in the world still open the search they name |
-| `order` | `document` (default), `confidence` | push | Changing the order of a list is a deliberate act on the view |
+| `order` | `document` (default), `confidence`, `prioritised` | push | Changing the order of a list is a deliberate act on the view |
+| `conf` | `0`–`100` integer, **no default** | replace, debounced 200ms | Where the prioritised bar sits. Dragged, so the same call `find` makes; absent has to keep meaning *nobody has touched it* |
 
 ### `runs` and the singular `run` it replaced
 
@@ -770,13 +942,11 @@ a hope.
 - **No keyboard shortcut** opens search, and nothing steps between results with the arrow keys. The
   app still has no shortcut map at all — the gap [keyboard.md](keyboard.md) and
   [bottom-bar.md](../plans/bottom-bar.md#what-is-still-open) both record.
-- **Nothing marks where the hits are on the spine.** Three results scattered through a long article
-  are three places you have to scroll to find. Each row now says *where* it falls
-  ([above](#where-in-the-article-on-every-result)), which is half the answer — you can see at a glance
-  that everything matched in the first third — but it is still a number per row rather than a map. A
-  shared rail of ticks is the thing that would actually fix it, and the spine already knows about
-  block positions. It is the same pattern Chrome and Firefox put on the scrollbar for find-in-page
-  and VS Code puts in its overview ruler, so there is plenty of prior art to copy.
+- **The rail has no scroll-to-next.** Marks in the spine now show where the results are
+  ([above](#the-rail-and-the-shape-of-a-search)), and each mark is inside a band you can click — but
+  clicking lands on the section, not on the match. Chrome and Firefox put *both* on the scrollbar
+  for find-in-page: the ticks and a way to step between them. The stepping half is the same gap as
+  the missing keyboard shortcut above, and probably the same piece of work.
 - **A hit that is real but wrong** — the model quotes an adjacent sentence that does not actually
   match — is undetectable from here and uncounted. Only a quote that is not in the block at all is
   caught. The same residual [chat-mode.md](../plans/chat-mode.md#what-is-still-open) has.

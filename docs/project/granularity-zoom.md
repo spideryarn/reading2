@@ -360,6 +360,17 @@ Four decisions worth keeping:
   is why `fit.spine` is part of `layoutKey` in [`App.tsx`](../../src/web/App.tsx) — the rail's own
   measurements and the `?at=` tracker's both have to be redone.
 
+- **Search results paint into it**, added 2026-08-26 at Greg's request — one lane per switched-on
+  saved search down the right-hand edge, each bar as tall as the paragraph it names and in that
+  search's colour. This is the payoff of the rail being *proportional*: it is the only place a
+  search's **shape** exists, and a shape is what a list of thirty passages cannot show. The rail's
+  own pixel geometry is what places them, never the character ruler a result row prints its "42% in"
+  from — the two disagree, and by enough to put a mark in the wrong band. Full account, including
+  why the lanes are packed rather than fixed and why the words matcher gets a lane too, in
+  [search.md § The rail, and the shape of a search](search.md#the-rail-and-the-shape-of-a-search).
+  Entering search mode clears `?spine=`, so a reader who had put the rail away gets it back rather
+  than half a feature drawn where they cannot see it.
+
 Because the spine now carries the coarse levels, the **L0 column is the first thing auto-fit gives
 up** on a narrow window (below), and what the article *is* lives in the masthead, so that giving it
 up costs nothing.

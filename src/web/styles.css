@@ -877,8 +877,8 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   width: var(--spine-w);
   /* How much of the rail's width the search lanes may take, and how wide one
      lane may get when there are few of them — see § search marks below. */
-  --spine-gutter: 22px;
-  --lane-max: 5px;
+  --spine-gutter: 24px;
+  --lane-max: 6px;
   z-index: 45;
   background: var(--panel);
   border-right: 1px solid var(--rule-strong);
@@ -1017,19 +1017,26 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 
 .spine-match {
   position: absolute;
+  /* `--lane-w` is the *pitch*; the mark is a pixel narrower, and the pixel is
+     the gap that keeps two adjacent lanes reading as two marks rather than as
+     one wider one. It was a leftward `box-shadow`, which did not work and did
+     not look like it was not working: lanes are drawn right to left, so the
+     lane to the left is painted *after* its neighbour and its background
+     covered the neighbour's shadow. Every separator but the outermost was
+     invisible. Found by a GPT Sol review, 2026-08-26.
+
+     A `max()` under it because the gutter is shared: with eight searches on,
+     the pitch is 3px and a plain subtraction leaves 2px, but the narrow rail's
+     is 1.875px and would leave under one. A lane that rounds to a sub-pixel
+     line is the fault the phrase stripes already cap for. */
   right: calc(var(--lane) * var(--lane-w));
-  width: var(--lane-w);
+  width: max(1.5px, calc(var(--lane-w) - 1px));
   /* Percentages of the document's height, like everything else in the track —
      so a mark is as tall as its paragraph. The floor is what keeps a one-line
      list item in a long article visible at all; without it a mark can round to
      zero and the search looks like it found nothing there. */
   min-height: 3px;
   background: rgb(var(--h));
-  /* A hairline of the rail's own background on the left edge, so two adjacent
-     lanes read as two marks rather than as one wider one. `box-shadow` rather
-     than a border or a gap: both of those would come out of the lane's width,
-     and at ~2.75px a lane has none to give. */
-  box-shadow: -1px 0 0 var(--panel);
 }
 
 /* Keep the part labels clear of the lanes while there is something in them.
@@ -1059,7 +1066,7 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 /* The collapsed rail is 24px wide in total, so the search gutter has to be a
    smaller share of it — and the cap comes down with it, or two searches would
    cover most of a rail that is also trying to show you where you are. */
-.spine.narrow { --spine-gutter: 14px; --lane-max: 4px; }
+.spine.narrow { --spine-gutter: 15px; --lane-max: 4px; }
 .spine.narrow .spine-label { display: none; }
 .spine.narrow .spine-part { padding: 0; }
 .spine.narrow .spine-part::before { width: 100%; opacity: 0.3; }

@@ -29,6 +29,7 @@
 import { renderedText, type Mark } from "./annotate.js";
 import { findQuote, snippet } from "../quote-match.js";
 import type { Block, BlockId, SearchHit } from "../types.js";
+import type { HitOrder } from "./params.js";
 
 /**
  * Shorter than this and a literal search matches most of the article.
@@ -185,17 +186,68 @@ function placeOf(scale: Ruler, index: number, start: number): number {
   return Math.min(1, Math.max(0, chars / scale.total));
 }
 
+/**
+ * A lowercased copy of `hay`, plus the way back to the original's offsets.
+ *
+ * **`toLowerCase` does not preserve length**, and the naive version of the
+ * matcher below assumed it did: find the needle in a lowercased haystack, then
+ * use that index against the original string. `İ` (U+0130) lowercases to two
+ * code units, so a single one of those anywhere earlier in a paragraph puts
+ * every later offset out by one — the wash starts a letter late, the snippet
+ * starts a letter late, and the "42% in" is shifted. Nothing throws.
+ *
+ * The same trap is written down in src/library-search.ts § `foldWithMap`, which
+ * is what makes this one worth being annoyed about: it was a known hazard in
+ * this repo, in a function doing the same job, and this one did not check.
+ * Raised by a GPT Sol review, 2026-08-26.
+ *
+ * `map[i]` is the offset in `hay` that folded code unit `i` came from, and
+ * `map` has one extra entry at the end so a span that runs to the very last
+ * character has somewhere to point. Deliberately **only case**, not the accent
+ * and punctuation folding library search does: this is find-on-page, and
+ * find-on-page has a meaning readers already hold.
+ *
+ * Iterated by **code point**, which `for…of` over a string gives for free.
+ * Walking code units instead would be shorter and would quietly stop matching
+ * every cased script above the BMP — Adlam, Deseret, Osage, Vithkuqi — because
+ * lowercasing half a surrogate pair returns that half unchanged. Adlam is a
+ * living script in daily use; trading one obscure failure for another is not a
+ * fix.
+ */
+function foldCase(hay: string): { folded: string; map: number[] } {
+  let folded = "";
+  const map: number[] = [];
+  let at = 0;
+  for (const ch of hay) {
+    const lower = ch.toLowerCase();
+    for (let n = 0; n < lower.length; n++) map.push(at);
+    folded += lower;
+    at += ch.length;
+  }
+  map.push(hay.length);
+  return { folded, map };
+}
+
 /** Every place `needle` appears in `hay`, case-insensitively. */
 function literalSpans(hay: string, needle: string): { start: number; end: number }[] {
   const spans: { start: number; end: number }[] = [];
-  const lowerHay = hay.toLowerCase();
-  const lowerNeedle = needle.toLowerCase();
+  const { folded, map } = foldCase(hay);
+  /* The needle is folded the same way, and its *folded* length is what steps
+     the search forward — the two can differ, and stepping by the original's
+     length is how you would get overlapping matches back. */
+  const lowerNeedle = foldCase(needle).folded;
+  if (lowerNeedle.length === 0) return spans;
   for (
-    let i = lowerHay.indexOf(lowerNeedle);
+    let i = folded.indexOf(lowerNeedle);
     i !== -1;
-    i = lowerHay.indexOf(lowerNeedle, i + lowerNeedle.length)
+    i = folded.indexOf(lowerNeedle, i + lowerNeedle.length)
   ) {
-    spans.push({ start: i, end: i + needle.length });
+    const start = map[i] ?? hay.length;
+    const end = map[i + lowerNeedle.length] ?? hay.length;
+    /* Can only fire if a fold expanded the last character of the match, which
+       would make the span empty in the original. `hitMarks` drops empty spans
+       anyway; dropping it here keeps it out of the results list too. */
+    if (end > start) spans.push({ start, end });
   }
   return spans;
 }
@@ -353,7 +405,7 @@ export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
  * A copy, not a sort in place: the caller's array is memoised upstream and
  * mutating it would reorder a result set the marks were already computed from.
  */
-export function orderFound(found: Found[], order: "document" | "confidence"): Found[] {
+export function orderFound(found: Found[], order: HitOrder): Found[] {
   const copy = [...found];
   copy.sort((a, b) =>
     order === "confidence" && (a.confidence ?? 100) !== (b.confidence ?? 100)
@@ -361,6 +413,116 @@ export function orderFound(found: Found[], order: "document" | "confidence"): Fo
       : a.index - b.index || a.start - b.start,
   );
   return copy;
+}
+
+/* ------------------------------------------------------------ prioritised --
+   The third order, added 2026-08-26 at Greg's request:
+
+   > add a "Prioritised" ordering/filtering (kinda like how we do with
+   > Glossary) that orders by place but thresholds by confidence, and a
+   > threshold slider to the UI
+
+   It is the glossary's prioritised order with one deliberate difference, and
+   the difference is the whole of the design here.
+
+   **The glossary groups; this hides.** A prioritised glossary shows every term
+   and puts the ones that clear the bar at the top, because a glossary is a
+   reference list and a term you cannot find is a term you have lost. A search
+   is the opposite errand: the reader is hunting, the meaning matcher answers
+   generously, and the thing they want done with a weak match is for it to go
+   away. Hiding is also the only reading of "orders by place" that is true —
+   two groups is not place order, it is group order with place inside it.
+
+   **And hiding is worth more here than a list can show**, which is the reason
+   it is the right call rather than merely a defensible one: the results the
+   panel drops lose their marks in the prose too. `App.tsx` computes one array
+   and hands it to both, so the threshold declutters the article as well as the
+   list. Grouping would leave every weak wash exactly where it was.
+
+   **The cost is that a filter can silently swallow everything**, which is the
+   failure this codebase keeps catching itself in
+   (docs/reusable/silent-success.md). So nothing here is allowed to be quiet:
+   `confNote` says in words when the bar has hidden all of them or none of
+   them, the count beside the slider is `N of M` rather than `N`, and the
+   panel's own header keeps reporting the unfiltered total. */
+
+/**
+ * The bar's **starting** position, on the 0–100 scale the rows print.
+ *
+ * `50` because it is the midpoint of the scale the rows print, and a threshold
+ * the reader can locate on a number they can already see beats one they have to
+ * be told about. **Not** "more likely than not": this confidence is the model's
+ * judgement about its own answer and explicitly not a probability
+ * (docs/project/search.md § What the number means), so reading the halfway
+ * point as a coin-flip would be the flattering explanation the hover card was
+ * rewritten to avoid. Halfway up *worth a look* → *probably*, no more than
+ * that. An absolute starting point
+ * rather than a relative "top half", for the reason the glossary's gate gives:
+ * when the model's confidences run hot or cold an absolute bar degenerates to
+ * *no filtering*, which is the list the reader had before, while a relative one
+ * would always hide half of them however sure the model was.
+ *
+ * A default rather than a constant: `?conf=` overrides it, and that parameter
+ * deliberately has no default of its own so "absent" keeps meaning nobody has
+ * touched it. See `confParam` in params.ts.
+ */
+export const PRIORITY_CONF = 50;
+
+/** One step of the slider, and therefore how precise `?conf=` gets. */
+export const CONF_STEP = 1;
+
+/**
+ * Does this result survive the bar?
+ *
+ * **A result with no confidence always survives**, and this is the one line in
+ * the feature that must not be got wrong. Two different things arrive with a
+ * null confidence and the rule is right for both:
+ *
+ *  - **Every literal match.** Words mode has no confidence to report at all, so
+ *    treating null as zero would empty that list completely the moment an
+ *    `?order=prioritised` link was opened there. The same `?? 100` that makes
+ *    `orderFound` sort a literal match as certain, for the same reason: absent
+ *    is not low.
+ *  - **A malformed stored hit.** `SearchHit.confidence` is typed non-null and
+ *    `validateHits` enforces it, but saved JSON is cast rather than re-validated
+ *    on the way back in (src/searches.ts), so a null can reach here from an old
+ *    or hand-edited file. Showing it is the lossless direction: a result the
+ *    reader can see and judge, rather than one silently withheld on the
+ *    strength of a missing field. GPT Sol's review, 2026-08-26.
+ *
+ * Note that `runId === null` — not nullness of the confidence — is what
+ * actually distinguishes a literal hit from a model one, which is why the tests
+ * below exercise both spellings rather than assuming they coincide.
+ */
+function clears(found: Found, gate: number): boolean {
+  return (found.confidence ?? 100) >= gate;
+}
+
+/** The results that clear the bar. Only ever called for `prioritised`. */
+export function keepAbove(found: Found[], gate: number): Found[] {
+  return found.filter((f) => clears(f, gate));
+}
+
+/** How many clear a given bar. The number under the reader's hand. */
+export function countAbove(found: Found[], gate: number): number {
+  let n = 0;
+  for (const f of found) if (clears(f, gate)) n += 1;
+  return n;
+}
+
+/**
+ * Says out loud when the bar is doing nothing, or everything.
+ *
+ * The two ends a filter fails silently at. "No results" with a slider above it
+ * is ambiguous between *the search found nothing* and *you have hidden it all*,
+ * and those want opposite things done about them.
+ */
+export function confNote(found: Found[], gate: number): string | null {
+  if (found.length === 0) return null;
+  const kept = countAbove(found, gate);
+  if (kept === 0) return "Nothing clears this bar. Drag it left to see the weaker matches.";
+  if (kept === found.length) return "Every match clears this bar, so none are hidden.";
+  return null;
 }
 
 /**
@@ -433,32 +595,123 @@ export function blockStrength(found: Found[]): Map<BlockId, number> {
 }
 
 /**
- * Which searches matched anywhere in each block, as palette slots — the colours
- * the bar down the left of the paragraph is divided into.
+ * What matched in each block: **which searches, and how many times.**
  *
- * The bar and the marks answer two different questions and that is why they are
- * scoped differently. A mark says *these words matched, and these searches found
- * them*; the bar says *there is something in this paragraph*, which is the
- * signal you catch while scrolling past at speed (`blockStrength` above has the
- * borrowed reasoning). So a paragraph where one search matched the first
- * sentence and another matched the last gets **two** segments in its bar and
- * **one** rule under each phrase — and both are true.
+ * The bar down the left of a paragraph and the marks under its phrases answer
+ * two different questions, and that is why they are scoped differently. A mark
+ * says *these words matched, and these searches found them*; the bar says
+ * *there is something in this paragraph*, which is the signal you catch while
+ * scrolling past at speed (`blockStrength` above has the borrowed reasoning).
+ * So a paragraph where one search matched the first sentence and another
+ * matched the last gets **two** segments in its bar and **one** rule under each
+ * phrase — and both are true.
  *
- * Sorted and de-duplicated for the reason `annotateHtml` sorts its stripes: the
- * same pair of searches must draw the same bar in every paragraph they share,
- * or the reader is reading an order that came out of the result list's sort.
+ * ## Identity is the run, not the slot
  *
- * `null` slots — literal matches — are dropped rather than given a segment,
- * because a words search has no colour and cannot be one of several: the two
- * matchers are never on at the same time.
+ * The obvious shape for this is a set of palette slots, and it was that until a
+ * GPT Sol review, 2026-08-26, pointed out what it costs: **slots deliberately
+ * repeat past the eighth search** (hit-colours.ts § assignSlots), and select-all
+ * on an article with nine saved searches switches on nine. Keyed by slot, the
+ * ninth search and whichever earlier one shares its hue collapse into one
+ * entry — one mark in the rail instead of two, and one lane carrying the union
+ * of two searches' shapes. Silent, and precisely wrong in the case the reader
+ * asked for the most.
+ *
+ * So a search is identified by its **run id**, and the slot rides along as the
+ * thing that decides its colour. Two searches wearing the same hue then get two
+ * of everything, which is honest: the palette has run out, and the panel says
+ * so by printing the criterion beside every dot.
+ *
+ * ## Why `null` survives here and does not survive `blockHues`
+ *
+ * A literal match belongs to no saved search and has no colour of its own —
+ * both its id and its slot are `null`, and the paragraph bar drops it so the
+ * bar falls back to the one fixed search hue it has always been. The **spine**
+ * cannot do that: it has nothing to fall back to, and dropping the nulls there
+ * would mean the rail showed every meaning-search and *nothing at all* in words
+ * mode, which is the matcher a reader is most likely to be using. So the null
+ * is carried, and spine-marks.ts is where it becomes a lane. Getting this wrong
+ * would have been silent in the only way that matters: the feature would work
+ * perfectly for every search that cost money and do nothing for the free one.
+ *
+ * `count` is every individual match in the block, not the number of searches
+ * that found it — the two differ whenever one search quotes the same paragraph
+ * twice, and it is the first that answers "how much is in here".
+ */
+export interface MatchingSearch {
+  /** The saved search, or `null` for a literal match. */
+  runId: string | null;
+  /** Its palette slot, or `null` for a literal match — a colour, not an identity. */
+  slot: number | null;
+}
+
+export interface BlockMatch {
+  /** The searches that matched here, in a fixed order. */
+  searches: MatchingSearch[];
+  /** How many individual matches fall in this block. */
+  count: number;
+}
+
+/**
+ * A fixed order for the searches in a block: by slot, then by run id.
+ *
+ * By **slot** first so the same pair of searches draws the same thing in every
+ * paragraph they share — the reason `annotateHtml` sorts its stripes, and the
+ * failure otherwise is that the reader is reading an order that came out of the
+ * result list's sort, which they can change with the order control.
+ *
+ * By **run id** as the tie-break, which only does any work once the palette has
+ * wrapped and two searches wear one hue. Arbitrary, and it has to be *stable
+ * and arbitrary* rather than "whichever arrived first".
+ */
+function byColourThenId(a: MatchingSearch, b: MatchingSearch): number {
+  const slotDiff = (a.slot ?? -1) - (b.slot ?? -1);
+  if (slotDiff !== 0) return slotDiff;
+  const left = a.runId ?? "";
+  const right = b.runId ?? "";
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+export function blockMatches(found: Found[]): Map<BlockId, BlockMatch> {
+  const byBlock = new Map<BlockId, { searches: Map<string, MatchingSearch>; count: number }>();
+  for (const f of found) {
+    const entry = byBlock.get(f.blockId) ?? { searches: new Map(), count: 0 };
+    /* Keyed by the run id — `""` for a literal match, which has exactly one
+       identity because the two matchers are never both on. Keyed by the slot,
+       this is where the ninth search would have disappeared. */
+    entry.searches.set(f.runId ?? "", { runId: f.runId, slot: f.slot });
+    entry.count += 1;
+    byBlock.set(f.blockId, entry);
+  }
+  return new Map(
+    [...byBlock].map(([id, entry]) => [
+      id,
+      { searches: [...entry.searches.values()].sort(byColourThenId), count: entry.count },
+    ]),
+  );
+}
+
+/**
+ * The same thing, as the paragraph bar wants it: **colours only, once each.**
+ *
+ * Derived from `blockMatches` rather than looping again, so there is one answer
+ * to "which searches matched in this block" and two views of it. Two things are
+ * dropped on the way, and both are right for a bar and wrong for the rail:
+ *
+ * - `null` slots — literal matches — get no segment at all, because a words
+ *   search has no colour and cannot be one of several. The stylesheet falls
+ *   back to the one fixed search hue when `data-hues` is absent.
+ * - A slot two searches happen to share becomes **one** segment. The bar is
+ *   divided into colours, and two segments of the same colour side by side is
+ *   not a division, it is a wider segment drawn as two.
  */
 export function blockHues(found: Found[]): Map<BlockId, number[]> {
-  const byBlock = new Map<BlockId, Set<number>>();
-  for (const f of found) {
-    if (f.slot === null) continue;
-    const set = byBlock.get(f.blockId) ?? new Set<number>();
-    set.add(f.slot);
-    byBlock.set(f.blockId, set);
+  const out = new Map<BlockId, number[]>();
+  for (const [id, match] of blockMatches(found)) {
+    const slots = [
+      ...new Set(match.searches.map((s) => s.slot).filter((s): s is number => s !== null)),
+    ];
+    if (slots.length > 0) out.set(id, slots);
   }
-  return new Map([...byBlock].map(([id, set]) => [id, [...set].sort((a, b) => a - b)]));
+  return out;
 }

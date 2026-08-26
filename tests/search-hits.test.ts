@@ -16,11 +16,15 @@
 import { describe, expect, it } from "vitest";
 import {
   blockHues,
+  blockMatches,
   blockStrength,
   findLiteral,
   hitMarks,
   MIN_FIND_CHARS,
   orderFound,
+  keepAbove,
+  countAbove,
+  confNote,
   resolveHits,
   type Found,
 } from "../src/web/search-hits.js";
@@ -284,6 +288,173 @@ describe("blockHues", () => {
   });
 });
 
+describe("findLiteral and the offsets it reports", () => {
+  /* Lowercasing is **not length-preserving**, and the whole matcher was built
+     on the assumption that it is: find the needle in a lowercased haystack,
+     then use that index against the original. `İ` (U+0130) lowercases to two
+     code units, so every offset after one is out by one — and the same trap is
+     already written down at src/library-search.ts § foldWithMap, which is what
+     makes this a bug we knew about and had not looked for here.
+
+     Nothing crashes. The wash in the prose starts one letter late, the snippet
+     in the panel starts one letter late, and the "42% in" is shifted. Raised by
+     a GPT Sol review, 2026-08-26. */
+  const turkish = [
+    block("spya-t1u2v3", "<p>İstanbul and the needle in it.</p>"),
+  ];
+
+  it("reports offsets in the original text, not in a lowercased copy of it", () => {
+    const [hit] = findLiteral(turkish, "needle");
+    const text = "İstanbul and the needle in it.";
+    expect(hit).toBeDefined();
+    expect(text.slice(hit!.start, hit!.end)).toBe("needle");
+  });
+
+  it("still finds a match whose own case differs from the query", () => {
+    const [hit] = findLiteral(turkish, "NEEDLE");
+    const text = "İstanbul and the needle in it.";
+    expect(text.slice(hit!.start, hit!.end)).toBe("needle");
+  });
+
+  it("still case-folds a script that lives above the BMP", () => {
+    /* The fix for the offset bug walks code points rather than code units, and
+       this is the check that it does. Lowercasing half a surrogate pair returns
+       that half unchanged, so a code-unit walk would trade the `İ` failure for
+       silently never matching Adlam, Deseret or Osage — Adlam being a script in
+       daily use for Fulani. */
+    const upper = String.fromCodePoint(0x1e900);
+    const lower = String.fromCodePoint(0x1e922);
+    const adlam = [block("spya-a1d2l3", `<p>${upper}${lower} here.</p>`)];
+    const [found] = findLiteral(adlam, `${lower}${lower}`);
+    expect(found).toBeDefined();
+    expect(found!.start).toBe(0);
+    expect(found!.end).toBe(upper.length + lower.length);
+  });
+
+  it("finds every occurrence, without overlapping them", () => {
+    const twice = [block("spya-t9u9v9", "<p>Mind and mind and MIND.</p>")];
+    const spans = findLiteral(twice, "mind").map((f) => [f.start, f.end]);
+    expect(spans).toEqual([
+      [0, 4],
+      [9, 13],
+      [18, 22],
+    ]);
+  });
+});
+
+describe("blockMatches", () => {
+  const hit = (blockId: string, quote: string): SearchHit => ({
+    blockId,
+    quote,
+    confidence: 80,
+    reasoning: "",
+  });
+
+  it("keeps the literal matcher's null, where blockHues drops it", () => {
+    /* The one difference between the two, and the reason there are two. The
+       paragraph bar has a fallback for a colourless match — the fixed search
+       hue it always had — so `blockHues` can drop the null. The spine has no
+       fallback: dropping it there would mean the rail showed every search that
+       cost money and **nothing at all** in words mode, which is the matcher a
+       reader is most likely to be using. Silent, and backwards. */
+    const literal = blockMatches(findLiteral(BLOCKS, "thermostat"));
+    expect(literal.size).toBeGreaterThan(0);
+    for (const match of literal.values()) {
+      expect(match.searches).toEqual([{ runId: null, slot: null }]);
+    }
+  });
+
+  it("counts every match in a block, not every search that found one", () => {
+    /* `searches` answers "whose", `count` answers "how much". Two hits from one
+       search is one entry and two matches, and conflating them would make a
+       paragraph the model quoted five times look exactly like one it quoted
+       once — which is the question "how common" is asking. */
+    const found = resolveHits(BLOCKS, [
+      {
+        id: "spya-aaa2aa",
+        slot: 6,
+        hits: [hit("spya-k3m9qt", "mind is software"), hit("spya-k3m9qt", "wet hardware")],
+      },
+    ]);
+    const match = blockMatches(found).get("spya-k3m9qt");
+    expect(match?.searches).toEqual([{ runId: "spya-aaa2aa", slot: 6 }]);
+    expect(match?.count).toBe(2);
+  });
+
+  it("adds up the counts of several searches in one block, in palette order", () => {
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 6, hits: [hit("spya-k3m9qt", "mind is software")] },
+      { id: "spya-bbb2bb", slot: 2, hits: [hit("spya-k3m9qt", "wet hardware")] },
+    ]);
+    const match = blockMatches(found).get("spya-k3m9qt");
+    expect(match?.searches.map((x) => x.slot)).toEqual([2, 6]);
+    expect(match?.count).toBe(2);
+  });
+
+  it("keeps two searches apart when the palette has wrapped and they share a hue", () => {
+    /* **The bug this shape exists to prevent.** Slots repeat past the eighth
+       search (hit-colours.ts § assignSlots) and select-all switches on every
+       saved search there is, so keying identity off the slot merges the ninth
+       search with whichever earlier one shares its hue — one entry instead of
+       two, one lane in the rail carrying the union of two searches' shapes.
+       Raised by a GPT Sol review, 2026-08-26. */
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 3, hits: [hit("spya-k3m9qt", "mind is software")] },
+      { id: "spya-zzz2zz", slot: 3, hits: [hit("spya-k3m9qt", "wet hardware")] },
+    ]);
+    const match = blockMatches(found).get("spya-k3m9qt");
+    expect(match?.searches).toEqual([
+      { runId: "spya-aaa2aa", slot: 3 },
+      { runId: "spya-zzz2zz", slot: 3 },
+    ]);
+    expect(match?.count).toBe(2);
+  });
+
+  it("orders a block's searches the same way whatever order the results came in", () => {
+    /* By slot, so the same pair of searches draws the same thing in every
+       paragraph they share — the reason `annotateHtml` sorts its stripes. The
+       reader can change the result order with the sort control, and that must
+       not rearrange anything drawn. */
+    const runs = [
+      { id: "spya-bbb2bb", slot: 7, hits: [hit("spya-k3m9qt", "mind is software")] },
+      { id: "spya-aaa2aa", slot: 1, hits: [hit("spya-k3m9qt", "wet hardware")] },
+    ];
+    const forward = blockMatches(resolveHits(BLOCKS, runs)).get("spya-k3m9qt");
+    const backward = blockMatches(resolveHits(BLOCKS, [...runs].reverse())).get("spya-k3m9qt");
+    expect(forward?.searches.map((x) => x.slot)).toEqual([1, 7]);
+    expect(backward?.searches).toEqual(forward?.searches);
+  });
+
+  it("agrees with blockHues about which colours matched where", () => {
+    /* They are one implementation and two views of it, and this is the check
+       that keeps them that way — the failure if they drift is the paragraph bar
+       and the rail disagreeing about the same paragraph, which is exactly the
+       invariant the whole feature is built around (search-hits.ts, top). */
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 6, hits: [hit("spya-k3m9qt", "mind is software")] },
+      { id: "spya-bbb2bb", slot: 2, hits: [hit("spya-k3m9qt", "wet hardware")] },
+    ]);
+    const hues = blockHues(found);
+    for (const [id, match] of blockMatches(found)) {
+      expect(hues.get(id)).toEqual([
+        ...new Set(match.searches.map((x) => x.slot).filter((x) => x !== null)),
+      ]);
+    }
+  });
+
+  it("gives the paragraph bar one segment when two searches share a hue", () => {
+    /* The bar is *divided into colours*. Two segments of the same colour side
+       by side is not a division, it is a wider segment drawn as two — and the
+       gradient would put a seam in the middle of it. The rail wants both; the
+       bar wants one. */
+    const found = resolveHits(BLOCKS, [
+      { id: "spya-aaa2aa", slot: 3, hits: [hit("spya-k3m9qt", "mind is software")] },
+      { id: "spya-zzz2zz", slot: 3, hits: [hit("spya-k3m9qt", "wet hardware")] },
+    ]);
+    expect(blockHues(found).get("spya-k3m9qt")).toEqual([3]);
+  });
+});
+
 /**
  * Where in the article a result falls — the second thing every row shows, and
  * the only thing a literal result shows besides its words.
@@ -459,6 +630,79 @@ describe("orderFound", () => {
     const input = [row(5, 0, 30), row(1, 0, 90)];
     orderFound(input, "confidence");
     expect(input.map((f) => f.index)).toEqual([5, 1]);
+  });
+
+  it("orders prioritised by place, exactly as document does", () => {
+    // The filtering is what makes prioritised different; the sort is not.
+    const rows = [row(5, 0, 90), row(1, 0, 30)];
+    expect(orderFound(rows, "prioritised").map((f) => f.index)).toEqual(
+      orderFound(rows, "document").map((f) => f.index),
+    );
+  });
+});
+
+describe("the prioritised threshold", () => {
+  /* `runId`, not the confidence, is what makes a hit literal rather than the
+     model's — so it is a parameter here. GPT Sol's review pointed out that
+     fixtures written with `runId: null` throughout cannot tell the two apart,
+     which is exactly the distinction `clears` is reasoning about. */
+  const row = (index: number, confidence: number | null, runId: string | null = null): Found => ({
+    key: `k${index}`,
+    blockId: "spya-k3m9qt",
+    runId,
+    slot: null,
+    index,
+    start: 0,
+    end: 4,
+    confidence,
+    reasoning: null,
+    short: "",
+    long: "",
+    at: 0,
+    whole: false,
+  });
+
+  it("keeps what clears the bar and drops what does not", () => {
+    const rows = [row(1, 80), row(2, 50), row(3, 20)];
+    expect(keepAbove(rows, 50).map((f) => f.index)).toEqual([1, 2]);
+    expect(countAbove(rows, 50)).toBe(2);
+  });
+
+  it("keeps a model hit whose stored confidence is missing", () => {
+    /* Typed non-null and enforced by validateHits, but saved JSON is cast
+       rather than re-validated on the way back in, so a null can reach here
+       from an old file. Showing it is the lossless direction — a result the
+       reader can see and judge beats one withheld on a missing field. */
+    expect(keepAbove([row(1, null, "spya-k3m9qt")], 90)).toHaveLength(1);
+  });
+
+  it("keeps a result with no confidence at any bar at all", () => {
+    /* The one line in this feature that must not be got wrong. Every result in
+       words mode has a null confidence, so treating null as zero would empty
+       the list the moment an `?order=prioritised` link was opened there —
+       silently, since "Nothing matched" is what an empty list already says.
+       Absent is not low: the same rule `orderFound` follows when it sorts a
+       literal match as certain. */
+    const words = [row(1, null), row(2, null)];
+    expect(keepAbove(words, 100).map((f) => f.index)).toEqual([1, 2]);
+    expect(keepAbove(words, 0)).toHaveLength(2);
+  });
+
+  it("is inclusive at the bar, so the printed number means what it says", () => {
+    // A row printed "50" must not vanish at a threshold of 50 — the reader can
+    // see the number and would read that as a bug.
+    expect(keepAbove([row(1, 50)], 50)).toHaveLength(1);
+  });
+
+  it("says out loud when it has hidden everything, or nothing", () => {
+    const rows = [row(1, 80), row(2, 20)];
+    expect(confNote(rows, 90)).toMatch(/Nothing clears/);
+    expect(confNote(rows, 0)).toMatch(/none are hidden/);
+    // And says nothing when it is doing its job, so the note is a warning
+    // rather than a running commentary.
+    expect(confNote(rows, 50)).toBeNull();
+    // An empty result set is the search's problem to explain, not the bar's.
+    expect(confNote([], 50)).toBeNull();
   });
 });
 
