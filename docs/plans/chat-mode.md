@@ -580,6 +580,19 @@ Three things fell out of it that are worth naming, because each was a bug in its
   latched now: "by default" means on arrival, and a reader who has just closed the only conversation
   asked for the list.
 
+**Both fixes were driven in a real browser afterwards**, in a fresh tab with the backend state read
+back from `/api/chat/<slug>` at each step rather than trusted from the screen — which matters here
+more than usual, because the bug being fixed was one where the screen was right and the state was
+not. Editing works in a fresh session and after a reload; the discard count on an edit is right;
+three new-then-close rounds leave the list exactly as it was; a draft keeps its conversation and is
+still in the box on reopening; a draft does not follow the reader into another conversation; a new
+conversation takes the caret and an existing one does not (checked by `document.activeElement` and
+by a real Down keypress reaching the article, not by eye); and retry and stop still behave.
+
+The copy button **still has no evidence behind it** — `navigator.clipboard.writeText()` does not
+resolve in the automation tab, so it has now failed to be verified twice, for a reason that says
+nothing about whether it works. It wants ten seconds of somebody's own eyes in an ordinary window.
+
 **A third bug came from the review of the fix.** `src/chat.ts` had an exported `createThread` that
 wrote an empty thread to disk, called by nothing. It had been harmless; the moment the panel started
 discarding empty conversations locally it would have become a deletion that did not delete — gone
