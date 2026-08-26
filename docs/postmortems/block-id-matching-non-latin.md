@@ -106,7 +106,11 @@ small lesson, since "normalised" is doing a lot of unexamined work in that sente
 
 ## Can the fix orphan ids on existing articles?
 
-**No, and not because we tested it.** Because of the shape of the code.
+**No migration loss was measured, and the shape of the code says why.** (An earlier version of this
+heading answered a flat "no". GPT Sol's later review was right that the evidence supports the
+narrower claim: no loss *on the three articles that exist*, plus a structural argument. NFKC creates
+equivalence classes the old key did not have, and the ambiguity rule below deliberately re-mints in
+rare cases — so "cannot orphan" is too strong for all possible data.)
 
 [`carryOverIds`](../../src/blocks.ts) builds its lookup map by calling `matchKey` on the *previous*
 blocks at run time, in the same process, with the same function that keys the new ones:

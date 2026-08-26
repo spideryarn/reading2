@@ -186,8 +186,11 @@ pages to images yourself on Vercel* (their v1 and v2 pain), and *figures are the
 
 ## The decision
 
-**v1 = pdf.js text layer as the free baseline + Claude Haiku 4.5 reading page-range chunks in
-parallel, checked against that baseline.** Reasons, in order:
+**v1 = pdf.js text layer as the free baseline + a vision model reading page-range chunks in
+parallel, checked against that baseline.** Claude Haiku 4.5 is the incumbent and the tie-break
+default; **which model actually reads the pages is decided by the bake-off**, not here — see
+[the second round](#second-round-2026-08-26) and
+[the plan](../plans/pdf-ingestion.md#which-model-and-which-vendor). Reasons, in order:
 
 1. ~~**No new vendor.**~~ **Superseded 2026-08-26** — see [the second round](#second-round-2026-08-26).
    The original reasoning was that Gemini Flash is cheaper and benchmarks higher but costs a second
@@ -197,7 +200,7 @@ parallel, checked against that baseline.** Reasons, in order:
    the key and bill this repo already has.
 2. **The image is nearly free once you pay for the output**, and it is what makes scans, columns
    and headings work without heuristics.
-3. **Haiku, not Sonnet, not Opus.** Greg: *"I'm hoping we won't need a frontier model."*
+3. **A cheap model, not a frontier one.** Greg: *"I'm hoping we won't need a frontier model."*
    Transcription is not reasoning. `MODEL` (Sonnet 5) is the escalation tier, on request, recorded
    in `meta.json` — never a silent switch.
 4. **The text layer is kept and used**, not thrown away: it is the page count, the "is this a scan"
@@ -312,6 +315,23 @@ plus GPU model weights. We deploy to Vercel serverless: no native binaries, no G
 model is only interesting if somebody hosts it — which is exactly what Mistral OCR is. Licences are
 clean if this changes (PaddleOCR-VL Apache 2.0, dots.ocr MIT, olmOCR Apache 2.0, Docling MIT);
 MinerU has left AGPL for an Apache-based licence with a revenue cap that would not bind us.
+
+### Corrected by GPT Sol, same day
+
+Two claims above were stronger than their evidence and are corrected in
+[the plan](../plans/pdf-ingestion.md#gpt-sols-third-review-2026-08-26); repeated here so this
+document doesn't keep asserting them:
+
+- **The honesty numbers are PP-OCRv6 against general vision models.** Applying them to *Mistral OCR
+  against Haiku or Gemini* is an extrapolation. Mistral OCR is itself a learned system with language
+  priors and can reach for the same plausible wrong word. The independence the scan cross-check
+  depends on is a hypothesis to be measured, not a finding.
+- **"No fidelity loss" through OpenRouter's `native` engine is not what the documentation says.**
+  What it says is that the file goes to a natively-capable model without a conversion step.
+  OpenRouter is still an adapter: a different structured-output parameter, and a *normalised*
+  `finish_reason` with the provider's real one moved to `native_finish_reason`. And its OCR engine
+  returns flattened annotations with no guaranteed page boundaries, so the "manufactured text layer"
+  may need reconstructing into pages before it can be compared page by page.
 
 ### Sources, second round
 

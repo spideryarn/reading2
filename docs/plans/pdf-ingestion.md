@@ -164,13 +164,32 @@ evidence in the first hour, not on a hunch; the rest of the app stays Anthropic;
 [the eval](#the-eval-evalspdf) exists so the decision can be re-run when the models change, which
 they will.
 
-**And the complexity turned out to be much smaller than the first draft assumed.** "A second
-vendor" meant a second SDK, key, bill and outage surface only because we were thinking of going
-direct. OpenRouter is already wired here — `OPENROUTER_MODEL` in
-[`src/models.ts`](../../src/models.ts) — and reaches the alternatives under one key and one bill.
-Its `native` PDF engine passes the bytes straight through to a model that reads PDFs natively, so
-there is no conversion step and no fidelity loss; the loss only appears if you route through one of
-its *parsing* engines instead. Prices as of 2026-08-26, full table and caveats in
+**And the complexity turned out to be smaller than the first draft assumed — though not as small as
+this section first claimed.** "A second vendor" meant a second SDK, key, bill and outage surface only
+because we were thinking of going direct. OpenRouter reaches the alternatives under one key and one
+bill, and its `native` PDF engine sends the file to a model that reads PDFs natively rather than
+converting it first.
+
+**"No conversion step" is what the documentation supports. "No fidelity loss" is not, and this plan
+said it anyway** — GPT Sol's third review. OpenRouter is a real adapter, not a wire. Concretely:
+
+- **It is a different API, not the same one behind a different URL.** Anthropic takes
+  `output_config.format` and returns `stop_reason: "end_turn"`; OpenRouter takes
+  `response_format: json_schema` and returns a *normalised* `finish_reason` — `stop`, `length`,
+  `content_filter`, `error` — with the provider's real reason kept separately in
+  `native_finish_reason`. So Gemini's `RECITATION` arrives as an undifferentiated `content_filter`,
+  and **the retry-by-finish-reason logic added above stops working through the proxy unless it reads
+  both fields.** [`src/openrouter-stream.ts:275`](../../src/openrouter-stream.ts) — the streaming
+  code this repo already has — keeps only `finish_reason`. That is a concrete change, not a caveat.
+- **Unsupported parameters can be silently ignored** rather than rejected, so a production request
+  needs `provider.require_parameters: true`, strict local validation of the returned JSON, and the
+  resolved provider and model recorded with the result.
+- **What `src/models.ts` actually proves** is that an OpenRouter key and a model spelling exist here.
+  Not that PDF input, structured output and streaming are integrated through it. They aren't yet.
+
+So the honest statement is: OpenRouter probably makes a second vendor cheap, and the bake-off has to
+demonstrate it rather than assume it — same chunk, same prompt, same schema, direct against proxied,
+comparing structure, page handling, usage *and* finish metadata over several runs. Prices as of 2026-08-26, full table and caveats in
 [research § second round](../research/pdf-parsing-options.md#second-round-2026-08-26):
 
 | Candidate | Price | Why it is in the bake-off |
@@ -184,7 +203,16 @@ within one provider**, so its auto-routing can break a cache hit unless routing 
 is a capability loss. One thing to check before depending on it: whether its `mistral-ocr` engine
 runs OCR 4.1 or the older, Mistral-deprecated 2503 model — the docs don't say.
 
-**Mistral OCR is the receipt for a scan, not the reader of one.** Independent tests report it
+**Mistral OCR is the receipt for a scan, not the reader of one — and the independence it depends on
+is a hypothesis, not a finding.** The honesty numbers below are PP-OCRv6 against general vision
+models; transferring them to *this* pair is a step the research does not take for us. Mistral OCR is
+itself a learned system with language priors, so it can reach for the same plausible wrong word.
+Nor is the plumbing free: OpenRouter returns the parsed content flattened into file annotations with
+**no guaranteed page boundaries**, and the parse happens inside a chat-completion request, so the
+"3p" figure omits the downstream model's own inference cost. Both the independence and the price are
+things the bake-off measures.
+
+With that said: Independent tests report it
 inventing text on low-resolution scans, dropping headers and footers, and misaligning ~17% of
 complex table columns — and OpenRouter's wrapper strips the block labels, bounding boxes and
 confidence scores that Mistral's own endpoint returns, which are the only things that would let us
@@ -215,7 +243,12 @@ Both are cheap to defend against and belong in v1:
   `content_filter` (OpenAI), `RECITATION` (Gemini) or a refusal (Anthropic). Verbatim transcription
   is exactly the shape that trips it. Defence: **route retries by finish reason**, not blindly — a
   truncated call and a filtered call need different responses, and a filtered call retried
-  identically will be filtered identically. Bump temperature slightly on retry.
+  identically will be filtered identically. LlamaIndex bumps temperature on retry; **we don't** —
+  that is right for a parser and wrong for verbatim transcription, where a higher temperature buys
+  its way past the filter by drifting off the page. Retry once with a smaller chunk, then fail
+  visibly. And note that through OpenRouter the filtered case arrives as a normalised
+  `content_filter` unless `native_finish_reason` is read too
+  ([which model, and which vendor](#which-model-and-which-vendor)).
 
 Both produce a short page, so the per-page check catches them — but the check reports "the model
 lost content", which is the wrong diagnosis and sends the next person looking in the wrong place.
@@ -266,8 +299,34 @@ ink is damaged, an OCR engine tends to produce visible rubbish — so where they
 signal, in a way that two vision models would not be.
 
 So a scan can have a baseline after all: **the OCR pass manufactures the text layer the file
-doesn't have**, and the existing per-page check runs against it unchanged. No new machinery, a
-different source for the same comparison.
+doesn't have.** An earlier draft of this paragraph said the existing per-page check then "runs
+against it unchanged". It doesn't — OpenRouter's parser returns flattened annotations with no
+guaranteed page boundaries, so the witness may need reconstructing into pages before any per-page
+comparison is possible. That is work, and it is work the spike has to prove.
+
+**And whatever it produces is "machine cross-checked", never "verified".** Two systems agreeing is
+evidence; only a person reading the page is verification. The reader's wording has to keep that
+distinction, because "verified" is precisely the word a reader would rely on.
+
+**How to compare, if it earns its place** — the failure here is a threshold set by feel:
+
+- Normalise both sides identically first: NFKC, ligatures, soft hyphens, line-end hyphenation,
+  whitespace, equivalent quotes and dashes. Remove furniture from both, identified independently.
+- Align words in order, tolerating paragraph split/merge and cross-page sentences; keep *separate*
+  structural checks for order and paragraph coverage rather than folding them into one number.
+- Require exact agreement on numbers, citations, URLs and symbols.
+- Report the unmatched spans, not just a score.
+
+Sol's calibration hypothesis, to be replaced by measurement: a clean, straight, high-resolution scan
+should disagree on roughly 1–3% of normalised words, and Fowler several times that. Start at *under
+2% and no unmatched body span over five words and no protected-token difference* = cross-checked;
+2–5% = visibly uncertain; over 5% = unverified.
+
+The two ways this check dies: it fires on every page because furniture, page boundaries and
+hyphenation were not normalised the same way on both sides; or it never fires usefully because the
+threshold was widened to accommodate the historical scan, or because comparison stayed
+bag-of-words — both readers agreeing on the common words while differing on the damaged, important
+one.
 
 **Greg's call: put it in the bake-off and decide from what it catches.** The first hour already runs
 the hard pages through several readers; adding Mistral OCR on the scan pages costs pennies and no
@@ -352,10 +411,20 @@ Measured on this laptop already: pass 0 on Nagel is 392 ms.
 The homepage add box gains a file drop beside the URL field.
 
 ```
-  browser ──POST multipart──► /api/upload  ──► data/<slug>/raw.pdf ──► job { slug, steps: [extract, blocks, toc, arc] }
-                                                  (today: local disk)
-                                                  (Supabase: Storage bucket, then raw_bytes on the revision)
+  DEPLOYED (the real path — the function never sees the bytes)
+
+    browser ──signed upload──► Supabase Storage ──► object key
+       │                                              │
+       └────────── "it's there" ──► /api/upload ──────┘ ──► job { slug, steps: [...] }
+
+  LOCAL DEV ONLY (throwaway, and knowingly not a deployable path)
+
+    browser ──POST multipart──► /api/upload ──► raw store (filesystem) ──► job { … }
 ```
+
+Draw it in that order deliberately. A local multipart route works perfectly on this laptop and is
+**not** a Vercel path at all — 4.5 MB stops it, and the ball-lightning eval PDF is 11.5 MB. Building
+the local one first is fine; mistaking it for the shipping one is not.
 
 Five things that are not obvious:
 
@@ -368,10 +437,13 @@ Five things that are not obvious:
 - **One source of truth for the bytes.** The first draft said both "Storage object" and
   `raw_bytes`. Pick one: either the revision row stores an object key plus checksum, or the worker
   copies the object into `bytea` and deletes it. Not both.
-- **Local versus Supabase.** A local multipart route into `data/<slug>/raw.pdf` is mostly
-  throwaway once Storage exists. Either put a **raw-document store** seam in now (`put`, `get`,
-  `sha256`, filesystem today, Storage later — the same shape as `src/api.ts` for reads) or
-  postpone upload until [postgres-migration.md](postgres-migration.md) lands. A question for Greg.
+- **Local versus Supabase — decided (2026-08-26).** Put the **raw-document store** seam in now
+  (`put`, `get`, `sha256`; filesystem today, Storage later — the same shape as `src/api.ts` for
+  reads) and build upload against it. The filesystem backing is knowingly throwaway; the seam and
+  the file picker are not. But the seam is *not* the whole job, and the plan should stop implying it
+  is: [`src/pipeline.ts`](../../src/pipeline.ts) is URL-shaped throughout — `StepContext`, `Job`,
+  `StepName`, `requireUrl`, the outputs and the freshness rules all assume a source URL. Upload
+  touches every one of those.
 - **A job without a URL.** `requireUrl` in [`src/pipeline.ts`](../../src/pipeline.ts) refuses to
   run without one, and neither `Job` nor `StepContext` has a source type today. An uploaded
   article gets `source: { kind: "upload", filename, sha256 }`, no `fetch` step in its list, and
@@ -413,17 +485,21 @@ What's deterministic gets a test; the model call doesn't ([testing.md](../projec
   collisions; password-protected, corrupt, oversized and 101-page PDFs refused by name.
 - Concurrency ceiling across chunks and across jobs, cancellation mid-chunk, retry accounting.
 - Re-read id survival: an untouched paragraph keeps its id, a corrected one doesn't, and a
-  non-Latin paragraph — whichever way Greg's answer goes — behaves as the plan says.
+  non-Latin paragraph keeps its id too — that last one is [step 0](#build-order)'s test, not this
+  plan's, and it should be green before the PDF scorer is written against `splitIntoBlocks`.
 - `scripts/pdf-eval.ts`, **run by hand**: the five real PDFs below through the whole thing, writing
   `output/<slug>.html` beside the pass-0 text so a person can compare — the original version's
   fidelity harness, at the size we need
   ([original-version/extraction.md § Quality measurement](../project/original-version/extraction.md#quality-measurement-real-and-worth-rebuilding)).
 
-Evaluation set, one of each kind Greg named: Nagel (scan with OCR layer, cover page, footers),
-BERT (two-column, figures, tables, references), a single-column essay, a scan with **no** text
-layer (pass 0 says 0 words; pass 1 still works because the model sees the image; the check must
-skip the ratio and say so in `meta.note`), and a slide deck (expected to come out as a list of
-placeholders and short paragraphs — v1 should degrade legibly, not crash).
+Hand-run set, wider than the scored eval and not gold-checked: Nagel (scan with an OCR layer, cover
+page, footers), BERT (two-column, figures, tables, references), a single-column essay, a scan with
+**no** text layer, and a slide deck (expected to come out as a list of placeholders and short
+paragraphs — v1 should degrade legibly, not crash). An earlier draft of this paragraph said the
+no-text scan "must skip the ratio and say so in `meta.note`" — that is the position
+[the scan section](#a-scan-with-no-text-layer) replaced, and it is wrong twice over: a note in a
+JSON file is not a thing the reader sees, and skipping the check is what the visible-unverified
+status exists to avoid.
 
 ### The eval: `evals/pdf/`
 
@@ -749,15 +825,57 @@ the section above:
 | GPT as reviewer, given the text layer | that | one or two pages at a time with page PNGs and a JSON discrepancy schema we validate; `run-codex.ts` needs an image path first |
 | Scorer built alongside the extractor | that | the eval is built first and shown to fail — synthetic set, gold-vs-gold, corrupted gold, naive text-layer baseline |
 
+### GPT Sol's third review (2026-08-26)
+
+Run after the day's answers and research were folded in, and aimed at what had changed. Verdict:
+*"revise before building the production path. Approve the stage-3 fix and a strengthened bake-off
+now. The main unresolved risk is the scan 'witness': it is useful evidence, but the plan currently
+promotes it to verification too quickly."*
+
+| It found | The plan said | It now says |
+|---|---|---|
+| The independence of the two scan readers is assumed, not shown — the honesty numbers are PP-OCRv6 vs general VLMs, transferred to a different pair | "they fail differently, so disagreement is a signal" | a hypothesis the bake-off measures; Mistral is itself a learned system with language priors |
+| OpenRouter's OCR output is flattened annotations with **no guaranteed page boundaries**, and the parse runs inside a chat completion | "the existing per-page check runs against it unchanged", "3p" | the witness may need reconstructing into pages, and the price omits downstream inference |
+| "No fidelity loss" is stronger than the docs support | asserted | OpenRouter is an adapter: different structured-output parameter, and a *normalised* `finish_reason` with the real one in `native_finish_reason` |
+| [`src/openrouter-stream.ts:275`](../../src/openrouter-stream.ts) keeps only `finish_reason` | — | the new retry-by-finish-reason logic silently stops working through the proxy; that field has to be kept |
+| Unsupported parameters may be ignored rather than rejected | — | `provider.require_parameters: true`, validate the JSON locally, record the resolved provider |
+| Four pages judged once by eye can reject a loser, not choose a winner | the bake-off as drafted | add the easy eval PDF, production settings, deliberate page choice, blind judging, an error ledger, best-two-run-twice, and a written tie-break rule |
+| The bake-off had two scans and no document representing the release gate | — | the easy eval PDF is in it |
+| Step 0 blocks integration, not the spike | "before any of this" | run the bake-off in parallel; what matters is that the scorer isn't written against a broken `splitIntoBlocks` |
+| "The fix cannot orphan existing ids" is stronger than the evidence | postmortem's claim | "no migration loss was measured on the current three articles" — NFKC creates new equivalence classes and the ambiguity rule re-mints by design |
+| Seven internal contradictions left by a day of edits | — | fixed: the upload diagram, the store seam as "a question", build step 7, the tests' non-Latin caveat, the old `meta.note` evaluation-set line, and what `src/models.ts` proves |
+| Upload is not one module | "put the seam in" | `StepContext`, `Job`, `StepName`, `requireUrl`, outputs and freshness are all URL-shaped |
+
+Things it wants tested that the plan had not named: mid-stream errors and a missing `[DONE]`; usage
+arriving in a final empty-choice event; whether cancelling a repetition loop leaves invalid partial
+JSON; provider failover changing results or price; **data-retention routing for uploaded private
+documents**; and whether a filtered retry at higher temperature is still verbatim.
+
+**Its questions, with the answers it recommends** — folded into the list above rather than left here,
+except where they are genuinely open:
+
+1. *Should OCR agreement make a scan "verified"?* No — "machine cross-checked". **Adopted.**
+2. *If the vendors tie, what wins?* Direct Anthropic Haiku. **Adopted as the tie-break rule.**
+3. *May OpenRouter fail over between providers automatically?* Not during the bake-off or the eval —
+   pin the provider, disable fallback, decide production separately. **Adopted.**
+4. *Should a recitation retry change temperature?* Not automatically: retry one smaller chunk, then
+   fail visibly. **Adopted** — it replaces the "bump temperature" mitigation borrowed from
+   LlamaIndex, which is right for a parser and wrong for verbatim transcription.
+5. *Does "build upload now" mean local-only until Supabase?* Yes, and the plan must not pretend a
+   filesystem-backed upload is deployable. **Adopted** — the diagram now leads with the real path.
+
 ## Build order
 
 The riskiest assumption is "Haiku doesn't summarise in small chunks, at this cost and speed" — so
 it is tested in the first hour, not the last, and against the alternative.
 
-0. **Before any of this: fix stage 3's paragraph matcher**
-   ([postmortem](../postmortems/block-id-matching-non-latin.md)). Two to three hours, unrelated to
-   PDFs, and it silently drops paragraphs today. Doing it first also means the PDF eval's block
-   comparison is built against a matcher that works.
+0. **Fix stage 3's paragraph matcher** ([postmortem](../postmortems/block-id-matching-non-latin.md)).
+   Two to three hours, unrelated to PDFs, and it silently drops paragraphs today.
+
+   **It blocks integration, not the spike** (GPT Sol's correction, and it's right): the bake-off is
+   a scratch script that never touches stage 3, so run them in parallel or the bake-off first. What
+   must not happen is the PDF scorer being written against `splitIntoBlocks` while `splitIntoBlocks`
+   is still wrong — the eval would then be calibrated against the bug.
 1. **First hour: the bake-off.** Four pages each of three hard documents — a scan with running
    headers and hyphenation, a two-column paper, and a scan with no text layer at all — through:
 
@@ -776,6 +894,27 @@ it is tested in the first hour, not the last, and against the alternative.
    a running header left in, an invented word where the ink is damaged. And note which reader
    *admits* it can't read something — that is the property we most want and the hardest to get.
 
+   **Four pages judged once by eye can reject a loser but cannot choose a winner** (GPT Sol). Five
+   cheap additions that fix that without turning the first hour into a week:
+
+   - **Include the easy eval PDF.** As first drafted the bake-off was two scans and a paper, with
+     nothing representing the document the release gate is actually set on.
+   - **Use production settings** — real page chunks, the real schema, streaming, the real routing —
+     not a simplified prompt. Half of what we are measuring is the plumbing.
+   - **Choose the pages deliberately**: first page, a dense middle page, a page whose paragraph
+     continues across the break, and the worst layout in the document.
+   - **Blind the reader names while judging**, and keep a small error ledger — missing spans,
+     invented spans, order errors, structural errors, protected-token errors, admissions of
+     uncertainty — rather than an impression.
+   - **Run every candidate once, then the best two twice more**, which exposes non-determinism
+     without making gold for twelve pages.
+
+   **The tie-break rule, decided in advance so it can't be argued backwards:** too close to call if
+   both have zero paragraph or order failures and differ by less than about one adjudicated
+   transcription error per page. On a tie, **keep direct Anthropic Haiku** — it holds the incumbent
+   SDK and the native finish semantics the retry logic reads. Switching needs a clear fidelity win,
+   or a consistent 20% cost or latency win with no new failure class.
+
 2. From those outputs, set the fidelity, latency and cost thresholds; choose the model, the vendor
    and the schema; decide whether the OCR cross-check for scans earns its place. Write the numbers
    into this plan, including the ones that argued against the choice.
@@ -784,7 +923,9 @@ it is tested in the first hour, not the last, and against the alternative.
 4. Build chunking, rendering, stitching and the chunk cache.
 5. Define the raw manifest, the `Meta` fields and pipeline freshness.
 6. Integrate URL PDFs through `STEPS`. Make the easy eval PDF pass tier 1.
-7. Upload last — after the storage seam, or after Supabase, per Greg's answer.
+7. Upload last — the store seam, then the file picker, then the pipeline's URL assumptions. Not
+   "after Supabase": Greg's answer was to build it now, behind the seam, knowing the local half is
+   throwaway.
 
 ## Greg's answers (2026-08-26)
 
