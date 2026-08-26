@@ -82,6 +82,97 @@ crumb, title and gist; the group's open delay is 150ms, enough that crossing the
 and short enough not to feel like a wait, and once one is open its neighbours are instant. In
 outline mode there is no panel: the table is itself the list.
 
+### How much a landmark says
+
+> The "Argument" column is great, but it's not using the full vertical height to display as much
+> information as it could be. Perhaps it could always show them all, with the current one centred?
+> Perhaps also with some kind of fisheye effect?
+>
+> — Greg, 2026-08-26
+
+It did already show them all, and the current one was already centred — the thing actually missing
+was **density**. A landmark got one clamped line of sentence in the arc column and, in the parts and
+sections columns, its title and nothing else, however much room the column had. So the arc's five
+parts left most of a twelve-hundred-pixel panel blank: the same complaint the panel was built to
+answer, one level up.
+
+So a landmark's line budget is worked out from **how many entries the level has and how tall the
+panel is** — [`landmarkLines`](../../src/web/context.ts), tested in
+[`tests/context.test.ts`](../../tests/context.test.ts). A level of five gets several lines each, so
+the arc column reads as five sentences with the one you are in set large and unclamped; forty
+sections under six part headings get none and stay the title-only list they already were. In
+between it steps down, and where it lands depends on the window as much as the count. A title
+column shows its gist under its title; the arc column, which has no titles, keeps at least one line
+whatever the budget says, because its sentence is the only content it has and a landmark reading
+`3 / 5` and nothing else is a hole in the list.
+
+Three things about that number are deliberate:
+
+- **It is estimated, and that is a trade rather than a free win.** GPT's review made the case for
+  measuring properly — the candidates are a ladder of five, so you can render all five off-screen at
+  the real column width, measure once and take the largest that fits, with no measure-resize-measure
+  loop anywhere. That would be right about wrapped titles, wrapped headings and the open entry's
+  real height, which the estimate is only approximately right about. It is not built because it is
+  five hidden renders per panel per resize to choose between three lines and four. What *is* built
+  so the estimate can be checked rather than eyeballed: the panel carries its chosen budget as
+  `data-ctx-lines`.
+- **Everything in it leans towards undershooting.** A landmark's title is charged as two lines,
+  because in an eleven-rem column most section titles wrap. Blank space is recoverable and visible;
+  entries pushed off the foot of a panel that cannot be scrolled are neither.
+- **Nothing that moves while the reader scrolls goes into it** — and there are two such things,
+  which look like one problem and are not. `window.innerHeight` is the first: on a phone or an iPad
+  the browser's own toolbars collapse *as you scroll* and it grows seventy to a hundred pixels while
+  they do, enough to cross a line threshold on a six-item level, on the device this app is most for
+  ([touch.md](touch.md)). GPT's review found that one. So the budget reads `100svh`, the viewport
+  with the chrome showing, which does not move when the chrome does; no JS property reports it, so
+  [`useColumnContext.ts`](../../src/web/useColumnContext.ts) reads it off a zero-width probe styled
+  `height: 100svh`, and where `svh` is unsupported the declaration is dropped, the probe is 0 tall,
+  and the fallback to `innerHeight` is the one branch rather than a plausible wrong number.
+
+  The second is **the panel's own top edge**, and it is the one that actually bit. `ColumnRect.top`
+  is the header row's bottom, and that row is sticky under the masthead, so it settles over the
+  first hundred and fifty pixels of scroll — as its own doc comment says. The version of this that
+  took `stableH - rect.top` fixed the phone and reopened the identical hole on every desktop:
+  measured in a browser at four lines and three, two hundred pixels down the article, against two
+  and one at the top of it. A reader arriving at an article and scrolling once watched every
+  landmark in two columns rewrap. The allowance for the bars is therefore a **constant**, which is
+  approximate on purpose: being fifty pixels wrong costs at most a line, and being right only after
+  the reader has scrolled costs the rewrap the whole calculation exists to avoid.
+
+  Worth keeping as the shape of the mistake rather than as a footnote: the same error wearing
+  different clothes survived the review that found its twin, because fixing one *looked* like fixing
+  the class. It was caught by measuring in a browser
+  ([browser-testing.md](browser-testing.md)) — the number was there to be read only because the
+  panel had been made to carry `data-ctx-lines` in the first place.
+
+**The fisheye stays a matter of size, not of length.** Every landmark on a level gets the same
+number of lines; what varies with distance is the type — the four tiers' sizes, now carried into the
+gist as well as the title. Giving `near` more lines than `far` would have meant several entries
+rewrapping at every section boundary, on top of the font-size step that already reflows there, and
+the panel re-places itself with `scroll-behavior: smooth`, so each rewrap would glide the whole
+list. Fable's review put it as the hairline mistake at larger scale, and the tiers already carry
+distance in size and opacity.
+
+Two things that review caught before they reached a screen. **Opacity does not stack well past one
+line**: an already-read entry is at 0.6 and a far one at 0.6 again, so a far, read landmark sits at
+0.36 — survivable as a single line, a grey smear as four, over exactly the half of the panel the
+reader has been through. The tiers' step down reaches the gist by size and colour and no third
+multiplier. And the `§` mark for the author's own heading, which the open entry had and landmarks
+silently dropped, is now on both.
+
+**And state the cost, because it is the other half of the same change.** Taller landmarks mean fewer
+of them fit between the focus line and the panel's edges. On a short level that costs nothing — four
+four-line entries still sit comfortably above the line — but on a level whose budget lands at one or
+two lines, the list visible around the reader is shorter than it was. That is the trade: the entries
+you can see say more, and there are fewer of them. The tooltip still reads any landmark in full, and
+the ends of a long level were already past the fade.
+
+One thing the arithmetic gets deliberately wrong. `-webkit-line-clamp` is not the mechanism the old
+single line used: `nowrap` with `text-overflow` ellipsized inline at the box's right edge, while
+line-clamp wraps first and ellipsizes the last permitted *line*, so even at one line it can cut at
+an earlier word. `text-overflow` no longer applies at all, so `overflow-wrap: anywhere` is there to
+stop an unbreakable string — a URL in a gist — being hard-clipped with nothing to say so.
+
 **The part heading sticks.** A heading marks each run of sections, and it pins to the top of its
 panel while its own run scrolls under it, so the column always names the part you are in — not only
 while you are in that part's first section. That is why the panel *scrolls* its list rather than
@@ -283,3 +374,6 @@ read. If none does, the answer is the spine's tooltips, which already exist.
 - [tooltips.md](tooltips.md) — the landmark cards are the spine's tooltip, with a shorter delay
 - [browser-testing.md](browser-testing.md) — a hidden tab runs no rAF, so the live half cannot be
   checked there; the sampler was verified by shimming `requestAnimationFrame` and dispatching `scroll`
+- [summaries.md § Following the reader](summaries.md#scrolling-without-taking-the-scroll-off-the-reader)
+  — the same problem in a panel the reader *can* scroll, which is why that one nudges rather than
+  centres, and why it needs no scroll listener to tell its own scrolling from theirs

@@ -55,9 +55,28 @@ export interface LiveContext {
    * them holding the old 40% line until the next section boundary.
    */
   viewportH: number;
+  /**
+   * `100svh` — the **small** viewport, the one with the browser's own toolbars
+   * showing. On a phone or an iPad those toolbars collapse *as you scroll*, so
+   * `innerHeight` grows by seventy to a hundred pixels partway down a page
+   * while nothing about the layout has changed. That is fine for centring,
+   * which should follow the real viewport, and wrong for anything that decides
+   * how much text to draw: a budget read off `innerHeight` would step up
+   * mid-scroll and rewrap every landmark under the reader's eye. `svh` is
+   * defined not to move when the chrome does, which is exactly the property
+   * wanted — see `landmarkLines` in context.ts, and GPT Sol's review,
+   * 2026-08-26, which found this.
+   */
+  stableH: number;
 }
 
-const EMPTY: LiveContext = { focusRow: 0, rects: new Map(), viewportH: 0, clipLeft: 0 };
+const EMPTY: LiveContext = {
+  focusRow: 0,
+  rects: new Map(),
+  viewportH: 0,
+  stableH: 0,
+  clipLeft: 0,
+};
 
 interface Options {
   sections: Section[];
@@ -90,6 +109,17 @@ export function useColumnContext({
     );
     const pin = document.querySelector<HTMLElement>("thead th.pin-left");
     const table = document.querySelector<HTMLElement>("table.zoom");
+
+    // A zero-width probe whose only job is to report `100svh`, which no JS
+    // property exposes. Where `svh` is not supported the declaration is
+    // dropped, the empty div is 0 tall, and the read below falls back to
+    // `innerHeight` — the failure states itself rather than returning a
+    // plausible wrong number.
+    const probe = document.createElement("div");
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.cssText =
+      "position:fixed;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none";
+    document.body.appendChild(probe);
     let last: LiveContext = EMPTY;
     let frame = 0;
 
@@ -108,11 +138,13 @@ export function useColumnContext({
         rects.set(d, { left: r.left, width: r.width, top: r.bottom });
       }
       const viewportH = window.innerHeight;
+      const stableH = probe.clientHeight || viewportH;
       const clipLeft = pin?.getBoundingClientRect().right ?? 0;
 
       const same =
         focusRow === last.focusRow &&
         viewportH === last.viewportH &&
+        stableH === last.stableH &&
         clipLeft === last.clipLeft &&
         rects.size === last.rects.size &&
         [...rects].every(([d, r]) => {
@@ -120,7 +152,7 @@ export function useColumnContext({
           return o && o.left === r.left && o.width === r.width && o.top === r.top;
         });
       if (same) return;
-      last = { focusRow, rects, viewportH, clipLeft };
+      last = { focusRow, rects, viewportH, stableH, clipLeft };
       setLive(last);
     };
     const schedule = () => {
@@ -141,6 +173,7 @@ export function useColumnContext({
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       ro?.disconnect();
+      probe.remove();
       if (frame) cancelAnimationFrame(frame);
     };
   }, [sections, depths, enabled, layoutKey]);

@@ -32,7 +32,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { BlockId, NodeId } from "../types.js";
-import type { ContextEntry, ContextItem } from "./context.js";
+import { landmarkLines, type ContextEntry, type ContextItem } from "./context.js";
 import { ContextList } from "./ContextList.js";
 import { TooltipGroup } from "./Tooltip.js";
 import { FOCUS_LINE, type ColumnRect } from "./useColumnContext.js";
@@ -87,6 +87,12 @@ interface Props {
   rect: ColumnRect | null;
   /** Re-centre on a height-only resize, which changes no entry and no rect. */
   viewportH: number;
+  /**
+   * `100svh` — see LiveContext.stableH. The line budget is worked out from
+   * this and not from `viewportH`, because a phone's toolbars collapse as you
+   * scroll and `innerHeight` grows while they do.
+   */
+  stableH: number;
   /** The pinned column's right edge — see LiveContext.clipLeft. */
   clipLeft: number;
   /** This column is the pinned one, so nothing clips it and it paints on top. */
@@ -104,6 +110,7 @@ export function ContextPanel({
   entries,
   rect,
   viewportH,
+  stableH,
   clipLeft,
   pinned,
   activeChain,
@@ -122,6 +129,16 @@ export function ContextPanel({
   // and a viewport of lead above them, most of the panel would have stayed
   // blank however far we asked it to scroll.
   const hasCurrent = entries.some((e) => e.kind === "item" && e.tier === "cur");
+
+  // How many lines of gist a landmark can afford here — see context.ts § how
+  // much fits. `rect.top`, the panel's own top edge, is the obvious thing to
+  // subtract and is the one input that must NOT be used: it is the sticky
+  // header's bottom, which settles over the first hundred and fifty pixels of
+  // scroll, so the budget would step up while the reader scrolled and every
+  // landmark would rewrap. Measured doing exactly that before this line was
+  // written the other way round. `stableH` is `100svh` and the bars above the
+  // panel are a constant inside `landmarkLines`.
+  const lines = landmarkLines(entries, stableH);
 
   // Scroll the list so the current item's middle sits on the focus line.
   // Measured, not computed from entry counts: tiers have different heights and
@@ -207,6 +224,13 @@ export function ContextPanel({
       }
       onMouseLeave={() => onHoverNode(null)}
       {...{ [NAV_DEPTH_ATTR]: navDepth }}
+      /* The line budget, on the DOM, so a browser check can assert what this
+         column decided instead of counting lines in a screenshot. An estimate
+         that overfills fails silently — the extra entries simply slide under
+         the bottom fade — and the check you would naturally run, looking at
+         the one column you were thinking about, agrees with it
+         (docs/reusable/silent-success.md). */
+      data-ctx-lines={lines}
       /* A vertical swipe here steps one item instead of scrolling — swipe.ts.
          The panel is the surface a finger actually lands on in reading mode:
          it covers the column, so the cells underneath are never touched. It
@@ -221,6 +245,7 @@ export function ContextPanel({
             onHoverNode={onHoverNode}
             activeChain={activeChain}
             crumbFor={crumbFor}
+            lines={lines}
           />
         </TooltipGroup>
       </div>

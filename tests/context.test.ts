@@ -12,7 +12,13 @@ import { describe, expect, it } from "vitest";
 import type { Block, Tree, TreeNode } from "../src/types.js";
 import { buildGeometry, type Cell } from "../src/web/tree.js";
 import { itemStarts } from "../src/web/keynav.js";
-import { currentIndex, itemsFromCells, levelList } from "../src/web/context.js";
+import {
+  currentIndex,
+  itemsFromCells,
+  landmarkLines,
+  levelList,
+  type ContextEntry,
+} from "../src/web/context.js";
 
 const blocks: Block[] = JSON.parse(readFileSync("example/blocks.json", "utf8")).blocks;
 const tree: Tree = JSON.parse(readFileSync("example/tree.json", "utf8"));
@@ -139,5 +145,103 @@ describe("continuation cells", () => {
     const list = levelList(it2, cur, { P } as never);
     expect(list.some((e) => e.tier === "cur")).toBe(false);
     expect(list.some((e) => e.before)).toBe(false);
+  });
+});
+
+describe("landmarkLines", () => {
+  /**
+   * The budget reads four things off the list — how many items, how many
+   * headings, whether one of them is current, and whether the level is the arc
+   * — so a list of the right shape is enough; no tree, no fixture.
+   */
+  const list = (
+    items: number,
+    { groups = 0, current = true, arc = false } = {},
+  ): ContextEntry[] =>
+    [
+      ...Array.from({ length: groups }, () => ({ kind: "group", tier: "far", item: {} })),
+      ...Array.from({ length: items }, (_, i) => ({
+        kind: "item",
+        tier: current && i === 0 ? "cur" : "far",
+        item: arc ? { step: { index: i + 1, total: items } } : {},
+      })),
+    ] as ContextEntry[];
+
+  /**
+   * These assertions are deliberately about *shape* rather than about the
+   * numbers the constants happen to produce. A test that says
+   * `landmarkLines(five, 1200) === 4` re-asserts the arithmetic it is checking
+   * and would stay green if every constant were visually wrong — the
+   * shared-assumption failure in docs/reusable/silent-success.md, which GPT
+   * Sol's review of this change pointed out the first version of these tests
+   * was an example of. What can honestly be checked here is that the budget
+   * moves the right way, stays inside its bounds, and never returns something
+   * a renderer cannot use. Whether four lines actually *fit* is a question
+   * about wrapped text at a real width, and is answered in a browser against
+   * `data-ctx-lines` — see docs/project/browser-testing.md.
+   */
+  const CASES = [4, 5, 6, 8, 12, 20, 40];
+  const HEIGHTS = [400, 700, 900, 1100, 1300, 1600, 2400];
+
+  it("is a whole number of lines, never negative, never past the cap", () => {
+    for (const h of HEIGHTS)
+      for (const n of CASES)
+        for (const arc of [false, true]) {
+          const v = landmarkLines(list(n, { groups: Math.ceil(n / 6), arc }), h);
+          expect(Number.isInteger(v)).toBe(true);
+          expect(v).toBeGreaterThanOrEqual(0);
+          expect(v).toBeLessThanOrEqual(4);
+        }
+  });
+
+  it("never grows as the level gets longer", () => {
+    for (const h of HEIGHTS) {
+      const seen = CASES.map((n) => landmarkLines(list(n), h));
+      for (const [i, v] of seen.entries()) if (i) expect(v).toBeLessThanOrEqual(seen[i - 1]!);
+    }
+  });
+
+  it("never shrinks as the panel gets taller", () => {
+    for (const n of CASES) {
+      const seen = HEIGHTS.map((h) => landmarkLines(list(n), h));
+      for (const [i, v] of seen.entries()) if (i) expect(v).toBeGreaterThanOrEqual(seen[i - 1]!);
+    }
+  });
+
+  it("gives a short level lines and a long one none", () => {
+    // The two ends of the ladder, which is the whole point of it: the arc's
+    // five parts were the complaint, and forty sections were already fine.
+    expect(landmarkLines(list(5), 1200)).toBeGreaterThan(0);
+    expect(landmarkLines(list(40, { groups: 6 }), 1200)).toBe(0);
+  });
+
+  it("charges headings for the room they take", () => {
+    // Same items, more part headings between them: never more generous.
+    expect(landmarkLines(list(12, { groups: 6 }), 1200)).toBeLessThanOrEqual(
+      landmarkLines(list(12), 1200),
+    );
+  });
+
+  it("counts every item as a landmark when none of them is current", () => {
+    // A level with no item under the focus line (context.ts § currentIndex)
+    // has no open entry and one more landmark. It correctly comes out MORE
+    // generous, not less — an open entry costs several landmarks' worth of
+    // room and there isn't one — and that is the point: such a panel is pinned
+    // at scrollTop 0 and cannot be scrolled, so what the budget gets wrong at
+    // the foot is gone with nothing to see. What has to hold is that the extra
+    // landmark is charged, which shows up as the same downward step with the
+    // level's length.
+    for (const h of HEIGHTS) {
+      const seen = CASES.map((n) => landmarkLines(list(n, { current: false }), h));
+      for (const [i, v] of seen.entries()) if (i) expect(v).toBeLessThanOrEqual(seen[i - 1]!);
+      expect(landmarkLines(list(9, { current: false }), h)).toBeLessThanOrEqual(
+        landmarkLines(list(8, { current: false }), h),
+      );
+    }
+  });
+
+  it("is 0 when nothing on the level is a landmark", () => {
+    expect(landmarkLines(list(1), 1200)).toBe(0);
+    expect(landmarkLines([], 1200)).toBe(0);
   });
 });

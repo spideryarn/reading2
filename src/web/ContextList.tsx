@@ -51,6 +51,14 @@ interface Props {
   activeChain: Set<NodeId>;
   /** Title of the level's parent for a crumb, e.g. the part a section is in. */
   crumbFor(item: ContextItem): string | null;
+  /**
+   * How many lines of gist a landmark gets, from `landmarkLines` in
+   * context.ts — 0 when the level is too long to afford any, which is the
+   * title-only landmark this column had before. The arc column takes at least
+   * one whatever the budget says: its sentence is the only content it has, and
+   * a landmark of nothing but `3 / 5` is a hole in the list.
+   */
+  lines: number;
 }
 
 /**
@@ -83,7 +91,7 @@ function EntryCard({ item, crumb }: { item: ContextItem; crumb: string | null })
   );
 }
 
-export function ContextList({ entries, onJump, onHoverNode, activeChain, crumbFor }: Props) {
+export function ContextList({ entries, onJump, onHoverNode, activeChain, crumbFor, lines }: Props) {
   return (
     // The list, not the panel, ends a hover: the panel is mostly padding — the
     // room the first and last items need to reach the focus line — and a
@@ -156,6 +164,10 @@ export function ContextList({ entries, onJump, onHoverNode, activeChain, crumbFo
             </li>
           );
         }
+        // The arc column has no titles — its sentence *is* the landmark — so
+        // it never drops to none. A title column shows its gist only when the
+        // level is short enough to pay for it.
+        const clamp = e.item.step ? Math.max(1, lines) : lines;
         return (
           <Tooltip
             key={node.id}
@@ -166,10 +178,21 @@ export function ContextList({ entries, onJump, onHoverNode, activeChain, crumbFo
             <li className={className} onClick={jump} onMouseEnter={enter}>
               <div className={titleClass}>
                 {heading}
-                {/* The arc column has no titles: its sentence, clamped to a
-                    line, is the landmark. */}
-                {e.item.step && <span className="ctx-clamp">{body}</span>}
+                {/* The same label the open entry gives it. A bare section sign
+                    is not self-explanatory to anyone, and to a screen reader it
+                    is a stray symbol — GPT Sol's review, 2026-08-26. */}
+                {node.sourceHeading && (
+                  <span className="own" title="the author's own heading">§</span>
+                )}
               </div>
+              {clamp > 0 && body && (
+                <span
+                  className="ctx-clamp"
+                  style={{ "--ctx-lines": clamp } as React.CSSProperties}
+                >
+                  {body}
+                </span>
+              )}
             </li>
           </Tooltip>
         );
