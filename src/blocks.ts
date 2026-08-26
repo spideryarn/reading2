@@ -291,6 +291,8 @@ export interface SplitResult {
     reused: number;
     carried: number;
     minted: number;
+    /** Internal links repointed from the author's id to ours. retargetAnchors. */
+    retargeted: number;
     gistable: number;
   };
 }
@@ -442,6 +444,243 @@ function carryOverIds(
   return out;
 }
 
+/**
+ * Where the author's own anchor names are parked while the sanitiser runs.
+ *
+ * Stage 3 has to know an element's *old* name to repoint the links that use it,
+ * and there is exactly one window in which to read it: after the sanitiser has
+ * decided which elements survive, and before ids are handed out. Those are two
+ * different documents — `sanitizeInPlace` replaces `innerHTML`, so every node
+ * is re-parsed and nothing can be remembered across it by identity.
+ *
+ * Hence an attribute, which is text and does survive. DOMPurify keeps `data-*`
+ * by default, and keeps these in the very cases the `id` itself is deleted
+ * (see stampAuthorAnchors).
+ *
+ * **Two of them, because `id` and `<a name>` are not equal claims.** The HTML
+ * spec resolves a fragment by looking at every `id` in the document *first* and
+ * only then at named anchors, so a `name` that matches an `id` elsewhere never
+ * wins — and one attribute could not tell the two apart. GPT Sol's review,
+ * 2026-08-26.
+ *
+ * **They are scrubbed twice**, and both matter. Every copy the document arrived
+ * carrying is removed before we write ours, so an article cannot forge one; and
+ * every one of ours is removed the moment it has been read, which is before a
+ * single block's html is serialised. Nothing with these attributes on it has
+ * ever reached `blocks.json`, and tests/blocks.test.ts pins that.
+ */
+const WAS_ID = "data-spya-was-id";
+const WAS_NAME = "data-spya-was-name";
+const STAMPS = `[${WAS_ID}], [${WAS_NAME}]`;
+
+/**
+ * Take every stamp off, **including the ones `querySelectorAll` cannot see.**
+ *
+ * A DOM query does not enter `<template>`: its children live in a separate
+ * document fragment, so `doc.querySelectorAll("[data-…]")` walks straight past
+ * them while `outerHTML` serialises them in full. A stamp inside a template
+ * therefore survived both scrubs and reached `blocks.json` — inert, but the
+ * invariant above said it could not happen, and an invariant that is false is
+ * worse than one nobody claimed. Found by GPT Sol's review, 2026-08-26.
+ */
+function scrubStamps(root: ParentNode): void {
+  for (const el of Array.from(root.querySelectorAll(STAMPS))) {
+    el.removeAttribute(WAS_ID);
+    el.removeAttribute(WAS_NAME);
+  }
+  for (const t of Array.from(root.querySelectorAll("template"))) {
+    scrubStamps((t as HTMLTemplateElement).content);
+  }
+}
+
+/**
+ * Record what each element is called *by the article*, before we rename it.
+ *
+ * `id` and `<a name>` both, because a named anchor is what a page written
+ * before ids were universal uses for the same job, and `href="#note"` cannot
+ * tell you which one it is aiming at.
+ *
+ * Runs **before the sanitiser**, which is the whole point. DOMPurify's
+ * `SANITIZE_DOM` deletes any `id` or `name` whose value happens to name a
+ * property of `document` or of a form element — `target`, `title`, `name`,
+ * `method`, `action`, `links`, `images`, `forms` and a long tail of others. Ids
+ * like that are common enough in real headings, and without this pass they are
+ * gone before stage 3 has ever seen the element, taking every link to them with
+ * them.
+ *
+ * **The name is also written onto the first child**, and that is not
+ * belt-and-braces. The sanitiser deletes elements it does not know while
+ * *keeping their contents* — `<x-section id="methods"><h2>Methods</h2>` loses
+ * the wrapper and keeps the heading — so a name living only on the wrapper dies
+ * with it. Realistic CMS markup, and reproduced by GPT Sol's review,
+ * 2026-08-26. When the wrapper survives, both stamps say the same thing and the
+ * outer one is read first, so the copy costs nothing and changes no answer.
+ *
+ * `<html>` and `<body>` are cleared but never stamped. They sit outside the
+ * subtree the sanitiser rewrites, so an attribute there crosses it untouched —
+ * which is exactly what a forged one would need. Nothing links to `<body>`
+ * anyway; `#top` is a fragment the browser handles itself.
+ */
+function stampAuthorAnchors(doc: Document): void {
+  scrubStamps(doc.body);
+  for (const root of [doc.documentElement, doc.body]) {
+    root?.removeAttribute(WAS_ID);
+    root?.removeAttribute(WAS_NAME);
+  }
+  for (const el of Array.from(doc.body.querySelectorAll("[id], a[name]"))) {
+    const id = el.getAttribute("id");
+    const name = el.tagName === "A" ? el.getAttribute("name") : null;
+    // Ours already: nothing to rename, and nothing to link back to.
+    if (id && !isSpideryarnId(id)) stamp(el, WAS_ID, id);
+    if (name && !isSpideryarnId(name)) stamp(el, WAS_NAME, name);
+  }
+}
+
+/** On the element, and on its first child in case the element is unwrapped. */
+function stamp(el: Element, attr: string, value: string): void {
+  el.setAttribute(attr, value);
+  const heir = el.firstElementChild;
+  if (heir && !heir.hasAttribute(attr)) heir.setAttribute(attr, value);
+}
+
+interface AuthorAnchor {
+  el: Element;
+  was: string;
+  /** `id` beats `name`, always — see WAS_ID. */
+  kind: "id" | "name";
+}
+
+/** Read the stamps back, in document order, and take them all off again. */
+function readAuthorAnchors(doc: Document): AuthorAnchor[] {
+  const out: AuthorAnchor[] = [];
+  for (const el of Array.from(doc.body.querySelectorAll(STAMPS))) {
+    const id = el.getAttribute(WAS_ID);
+    const name = el.getAttribute(WAS_NAME);
+    if (id) out.push({ el, was: id, kind: "id" });
+    if (name) out.push({ el, was: name, kind: "name" });
+  }
+  scrubStamps(doc.body);
+  return out;
+}
+
+/**
+ * Which block a reader would be looking at if they followed a link to this
+ * element — and the order of the four cases is the whole content of it.
+ *
+ *  1. The element **is** a block. Itself.
+ *  2. The element **contains** blocks — `<section id="methods">`, or the nested
+ *     `<ul>` inside an `<li>`. Its first one, because that is where the thing
+ *     being pointed at begins. This has to be tried before case 3: a nested
+ *     list is both inside a block and around one, and the answer the link meant
+ *     is the inner one.
+ *  3. The element is **inside** a block — a footnote span, an emphasised
+ *     phrase. The block containing it, because a block is the finest thing the
+ *     reading view can put under your eye.
+ *  4. The element is **between** blocks — a standalone `<a name="note"></a>`,
+ *     which is what a table's foster-parented anchor also collapses to. The
+ *     next block after it, which is where a browser would have landed.
+ *
+ * Wrappers are the case that most looks like it needs no work and gets it most
+ * wrong: their ids survive stage 3 untouched, so the link looks fine, but a
+ * wrapper is never in anybody's `block.html` and so is not in the rendered page
+ * at all. Cases 2 and 4 both came out of GPT Sol's review, 2026-08-26.
+ *
+ * Undefined when it resolves to nothing — an element after the last block with
+ * nothing inside it — and the link is then left exactly as the author wrote it.
+ *
+ * `order` is built once for the document rather than walked per anchor. The
+ * first version descended each element's subtree with `querySelectorAll("*")`,
+ * which is quadratic on nested markup: Sol measured 1.5s on a synthetic page
+ * with 750 nested ids, against 188ms for the same page without them.
+ */
+function blockFor(
+  el: Element,
+  blockOf: Map<Element, string>,
+  blocksInOrder: Element[],
+  order: Map<Element, number>,
+): string | undefined {
+  const own = blockOf.get(el);
+  if (own !== undefined) return own;
+
+  const at = order.get(el);
+  // Not in the walk at all — nothing sane to say about where it sits.
+  if (at === undefined) return undefined;
+  const next = blocksInOrder.find((b) => (order.get(b) ?? -1) > at);
+
+  // Case 2 before case 3: the first block after this element is a descendant of
+  // it exactly when this element wraps something.
+  if (next && el.contains(next)) return blockOf.get(next);
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const above = blockOf.get(node);
+    if (above !== undefined) return above;
+  }
+  return next ? blockOf.get(next) : undefined;
+}
+
+/**
+ * Point the article's own internal links at our ids.
+ *
+ * A published page links to its own sections — the Anthropic constitution has
+ * five, `<a href="#how-we-think-about-corrigibility">` among them — and the
+ * target is an `id` the author put on a heading. Stage 3 then gives that
+ * heading a spideryarn id and **overwrites the author's**, because a block can
+ * only have one id and everything in this project addresses text by ours
+ * (docs/project/block-ids.md). The link survives the sanitiser intact and now
+ * points at a fragment that exists nowhere in the document, so clicking it puts
+ * the fragment in the address bar and moves nothing.
+ *
+ * Silent in the way this codebase keeps meeting
+ * (docs/reusable/silent-success.md): nothing throws, the link still looks like
+ * a link, and the article reads fine until someone follows one.
+ *
+ * So the id is not really destroyed, it is *renamed*, and this renames the
+ * references with it. Done here rather than in the client because here is the
+ * only place both names are known at once — one stage-3 run later the author's
+ * id is gone from the HTML for good.
+ *
+ * Two things it deliberately does not touch:
+ *
+ *  - **Links that leave this document.** `href` has to start with `#`. A link
+ *    out to `https://example.test/page#section` is a link to somebody else's
+ *    page and must stay one. That also means a page that links to *itself* the
+ *    long way round — `href="https://this.article/#section"` — is not repaired,
+ *    because stage 3 is not told what the article's own address is. No article
+ *    we have ingested does that; see docs/plans/internal-anchor-links.md.
+ *  - **Fragments no element answers to.** A dead link stays dead rather than
+ *    being pointed somewhere plausible.
+ *
+ * And on a re-run there is simply nothing to do: every href already says
+ * `#spya-…`, no stamp is written for an id of ours, and the map comes out
+ * empty. Idempotent, like the rest of the stage.
+ *
+ * The fragment is compared raw *and* percent-decoded, because an id with a
+ * space or a non-ASCII letter in it is written encoded in the href and plain in
+ * the attribute.
+ */
+function retargetAnchors(doc: Document, renamed: Map<string, string>): number {
+  if (renamed.size === 0) return 0;
+  let count = 0;
+  for (const a of Array.from(doc.querySelectorAll("a[href]"))) {
+    const href = a.getAttribute("href");
+    if (!href || href.length < 2 || !href.startsWith("#")) continue;
+    const fragment = href.slice(1);
+    const target = renamed.get(fragment) ?? renamed.get(decodeFragment(fragment));
+    if (target === undefined) continue;
+    a.setAttribute("href", `#${target}`);
+    count++;
+  }
+  return count;
+}
+
+/** `decodeURIComponent` throws on a lone `%`; a malformed fragment is just text. */
+function decodeFragment(fragment: string): string {
+  try {
+    return decodeURIComponent(fragment);
+  } catch {
+    return fragment;
+  }
+}
+
 export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
   const dom = new JSDOM(html);
   const doc = dom.window.document;
@@ -460,7 +699,18 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
    * are staying. Sanitising afterwards would mint ids for elements about to be
    * deleted, and the blocks array would list ids that the HTML no longer has.
    */
+  /* Before the sanitiser, because the sanitiser deletes some of what this is
+     here to read; and read back straight after, because the sanitiser re-parses
+     the document and these are the only nodes that outlive it. See WAS_ID. */
+  stampAuthorAnchors(doc);
   sanitizeInPlace(doc.body);
+  const authored = readAuthorAnchors(doc);
+  /* Document order for every element, once. blockFor needs to ask "what is the
+     next block after this?" and asking it by walking subtrees is quadratic. */
+  const order = new Map<Element, number>();
+  Array.from(doc.body.querySelectorAll("*")).forEach((el, i) => {
+    order.set(el, i);
+  });
 
   const elements = collectElements(doc.body);
 
@@ -524,11 +774,36 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
     found[i]!.el.setAttribute("id", ids[i]!);
   });
 
-  const blocks: Block[] = found.map(({ el, content, text }, index) => {
+  /* After every id is settled and before a single block's html is read: the
+     rewrite has to see the final ids, and the html has to see the rewrite. */
+  const blockOf = new Map<Element, string>();
+  found.forEach(({ el }, i) => {
+    blockOf.set(el, ids[i]!);
+  });
+  const blocksInOrder = found.map(({ el }) => el);
+  const renamed = new Map<string, string>();
+  /* Every `id` in the document, and only then the named anchors — the order the
+     HTML spec resolves a fragment in, so a `name` never beats an `id` that
+     matches it. Within each pass, first in document order wins, which is what a
+     browser does with a document that uses the same id twice (and CMS output
+     does). `authored` is in document order because querySelectorAll is. */
+  for (const kind of ["id", "name"] as const) {
+    for (const anchor of authored) {
+      if (anchor.kind !== kind || renamed.has(anchor.was)) continue;
+      const block = blockFor(anchor.el, blockOf, blocksInOrder, order);
+      if (block !== undefined) renamed.set(anchor.was, block);
+    }
+  }
+  const retargeted = retargetAnchors(doc, renamed);
+
+  const blocks: Block[] = found.map(({ el, text }, index) => {
     const id = ids[index]!;
-    // `ownContent` may have cloned before the id existed; keep the stored html
-    // in step with the document.
-    if (content !== el) content.setAttribute("id", id);
+    /* Recomputed rather than reused. `ownContent` may have cloned this element
+       before it had an id and before its links were repointed, and the stored
+       html has to be the document's, not a snapshot of it part-way through.
+       Patching the id onto the clone (which is what this used to do) fixed the
+       half of that we knew about. */
+    const content = ownContent(el);
 
     const { kind, level, gistable, note } = describeBlock(el, text, proseText);
     return {
@@ -552,6 +827,7 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
       reused,
       carried,
       minted,
+      retargeted,
       gistable: blocks.filter((b) => b.gistable).length,
     },
   };
@@ -677,6 +953,7 @@ async function main() {
   console.log(
     `Ids:       ${stats.reused} reused, ${stats.carried} carried over, ${stats.minted} minted`,
   );
+  console.log(`Links:     ${stats.retargeted} internal links repointed at our ids`);
   console.log(`Gistable:  ${stats.gistable}  (${stats.total - stats.gistable} skipped)`);
   console.log(`\nHTML:      ${path.resolve(input)}`);
   console.log(`Blocks:    ${path.resolve(outJson)}`);

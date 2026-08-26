@@ -175,45 +175,107 @@ Stage 3 does not only *add* an id. Where the author already put one on a paragra
 **overwrites** it — a block can only have one id, and everything here addresses text by ours.
 
 That quietly broke a link the reader can see. A published page often points at its own sections, and
-the Anthropic constitution has five, "see the section on
-[how we think about corrigibility](https://www.anthropic.com/constitution) for more on this" among
-them. Those are `<a href="#how-we-think-about-corrigibility">`, aimed at an `id` the author put on a
-heading. The sanitiser has no reason to touch the link, so it arrived in the reading view intact and
-pointing at a fragment that existed nowhere in the document. Clicking it put the fragment in the
-address bar and moved the page not at all — the shape of failure this project keeps meeting
-([silent-success.md](../reusable/silent-success.md)), since nothing throws and nothing looks wrong
-until somebody follows one.
+the Anthropic constitution has five, "see the section on how we think about corrigibility for more
+on this" among them. Those are `<a href="#how-we-think-about-corrigibility">`, aimed at an `id` the
+author put on a heading. The sanitiser has no reason to touch the link, so it arrived in the reading
+view intact and pointing at a fragment that existed nowhere in the document. Clicking it put the
+fragment in the address bar and moved the page not at all — the shape of failure this project keeps
+meeting ([silent-success.md](../reusable/silent-success.md)), since nothing throws and nothing looks
+wrong until somebody follows one.
 
 The id is not really destroyed, it is **renamed**, so `retargetAnchors` in
-[`src/blocks.ts`](../../src/blocks.ts) renames the references with it: every `href="#author-id"` in
-the document becomes `href="#spya-…"`. It has to happen there, because that is the only moment both
-names are known at once — one stage-3 run later the author's id is gone from the HTML for good.
-`stats.retargeted` counts them, and the pipeline logs it.
+[`src/blocks.ts`](../../src/blocks.ts) renames the references with it: every same-document
+`href="#author-id"` becomes `href="#spya-…"`. It has to happen there, because that is the only
+moment both names are known at once — one stage-3 run later the author's id is gone from the HTML
+for good. `stats.retargeted` counts them, and the pipeline logs the number.
 
-Four things it deliberately leaves alone, and one it cannot reach:
+**Every anchor resolves to a block, because a block is all the reading view draws.** Four cases, and
+the order they are tried in is the whole content of the rule:
 
-- **A link out to the web** that happens to carry a fragment. `#` has to be the first character.
-- **A fragment that was never a block's id** — a footnote span, a `<section>` wrapper. Only block
-  elements are restamped, so those ids are still in the document and those links still resolve.
+1. The anchor names a block. Itself.
+2. The anchor names something that **contains** blocks — `<section id="methods">`, or the nested
+   `<ul>` inside an `<li>`. Its first one, because that is where the thing being pointed at begins.
+   Wrappers are the case that most looks like it needs no work: their ids survive stage 3 untouched,
+   so the link looks healthy in the document — and a wrapper is in nobody's `block.html`, so it is
+   not in the rendered page at all and the link is dead on screen.
+3. The anchor names something **inside** a block — a footnote span, an emphasised phrase. The block
+   containing it, which is the finest thing this view can put under the reader's eye. This has to be
+   tried *after* case 2, because a nested list is both inside a block and around one, and the answer
+   the link meant is the inner one.
+4. The anchor sits **between** blocks — a standalone `<a name="note"></a>`, which is also what a
+   named anchor inside a table collapses to once the parser has foster-parented it out. The next
+   block after it, which is where a browser would have landed.
+
+Cases 2 and 4 both came out of GPT Sol's review, 2026-08-26.
+
+Two ordering rules on top of that. A document that uses the same name twice — invalid, and ordinary
+in CMS output — resolves to the first in document order. And **an `id` always beats an `<a name>`
+that claims the same word**, which is the order the HTML spec resolves a fragment in: every id in
+the document first, named anchors only after.
+
+**The author's name is read before the sanitiser, not after.** DOMPurify's `SANITIZE_DOM` deletes
+any `id` or `name` whose value happens to name a property of `document` or of a form element:
+`target`, `title`, `name`, `method`, `action`, `links`, `images`, `forms` and a long tail. Ids like
+that are common in real headings, and they are gone before stage 3 has ever seen the element. So
+every anchor name is stamped onto its element *before* `sanitizeInPlace` runs, read back
+immediately after, and taken off again — the sanitiser re-parses the document, so an attribute is
+the only thing that can cross it.
+
+Three details of that, each of which was wrong first:
+
+- **The name goes on the element's first child as well.** The sanitiser deletes an element it does
+  not know while keeping the contents, so `<x-section id="methods"><h2>Methods</h2>` loses the
+  wrapper — and a name living only there dies with it. When the wrapper survives, both stamps say
+  the same thing and the outer one is read first, so the copy changes no answer.
+- **The scrub reaches inside `<template>`.** A DOM query does not enter template content: its
+  children are a separate fragment, so `querySelectorAll` walks past them while `outerHTML`
+  serialises them in full. A stamp the *article itself* shipped in there survived both scrubs and
+  reached `blocks.json` — inert, but the invariant said it could not happen, and an invariant that
+  is false is worse than one nobody claimed.
+- **`<html>` and `<body>` are cleared and never stamped.** They sit outside the subtree the
+  sanitiser rewrites, so an attribute there crosses it untouched, which is exactly what a forged one
+  would need. The stamps are also read from inside the body rather than from the document.
+
+Two things it deliberately leaves alone, and one it cannot reach:
+
+- **A link that leaves the document.** `#` has to be the first character, so
+  `https://example.test/page#section` stays a link to somebody else's page.
 - **A fragment nothing answers to.** A dead link stays dead rather than being pointed somewhere
   plausible.
-- **Anything on a re-run**, where every href already says `#spya-…` and there is nothing left to
-  rename. Idempotent, like the rest of the stage — including across a re-extraction, where the
-  author's ids come back and ours are carried over by matching text (above).
-- And the one it cannot: **an id DOMPurify deleted before we ever saw it.** Its `SANITIZE_DOM` drops
-  any `id` naming a property of `document` or of a form element — `target`, `title`, `name`,
-  `method`, `action`, `links`, `images`, `forms`. A link to `#target` therefore stays dead, as it
-  would have in a browser, for want of anything left to rename it to.
+- And the one it cannot: **a page that links to itself the long way round**,
+  `href="https://this.article/#section"` or `/article#section`. Those still point at the overwritten
+  name. Stage 3 is not told the article's own address, and no page we have ingested does this — see
+  [internal-anchor-links.md](../plans/internal-anchor-links.md).
+
+On a re-run there is nothing to do: every href already says `#spya-…`, no stamp is written for an id
+of ours, and the map comes out empty. It survives a re-extraction too, where the author's ids come
+back and ours are carried over by matching text (above).
 
 **The click is then ours, not the browser's.** Left alone, a hash jump puts the target's top edge at
 the top of the viewport — behind two sticky bars — and leaves `?at=` claiming the reader never
 moved. Every other way of moving through this article goes through `scrollToBlock` and records where
 it went, so [`internal-links.ts`](../../src/web/internal-links.ts) resolves the click to a block and
-hands it to the same jump a gist, a spine segment and an arrow key use. A fragment smaller than a
-block resolves to the row containing it, which is the finest thing this view can put under the
-reader's eye; anything it cannot resolve is handed back to the browser untouched. ⌘-click still
-opens a tab, and lands correctly, because an arriving `#spya-…` is rewritten to `?at=` before React
-mounts ([url-state.md](url-state.md)).
+hands it to the same jump a gist, a spine segment and an arrow key use. Anything it cannot resolve
+is handed back to the browser untouched. Three kinds of click are deliberately *not* taken over: a
+modified one, one on a link asking for its own tab (`target`, compared case-insensitively, because
+the keywords are), and one on a link the mouse-up handler has already turned into a question. A
+fourth is *stopped* rather than handed back — a click that ends a text selection inside the link.
+Merely declining to jump there would leave the browser to follow the fragment natively and throw the
+reader away from the passage they had just chosen. ⌘-click lands correctly because an arriving `#spya-…` is rewritten to `?at=` before
+React mounts, **overriding any `?at=` that came with it** — a link opened in a new tab carries both,
+one saying where you were and one saying where you asked to go ([url-state.md](url-state.md)).
+
+### A gap that predates all of this
+
+An article that ships an `id` in **our** format — `<h2 id="spya-k3m9qt">` — is believed. Stage 3
+treats it as an id it minted on a previous run and reuses it, which means a page can name a block id
+belonging to somebody else's paragraph and take every comment, search hit and ToC row anchored to
+it. Nothing about that is hard to do once you know an id — and ids are printed beside every
+paragraph and pasted into links, so **knowing one is not a barrier**. What keeps it narrow today is
+that articles are fetched once from addresses a reader chose. It stops being narrow the moment an
+article can be refreshed from a source that has changed since, which is a thing we will want. Raised
+by GPT Sol's review, 2026-08-26; written down here because the fix is not obvious and nobody should
+discover this by accident.
 
 ## Showing an id
 

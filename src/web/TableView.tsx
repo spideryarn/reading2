@@ -28,6 +28,7 @@ import {
 } from "./annotate.js";
 import { CATEGORICAL_SLOTS } from "./hit-colours.js";
 import { readSelection } from "./selection.js";
+import { internalTarget } from "./internal-links.js";
 import type { Section } from "./position.js";
 import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
 import { ContextPanel } from "./ContextPanel.js";
@@ -329,11 +330,52 @@ export function TableView({
           )}
         </tr>
       </thead>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the click being handled
+          is always on a real <a> inside the prose, and pressing Enter on a
+          focused link fires a click that bubbles to exactly this handler. A
+          keydown listener here would run the jump twice. */}
       <tbody
         ref={bodyRef}
         onMouseLeave={() => setHoveredRow(null)}
-        /* Delegated, not per-block: the prose is injected HTML, so the <mark>
-           elements are not React's and cannot carry React handlers. */
+        /* Both handlers below are delegated, not per-block: the prose is
+           injected HTML, so its <mark> and <a> elements are not React's and
+           cannot carry React handlers. */
+        /* An internal link — the article pointing at one of its own sections.
+
+           Left to the browser, this would jump the target under the sticky bars
+           and leave `?at=` claiming the reader never moved. See
+           internal-links.ts, which also says why the href already reads
+           `#spya-…` by the time it gets here. */
+        onClick={(e) => {
+          // A modified click is the reader asking for a new tab or window, and
+          // that works: the href is a real fragment, and main.tsx turns an
+          // arriving `#spya-…` into `?at=` before React mounts. Taking it over
+          // would break the one case where the browser's own answer is right.
+          if (e.defaultPrevented || e.button !== 0) return;
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          const link = (e.target as Element).closest?.("a[href]");
+          if (!link) return;
+          /* A drag that ended inside a link is a selection, and the mouse-up
+             handler below has already turned it into a question. Stopping the
+             click is not optional here: merely declining to jump would leave the
+             browser to follow the fragment natively, which throws the reader
+             away from the passage they just chose. */
+          const selection = window.getSelection();
+          if (selection && !selection.isCollapsed && selection.anchorNode &&
+              link.contains(selection.anchorNode)) {
+            e.preventDefault();
+            return;
+          }
+          /* A link asking for its own tab gets one. `target` is article-supplied
+             and the sanitiser keeps it — and the keywords are ASCII
+             case-insensitive, so `_SELF` is `_self`. */
+          const to = link.getAttribute("target")?.toLowerCase();
+          if (to && to !== "_self") return;
+          const blockId = internalTarget(e.target as Element, document);
+          if (!blockId) return; // not ours to handle — an outbound link, or a dead fragment
+          e.preventDefault();
+          onJump(blockId);
+        }}
         onMouseUp={(e) => {
           // A real selection wins over the mark it happens to end in. Checking
           // the mark first meant that selecting a phrase *inside* an existing
@@ -342,6 +384,12 @@ export function TableView({
           // already asked about is a completely ordinary thing to want.
           const anchor = readSelection(window.getSelection());
           if (anchor) return onSelect(anchor);
+          /* A link inside a commented passage is a link. `annotateHtml` puts
+             the <mark> *inside* the <a>, so without this a click on one would
+             open the comment on mouseup and then jump on click — two answers to
+             one click, in that order. Following the link is the one the reader
+             asked for. */
+          if ((e.target as Element).closest?.("a[href]")) return;
           const mark = (e.target as Element).closest?.("mark.cmt");
           const first = mark?.getAttribute("data-comment")?.split(" ")[0];
           if (first) onOpenComment(first);

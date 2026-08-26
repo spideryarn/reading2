@@ -106,12 +106,24 @@ if (canonicalAdd) history.replaceState(history.state, "", canonicalAdd);
  * to the block on its own, and then our restore would scroll again to offset it
  * under the sticky bars. Old links keep working; they just arrive in the new
  * spelling.
+ *
+ * **The hash beats an `?at=` that came with it**, which it did not until GPT
+ * Sol's review on 2026-08-26. The article's own internal links are `#spya-…`
+ * now (src/web/internal-links.ts), so ⌘-clicking one opens
+ * `?at=<where you were>#<where you asked to go>` — two positions in one
+ * address, and keeping the parameter meant the new tab opened at the paragraph
+ * you had *left*. Nothing about that looks like a bug from the outside; the tab
+ * opens, the article is there, and it is simply in the wrong place.
+ *
+ * The two are not equal claims. `?at=` is where the reader happened to be, put
+ * there by scrolling; a fragment is somewhere they asked to go. Reading it as
+ * the more recent of the two is right whichever way the link was made.
  */
 const legacyAnchor = decodeURIComponent(location.hash.slice(1));
 if (isSpideryarnId(legacyAnchor)) {
   const url = new URL(location.href);
   url.hash = "";
-  if (!url.searchParams.has("at")) url.searchParams.set("at", legacyAnchor);
+  url.searchParams.set("at", legacyAnchor);
   history.replaceState(history.state, "", url);
 }
 
