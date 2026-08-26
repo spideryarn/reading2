@@ -47,30 +47,74 @@
  * `blockId` and a `quote` against — this module is never given it, and
  * returns whatever `JSON.parse` produces.
  *
- * THE SAFETY PROPERTY THIS DEPENDS ON: `push` is allowed to miss a hit, or
- * emit nothing at all — the worst that costs is a late hit, never a wrong
- * one. **Two separate things have to hold for that, and the second is the one
- * that nearly got away.**
+ * THE SAFETY PROPERTY THIS DEPENDS ON, STATED EXACTLY — because it has now
+ * been wrong three times and the unqualified version of it must not stand:
+ *
+ * **The stored `done` result is never wrong.** A *preview* — a hit shown
+ * mid-stream, before `done` — can be wrong, and there is exactly one known
+ * way to make that happen: a reply with **duplicate top-level `hits` keys**,
+ * `{"hits":[A],"hits":[B]}`. JSON allows a key to repeat; `JSON.parse` (what
+ * the final, authoritative pass uses) silently keeps the LAST occurrence, so
+ * the true answer is `B`. This module locks onto the FIRST occurrence of a
+ * depth-1 key spelled `hits` — see "One" below — so without the fix just
+ * below, it would stream `A` as a preview while `done` went on to report `B`.
+ * That is not a late hit or a missed one, it is a **wrong** one on screen.
+ *
+ * There is no way to correct this by chasing the *later* array instead: by
+ * the time the second `"hits"` key arrives, any hits from `A` are already on
+ * the reader's screen, and there is no taking them back.
+ *
+ * So it is handled in two places, and both are needed.
+ *
+ * **Here:** on detecting a SECOND depth-1 `"hits"` key, `push` gives up rather
+ * than compounds the error. `hitsArrayOpen` is never set `true` again, and the
+ * `duplicateKey` gate stops even `A`'s own tail, so nothing further is emitted
+ * from either array.
+ *
+ * **And in the caller:** `duplicateHitsKey()` reports the condition, and
+ * search.ts throws rather than storing the final parse. That is the half that
+ * makes the sentence at the top of this section true. An earlier draft of this
+ * comment said the final `done` was "unaffected and correct" — it would have
+ * been *correct about `B`*, and saved as the answer to a search whose reader
+ * had just been shown `A`. Refusing the whole reply is the only outcome that
+ * leaves nothing wrong stored, which is the guarantee this design actually
+ * makes. See "a second `hits` key stops every future emission, not just the
+ * second array's" in tests/search-hits-stream.test.ts, and the duplicate-key
+ * refusal in tests/search-stream.test.ts.
+ *
+ * Getting this far — "never wrong, except for that one named case, which is
+ * itself contained rather than compounded" — took getting two earlier,
+ * narrower claims wrong first, and both are worth keeping on the record
+ * rather than erasing once the third fix landed on top of them:
  *
  * *One:* the array a completed object is attributed to is pinned to the
- * literal `hits` key rather than to position (above). The version that keyed
- * off "the first `[` one level inside the outer object" got this wrong — a
- * sibling array arriving *first*, `{"notes":[...],"hits":[...]}`, made `push`
- * emit an object that was never inside `hits` at all.
+ * literal `hits` key rather than to position. The version that keyed off "the
+ * first `[` one level inside the outer object" got this wrong — a sibling
+ * array arriving *first*, `{"notes":[...],"hits":[...]}`, made `push` emit an
+ * object that was never inside `hits` at all.
  *
- * *Two:* `hitsArrayOpen` tracks whether we are still inside that array, and
- * not merely at the same depth as it. Pinning the key alone is **necessary
- * and not sufficient**, which is what the first attempt at the fix assumed:
+ * *Two:* `hitsArrayOpen` tracks whether we are still inside THAT array, and
+ * not merely at the same depth as it. Pinning the key alone is necessary and
+ * not sufficient, which is what the first attempt at fixing "One" assumed:
  * `hitsArrayDepth` is a depth *number*, so a sibling array arriving *after*
  * `hits` closes — `{"hits":[...],"notes":[...]}` — reaches the same number,
  * and its objects were still emitted. Caught by the new test written for the
  * first half of the fix, which is the only reason it did not ship.
  *
- * Either failure produces a **wrong** hit rather than a late one, and ruling
- * that shape out is the whole of what makes a brace counter an acceptable
- * stand-in for a real JSON parser here. A comment claiming this property is
- * not the property: if you change how an array is identified, the claim above
- * is what you are changing. `text()` returns every character fed to it,
+ * A comment claiming this property is not the property: if you change how an
+ * array is identified, or how a duplicate key is handled, the claim above is
+ * what you are changing, and it needs a new test before it needs new prose.
+ *
+ * **A related near-miss that is NOT a bug, on the record so nobody
+ * re-discovers it as one:** a `"hits"` key spelled with a JSON escape that
+ * decodes to the same string — `"hits"` — is not recognised by
+ * `lastDepth1String`, which compares the RAW characters between the quotes,
+ * unescaped. That array streams nothing at all, while the final `JSON.parse`
+ * (which does decode escapes) finds the hits inside it just fine. That is a
+ * hit arriving late — via `done` rather than as a preview — which the safety
+ * property already allows; it was considered and is deliberately not chased.
+ *
+ * Beyond all of the above: `text()` returns every character fed to it,
  * unmodified and in order, so the caller can still run the whole response
  * through `parseHits` + `validateHits` once the stream ends, exactly as it
  * does today; that final pass is the actual source of truth, and this module
@@ -84,6 +128,13 @@ export function hitExtractor(): {
   push(chunk: string): unknown[];
   /** Everything fed so far, so the caller can still run the strict whole-object parse at the end. */
   text(): string;
+  /**
+   * Did the reply carry more than one top-level `hits` key?
+   *
+   * If so the caller must refuse the whole reply rather than store the final
+   * parse, because a preview has already been shown from a different array.
+   */
+  duplicateHitsKey(): boolean;
 } {
   let buf = "";
 
@@ -125,6 +176,13 @@ export function hitExtractor(): {
   // Absolute index into `buf` of the `{` that opened the hit currently being
   // scanned, or -1 when we are not inside a depth-1 hit.
   let hitStart = -1;
+
+  /* A second top-level `hits` key. JSON has no rule against one and
+     `JSON.parse` silently keeps the LAST — so the preview and the stored result
+     would be reading different arrays, and the preview has already been shown.
+     Once this is set, nothing more is emitted, and `duplicateHitsKey()` tells
+     the caller to refuse the whole reply. See the docstring. */
+  let duplicateKey = false;
 
   return {
     push(chunk: string): unknown[] {
@@ -171,6 +229,15 @@ export function hitExtractor(): {
           // it.
           if (
             ch === "[" &&
+            hitsArrayDepth !== -1 &&
+            stack.length === 1 &&
+            lastDepth1String === "hits"
+          ) {
+            // A second one. Stop emitting; the caller refuses the reply.
+            duplicateKey = true;
+          }
+          if (
+            ch === "[" &&
             hitsArrayDepth === -1 &&
             stack.length === 1 &&
             stack[0] === "{" &&
@@ -196,7 +263,7 @@ export function hitExtractor(): {
             const raw = buf.slice(hitStart, i + 1);
             hitStart = -1;
             try {
-              out.push(JSON.parse(raw));
+              if (!duplicateKey) out.push(JSON.parse(raw));
             } catch {
               // Not actually a complete, well-formed object. `parseHits`'s
               // final pass over the whole text is the safety net — a hit
@@ -227,6 +294,9 @@ export function hitExtractor(): {
     },
     text(): string {
       return buf;
+    },
+    duplicateHitsKey(): boolean {
+      return duplicateKey;
     },
   };
 }

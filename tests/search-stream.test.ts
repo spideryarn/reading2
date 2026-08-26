@@ -427,3 +427,55 @@ describe("the alarm that says the preview and the stored result disagreed", () =
     expect(ids(["spya-k3m9qt", 7])).toEqual(["spya-k3m9qt:7"]);
   });
 });
+
+describe("a reply with two `hits` keys is refused outright", () => {
+  /* JSON allows a key to repeat and `JSON.parse` silently keeps the LAST, while
+     the extractor previews from the first. So the reader would be shown one set
+     of passages and a different set would be saved — the one case where a
+     preview really can be wrong rather than merely late.
+
+     It cannot be fixed by preferring the later array: the preview is on screen
+     before the second key exists. Refusing the whole reply is the only outcome
+     that leaves nothing wrong *stored*, which is the guarantee the design makes.
+     Found by GPT Sol, 2026-08-26, after two earlier fixes to the same claim. */
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** `JSON.stringify` cannot make a duplicate key — it has to be written out. */
+  const twoKeys =
+    `{"hits":[${JSON.stringify(HIT1)}],"hits":[${JSON.stringify(HIT2)}]}`;
+
+  it("throws rather than storing the second array", async () => {
+    fetchMock.mockResolvedValue(
+      sse(
+        frame({
+          model: "anthropic/claude-sonnet-4.5",
+          choices: [{ delta: { content: twoKeys } }],
+        }) +
+          frame({ choices: [{ finish_reason: "stop", delta: {} }] }) +
+          "data: [DONE]\n\n",
+      ),
+    );
+    await expect(findPassages(req())).rejects.toThrow(/\[ai-unreadable\]/);
+  });
+
+  it("proves the hazard is real: the two arrays genuinely differ", () => {
+    /* Without this the test above could pass for the wrong reason — a typo in
+       `twoKeys` making it merely unparseable. `JSON.parse` must succeed here,
+       and must disagree with what the preview would have shown. */
+    const parsed = JSON.parse(twoKeys) as { hits: { quote: string }[] };
+    expect(parsed.hits[0]?.quote).toBe(HIT2.quote);
+    expect(parsed.hits[0]?.quote).not.toBe(HIT1.quote);
+  });
+
+  it("leaves an ordinary reply alone", async () => {
+    fetchMock.mockResolvedValue(reply(null));
+    const result = await findPassages(req());
+    expect(result.hits).toHaveLength(2);
+  });
+});

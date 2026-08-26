@@ -380,30 +380,38 @@ export function validateHits(
  * is also the most likely real failure here, because the answer's size grows
  * with the number of hits and nothing else.
  *
- * **Detected by balancing brackets from the opening `{` to the end of the
- * text, not by `lastIndexOf("}")`.** That was the first version, and it had a
- * bug that only showed up once streaming made "cut off after one complete
+ * **Detected by walking forward from the opening `{` until IT balances to
+ * zero, not by `lastIndexOf("}")` and not by checking whether the WHOLE
+ * remainder balances.** Both of those were tried, in that order, and each had
+ * a bug of its own:
+ *
+ * `lastIndexOf("}")` broke once streaming made "cut off after one complete
  * hit" a real case rather than a hypothetical one: once one hit closes, ITS
  * `}` is the last one anywhere in the text, so a genuinely truncated answer —
  * `{"hits":[{...one whole hit...},{"blockId":"spy` — read as a *complete*
  * object with trailing junk, fell into `JSON.parse` and failed there, and was
  * reported as `[ai-unreadable]` ("could not be read at all") rather than
  * `[ai-overflowed]` ("ask for something narrower") — sending the reader to
- * blame the provider for a limit this app itself set. `isBalanced` below
- * walks the whole remainder counting `{`/`[` opens against `}`/`]` closes
- * (ignoring both inside quoted strings, the same way `hitExtractor` does),
- * and a truncated answer is caught as soon as it does not return to zero,
- * whether or not a hit happened to close first. See
+ * blame the provider for a limit this app itself set. See
  * tests/search.test.ts § "says cut off, not malformed, once a complete hit
  * has already streamed" for the case this fixes.
  *
- * The other two outcomes — no object at all, and an object that is there but
- * malformed — read identically to a reader who did not write this code, so
- * both throw `PROVIDER_UNREADABLE` (docs/project/copy.md: every reader-facing
- * sentence lives in src/messages.ts). The distinction between them is still
- * real and still worth a log reader having, so it is not thrown away — it
- * rides on the Error's `cause`, and `findPassagesStream` logs it before
- * rethrowing. See the `catch` around this function's call site.
+ * The fix for that — balance the whole remainder of the text — broke the
+ * trailing-prose leniency this very docstring promises two paragraphs up: a
+ * perfectly complete `{"hits":[]}` followed by a chatty sign-off containing a
+ * stray `{` ("Let me know if I can help with anything else! {") made the
+ * *remainder* fail to balance, even though the object itself was whole, and
+ * reported `[ai-overflowed]` for an answer that was actually fine.
+ *
+ * `objectEnd` below is the version that survives both cases: it scans forward
+ * from the opening `{` and returns the index where THAT bracket's own nesting
+ * first returns to zero — the object's own matching `}` — ignoring everything
+ * before `from` and everything after that point, trailing prose included.
+ * Braces and brackets inside a quoted string don't count, the same way
+ * `hitExtractor` in src/search-hits-stream.ts ignores them, for the same
+ * reason — a literal `{` in a quoted example must not be counted as nesting.
+ * If the text runs out before nesting returns to zero, the object never
+ * closed — that is the cut-off case.
  */
 export function parseHits(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -411,10 +419,11 @@ export function parseHits(text: string): unknown {
   if (from === -1) {
     throw new Error(PROVIDER_UNREADABLE.message, { cause: "no-object" });
   }
-  if (!isBalanced(trimmed.slice(from))) {
+  const end = objectEnd(trimmed.slice(from));
+  if (end === -1) {
     throw new Error(ANSWER_OVERFLOWED.message, { cause: "cut-off" });
   }
-  const to = trimmed.lastIndexOf("}");
+  const to = from + end;
   try {
     return JSON.parse(trimmed.slice(from, to + 1));
   } catch {
@@ -423,23 +432,26 @@ export function parseHits(text: string): unknown {
 }
 
 /**
- * Does every `{`/`[` in `text` have a matching close by the end of it?
+ * Where the object starting at index 0 of `text` closes — the index of its
+ * own matching `}` — or -1 if `text` runs out before it does.
  *
  * Not a JSON validator — it does not check bracket TYPES match (`{` closed by
- * `]` still counts as balanced) or that the result is otherwise well-formed;
- * `JSON.parse` right after this is what actually validates the shape, and
- * catches that case as "malformed" rather than "cut off". This only answers
- * the narrower question `parseHits` needs: did the text stop partway through
- * a structure, or did every brace and bracket that opened get closed. Braces
- * and brackets inside a quoted string are ignored, the same way
- * `hitExtractor` in src/search-hits-stream.ts ignores them, for the same
- * reason — a literal `{` in a quoted example must not be counted as nesting.
+ * `]` still counts as the nesting returning to zero) or that the result is
+ * otherwise well-formed; `JSON.parse` right after this is what actually
+ * validates the shape, and catches that case as "malformed" rather than "cut
+ * off". This only answers the narrower question `parseHits` needs: does the
+ * FIRST structure in `text` close before the text runs out, and if so,
+ * exactly where — stopping there rather than continuing to look at whatever
+ * comes after is what keeps trailing prose from being mistaken for more of
+ * the object. See the docstring above for the two ways getting this wrong
+ * broke a real case.
  */
-function isBalanced(text: string): boolean {
+function objectEnd(text: string): number {
   let depth = 0;
   let inString = false;
   let escaped = false;
-  for (const ch of text) {
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
@@ -450,10 +462,14 @@ function isBalanced(text: string): boolean {
       inString = true;
       continue;
     }
-    if (ch === "{" || ch === "[") depth++;
-    else if (ch === "}" || ch === "]") depth--;
+    if (ch === "{" || ch === "[") {
+      depth++;
+    } else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) return i;
+    }
   }
-  return depth === 0;
+  return -1;
 }
 
 /**
@@ -593,6 +609,14 @@ export async function* findPassagesStream({
     });
   } catch (err) {
     clearTimeout(stallTimer);
+    if (stoppedByReader(err, signal, deadline, stall.signal)) {
+      // The reader left before the model replied at all — a disconnect, not
+      // a provider failure. Nothing to log as an error and nothing to try to
+      // parse; see the fuller version of this reasoning where `stopped` is
+      // declared, below.
+      line.info({ model, ms: since(started) }, `search was abandoned before ${model} replied`);
+      throw err;
+    }
     line.error(
       {
         ...errorFields(err),
@@ -634,6 +658,22 @@ export async function* findPassagesStream({
   let finishReason: string | null = null;
   let usage: Usage | undefined;
   const end: StreamEnd = { terminated: false };
+  /* Three deliberate outcomes when the reader disconnects, not two by
+     accident and a third nobody designed:
+       - the buffered text already parses and validates cleanly → treated
+         exactly like an ordinary finished search — nothing was lost, so
+         nothing is thrown away. See the cancellation test "cancelling once
+         the text is already complete still produces a `done`".
+       - it does not (empty, incomplete, or malformed) → NOT a provider
+         failure and NOT the reader's mistake: logged at `info`, never
+         `error`, and thrown as `READER_LEFT` rather than one of the
+         ai-coded reader-facing sentences below, which would misreport a
+         disconnect as the model's fault or invite a retry nobody asked for.
+       - the initial fetch never replies before the reader leaves → the same
+         rule, in the catch around it above.
+     `stopped` is what the second and third checks below share; see
+     `stoppedByReader`/`readerAborted` in openrouter-stream.ts, and chat's
+     own `stoppedByReader` in converse.ts, which this follows. */
   let stopped = false;
 
   try {
@@ -724,6 +764,22 @@ export async function* findPassagesStream({
       `stream from ${used} ended without finishing`,
     );
     throw new Error(ENDED_UNFINISHED.message);
+  }
+
+  /* Two top-level `hits` keys. `JSON.parse` keeps the last silently, and the
+     extractor previewed from the first — so storing the final parse would mean
+     the reader was shown one set of passages and a different set was saved.
+     There is no repairing that from here: the preview has already been on
+     screen. Refusing the whole reply is the only answer that leaves nothing
+     wrong *stored*, which is the guarantee the streaming design actually makes.
+     Found by review, 2026-08-26; see src/search-hits-stream.ts § the safety
+     property. */
+  if (extractor.duplicateHitsKey()) {
+    line.error(
+      { model: used, ms: since(started), chars: extractor.text().length },
+      `${used} sent more than one "hits" key`,
+    );
+    throw new Error(PROVIDER_UNREADABLE.message, { cause: "duplicate-hits-key" });
   }
 
   const rawText = extractor.text();

@@ -114,6 +114,20 @@ describe("parseHits", () => {
       '{"hits":[{"blockId":"spya-k3m9qt","quote":"mind is software","confidence":90,"reasoning":"r1"},{"blockId":"spya-p7';
     expect(() => parseHits(partial)).toThrow(/\[ai-overflowed\]/);
   });
+
+  /**
+   * The fix above overcorrected once: checking whether the WHOLE remainder
+   * balances, rather than just the object itself, meant a complete
+   * `{"hits":[]}` followed by chatty trailing prose containing a stray `{`
+   * failed to balance and reported [ai-overflowed] for a perfectly good
+   * answer — breaking the leniency this file's very first tests pin ("reads
+   * one with a preamble in front of it"), just on the trailing side instead
+   * of the leading one.
+   */
+  it("does not mistake a stray brace in trailing prose for an unclosed object", () => {
+    const withSignOff = '{"hits":[]}\n\nLet me know if I can help with anything else! {';
+    expect(parseHits(withSignOff)).toEqual({ hits: [] });
+  });
 });
 
 describe("validateHits", () => {
