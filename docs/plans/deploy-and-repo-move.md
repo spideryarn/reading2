@@ -10,7 +10,19 @@ Two jobs that people will want to do together and that are better done apart.
 >
 > — Greg, 2026-08-25
 
-**Nothing here has been implemented. This is the plan.**
+**Job A is now half done — see [deployment.md](../project/deployment.md).** On 2026-08-26 the new
+Vercel project was created, the production API was built, and the app is live behind Vercel's login
+wall on a per-deployment URL. What is *not* done is the database (the Supabase project is still
+empty), the beta gate, and the domain — Greg deferred the domain deliberately: *"using a temporary
+url rather than the proper spideryarn.com domain — that's a later step"* (2026-08-26). Steps 1, 2 and
+8 of [§ The steps](#the-steps) are done; 3, 4, 5, 7 and 9 are not. Job B has not started.
+
+Four things in this plan turned out to be wrong or incomplete once it met the platform, and they are
+worth reading before trusting the rest of it — they are in
+[first-vercel-deploy-silent-failures.md](../postmortems/first-vercel-deploy-silent-failures.md).
+The biggest: step 1 below says "one catch-all Vercel function", and Vercel does not have one.
+
+**The rest of this file is still the plan.**
 [Job A](#job-a-onto-spideryarncom) is the deployment, [job B](#job-b-one-repo-old-code-under-legacy)
 is the repo move. They share nothing except a date and do not block each other — though job B is the
 one with the sequencing trap in it, so read that part before touching either.
@@ -177,15 +189,23 @@ directory.
 
 ### The steps
 
-1. **A production API.** One catch-all Vercel function that adapts Vercel's request/response to the
-   `(IncomingMessage, ServerResponse)` shape [`handleApi`](../../src/routes.ts) already takes, and
-   mounts it unchanged. Every route comes along for free —
-   `library`, `article`, the three comment routes, the six job routes. This is the seam `routes.ts`
-   documents; it should be a small file, and if it is turning into a large one, something has gone
-   wrong.
-2. **`vercel.json`.** Rewrite everything that is not `/api/*` and not an asset to `/index.html`, so
-   `/read/<slug>` survives a reload and a pasted link. Framework preset: Vite. Build: `npm run build`.
-   Output: `dist`.
+1. **A production API.** ✅ **Done**, and the shape of it was right: `handleApi` already takes
+   `(IncomingMessage, ServerResponse)`, Vercel's Node runtime hands you exactly those, and every
+   route came along for free without `routes.ts` being touched. [`src/vercel.ts`](../../src/vercel.ts)
+   is the adapter and it is small, as this bullet asked.
+
+   **But "one catch-all Vercel function" is not a thing Vercel has.** Its filesystem routing treats
+   every bracketed filename as a *single* segment — `[...path]` is a Next.js idiom that does not
+   travel — so `/api/library` arrived and `/api/article/writes` got a platform 404. The catch-all is
+   an explicit rewrite in [`vercel.json`](../../vercel.json) instead. Two further surprises, both in
+   the postmortem: Vercel compiles `api/*.ts` with this repo's TypeScript 7 and *reports success*
+   while shipping a broken function, so the API is precompiled by
+   [vite.api.config.ts](../../vite.api.config.ts); and the runtime has `require(ESM)` off, which
+   nothing local reproduces.
+2. **`vercel.json`.** ✅ **Done**, and this bullet was exactly right — the SPA rewrite worked first
+   time and `/read/<slug>` survives a reload. The build command gained a second half (the API), and
+   the region is pinned to `lhr1` so the function sits next to the database rather than across an
+   ocean from it.
 3. **The queue, honestly.** `POST /api/jobs` returns its 202 receipt and continues the work with
    Vercel's `waitUntil`, which is *exactly* the shape [`src/jobs.ts`](../../src/jobs.ts) already
    has — return a receipt, keep working, let the browser poll. What is genuinely lost is p-queue's
@@ -198,13 +218,20 @@ directory.
    honest downgrade to "it might answer twice under a double-click".
 5. **The beta gate**, before anything is reachable — see [§ The beta gate](#the-beta-gate). This
    belongs *before* the domain move in the order of work, not after it.
+
+   **Not built.** Its job is being done for now by Vercel's own login wall, which costs no code and
+   admits only Greg. That is only adequate because there is no custom domain: Vercel's Pro plan
+   cannot protect a production *domain*, and `<project>.vercel.app` counts as one — which is why
+   there deliberately is no `spideryarn.vercel.app`. **The gate is what makes a stable URL possible**,
+   so it is the next thing here rather than a later one.
 6. **Environment variables** on the new project: `ANTHROPIC_API_KEY` (pipeline — note it is *not*
    in `.env.local`, it comes from Greg's shell, so it is easy to forget) and `OPENROUTER_API_KEY`
    (the explain call), plus whatever Supabase needs.
 7. **Move the two existing articles** into Supabase — Noema and `writes`. Small, but it is the
    difference between launching onto an empty shelf and launching onto a real one.
-8. **Deploy to `.vercel.app` and actually read an article on it** before any domain moves. Do that
-   in a Sonnet subagent per [browser-testing.md](../project/browser-testing.md).
+8. **Deploy to `.vercel.app` and actually read an article on it** before any domain moves. Deployed
+   and checked in the browser; *reading an article* waits on step 7, because there is nothing on the
+   shelf yet.
 9. **Move `spideryarn.com` and `www.spideryarn.com`** to the new project. Keep the old project
    deployed and domainless as the rollback.
 

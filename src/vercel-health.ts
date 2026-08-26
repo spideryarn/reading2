@@ -20,7 +20,15 @@
  *    src/routes.ts is matched against it, and several against the query string
  *    too. If the platform ever rewrites the path, they all 404 at once and the
  *    cause appears in no application log.
- * 4. **Whether `DATABASE_URL` quietly overrode the TLS decision.** `pg`
+ * 4. **Whether a request body survives the platform.** `readBody` in
+ *    src/routes.ts consumes the raw stream with `for await (const chunk of req)`.
+ *    Vercel's request helpers read the stream first and replay it through
+ *    `req.on("data")` — *not* through the async iterator — so with helpers on,
+ *    every POST body arrives empty and every route reports a missing field
+ *    rather than an error. `NODEJS_HELPERS=0` turns the helpers off. GPT Sol
+ *    found this in review, 2026-08-26; a POST to this endpoint is how you check
+ *    it is still true after a platform change. See § POST below.
+ * 5. **Whether `DATABASE_URL` quietly overrode the TLS decision.** `pg`
  *    discards an explicit `ssl` object entirely if the connection string
  *    carries `sslmode`, `sslrootcert`, `sslcert` or `sslkey` — so the CA can be
  *    loaded, reported as verified here, and not used. GPT Sol found this in
@@ -64,7 +72,67 @@ const EXPECTED = [
  */
 const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
 
+/**
+ * `POST /api/health` — did the body get here?
+ *
+ * Deliberately the **same loop** `readBody` uses in src/routes.ts, not a
+ * `req.body` lookup or a `data` listener. A check that reads the body a
+ * different way from the code it is vouching for can pass while the real path
+ * fails, which is the whole failure mode being checked for here.
+ *
+ *     curl -X POST .../api/health -d '{"hello":"world"}'
+ *
+ * `bytes: 0` on a request that had a body means the stream was consumed before
+ * we got it — put `NODEJS_HELPERS=0` back.
+ */
+async function bodyCheck(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  const raw = Buffer.concat(chunks).toString("utf8");
+
+  let parsed = false;
+  try {
+    JSON.parse(raw);
+    parsed = true;
+  } catch {
+    /* Not an error here. This endpoint reports what arrived; whether it was JSON
+       is one of the things being reported. */
+  }
+
+  const declared = Number(req.headers["content-length"] ?? "0");
+  const lost = declared > 0 && chunks.length === 0;
+
+  res.statusCode = lost ? 503 : 200;
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(
+    JSON.stringify(
+      {
+        ok: !lost,
+        bytes: raw.length,
+        contentLength: declared,
+        parsedAsJson: parsed,
+        helpersDisabled: process.env.NODEJS_HELPERS === "0",
+        ...(lost
+          ? {
+              problem:
+                "The request declared a body and the stream yielded nothing. Something read it " +
+                "before this handler did — set NODEJS_HELPERS=0 on the Vercel project.",
+            }
+          : {}),
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 export async function health(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    await bodyCheck(req, res);
+    return;
+  }
+
   const warnings: string[] = [];
 
   const env: Record<string, boolean> = {};
