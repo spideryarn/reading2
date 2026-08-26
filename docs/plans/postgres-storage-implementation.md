@@ -1110,6 +1110,77 @@ after the tree passes the full structural validator and its step stamps match th
 change gives steps 11 and 12 a shared lifecycle, makes retry and cleanup decidable, and restores the
 publication boundary the migration promised.
 
+### What the review of the *built* seam found
+
+Stages 1–4 shipped in `39b9892` and `fa3945c`, then GPT Sol reviewed the code rather than the plan —
+the half that usually gets skipped. **Three criticals. The seam is safe enough as a filesystem queue
+and is *not* yet a safe foundation for the cutover.** Fix these before the Postgres adapter.
+
+**1. `has()` accepts a mixed generation, so the truncation fix is narrower than claimed.** `write()`
+renames each output separately, and `has()` only checks that every current path parses. So if
+generation A is complete and a rerun replaces *one* of generation B's outputs and dies, every path
+exists and parses and the step reports **done** with A and B mixed. Two concurrent runs on one slug
+do the same. **Per-file atomic renames are not atomicity across a step**, and
+[ingest-queue.md](../project/ingest-queue.md) now wrongly implies a kill leaves an output absent.
+
+*The red test to write first:* start from a complete old generation, replace exactly one output with
+a valid new one, expect not-done. Then choose — a per-step manifest of content hashes committed last,
+or (the boring option, and probably right) **force the interrupted step and everything downstream on
+Retry**, and let the Postgres transaction supply real atomicity later.
+
+**2. The filesystem cannot tell `extractedHtml` from `stampedHtml`, though the type says it can.**
+Both map to `output/<slug>.html` and both use the same non-empty-text decoder. So after `extract`
+overwrites the HTML, an old blocks JSON beside the new *unstamped* HTML makes `blocks` report done —
+which is exactly the guarantee `artifacts.ts` claims to give. **And the test only asserts the two
+paths are equal**, so it pins the collision without noticing it is a hole. Give them distinct paths,
+or bind the blocks JSON and the stamped HTML through one generation hash.
+
+**3. `stepIsDone` is not store-independent, so the seam cannot actually be switched.** The `store`
+parameter **defaults** to the filesystem, so a future Postgres caller that forgets it compiles and
+gets a confident filesystem answer — the silent-success shape this project keeps hitting. And even
+when a store *is* passed, `tweets` and `summary` still call their filesystem-only `isDone(ctx)`
+afterwards. Make the store **mandatory now**.
+
+> **And the reason given for leaving stage 4 half-migrated does not hold.** The claim was that
+> `tweets.ts` and `summarise.ts` keep `PROMPT_VERSION` module-private, so a stamp would need a second
+> copy of that string. The review's answer: **each stage exports an `expectedStamp(blocks)` factory
+> and keeps the constant private.** No copy, no drift, no public constant. That closes stage 4
+> properly, and it should be done before the Postgres adapter rather than after.
+
+#### Six more, all real
+
+- **Absent, unreadable, corrupt and oversized are collapsed.** Any `stat` failure becomes a silent
+  `null`, permissions and I/O errors included, and `artifacts.ts` documents that as intended —
+  against this project's own no-swallowing rule. It also lets the metadata page fall through to the
+  `example/` fixture when the real article merely could not be `stat`ed. **Catch only `ENOENT` as
+  absence**; let the rest propagate, and treat parse corruption separately and visibly.
+- **`assertProduced` can report success while the store says not-done.** It still checks path
+  existence only, and the job is marked done straight after — so a malformed, oversized or simply
+  *unchanged old* file passes, as does a forced stage that returns without writing anything. During
+  the transition it should at least take the same store and use its readability rules.
+- **The agreement tests permit the drift they claim to prevent.** Comparing **sets** lets two kinds
+  inside one step swap destinations; the duplicate check runs on the declared side only; and the
+  fixture table records a `from` path the loop never uses, so a round trip writes and reads through
+  the *same possibly-wrong* mapping. Compare ordered arrays, assert uniqueness on both sides, and
+  **prove it goes red by swapping `extract`'s two `PATHS` entries**.
+- **The size ceiling is checked on the wrong side and racily.** `stat` then `readFile` means an
+  atomic replacement in between can slip past it, and `write()` enforces no ceiling at all — yet the
+  pipeline writes decoded text back as UTF-8, which can be *larger* than the bytes `fetch` capped. A
+  step can therefore succeed and be permanently "not done" afterwards. Enforce on write, and read
+  through one file handle so size and bytes describe the same inode. (A streaming JSON parser would
+  be over-engineering; realistic per-kind ceilings are enough.)
+- **`STEP_STORAGE` is still an uncovered third declaration**, hand-maintained, with a `?? []` that
+  turns a missing step into silence. The "one place a path is written down" claim is false while it
+  stands. Make it exhaustive over `StepName` and drop the fallback.
+- **Two "object" decoders accept arrays**, so `{"nodes":[]}` passes. One `!Array.isArray` each.
+
+#### What survived
+
+`sameStamp` really does reject an empty expected stamp. The two `PATHS` anomalies are real and there
+is **no third** resolved-path collision. The metadata page's two halves do agree, because `outputs`
+and the store share one `ctx`. And no ordinary non-racing step is *more* permissive than before — the
+change narrows the check everywhere except the interrupted-rerun case above.
+
 ### What this section corrects in the rest of this document
 
 1. **The seam comes *out* of the stage modules, not into them.** This document recommended landing it
