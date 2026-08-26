@@ -92,12 +92,24 @@ interface Props {
    * pressed.** The prose now carries the whole glossary in every mode — Greg's
    * call, and the reasoning is on `termMarks` in annotate.ts. The pressed one
    * is still distinguishable: it arrives with `open` set, which becomes
-   * `mark.term[data-open]`.
+   * `mark.term[data-term-open]`.
    *
    * Optional, so an article with no glossary and every test that renders this
    * table without one go on working unchanged.
    */
   terms?: readonly TermSelection[] | undefined;
+  /**
+   * The term the reader has pressed in the glossary band, of the many drawn.
+   *
+   * **Its own prop rather than an `open` flag inside `terms`**, so that pressing
+   * one does not invalidate the scan. `terms` is the input to a regex pass over
+   * every block that has a term in it; the pressed id only decides one
+   * attribute on marks that pass has already found. Keeping them apart is the
+   * difference between a press costing a re-annotate and costing a full rescan
+   * — 44–135ms on a long article with a big glossary, measured by a GPT Sol
+   * review, 2026-08-26.
+   */
+  openTerm?: string | null | undefined;
   /**
    * The search results' marks, already resolved and grouped by block, and the
    * strongest match in each block for the bar down its left.
@@ -141,6 +153,7 @@ export function TableView({
   onOpenChat,
   onChatAbout,
   terms,
+  openTerm,
   hitMarks,
   hitStrength,
   hitHues,
@@ -316,6 +329,59 @@ export function TableView({
    * one entry the reader pressed.
    */
   const termMarksByBlock = useMemo(() => termMarks(blocks, terms ?? []), [blocks, terms]);
+
+  /**
+   * The verbatim column's HTML, annotated once per change rather than once per
+   * render.
+   *
+   * **This memo is a fix, not a tidy-up.** `annotateHtml` was called inline in
+   * the JSX below, so it ran for every block on every render of this component
+   * — and this component re-renders on things as cheap as the pointer crossing
+   * from one row to the next (`hoveredRow`). That was survivable while it had a
+   * fast path that mattered: a block with no marks returns its html unparsed,
+   * and before 2026-08-26 the only marked blocks were the handful carrying a
+   * comment or a search hit.
+   *
+   * Underlining every glossary term took that fast path away. Every block
+   * containing any term now parses its own HTML, builds a TreeWalker over it
+   * and re-serialises — on every hover of every row. Memoising here puts the
+   * cost back where it belongs: once when the marks actually change.
+   *
+   * `openComment` and `openChat` are absent from the dependencies because they
+   * are already folded into `marksByBlock`; adding them would recompute twice
+   * for one change. `openTerm` is present precisely because it is *not* folded
+   * into `termMarksByBlock` — see the prop.
+   *
+   * The nearby `Props` docstring on `chats` was already worried about exactly
+   * this ("re-`annotateHtml` every paragraph of the article while one answer
+   * arrives"); this is the line that makes that worry unnecessary.
+   */
+  const proseHtml = useMemo(() => {
+    const byBlock = new Map<BlockId, string>();
+    for (const block of blocks) {
+      /* Both kinds in one call. `annotateHtml` cuts each text node at every
+         mark boundary in one pass, so a comment and a term over the same words
+         produce one <mark> carrying both classes — two nested ones would read
+         as a rendering bug. Concatenating here is what gives it the chance. */
+      const found = termMarksByBlock.get(block.id) ?? [];
+      const marks = [
+        ...(marksByBlock.get(block.id) ?? []),
+        /* The pressed term's `open`, applied here rather than carried through
+           the scan — see the `openTerm` prop. A plain `.map` over marks that
+           have already been found, so a press costs no regex and no reparse of
+           anything except the blocks it actually appears in. */
+        ...(openTerm
+          ? found.map((m) => (m.id === openTerm ? { ...m, open: true } : m))
+          : found),
+        ...(hitMarks?.get(block.id) ?? []),
+      ];
+      /* The unmarked majority never reaches the parser at all. `annotateHtml`
+         has this test too; doing it here as well is what keeps an unmarked
+         block out of the Map's churn as well as out of the parse. */
+      if (marks.length > 0) byBlock.set(block.id, annotateHtml(block.html, marks));
+    }
+    return byBlock;
+  }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
 
   // Whether the end columns need to read as a layer depends on whether the
   // table actually outruns the window — which App knows exactly, because it
@@ -650,18 +716,10 @@ export function TableView({
                 </button>
                 <div
                   className="prose"
-                  dangerouslySetInnerHTML={{
-                    /* Both kinds in one call. `annotateHtml` cuts each text
-                       node at every mark boundary in one pass, so a comment and
-                       a term over the same words produce one <mark> carrying
-                       both classes — two nested ones would read as a rendering
-                       bug. Concatenating here is what gives it the chance. */
-                    __html: annotateHtml(block.html, [
-                      ...(marksByBlock.get(block.id) ?? []),
-                      ...(termMarksByBlock.get(block.id) ?? []),
-                      ...(hitMarks?.get(block.id) ?? []),
-                    ]),
-                  }}
+                  /* Looked up, not computed — see `proseHtml` above. A block
+                     with no marks is absent from the map and renders its own
+                     html untouched. */
+                  dangerouslySetInnerHTML={{ __html: proseHtml.get(block.id) ?? block.html }}
                 />
               </td>
             )}

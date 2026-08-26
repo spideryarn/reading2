@@ -22,7 +22,7 @@
  *
  * See docs/project/glossary.md.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryResponse, Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
@@ -58,6 +58,22 @@ export function useGlossaryTerms(slug: string): {
   setEntries(entries: GlossaryEntry[]): void;
 } {
   const [entries, setEntries] = useState<GlossaryEntry[]>([]);
+  /**
+   * The band has spoken, so our own read is stale news whatever it says.
+   *
+   * Without this the two sources can land in the wrong order: the reader opens
+   * the band and presses "find them" before this hook's opening GET has come
+   * back, the band pushes the finished list, and *then* the GET replies with
+   * the 404 or the old list it was always going to reply with, overwriting it.
+   * The `live` flag below does not cover this — it is about a different slug,
+   * not about a newer answer for the same one. Raised by a GPT Sol review,
+   * 2026-08-26.
+   */
+  const pushed = useRef(false);
+  const push = useCallback((next: GlossaryEntry[]) => {
+    pushed.current = true;
+    setEntries(next);
+  }, []);
 
   useEffect(() => {
     /* Guarded against its own reply. Switching articles starts a second fetch
@@ -66,13 +82,14 @@ export function useGlossaryTerms(slug: string): {
        both lists are real, would look like a glossary that is merely wrong
        rather than one that is about a different page. */
     let live = true;
+    pushed.current = false;
     setEntries([]);
     void (async () => {
       try {
         const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`);
         if (!res.ok) return; // 404 is the ordinary case: no glossary yet.
         const loaded = (await res.json()) as GlossaryResponse;
-        if (live) setEntries(loaded.glossary.entries);
+        if (live && !pushed.current) setEntries(loaded.glossary.entries);
       } catch {
         /* Nothing to say and nobody waiting — see the docstring. */
       }
@@ -82,7 +99,7 @@ export function useGlossaryTerms(slug: string): {
     };
   }, [slug]);
 
-  return { entries, setEntries };
+  return { entries, setEntries: push };
 }
 
 export interface UseGlossary {

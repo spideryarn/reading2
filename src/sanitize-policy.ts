@@ -52,7 +52,12 @@ import type { Config, DOMPurify } from "dompurify";
  * against a policy, and this names the policy. Tying it to the dependency would
  * re-sanitise every article in the library on every patch release, for nothing.
  */
-export const SANITIZER_VERSION = 1;
+export const SANITIZER_VERSION = 2;
+/* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
+   (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
+   policy that has never seen this rule and has to be re-cleaned on next read —
+   which is exactly what the paragraph above says to bump for, and what the
+   first version of that change forgot to do. GPT Sol, 2026-08-27. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -136,8 +141,8 @@ const EMBED_ATTRS: ReadonlyArray<readonly [string, string]> = [
  *   silent request to a third party. Prose gets its looks from our stylesheets
  *   (docs/project/design-css-overview.md), so nothing of value is lost.
  * - **The annotation attributes the client owns.** `annotateHtml` adds
- *   `data-comment` / `data-mark-end` / `data-open` / `data-term` and the `cmt`
- *   and `term` classes, and the reading view treats them as its own. An article
+ *   `data-comment` / `data-mark-end` / `data-term` / `data-chat`, a per-kind
+ *   `data-…-open`, and the `cmt`, `chat` and `term` classes, and the reading view treats them as its own. An article
  *   that ships `<mark class="cmt" data-comment="…">` in its source would draw a
  *   fake comment in someone else's document, and `<mark class="term">` would
  *   underline whatever the publisher chose as though the glossary had found it.
@@ -169,7 +174,19 @@ export const ARTICLE_CONFIG: Config = {
     // origin, which is exactly what the sandbox reasoning below assumes cannot
     // happen.
     "srcdoc",
-    "data-comment", "data-mark-end", "data-open", "data-term",
+    /* The annotation attributes the client owns — see the note above. Every one
+       `annotateHtml` can write has to be here, or an article ships its own and
+       draws a mark nobody made.
+
+       `data-chat` and `data-chat-end` were missing until 2026-08-26: chat marks
+       are clickable, so a forged one was a link in someone else's document to a
+       conversation id of the publisher's choosing. `data-open` was replaced by
+       the four per-kind attributes in the same change, and is kept in this list
+       because forbidding an attribute nothing writes any more costs nothing and
+       un-forbidding one is how a hole reopens. Found by a GPT Sol review. */
+    "data-comment", "data-mark-end", "data-term",
+    "data-chat", "data-chat-end",
+    "data-open", "data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open",
   ],
 };
 
@@ -205,34 +222,150 @@ export const RISKY_ROOT_ATTR = /^(on|style$|srcdoc$|data-(comment|mark-end|open)
 /**
  * The attributes that can carry a URL, across everything this policy allows.
  *
- * `srcset` and `poster` are the two people forget. `data` and `formaction` are
- * on elements this policy does not allow at all today — kept because the cost
- * is a string in an array and the cost of missing one is a hole.
+ * **The first version of this list had five holes, and GPT Sol found all five**
+ * by running them through `sanitizeHtml` rather than by reading the list —
+ * which is the lesson: an allowlist of attributes is only ever as good as the
+ * adversarial cases someone actually tried.
+ *
+ * `background` is a presentational `<table>` attribute from HTML 4 that
+ * browsers still fetch. `srcset` needs its own parsing (below) rather than
+ * membership here. `data` and `formaction` are on elements this policy does not
+ * allow today — kept because the cost is a string and the cost of missing one
+ * is a hole.
  */
-const URL_ATTRS = ["href", "src", "srcset", "poster", "data", "formaction", "xlink:href"];
+const URL_ATTRS = [
+  "href",
+  "src",
+  "poster",
+  "background",
+  "data",
+  "formaction",
+  "xlink:href",
+  "longdesc",
+  "cite",
+  "action",
+];
+
+/**
+ * SVG presentation attributes that take a **functional IRI** — `url(#thing)`,
+ * and equally `url(/api/health)`, which a browser will go and fetch as a paint
+ * server.
+ *
+ * Separate from `URL_ATTRS` because the value is not a URL; it is a value that
+ * may *contain* one, and the ordinary attribute check would look straight past
+ * `fill="url(/api/health)"`. It did.
+ */
+const IRI_ATTRS = [
+  "fill",
+  "stroke",
+  "filter",
+  "mask",
+  "clip-path",
+  "marker-start",
+  "marker-mid",
+  "marker-end",
+];
+
+/** `url( … )`, however it is spaced or quoted. */
+const FUNCTIONAL_IRI = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
+
+/**
+ * The origins that are *us*, for deciding whether a URL points at our own API.
+ *
+ * In a browser this is exact: `location.origin` is the page the article is
+ * being rendered into, which is the only origin that matters. On the server —
+ * where stage 3 runs — there is no such thing, so it takes a configured list
+ * and falls back to the local dev origins.
+ *
+ * **This exists because the first version resolved everything against a
+ * placeholder origin**, which made every absolute URL "foreign" — including
+ * `https://spideryarn-greg-detre.vercel.app/api/library`, our own production
+ * host. It stripped `/api/health` and let the fully-qualified version straight
+ * through. GPT Sol found it; confirmed by running both through `sanitizeHtml`.
+ */
+function ownOrigins(): string[] {
+  /* Read off `globalThis` rather than `process` directly: this module is
+     imported by the browser build too (src/web/sanitize.ts), where `process`
+     does not exist and a bare reference is a ReferenceError at load. */
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  const configured = (env?.SPIDERYARN_ORIGINS ?? "")
+    .split(",")
+    .map((o: string) => o.trim())
+    .filter(Boolean);
+  const here = typeof location === "object" && location?.origin ? [location.origin] : [];
+  return [...here, ...configured, "http://localhost:5273", "http://127.0.0.1:5273"];
+}
+
+/** A placeholder that no real host can collide with, for resolving relative URLs. */
+const RELATIVE_BASE = "https://spideryarn.invalid";
 
 /**
  * Does this URL point at our own API?
  *
- * **Resolved rather than string-matched.** `startsWith("/api/")` misses
- * `/foo/../api/library`, and misses a same-origin absolute URL entirely. A
- * relative URL is resolved against a placeholder origin, which is enough to
- * normalise the path; an absolute URL to somebody else's host resolves to a
- * different origin and is left alone, which is the whole point — this is about
- * *our* API, not about links in general.
+ * Three shapes have to be caught, and the first version caught only one:
+ *
+ *  - **host-relative** — `/api/health`, and `/figures/../api/health`, which is
+ *    why this resolves rather than string-matches;
+ *  - **absolute, our host** — `https://<us>/api/library`;
+ *  - **protocol-relative, our host** — `//<us>/api/library`.
+ *
+ * Somebody else's `/api/` path is left alone, which is the point: this is about
+ * our API, not about the word "api" in a link.
  */
 function isOwnApi(value: string): boolean {
   const trimmed = value.trim();
-  // Protocol-relative — `//host/api/x` — is somebody else's host, not ours.
-  if (trimmed.startsWith("//")) return false;
+  if (trimmed === "") return false;
+
+  /* Protocol-relative inherits the page's scheme, so it is resolved against a
+     scheme we pick and then compared by HOST rather than by full origin. */
+  const protocolRelative = trimmed.startsWith("//");
+
   let url: URL;
   try {
-    url = new URL(trimmed, "https://spideryarn.invalid/");
+    url = new URL(trimmed, RELATIVE_BASE);
   } catch {
     return false;
   }
-  if (url.origin !== "https://spideryarn.invalid") return false;
-  return url.pathname === "/api" || url.pathname.startsWith("/api/");
+
+  const path = url.pathname;
+  if (path !== "/api" && !path.startsWith("/api/")) return false;
+
+  // Host-relative: it resolved against the placeholder, so it is whatever
+  // origin the page is served from — ours by definition.
+  if (url.origin === RELATIVE_BASE) return true;
+
+  const ours = ownOrigins();
+  if (protocolRelative) {
+    return ours.some((o) => {
+      try {
+        return new URL(o).host === url.host;
+      } catch {
+        return false;
+      }
+    });
+  }
+  return ours.includes(url.origin);
+}
+
+/**
+ * `srcset`, minus any candidate pointing at our own API.
+ *
+ * **Parsed candidate by candidate**, because the whole value —
+ * `"/safe.png 1x, /api/health 2x"` — is not a URL, so handing it to `new URL()`
+ * throws and the old code concluded there was nothing to see. That is how a
+ * mixed `srcset` walked through the first version of this rule.
+ *
+ * Returns `null` when nothing is left, so the caller drops the attribute rather
+ * than leaving an empty one.
+ */
+function cleanSrcset(value: string): string | null {
+  const kept = value
+    .split(",")
+    .map((candidate) => candidate.trim())
+    .filter((candidate) => candidate !== "")
+    .filter((candidate) => !isOwnApi(candidate.split(/\s+/)[0] ?? ""));
+  return kept.length ? kept.join(", ") : null;
 }
 
 export function installArticlePolicy(purify: DOMPurify): void {
@@ -277,6 +410,29 @@ export function installArticlePolicy(purify: DOMPurify): void {
     for (const name of URL_ATTRS) {
       const value = el.getAttribute(name);
       if (value !== null && isOwnApi(value)) el.removeAttribute(name);
+    }
+
+    /* `srcset` is a list, so it is cleaned rather than kept-or-dropped: one bad
+       candidate must not cost the reader the other three. */
+    const srcset = el.getAttribute("srcset");
+    if (srcset !== null) {
+      const cleaned = cleanSrcset(srcset);
+      if (cleaned === null) el.removeAttribute("srcset");
+      else if (cleaned !== srcset) el.setAttribute("srcset", cleaned);
+    }
+
+    /* `fill="url(/api/health)"` is a paint server the browser will fetch, and
+       the attribute check above looks straight past it because the value is not
+       a URL. */
+    for (const name of IRI_ATTRS) {
+      const value = el.getAttribute(name);
+      if (value === null || !value.includes("url(")) continue;
+      FUNCTIONAL_IRI.lastIndex = 0;
+      let bad = false;
+      for (const m of value.matchAll(FUNCTIONAL_IRI)) {
+        if (isOwnApi(m[1] ?? "")) bad = true;
+      }
+      if (bad) el.removeAttribute(name);
     }
 
     if (el.tagName !== "IFRAME") return;

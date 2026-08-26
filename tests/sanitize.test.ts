@@ -231,6 +231,29 @@ describe("things the first draft got wrong", () => {
     expect(out).toContain("forged"); // the words are still the author's
   });
 
+  it("does not let an article forge a chat mark, which is clickable", () => {
+    /* `data-chat` and `data-chat-end` were missing from FORBID_ATTR until
+       2026-08-26, so this passed nothing and an article could ship a mark that
+       opens a conversation of the publisher's choosing in someone else's
+       document. The comment above it was already right about why that matters;
+       chat had simply not been added to the list. Found by a GPT Sol review. */
+    const out = sanitizeHtml(
+      `<p><mark class="chat" data-chat="t1" data-chat-end="">forged</mark></p>`,
+    );
+    expect(out).not.toContain("data-chat");
+    expect(out).not.toContain("data-chat-end");
+    expect(out).toContain("forged");
+  });
+
+  it("does not let an article forge any of the four pressed-mark attributes", () => {
+    // One per kind since 2026-08-26 — annotate.ts says why. Each is as
+    // forgeable as `data-open` was, so each has to be forbidden.
+    for (const attr of ["data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open"]) {
+      const out = sanitizeHtml(`<p><mark class="term" ${attr}="">forged</mark></p>`);
+      expect(out, attr).not.toContain(attr);
+    }
+  });
+
   it("keeps a non-reserved class beside the stripped one", () => {
     const out = sanitizeHtml(`<p class="cmt lede">x</p>`);
     expect(out).toContain("lede");

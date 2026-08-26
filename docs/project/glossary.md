@@ -682,6 +682,25 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 
 ## What is still open
 
+- **The hover card has no keyboard route at all**, and that is the one open question here with a
+  real cost attached. The marks are injected HTML, so they are not focusable and cannot take
+  `aria-describedby`; the card is reachable by pointer and by nothing else. Making every run a tab
+  stop is not the answer — a long article has several hundred of them, and tabbing through the
+  article's prose to reach a definition is worse than the gap. A GPT Sol review, 2026-08-26,
+  suggested the two least-bad shapes: **one focusable control per paragraph** ("the terms used here")
+  opening a list, or **one roving tab stop** across a paragraph's occurrences with `focusin` handled
+  by the same delegated listener, Enter to open and Escape to close. Neither is built. What *was*
+  done is honest labelling: the card is `role="dialog"` rather than `role="tooltip"`, because WAI's
+  tooltip pattern says outright that a tooltip does not take focus and should not contain focusable
+  controls, and this one holds a link and a button.
+- **The hover state machine has no test**, and it is the part of this feature most likely to be
+  wrong: it is timers, a delegated listener and two pieces of mutable closure state, and the one real
+  bug in it so far — a pointer that crossed a term and moved on within the open delay cancelled
+  nothing, so the card opened at a word nobody was pointing at — was found by *reading* it, not by
+  running it. Testing it needs a component harness this repo does not have
+  ([testing.md](testing.md) is about pure functions), so adding one is a dependency decision rather
+  than a chore. Until then the marks and the merge are covered by `tests/annotate.test.ts` and the
+  interaction is covered by a person.
 - **Nothing generates a glossary for the fixture.** `example/` has no `glossary.json`, so the panel
   there always offers the button and the button writes into `data/`, which the fixture is not. That
   is consistent with the thread page and equally unsatisfying on both.

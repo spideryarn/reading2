@@ -3,8 +3,12 @@
  *
  * The server uses it to record which blocks a term appears in
  * (src/glossary.ts § `findOccurrences`); the reading view uses it to underline
- * every occurrence of the selected term in the prose beside the panel
- * (src/web/TableView.tsx). Those two must agree, or the panel says a term is in
+ * every occurrence of every term in the prose beside the panel
+ * (src/web/TableView.tsx) — of the *selected* term until 2026-08-26, when the
+ * underline became a standing property of the article rather than something a
+ * press turned on (docs/project/glossary.md).
+ *
+ * Those two must agree, or the panel says a term is in
  * a block and the block shows nothing underlined — a
  * [silent success](docs/reusable/silent-success.md) in its most annoying form,
  * because the feature looks like it is working and is quietly lying about where

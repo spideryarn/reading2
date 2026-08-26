@@ -365,15 +365,37 @@ export function annotateHtml(html: string, marks: Mark[]): string {
         }
         el.setAttribute("style", style.join(";"));
       }
-      // A hit the reader has pressed in the panel gets the same treatment as
-      // the comment whose dialog is open, and for the same reason: after a jump
-      // the panel and the passage need to be visibly the same thing. Since
-      // 2026-08-26 the selected glossary term is in the same sentence: every
-      // term is underlined now, so being *pressed* has to look like something
-      // other than being marked at all. See `open` on TermSelection.
-      if (comments.some((m) => m.open) || hits.some((m) => m.open) || terms.some((m) => m.open)) {
-        el.setAttribute("data-open", "");
-      }
+      /* The one the reader has pressed — the comment whose dialog is open, the
+         search hit they clicked in the panel, the conversation on screen, the
+         term selected in the glossary band. All four mean the same thing and
+         want the same treatment: after a jump, the panel and the passage have
+         to be visibly the same thing.
+
+         **One attribute per kind, and that is a bug fix.** It was a single
+         `data-open` until 2026-08-26, which was fine while only one kind of
+         mark was ever numerous — but a merged mark carries every class that
+         applies, so `mark.hit[data-open]` matched a hit that merely *overlapped*
+         a pressed comment, and drew it as though the reader had pressed the
+         hit. Underlining every glossary term is what made that reachable rather
+         than theoretical: now any pressed term sitting inside a searched-for
+         sentence lights the search result up, and any open comment lights up
+         every term inside it. Raised by a GPT Sol review, 2026-08-26.
+
+         Chat was worse and in the other direction: `mark.chat[data-open]` is a
+         real rule in styles.css and `TableView` has always passed `open` for
+         chats, but nothing here ever read it — so an open conversation's mark
+         was drawn as open only by the accident of overlapping a comment or a
+         hit. Giving each kind its own attribute fixes that in the same stroke.
+
+         The attribute is *not* the class with a suffix by accident: the
+         selectors in styles.css are `mark.cmt[data-cmt-open]` and so on, so a
+         forged attribute on its own still cannot make anything look pressed —
+         and all four are in the sanitiser's FORBID_ATTR beside `data-comment`
+         (src/sanitize-policy.ts) for the same reason the others are. */
+      if (comments.some((m) => m.open)) el.setAttribute("data-cmt-open", "");
+      if (chats.some((m) => m.open)) el.setAttribute("data-chat-open", "");
+      if (hits.some((m) => m.open)) el.setAttribute("data-hit-open", "");
+      if (terms.some((m) => m.open)) el.setAttribute("data-term-open", "");
       el.textContent = piece;
       fragment.appendChild(el);
     }
@@ -434,7 +456,7 @@ export interface TermSelection {
    *
    * Every entry is underlined now (see `termMarks` below), so "selected" can no
    * longer mean "the one with a mark on it" — it has to be a *difference*
-   * between marks instead. This is what `mark.term[data-open]` hangs off, and
+   * between marks instead. This is what `mark.term[data-term-open]` hangs off, and
    * it does the same job `open` does for a comment and for a search hit: after
    * a jump, the row in the panel and the words in the prose have to be visibly
    * the same thing.

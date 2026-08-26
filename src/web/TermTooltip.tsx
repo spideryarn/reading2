@@ -24,7 +24,8 @@
  * tooltips must never sit under the pointer and keep themselves open. This one
  * carries a link out to the term's canonical page and a button into the
  * glossary, so the pointer has to be able to reach it — hence `interactive`,
- * and hence the close delay being long enough to cross the gap.
+ * and hence the close delay being long enough to cross the 8px `offset` between
+ * the words and the card.
  *
  * See docs/project/glossary.md § The underline is always there.
  */
@@ -49,8 +50,9 @@ import { entryProse, hostOf } from "./GlossaryPanel.js";
  * a paragraph on its way to the scrollbar passes over several of them. The
  * delay is what keeps that from being a card that flashes three times.
  *
- * Closing is slow enough to cross the 10px gap between the words and the card,
- * because unlike the spine's tooltips this one can be pointed at.
+ * Closing is slow enough to cross the 8px gap between the words and the card
+ * (the `offset` middleware below), because unlike the spine's tooltips this one
+ * can be pointed at.
  */
 const DELAY = { open: 320, close: 220 } as const;
 
@@ -102,32 +104,48 @@ export function TermTooltip({
      Delegated on the document rather than bound per mark, because the marks are
      injected HTML that React re-creates whenever the prose re-renders — a
      listener attached to one would be attached to a node that no longer exists
-     the next time the reader searches for something.
+     the next time the reader searches for something. (What that *does not* buy
+     us is an open card following the replacement; see the observer below.)
 
      `pointerover` on *everything*, not `pointerout` on the marks: every element
      the pointer enters fires it, so "left the term" needs no `relatedTarget`
      arithmetic — it is simply an over event on something that is neither a mark
      nor the card. That is also what makes moving between two adjacent terms one
-     swap rather than a close and an open. */
+     swap rather than a close and an open.
+
+     **`pending` is separate from `current`, and that separation is a bug fix.**
+     Everything used to key off `current`, which stays null until the open timer
+     fires — so a pointer that crossed a term and moved on within the 320ms
+     delay cancelled nothing, and the card opened afterwards at a word the
+     pointer had long left, with no event coming to close it again. Found by a
+     GPT Sol review, 2026-08-26. */
   useEffect(() => {
     let openTimer: ReturnType<typeof setTimeout> | undefined;
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
     /* Read inside the handlers rather than through `shown`, which would put
        state in the dependency list and rebind these listeners on every hover. */
     let current: HTMLElement | null = null;
+    /** The mark an open timer is armed for. Null whenever no timer is armed. */
+    let pending: HTMLElement | null = null;
 
-    const stop = () => {
+    /** Cancel a pending open. Never touches an open card. */
+    const disarm = () => {
       clearTimeout(openTimer);
+      pending = null;
+    };
+
+    const shut = () => {
+      disarm();
       clearTimeout(closeTimer);
+      current = null;
+      setShown(null);
     };
 
     const close = () => {
-      clearTimeout(openTimer);
+      disarm();
       clearTimeout(closeTimer);
-      closeTimer = setTimeout(() => {
-        current = null;
-        setShown(null);
-      }, DELAY.close);
+      if (!current) return; // nothing open — the disarm above was the whole job
+      closeTimer = setTimeout(shut, DELAY.close);
     };
 
     const over = (event: PointerEvent) => {
@@ -146,10 +164,24 @@ export function TermTooltip({
         // and the prose has not caught up. Nothing to show, so show nothing
         // rather than an empty card.
         if (ids.length === 0) return close();
-        if (mark === current) return stop();
-        stop();
+        // Already showing this one: cancel any close the card's own edge began.
+        if (mark === current) {
+          disarm();
+          clearTimeout(closeTimer);
+          return;
+        }
+        if (mark === pending) return; // its timer is already running
+        disarm();
+        clearTimeout(closeTimer);
+        pending = mark;
         openTimer = setTimeout(
           () => {
+            pending = null;
+            /* The mark may have been replaced during the delay — any search
+               keystroke re-annotates the prose. Opening against a node that is
+               no longer in the document pins the card wherever that node last
+               was. */
+            if (!mark.isConnected) return;
             current = mark;
             /* Before the state, so the reference exists by the time React
                mounts the panel — see the effect above. */
@@ -162,26 +194,26 @@ export function TermTooltip({
       }
       // Inside the card: the reader is reaching for the link. Cancel the close
       // that entering it would otherwise have already started.
-      if (target?.closest?.(".term-card")) return stop();
-      if (current) close();
+      if (target?.closest?.(".term-card")) {
+        disarm();
+        clearTimeout(closeTimer);
+        return;
+      }
+      close();
     };
 
     /* Leaving the window entirely, which fires no `pointerover` at all. */
-    const leave = () => {
-      if (current) close();
-    };
+    const leave = () => close();
     const key = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || !current) return;
-      stop();
-      current = null;
-      setShown(null);
+      if (event.key === "Escape") shut();
     };
 
     document.addEventListener("pointerover", over);
     document.addEventListener("pointerleave", leave);
     document.addEventListener("keydown", key);
     return () => {
-      stop();
+      disarm();
+      clearTimeout(closeTimer);
       document.removeEventListener("pointerover", over);
       document.removeEventListener("pointerleave", leave);
       document.removeEventListener("keydown", key);
@@ -195,6 +227,40 @@ export function TermTooltip({
     };
   }, [byId, refs]);
 
+  /**
+   * The prose was re-annotated under an open card.
+   *
+   * **The delegated listener above survives that; the card does not.** React
+   * writes the verbatim column with `dangerouslySetInnerHTML`, so every
+   * `<mark>` in a block is *replaced* whenever its marks change — which happens
+   * on every keystroke of a search, on opening a comment, on pressing a term.
+   * The node the card is anchored to is then detached, and Floating UI's
+   * `autoUpdate` cannot notice: it watches for scroll and resize, and a node
+   * quietly leaving the document is neither. The card would sit at the words'
+   * last position, or collapse into a corner, and no pointer event is coming to
+   * correct it because the pointer has not moved.
+   *
+   * So: watch the block this card belongs to, and close if its mark goes.
+   * Scoped to the one `.prose` div rather than the document, and mounted only
+   * while a card is open, so it costs nothing the rest of the time. Closing
+   * rather than re-finding the replacement, because the replacement is only the
+   * *same* words by coincidence — the reader may have searched for something
+   * that split the run in two.
+   *
+   * Found by a GPT Sol review, 2026-08-26, which also caught that the comment
+   * above claimed delegation dealt with this. It deals with the listener.
+   */
+  useEffect(() => {
+    if (!shown) return;
+    const host = shown.el.closest(".prose") ?? shown.el.parentElement;
+    if (!host) return;
+    const observer = new MutationObserver(() => {
+      if (!shown.el.isConnected) setShown(null);
+    });
+    observer.observe(host, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [shown]);
+
   if (!shown) return null;
   const found = shown.ids.map((id) => byId.get(id)).filter((e): e is GlossaryEntry => e !== undefined);
   if (found.length === 0) return null;
@@ -207,7 +273,20 @@ export function TermTooltip({
            it the first frame paints at the top-left corner of the page. */
         style={{ ...floatingStyles, visibility: isPositioned ? "visible" : "hidden" }}
         className="tooltip-anchor interactive"
-        role="tooltip"
+        /* `dialog`, not `tooltip`, and the difference is the button in the
+           foot. WAI's tooltip pattern is for text that describes the thing you
+           are pointing at, and says outright that a tooltip does not take focus
+           and should not contain focusable controls; a hover panel that does
+           contain them is a non-modal dialog. Flagged by a GPT Sol review,
+           2026-08-26.
+
+           **This is honest labelling, not working keyboard support.** There is
+           no keyboard route to this card at all — the marks are injected HTML,
+           so they are not focusable, and making several hundred runs per
+           article into tab stops would be worse than the gap. See
+           docs/project/glossary.md § What is still open. */
+        role="dialog"
+        aria-label={found.map((e) => e.name).join(", ")}
       >
         <div className="tooltip term-card">
           {/* More than one only where two terms overlap the same words —

@@ -1235,7 +1235,7 @@ mark.cmt:hover {
 }
 /* The one whose dialog is open, so the panel and the passage are visibly the
    same thing when the reader has scrolled and lost track. */
-mark.cmt[data-open] {
+mark.cmt[data-cmt-open] {
   background: var(--highlight-wash);
   border-bottom-color: var(--highlight);
 }
@@ -1269,7 +1269,7 @@ mark.cmt[data-mark-end]::after {
    highlight; the same wash behind every term in the piece is a mottled
    paragraph, and the reader cannot turn it off. So the standing mark is the
    dotted rule alone, at a weight meant to be legible when looked for and
-   ignorable when not, and the wash moved to `[data-open]` below.
+   ignorable when not, and the wash moved to `[data-term-open]` below.
 
    A dotted underline where a comment gets a solid one, and no marker glyph: a
    comment is an artefact you made and can open, a term occurrence is neither.
@@ -1292,10 +1292,10 @@ mark.term:hover {
 }
 /* The term pressed in the glossary panel, of the many drawn. Being selected
    cannot mean *having* a mark any more, so it means a heavier one — the same
-   job `mark.cmt[data-open]` and `mark.hit[data-open]` do, and for the same
+   job `mark.cmt[data-cmt-open]` and `mark.hit[data-hit-open]` do, and for the same
    reason: after a jump, the row in the panel and the words in the prose have to
    be visibly the same thing. */
-mark.term[data-open] {
+mark.term[data-term-open] {
   background: var(--highlight-wash);
   border-bottom-color: var(--highlight);
 }
@@ -1480,12 +1480,14 @@ mark.hit:not([data-hues]) {
   background-size: 100% var(--hue-band);
 }
 /* The one the reader pressed in the panel, so the list and the passage are
-   visibly the same thing after a jump. Same job `mark.cmt[data-open]` does.
+   visibly the same thing after a jump. Same job `mark.cmt[data-cmt-open]` does.
+   One attribute per kind, so an overlap cannot draw somebody else's mark as
+   pressed — annotate.ts says what that used to do.
    The ring is in the neutral wash colour rather than in any of the hues: it
    means *this is the row you pressed*, which is a different fact from which
    search found it, and a ring that borrowed a hue would be a fourth thing
    wearing a colour that already means something. */
-mark.hit[data-open] {
+mark.hit[data-hit-open] {
   background-color: rgb(var(--hit-wash-rgb) / calc(var(--hit-a) * 0.55));
   box-shadow: 0 0 0 1px rgb(var(--hit-wash-rgb) / 0.8);
 }
@@ -5352,8 +5354,12 @@ td.text.has-hit[data-hues="8"] {
 /* The three pictures, as one control. Same shape as `.gloss-sort`, because it
    is the same kind of thing — a small quiet row of exclusive choices under the
    heading — and a second visual idiom for it would be a third thing to learn. */
+/* Six of them now, in a band that can be 288px. `wrap` rather than a smaller
+   font or a scroller: a control the reader has to scroll to find is a control
+   they do not know exists, and these six are the whole of what this mode does. */
 .diag-kinds {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
@@ -5472,6 +5478,15 @@ td.text.has-hit[data-hues="8"] {
 .diag-mindmap .diag-node.diag-d0 .diag-label { font-size: 12px; }
 .diag-mindmap .diag-node.diag-d1 .diag-label { font-size: 11.5px; }
 .diag-mindmap .diag-node.diag-d2 .diag-label { font-size: 10.5px; }
+.diag-arc .diag-node.diag-d0 .diag-label { font-size: 11px; }
+.diag-arc .diag-node.diag-d1 .diag-label { font-size: 11px; }
+.diag-arc .diag-node.diag-d2 .diag-label { font-size: 11px; }
+.diag-force .diag-node.diag-d0 .diag-label { font-size: 10px; }
+.diag-force .diag-node.diag-d1 .diag-label { font-size: 10px; }
+.diag-force .diag-node.diag-d2 .diag-label { font-size: 10px; }
+.diag-cluster .diag-node.diag-d0 .diag-label { font-size: 11px; }
+.diag-cluster .diag-node.diag-d1 .diag-label { font-size: 11px; }
+.diag-cluster .diag-node.diag-d2 .diag-label { font-size: 11px; }
 
 /* The gist, on the one picture that draws one. It is on the <tspan> rather than
    the <text>, so it beats the sizes above by being on the element itself —
@@ -5798,7 +5813,7 @@ mark.chat {
   background: none;
   border-bottom: 1px solid color-mix(in oklab, var(--chat-mark) 60%, var(--page));
 }
-mark.chat[data-open] {
+mark.chat[data-chat-open] {
   background: var(--chat-mark-wash);
   border-bottom-color: var(--chat-mark);
 }
@@ -5971,3 +5986,37 @@ tr:hover .block-chat,
 }
 
 .ideas-again { margin-top: 1rem; }
+
+/* ---- arc, force, cluster: the graph pictures ---- */
+
+/* An arc's stroke width IS its weight, quantised to three steps — the eye can
+   rank two arcs side by side without a legend, which a continuous width cannot
+   do at these sizes. `depth` on the link is carrying the weight bucket here
+   rather than a tree depth; see layoutArc. */
+.diag-arc .diag-link { stroke: rgb(var(--cat-0-rgb) / 0.28); fill: none; }
+.diag-arc .diag-link.diag-d1 { stroke: rgb(var(--cat-0-rgb) / 0.42); stroke-width: 1.4; }
+.diag-arc .diag-link.diag-d2 { stroke: rgb(var(--cat-0-rgb) / 0.6); stroke-width: 2; }
+/* The spine, which is not an arc and must not read as the strongest one. */
+.diag-arc .diag-link.diag-d0[id="arc-spine"],
+.diag-arc .diag-link#arc-spine { stroke: var(--rule-strong); stroke-width: 1.5; }
+.diag-arc .diag-node .diag-box { fill: transparent; stroke: none; }
+.diag-arc .diag-node:hover .diag-box,
+.diag-arc .diag-node.on .diag-box { fill: var(--surface-raised); }
+.diag-arc .diag-node.here .diag-box { fill: transparent; stroke: var(--highlight); stroke-width: 1.5; }
+
+/* Force: the link is the relationship, and the three kinds are not the same
+   claim. Containment is solid, sequence is nearly invisible (it is already told
+   by the vertical axis), and vocabulary — the only one a tree could not hold —
+   is the one worth seeing. */
+.diag-force .diag-link { fill: none; }
+.diag-force .diag-link.diag-d0 { stroke: var(--rule); stroke-width: 0.75; opacity: 0.35; }
+.diag-force .diag-link.diag-d1 { stroke: rgb(var(--cat-rgb) / 0.5); stroke-width: 1.1; }
+.diag-force .diag-link.diag-d2 { stroke: rgb(var(--cat-0-rgb) / 0.5); stroke-width: 1.4; }
+.diag-force .diag-node .diag-box { stroke-width: 1; }
+.diag-force .diag-label { font-weight: 600; }
+
+.diag-cluster .diag-link { stroke: rgb(var(--cat-rgb) / 0.45); fill: none; }
+.diag-cluster .diag-node .diag-box { fill: transparent; stroke: none; }
+.diag-cluster .diag-node:hover .diag-box,
+.diag-cluster .diag-node.on .diag-box { fill: var(--surface-raised); }
+.diag-cluster .diag-node.here .diag-box { fill: transparent; stroke: var(--highlight); stroke-width: 1.5; }

@@ -549,7 +549,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * and it is the line that keeps the fetch where it belongs.
    *
    * Since every term is underlined, being selected can no longer mean *having*
-   * a mark. It means a **different** mark — `mark.term[data-open]` — which is
+   * a mark. It means a **different** mark — `mark.term[data-term-open]` — which is
    * the same thing the open comment and the pressed search hit already do.
    */
   const [term, setTerm] = useState<TermSelection | null>(null);
@@ -557,9 +557,13 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   /**
    * The whole list, as the prose needs it: spellings and the blocks to look in.
    *
-   * Memoised on the entries and on which one is pressed, because it is the
-   * input to a scan of the article — see `termMarks` in annotate.ts, which does
-   * the finding.
+   * Memoised on the entries and **deliberately not on which one is pressed**,
+   * which is the whole point of it being separate from `term` below. This is
+   * the input to a scan of the article — `termMarks` in annotate.ts — and
+   * folding the pressed id in here meant every press re-compiled every pattern
+   * and re-parsed every block that has a term in it, to change one attribute.
+   * A GPT Sol review measured that at 44–135ms on a 400-block, 60-term article.
+   * `TableView` takes the pressed id as its own prop and applies it at the end.
    */
   const termSelections = useMemo<TermSelection[]>(
     () =>
@@ -567,9 +571,8 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         id: entry.id,
         forms: formsOf(entry),
         blocks: entry.blocks,
-        open: entry.id === term?.id,
       })),
-    [terms, term],
+    [terms],
   );
 
   /**
@@ -1034,6 +1037,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           });
         }}
         terms={termSelections}
+        openTerm={term?.id ?? null}
         hitMarks={hitMarks}
         hitHues={hitHues}
         hitStrength={hitStrength}
@@ -1573,19 +1577,37 @@ function GlossaryBand({
      actually been refetched, so this fires on load and on each of the three
      verbs, not on every render.
 
+     **Keyed on `status`, not on the entries being truthy**, which is a bug fix.
+     `reset()` deletes the artefact and sets `glossary` to null while the new
+     one is written, so there are no entries to push — and a bare `if (entries)`
+     therefore pushed nothing at all, leaving the prose underlined from a list
+     the reader had just thrown away, for as long as the regeneration took and
+     for ever if it failed. `none` is a real answer and has to be said out loud.
+     Found by a GPT Sol review, 2026-08-26.
+
+     `loading` and `error` say nothing, on purpose: neither is a claim that the
+     article has no terms, and pushing `[]` for them would blink every underline
+     out and back on each mount of the band.
+
      No cleanup that clears it, unlike the selection below: leaving glossary
      mode must take the *highlight* off the pressed term, but the underlines are
      not a property of the mode any more and must survive the band closing. */
+  const status = glossary.status;
   const entries = glossary.glossary?.entries;
   useEffect(() => {
-    if (entries) onEntries(entries);
-  }, [entries, onEntries]);
+    if (status === "ready" && entries) onEntries(entries);
+    else if (status === "none") onEntries([]);
+  }, [status, entries, onEntries]);
 
-  /* Leaving glossary mode must take the underlines out of the prose with it.
+  /* Leaving glossary mode must take the *highlight* off the pressed term. Not
+     the underlines, which since 2026-08-26 are a standing property of the
+     article and outlive the band — this comment said otherwise until a GPT Sol
+     review noticed it was describing the old behaviour.
+
      Its own effect, with no dependency on `selected`, so it runs on unmount and
      only on unmount — folding it into the cleanup of the effect above would
      clear the selection on every change and set it again immediately, which is
-     a visible flicker of every mark on the page. */
+     a visible flicker. */
   useEffect(() => () => onSelected(null), [onSelected]);
 
   return (
@@ -1986,6 +2008,7 @@ function DiagramBand({
       onKind={(next) => void setKind(next)}
       atRow={atRow}
       onJump={onJump}
+      blocks={article.blocks}
     />
   );
 }

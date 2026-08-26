@@ -91,7 +91,7 @@ describe("annotateHtml", () => {
     const out = annotateHtml("<p>alpha beta</p>", [
       { id: "spya-aaaaaa", start: 0, end: 5, open: true },
     ]);
-    expect(out).toContain("data-open");
+    expect(out).toContain("data-cmt-open");
   });
 });
 
@@ -305,21 +305,21 @@ describe("termMarks", () => {
 
   it("marks the pressed term differently from the rest", () => {
     // Being selected can no longer mean *having* a mark, so it has to mean a
-    // different one — the same `data-open` the open comment and the pressed
-    // search hit already carry.
+    // different one — the same thing the open comment and the pressed search
+    // hit already do, under an attribute of its own.
     const other = { id: "spya-other1", forms: ["problems"], blocks: ["spya-bbbbbb"] };
     const pressed = { ...selection, open: true };
     const marks = termMarks(blocks, [pressed, other]).get("spya-bbbbbb")!;
     const host = document.createElement("div");
     host.innerHTML = annotateHtml(blocks[1]!.html, marks);
-    const open = host.querySelector("mark[data-open]");
+    const open = host.querySelector("mark[data-term-open]");
     expect(open?.getAttribute("data-term")).toBe("spya-termid");
     // And the unpressed one is drawn, but plainly.
     const plain = [...host.querySelectorAll("mark.term")].find(
       (m) => m.getAttribute("data-term") === "spya-other1",
     );
     expect(plain).not.toBeUndefined();
-    expect(plain?.hasAttribute("data-open")).toBe(false);
+    expect(plain?.hasAttribute("data-term-open")).toBe(false);
   });
 
   it("merges a comment and a term over the same words into ONE mark", () => {
@@ -436,7 +436,33 @@ describe("search hits — the third kind of mark", () => {
 
   it("marks the pressed hit as open, the way an open comment is", () => {
     const out = annotateHtml(html, [{ id: "h1", start: 3, end: 10, kind: "hit", open: true }]);
-    expect(host(out).querySelector("mark.hit")?.hasAttribute("data-open")).toBe(true);
+    expect(host(out).querySelector("mark.hit")?.hasAttribute("data-hit-open")).toBe(true);
+  });
+
+  it("does not let one kind's pressed state leak onto another kind's mark", () => {
+    /* The bug the per-kind attributes exist for. A merged mark carries every
+       class that applies, so under one shared `data-open` a hit that merely
+       OVERLAPPED a pressed term was drawn by `mark.hit[data-open]` as though
+       the reader had pressed the hit. Underlining every term is what turned
+       that from theoretical into ordinary. Found by a GPT Sol review,
+       2026-08-26. */
+    const out = annotateHtml(html, [
+      { id: "t1", start: 3, end: 10, kind: "term", open: true },
+      { id: "h1", start: 3, end: 10, kind: "hit", open: false },
+    ]);
+    const mark = host(out).querySelector("mark.term.hit");
+    expect(mark).not.toBeNull();
+    expect(mark?.hasAttribute("data-term-open")).toBe(true);
+    expect(mark?.hasAttribute("data-hit-open")).toBe(false);
+  });
+
+  it("marks an open chat, which nothing used to read", () => {
+    /* `mark.chat[data-open]` has been a real rule in styles.css and TableView
+       has always passed `open` for chats, but `annotateHtml` never looked at
+       it — so an open conversation was drawn as open only when it happened to
+       overlap a comment or a hit. Same review. */
+    const out = annotateHtml(html, [{ id: "c1", start: 3, end: 10, kind: "chat", open: true }]);
+    expect(host(out).querySelector("mark.chat")?.hasAttribute("data-chat-open")).toBe(true);
   });
 });
 
