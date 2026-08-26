@@ -137,6 +137,7 @@ export const articleMetadata = reader.articleMetadata.bind(reader);
 export const loadTweets = reader.loadTweets.bind(reader);
 export const loadGlossary = reader.loadGlossary.bind(reader);
 export const loadSummaries = reader.loadSummaries.bind(reader);
+export const loadIdeas = reader.loadIdeas.bind(reader);
 
 /**
  * The reader's own state: conversations, saved searches, checked terms.

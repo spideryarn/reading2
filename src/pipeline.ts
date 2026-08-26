@@ -25,12 +25,18 @@ import { runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchDocument, readRaw, writeRaw } from "./fetch.js";
 import { generateGlossary, PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "./glossary.js";
+import {
+  generateIdeas,
+  inputFingerprint as ideasFingerprint,
+  PROMPT_VERSION as IDEAS_PROMPT_VERSION,
+} from "./ideas.js";
 import { stageFailure } from "./job-failure.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { generateSummaries, summariesAreCurrent } from "./summarise.js";
 import { log } from "./log.js";
-import { type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
+import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
+import { hashProfile } from "./profile.js";
 import { fsLocations } from "./store/artifacts-fs.js";
 import {
   type ArtifactKind,
@@ -96,6 +102,7 @@ export const STEP_ORDER: StepName[] = [
   "tweets",
   "glossary",
   "summary",
+  "ideas",
 ];
 
 /**
@@ -125,9 +132,22 @@ export const DEFAULT_INGEST_STEPS: StepName[] = ["fetch", "extract", "blocks", "
  * Anything not in the table is not an article-reading stage and shares nothing.
  */
 export function sharesArticleCache(step: StepName, later: readonly StepName[]): boolean {
-  const group = STAGE_EFFORT[step as ArticleStage];
-  if (group === undefined) return false;
-  return later.some((s) => STAGE_EFFORT[s as ArticleStage] === group);
+  const effort = STAGE_EFFORT[step as ArticleStage];
+  if (effort === undefined) return false;
+  const renderer = ARTICLE_RENDERER[step as ArticleStage];
+  /* **Both tables, not just the effort one.** Effort is part of the cache key
+     and that is the surprising half, which is why it got written down first —
+     but the *bytes* are the obvious half, and they stopped being uniform when
+     `ideas` arrived and had to send block ids. Grouping on effort alone would
+     mark the article on an `arc` run because `ideas` is queued behind it at the
+     same effort, pay the 1.25x write premium, and never collect a read: the two
+     prompts do not agree on a single byte after the head.
+     src/models.ts § ARTICLE_RENDERER. */
+  return later.some(
+    (s) =>
+      STAGE_EFFORT[s as ArticleStage] === effort &&
+      ARTICLE_RENDERER[s as ArticleStage] === renderer,
+  );
 }
 
 /**
@@ -174,6 +194,12 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
   "tweets",
   "glossary",
   "summary",
+  /* Same two reasons as the three above: it reads `blocks.json` and
+     `tree.json`, nothing reads what it writes, so the positional cascade would
+     buy a model call for nothing. Unlike the glossary, forcing it does not
+     silently lengthen anything — `ideas` replaces rather than appends — but the
+     first reason stands on its own. */
+  "ideas",
 ]);
 
 export interface StepContext {
@@ -1057,6 +1083,100 @@ export const STEPS: Record<StepName, PipelineStep> = {
       );
       const short = missing > 0 ? `, ${missing} missing` : "";
       return `${run.targets - missing} of ${run.targets} sections${short}`;
+    },
+  },
+  /* Stage 5f — the ideas. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, for
+     the reason `tweets`, `glossary` and `summary` established: everything up to
+     `arc` makes the article readable, everything after it is a thing somebody
+     asks for.
+
+     **The first step whose stamp has four values rather than three**, and both
+     additions close holes the others still have — see the notes below. */
+  ideas: {
+    name: "ideas",
+    label: "Finding the ideas",
+    outputs: (ctx) => [path.join(ctx.dir, "ideas.json")],
+    produces: ["ideas"],
+    /**
+     * Four values, where every other stamped step declares three.
+     *
+     * **The blocks AND the tree.** `inputHashFor` above hashes only the blocks,
+     * which `StepStamp`'s own docstring has flagged as wrong for exactly this
+     * family of stages since it was written: section boundaries can move
+     * without a single block changing. It matters more here than anywhere
+     * because the prompt shows the model the skeleton *before* the article
+     * precisely so that it judges what the argument rests on — re-cut the
+     * sections and that judgment was made against a different question, while
+     * a blocks-only hash reports no change at all.
+     *
+     * **And the profile.** Every other stage records a `profileHash` and lets
+     * the read path put a banner in front of the reader; none of them puts it
+     * in the stamp, so nothing regenerates. For a glossary that is a gap you
+     * can argue for. Here the profile decides what "assumed" *means* — a
+     * physicist reading a physics essay brings everything it assumes — so an
+     * artefact written for a different profile is answering a different
+     * question, not merely an older one.
+     */
+    stamp: async (ctx, store) => {
+      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
+      const tree = await store.read(ctx.slug, "toc", "tree");
+      /* `null` is "we cannot tell", which must not be confused with a hash that
+         fails to match. Both answer not-current; only one is a stale artefact. */
+      if (!blocksFile?.blocks || !tree) return null;
+      return {
+        inputHash: ideasFingerprint(blocksFile.blocks, tree),
+        promptVersion: IDEAS_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx) {
+      const run = await generateIdeas({
+        dir: ctx.dir,
+        profile: ctx.profile ?? null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const total = run.ideas.ideas.length;
+      const assumed = run.ideas.ideas.filter((i) => i.provenance === "assumed").length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "ideas",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          ideas: total,
+          assumed,
+          /* **The quality signals, and the reason this stage has more of them
+             than its neighbours.** The glossary computes its own occurrences,
+             so the model cannot be wrong about a block id; here the model names
+             the ids, and every one of these counts is a way it was wrong that
+             is completely invisible from outside — a dropped occurrence looks
+             exactly like a passage the model chose not to name.
+
+             `unanchored` is the one to watch. It counts ideas thrown away for
+             having no verifiable passage at all, which is the failure this
+             stage is most likely to have: naming a topic instead of finding a
+             load-bearing proposition. A run that starts returning several is
+             the prompt having drifted, and nothing else would report it.
+             docs/reusable/silent-success.md. */
+          unanchored: run.dropped.unanchored,
+          unknownIds: run.dropped.unknownIds,
+          unquoted: run.dropped.unquoted,
+          malformed: run.dropped.malformed,
+          truncatedOccurrences: run.dropped.truncated,
+          /* The profile's LENGTH, never the profile — it is the reader's own
+             words about themselves. docs/project/logging.md. */
+          profileChars: ctx.profile?.length ?? 0,
+        },
+        `ideas ${ctx.slug}: ${total} ideas (${assumed} to bring)`,
+      );
+      return `${total} ${total === 1 ? "idea" : "ideas"}, ${assumed} to bring`;
     },
   },
 };

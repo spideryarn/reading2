@@ -57,6 +57,7 @@ import type {
   SearchRun,
   ShelfState,
   SummariesFound,
+  IdeasFound,
   ThreadFound,
 } from "../types.js";
 
@@ -94,6 +95,13 @@ export interface ArticleReader {
 
   /** The summaries at every rung, plus staleness. */
   loadSummaries(slug: string): Promise<SummariesFound>;
+
+  /**
+   * The ideas, plus staleness. Computed at read time like the three above —
+   * and against the blocks **and** the tree, which is this artefact's own
+   * rule rather than a variation on theirs. src/ideas.ts § `inputFingerprint`.
+   */
+  loadIdeas(slug: string): Promise<IdeasFound>;
 }
 
 /**

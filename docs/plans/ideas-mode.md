@@ -528,7 +528,7 @@ stage missing from any one of them fails in a different place.**
 ### No pagination, and therefore no append
 
 The glossary paginates because its list is unbounded — an article can hold an encyclopaedia of terms,
-and the [504s that shaped that feature](../project/glossary.md#one--the-answer-is-what-times-out-not-the-question)
+and the [504s that shaped that feature](../project/glossary.md#one-the-answer-is-what-times-out-not-the-question)
 were caused by output length. **A piece does not have forty ideas.** It has three to ten. So:
 
 - one call, `suggestedIdeas(words)` = one per ~800 words, clamped to **3–10**;
@@ -798,7 +798,7 @@ against the passages, not as an authoritative list** — and it is a mitigation 
 
 **Changed — and this list is three times the first draft's, which is the review's main finding**
 
-*Storage* (§ [It is not a file, it is an artefact](#it-is-not-a-file-it-is-an-artefact--and-that-is-most-of-the-work)) —
+*Storage* (§ [It is not a file, it is an artefact](#it-is-not-a-file-it-is-an-artefact-and-that-is-most-of-the-work)) —
 `src/store/artifacts.ts` · `artifacts-fs.ts` · `contracts.ts` · `import.ts` · `export.ts` ·
 `src/db/schema.ts` (JSONB column + the `revision_step_runs` CHECK) · a Postgres reader · a migration ·
 `tests/store-artefact-manifest.test.ts` · `tests/store-roundtrip.test.ts`.

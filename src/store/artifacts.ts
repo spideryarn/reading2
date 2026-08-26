@@ -40,6 +40,7 @@ import type {
   Arc,
   Block,
   Glossary,
+  Ideas,
   Meta,
   StepName,
   Summaries,
@@ -73,7 +74,8 @@ export type ArtifactKind =
   | "arc"
   | "tweets"
   | "glossary"
-  | "summary";
+  | "summary"
+  | "ideas";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -95,6 +97,7 @@ export interface ArtifactMap {
   tweets: TweetThread;
   glossary: Glossary;
   summary: Summaries;
+  ideas: Ideas;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -139,6 +142,37 @@ export interface StepStamp {
   promptVersion?: string;
   /** The model that ran. On disk: `generator`, e.g. `"claude-sonnet-5"`. */
   model?: string;
+  /**
+   * The **reader's profile** the artefact was written for. On disk:
+   * `profileHash`.
+   *
+   * Added 2026-08-26 for `ideas`, and it is worth saying why it was not here
+   * before and why that was a real hole rather than a simplification.
+   *
+   * Several artefacts have recorded a `profileHash` since the profile existed,
+   * and the read path reports a changed profile so a panel can offer to
+   * regenerate. **Nothing put it in the stamp**, so `stepIsDone` never saw it:
+   * edit your profile and the glossary stays "current" for ever, and the only
+   * thing that says otherwise is a banner the reader has to act on.
+   *
+   * For the glossary that is a defensible gap — a profile changes which terms
+   * are worth an entry. For `ideas` it is close to fatal, because the profile
+   * changes what the artefact *means*: "what you need to bring" is defined by
+   * who is reading, and a list written for last month's profile is answering a
+   * different question rather than being merely old.
+   *
+   * **Only stages that opt in are affected**, because `sameStamp` compares the
+   * keys the *expected* stamp declares. A stage whose `stamp()` omits this
+   * behaves exactly as it did — so this is a field `ideas` uses and the others
+   * may adopt when somebody decides they should, not a silent invalidation of
+   * every artefact on every shelf.
+   *
+   * Three states, matching the artefacts' own: `undefined` for "written before
+   * this existed", `null` for "written deliberately without a profile", and a
+   * hash. `null` is a real answer and must compare equal to `null` — which it
+   * does, because it is compared with `===` like every other key.
+   */
+  profileHash?: string | null;
 }
 
 /**

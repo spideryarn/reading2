@@ -192,6 +192,7 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
   if (revision.tweets) await put("tweets.json", revision.tweets);
   if (revision.glossary) await put("glossary.json", revision.glossary);
   if (revision.summary) await put("summary.json", revision.summary);
+  if (revision.ideas) await put("ideas.json", revision.ideas);
   if (revision.labels) await put("labels.json", revision.labels);
 
   if (revision.rawBytes) {

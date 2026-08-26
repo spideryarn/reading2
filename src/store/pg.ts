@@ -42,6 +42,10 @@ import {
   revisionStepRuns,
 } from "../db/schema.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
+import {
+  isStale as ideasAreStale,
+  PROMPT_VERSION as IDEAS_PROMPT_VERSION,
+} from "../ideas.js";
 import { isSlug } from "../ingest.js";
 import { CAPABLE_MODEL } from "../models.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
@@ -57,6 +61,8 @@ import type {
   Block,
   Glossary,
   GlossaryFound,
+  Ideas,
+  IdeasFound,
   LibraryEntry,
   ListOptions,
   Meta,
@@ -233,6 +239,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   tweets: ["article_revisions.tweets"],
   glossary: ["article_revisions.glossary"],
   summary: ["article_revisions.summary"],
+  ideas: ["article_revisions.ideas"],
 };
 
 /**
@@ -275,6 +282,7 @@ export const pgArticleReader: Pick<
   | "loadTweets"
   | "loadGlossary"
   | "loadSummaries"
+  | "loadIdeas"
 > = {
   async loadArticle(slug: string): Promise<Article> {
     requireSlug(slug);
@@ -596,5 +604,34 @@ export const pgArticleReader: Pick<
     }
     const blocks = await blocksFor(found.revision.id);
     return { summaries, stale: summariesStale(summaries, blocks) };
+  },
+
+  async loadIdeas(slug: string): Promise<IdeasFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug);
+    if (!found) throw notFound(slug);
+
+    const ideas = found.revision.ideas as Ideas | null;
+    if (!ideas) {
+      throw Object.assign(
+        new Error(`No ideas for "${slug}" yet. Find them with \`npm run ideas -- ${slug}\`.`),
+        { status: 404 },
+      );
+    }
+    const blocks = await blocksFor(found.revision.id);
+    /* **The tree as well as the blocks**, which is what makes this one line
+       longer than its three neighbours. `ideas` is written from the skeleton as
+       much as from the paragraphs (src/ideas.ts § `inputFingerprint`), so a
+       re-sectioned article is a different question even when every block is
+       byte-identical — and a blocks-only comparison here would report it
+       current while the filesystem store reported it stale. Two stores
+       disagreeing about staleness is precisely what the parity tests exist to
+       catch, and precisely the kind of thing that looks fine until it doesn't. */
+    const tree = found.revision.tree as Tree | null;
+    return {
+      ideas,
+      stale: !tree || ideasAreStale(ideas, blocks, tree),
+      outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+    };
   },
 };

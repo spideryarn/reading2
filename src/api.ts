@@ -23,6 +23,11 @@ import { loadShelf } from "./shelf.js";
 import { loadReaderProfile } from "./profile.js";
 import { loadLookups } from "./glossary-lookups.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION, readGlossary } from "./glossary.js";
+import {
+  isStale as ideasAreStale,
+  PROMPT_VERSION as IDEAS_PROMPT_VERSION,
+  readIdeas,
+} from "./ideas.js";
 import { isStale as summariesStale, readSummaries } from "./summarise.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
@@ -38,6 +43,7 @@ import type {
   ArticleMetadata,
   Block,
   GlossaryFound,
+  IdeasFound,
   SummariesFound,
   LibraryEntry,
   ListOptions,
@@ -334,6 +340,48 @@ export async function loadGlossary(slug: string): Promise<GlossaryFound> {
        reason the header gives: a flag stored at generation time is right until
        the moment it matters. `stale` is about the article; this is about us. */
     outdated: glossary.version !== PROMPT_VERSION,
+  };
+}
+
+/**
+ * The article's ideas, and whether they still describe it.
+ *
+ * The read half of stage 5f, and the same shape as `loadGlossary` above for the
+ * same reason: two functions answering the same question about different
+ * artefacts must not be allowed to drift.
+ *
+ * **One difference, and it is the tree.** Staleness here is computed against
+ * the blocks *and* `tree.json`, because that is what the stage was written
+ * from — `inputFingerprint` in src/ideas.ts has the argument. A blocks-only
+ * comparison would report a re-sectioned article as unchanged, and the ideas
+ * would go on claiming to say what *this* argument rests on while the argument
+ * had been cut into different pieces.
+ */
+export async function loadIdeas(slug: string): Promise<IdeasFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const ideas = await readIdeas(dir);
+  if (!ideas) {
+    throw Object.assign(
+      new Error(
+        `No ideas for "${slug}" yet. Find them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["ideas"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  // Unknown counts as stale — the honest answer, and the safe way round to be
+  // wrong: the cost is a banner offering a regeneration nobody needed.
+  return {
+    ideas,
+    stale: !blocksFile || !tree || ideasAreStale(ideas, blocksFile.blocks, tree),
+    outdated: ideas.version !== IDEAS_PROMPT_VERSION,
   };
 }
 

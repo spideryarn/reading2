@@ -38,7 +38,7 @@ import { CAPABLE_MODEL } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { parseJsonFrom } from "./parse-json.js";
-import { hashBlocks } from "./source-hash.js";
+import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
@@ -598,26 +598,18 @@ export function batchFingerprint(batch: Batch, blocks: Block[], outline: string)
 /**
  * A fingerprint of the tree, for the manifest — **not** `renderOutline`'s text.
  *
- * The outline is titles and indentation, which is the right thing to send a
- * model and the wrong thing to compare two trees by: two structures that cut
- * the article in completely different places can print an identical outline.
- * This walks every node and takes its id, parent, range, title and gist, so a
- * boundary that moved changes the hash even when every title stayed put.
+ * **Moved to src/source-hash.ts on 2026-08-26** and re-exported here, so
+ * nothing that already imported it from this module had to change. That is the
+ * same move `hashBlocks` made out of src/tweets.ts, for the same reason:
+ * `ideas` (stage 5f) needs this exact answer, and two modules computing "the
+ * same" structure hash two ways can only ever disagree — the day they do, one
+ * artefact reports itself current against a different definition of current.
  *
- * Named for what it fingerprints rather than for what the prompt calls it,
- * after a review pointed out that hashing `renderOutline` was claiming more
- * than it checked. GPT-5.6-sol, 2026-08-26.
+ * The NUL separator went across byte for byte, which is load-bearing rather
+ * than stylistic: change it and every `labels.json` already on a shelf reports
+ * a structure that has not moved as having moved.
  */
-export function structureHash(tree: Tree): string {
-  const canonical = Object.keys(tree.nodes)
-    .sort()
-    .map((id) => {
-      const n = tree.nodes[id]!;
-      return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""].join("\u0000");
-    })
-    .join("\n");
-  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
-}
+export { structureHash } from "./source-hash.js";
 
 /** One batch that came back whole, kept so a later run does not pay for it again. */
 export interface LabelCheckpointEntry {

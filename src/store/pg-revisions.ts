@@ -195,6 +195,13 @@ export const REVISION_COLUMN_POLICY: Record<
   tweets: "carry",
   glossary: "carry",
   summary: "carry",
+  /* Carries like its four neighbours, and its staleness is answered the same
+     way: `sourceHash` on the artefact against the blocks and tree now, computed
+     at read time. What is different is that a carried `ideas` also survives a
+     profile change — deliberately, because the artefact says which profile it
+     was written for and `stepIsDone` compares it, so the *step* re-runs while
+     the *reader* keeps something to look at until it does. */
+  ideas: "carry",
 };
 
 const MINTED = new Set(

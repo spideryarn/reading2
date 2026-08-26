@@ -134,6 +134,9 @@ export const PATHS: {
   summary: {
     summary: (at) => path.join(at.dir, "summary.json"),
   },
+  ideas: {
+    ideas: (at) => path.join(at.dir, "ideas.json"),
+  },
 };
 
 /**
@@ -157,6 +160,7 @@ const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
   tweets: "tweets",
   glossary: "glossary",
   summary: "summary",
+  ideas: "ideas",
 };
 
 /**
@@ -242,6 +246,10 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
   arc: { maxBytes: 16 * MiB, decode: json("entries", isArray) },
   tweets: { maxBytes: 16 * MiB, decode: json("tweets", isArray) },
   glossary: { maxBytes: 32 * MiB, decode: json("entries", isArray) },
+  /* Far smaller than a glossary in practice — three to ten ideas rather than a
+     hundred terms — but the same ceiling, because the cap is a guard against a
+     corrupt or hostile file rather than a size estimate. */
+  ideas: { maxBytes: 32 * MiB, decode: json("ideas", isArray) },
   summary: { maxBytes: 32 * MiB, decode: json("entries", isArray) },
 };
 
@@ -360,6 +368,8 @@ interface StampedOnDisk {
   sourceHash?: unknown;
   version?: unknown;
   generator?: unknown;
+  /** Only `ideas` compares this today — see `StepStamp.profileHash`. */
+  profileHash?: unknown;
 }
 
 function stampOf(artefact: unknown): StepStamp {
@@ -368,6 +378,14 @@ function stampOf(artefact: unknown): StepStamp {
   if (typeof a.sourceHash === "string") stamp.inputHash = a.sourceHash;
   if (typeof a.version === "string") stamp.promptVersion = a.version;
   if (typeof a.generator === "string") stamp.model = a.generator;
+  /* `null` is carried across as `null` rather than dropped: it means "written
+     deliberately without a profile", which is a real answer and has to compare
+     equal to an expected `null`. Dropping it would make an artefact written
+     without a profile look like one written before profiles existed, and the
+     step would then regenerate on every run for ever. */
+  if (typeof a.profileHash === "string" || a.profileHash === null) {
+    stamp.profileHash = a.profileHash;
+  }
   return stamp;
 }
 

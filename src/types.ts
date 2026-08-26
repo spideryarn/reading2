@@ -602,6 +602,181 @@ export type ThreadFound = Omit<ThreadResponse, "profileChanged">;
 export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
 /** As `ThreadFound`, for the summaries. */
 export type SummariesFound = Omit<SummariesResponse, "profileChanged">;
+/** As `ThreadFound`, for the ideas. */
+export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
+
+
+/* ------------------------------------------------------------------ ideas --
+   The propositions a reader has to hold to get the piece — `data/<slug>/
+   ideas.json`, and a **mode** in the band beside the glossary. Stage 5f.
+   See docs/plans/ideas-mode.md.
+
+   The glossary answers *what does this word mean*, on both sides of the
+   introduced/assumed line. This answers the other unit: a claim you hold, which
+   has no name to match and therefore cannot be found the way a term is. */
+
+/**
+ * Where the idea comes from, and it is the **model's classification** rather
+ * than a fact about the idea.
+ *
+ * A piece can assume a broad framework and introduce its own refinement of it,
+ * and that idea belongs in both groups. The panel draws this the way it draws
+ * everything else the model asserts — as a claim, not as a property. See
+ * docs/plans/ideas-mode.md § What it looks like.
+ */
+export type IdeaProvenance = "assumed" | "introduced";
+
+/**
+ * One place in the article that bears on an idea.
+ *
+ * **This is `SearchHit` minus `confidence`**, and the missing field is the
+ * design rather than an omission: a search hit's confidence answers *is this
+ * what you asked for*, and here nobody asked a question. `resolveIdea` in
+ * src/web/search-hits.ts therefore builds a `Found` with `confidence: null`,
+ * which is the value a literal word-match already carries — a passage with a
+ * place and no opinion attached.
+ *
+ * **What it points at depends on the provenance**, and the difference is the
+ * one design decision this whole feature turns on:
+ *
+ * | provenance | the occurrence is |
+ * |---|---|
+ * | `introduced` | where the piece states or develops the idea |
+ * | `assumed` | where the piece would stop making sense without it |
+ *
+ * An assumed idea is by definition not in the article, so there is nothing to
+ * quote — and a model asked for a quote anyway will either return nothing or
+ * invent one. Asking instead for the passage that *presupposes* it gives a real
+ * location the reader can go and test.
+ */
+export interface IdeaOccurrence {
+  blockId: BlockId;
+  /**
+   * The exact words, copied from that block.
+   *
+   * Verified at generation time against `blocks.json` and dropped if it is not
+   * there, exactly as `validateHits` does in src/search.ts. The anchor is the
+   * block id; this only finds the words inside it.
+   */
+  quote: string;
+  /**
+   * One line on what this passage does with the idea.
+   *
+   * **A harder question than search's "why does this match"**, and for an
+   * `assumed` occurrence it is the whole guard against the model returning
+   * universal truths: it has to name the local inferential move — what the
+   * passage says, what connection fails without the idea, and why *this* idea
+   * rather than general background knowledge supplies it.
+   */
+  reasoning: string;
+  /** Where `quote` sat in `block.text` — a disambiguator, never the anchor. */
+  start?: number;
+}
+
+/**
+ * One idea, and where the article needs it.
+ *
+ * The unit test that separates this from a `GlossaryEntry`: **can you say it as
+ * a proposition?** A term is a noun phrase and the answer to it is a
+ * definition; an idea has a claim shape and the answer is a sentence you could
+ * carry to a different article and use.
+ */
+export interface Idea {
+  /** `mintId`, so it is a block id by construction and `?idea=` validates for free. */
+  id: string;
+  /** The idea as a handle — a short proposition, not a topic. Three to ten words. */
+  name: string;
+  provenance: IdeaProvenance;
+  /**
+   * The idea itself, stated so a reader could carry it out of this article.
+   *
+   * The field where the describes-the-page register is most tempting, because
+   * it is the line the panel shows first — the same position `senseHere` holds
+   * in a glossary entry, and it failed there first. Plain text, never Markdown.
+   */
+  statement: string;
+  /**
+   * What stops making sense without it.
+   *
+   * Load-bearing for an `assumed` idea and optional for an `introduced` one.
+   * **The second place the banned register relocates to** — a ban in
+   * `statement` alone pushes it here, which is the glossary's hardest-won
+   * lesson (docs/project/glossary.md § A prompt ban relocates a register).
+   */
+  whyYouNeedIt?: string;
+  /**
+   * A concrete everyday thing this idea works like — **the model's own frame,
+   * not the author's**, and labelled as such in the panel the way `background`
+   * is in a glossary entry.
+   *
+   * Absent is a real answer and the prompt says so out loud: a strained analogy
+   * is worse than none, and a field invites filling.
+   */
+  analogy?: string;
+  /**
+   * Where the article needs it. **Never empty** — an idea whose every
+   * occurrence failed validation is dropped rather than stored.
+   *
+   * That is the opposite of the glossary's rule, and deliberately: an unmatched
+   * glossary entry is still a definition you can read, where an idea with no
+   * occurrence is a claim with no evidence and no way back to the page, which
+   * vision.md § Principles 4 refuses.
+   */
+  occurrences: IdeaOccurrence[];
+}
+
+/**
+ * The artefact. `data/<slug>/ideas.json`, stage 5f.
+ *
+ * **No `passes` and no append**, unlike `Glossary`. A glossary paginates
+ * because an article can hold an encyclopaedia of terms and their output length
+ * caused a production outage; a piece has three to ten ideas. Running the step
+ * again replaces rather than appends, which removes the FORBIDDEN checklist,
+ * `existingFor` and the "a stale glossary is not appended to" rule all at once.
+ */
+export interface Ideas {
+  version: string;
+  generator: string;
+  slug: string;
+  /**
+   * Fingerprint of what this was written from — **blocks *and* tree**, unlike
+   * every artefact before it.
+   *
+   * `StepStamp` in src/store/artifacts.ts predicted this: *"`arc`, `tweets`,
+   * `glossary` and `summary` all read the tree as well as the blocks, and
+   * src/labels.ts already keeps a separate `structureHash` precisely because
+   * section boundaries can move without a single block changing."* Ideas reads
+   * the skeleton to judge what is load-bearing, so a re-sectioned article is a
+   * different question even when every block is byte-identical.
+   */
+  sourceHash: string;
+  /** As `Glossary.profileHash`, and **in the freshness stamp** — see src/pipeline.ts. */
+  profileHash?: string | null;
+  /**
+   * Assumed first, then introduced; within each group, first occurrence.
+   *
+   * Stored in that order rather than sorted at read time, and the order is
+   * fixed at write time because `assignSlots` colours by walking it — a list
+   * that reordered itself would recolour every idea on the rail.
+   */
+  ideas: Idea[];
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/**
+ * `GET /api/ideas/:slug`. The same three staleness facts the glossary carries,
+ * for the same three reasons, computed at read time.
+ */
+export interface IdeasResponse {
+  ideas: Ideas;
+  /** The article moved underneath these ideas. */
+  stale: boolean;
+  /** The article is the same and we would write these differently now. */
+  outdated: boolean;
+  /** You are not who you were when we wrote it. */
+  profileChanged: boolean;
+}
 
 
 /* ------------------------------------------------------- reader profile --

@@ -25,6 +25,10 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { PROMPT_VERSION as GLOSSARY_VERSION } from "../src/glossary.js";
+import {
+  inputFingerprint as ideasFingerprint,
+  PROMPT_VERSION as IDEAS_VERSION,
+} from "../src/ideas.js";
 import { PROMPT_VERSION as SUMMARY_VERSION } from "../src/summarise.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
@@ -40,7 +44,7 @@ import {
 import { sameStamp } from "../src/store/artifacts.js";
 import type { ArtifactKind } from "../src/store/artifacts.js";
 import type { StepContext } from "../src/pipeline.js";
-import type { Block, StepName } from "../src/types.js";
+import type { Block, StepName, Tree } from "../src/types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -107,6 +111,32 @@ const UNSTAMPED_HTML = "<article><h1>A title</h1><p>One paragraph of something t
 
 const SOURCE_HASH = hashBlocks(BLOCKS);
 
+/**
+ * Hoisted out of `writeWholeArticle` so `IDEAS_SOURCE_HASH` below can hash the
+ * same object the fixture writes. Two copies of "the tree" here would let the
+ * fingerprint and the file disagree, which is the one way this fixture could
+ * report a step not-done for a reason that has nothing to do with the step.
+ */
+const TREE = {
+  version: "toc/2",
+  generator: CAPABLE_MODEL,
+  slug: SLUG,
+  rootId: "n0000",
+  nodes: {
+    n0000: {
+      id: "n0000",
+      parent: null,
+      range: [HEAD.id, BODY.id],
+      title: "A title",
+      gist: "A gist.",
+      children: [],
+    },
+  },
+} as unknown as Tree;
+
+/** Blocks **and** tree — src/ideas.ts § `inputFingerprint`. */
+const IDEAS_SOURCE_HASH = ideasFingerprint(BLOCKS, TREE);
+
 /** A context pointing at a temp article. Nothing here runs, so most of it is
     the type asking rather than anything being used. */
 function ctxAt(at: ArtifactLocations): StepContext {
@@ -150,22 +180,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
   await writeJson(pathFor(at, "extract", "meta"), { slug: SLUG, title: "A title" });
   await writeJson(pathFor(at, "blocks", "blocks"), { blocks: BLOCKS });
   await writeJson(pathFor(at, "toc", "blocks"), { blocks: BLOCKS });
-  await writeJson(pathFor(at, "toc", "tree"), {
-    version: "toc/2",
-    generator: CAPABLE_MODEL,
-    slug: SLUG,
-    rootId: "n0000",
-    nodes: {
-      n0000: {
-        id: "n0000",
-        parent: null,
-        range: [HEAD.id, BODY.id],
-        title: "A title",
-        gist: "A gist.",
-        children: [],
-      },
-    },
-  });
+  await writeJson(pathFor(at, "toc", "tree"), TREE);
   await writeJson(pathFor(at, "toc", "labels"), {
     version: "labels/1",
     generator: CAPABLE_MODEL,
@@ -203,6 +218,23 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     version: SUMMARY_VERSION,
     entries: [],
     missing: 0,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* **Not `...stamped`**, and this is the one artefact here that cannot use it.
+     `ideas` hashes the blocks AND the tree (src/ideas.ts § inputFingerprint),
+     so `SOURCE_HASH` alone would never match what its `stamp` computes and the
+     step would report itself not-done however complete the fixture was. It also
+     carries a `profileHash`, which is the other half of the same stamp — `null`
+     meaning "written deliberately without a profile", which is what a context
+     with no profile expects to find. */
+  await writeJson(pathFor(at, "ideas", "ideas"), {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: IDEAS_SOURCE_HASH,
+    profileHash: null,
+    version: IDEAS_VERSION,
+    ideas: [],
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

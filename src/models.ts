@@ -220,6 +220,7 @@ export type Task =
   | "tweets"
   | "glossary"
   | "summarise"
+  | "ideas"
   | "explain"
   | "chat"
   | "search";
@@ -261,6 +262,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   tweets: "capable",
   glossary: "capable",
   summarise: "capable",
+  ideas: "capable",
   explain: "capable",
   chat: "capable",
   search: "capable",
@@ -278,8 +280,10 @@ export function modelForOpenRouter(task: Task): string {
   return TASK_TIER[task] === "quick" ? QUICK_MODEL_OPENROUTER : CAPABLE_MODEL_OPENROUTER;
 }
 
-/** The six tasks that reach a model through the Anthropic SDK rather than OpenRouter. */
-const PIPELINE_TASKS: readonly Task[] = ["toc", "labels", "arc", "tweets", "glossary", "summarise"];
+/** The seven tasks that reach a model through the Anthropic SDK rather than OpenRouter. */
+const PIPELINE_TASKS: readonly Task[] = [
+  "toc", "labels", "arc", "tweets", "glossary", "summarise", "ideas",
+];
 
 /*
  * **Six of those rows would otherwise be a lie, and this is what stops them.**
@@ -315,8 +319,8 @@ for (const task of PIPELINE_TASKS) {
 /** The reasoning levels `output_config.effort` accepts. */
 export type Effort = "low" | "medium" | "high";
 
-/** The three stages that read the whole article and could share one cached copy of it. */
-export type ArticleStage = "arc" | "tweets" | "glossary";
+/** The four stages that read the whole article and could share one cached copy of it. */
+export type ArticleStage = "arc" | "tweets" | "glossary" | "ideas";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -357,6 +361,46 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
   arc: "high",
   tweets: "high",
   glossary: "medium",
+  /* `high`: finding an unstated premise and then arguing that the piece
+     collapses without it is the hardest judgment any stage here makes — harder
+     than the glossary's "is this word obvious", which is what `medium` was
+     measured to be enough for.
+
+     **It buys no cache share, and an earlier version of this comment claimed
+     it did.** Matching arc and tweets on effort is necessary for a shared
+     prefix and nowhere near sufficient: ideas sends `articleWithIds` and those
+     three send `articleText`, which are different bytes for the same article.
+     See `ARTICLE_RENDERER` below, which is what stops that mistake being made
+     by the code as well as by the comment. */
+  ideas: "high",
+};
+
+/**
+ * **Which rendering of the article each stage sends** — and therefore the other
+ * half of "can these two share a cached prefix".
+ *
+ * A cache matches a byte-exact prefix. `STAGE_EFFORT` above is one thing that
+ * has to agree; this is the other, and it was invisible until `ideas` arrived,
+ * because until then every article-reading stage sent `articleText` and the
+ * renderer could not be the thing that differed.
+ *
+ * `ideas` sends `articleWithIds`, because every occurrence it returns is a block
+ * id and the ids therefore have to be on the page (src/article-prompt.ts says
+ * why the other four deliberately omit them). So it can never share a prefix
+ * with arc, tweets, glossary or summary however its effort is set — and
+ * `sharesArticleCache` in src/pipeline.ts reads both tables rather than the one,
+ * so nothing pays a 1.25x cache *write* premium for a read that cannot happen.
+ *
+ * The stages that send `articleWithIds` in the request path — search, explain,
+ * converse — are not pipeline stages and do not appear here; they also go
+ * through OpenRouter rather than the Anthropic SDK, so they share nothing with
+ * this stage in practice either.
+ */
+export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
+  arc: "text",
+  tweets: "text",
+  glossary: "text",
+  ideas: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

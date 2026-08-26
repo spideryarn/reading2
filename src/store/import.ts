@@ -81,7 +81,7 @@ import { parseJsonFrom } from "../parse-json.js";
 import { hashBlocks } from "../source-hash.js";
 import { deriveLibraryScalars } from "./pg-revisions.js";
 import type { LabelsFile } from "../labels.js";
-import type { Arc, Block, Glossary, Meta, Summaries, Tree, TweetThread } from "../types.js";
+import type { Arc, Block, Glossary, Ideas, Meta, Summaries, Tree, TweetThread } from "../types.js";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
@@ -239,6 +239,8 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
   if (!glossary) absent.push("glossary.json");
   const summaries = await readJson<Summaries>(path.join(dir, "summary.json"));
   if (!summaries) absent.push("summary.json");
+  const ideas = await readJson<Ideas>(path.join(dir, "ideas.json"));
+  if (!ideas) absent.push("ideas.json");
   const labels = await readJson<LabelsFile>(path.join(dir, "labels.json"));
   if (!labels) absent.push("labels.json");
   /* ## Reader state is read through the app's OWN loaders, never by reopening
@@ -517,6 +519,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       tweets: tweets ?? null,
       glossary: glossary ?? null,
       summary: summaries ?? null,
+      ideas: ideas ?? null,
       labels: labels ?? null,
       ...scalars,
     } as const;
@@ -768,6 +771,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       { step: "tweets", present: Boolean(tweets) },
       { step: "glossary", present: Boolean(glossary) },
       { step: "summary", present: Boolean(summaries) },
+      { step: "ideas", present: Boolean(ideas) },
     ];
     const withdrawn = produced.filter((p) => !p.present).map((p) => p.step);
     if (withdrawn.length) {

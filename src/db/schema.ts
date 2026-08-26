@@ -68,6 +68,7 @@ import type {
   Arc,
   Citation,
   Glossary,
+  Ideas,
   JobStep,
   SearchHit,
   Summaries,
@@ -340,6 +341,25 @@ export const articleRevisions = spideryarn.table(
      * `missing` is what stops a half-empty artefact reading as a complete one.
      */
     summary: jsonb("summary").$type<Summaries>(),
+
+    /**
+     * The propositions a reader has to hold — `Ideas`, stage 5f.
+     *
+     * The WHOLE artefact, like the four above, and here the reason is the
+     * `occurrences`: each one is a block id plus the verbatim quote the model
+     * pointed at, validated against `revision_blocks` at generation time. A
+     * column holding `Idea[]` without `sourceHash` and `profileHash` could not
+     * answer either of the two questions the panel has to ask before drawing
+     * anything — has the article moved under these, and were they written for
+     * the reader who is looking at them.
+     *
+     * **No foreign key from an occurrence's `blockId` to `revision_blocks`**,
+     * deliberately, and the same argument the glossary makes about entry ids
+     * applies from the other end: a re-extraction may drop a paragraph, and an
+     * idea that named it should degrade to *"we can no longer find this in the
+     * article"* rather than take a delete with it or block one.
+     */
+    ideas: jsonb("ideas").$type<Ideas>(),
 
     /**
      * The tree's navigation labels — `LabelsFile`, stage 4's second model pass.
@@ -729,7 +749,7 @@ export const revisionStepRuns = spideryarn.table(
        * with the `toc` row. Verified against src/pipeline.ts rather than
        * inferred from the file existing.
        */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','arc','tweets','glossary','summary')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','arc','tweets','glossary','summary','ideas')`,
     ),
     check(
       "revision_step_runs_status",

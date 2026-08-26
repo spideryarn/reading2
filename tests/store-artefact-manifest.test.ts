@@ -70,6 +70,7 @@ const HOMES: Record<string, string> = {
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
   "summary.json": "article_revisions.summary",
+  "ideas.json": "article_revisions.ideas",
   "comments.json": "comments",
   "chat.json": "chat_threads + chat_messages",
   "searches.json": "search_runs (hits stay JSONB)",

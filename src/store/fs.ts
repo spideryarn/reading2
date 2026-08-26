@@ -25,6 +25,7 @@ import {
   listArticles,
   loadArticle,
   loadGlossary,
+  loadIdeas,
   loadSummaries,
   loadTweets,
 } from "../api.js";
@@ -74,6 +75,7 @@ export const fsArticleReader: ArticleReader = {
   loadTweets,
   loadGlossary,
   loadSummaries,
+  loadIdeas,
 };
 
 /**
