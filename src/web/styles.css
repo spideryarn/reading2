@@ -2846,6 +2846,14 @@ td.text.has-hit[data-hues="8"] {
 }
 .chat-icon:not(:disabled):hover { background: var(--surface-raised); color: var(--ink); }
 .chat-icon.danger:not(:disabled):hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+/* Armed: one press has already happened and the next one deletes. Coloured
+   rather than merely hovered, because the whole point is that it looks
+   different from the button you pressed a moment ago. */
+.chat-icon.danger.armed,
+.chat-icon.danger.armed:hover {
+  color: var(--page);
+  background: var(--destructive, oklch(0.65 0.2 25));
+}
 /* Matches `.chat-send:disabled` below, and it was missing here — so the one
    icon button that is ever disabled (Ask again, while an answer arrives) kept
    its pointer cursor and still lit up under the mouse. It looked and felt
@@ -2864,18 +2872,23 @@ td.text.has-hit[data-hues="8"] {
 
 /* ---- the list of conversations ---- */
 .chat-threads { flex: 1; margin: 0; padding: 0.35rem; list-style: none; overflow-y: auto; }
+/* Three lines: the title, where the conversation got to, and when. `flex-start`
+   rather than `center` because the two icons belong beside the *title*, not
+   halfway down a row whose height now depends on how long the title is. */
 .chat-thread {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.15rem;
   border-radius: var(--radius);
 }
 .chat-thread:hover { background: var(--surface-raised); }
+.chat-thread + .chat-thread, .chat-threads li + li { margin-top: 0.1rem; }
 .chat-thread-open {
   flex: 1;
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
   min-width: 0;
   padding: 0.4rem 0.5rem;
   border: 0;
@@ -2886,14 +2899,49 @@ td.text.has-hit[data-hues="8"] {
   cursor: pointer;
 }
 .chat-thread-open:hover { color: var(--ink); }
+/* Two lines, then cut. A title is up to ninety characters (TITLE_MAX in
+   src/chat-title.ts) and the panel is about forty across, so two lines shows
+   nearly all of one and the tooltip has the rest. `line-clamp` needs the
+   prefixed pair to work anywhere; both are still required in 2026. */
 .chat-thread-title {
-  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--ink);
+  font-weight: 500;
+  line-height: 1.3;
+}
+/* The last thing said. Dimmer than the title and only one line — it is a hint
+   about which conversation this is, not something to read here. */
+.chat-thread-last {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
 }
-.chat-thread-count { color: var(--ink-faint); font-size: 0.75rem; }
+.chat-thread-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+}
+/* The dot between the counts, drawn rather than typed, so it is not read out
+   as a word by a screen reader. */
+.chat-thread-meta > * + *::before { content: "·"; margin-right: 0.4rem; }
+.chat-thread-count { white-space: nowrap; }
+.chat-thread-when { white-space: nowrap; }
+/* The icons only appear under the pointer — three lines of metadata is enough
+   in the row without two permanent buttons competing with it — but never
+   vanish for the keyboard, which cannot hover. */
+.chat-thread-actions { display: flex; gap: 0.1rem; padding-top: 0.35rem; opacity: 0; }
+.chat-thread:hover .chat-thread-actions,
+.chat-thread:focus-within .chat-thread-actions { opacity: 1; }
 .chat-rename {
   flex: 1;
   min-width: 0;

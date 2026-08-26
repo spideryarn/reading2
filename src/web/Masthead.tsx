@@ -125,7 +125,7 @@ export function Masthead({ article }: Props) {
             original is one click away. docs/plans/pdf-ingestion.md § A scan
             with no text layer. */}
         {meta.source === "pdf" && (
-          <p className="provenance">
+          <p className="source-note">
             {meta.unverified ? (
               <>
                 Transcribed by a machine from a scanned image. There was no text in the file to
