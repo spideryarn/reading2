@@ -32,22 +32,44 @@
  * it was protecting against is the friction of a *shared abstraction over a
  * moving boundary*; four lines with no dependencies is not that.
  *
- * ## There is still a second answer
+ * ## Two rules, on purpose — and this was checked rather than assumed
  *
- * `isSlug` in [ingest.ts](./ingest.ts) is **stricter** — `^[a-z0-9][a-z0-9-]*$`
- * — and is what *mints* a slug, so nothing nonconforming should exist on disk.
- * It deliberately lives next to `slugFromUrl` so the two cannot drift. Whether
- * the two rules should collapse into one is an open question, with the
- * reasoning in docs/plans/simplification-audit.md § A.3; it needs a look at what
- * is actually stored before it can be tightened safely.
+ * `isSlug` in [ingest.ts](./ingest.ts) is **stricter**: `^[a-z0-9][a-z0-9-]*$`.
+ * It is what *mints* a slug, next to `slugFromUrl`, so every slug this app
+ * creates is lower-case and dash-separated.
+ *
+ * This one is looser, and it stays looser. Tightening it to match was tried on
+ * 2026-08-26 and reverted, because **something real depends on the difference**:
+ * `_`-prefixed directories mean "not an article" (see `listArticles` in
+ * src/api.ts and src/library-search.ts, which both skip them), and reader-state
+ * paths are asked about such names — `loadComments("_test-parse-json")` and
+ * friends. Minting refuses a leading underscore; reading must not.
+ *
+ * That is a *tidiness* difference, not a safety one, which is the part worth
+ * being clear about. This rule already refuses everything that could climb out
+ * of `data/`: no `/`, no `\`, and `.` and `..` by name. A slug that passes here
+ * is a single path segment. What it does not guarantee is that the slug is one
+ * we would have minted — and nothing needs that guarantee at a read.
+ *
+ * So security.md's warning ("a codebase with two answers will eventually be
+ * asked by something that only checks one") is answered by there being **one
+ * definition per question** — may this be minted? may this be read? — rather
+ * than by forcing one answer onto both. What was actually wrong was five copies
+ * of the read rule, and that is what this file fixed.
+ *
+ * `data/_jobs/` never reaches either: it is a hardcoded `JOBS_DIR` constant in
+ * src/jobs.ts. There is a test pinning that.
  */
+
+/** The rule, in one place. Private, so there is nothing to import and diverge. */
+const SLUG = /^[\w.-]+$/;
 
 /**
  * A slug is a path segment. Anything that isn't one is refused outright rather
  * than sanitised, because sanitising invites arguing about whether it worked.
  */
 export function assertSlug(slug: string): void {
-  if (!/^[\w.-]+$/.test(slug) || slug === "." || slug === "..") {
+  if (!SLUG.test(slug) || slug === "." || slug === "..") {
     throw new Error(`Not a valid slug: ${JSON.stringify(slug)}`);
   }
 }

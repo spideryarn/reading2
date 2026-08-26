@@ -367,9 +367,18 @@ are a shared helper the wrong choice is visibly absent from, and a test that fai
 
 ### Still open here
 
-- **`isSlug` and `assertSlug` are two different definitions of a slug.** (`assertSlug` now lives in
-  [`src/slug.ts`](../../src/slug.ts) — it had been copied into five reader-state modules, which is
-  what this warning predicted; the two *rules* are still two.)
+- ~~**`isSlug` and `assertSlug` are two different definitions of a slug.**~~ **Answered, 2026-08-26,
+  though not the way this warning expected.** `assertSlug` had been copied byte-for-byte into *five*
+  reader-state modules — which is what the warning predicted, and that is now one shared
+  [`src/slug.ts`](../../src/slug.ts).
+
+  The two rules themselves stay two, deliberately. Collapsing them onto the stricter one was tried
+  and reverted: `_`-prefixed names mean "not an article" and reader-state paths are legitimately
+  asked about them, so minting must refuse a leading underscore and reading must not. The difference
+  is tidiness, not safety — the read rule already refuses `/`, `\`, `.` and `..`, so anything it
+  accepts is a single path segment. One definition **per question** (may this be minted? may this be
+  read?) rather than one answer forced onto both. [`tests/slug.test.ts`](../../tests/slug.test.ts)
+  pins both halves, including that neither can reach `data/_jobs/`.
   [`src/ingest.ts`](../../src/ingest.ts) says `^[a-z0-9][a-z0-9-]*$`;
   [`src/comments.ts`](../../src/comments.ts) says `^[\w.-]+$`. Neither admits a `/`, so neither is a
   traversal, but a codebase with two answers to "what is a slug" will eventually be asked the

@@ -92,7 +92,7 @@ is read by nothing.
 | `DATABASE_URL` | Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off) |
-| `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
+| `NODEJS_HELPERS=0` | the request body (section not written yet) |
 | `ANTHROPIC_API_KEY` | the pipeline stages. Note it is *not* in `.env.local` — it comes from Greg's shell, so it is the easy one to forget |
 | `OPENROUTER_API_KEY` | explain, and chat |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | for the beta gate, which does not exist yet |
