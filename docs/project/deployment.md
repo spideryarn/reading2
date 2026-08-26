@@ -214,11 +214,12 @@ is read by nothing.
 | `SPIDERYARN_STORE=postgres` | which store serves reads. **Unset means `files`**, and on a host with no durable disk that is an empty shelf and a 200 |
 | `DATABASE_URL` | **not set yet**, which is why `/api/health` is a 503 and nothing can be read in production. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
-| `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off) |
+| `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production only, not Preview** (measured 2026-08-26) — so a preview deployment used to check anything will fail for a reason unrelated to whatever you are checking |
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
 | `ANTHROPIC_API_KEY` | the pipeline stages. Note it is *not* in `.env.local` — it comes from Greg's shell, so it is the easy one to forget |
 | `OPENROUTER_API_KEY` | explain, and chat |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | for the beta gate, which does not exist yet |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **not set, and read at BUILD time.** Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next one. Missing means `src/web/lib/supabase.ts` throws at module load and the site is a blank page — see [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 
 ## `/api/health`, and why to look at it first

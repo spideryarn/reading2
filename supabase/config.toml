@@ -200,7 +200,18 @@ site_url = "http://localhost:5273"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["http://localhost:5273", "http://127.0.0.1:5273"]
+# `/**` and not `/*`: one star does not cross a slash, so `/*` would cover
+# `/auth` and NOT `/auth/callback`, and the failure is silent — Supabase falls
+# back to `site_url` and the reader lands on the shelf instead of where they
+# were. The bare roots stay because they are `site_url` and its 127.0.0.1 twin.
+# The same three globs are needed on the remote project; see
+# docs/plans/auth-ui-and-production.md § The two hostnames.
+additional_redirect_urls = [
+  "http://localhost:5273",
+  "http://localhost:5273/**",
+  "http://127.0.0.1:5273",
+  "http://127.0.0.1:5273/**",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.

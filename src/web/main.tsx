@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { LucideProvider } from "lucide-react";
 import { App } from "./App.js";
-import { canonicalAddHref, parseRoute, readHref } from "./router.js";
+import { CALLBACK_HREF, canonicalAddHref, parseRoute, readHref } from "./router.js";
 import { isSpideryarnId } from "../ids.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
 // styles.css inside `@layer app` — importing the two side by side would
@@ -95,8 +95,39 @@ enableHistorySync();
  * `replaceState`, as with the others: the address you typed is a spelling, not
  * a page you visited, and pressing Back should not offer to re-add anything.
  */
-const canonicalAdd = canonicalAddHref(location.pathname, location.search, location.hash);
-if (canonicalAdd) history.replaceState(history.state, "", canonicalAdd);
+/**
+ * **`/auth/callback` is exempt from every rewrite in this file, and it goes
+ * first.** Not tidiness — a security property.
+ *
+ * Google returns the reader to this address with a one-time `?code=` and a
+ * `state` on it. `canonicalAddHref` below reads `location.search` as *part of
+ * an article's address*: that is its whole job, and it is why
+ * `/add/https://x.test/a?about=1` correctly queues a URL with `?about=1` on
+ * it. So a return landing on any `/add/…` spelling would fold our
+ * authorisation code into a stranger's URL, which the ingest pipeline then
+ * fetches — putting a live auth code in someone else's access log.
+ *
+ * The window is real rather than theoretical: this file imports `App` at module
+ * scope, so the Supabase client reads `window.location.href` before any line
+ * below runs. It can therefore exchange the code *successfully* while a rewrite
+ * leaves a copy of it encoded in an article address. It works, and it leaks.
+ *
+ * GPT Sol, 2026-08-26. The path is `CALLBACK_HREF` from router.ts rather than a
+ * string here, because two spellings of it is exactly how this comes back.
+ *
+ * **All four rewrites are guarded, not just the one that can bite.** Only the
+ * `/add/` one is reachable from a real callback — the other three need a
+ * `#spya-…`, a `?slug=`, or an `about=`, and Google sends none of those. But
+ * "this one is unreachable" is a judgement that has to be re-made every time
+ * somebody adds a rewrite, and the person adding the fifth will not read this
+ * paragraph. One flag, checked four times, is a rule instead.
+ */
+const onCallback = new RegExp(`^${CALLBACK_HREF}/?$`).test(location.pathname);
+
+if (!onCallback) {
+  const canonicalAdd = canonicalAddHref(location.pathname, location.search, location.hash);
+  if (canonicalAdd) history.replaceState(history.state, "", canonicalAdd);
+}
 
 /**
  * Deep links used to be `/#spya-k6fpme`; position now lives in `?at=`.
@@ -120,7 +151,7 @@ if (canonicalAdd) history.replaceState(history.state, "", canonicalAdd);
  * the more recent of the two is right whichever way the link was made.
  */
 const legacyAnchor = decodeURIComponent(location.hash.slice(1));
-if (isSpideryarnId(legacyAnchor)) {
+if (!onCallback && isSpideryarnId(legacyAnchor)) {
   const url = new URL(location.href);
   url.hash = "";
   url.searchParams.set("at", legacyAnchor);
@@ -146,7 +177,7 @@ if (isSpideryarnId(legacyAnchor)) {
  * someone handed a link can see what it is going to show them (params.ts).
  */
 const legacySlug = new URLSearchParams(location.search).get("slug");
-if (legacySlug) {
+if (!onCallback && legacySlug) {
   const rest = location.search
     .replace(/^\?/, "")
     .split("&")
@@ -183,7 +214,7 @@ if (legacySlug) {
  * article-less links.
  */
 const aboutish = /(^|[?&])(about=[^&]*|panel=about)($|&)/.test(location.search);
-if (aboutish) {
+if (!onCallback && aboutish) {
   const rest = location.search
     .replace(/^\?/, "")
     .split("&")

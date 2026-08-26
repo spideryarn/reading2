@@ -42,6 +42,7 @@ import { useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { Article } from "../types.js";
 import { Link } from "./Link.js";
+import { SourceLink } from "./SourceLink.js";
 import { LIBRARY_HREF } from "./router.js";
 import { articleStats } from "./stats.js";
 
@@ -130,18 +131,14 @@ export function Masthead({ article }: Props) {
               <>
                 Transcribed by a machine from a scanned image. There was no text in the file to
                 check it against, so nothing has verified it.{" "}
-                <a href={`/api/source/${meta.slug}`} target="_blank" rel="noreferrer noopener">
-                  View the scanned pages
-                </a>
+                <SourceLink slug={meta.slug}>View the scanned pages</SourceLink>
                 .
               </>
             ) : (
               <>
                 Transcribed by a machine from a PDF, and checked against the file's own text on{" "}
                 {meta.pagesChecked ?? 0} of {meta.pages ?? 0} pages.{" "}
-                <a href={`/api/source/${meta.slug}`} target="_blank" rel="noreferrer noopener">
-                  View the original
-                </a>
+                <SourceLink slug={meta.slug}>View the original</SourceLink>
                 .
               </>
             )}

@@ -80,6 +80,7 @@ import {
   ArrowLeft,
   Blocks,
   BookA,
+  Lightbulb,
   BookOpen,
   Clock,
   Download,
@@ -106,7 +107,7 @@ import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 import { ProfileBox } from "./ProfileBox.js";
 
 /**
@@ -143,6 +144,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   tweets: ListOrdered,
   glossary: BookA,
   summary: Layers,
+  ideas: Lightbulb,
 };
 
 /**
@@ -211,7 +213,7 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
     setProvenanceError(null);
     setSlow(false);
     const timer = setTimeout(() => live && setSlow(true), LOADING_AFTER_MS);
-    fetch(`/api/metadata/${encodeURIComponent(slug)}`)
+    apiFetch(`/api/metadata/${encodeURIComponent(slug)}`)
       .then((r) => readJson<ArticleMetadata>(r))
       .then((m) => live && setProvenance(m))
       .catch((e: Error) => live && setProvenanceError(e.message));
@@ -250,7 +252,7 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
     if (purposeDraft === purposeSaved) return;
     const sending = purposeDraft;
     setPurposeError(null);
-    fetch(`/api/library/${encodeURIComponent(slug)}`, {
+    apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ purpose: sending === "" ? null : sending }),

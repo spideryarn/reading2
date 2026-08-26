@@ -22,7 +22,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LibraryHit, LibrarySearchResponse } from "../types.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 
 /** Long enough to skip the middle of a word, short enough not to feel laggy. */
 const DEBOUNCE_MS = 250;
@@ -97,7 +97,7 @@ export function useLibrarySearch(query: string): LibrarySearchState {
          different halves: abort stops the browser holding six connections open
          while somebody types, and the echo check is what stops a response that
          escaped the abort from repainting the list. Either alone leaves a gap. */
-      fetch(`/api/library/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
+      apiFetch(`/api/library/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
         .then((r) => readJson<LibrarySearchResponse>(r))
         .then((body) => {
           // The answer to a question nobody is asking any more.

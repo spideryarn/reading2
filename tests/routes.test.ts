@@ -17,6 +17,7 @@ import { createComment, loadComments } from "../src/comments.js";
 import { loadShelf } from "../src/shelf.js";
 import { deleteRun, loadRuns } from "../src/searches.js";
 import { mintId } from "../src/ids.js";
+import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const SLUG = "test-routes-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -29,13 +30,21 @@ interface Reply {
 }
 
 /** Drive `handleApi` with a fake request/response pair. */
-async function call(method: string, url: string, body?: unknown): Promise<Reply> {
+async function call(
+  method: string,
+  url: string,
+  body?: unknown,
+  /** Omitted means "signed in". The gate's own cases below pass their own. */
+  verify?: Parameters<typeof handleApi>[2],
+  /** Omitted means the authenticated header. `{}` is an anonymous request. */
+  headers: Record<string, string> = AUTHED_HEADERS,
+): Promise<Reply> {
   const payload = body === undefined ? [] : [Buffer.from(typeof body === "string" ? body : JSON.stringify(body))];
   const req = Object.assign(
     (async function* () {
       yield* payload;
     })(),
-    { method, url },
+    { method, url, headers },
   ) as unknown as IncomingMessage;
 
   let status = 0;
@@ -53,7 +62,7 @@ async function call(method: string, url: string, body?: unknown): Promise<Reply>
     },
   } as unknown as ServerResponse;
 
-  const handled = await handleApi(req, res);
+  const handled = await handleApi(req, res, verify ?? acceptAny);
   return { handled, status, body: text ? JSON.parse(text) : {} };
 }
 
@@ -77,7 +86,7 @@ async function callStreaming(
     (async function* () {
       yield* payload;
     })(),
-    { method, url },
+    { method, url, headers: AUTHED_HEADERS },
   ) as unknown as IncomingMessage;
 
   let status = 0;
@@ -109,7 +118,7 @@ async function callStreaming(
     },
   } as unknown as ServerResponse;
 
-  await handleApi(req, res);
+  await handleApi(req, res, acceptAny);
   return { status, headers, frames, streamed };
 }
 
@@ -774,5 +783,49 @@ describe("POST /api/search/:slug is a stream too", () => {
     expect(frames.map((f) => f.event)).toEqual(["begin", "hit"]);
     expect(frames.some((f) => f.event === "done")).toBe(false);
     expect(await loadRuns(SEARCH_SLUG)).toHaveLength(0);
+  });
+});
+
+/**
+ * The gate, at the seam it actually sits at.
+ *
+ * tests/auth.test.ts covers `requireUser` on its own. These two cover the thing
+ * that has gone wrong in every project that ever built one: **the gate being
+ * mounted somewhere that does not run.** Which is why they go through
+ * `handleApi` rather than round it.
+ *
+ * The mutation test that makes them mean something is in
+ * docs/plans/auth-ui-and-production.md and has to be done by hand once: comment
+ * out the `await requireUser(...)` line, watch the first of these go red, put
+ * it back. A gate test that has never been seen to fail proves nothing —
+ * docs/reusable/silent-success.md, and the memory with my name on it.
+ */
+describe("the gate", () => {
+  it("refuses a request with no Authorization header", async () => {
+    /* GET, because a 401 on a POST could equally be validation failing first —
+       and the order matters: the gate runs before any body is read, so a
+       stranger gets 401 rather than a diagnosis of their JSON. */
+    const r = await call("GET", "/api/library", undefined, undefined, {});
+    expect(r.status).toBe(401);
+    /* Not an empty shelf. An empty library and a locked library look identical
+       to a stranger and identical in a log, which is the failure this route
+       would most plausibly have. */
+    expect(r.body).not.toHaveProperty("articles");
+  });
+
+  it("refuses a request whose token does not check out", async () => {
+    const no = async () => ({ ok: false, kind: "bad-token" }) as const;
+    const r = await call("GET", "/api/library", undefined, no, {
+      authorization: "Bearer nonsense",
+    });
+    expect(r.status).toBe(401);
+  });
+
+  /* Otherwise a gate that refuses absolutely everything passes both tests
+     above and the suite still looks green. */
+  it("lets a signed-in reader through", async () => {
+    const r = await call("GET", "/api/library");
+    expect(r.status).toBe(200);
+    expect(r.body).toHaveProperty("articles");
   });
 });

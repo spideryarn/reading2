@@ -202,6 +202,39 @@ export const RISKY_ROOT_ATTR = /^(on|style$|srcdoc$|data-(comment|mark-end|open)
  * why `srcdoc` is forbidden above: a `srcdoc` frame runs in *our* origin, and
  * the reasoning would then be exactly backwards.
  */
+/**
+ * The attributes that can carry a URL, across everything this policy allows.
+ *
+ * `srcset` and `poster` are the two people forget. `data` and `formaction` are
+ * on elements this policy does not allow at all today — kept because the cost
+ * is a string in an array and the cost of missing one is a hole.
+ */
+const URL_ATTRS = ["href", "src", "srcset", "poster", "data", "formaction", "xlink:href"];
+
+/**
+ * Does this URL point at our own API?
+ *
+ * **Resolved rather than string-matched.** `startsWith("/api/")` misses
+ * `/foo/../api/library`, and misses a same-origin absolute URL entirely. A
+ * relative URL is resolved against a placeholder origin, which is enough to
+ * normalise the path; an absolute URL to somebody else's host resolves to a
+ * different origin and is left alone, which is the whole point — this is about
+ * *our* API, not about links in general.
+ */
+function isOwnApi(value: string): boolean {
+  const trimmed = value.trim();
+  // Protocol-relative — `//host/api/x` — is somebody else's host, not ours.
+  if (trimmed.startsWith("//")) return false;
+  let url: URL;
+  try {
+    url = new URL(trimmed, "https://spideryarn.invalid/");
+  } catch {
+    return false;
+  }
+  if (url.origin !== "https://spideryarn.invalid") return false;
+  return url.pathname === "/api" || url.pathname.startsWith("/api/");
+}
+
 export function installArticlePolicy(purify: DOMPurify): void {
   purify.addHook("afterSanitizeAttributes", (node) => {
     // Duck-typed, not `node instanceof Element`. There is no global `Element` in
@@ -223,6 +256,28 @@ export function installArticlePolicy(purify: DOMPurify): void {
       if (el.classList?.contains(own)) el.classList.remove(own);
     }
     if (el.classList?.length === 0 && el.hasAttribute("class")) el.removeAttribute("class");
+
+    /* **An article may not address our own API.**
+     *
+     * This policy keeps relative URLs, on purpose — the block splitter needs
+     * figures, and tests/sanitize.test.ts pins that `<img src="/d.png">`
+     * survives. Which means a published page can contain
+     * `<img src="/api/health">` or `<a href="/api/library">`, and those resolve
+     * against *our* origin when the reading view renders them.
+     *
+     * Neither is a catastrophe — the gate refuses the anchor and the image
+     * reaches only the one public endpoint — but both are a stranger's page
+     * making requests to our server from the reader's browser, and "bounded"
+     * is a thing to decide rather than to discover. Found by GPT Sol,
+     * 2026-08-26, in review of the auth work: no grep over our source can see
+     * these, because they arrive at runtime.
+     *
+     * Every URL-bearing attribute, not just `href` and `src` — a rule that
+     * covers four of six looks exactly like a rule that covers six. */
+    for (const name of URL_ATTRS) {
+      const value = el.getAttribute(name);
+      if (value !== null && isOwnApi(value)) el.removeAttribute(name);
+    }
 
     if (el.tagName !== "IFRAME") return;
     if (!isAllowedEmbed(el.getAttribute("src"))) {

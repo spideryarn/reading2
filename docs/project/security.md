@@ -773,6 +773,40 @@ one that writes turns "an injected page made the answer wrong" into "an injected
 reader's data", which is a different problem needing a different answer — most likely the reader
 confirming the action rather than the model being trusted not to be fooled.
 
+## A third party who is not untrusted: whoever signs in <a id="the-gate"></a>
+
+Since 2026-08-27 there is a gate. [auth.md](auth.md) says where the pieces are; two facts belong
+here because they are properties of this system rather than of that feature.
+
+**The gate admits anyone with a Google account.** There is no allowlist — `isAllowed` in
+[`src/auth.ts`](../../src/auth.ts) returns true — and that is Greg's explicit decision, made twice
+and in writing ([auth-supabase.md § Who gets in](../plans/auth-supabase.md#who-gets-in)). A security
+doc that did not say so would be wrong. What it buys somebody is the ingest pipeline and
+`ANTHROPIC_API_KEY` at two model calls per article; **the control that is actually missing is a
+spend limit**, and an allowlist of one never limited what Greg could spend either.
+
+**And it does not yet say whose data is whose.** `currentOwnerId()` is process-wide and the reads
+do not filter by owner, so every admitted person sees the same shelf, profile and chats. That was
+not part of the decision above, which was made about money, and it is
+[open for Greg](../plans/auth-ui-and-production.md#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is).
+
+**An article may not address our own API.** The sanitiser keeps relative URLs by design — the block
+splitter needs figures — so a published page could carry `<img src="/api/health">` or
+`<a href="/api/library">` and have them resolve against *our* origin in the reading view. No grep
+over our source can see those; they arrive at runtime. `installArticlePolicy` in
+[`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) now strips any URL-bearing attribute that
+resolves to our own `/api/`, and `tests/sanitize-own-api.test.ts` pins both halves — that it strips
+those, and that it leaves `/d.png`, `//example.com/api/x` and `/apiary/notes` alone. GPT Sol, 2026-08-26.
+
+**`/api/health` is the one route outside the gate**, because [`src/vercel.ts`](../../src/vercel.ts)
+answers it before `handleApi` runs — a probe that reports on the deployment has to work when the
+application does not. Until 2026-08-27 that endpoint read the *entire* request body from any
+method, with no cap, because `MAX_BODY_BYTES` lives in `src/routes.ts` and not in that path. It is
+now GET/HEAD/POST only, 405 otherwise, and the POST probe stops at 8KB. Separately,
+[`api/index.js`](../../api/index.js) used to return the message and stack of a failed import to the
+caller, behind a comment claiming the deployment was behind a login wall — which
+[deployment.md](deployment.md) already showed was false. The stack goes to the log now.
+
 ## Known gaps
 
 Honest list. None is a reason to delay the fix above; all are worth knowing.

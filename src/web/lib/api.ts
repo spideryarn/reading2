@@ -39,7 +39,24 @@
  * `{ error }` string does. An unparsed body is somebody else's HTML — Vercel's,
  * a proxy's, a captive portal's — and putting it on screen is how you get a
  * stack trace, or a login page, rendered as an error message.
+ *
+ * ## And, since 2026-08-26, making the request as well as reading it
+ *
+ * `apiFetch` below is the other half. Every request to our API carries an
+ * `Authorization: Bearer` header now, and there are thirty-one call sites in
+ * fourteen files — so the one thing that must not happen is thirty-one
+ * independent decisions about how to get a token. Same argument as above, one
+ * layer up, which is why it lives in this file rather than in a new one.
+ *
+ * **A header rather than a cookie**, and that was a free choice rather than a
+ * clever one: nothing in this app uses `EventSource`, which cannot set headers.
+ * useChat.ts says in its own comment why it reads SSE off a `fetch` body
+ * instead, and that decision — made for other reasons — is what leaves a
+ * bearer token available here. Cookies would have brought a CSRF surface with
+ * them. docs/plans/auth-supabase.md.
  */
+
+import { supabase } from "./supabase.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
 const SNIPPET = 300;
@@ -160,3 +177,141 @@ export async function readJson<T>(res: Response): Promise<T> {
     );
   }
 }
+
+
+/* ------------------------------------------------------------------------- *
+ *  Making the request
+ * ------------------------------------------------------------------------- */
+
+/**
+ * `fetch`, with the reader's access token on it.
+ *
+ * A drop-in for `fetch` at every `/api/…` call site: same arguments, same
+ * `Response`, same streaming body, same `AbortSignal`. The differences are all
+ * on the way out.
+ *
+ * ## Same-origin `/api/` only
+ *
+ * The cheapest line in this file, and it stops the expensive mistake: a future
+ * absolute URL quietly posting somebody's bearer token to another host. There
+ * is no legitimate cross-origin call in this app, so the check costs nothing
+ * and refuses rather than warns.
+ *
+ * ## The token is fetched, not remembered
+ *
+ * `getSession()` on **every** request, never a token cached in React state.
+ * The SDK refreshes inside a 90-second margin and single-flights concurrent
+ * refreshes, so this is close to free — and it is what makes a page restored
+ * from the bfcache, a tab that has been in the background for an hour, and a
+ * refresh already in flight all behave without any of them being special-cased.
+ *
+ * ## A 401 is not "the session is gone"
+ *
+ * Refresh once, retry once, and then report the failure. **Do not sign the
+ * reader out.** A 401 can be a refresh race or a momentary verifier failure,
+ * and dropping somebody out of the article they are reading because one request
+ * lost a race is a worse bug than the one it would be preventing. Session state
+ * belongs to the SDK's own auth events; useSession.ts subscribes to them.
+ *
+ * Retrying is safe for what this app sends — every body is a string or absent,
+ * so there is no consumed stream to replay. A `ReadableStream` body would break
+ * that assumption, and there are none.
+ *
+ * ## A stream does not die when its token expires
+ *
+ * The token is an admission check. Once the server has accepted the request
+ * there is nothing to re-check per SSE frame, so a chat answer that runs past
+ * the hour simply keeps arriving. Worth stating because it is the first
+ * question anyone asks about this design.
+ */
+export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  if (!input.startsWith("/api/")) {
+    throw new Error(`apiFetch is for our own API only, and this is not: ${input}`);
+  }
+
+  const send = async (token: string | undefined): Promise<Response> => {
+    /* `Headers` rather than object spread, because a caller may pass headers as
+       an array of pairs or as a `Headers` instance, and spreading either of
+       those silently produces `{}` — a class of bug where the request goes out
+       looking almost right. */
+    const headers = new Headers(init.headers);
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    return fetch(input, { ...init, headers });
+  };
+
+  const token = await accessToken();
+  const first = await send(token);
+  if (first.status !== 401) return first;
+
+  /* **Nobody was signed in, so there is nothing to refresh.** Without this the
+     sign-in screen's own requests would each provoke a pointless refresh call,
+     and — worse — `refreshSession()` on a signed-out client is a shape this
+     code then has to guess at. A 401 for an anonymous request is not a race, it
+     is the correct answer. */
+  if (!token) return first;
+
+  /* One refresh, one retry. Not a loop: if a fresh token is also refused then
+     the answer really is no, and a client that keeps asking turns a refusal
+     into a denial-of-service against our own server.
+     The `catch` is not decoration — a refresh is a network call, and a throw
+     here would replace a perfectly good 401 (which callers know how to report)
+     with a `TypeError` about `fetch`. */
+  let refreshed: string | undefined;
+  try {
+    const { data } = await supabase.auth.refreshSession();
+    refreshed = data?.session?.access_token;
+  } catch {
+    return first;
+  }
+  if (!refreshed) return first;
+  return send(refreshed);
+}
+
+/**
+ * The current access token, or `undefined`.
+ *
+ * `undefined` rather than a throw: an unauthenticated request should be refused
+ * by the server, with the server's own message, rather than by a client-side
+ * error the reader cannot act on. It also means the sign-in screen's own calls
+ * do not need a special case.
+ */
+async function accessToken(): Promise<string | undefined> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token;
+}
+
+/**
+ * The token we already have, without waiting to find out if it is fresh.
+ *
+ * **For `pagehide` and nothing else.** A page being torn down can be killed
+ * inside the `await` that `apiFetch` does before it starts the request, which
+ * turns a best-effort save into a save that often never leaves. This reads the
+ * SDK's synchronous in-memory copy and starts the request immediately.
+ *
+ * The trade is explicit: a token that expired in the last few seconds will be
+ * refused, and the save is lost. That is strictly better than the request never
+ * being made — and the real fix is not to arrive here with unsaved work, which
+ * is why useProfile.ts also flushes on `visibilitychange`. GPT Sol, 2026-08-26.
+ */
+export function leavingFetch(input: string, init: RequestInit = {}): void {
+  if (!input.startsWith("/api/")) return;
+  const headers = new Headers(init.headers);
+  const token = cachedToken;
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  /* `keepalive` lets the request outlive the page. Deliberately unawaited and
+     unhandled: there is no one left to tell. */
+  void fetch(input, { ...init, headers, keepalive: true }).catch(() => {});
+}
+
+/**
+ * The last token we saw, kept for `leavingFetch`.
+ *
+ * Updated from the SDK's own auth events rather than polled, so it is exactly
+ * as fresh as the SDK is. This is the one place in the client that holds a
+ * token in a variable, and it exists solely because `pagehide` has no time to
+ * await anything.
+ */
+let cachedToken: string | undefined;
+supabase.auth.onAuthStateChange((_event, session) => {
+  cachedToken = session?.access_token;
+});

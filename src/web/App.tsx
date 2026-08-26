@@ -605,14 +605,47 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   const [found, setFound] = useState<Found[]>([]);
   const [openHit, setOpenHit] = useState<string | null>(null);
 
+  /**
+   * The selected idea's passages — **its own state, deliberately not `found`.**
+   *
+   * Ideas resolves into the same `Found[]` search does and draws through the
+   * same marks, so sharing one piece of state looks like the obvious economy.
+   * It is a bug, and a silent one. `SearchBand` pushes into `found` from a
+   * **layout** effect and clears it from a **passive** unmount cleanup, and both
+   * of those are deliberate (see the comments there). Passive cleanups flush
+   * *after* paint and layout effects run *before* it, so switching search →
+   * ideas would run:
+   *
+   *   IdeasBand's layout push   → passages written   (before paint)
+   *   SearchBand's passive clear → passages wiped    (after paint)
+   *
+   * The outgoing mode tidies up on top of the incoming one, and nothing errors.
+   * It does not happen today between glossary and search only because those two
+   * clear different state. Two states and one `mode` test below is the whole
+   * fix. Found by GPT Sol reviewing the plan; docs/plans/ideas-mode.md.
+   */
+  const [ideaFound, setIdeaFound] = useState<Found[]>([]);
+  const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
+
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
      anchor for an article's worth of blocks at that rate is the one thing that
      would make typing feel slow. Same reasoning as the second map in
      TableView.tsx. */
-  const hitMarks = useMemo(() => buildHitMarks(found, openHit), [found, openHit]);
-  const hitStrength = useMemo(() => blockStrength(found), [found]);
-  const hitHues = useMemo(() => blockHues(found), [found]);
+  /* **One list, chosen by mode, feeding every memo below.** The marks, the
+     paragraph bar and the rail must all be about the same passages, and the way
+     to guarantee that is for one expression to decide and everything else to
+     read it — the same "compute once, hand to both" rule the panel and the
+     prose already follow. The two modes are mutually exclusive, so this is a
+     pick rather than a merge. */
+  const passages = mode === "ideas" ? ideaFound : found;
+  const openPassage = mode === "ideas" ? openOccurrence : openHit;
+  const hitMarks = useMemo(
+    () => buildHitMarks(passages, openPassage),
+    [passages, openPassage],
+  );
+  const hitStrength = useMemo(() => blockStrength(passages), [passages]);
+  const hitHues = useMemo(() => blockHues(passages), [passages]);
   /* The same facts again, for the rail rather than for the prose — which
      searches matched where, plus how many times. Kept as its own memo beside
      the other two for the reason given on them: `found` changes on every
@@ -622,7 +655,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
      slot, so `blockHues` drops it — right for the paragraph bar, which falls
      back to the one fixed search hue, and wrong for the rail, which would then
      show nothing at all in words mode. search-hits.ts § Why `null` survives. */
-  const hitBlocks = useMemo(() => blockMatches(found), [found]);
+  const hitBlocks = useMemo(() => blockMatches(passages), [passages]);
 
   /**
    * The bottom drawer — see Dock.tsx, and docs/plans/bottom-bar.md for why the
@@ -1131,6 +1164,16 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         <SummaryBand slug={slug} article={article} onJump={jumpTo} />
       )}
       {mode === "diagram" && <DiagramBand article={article} onJump={jumpTo} />}
+      {mode === "ideas" && (
+        <IdeasBand
+          slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setIdeaFound}
+          openKey={openOccurrence}
+          onOpenKey={setOpenOccurrence}
+        />
+      )}
       {mode === "search" && (
         <SearchBand
           slug={slug}
@@ -1178,7 +1221,16 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
              of leaving it alone means a reader who has hidden the rail opens
              search and finds half the feature drawn somewhere they cannot see.
              The pill is one press away. docs/project/search.md § The rail. */
-          if (next === "search" && mode !== "search" && showSpine === false) {
+          /* Ideas paints one lane down the rail for the selected idea, and
+             the rail is the only place that can show an idea's *shape* — is
+             this threaded through the piece, or concentrated in one section?
+             So it earns the same arrival rule search has, for the same reason
+             and with the same `null` rather than `true`. */
+          if (
+            (next === "search" || next === "ideas") &&
+            mode !== next &&
+            showSpine === false
+          ) {
             void setShowSpine(null);
           }
         }}
@@ -1196,6 +1248,110 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Ideas, and the fetch that belongs to it.
+ *
+ * A component of its own for the reason `ChatBand` and `GlossaryBand` are:
+ * `useIdeas` fetches on mount, and calling it up in `Reader` would charge every
+ * reader of every article a request for a list almost none of them will open.
+ *
+ * What it pushes up is the **resolved** passages, not the stored occurrences.
+ * The panel and the prose have to be showing the same set, and the only way to
+ * guarantee that is for one of them to compute it and hand it to the other —
+ * the same rule `SearchBand` follows. Resolution can drop occurrences (a block
+ * the article no longer has), so a panel counting the stored list would say
+ * "2 of 5" and step through three.
+ */
+function IdeasBand({
+  slug,
+  blocks,
+  onJump,
+  onFound,
+  openKey,
+  onOpenKey,
+}: {
+  slug: string;
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+}) {
+  const ideas = useIdeas(slug);
+  const [ideaId, setIdeaId] = useQueryState("idea", ideaParam);
+
+  /* The palette slot, assigned over **every** idea rather than only the
+     selected one, so an idea's colour does not depend on which one is open —
+     the same guarantee `assignSlots` gives saved searches, and the same reason
+     App.tsx calls it over all runs rather than the active ones.
+
+     `generatedAt` for every idea, so `inCreationOrder` walks them in the order
+     the artefact stores — which src/ideas.ts fixes at write time precisely so
+     this cannot reshuffle. Ideas have no clock of their own; the artefact's is
+     the honest stand-in, and the index breaks the tie. */
+  const slots = useMemo(() => {
+    const list = ideas.ideas?.ideas ?? [];
+    const at = ideas.ideas?.generatedAt ?? "";
+    return assignSlots(list.map((idea, i) => ({ id: idea.id, createdAt: `${at}#${i}` })));
+  }, [ideas.ideas]);
+
+  const selected = useMemo(
+    () => ideas.ideas?.ideas.find((i) => i.id === ideaId) ?? null,
+    [ideas.ideas, ideaId],
+  );
+
+  /* Document order, so the stepper's "2 of 4" counts the way the reader moves
+     through the article rather than the order the model happened to list them. */
+  const found = useMemo(() => {
+    if (!selected) return [];
+    return orderFound(
+      resolveIdea(blocks, {
+        id: selected.id,
+        slot: slots.get(selected.id) ?? 0,
+        occurrences: selected.occurrences,
+      }),
+      "document",
+    );
+  }, [selected, blocks, slots]);
+
+  /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
+     paintable frame in which the panel shows the new idea and the prose still
+     marks the old one. Same reasoning, and the same pairing with an
+     unmount-only clear below, as `SearchBand`. */
+  useLayoutEffect(() => {
+    onFound(found);
+  }, [found, onFound]);
+
+  /* Unmount only, with no data dependencies: leaving the mode must take the
+     marks out of the prose with it, and folding this into the effect above
+     would clear them on every change before setting them again — one frame of
+     flicker on every keypress-equivalent. */
+  useEffect(
+    () => () => {
+      onFound([]);
+      onOpenKey(null);
+    },
+    [onFound, onOpenKey],
+  );
+
+  return (
+    <IdeasPanel
+      {...ideas}
+      ideaId={ideaId}
+      onIdea={(next) => {
+        void setIdeaId(next);
+        /* A new idea means the old occurrence is meaningless — its key names an
+           idea nobody is looking at, so the stepper would read "0 / 3". */
+        onOpenKey(null);
+      }}
+      found={found}
+      openKey={openKey}
+      onOpenKey={onOpenKey}
+      onJump={onJump}
+    />
   );
 }
 

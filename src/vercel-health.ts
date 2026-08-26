@@ -70,6 +70,17 @@ const EXPECTED = [
  * The four `pg` reads out of a connection string that make it ignore the `ssl`
  * object handed to `new Pool` — see node-postgres, "Usage with connectionString".
  */
+/**
+ * How much of a body this probe will read from an unauthenticated caller.
+ *
+ * Generous for the thing it is for — the check is "did any bytes arrive at
+ * all", and `{"hello":"world"}` is eighteen of them — and small enough that
+ * nobody can use a public endpoint to make us hold memory. Deliberately its own
+ * constant rather than an import of `MAX_BODY_BYTES` from src/routes.ts: this
+ * file has to keep working when that module cannot even load.
+ */
+const MAX_PROBE_BYTES = 8 * 1024;
+
 const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
 
 /**
@@ -87,7 +98,20 @@ const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
  */
 async function bodyCheck(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
+  let size = 0;
+  let truncated = false;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    /* Stop reading rather than throw: this endpoint's job is to report what
+       arrived, and "more than we were willing to read" is a report. A throw
+       here would be answered by src/vercel.ts's last-resort catch as a plain
+       500, which says nothing. */
+    if (size > MAX_PROBE_BYTES) {
+      truncated = true;
+      break;
+    }
+    chunks.push(chunk as Buffer);
+  }
   const raw = Buffer.concat(chunks).toString("utf8");
 
   let parsed = false;
@@ -110,6 +134,7 @@ async function bodyCheck(req: IncomingMessage, res: ServerResponse): Promise<voi
       {
         ok: !lost,
         bytes: raw.length,
+        truncated,
         contentLength: declared,
         parsedAsJson: parsed,
         helpersDisabled: process.env.NODEJS_HELPERS === "0",
@@ -129,6 +154,34 @@ async function bodyCheck(req: IncomingMessage, res: ServerResponse): Promise<voi
 
 export async function health(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "GET" && req.method !== "HEAD") {
+    /* **This is the one route the gate does not cover**, because src/vercel.ts
+       answers it before `handleApi` is ever called — a probe that reports on the
+       deployment has to work when the application does not.
+     *
+     * Which makes what it does with a non-GET the whole of its attack surface,
+     * and until 2026-08-27 that was: read the entire request body, from anyone,
+     * with no cap. `MAX_BODY_BYTES` lives in src/routes.ts and is not in this
+     * path, so
+     *
+     *     curl -X DELETE https://host/api/health --data-binary @something-huge
+     *
+     * was an unauthenticated request that read as much as anybody cared to
+     * send. Found by GPT Sol reviewing the auth plan; it is not caused by the
+     * gate, and it became the gate's business the moment we wrote down that
+     * everything except health is covered.
+     *
+     * So: **POST only, capped, and every other method is 405.** The body probe
+     * is a real diagnostic — it is how `NODEJS_HELPERS=0` gets verified after a
+     * platform change — so it stays, narrowed to the one method that means
+     * "here is a body". */
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      res.setHeader("Allow", "GET, HEAD, POST");
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(JSON.stringify({ error: "Only GET, HEAD and POST are allowed here." }));
+      return;
+    }
     await bodyCheck(req, res);
     return;
   }

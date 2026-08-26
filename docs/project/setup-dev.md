@@ -33,6 +33,32 @@ OPENROUTER_API_KEY=sk-or-…
 `!.env.example` — so it must never gain a real value. `.env.prod` records what the remote project
 needs and is **loaded by nothing**: `src/env.ts` reads `.env.local` and only `.env.local`.
 
+### Signing in needs four more
+
+Since 2026-08-27 the app has a gate ([auth.md](auth.md)), and **without these the client throws at
+module load and you get a blank page** — deliberately, because the alternative is a sign-in button
+that does nothing and no clue why.
+
+```
+VITE_SUPABASE_URL=http://127.0.0.1:54361
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_…      # npx supabase status prints it
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_…           # the same one; the server verifies with it
+SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=…           # read by the Supabase stack, not by us
+SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=…
+```
+
+**The `VITE_` ones are compiled into the browser bundle**, so they are public by construction and
+must only ever hold the *publishable* key. `tests/no-secrets-in-bundle.test.ts` is the guard, and it
+decodes JWT payloads rather than searching for the word `service_role` — a legacy service-role key
+does not contain it in the clear.
+
+Two things that will waste your afternoon otherwise. Vite reads `.env.local` itself for `VITE_`
+variables, and it reads it **at startup**, so a new one needs `npm run dev` restarting. And the
+local redirect allow-list in [`supabase/config.toml`](../../supabase/config.toml) names
+`http://localhost:5273` and `http://127.0.0.1:5273` with `/**` — **if another agent already has
+5273 and Vite picks 5275, Google sign-in will be refused** for a reason that has nothing to do with
+your code.
+
 It is needed by the two LLM calls that happen in a request handler rather than in the pipeline:
 the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
 ([comments.md](comments.md)), and the chat in [`src/converse.ts`](../../src/converse.ts)

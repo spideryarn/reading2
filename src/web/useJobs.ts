@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Job, StepName } from "../types.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 
 /** While something is running. Fast enough to feel live, slow enough to be free. */
 const BUSY_MS = 1000;
@@ -26,7 +26,93 @@ function isBusy(jobs: Job[]): boolean {
 }
 
 async function send<T>(url: string, init?: RequestInit): Promise<T> {
-  return readJson<T>(await fetch(url, init));
+  return readJson<T>(await apiFetch(url, init));
+}
+
+/* ------------------------------------------------------------- advancing --
+
+   The browser is what moves a job along. `POST /api/jobs/:id/advance` runs one
+   step and returns; this calls it again until there is nothing left. The design
+   and the reasons are docs/plans/job-queue-rethink.md § Decided; the short
+   version is that a serverless host has no long-running process, so each step
+   has to fit inside a request somebody is waiting on.
+
+   It costs nothing on this laptop, where the in-process queue is still running
+   the job: the server answers `busy` and this backs off. See `advanceJob` in
+   src/jobs.ts for how the two take turns.
+   -------------------------------------------------------------------------- */
+
+/** What `POST /api/jobs/:id/advance` answers. Mirrors `Advanced` in src/jobs.ts. */
+interface Advanced {
+  job: Job;
+  ran: StepName | null;
+  busy: boolean;
+  done: boolean;
+}
+
+/**
+ * Job ids this **tab** is already driving. Module scope, not a ref, and that is
+ * the point.
+ *
+ * A page can mount `useJobs` several times over — the reading view has one for
+ * the thread panel, one for the glossary and one for summaries — and every one
+ * of them polls the same list and would start its own loop on the same job.
+ * They would not corrupt anything (the server turns the losers away with
+ * `busy`) but they would be three requests to be told the same thing. One set
+ * per tab makes it one loop per job.
+ */
+const driving = new Set<string>();
+
+/** Longest we wait between "somebody else has it" and asking again. */
+const BUSY_CAP_MS = 8000;
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Call advance until the job is finished, failed or stopped.
+ *
+ * **`done` is the only thing that ends it.** Not a status read off the polled
+ * list, which is a second account of the same fact and can be a second stale;
+ * the server answers the question directly because it has just done the work.
+ *
+ * Errors do not end it either — they release the id and let the next poll start
+ * a fresh loop, which is what turns a dev server restarting under us into a
+ * pause rather than an abandoned ingest. The reason is already on screen: the
+ * poll below reports it.
+ *
+ * @param alive false once the hook that started this has unmounted. Another
+ *   mounted hook's next poll picks the job up again, because `finally` releases
+ *   it — so closing a panel mid-ingest does not stop the ingest.
+ */
+async function drive(id: string, alive: () => boolean): Promise<void> {
+  if (driving.has(id)) return;
+  driving.add(id);
+  try {
+    let backoff = BUSY_MS;
+    while (alive()) {
+      const advanced = await send<Advanced>(`/api/jobs/${id}/advance`, { method: "POST" });
+      if (advanced.done) return;
+      if (advanced.busy) {
+        /* Doubling, because the common reason for `busy` on this laptop is that
+           the in-process queue owns the whole job — which can be minutes. At a
+           flat second that is sixty pointless requests a minute, each one
+           logged by the server, to be told the same thing. */
+        await wait(backoff);
+        backoff = Math.min(backoff * 2, BUSY_CAP_MS);
+      } else {
+        backoff = BUSY_MS;
+      }
+    }
+  } catch {
+    /* Swallowed on purpose, and it is the one `catch` here that does not set an
+       error message. A failed advance is not news the reader can act on — the
+       poll beside it is making the same request to the same server and will say
+       so — and a driver that threw would take the loop with it. Waiting first
+       so that a server that is down does not get a request per poll. */
+    await wait(IDLE_MS);
+  } finally {
+    driving.delete(id);
+  }
 }
 
 export interface UseJobs {
@@ -145,6 +231,15 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
           if (job.status === "done" && !announced.current.has(job.id)) {
             announced.current.add(job.id);
             if (!first) finishedRef.current?.(job);
+          }
+          /* **Including on the first poll**, unlike `onFinished` above. A job
+             left unfinished by a closed tab or a restarted server is exactly
+             what a fresh page load should pick up — that is the "something has
+             to notice you came back" of docs/plans/ingest-resume.md, and here
+             coming back *is* the trigger. `drive` returns immediately if this
+             tab already has a loop on that id. */
+          if (job.status === "queued" || job.status === "running") {
+            void drive(job.id, () => live);
           }
         }
         schedule(isBusy(body.jobs) ? BUSY_MS : IDLE_MS);

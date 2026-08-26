@@ -4,8 +4,7 @@
 [docs/research/auth-options.md](../research/auth-options.md) — this file is the decision and where
 its pieces live.
 
-This is a **stub**. It should grow as the gate gets built; right now the design lives in the deploy
-plan and nothing is implemented yet.
+**Built, locally, on 2026-08-27.** Not yet true in production — see [§ What is not done](#what-is-not-done).
 
 **The build is planned in [auth-supabase.md](../plans/auth-supabase.md)** (2026-08-26) — what to
 click in Google Cloud and in the Supabase dashboard, the client seam, the gate, the tests, and an
@@ -14,6 +13,35 @@ that are cheap to get wrong and are measured rather than assumed: both the local
 project already sign tokens with **asymmetric ES256 keys**, so verification is local and needs no
 network call and no extra crypto library; and `flowType` in `createClient` **defaults to
 `implicit`**, not `pkce`.
+
+## Where the pieces are
+
+| | |
+|---|---|
+| [`src/auth.ts`](../../src/auth.ts) | **the gate.** `requireUser(req, verify?)`, called once at the top of `handleApi`'s `try` |
+| [`src/routes.ts`](../../src/routes.ts) | that one call, and the comment saying why it is *inside* the `try` |
+| [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) | the browser client. One of them, module scope, `flowType: "pkce"` |
+| [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for all 31 call sites — and `leavingFetch` for `pagehide` |
+| [`src/web/useSession.ts`](../../src/web/useSession.ts) | who is signed in, as state |
+| [`src/web/SignInPage.tsx`](../../src/web/SignInPage.tsx) | the screen |
+| [`src/web/AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where Google returns to, and why it reads the URL itself |
+| [`src/web/auth-return.ts`](../../src/web/auth-return.ts) | where the reader was going, in `sessionStorage`, with three rules |
+| [`src/web/AccountSection.tsx`](../../src/web/AccountSection.tsx) | signed in as / sign out, on `/profile` |
+| [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) | the PDF link, because a navigation carries no header |
+
+## The four things worth knowing before you touch any of it
+
+1. **The gate is inside `handleApi`'s `try`.** Above it, a thrown `httpError` escapes the catch:
+   500 in dev with the message in the body, a blank 500 on Vercel, and the `finally` never runs so
+   **the refusal is never logged**. It still fails closed, which is the only mercy.
+2. **A 401 is not "the session is gone".** `apiFetch` refreshes once and retries once, and leaves
+   sign-out to the SDK's auth events. Dropping a reader out of an article because one request lost
+   a refresh race is worse than the bug it would prevent.
+3. **JWKS unreachable is 503, not 401.** A 401 tells a good session to throw itself away and
+   refresh, which cannot help, and reports our outage as the reader's mistake.
+4. **`/auth/callback` is exempt from every rewrite in `main.tsx`.** `canonicalAddHref` folds
+   `location.search` into an article's address — its whole job — so a return landing on `/add/…`
+   would put our one-time auth code in a stranger's access log.
 
 ## What auth is for here
 
@@ -61,9 +89,23 @@ both refused**. Every realistic failure here is a fail-open bug: an empty env va
 middleware not mounted on every route, a verify call that silently accepts an unsigned token. See
 [silent-success.md](../reusable/silent-success.md) — this is that pattern with a security consequence.
 
+## What is not done
+
+- **Production.** Google has never been told this project's callback URI, the remote project has
+  Google switched off, and no `VITE_*` variable is set on Vercel. Until all three,
+  the deployed site has a gate and no way through it. The steps, and the order that avoids
+  deploying a blank page, are in
+  [auth-ui-and-production.md](../plans/auth-ui-and-production.md#what-has-to-be-true-before-this-is-promoted).
+- **Whose shelf.** The gate says who you are; nothing yet asks whose data this is.
+  `currentOwnerId()` is still process-wide, so every admitted person sees the same library. That is
+  a decision for Greg rather than a bug, and it is written up at
+  [§ The gate says who you are](../plans/auth-ui-and-production.md#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is).
+- **A spend limit**, which is the control that is actually missing and always was.
+- **Email in production** needs SMTP: `mailer_autoconfirm` is false there, so a sign-up sends a
+  confirmation and Supabase's built-in mailer is not for production use. Google works without it.
+
 ## Still open
 
-- **Nothing is implemented.** `src/auth.ts` does not exist yet. It arrives with the Supabase work.
 - **The allowlist should become a table** the second time somebody is let in — adding a beta user
   should not need a deploy.
 - **Whether to put Cloudflare Access in front** as an outer, code-free gate. Free to 50 users, and it

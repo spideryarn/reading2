@@ -23,7 +23,7 @@
  * below.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { readJson } from "./lib/api.js";
+import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
 
 export interface UseProfile {
   /** What the server holds. `null` while loading, and `""` for "never written". */
@@ -65,7 +65,7 @@ export function useProfile(): UseProfile {
 
   useEffect(() => {
     let live = true;
-    fetch("/api/reader")
+    apiFetch("/api/reader")
       .then((r) => readJson<{ profile: string | null }>(r))
       .then((body) => {
         if (!live) return;
@@ -97,18 +97,34 @@ export function useProfile(): UseProfile {
     if (inFlight.current === current) return;
     inFlight.current = current;
     const mine = ++generation.current;
+    const body = JSON.stringify({ profile: current === "" ? null : current });
+    const headers = { "Content-Type": "application/json" };
+
+    /* **The leaving case does not go through `apiFetch`, and that is the whole
+       of this branch.**
+     *
+       `keepalive` lets a request outlive the document — that was already here,
+       and it is why `pagehide` was worth doing at all. But `apiFetch` now
+       `await`s `getSession()` *before* it starts the request, and a page being
+       torn down can be killed inside that await. A best-effort save would have
+       become a save that often never leaves, and it would have looked like
+       nothing: no error, no request in the network tab, just a lost sentence.
+
+       So `leavingFetch` uses the token the SDK already has in memory and starts
+       immediately. The trade is explicit: a token that expired in the last few
+       seconds is refused and the save is lost. That is strictly better than not
+       sending. GPT Sol, 2026-08-26 — and see the `visibilitychange` listener
+       below, which is the real fix, because the best way to survive `pagehide`
+       is to have already saved. */
+    if (leaving) {
+      leavingFetch("/api/reader", { method: "PATCH", headers, body });
+      inFlight.current = null;
+      return;
+    }
+
     setSaving(true);
     setError(null);
-    fetch("/api/reader", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile: current === "" ? null : current }),
-      /* The page is going away, so the request has to outlive it. Without this
-         the browser is entitled to cancel it the moment the document unloads,
-         and the reader's last sentence is gone with no error anywhere —
-         `pagehide`'s whole reason for being here, undone. */
-      ...(leaving ? { keepalive: true } : {}),
-    })
+    apiFetch("/api/reader", { method: "PATCH", headers, body })
       .then((r) => readJson<{ profile: string | null }>(r))
       .then((body) => {
         if (mine !== generation.current) return;
@@ -138,7 +154,22 @@ export function useProfile(): UseProfile {
   useEffect(() => {
     const leave = () => flush(true);
     window.addEventListener("pagehide", leave);
-    return () => window.removeEventListener("pagehide", leave);
+
+    /* **Save before the page is going away, not while it is.** `pagehide` is
+       the last chance and a poor one — the ordinary flush above is a full
+       request with error handling, and this one is a shot in the dark. A tab
+       being switched away from, or an app being backgrounded on an iPad, fires
+       `visibilitychange` first and while there is still time to do it properly.
+       On iOS this is often the *only* one that fires. */
+    const hidden = () => {
+      if (document.visibilityState === "hidden") flush(false);
+    };
+    document.addEventListener("visibilitychange", hidden);
+
+    return () => {
+      window.removeEventListener("pagehide", leave);
+      document.removeEventListener("visibilitychange", hidden);
+    };
   }, [flush]);
 
   return { profile, draft, setDraft, flush, error, saving };
@@ -176,7 +207,7 @@ export function useHasProfile(slug?: string): boolean {
        The server resolves it exactly as the prompts do, so the answer here and
        the answer the model gets cannot disagree. */
     const at = slug ? `?slug=${encodeURIComponent(slug)}` : "";
-    fetch(`/api/reader${at}`)
+    apiFetch(`/api/reader${at}`)
       .then((r) => readJson<{ hasProfile: boolean }>(r))
       .then((body) => live && setHas(body.hasProfile))
       // A reader whose profile could not be read is a reader with no profile as

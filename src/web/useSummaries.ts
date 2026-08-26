@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Job, Summaries, SummariesResponse } from "../types.js";
 import { useJobs } from "./useJobs.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
 export type SummariesStatus = "loading" | "none" | "ready" | "error";
@@ -89,7 +89,7 @@ export function useSummaries(slug: string): UseSummaries {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/summary/${encodeURIComponent(slug)}`);
+      const res = await apiFetch(`/api/summary/${encodeURIComponent(slug)}`);
       if (res.status === 404) {
         // The ordinary case, not a fault: most articles have none, and the
         // panel still works — it falls back to the gists on the tree.

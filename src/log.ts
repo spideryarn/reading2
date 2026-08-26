@@ -170,6 +170,11 @@ export type Component =
   | "jobs" // src/jobs.ts — the queue and job lifecycle
   | "pipeline" // src/pipeline.ts — one line per step, with what it cost
   | "store" // src/api.ts, src/comments.ts, src/chat.ts, src/searches.ts
+  /* src/auth.ts — and only ever about OUR side failing. A refused token is not
+     logged here: it is an ordinary 401, and the `http` line already says so.
+     Nothing in this component may carry a token, a `sub` or an email address;
+     redaction below matches key paths and never text. */
+  | "auth"
   | "model"; // src/explain.ts, src/converse.ts, src/search.ts — a reader waiting
 
 /**

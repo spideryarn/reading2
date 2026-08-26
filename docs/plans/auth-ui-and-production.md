@@ -132,6 +132,42 @@ keep working after a rename; this is the case where it did, and it is the public
 
 ---
 
+## What got built, 2026-08-27
+
+Everything in parts 1–3 and 5, plus the health hardening. **Locally only** — production is still
+[waiting on Greg's two dashboards](#what-greg-has-to-do) and on `DATABASE_URL`.
+
+| | |
+|---|---|
+| `src/auth.ts` | `requireUser`, the verifier seam, 401/403/**503** |
+| `src/routes.ts` | one line, inside the `try`, above the route table |
+| `src/web/lib/supabase.ts` | the client. Throws by name if a `VITE_*` is missing |
+| `src/web/lib/api.ts` | `apiFetch` (+ `leavingFetch` for `pagehide`), and **all 32 call sites in 15 files** |
+| `src/web/useSession.ts`, `SignInPage.tsx`, `AuthCallback.tsx`, `auth-return.ts`, `AccountSection.tsx`, `GoogleMark.tsx`, `SourceLink.tsx` | the screens and the seams |
+| `src/web/router.ts`, `main.tsx`, `App.tsx` | `/login`, `/auth/callback`, the four guarded rewrites, the whole-app gate |
+| `src/sanitize-policy.ts` | an article may not address our own API |
+| `src/vercel-health.ts`, `api/index.js` | 405, an 8KB cap, and the stack goes to the log |
+| 6 new test files, 6 harnesses updated | 207 tests across the 13 suites this touches |
+
+**32, not 31.** Another agent added `useChatAnchors.ts` while this was being written, and a second
+sweep of the whole directory caught it. Worth recording because the count in this plan was measured
+carefully and was still stale within the hour — the sweep is the check, not the number.
+
+**The gate was proved by removing it.** With `await requireUser(...)` commented out,
+`tests/routes.test.ts` goes from 54 green to **2 red**; put back, 54 green, and the file is
+byte-identical to a copy taken before. A gate test that has never been seen to fail proves nothing.
+
+**The bundle check caught something on its first run and it was a false positive** — the SDK's own
+`key.startsWith("sb_secret_")`, a prefix test rather than a credential. The detector now wants the
+twenty-odd characters that make it an actual key. Checking the hit rather than trusting it is the
+whole reason to write these down.
+
+**What is deliberately not done here:** email in production (needs SMTP), `owner_id` scoping (needs
+[Greg's decision](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is)), and everything
+in part 4 that requires a dashboard.
+
+---
+
 ## The shape of the change
 
 ```

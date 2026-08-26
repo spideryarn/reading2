@@ -77,7 +77,7 @@ import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { useJobs } from "./useJobs.js";
 import { useSlow } from "./useSlow.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useHasProfile } from "./useProfile.js";
@@ -107,7 +107,7 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    */
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tweets/${encodeURIComponent(slug)}`);
+      const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
       if (res.status === 404) {
         setLoaded({ status: "none" });
         return;

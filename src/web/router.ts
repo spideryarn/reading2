@@ -87,7 +87,28 @@ export type Route =
    * global value nobody can find. Greg, 2026-08-26: *"the user-level profile
    * should be in its own new `/profile` page (linked to from the Home page)"*.
    */
-  | { kind: "profile" };
+  | { kind: "profile" }
+  /**
+   * The sign-in screen at an address of its own — `/login`.
+   *
+   * Mostly redundant: not being signed in already shows you that screen
+   * wherever you are, because who you are is not view state and so does not
+   * belong in the URL (url-state.md). It exists because a password-reset email
+   * has to land *somewhere*, and because "send me the login page" is a
+   * reasonable thing to be able to do. Nothing in the app links to it yet.
+   */
+  | { kind: "login" }
+  /**
+   * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
+   *
+   * **The one route that must be exempt from every rewrite in main.tsx**, and
+   * that is a security property rather than tidiness. `canonicalAddHref` reads
+   * `location.search` as part of an article's address — its whole job — so a
+   * return to `/add/…?code=C` would encode our one-time authorisation code
+   * inside a stranger's URL, which ingest then fetches. Their access log, our
+   * auth code. GPT Sol found it; docs/plans/auth-supabase.md has the diagram.
+   */
+  | { kind: "callback" };
 
 /**
  * The path segment for each view. `article` has none — the reading view is the
@@ -134,6 +155,10 @@ export function parseRoute(pathname: string): Route {
   // Not under /read/, because it is not about an article. It is the one page in
   // the app with no data behind it at all.
   if (/^\/design\/?$/.test(pathname)) return { kind: "design" };
+  /* Above everything else, because the whole point of this address is that
+     nothing may reinterpret it. See the `callback` variant above. */
+  if (new RegExp(`^${CALLBACK_HREF}/?$`).test(pathname)) return { kind: "callback" };
+  if (new RegExp(`^${LOGIN_HREF}/?$`).test(pathname)) return { kind: "login" };
   // Beside `design` and above `/read/` for the same reason: it is not about an
   // article, so the article regex must never get a chance at it.
   if (/^\/profile\/?$/.test(pathname)) return { kind: "profile" };
@@ -200,6 +225,16 @@ export function carriedSearch(search: string): string {
 
 export const LIBRARY_HREF = "/";
 export const DESIGN_HREF = "/design";
+export const LOGIN_HREF = "/login";
+/**
+ * Spelled once, and read by both `parseRoute` above and main.tsx's rewrite
+ * exemption.
+ *
+ * Two copies of this string is how the exemption comes to disagree with the
+ * route, and the failure mode is not a broken link — it is an OAuth code folded
+ * into an article URL. lib/supabase.ts builds the absolute form from it.
+ */
+export const CALLBACK_HREF = "/auth/callback";
 
 /**
  * The canonical address for "add this URL": `/add/<the URL, percent-encoded>`.

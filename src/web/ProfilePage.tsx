@@ -38,11 +38,12 @@
  * the original's homepage did not have either. This is a reading tool.
  */
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpen, Cpu, TriangleAlert, User } from "lucide-react";
+import { ArrowLeft, BookOpen, Cpu, TriangleAlert, User, UserCheck } from "lucide-react";
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
+import { AccountSection } from "./AccountSection.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useProfile } from "./useProfile.js";
 
@@ -68,11 +69,11 @@ export function ProfilePage() {
 
   useEffect(() => {
     let live = true;
-    fetch("/api/library")
+    apiFetch("/api/library")
       .then((r) => readJson<{ articles: LibraryEntry[] }>(r))
       .then((body) => live && setShelf(body.articles))
       .catch(() => live && setShelf([]));
-    fetch("/api/models")
+    apiFetch("/api/models")
       .then((r) => readJson<{ tasks: { task: string; model: string; effort?: string }[] }>(r))
       .then((body) => live && setModels(body.tasks))
       .catch(() => live && setModels([]));
@@ -106,6 +107,13 @@ export function ProfilePage() {
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-muted-foreground">
         What the model knows about who it is writing for.
       </p>
+
+      {/* ---------------------------------------------------------- account -- */}
+      <Section icon={UserCheck} label="Account">
+        <div className={`${CARD} tw:p-4`}>
+          <AccountSection />
+        </div>
+      </Section>
 
       {/* ------------------------------------------------------- about you -- */}
       <Section icon={User} label="About you">

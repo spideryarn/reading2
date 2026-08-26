@@ -1,0 +1,256 @@
+/**
+ * **The gate.** Who is making this request, and are they allowed to?
+ *
+ * One function, called once, at the top of `handleApi`'s `try` — see
+ * src/routes.ts. Everything below it can assume a person.
+ *
+ * ## What this is for, which is not user accounts
+ *
+ * There is one user. The gate exists because **a public site plus online
+ * ingest plus no login is an open proxy and an open wallet**: anyone can make
+ * the server fetch an arbitrary URL, and anyone can spend `ANTHROPIC_API_KEY`
+ * two model calls at a time. That is not hypothetical — on 2026-08-26, before
+ * this file existed, an anonymous `POST /api/jobs` against the production
+ * hostname returned 202 and created a running job. See
+ * docs/plans/auth-ui-and-production.md.
+ *
+ * ## Why `getClaims` and not `getUser`, and never `getSession`
+ *
+ * Both projects sign tokens with **asymmetric ES256 keys**, so `getClaims`
+ * verifies the signature locally against a cached JWKS — no network call per
+ * request, and no second crypto library. `getUser` would be a round trip to
+ * Supabase on every single API call. `getSession` reads storage and returns
+ * whatever is in it *without checking a signature at all*; the SDK's own types
+ * carry a security notice about it. It is a browser convenience and it has no
+ * business on a server.
+ *
+ * And the one that is worse than all of them:
+ *
+ *     JSON.parse(atob(token.split(".")[1])).email      // ← never
+ *
+ * That gives you an email. It also gives an attacker any email they type,
+ * because it decodes rather than verifies. `tests/auth.test.ts` signs a token
+ * with a key we made up and asserts this file refuses it, which is the test
+ * that would notice if someone ever wrote the line above.
+ *
+ * ## The publishable key, not the secret one
+ *
+ * `getClaims` needs no privilege — it fetches a public key set and does
+ * arithmetic. Handing it the secret key would work, and would put a
+ * database-bypassing credential into a code path that runs on every request,
+ * for no benefit at all.
+ *
+ * ## Every message in here is fixed prose
+ *
+ * `logRequest` in src/routes.ts writes an error's message into a `reason`
+ * field, and docs/project/logging.md is emphatic that redaction matches key
+ * paths and never text. So nothing here interpolates the token, the header,
+ * the SDK's own error, the `sub`, or the email address. A test asserts it.
+ */
+
+import type { IncomingMessage } from "node:http";
+
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+import { log } from "./log.js";
+import type { OwnerId } from "./owner.js";
+
+/** Somebody Supabase will vouch for. */
+export interface AuthedUser {
+  id: OwnerId;
+  email: string;
+}
+
+/**
+ * Everything the gate needs to know about a token, or why not.
+ *
+ * A seam rather than a direct call, because six test files drive `handleApi`
+ * with hand-built requests and none of them can mint a real ES256 token
+ * without a running Supabase. They hand this in instead and go on being about
+ * routes. The default is the real one, so forgetting to inject cannot make a
+ * production build permissive.
+ */
+export type Verifier = (token: string) => Promise<VerifyResult>;
+
+export type VerifyResult =
+  | { ok: true; claims: { sub: string; email?: string; role?: string; is_anonymous?: boolean } }
+  /** The token is bad. 401, and the reader should sign in again. */
+  | { ok: false; kind: "bad-token" }
+  /**
+   * We could not find out whether the token is bad — the key set was
+   * unreachable or unparseable.
+   *
+   * **503, not 401**, and the difference is not pedantry. A 401 tells a client
+   * with a perfectly good session to throw it away and refresh, which cannot
+   * help, and it reports our outage as their mistake. GPT Sol, 2026-08-26.
+   */
+  | { ok: false; kind: "unavailable" };
+
+/** An error carrying the HTTP status it should be reported as. Mirrors src/routes.ts. */
+function httpError(status: number, message: string): Error {
+  return Object.assign(new Error(message), { status });
+}
+
+/** uuid-shaped, and nothing else will do for something that becomes an `OwnerId`. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+let client: SupabaseClient | null = null;
+
+/**
+ * The server-side Supabase client, made once.
+ *
+ * `persistSession: false` and `autoRefreshToken: false` because there is no
+ * session here to persist — this client exists to verify other people's
+ * tokens, and a server that quietly kept one user's session in module scope
+ * would be a much worse bug than a missing one.
+ */
+function supabase(): SupabaseClient {
+  if (client) return client;
+  const url = process.env.SUPABASE_URL;
+  /* The publishable key if it is there, the legacy anon key if it is not. Both
+     work; the fallback exists so that rotating the dashboard and deploying do
+     not have to happen in the same minute. */
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    /* Fail closed and say which slot is empty. An auth module that starts up
+       with no configuration and lets everyone through is the canonical
+       fail-open; see docs/reusable/silent-success.md. */
+    throw httpError(
+      503,
+      "Sign-in is not configured on this server. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.",
+    );
+  }
+  client = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  return client;
+}
+
+/**
+ * The real verifier: check the signature and the expiry against the JWKS.
+ *
+ * Telling "bad token" from "cannot reach the key set" is the whole reason this
+ * returns a shape rather than a boolean. The SDK reports both as an
+ * `AuthError`, so the discrimination is on what kind — anything that smells of
+ * the network or of a missing key set is `unavailable`.
+ */
+export const verifyWithSupabase: Verifier = async (token) => {
+  let result: Awaited<ReturnType<SupabaseClient["auth"]["getClaims"]>>;
+  try {
+    result = await supabase().auth.getClaims(token);
+  } catch (err) {
+    /* A throw out of `getClaims` is not a verdict on the token — it is fetch
+       failing, or JSON not parsing. Logged (never the token itself) because
+       this one is ours to fix, and returned as `unavailable` so the reader is
+       not told to sign in again over our outage. */
+    log("auth").error({ err: (err as Error).name }, "could not reach the JWT key set");
+    return { ok: false, kind: "unavailable" };
+  }
+
+  if (result.error || !result.data) {
+    const name = result.error?.name ?? "";
+    const unreachable = name === "AuthRetryableFetchError" || name === "AuthApiError";
+    if (unreachable) {
+      log("auth").error({ err: name }, "could not verify against the JWT key set");
+      return { ok: false, kind: "unavailable" };
+    }
+    return { ok: false, kind: "bad-token" };
+  }
+
+  const claims = result.data.claims as VerifyResult extends { ok: true; claims: infer C }
+    ? C
+    : never;
+  return { ok: true, claims };
+};
+
+/**
+ * Is this signed-in person allowed in?
+ *
+ * **Today: yes, anyone Supabase will vouch for.** Greg, 2026-08-26, twice:
+ *
+ * > We can get rid of the allowlist once we've added authentication. I'll
+ * > accept the risk
+ *
+ * A function rather than an inline `true` so that narrowing it later is an edit
+ * here and nowhere else.
+ *
+ * **What that decision was made about was model spend**, and there is a second
+ * consequence nobody had raised at the time: `currentOwnerId()` in src/owner.ts
+ * is still process-wide and the reads do not filter by owner, so every admitted
+ * person sees the *same* shelf rather than their own. That is written up in
+ * docs/plans/auth-ui-and-production.md § The gate says who you are, and it is
+ * Greg's call rather than this file's. Until he has made it, this stays as he
+ * left it — and the one line that changes it is right here.
+ */
+function isAllowed(_claims: { sub: string; email: string }): boolean {
+  return true;
+}
+
+/**
+ * The person making this request, or a thrown `httpError`.
+ *
+ * Never returns a user it is not sure about, and has no branch that returns
+ * `null` and lets the caller decide — a caller that forgets to check is the
+ * exact bug this file exists to prevent.
+ */
+export async function requireUser(
+  req: IncomingMessage,
+  verify: Verifier = verifyWithSupabase,
+): Promise<AuthedUser> {
+  const header = req.headers?.authorization ?? "";
+  const [scheme, token] = header.split(" ");
+  if (scheme?.toLowerCase() !== "bearer" || !token) {
+    throw httpError(401, "You need to be signed in to do that. [auth-none]");
+  }
+
+  const result = await verify(token);
+
+  if (!result.ok) {
+    if (result.kind === "unavailable") {
+      /* Not 401. See VerifyResult — telling a good session it is bad, because
+         our key set was briefly unreachable, sends the reader round a refresh
+         loop that cannot succeed. */
+      throw httpError(
+        503,
+        "We couldn't check your sign-in just now. Try again in a moment. [auth-down]",
+      );
+    }
+    throw httpError(401, "Your sign-in has expired or isn't valid. Sign in again. [auth-bad]");
+  }
+
+  const { claims } = result;
+
+  /* **The claims are checked, not just the signature.** `getClaims` verifies
+     the signature and the expiry and runtime-checks none of this, so "the
+     signature checked out" is a strictly weaker statement than "this is one of
+     our users, signed in as a person".
+
+     `role` in particular: a legacy `anon` key is a validly signed JWT carrying
+     `"role":"anon"` and no `sub`, and it is sitting in the browser bundle of
+     every Supabase app in the world. It must not be a login. */
+  if (
+    typeof claims.sub !== "string" ||
+    !UUID.test(claims.sub) ||
+    claims.role !== "authenticated" ||
+    claims.is_anonymous === true
+  ) {
+    throw httpError(401, "That sign-in isn't one we can use. Sign in again. [auth-claims]");
+  }
+
+  /* Every route downstream expects to be able to say who acted, and an identity
+     with no address is not one we can use. */
+  if (typeof claims.email !== "string" || claims.email === "") {
+    throw httpError(401, "That account has no email address on it. [auth-noemail]");
+  }
+
+  const user: AuthedUser = { id: claims.sub as OwnerId, email: claims.email };
+
+  if (!isAllowed({ sub: user.id, email: user.email })) {
+    throw httpError(
+      403,
+      "Spideryarn is still in private beta, and this account isn't on the list yet. [auth-beta]",
+    );
+  }
+
+  return user;
+}

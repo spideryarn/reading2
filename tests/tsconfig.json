@@ -13,7 +13,14 @@
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"],
+    /* `vite/client` alongside `node`, because a test that imports a client
+       module can pull in one that reads `import.meta.env` — src/web/lib/
+       supabase.ts is the first. Without it that property does not exist on
+       `ImportMeta` in this project, and the file typechecks under
+       src/web/tsconfig.json (which has the types) while failing here. Same
+       shape as the `@/` alias below: a third resolver with its own way of
+       being wrong. */
+    "types": ["node", "vite/client"],
 
     /* The same `@/` alias src/web/tsconfig.json declares, pointed at the same
        directory from here. A test that imports a component which imports a

@@ -35,7 +35,7 @@ import { mintId } from "../ids.js";
 import { isStale } from "../search-stale.js";
 import { describeFetchFailure } from "./useComments.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { failure, readJson } from "./lib/api.js";
+import { apiFetch, failure, readJson } from "./lib/api.js";
 
 /**
  * A saved run, plus the one thing about it that is not on the run.
@@ -121,7 +121,7 @@ export function useSearch(slug: string): SearchApi {
        article's emptiness as though it were this one's. */
     setLoaded(false);
     setFingerprint(null);
-    fetch(`/api/search/${encodeURIComponent(slug)}`)
+    apiFetch(`/api/search/${encodeURIComponent(slug)}`)
       .then((r) =>
         readJson<{ runs?: SearchRun[]; sourceHash?: string; error?: string }>(r),
       )
@@ -163,8 +163,7 @@ export function useSearch(slug: string): SearchApi {
   const forget = useCallback(
     async (id: string) => {
       try {
-        const r = await fetch(
-          `/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+        const r = await apiFetch(`/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
           { method: "DELETE" },
         );
         // A DELETE that 500s used to remove the row from the screen and say
@@ -208,7 +207,7 @@ export function useSearch(slug: string): SearchApi {
 
       void (async () => {
         try {
-          const r = await fetch(`/api/search/${encodeURIComponent(slug)}`, {
+          const r = await apiFetch(`/api/search/${encodeURIComponent(slug)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id, criterion }),

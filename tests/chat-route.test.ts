@@ -20,6 +20,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { handleApi } from "../src/routes.js";
 import { loadThreads } from "../src/chat.js";
+import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 /* An unknown slug falls through to the committed fixture article (see
    `loadArticle` in src/api.ts), so the turn has blocks to cite without this
@@ -50,7 +51,7 @@ async function ask(body: unknown): Promise<Frame[]> {
     (async function* () {
       yield* payload;
     })(),
-    { method: "POST", url: `/api/chat/${SLUG}` },
+    { method: "POST", url: `/api/chat/${SLUG}` , headers: AUTHED_HEADERS },
   ) as unknown as IncomingMessage;
 
   let written = "";
@@ -71,7 +72,7 @@ async function ask(body: unknown): Promise<Frame[]> {
     },
   } as unknown as ServerResponse;
 
-  await handleApi(req, res);
+  await handleApi(req, res, acceptAny);
   return written
     .split("\n\n")
     .filter((block) => block.startsWith("event: "))

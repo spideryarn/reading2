@@ -33,6 +33,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleApi } from "../src/routes.js";
 import { loadThreads } from "../src/chat.js";
 import type { ChatMessage } from "../src/types.js";
+import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const SLUG = "test-chat-live-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
@@ -90,7 +91,7 @@ function call(method: string, url: string, body?: unknown): Call {
     (async function* () {
       yield* payload;
     })(),
-    { method, url },
+    { method, url, headers: AUTHED_HEADERS },
   ) as unknown as IncomingMessage;
 
   let written = "";
@@ -118,7 +119,7 @@ function call(method: string, url: string, body?: unknown): Call {
   } as unknown as ServerResponse;
 
   return {
-    done: handleApi(req, res).then(() => {}),
+    done: handleApi(req, res, acceptAny).then(() => {}),
     status: () => status,
     body: () => (written.startsWith("event: ") ? {} : (JSON.parse(written || "{}") as Record<string, unknown>)),
     frames: () =>

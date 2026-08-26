@@ -343,3 +343,48 @@ describe("addUrlFromQuery", () => {
     expect(addUrlFromQuery("")).toBe("");
   });
 });
+
+/**
+ * The callback route, and the rewrite it must dodge.
+ *
+ * The point is not that `/auth/callback` parses — it is that **no rewrite
+ * touches it**. `canonicalAddHref` reads `location.search` as part of an
+ * article's address, which is its whole job, so a Google return landing on any
+ * `/add/…` spelling would fold our one-time authorisation code into a
+ * stranger's URL and then ingest would fetch it. GPT Sol, 2026-08-26.
+ *
+ * main.tsx does the exempting (it is module-init side effects, which nothing
+ * can test); what is tested here is the pure function it guards, so that the
+ * two cannot drift apart without something going red.
+ */
+describe("the auth callback", () => {
+  it("is its own route", () => {
+    expect(parseRoute("/auth/callback")).toEqual({ kind: "callback" });
+    expect(parseRoute("/auth/callback/")).toEqual({ kind: "callback" });
+  });
+
+  it("is not mistaken for an article, an add, or the shelf", () => {
+    expect(parseRoute("/auth/callback").kind).not.toBe("read");
+    expect(parseRoute("/auth/callback").kind).not.toBe("add");
+    expect(parseRoute("/login")).toEqual({ kind: "login" });
+  });
+
+  /**
+   * The consequence, stated as the thing we actually care about: with a code on
+   * it, this address must not turn into a request to add an article.
+   *
+   * `canonicalAddHref` would happily do that if it were ever asked — it has no
+   * idea what `/auth/callback` is — which is exactly why the guard lives above
+   * it in main.tsx rather than inside it.
+   */
+  it("would be rewritten into an add if it were not exempt — so it must be exempt", () => {
+    /* Not an `/add/` path, so nothing to canonicalise: proves the callback is
+       safe from the path branch on its own. */
+    expect(canonicalAddHref("/auth/callback", "?code=SECRET&state=S", "")).toBeNull();
+    /* But `?add=` is read from the query wherever it appears, and this is the
+       shape that shows the guard is doing work rather than being decorative. */
+    const folded = canonicalAddHref("/auth/callback", "?add=https://x.test/a&code=SECRET", "");
+    expect(folded).not.toBeNull();
+    expect(folded).toContain("SECRET");
+  });
+});
