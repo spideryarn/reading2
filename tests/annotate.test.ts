@@ -225,15 +225,14 @@ describe("termMarks", () => {
     blocks: ["spya-aaaaaa", "spya-bbbbbb"],
   };
 
-  it("marks nothing at all when no term is selected", () => {
-    // The whole shape of the decision in GlossaryPanel.tsx: the article
-    // acquires marks when the reader asks for them and at no other time. Their
-    // version underlined every term in every article, always.
-    expect(termMarks(blocks, null).size).toBe(0);
+  it("marks nothing at all for an article with no glossary", () => {
+    // The prose is untouched until there is a list — which is still the
+    // ordinary case, because a glossary is generated on demand.
+    expect(termMarks(blocks, []).size).toBe(0);
   });
 
   it("finds every occurrence, in the rendered-text offset space", () => {
-    const found = termMarks(blocks, selection);
+    const found = termMarks(blocks, [selection]);
     const first = found.get("spya-aaaaaa");
     expect(first).toHaveLength(1);
     // Offsets are against renderedText(html), NOT block.text — the two are
@@ -251,13 +250,13 @@ describe("termMarks", () => {
     // block the panel claims has none — one is a visible bug, the other is the
     // panel and the prose quietly telling you different things.
     const narrowed = { ...selection, blocks: ["spya-bbbbbb"] };
-    const found = termMarks(blocks, narrowed);
+    const found = termMarks(blocks, [narrowed]);
     expect(found.has("spya-aaaaaa")).toBe(false);
     expect(found.has("spya-bbbbbb")).toBe(true);
   });
 
   it("draws a term underline that is not a comment", () => {
-    const marks = termMarks(blocks, selection).get("spya-bbbbbb")!;
+    const marks = termMarks(blocks, [selection]).get("spya-bbbbbb")!;
     const out = annotateHtml(blocks[1]!.html, marks);
     expect(out).toContain('class="term"');
     // A term is inert. `mark.cmt` is what the click handler in TableView
@@ -268,12 +267,67 @@ describe("termMarks", () => {
     expect(out).toContain('data-term="spya-termid"');
   });
 
+  /* ------------------------------------------------- the whole list at once --
+     Since 2026-08-26 the prose carries every entry, in every mode, rather than
+     the one the reader pressed — Greg's call, reversing the decision the test
+     above used to assert. These are the three things that changed with it. */
+
+  it("underlines every term in the list, not just one", () => {
+    const second = {
+      id: "spya-secnd1",
+      forms: ["explanation"],
+      blocks: ["spya-aaaaaa"],
+    };
+    const found = termMarks(blocks, [selection, second]);
+    const first = found.get("spya-aaaaaa")!;
+    // "nonreductive explanation" once, and "explanation" twice — the bare noun
+    // appears again at the end of the sentence.
+    expect(first.filter((m) => m.id === "spya-termid")).toHaveLength(1);
+    expect(first.filter((m) => m.id === "spya-secnd1")).toHaveLength(2);
+  });
+
+  it("gives two overlapping terms ONE mark that names both", () => {
+    // Commoner now that the whole list is drawn: "explanation" sits inside
+    // "nonreductive explanation". Two nested <mark>s would stack two underlines
+    // on the same words and read as a rendering bug.
+    const inner = { id: "spya-inner1", forms: ["explanation"], blocks: ["spya-aaaaaa"] };
+    const marks = termMarks(blocks, [selection, inner]).get("spya-aaaaaa")!;
+    const out = annotateHtml(blocks[0]!.html, marks);
+    const host = document.createElement("div");
+    host.innerHTML = out;
+    expect(host.querySelectorAll("mark mark")).toHaveLength(0);
+    const both = [...host.querySelectorAll("mark")].find(
+      (m) => (m.getAttribute("data-term") ?? "").split(" ").length === 2,
+    );
+    expect(both?.getAttribute("data-term")).toContain("spya-termid");
+    expect(both?.getAttribute("data-term")).toContain("spya-inner1");
+  });
+
+  it("marks the pressed term differently from the rest", () => {
+    // Being selected can no longer mean *having* a mark, so it has to mean a
+    // different one — the same `data-open` the open comment and the pressed
+    // search hit already carry.
+    const other = { id: "spya-other1", forms: ["problems"], blocks: ["spya-bbbbbb"] };
+    const pressed = { ...selection, open: true };
+    const marks = termMarks(blocks, [pressed, other]).get("spya-bbbbbb")!;
+    const host = document.createElement("div");
+    host.innerHTML = annotateHtml(blocks[1]!.html, marks);
+    const open = host.querySelector("mark[data-open]");
+    expect(open?.getAttribute("data-term")).toBe("spya-termid");
+    // And the unpressed one is drawn, but plainly.
+    const plain = [...host.querySelectorAll("mark.term")].find(
+      (m) => m.getAttribute("data-term") === "spya-other1",
+    );
+    expect(plain).not.toBeUndefined();
+    expect(plain?.hasAttribute("data-open")).toBe(false);
+  });
+
   it("merges a comment and a term over the same words into ONE mark", () => {
     // Two nested <mark>s would stack two underlines on the same words, which
     // reads as a rendering bug. And the comment must keep `cmt` — a question
     // asked about a sentence does not stop being clickable because a glossary
     // term happens to sit in it.
-    const marks = termMarks(blocks, selection).get("spya-bbbbbb")!;
+    const marks = termMarks(blocks, [selection]).get("spya-bbbbbb")!;
     const text = renderedText(blocks[1]!.html);
     const out = annotateHtml(blocks[1]!.html, [
       { id: "c1", start: 0, end: text.length },

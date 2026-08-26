@@ -1,7 +1,8 @@
 # Glossary — the terms this piece uses, and where it uses them
 
 The terms an article uses in a non-obvious way, defined **from the article itself**, in the band
-between the spine and the prose. Select one and the article underlines every place it appears.
+between the spine and the prose. Every one of them is underlined in the prose, in every mode, and
+pointing at one shows its entry without opening the band at all.
 
 [vision.md](vision.md#where-this-goes-after-granularity-zoom) has listed an *author's glossary* since
 the beginning:
@@ -34,9 +35,9 @@ until you know what they are for.
  │             │ explanation   c·85   │   ┈┈┈┈┈┈┈┈┈┈┈┈          │
  │             │ │IN THIS PIECE       │   does not collapse …  │
  │             │ │Seth's term for an  │                         │
- │             │ │account that…       │      ↑ underlined only │
- │             │ ┊BACKGROUND      (i) │        while that term │
- │             │ ┊The ordinary use in │        is selected     │
+ │             │ │account that…       │      ↑ every term is   │
+ │             │ ┊BACKGROUND      (i) │        underlined; this│
+ │             │ ┊The ordinary use in │        one is pressed  │
  │             │ ┊philosophy of mind… │                         │
  │             │ ┊ ↗ en.wikipedia.org │                         │
  │             │ ┌───────────────────┐│                         │
@@ -262,6 +263,59 @@ than four hundred, on every render — but it is chosen for the other reason: it
 between the two halves surface as a **missing** underline rather than as an underline in a block the
 panel claims has none.
 
+### The underline is always there
+
+**Reversed on 2026-08-26, and the thing it reversed is written up two sections below.** Greg:
+
+> Glossary entries should always be underlined in the verbatim text column, even outside Glossary
+> mode, and hover should show a rich tooltip.
+
+So the prose now carries the **whole list**, in every mode, whether or not the band has ever been
+opened. Four things follow, and three of them are the interesting part:
+
+- **The line got quieter.** A wash behind one pressed term is a highlight; the same wash behind every
+  term in the piece is a mottled paragraph the reader cannot turn off. The standing mark is the
+  dotted rule alone (`mark.term` in [`styles.css`](../../src/web/styles.css)); the wash moved to the
+  pressed one.
+- **Being selected had to stop meaning "having a mark"**, because everything has one now. It means a
+  *different* mark — `mark.term[data-open]`, which is exactly what the open comment and the pressed
+  search hit already do. `open` on `TermSelection` carries it.
+- **The principle moved rather than lost.** What the section below objects to is the *article
+  acquiring explanation* on the model's initiative. The underline is now a standing property of the
+  page, like a heading; the explanation still arrives only when the reader points at something, and
+  the thing that arrives is [the hover card](#the-hover-card).
+- **The list has to be fetched for every reader**, which is the cost `GlossaryBand` was built to
+  avoid. Half of it is avoided anyway: `useGlossaryTerms` in
+  [`useGlossary.ts`](../../src/web/useGlossary.ts) is one GET and no job poller, and the band still
+  owns everything with a job in it. While the band is open it holds the fresher list and pushes it
+  up, so there is one list and two ways of arriving at it.
+
+### The hover card
+
+Point at an underlined term and its entry appears — name, what the author means by it, what you need
+to bring to it, the web answer if somebody has already asked for one, and a way into the band.
+[`TermTooltip.tsx`](../../src/web/TermTooltip.tsx).
+
+**It is not [`Tooltip.tsx`](../../src/web/Tooltip.tsx)**, and the reason is the same one that shapes
+`annotateHtml`: the marks are injected HTML, not React elements, so there is nothing to clone a ref
+onto — and there are hundreds of them on a long article, so one Floating UI instance per occurrence
+would be hundreds of them for the one being pointed at. It is **one** panel for the page, positioned
+against whichever `<mark>` the pointer is on, with the hover intent as delegated listeners and
+timers. Floating UI still does flip, shift and follow-the-scroll.
+
+Three details worth knowing before changing it:
+
+- **It takes pointer events, and nothing else here does.** `.tooltip-anchor` is `pointer-events:
+  none` so a spine tooltip can never land under the pointer and keep itself open. This card carries a
+  link and a button, so it has `interactive` — and therefore a close delay long enough to cross the
+  gap between the words and the card.
+- **Touch is excluded on purpose.** A tap fires `pointerover` and never fires the leaving event, so
+  on an iPad this would open a card that stays until something else is tapped — and the tap was
+  probably the start of a selection. See [touch.md](touch.md).
+- **The click stays inert.** Pressing a mark does what pressing prose has always done, which is
+  select it. The way to the full entry is the button in the card's foot, which opens the band on that
+  term.
+
 ## What we deliberately do not do
 
 **Mark up the prose on the model's initiative.** Theirs put a dotted underline and a small book icon
@@ -269,11 +323,15 @@ on every term, inline, in every article, always. That is the prose acquiring mar
 write, at the model's suggestion rather than the reader's — a small violation of
 [principle 5](vision.md#principles), and the thing our own review of their feature said to drop.
 
-What happens instead is Greg's call, 2026-08-25, chosen over a jump-only alternative: **selecting a
+What happened instead was Greg's call, 2026-08-25, chosen over a jump-only alternative: **selecting a
 term underlines its occurrences, and only while it is selected.** Reader-initiated, so the principle
 holds — and it answers the question the list otherwise raises on every entry, which is *where does
-this piece actually use that*. Pressing the selected term again clears it, which is the only way to
-take the underlines back out; a selection you cannot cancel is a mode inside a mode.
+this piece actually use that*.
+
+**That half was reversed on 2026-08-26** — see [The underline is always there](#the-underline-is-always-there)
+above, which says what survived of it and what did not. What is still true is the rest of this
+section: the icon never came back, the click is still inert, and the *explanation* is still something
+the reader asks for rather than something the page pushes at them.
 
 ## What an entry says, and which half came from where
 

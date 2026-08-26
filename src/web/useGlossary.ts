@@ -25,10 +25,65 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryResponse, Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
-import { failure, readJson } from "./lib/api.js";
+import { apiFetch, failure, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
 export type GlossaryStatus = "loading" | "none" | "ready" | "error";
+
+/**
+ * The term list, and nothing else — for the *prose*, which now underlines every
+ * entry whether or not the glossary band is open.
+ *
+ * **A second, much smaller hook rather than lifting `useGlossary` into
+ * `Reader`.** Greg's call on 2026-08-26 made the underlines a standing property
+ * of the article, so the list has to be fetched for every reader of every
+ * article, which is precisely the cost `GlossaryBand` exists to avoid. But only
+ * *half* of that cost was ever about the fetch: `useGlossary` also mounts
+ * `useJobs`, which polls the job list forever, and the underlines have no use
+ * for a job — they want the terms as they stand. So this is one GET and no
+ * poller, and the band goes on owning everything else.
+ *
+ * `setEntries` is the other half of keeping the two in step. When the band is
+ * open it has the fresher list — the reader may have just generated, appended
+ * to or reset it — and it pushes that list up here rather than this hook
+ * refetching, which is the same seam `onSelected` already uses (App.tsx §
+ * GlossaryBand). One list, two ways of arriving at it.
+ *
+ * A failed read is swallowed. The underline is an enhancement over the prose,
+ * so there is nothing to tell the reader that they could act on, and the panel
+ * says it properly the moment they open it.
+ */
+export function useGlossaryTerms(slug: string): {
+  entries: GlossaryEntry[];
+  setEntries(entries: GlossaryEntry[]): void;
+} {
+  const [entries, setEntries] = useState<GlossaryEntry[]>([]);
+
+  useEffect(() => {
+    /* Guarded against its own reply. Switching articles starts a second fetch
+       while the first is in flight, and the loser landing last would underline
+       this article's prose with the previous article's terms — which, because
+       both lists are real, would look like a glossary that is merely wrong
+       rather than one that is about a different page. */
+    let live = true;
+    setEntries([]);
+    void (async () => {
+      try {
+        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`);
+        if (!res.ok) return; // 404 is the ordinary case: no glossary yet.
+        const loaded = (await res.json()) as GlossaryResponse;
+        if (live) setEntries(loaded.glossary.entries);
+      } catch {
+        /* Nothing to say and nobody waiting — see the docstring. */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [slug]);
+
+  return { entries, setEntries };
+}
 
 export interface UseGlossary {
   status: GlossaryStatus;
@@ -102,7 +157,7 @@ export function useGlossary(slug: string): UseGlossary {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/glossary/${encodeURIComponent(slug)}`);
+      const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`);
       if (res.status === 404) {
         // The ordinary case, not a fault: most articles have no glossary, and
         // this is what the panel's button is for.
@@ -228,7 +283,7 @@ export function useGlossary(slug: string): UseGlossary {
    */
   const reset = useCallback(async () => {
     try {
-      const res = await fetch(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
       if (!res.ok) throw await failure(res);
     } catch (err) {
       setError((err as Error).message);
@@ -265,8 +320,7 @@ export function useGlossary(slug: string): UseGlossary {
       setLooking(id);
       setLookFailed(null);
       try {
-        const res = await fetch(
-          `/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
+        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/lookup`,
           { method: "POST" },
         );
         const { entry } = await readJson<{ entry: GlossaryEntry }>(res);

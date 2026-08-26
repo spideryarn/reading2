@@ -72,11 +72,33 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 |---|---|
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
+| [`src/web/TermTooltip.tsx`](../../src/web/TermTooltip.tsx) | the other one — see below |
 | [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
 `Tooltip` is deliberately generic — nothing in it knows about the spine. The obvious second customer
 is a gist cell in [`TableView.tsx`](../../src/web/TableView.tsx), where a long summary is clipped by
 its column.
+
+### The second implementation, and why there is one
+
+`TermTooltip.tsx` (2026-08-26) does not use `Tooltip`, and the reason is not that it wanted something
+different — it is that `Tooltip`'s whole interface is *wrap a React element*. Its triggers are the
+`<mark>`s in the verbatim column, which are **injected HTML**: the prose goes in through
+`dangerouslySetInnerHTML` because [`annotate.ts`](../../src/web/annotate.ts) cuts the text nodes and
+labels the pieces, so there is no component to clone a ref onto. And there are hundreds of them on a
+long article, so one instance per occurrence would be hundreds of Floating UI instances for the one
+the reader is pointing at.
+
+So it is **one** floating panel for the whole page, positioned with `setPositionReference` against
+whichever mark the pointer is on, and the hover intent is a delegated `pointerover` listener plus two
+timers rather than `useHover` and `getReferenceProps`. Floating UI still does the hard half — flip,
+shift, and repositioning while the page scrolls.
+
+It is also the one tooltip here that **takes pointer events**, because its card carries a link out
+and a button in; every other one is `pointer-events: none` so that a panel can never land under the
+pointer and keep itself open. If a third customer ever has both properties — many triggers that are
+not React elements — that is the point at which this becomes a shared hook rather than a second file.
+[glossary.md § The hover card](glossary.md#the-hover-card) has the rest.
 
 ## What the card says, and why that
 
