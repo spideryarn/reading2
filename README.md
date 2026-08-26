@@ -9,19 +9,71 @@ An experiment in AI-assisted reading that **augments** rather than replaces read
 >
 > — Greg, 2026-08-24
 
-The default AI reading tool compresses: paste an article, get bullet points, done. Useful for
-triage, corrosive for understanding. We want the opposite — tools that make deep reading *cheaper*,
-not optional. Scan the landscape quickly, then burrow into the actual prose at the point you care
-about, ask questions there, and come away with something retained.
+Everything in this repo is downstream of that sentence.
 
-The first feature is **granularity zoom**: the article at any of several levels of compression,
-vertical for position in the piece, horizontal for how much detail. Alongside it are a glossary, a
-search, summaries at whatever length you ask for, and a chat that never takes the article off the
-screen.
+## The problem
 
-`spideryarn2` is just this working directory. The app this is an offshoot of is
-[documented here](docs/project/original-version/overview.md) — it is far larger, it works, and it is
-a library to consult rather than a backlog to import.
+Nearly every AI reading tool makes the same move: compression. Paste an article, get bullet points,
+done. That is genuinely useful for triage and genuinely corrosive for understanding. You come away
+with a fluent impression of the piece and none of its texture: no argument you could reconstruct,
+no sentence you could quote, no sense of where the author was strong and where they were
+hand-waving. The summary replaced the reading instead of supporting it.
+
+This worry is older than this repo. The much larger app this one grew from named it as the central
+risk — the AI doing too much, the reader getting lazy, nothing internalised — and offered a framing
+worth keeping: imagine *"a bunch of smart postdocs who you could give any instructions to"*. You
+would not ask them to read for you. You would ask them to make your own reading better.
+
+## The bet
+
+Make deep reading *cheaper*, not optional. Scan the landscape quickly. Descend on demand into the
+actual prose, at the point you care about. Stay oriented at whatever altitude you are flying. Ask
+questions at the moment of confusion, in place. Come away with something retained.
+
+The first feature built on this is **granularity zoom**
+([granularity-zoom.md](docs/project/granularity-zoom.md)): the article at several levels of
+compression, vertical for position in the piece, horizontal for how much detail. The leftmost level
+is a sentence for the whole piece; the rightmost is always the author's verbatim prose; move
+sideways and the text expands or contracts without you losing your place.
+
+Three commitments separate this from the summariser it superficially resembles:
+
+- **The text is the destination, not the source material.** Every generated line is a door into the
+  prose, not a wall in front of it. We never silently rewrite the author's words: generated text
+  lives at generated altitudes, and the rightmost level is verbatim, always.
+  [vision.md § Principles](docs/project/vision.md#principles).
+- **Nothing the model says is unanchored.** Every block of the article has a stable id, and anything
+  the model asserts is tied to one, so the passage it came from is one press away. That contract is
+  spelled out [below](#the-one-contract-that-matters).
+- **It is a reading tool, not a writing or chat tool.** The article never leaves the screen. And
+  when a design call is genuinely close, the tiebreak is: which option leaves more of the thinking
+  with the reader?
+
+## What exists today
+
+This is an experiment, not a product: no users, no accounts, one process. One bet on one idea —
+granularity zoom — plus the reading assistants the same block-id spine makes cheap. Select a
+sentence and the model explains it, researching the web when it needs to
+([comments.md](docs/project/comments.md)). A glossary of the terms the piece uses in a non-obvious
+way, defined from the piece itself ([glossary.md](docs/project/glossary.md)). Search by exact words
+or by what a passage says, hits marked in the prose ([search.md](docs/project/search.md)). Summaries
+of the whole piece or any part, at a length you choose ([summaries.md](docs/project/summaries.md)).
+A chat whose every claim carries a block id you can press
+([chat-mode.md](docs/plans/chat-mode.md)). A library of what you have read
+([library.md](docs/project/library.md)).
+
+Chat deserves a flag, because "a chatbot with the article stuffed in the context window" is a named
+anti-goal here ([vision.md § Anti-goals](docs/project/vision.md#anti-goals)). It was built anyway,
+at Greg's request, and the argument that what was built is not the anti-goal — along with an honest
+account of where that argument is weakest — is in
+[chat-mode.md § Say the awkward thing first](docs/plans/chat-mode.md#say-the-awkward-thing-first).
+Also not this, ever: "read it in 2 minutes", engagement mechanics, or confident claims with no path
+back to the source.
+
+`spideryarn2` is an offshoot of a working app that is far larger — accounts, a database,
+deployment, a year of building. [original-version/](docs/project/original-version/overview.md) is
+the map to it: a library to consult, not a backlog to import. This repo stays deliberately tight
+where that one is broad.
 
 ## Running it
 
