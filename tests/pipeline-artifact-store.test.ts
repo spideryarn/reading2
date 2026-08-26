@@ -26,6 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
+import { parseJsonFrom } from "../src/parse-json.js";
 import {
   type ArtifactLocations,
   createFsArtifactStore,
@@ -462,5 +463,73 @@ describe("glossary currency, through the stamp rather than a function", () => {
 
   it("says not-done when the glossary carries no stamp at all", async () => {
     expect(await ask({ entries: [], passes: 1 }, BLOCKS)).toBe(false);
+  });
+});
+
+describe("a corrupt artefact does not put the article in a log line", () => {
+  /* src/store/artifacts-fs.ts § json. The decoder used a bare `JSON.parse`, and
+     `read`'s catch logs the thrown message. V8 puts the first characters of the
+     offending input into a SyntaxError — `Unexpected token 'S', "SECRET art"...
+     is not valid JSON` — so a half-written artefact put article prose into a
+     debug log, which docs/project/logging.md forbids outright.
+
+     The same shape as the seven OpenRouter sites and the six Anthropic ones,
+     arriving by a route nobody had looked down: not a provider talking, but our
+     own file coming back malformed. Found by review, 2026-08-26. */
+  let where: ArtifactLocations;
+  let store: ReturnType<typeof createFsArtifactStore>;
+
+  beforeAll(async () => {
+    where = await tempArticle("leak");
+    store = createFsArtifactStore(() => where);
+  });
+  afterAll(async () => {
+    await rm(path.dirname(where.dir), { recursive: true, force: true });
+  });
+
+  /** A sentence that would be unmistakable if it ever reached a message. */
+  const PROSE = "Consciousness is not a spreadsheet and never was";
+
+  it("reads null and says nothing about what the file contained", async () => {
+    const file = pathFor(where, "toc", "blocks");
+    await mkdir(path.dirname(file), { recursive: true });
+    /* A file holding article prose rather than JSON — an artefact clobbered by
+       a write that went to the wrong path, or one whose first bytes are the
+       article itself. **Which corruption you pick matters**, and picking the
+       wrong one is how this test would have passed while proving nothing: V8
+       only quotes the input when the text does not begin as JSON. A string
+       truncated mid-value gives "Unterminated string in JSON at position 70",
+       which names no content at all — so a test built on that corruption is
+       green whether or not the bug exists. */
+    await writeFile(file, PROSE, "utf-8");
+
+    let raw = "";
+    try {
+      JSON.parse(PROSE);
+    } catch (err) {
+      raw = (err as Error).message;
+    }
+    /* First, prove the hazard is real rather than theoretical: V8 really does
+       quote the input. If this ever stops being true, the assertion below is
+       no longer testing anything, and it should fail loudly rather than pass
+       vacuously. */
+    expect(raw).toContain("Consciousn");
+
+    // And now the thing itself: reading through the store surfaces nothing.
+    expect(await store.read(where.slug ?? "leak", "toc", "blocks")).toBeNull();
+  });
+
+  it("describes the breakage without quoting it", () => {
+    // parseJsonFrom is what the decoder uses now. Its message says how the text
+    // failed — empty, cut off, breaks at position N — and never what it said.
+    let message = "";
+    try {
+      parseJsonFrom(PROSE, "an artefact");
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).not.toContain("Consciousness");
+    expect(message).not.toContain("spreadsheet");
+    expect(message).toMatch(/an artefact/);
   });
 });

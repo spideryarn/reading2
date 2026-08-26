@@ -33,6 +33,7 @@
 import { readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { log } from "../log.js";
+import { parseJsonFrom } from "../parse-json.js";
 import type { StepName } from "../types.js";
 import type {
   ArtifactKind,
@@ -167,10 +168,25 @@ interface Decoder {
   decode(text: string): unknown;
 }
 
-/** Valid JSON, and an object with the field that says what it is. */
+/**
+ * Valid JSON, and an object with the field that says what it is.
+ *
+ * **`parseJsonFrom`, not `JSON.parse`**, and the difference is a privacy rule
+ * rather than a nicety. V8 puts the first characters of the offending input
+ * into the `SyntaxError` message — `Unexpected token 'S', "SECRET art"... is
+ * not valid JSON` — and the caller below logs that message. The text being
+ * parsed here is an article's own artefact, so a truncated one would have put
+ * article prose into a log line, which docs/project/logging.md forbids
+ * outright. `parseJsonFrom` says how it broke (empty, cut off, breaks at
+ * position N of M characters) without saying what it said. Found by review
+ * 2026-08-26; this was the one JSON boundary in the repo still doing it by
+ * hand.
+ */
 function json(field: string, isRight: (v: unknown) => boolean): Decoder["decode"] {
   return (text) => {
-    const parsed: unknown = JSON.parse(text);
+    // The `source` string is copied into the error as given, so it must carry
+    // nothing about the content — see parseJsonFrom's header.
+    const parsed: unknown = parseJsonFrom<unknown>(text, "an artefact");
     if (typeof parsed !== "object" || parsed === null) {
       throw new Error("not an object");
     }
