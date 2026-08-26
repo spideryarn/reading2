@@ -53,14 +53,29 @@ Legend: ✅ done · 🔵 in progress · ⬜ not started
 | 12 | Jobs and claiming | ⬜ |
 | 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ |
 
-**One thing found on 2026-08-26 that step 13 needs, and nothing currently does.** `scripts/db-import.ts`
-upserts rows but never **deletes** ones that have gone from disk. A comment deleted on the filesystem
-stays in Postgres for ever, so `tests/store-parity.test.ts` and `tests/store-roundtrip.test.ts` go red
-on drift that is not a code bug — and, worse, cutover day would resurrect deleted comments while
-reporting a clean import. The fix is a reconciling import (delete reader-state rows for an article
-that the files no longer have) or an explicit "import is only ever run into an empty article", said
-out loud. Not fixed here because it is squarely step 10–13's business, but it is the reason those two
-tests are currently failing on this machine.
+**The import reconciles, and the direction it reconciles in reverses at cutover.** The importer
+deletes an article's reader-state rows inside its transaction before re-inserting them from the
+files ([`src/store/import.ts`](../../src/store/import.ts), *"The files win, so the rows the files no
+longer have must go"*), so a comment deleted on disk does not live on in Postgres. That is the right
+choice while `data/` is authoritative: "import only ever runs into an empty article" would break
+re-running the importer after any edit made through the files, which is the whole migration period.
+
+**Step 13 has to turn it round.** Once the app writes reader state straight to Postgres — comments
+already do, and step 10 does the rest — running the importer again would *delete* everything added
+since the last export, because it still believes the files are the truth. Flagged at
+[`import.ts`](../../src/store/import.ts) where the delete happens, and it is the reason cutover is a
+step rather than a flag flip.
+
+> Checked on 2026-08-26 rather than assumed. `tests/store-import-convergence.test.ts` asserts the
+> behaviour for **comments** only; a throwaway repro inserted stray rows into `chat_threads`,
+> `chat_messages`, `search_runs` and `glossary_lookups` for one article and re-imported with those
+> artefacts absent from disk — all four came back to zero rows, so the reconciling delete really does
+> cover all four reader-state artefacts and not just the tested one. `block_identities` is
+> deliberately exempt: it never loses a row ([block-ids.md](../project/block-ids.md)).
+>
+> One gap left, and it is not the importer's to close: `importArticle` reconciles only the slug it is
+> handed, so an article whose `data/` directory has vanished entirely leaves an orphan row that
+> nothing visits.
 
 ### Step 0 — done
 
@@ -313,6 +328,176 @@ Two things Sol did **not** find, both turned up while checking its work:
   which cost twenty minutes of believing a function did not exist. Fixed.
 - The `toStrictEqual` added for Sol's point 3 passes on every article, which is positive evidence
   the conditional spreads in `pg.ts` are complete rather than merely untested.
+
+## Step 12 — jobs and claiming, decided before it is built
+
+Scoped, argued out and cross-reviewed on 2026-08-26 before a line was written, because this is the
+step where a single-process assumption becomes a multi-process one, and hand-waving it is how the
+migration breaks in production. Fable arbitrated the first pass; **GPT Sol reviewed that pass and
+found three critical faults in it**, including one where this document had silently dropped a
+condition [postgres-migration.md](postgres-migration.md) already had right. The reasoning is kept
+because the conclusions look arbitrary without it, and because the first pass being wrong is the
+most useful thing on this page.
+
+### The premise, corrected
+
+The first pass asserted flatly that *the heartbeat is a timer beside the work, not a checkpoint
+inside it*, and concluded that lease length is therefore unrelated to step length. **That is half
+true, and the half that is false is the half that sets the number.**
+
+It holds while the worker awaits a model stream — the event loop is free, and a `setInterval`
+heartbeats straight through a two-minute call. It does **not** hold across the synchronous stages:
+JSDOM, Readability, DOMPurify, tree traversal, serialisation, hashing and model-output parsing all
+occupy the loop, and [`fetch.ts`](../../src/fetch.ts) accepts up to 32 MB before any of them run. A
+read-only benchmark during the review measured **4 MB of ordinary DOM blocking the loop for ~2.6
+seconds**, and a valid 16 MB synthetic DOM exhausting a 4 GB heap after ~14.
+
+So the honest rule, and the one to write down:
+
+> Lease length is independent of how long an *awaited* call takes, but it must exceed the worst
+> event-loop stall plus database round-trip delay.
+
+Sixty seconds remains a plausible starting value. It is **not** a proof, and nobody should treat it
+as one.
+
+### Stop, and the latency it costs
+
+An `AbortSignal` cannot cross a process boundary. With peers, the HTTP `Stop` lands on whatever
+process the load balancer picked, which usually is not the one running the job. That process can only
+record the request and return; the owning process has to *notice*. `LISTEN/NOTIFY` is ruled out under
+the transaction pooler ([ingest-queue.md](../project/ingest-queue.md)), so noticing means polling —
+and the heartbeat is already a poll.
+
+So **the heartbeat carries cancellation back**: the owning process learns of it on its next beat and
+calls its own local `controller.abort()`, tearing the stream down mid-call exactly as
+[`cancelJob`](../../src/jobs.ts) does today. Keep the existing `signal.aborted` checks at step
+boundaries too — they cost nothing and they are the belt.
+
+**Three windows the first pass left under-specified**, each of which is a real bug if left as it is:
+
+| Window | What must happen |
+|---|---|
+| Cancelled while **queued** | No owner exists to notice. Transition atomically to `cancelled`; never leave a `cancelling` flag with nobody to clear it. Today p-queue's own callback eventually clears it — Postgres provides no such callback |
+| Cancelled **between claim and first beat** | Check before starting paid work, or the API key is spent on a job already cancelled |
+| Cancelled, and **unwinding** | The heartbeat must go on extending the lease *throughout* the unwind. Otherwise a slow step that ignores its signal lets the lease expire, another worker starts, and the first is still writing. This is precisely why the current p-queue waits for the unwind |
+
+### The numbers
+
+**Heartbeat every 10s, lease 60s**, both in *database* time, deliberately decoupled: the lease is six
+beats, so a false reclaim needs five consecutive misses. Do not tune the lease below 60s — Supavisor
+hops, GC pauses, the event-loop stalls measured above and a laptop lid closing during local dev all
+argue for slack.
+
+Use a **single-flight self-rescheduling timer**, not a bare `setInterval`: an async beat whose
+database round trip exceeds the interval will otherwise overlap with the next one.
+
+**The lease detects a lost worker, not stuck work.** A worker can heartbeat perfectly while awaiting
+a promise that will never settle, and no lease can see that by construction. Per-step deadlines stay
+the defence. A distributed progress watchdog would be over-engineering for a one-user project and is
+deliberately not being built — but the limitation goes in writing, because the number looks like it
+covers more than it does.
+
+### The worker lifecycle, which nothing else specifies
+
+**`claim()` alone is not a queue.** Today `enqueue` schedules work immediately and p-queue starts the
+next item once the previous settles. Step 12 as first written said who *may* claim and never said who
+*does* — so a job enqueued while another holds the slot could sit queued for ever after the first
+finishes.
+
+One lifecycle, written down: **claim → start heartbeat → run → terminal transaction → claim again.**
+Enqueue kicks it (through `waitUntil` on Vercel, per
+[deploy-and-repo-move.md](deploy-and-repo-move.md)); boot, the jobs poll and any cron may also kick
+it, and kicking an already-running worker must be safe.
+
+### Fencing, and the condition this document had dropped
+
+Every write a running worker makes is fenced, and the fence is **three conditions, not two**:
+
+```sql
+update spideryarn.jobs set …
+ where id = $job and attempt_id = $attempt and status = 'running'
+```
+
+The first pass wrote only `id` and `attempt_id`. That is unsafe: the schema lets a terminal row keep
+its token, so a rescued job already marked `error` would accept a stale worker's write and return
+`rowCount === 1` — success, reported, with the wrong output. It is the exact failure the fence
+exists to prevent, and it had already been got right in
+[postgres-migration.md](postgres-migration.md); this document lost it. **Rescue must therefore be
+atomic in one transaction:** mark terminal, rotate or clear the token and lease, clear any
+cancellation request, and release the `queue_state` pointer.
+
+`fencedUpdate` stays a ~15-line helper that throws a typed `StaleAttemptError` unless
+`rowCount === 1` — the failure mode being zero-rows-reads-as-success,
+[silent-success](../reusable/silent-success.md) again — with one test proving a stale `attempt_id`
+throws and one proving a terminal row rejects its own former token. Keep it that small: an
+assert-one-row wrapper, not a lease framework.
+
+**But the helper is not the seam.** A generic `update(id, patch, attemptId?)` makes fencing
+*optional*, and an optional fence is not a fence. The contract should expose **state transitions
+rather than arbitrary patches** — `requestCancel`, `finish`, `fail`, `deleteFinished`,
+`enqueueOrGet` — with every worker transition requiring an attempt token. That is a change to
+[`contracts.ts`](../../src/store/contracts.ts) and it must land *before* the Postgres implementation,
+not after.
+
+`heartbeat` returns three outcomes rather than a boolean: `extended`, `cancelling` (abort locally,
+**keep the slot**, unwind as cancelled), `lost` (abort locally too — a worker that no longer holds
+the lease should stop spending the API key at once). Three *actions* are right; three *diagnoses* are
+not, so attach a reason to `lost` — missing row, terminal row, replaced attempt, stolen lease — and
+make a database or transport failure **reject**, never masquerade as `lost`.
+
+### Rescue: three places, honestly labelled
+
+- **Inside the claim transaction, always.** Claim already locks `queue_state` `FOR UPDATE` and
+  already has to decide whether the recorded running job's lease is live. This makes the common path
+  self-healing for free.
+- **Piggybacked on the jobs poll, throttled.** This closes claim's gap when no new work arrives. Two
+  caveats the first pass glossed: the module-level timestamp guard exists **once per process**, so N
+  instances rescue N times per interval; and making a read endpoint write has caching, prefetch and
+  retry consequences, so it needs `Cache-Control: no-store` and must be idempotent.
+- **At boot, lease-aware.** `sweepStopped()`'s reasoning — *"this process has just started, so
+  nothing on disk can have work happening against it"* — is single-process reasoning, and with peers
+  a `running` row may belong to a live one. The purpose survives: rescue only rows whose lease has
+  expired in database time.
+
+**Keep the cron.** The first pass proposed deleting it; that is wrong. With no browser open there is
+no poll, so removing it leaves crashed work dormant until somebody happens to make a request. Delete
+it only if the product explicitly accepts that, said out loud.
+
+**Rescue marks `error`; it never auto-requeues.** We declined pg-boss and with it retry, backoff and
+dead-letter machinery, so auto-requeue without attempt counts is a crash loop that spends model
+calls. This is the boring first cut and it matches today's behaviour — but note what it costs:
+automatic completion does not survive a deploy. And "Retry already skips completed steps" is proven
+only for *filesystem* artefacts; under the unbuilt per-attempt draft revisions it needs a red test
+before it can be claimed.
+
+### Lock order, or it deadlocks
+
+`queue_state` points at a job, and nothing in the schema guarantees that pointer equals the one
+`running` row. Two consequences: pointer drift makes claims hit `jobs_only_one_running` for ever —
+safe from double execution, permanently unavailable — and claim taking `queue_state` then the job can
+deadlock against finish taking the job then `queue_state`.
+
+**Every operation touching both rows locks `queue_state` first, then the job, and changes both in one
+transaction.** Treat a pointer that disagrees with the running row as a loud invariant failure rather
+than something to paper over. Claim orders by `created_at, id` — `created_at` alone is not a total
+order.
+
+### Two things that must land inside step 12
+
+**`work_key`, or de-dup silently stops working.** `sameWork()` / `activeFor()` scan the in-memory
+`Map`; none of it is queryable, and `steps` is a mutating JSONB blob so it cannot be the key. Without
+one, two processes each accept a duplicate "Add" click. The specification, which the older text got
+incomplete: an immutable non-null hash over the canonical ordered `{step, force}` list **plus
+`guidance ?? ""`** — today's identity includes normalised guidance and
+[postgres-migration.md](postgres-migration.md) omits it — with a partial unique index on active rows
+and `INSERT … ON CONFLICT` returning the existing job. Note also that `activeFor` returns only the
+*first* active job for a slug, so it can already miss an identical job queued behind different work.
+
+**`freeSlug`'s race, as a prerequisite with its own test.** It is check-then-use today, and
+`articles.slug UNIQUE` only discovers the collision after both processes have chosen — so two
+pipelines get paid for before one loses at publication. Reserve the slug transactionally before any
+expensive work, retrying suffixes on conflict. Give it its own two-transaction red test rather than
+entangling slug allocation with lease machinery.
 
 ## What is not done
 
