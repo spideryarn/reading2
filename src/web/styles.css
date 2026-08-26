@@ -2750,6 +2750,13 @@ td.text.has-hit {
 }
 
 .gloss-quiet { padding: 1rem 0.9rem; margin: 0; color: var(--ink-faint); }
+.gloss-look-wait {
+  margin: 0.35rem 0 0;
+  max-width: 46ch;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
 .gloss-error {
   margin: 0.4rem 0.7rem 0;
   color: var(--highlight-ink);

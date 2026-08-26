@@ -1094,6 +1094,29 @@ function Looked({
           {looking ? <Loader2 size={12} className="gloss-spin" /> : <Globe size={12} />}
           {looking ? "Checking…" : "Check the web"}
         </button>
+        {/* The wait needs saying, not just spinning through. This call sends the
+            whole article and may run a web search on top, so it can sit for the
+            better part of a minute — long enough that a bare spinner reads as
+            stuck. The search panel already had this and this did not, which is
+            the only reason they differed.
+
+            Both sentences earn their place: the first says why it is slow, so
+            the wait is expected rather than suspicious; the second says the
+            reader can leave, which is the thing that actually makes waiting
+            bearable and is true — the answer is stored against the entry, not
+            held in this component. Same promise the search panel makes.
+
+            Unlike chat and explain, no words arrive while this runs: the answer
+            appears whole. Making it stream is worth doing and is written up in
+            docs/plans/streaming-the-slow-two.md — it needs a storage seam that
+            was being rebuilt on the day this was written. */}
+        {looking && (
+          <p className="gloss-look-wait">
+            The whole piece goes to the model, and it may search the web as well, so this takes a
+            few seconds. You can carry on reading — the answer is saved against this term either
+            way.
+          </p>
+        )}
         {failed && <p className="gloss-error">{failed}</p>}
       </div>
     );
