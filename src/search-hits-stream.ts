@@ -49,15 +49,35 @@
  *
  * THE SAFETY PROPERTY THIS DEPENDS ON: `push` is allowed to miss a hit, or
  * emit nothing at all — the worst that costs is a late hit, never a wrong
- * one, now that the array a completed object is attributed to is pinned to
- * the literal `hits` key rather than to position. `text()` returns every
- * character fed to it, unmodified and in order, so the caller can still run
- * the whole response through `parseHits` + `validateHits` once the stream
- * ends, exactly as it does today; that final pass is the actual source of
- * truth, and this module is only ever showing the reader its answer sooner.
- * That guarantee holds only because `push` never mutates or drops anything
- * from what it appends to the buffer `text()` reads back — it only ever reads
- * from that buffer, never changes it.
+ * one. **Two separate things have to hold for that, and the second is the one
+ * that nearly got away.**
+ *
+ * *One:* the array a completed object is attributed to is pinned to the
+ * literal `hits` key rather than to position (above). The version that keyed
+ * off "the first `[` one level inside the outer object" got this wrong — a
+ * sibling array arriving *first*, `{"notes":[...],"hits":[...]}`, made `push`
+ * emit an object that was never inside `hits` at all.
+ *
+ * *Two:* `hitsArrayOpen` tracks whether we are still inside that array, and
+ * not merely at the same depth as it. Pinning the key alone is **necessary
+ * and not sufficient**, which is what the first attempt at the fix assumed:
+ * `hitsArrayDepth` is a depth *number*, so a sibling array arriving *after*
+ * `hits` closes — `{"hits":[...],"notes":[...]}` — reaches the same number,
+ * and its objects were still emitted. Caught by the new test written for the
+ * first half of the fix, which is the only reason it did not ship.
+ *
+ * Either failure produces a **wrong** hit rather than a late one, and ruling
+ * that shape out is the whole of what makes a brace counter an acceptable
+ * stand-in for a real JSON parser here. A comment claiming this property is
+ * not the property: if you change how an array is identified, the claim above
+ * is what you are changing. `text()` returns every character fed to it,
+ * unmodified and in order, so the caller can still run the whole response
+ * through `parseHits` + `validateHits` once the stream ends, exactly as it
+ * does today; that final pass is the actual source of truth, and this module
+ * is only ever showing the reader its answer sooner. That guarantee holds
+ * only because `push` never mutates or drops anything from what it appends
+ * to the buffer `text()` reads back — it only ever reads from that buffer,
+ * never changes it.
  */
 export function hitExtractor(): {
   /** Feed the next chunk of streamed text. Returns any hit objects that completed within it, in order. */
