@@ -1381,6 +1381,37 @@ pointed at:
   boundary and counted in the log line, not failed on. Normalise what is meaningless; fail on what
   is missing.
 
+### GPT Sol's review of the built code (2026-08-26), and the four inputs that defeat it
+
+Read the plan, the code and the tests, then **constructed inputs** rather than arguing about the
+numbers — which is the half of a review that finds things reading cannot. One is a defect and is
+fixed; three are limits and are written down here because a limit somebody discovers is a threshold
+somebody widens.
+
+**Fixed: a year truncated to its last two digits went through the matcher.** `protect` compared its
+tokens against the page packed into one string with the spaces removed, and asked `includes`. `43`
+is a substring of `1843`, so a model that turned 1843 into 43 passed the one check that exists to
+catch exactly that. Not a threshold being loose — the *matcher* waving it through. The haystack is
+now a set of whole tokens, with the line-break joins added to it by name rather than falling out of
+not knowing where words end. `evals/pdf/synthetic/faults.json` carries the probe.
+
+**Three limits, stated rather than tuned:**
+
+| The input | What happens | Why it is not fixed here |
+|---|---|---|
+| An 8-word omission made mostly of words that occur elsewhere on the page | Passes at 0.93 / 1.00 / 1.00 | The run is found by alignment and then *confirmed* against the bag of words, and common words are in the bag. Without a gold there is no signal left: eight common words are 1% of a real page. This is what `evals/pdf/<name>/gold.json` is for |
+| 25 invented ordinary words on a 100-word page | Passes at precision 0.80 | The threshold. `protect` catches invented *numbers* because those cannot be a legitimate exclusion; invented prose at that volume needs a gold or a much tighter precision floor, and a tighter floor fails real pages |
+| 20% of a page moved | Passes at order 0.80 | The threshold, and the same answer |
+
+All three are the same shape and the same answer: **the thresholds are a smoke test, not a gate, and
+the gate is a gold.** That was already this plan's position — see
+[the thresholds](#the-thresholds-and-why-they-are-not-yet-a-gate) — and it now has three worked
+counterexamples attached to it instead of an argument.
+
+Also from the same review, and both taken: the `raw.pdf` written by `npm run pdf` was missing, so an
+article made from a local file offered a "view the original" link that 404'd; and the eval had its
+own copy of the prompt, which would have gone on testing the wording the product had stopped using.
+
 ### What the bake-off raised, and what Fable said about it
 
 Two design questions the measurements produced rather than settled. Both went to
