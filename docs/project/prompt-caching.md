@@ -54,8 +54,14 @@ outline, and that comes to roughly **660 tokens** on the 141-block article and *
 360-block one: both under the 1,024-token floor below. So the breakpoint is accepted and does
 nothing, and it will start working on its own the day an article's outline is long enough. Until
 then `generateLabels` skips the warm-up that would otherwise pay a batch of latency to warm a cache
-that cannot exist, and reports `cacheable: false` so the zero can be told from a broken one.
-GPT-5.6-sol, 2026-08-26.
+that cannot exist, and reports `estimatedCacheable: false` beside the number of calls it made.
+
+Both fields, because the flag alone cannot carry it: `cacheReadTokens: 0` is also what a run of one
+fresh call reports, and what a fully resumed run reports, and neither of those is a fault. The pair
+separates "there was nothing to read" from "there was, and it did not". And it is an *estimate* — four
+characters to a token — so a prefix within a few percent of the floor could fall either side. That is
+accepted: the worst case is a few cents and a batch of latency, and the alternative is a
+`count_tokens` round trip before every run. GPT-5.6-sol, 2026-08-26.
 
 ### Glossary is a third cache, and the reason is not the article
 

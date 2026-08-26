@@ -30,7 +30,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
@@ -225,16 +225,25 @@ export interface LabelsFile {
    * second definition of what an article is.
    *
    * - `sourceHash` — the blocks these labels describe.
-   * - `outlineHash` — the *structure* they were written against, fingerprinted
-   *   over the outline text the prompt actually showed the model. Boundaries
-   *   can move without a single block changing, and when they do, a label
-   *   written to tell a paragraph apart from the wrong set of neighbours is
-   *   wrong in the one way this stage exists to prevent.
+   * - `structureHash` — the *tree* they were written against: every node's id,
+   *   parent, range, title and gist. Boundaries can move without a single block
+   *   changing, and when they do, a label written to tell a paragraph apart
+   *   from the wrong set of neighbours is wrong in the one way this stage
+   *   exists to prevent. The first version hashed the outline the prompt shows
+   *   the model, which is titles and nothing else — two trees that cut the
+   *   article in completely different places print the same outline, so it was
+   *   claiming more than it checked.
    * - `structureVersion` — the toc prompt version off the tree, so the pair of
    *   prompt versions is recorded rather than just this file's own.
+   *
+   * **Nothing reads these yet**, and that is the honest state of it: the `toc`
+   * step has no freshness check of its own, so the pipeline still decides it is
+   * done by whether the files exist. Recording the fields is what makes writing
+   * that check a small job rather than a re-run of every article; until it is
+   * written, this is evidence sitting in the file rather than a guard.
    */
   sourceHash: string;
-  outlineHash: string;
+  structureHash: string;
   structureVersion: string;
   labels: Record<string, string>;
   /**
@@ -531,20 +540,38 @@ export function batchParts(
 /**
  * A fingerprint of everything that decides what one batch's labels should say.
  *
- * **Over the rendered prompt, not over the block ids.** Resuming a batch
- * because its ids match is the wrong rule and it is the tempting one: the
- * boundaries, the crumbs, the gists and the whole article's outline can all
- * have moved while the same paragraphs sit in the same call, and a label whose
- * job is to tell a paragraph apart from its neighbours is then answering a
- * question nobody asked any more. Hashing the bytes we were about to send makes
- * that impossible to get wrong, because the bytes *are* the question.
+ * **The rendered prompt, and then the things the prompt does not show.**
+ * Resuming a batch because its block ids match is the wrong rule and it is the
+ * tempting one: the boundaries, the crumbs, the gists and the whole article's
+ * outline can all have moved while the same paragraphs sit in the same call,
+ * and a label whose job is to tell a paragraph apart from its neighbours is
+ * then answering a question nobody asked any more. Hashing the bytes we were
+ * about to send catches most of that, because the bytes *are* the question.
  * GPT-5.6-sol, 2026-08-26.
  *
- * The ids go in as well, even though the prompt already contains every one of
+ * **But not all of it, and the gap was a real hole.** The bytes carry titles,
+ * crumbs, gists and numbered paragraphs; they do not carry where one sibling
+ * set ends and the next begins. Move a paragraph from one lowest-level section
+ * into the one beside it, leave both titles and gists alone, and let the
+ * packing put both sections in the same call: the outline is identical, the
+ * section preamble is identical, the numbered paragraphs are identical and in
+ * the same order — and the sibling grouping, the single thing this whole stage
+ * rests on, has changed. The old labels would have been reused with nothing
+ * going red anywhere. So `setStarts` and the sets' own ids and blocks go in as
+ * well, none of which the model ever sees. Found by GPT-5.6-sol reviewing this
+ * checkpoint, 2026-08-26.
+ *
+ * The block ids go in too, even though the prompt already contains every one of
  * those paragraphs' text. Two sections of an article can be byte-identical —
  * a repeated boilerplate block, a table's header row — and a fingerprint that
  * could collide across two batches would resume one from the other's labels,
  * which is a wrong answer rather than a missing one.
+ *
+ * `max_tokens` is deliberately **not** in here. A retry runs with double the
+ * reasoning reservation, and an answer that passed every gate under a different
+ * ceiling is the same answer; treating the ceiling as part of the prompt's
+ * identity would refuse a good batch for a reason unconnected to what it says.
+ * Sol's call, and it is right.
  *
  * Sixteen hex characters, compared only for equality. src/source-hash.ts makes
  * the same argument at more length.
@@ -557,9 +584,36 @@ export function batchFingerprint(batch: Batch, blocks: Block[], outline: string)
     EFFORT,
     SYSTEM,
     batch.blocks.map((b) => b.id).join(","),
+    /* The grouping, which no part of the rendered text states. */
+    batch.setStarts.join(","),
+    batch.sets.map((s) => `${s.nodeId}:${s.blocks.map((b) => b.id).join("|")}`).join(";"),
     shared,
     own,
   ].join("\u0000");
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
+}
+
+/**
+ * A fingerprint of the tree, for the manifest — **not** `renderOutline`'s text.
+ *
+ * The outline is titles and indentation, which is the right thing to send a
+ * model and the wrong thing to compare two trees by: two structures that cut
+ * the article in completely different places can print an identical outline.
+ * This walks every node and takes its id, parent, range, title and gist, so a
+ * boundary that moved changes the hash even when every title stayed put.
+ *
+ * Named for what it fingerprints rather than for what the prompt calls it,
+ * after a review pointed out that hashing `renderOutline` was claiming more
+ * than it checked. GPT-5.6-sol, 2026-08-26.
+ */
+export function structureHash(tree: Tree): string {
+  const canonical = Object.keys(tree.nodes)
+    .sort()
+    .map((id) => {
+      const n = tree.nodes[id]!;
+      return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""].join("\u0000");
+    })
+    .join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
 
@@ -585,6 +639,13 @@ export interface LabelCheckpoint {
   generator: string;
   slug: string;
   sourceHash: string;
+  /**
+   * Which run last wrote this. Not part of what makes a checkpoint *usable* —
+   * resuming another run's work is the whole point — but it is what lets
+   * `clearCheckpoint` refuse to delete a file some other process is still
+   * writing to.
+   */
+  runId?: string;
   batches: LabelCheckpointEntry[];
 }
 
@@ -633,6 +694,44 @@ export function usableCheckpoint(
     out.set(fingerprint, { fingerprint, labels, record });
   }
   return out;
+}
+
+/**
+ * Does this stored entry answer for exactly the blocks this batch is asking
+ * about — no more, no fewer?
+ *
+ * The fingerprint already says the prompt was identical, so in practice this
+ * cannot fail. It is here because of what happens when it does: `usableCheckpoint`
+ * only knows whether an entry is *well-formed*, and `assertEveryBlockLabelled`
+ * at the end only asks whether every block ended up with a label, not whether
+ * the call that wrote it was asked about that block. Between those two, an
+ * entry carrying one extra id would overwrite a neighbouring batch's label and
+ * the run would report success. This is the check that sits where the answer is
+ * actually known. GPT-5.6-sol, 2026-08-26.
+ */
+export function coversExactly(entry: LabelCheckpointEntry, batch: Batch): boolean {
+  const want = batch.blocks.map((b) => b.id);
+  const got = Object.keys(entry.labels);
+  if (want.length !== got.length) return false;
+  const wanted = new Set(want);
+  return got.every((id) => wanted.has(id));
+}
+
+/**
+ * Is the shared prefix long enough for the model to take it?
+ *
+ * Its own function because the decision it feeds — serialise the first batch,
+ * or fan out immediately — costs a batch of latency when it is wrong in one
+ * direction and several cache writes when it is wrong in the other, and neither
+ * one is visible in the labels. `estimateTokens` is four characters a token, so
+ * a prefix within a few percent of the floor could fall either side; that is
+ * accepted, because the alternative is a `count_tokens` round trip before every
+ * run to decide something whose worst case is a few cents. What is *not*
+ * accepted is calling the result a fact, which is why the field it feeds is
+ * named `estimatedCacheable`.
+ */
+export function prefixIsCacheable(prefix: string): boolean {
+  return estimateTokens(SYSTEM + prefix) >= CACHE_FLOOR_TOKENS;
 }
 
 /**
@@ -952,14 +1051,25 @@ export interface LabelRun {
    */
   resumed: number;
   /**
-   * Whether the shared prefix was long enough for the cache to take it.
+   * Calls this run actually made — `batches` minus `resumed`.
    *
-   * The point of this field is that `cacheReadTokens: 0` has two causes and
-   * they need different responses: a prefix under the model's floor (nothing to
-   * do, and nothing wrong) and a cache that has stopped hitting (a bug worth
-   * chasing). Without this they are the same zero. docs/reusable/silent-success.md.
+   * Needed to read the cache figures at all. A run of one fresh call has
+   * nothing to read a cache back from, and a fully resumed run made no request
+   * to read one with; both report zeros that mean nothing is wrong.
    */
-  cacheable: boolean;
+  calls: number;
+  /**
+   * Whether the shared prefix looked long enough for the cache to take it.
+   *
+   * **An estimate, and named like one.** `cacheReadTokens: 0` has several
+   * causes needing opposite responses: a prefix under the model's floor
+   * (nothing to do), a run that made one call or none (nothing to read), and a
+   * cache that has stopped hitting (a bug worth chasing). This field plus
+   * `calls` separate the first two from the third; on its own it does not, and
+   * the first version of this comment claimed it did. GPT-5.6-sol, 2026-08-26.
+   * docs/reusable/silent-success.md.
+   */
+  estimatedCacheable: boolean;
   /**
    * **This run's calls only** — a resumed batch contributes nothing here, since
    * nobody paid for it this time. The per-batch figures in `file.batches` are
@@ -1122,6 +1232,13 @@ export async function generateLabels(opts: {
     : fatal.signal;
 
   const checkpointPath = opts.dir ? path.join(opts.dir, CHECKPOINT_FILE) : null;
+  /* Whose checkpoint this is. Two processes labelling the same directory is not
+     a supported thing to do, but `clearCheckpoint` deleting the *other* one's
+     live working state would be a silent, expensive way to find that out — so
+     the delete checks the file still says this run wrote it. Random rather than
+     derived, because two runs of the same article against the same tree would
+     derive the same id, which is exactly the pair that must not match. */
+  const runId = randomUUID();
   const resumable = checkpointPath
     ? usableCheckpoint(await readJsonIfPresent(checkpointPath), manifest)
     : new Map<string, LabelCheckpointEntry>();
@@ -1133,7 +1250,16 @@ export async function generateLabels(opts: {
   const kept: LabelCheckpointEntry[] = [];
   const writeCheckpoint = checkpointPath
     ? serialise(async () => {
-        await writeAtomic(checkpointPath, { ...manifest, batches: kept } satisfies LabelCheckpoint);
+        /* A batch that was already inside this write when the run was abandoned
+           would otherwise put the file back after a later run had cleared it.
+           p-queue can reject a running task's promise but cannot stop the
+           callback, so the callback has to look. GPT-5.6-sol, 2026-08-26. */
+        if (signal.aborted) return;
+        await writeAtomic(checkpointPath, {
+          ...manifest,
+          runId,
+          batches: kept,
+        } satisfies LabelCheckpoint);
       })
     : async (): Promise<void> => {};
   /* **The warm-up, and the condition it now carries.** All these batches share
@@ -1153,12 +1279,16 @@ export async function generateLabels(opts: {
      were right, the cache figures were zero, and zero was the number a working
      cache would have shown too.
 
-     `cacheable` is returned so the zero can be read. GPT-5.6-sol, 2026-08-26.
+     `estimatedCacheable` is returned so the zero can be read — and it is named
+     for what it is, an estimate at four characters a token, after a review
+     pointed out that the first name promised a distinction it could not make on
+     its own. A zero is *also* expected when every batch resumed or only one
+     fresh call ran, so `calls` comes back beside it. GPT-5.6-sol, 2026-08-26.
      See docs/research/prompt-caching-anthropic.md § Concurrency and
      docs/project/prompt-caching.md § The floor. */
   const prefix = batches[0] ? batchParts(batches[0], opts.blocks, outline).shared : "";
-  const cacheable = estimateTokens(SYSTEM + prefix) >= CACHE_FLOOR_TOKENS;
-  const queue = new PQueue({ concurrency: cacheable ? 1 : CONCURRENCY });
+  const estimatedCacheable = prefixIsCacheable(prefix);
+  const queue = new PQueue({ concurrency: estimatedCacheable ? 1 : CONCURRENCY });
 
   let done = 0;
   let resumed = 0;
@@ -1175,11 +1305,26 @@ export async function generateLabels(opts: {
       queue.add(async () => {
         const fingerprint = batchFingerprint(batch, opts.blocks, outline);
         const already = resumable.get(fingerprint);
-        if (already) {
+        /* Checked against *this* batch, not merely against the file's manifest.
+           `usableCheckpoint` can only ask whether an entry is well-formed; only
+           here is it known which blocks the entry is supposed to be answering
+           for. Without this, an entry carrying an extra id would quietly
+           overwrite another batch's label, and the coverage gate at the end —
+           which asks whether every block has one, not whether the right call
+           wrote it — would pass. GPT-5.6-sol, 2026-08-26. */
+        if (already && coversExactly(already, batch)) {
           kept.push(already);
           done++;
           resumed++;
           report();
+          /* Written even though nothing new was bought. Two reasons, and the
+             second one is a bug this had: it stamps the file with *this* run's
+             id, without which a fully-resumed run would never have written the
+             file at all and `clearCheckpoint` would then refuse to delete it as
+             somebody else's — leaving working state behind for ever. And it
+             compacts: entries the new plan does not ask for are dropped rather
+             than carried forward run after run. */
+          await writeCheckpoint();
           return { labels: already.labels, record: already.record, fromCheckpoint: true };
         }
 
@@ -1195,6 +1340,12 @@ export async function generateLabels(opts: {
           try {
             out = await runBatch(clientFor(), batch, opts.blocks, outline, signal, LABEL_HEADROOM * 2);
           } catch (again) {
+            /* An abort is not a second model failure and must not be dressed as
+               one. If another batch has already ended the run, or the caller
+               cancelled the ingest, wrapping that in "failed twice" hands
+               whoever reads the log a truncation story about a call that never
+               happened. Rethrown as itself. GPT-5.6-sol, 2026-08-26. */
+            if (signal.aborted) throw again;
             /* Both attempts, whatever the second one was. They are often
                different failures — a truncation carries the two budget figures
                that say which half overran, and losing it because the retry came
@@ -1270,7 +1421,7 @@ export async function generateLabels(opts: {
       generator: MODEL,
       slug: opts.slug,
       sourceHash,
-      outlineHash: createHash("sha256").update(outline, "utf8").digest("hex").slice(0, 16),
+      structureHash: structureHash(opts.tree),
       structureVersion: opts.tree.version,
       labels,
       batches: records,
@@ -1278,7 +1429,8 @@ export async function generateLabels(opts: {
     batches: batches.length,
     oversized: oversizedSets(batches).length,
     resumed,
-    cacheable,
+    calls: paid.length,
+    estimatedCacheable,
     inputTokens: paid.reduce((n, r) => n + r.inputTokens, 0),
     outputTokens: paid.reduce((n, r) => n + r.outputTokens, 0),
     /* Summed the same way as the other two. In a healthy run one batch writes
@@ -1289,7 +1441,14 @@ export async function generateLabels(opts: {
     cacheWriteTokens: paid.reduce((n, r) => n + r.cacheWriteTokens, 0),
     elapsedMs: Date.now() - started,
     clearCheckpoint: async (): Promise<void> => {
-      if (checkpointPath) await rm(checkpointPath, { force: true });
+      if (!checkpointPath) return;
+      /* Only if it is still ours. A second process labelling the same directory
+         would have overwritten this file with its own working state, and
+         deleting that is an expensive, silent way to discover the collision. */
+      const onDisk = await readJsonIfPresent(checkpointPath);
+      const owner = (onDisk as Partial<LabelCheckpoint> | undefined)?.runId;
+      if (owner !== undefined && owner !== runId) return;
+      await rm(checkpointPath, { force: true });
     },
   };
 }
@@ -1418,8 +1577,8 @@ async function main(): Promise<void> {
   /* Said out loud because the alternative is a pair of zeros in the cache
      figures that a broken cache would produce too. */
   console.log(
-    run.cacheable
-      ? `Cache:     ${run.cacheReadTokens} read, ${run.cacheWriteTokens} written`
+    run.estimatedCacheable
+      ? `Cache:     ${run.cacheReadTokens} read, ${run.cacheWriteTokens} written over ${run.calls} call(s)`
       : `Cache:     off — the shared prefix is under the model's ${CACHE_FLOOR_TOKENS}-token floor`,
   );
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);

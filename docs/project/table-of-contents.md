@@ -5,8 +5,13 @@ Pipeline stage 4. Builds the nested structure that the ToC sidebar and the
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
-Stage 4 builds the *structure* (ranges, hierarchy, titles, leaf `navLabel`s). Stage 5 fills the
-`gist` on each internal node. This document is about the structure and the labels.
+Stage 4 builds the *structure* — ranges, hierarchy, titles — and, in a second batched pass, the
+`navLabel` on every gistable block ([Two passes](#two-passes)). It also writes the one-sentence
+`gist` on each internal node, which [architecture.md](architecture.md#pipeline) draws as stage 5:
+they were never split into two model calls, because a tree without gists has nothing to render at
+its coarse levels and fails validation, and both would write the same artefact. The live prompt in
+[`src/toc.ts`](../../src/toc.ts) is the authority; this line used to say stage 5 filled them, and
+had not been true for some time.
 
 ## Intent
 
@@ -336,18 +341,21 @@ place, the tree last. Ordering alone was not enough: `writeFile` truncates befor
 put there, and *existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is
 done", so a kill mid-write left a present, truncated tree that a retry skipped.
 
-`labels.json` carries a **manifest** — `sourceHash`, `outlineHash`, `structureVersion` — because
+`labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because
 atomic writes give us "whole or not there" and not "still true". A complete set of labels for an
 article that has since been re-extracted, or re-structured, looks exactly like a current one. The
-outline hash is the one that earns its place: boundaries can move without a single block changing.
+structure hash is the one that earns its place: boundaries can move without a single block changing,
+so it is taken over every node's range, parent, title and gist rather than over the outline the
+prompt shows the model, which is titles alone. **Nothing reads it yet** — the `toc` step still has no
+freshness check — so today it is evidence in the file rather than a guard.
 
 While the batches are running, each one's labels are appended to **`labels-progress.json`** as it
 lands. That is working state, not an artefact, which is why it is not `labels.json`: a partial
 `labels.json` would be a finished-looking article with holes in its navigation. A later run reuses a
-batch only when a fingerprint over the exact bytes of its prompt matches — never merely because the
-same block ids are in the same call, since the crumbs, gists and outline around them may all have
-moved. The first unrecoverable failure aborts every other batch rather than letting a doomed run keep
-buying answers.
+batch only when a fingerprint matches over the exact bytes of its prompt **plus the sibling grouping
+those bytes never state** — never merely because the same block ids are in the same call, since the
+crumbs, gists, outline and boundaries around them may all have moved. The first unrecoverable failure
+aborts every other batch rather than letting a doomed run keep buying answers.
 
 The whole design, the alternatives weighed against it, and what it does not yet do are in
 [docs/plans/toc-scaling.md](../plans/toc-scaling.md).

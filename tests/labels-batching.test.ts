@@ -19,7 +19,7 @@
  * Deterministic — no network, no model. docs/project/testing.md.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import PQueue from "p-queue";
@@ -30,15 +30,18 @@ import {
   BatchIncomplete,
   batchFingerprint,
   contentWords,
+  coversExactly,
   detectShift,
   generateLabels,
   mergeLabels,
   parseLabels,
   planBatches,
+  prefixIsCacheable,
   batchParts,
   renderBatch,
   renderOutline,
   serialise,
+  structureHash,
   usableCheckpoint,
 } from "../src/labels.js";
 import type { Batch } from "../src/labels.js";
@@ -119,6 +122,37 @@ function fixture(sections: number, per: number, nonGistable: number[] = []): { t
   };
 
   return { tree: { version: "test", generator: "test", slug: "test", rootId, nodes }, blocks };
+}
+
+/**
+ * Move the last paragraph of section 0 into section 1, and change nothing else.
+ *
+ * The point of this helper is what it does *not* touch: every title, every gist
+ * and every block stays exactly as it was, so the outline the model is shown,
+ * the section preamble and the numbered paragraphs are all byte-identical. Only
+ * the sibling grouping moves — which is the one thing this whole stage rests on,
+ * and the one thing the rendered prompt never states.
+ */
+function withMovedBoundary(tree: Tree, blocks: Block[]): Tree {
+  const root = tree.nodes[tree.rootId]!;
+  const [firstId, secondId] = root.children as [NodeId, NodeId];
+  const first = tree.nodes[firstId]!;
+  const second = tree.nodes[secondId]!;
+  const moved = first.children[first.children.length - 1]!;
+  const nodes = { ...tree.nodes };
+  nodes[firstId] = {
+    ...first,
+    children: first.children.slice(0, -1),
+    range: [first.range[0], tree.nodes[first.children[first.children.length - 2]!]!.range[1]],
+  };
+  nodes[secondId] = {
+    ...second,
+    children: [moved, ...second.children],
+    range: [tree.nodes[moved]!.range[0], second.range[1]],
+  };
+  nodes[moved] = { ...tree.nodes[moved]!, parent: secondId };
+  void blocks;
+  return { ...tree, nodes };
 }
 
 describe("planBatches", () => {
@@ -733,11 +767,23 @@ describe("batchParts — the cache boundary", () => {
     expect(shared).toContain(outline);
   });
 
-  it("refuses to guess when the boundary is missing", () => {
-    // Rather than split at the wrong place, it caches nothing — an empty shared
-    // part marks no prefix, which is the safe failure.
+  it("cuts the message without losing or duplicating a byte", () => {
+    /* The two parts have to reassemble into exactly what `renderBatch` wrote,
+       because they are two halves of one request: anything dropped at the seam
+       is content the model never sees, and anything duplicated is content it
+       sees twice, and neither would throw.
+
+       This replaced a test called "refuses to guess when the boundary is
+       missing", which asserted `shared === "" ? own : shared` was truthy — true
+       on the ordinary path, so it passed without ever reaching the branch it
+       named. `renderBatch` always emits the marker, so that branch is not
+       reachable through the public API at all; it is defensive, and saying so
+       is more honest than a test that pretends to cover it.
+       GPT-5.6-sol, 2026-08-26. */
+    const whole = renderBatch(batches[0]!, blocks, outline);
     const { shared, own } = batchParts(batches[0]!, blocks, outline);
-    expect(shared === "" ? own : shared).toBeTruthy();
+    expect(shared).not.toBe("");
+    expect(`${shared}\n\n${own}`).toBe(whole);
   });
 });
 
@@ -800,6 +846,38 @@ describe("batchFingerprint", () => {
     expect(after).not.toBe(before);
   });
 
+  it("changes when a sibling boundary moves and nothing else does", () => {
+    /* The hole this closes. Move one paragraph from one lowest-level section
+       into the one beside it, leave both titles and both gists alone, and put
+       both sections in the same call: the outline is identical, the section
+       preamble is identical, the numbered paragraphs are identical and in the
+       same order, and the block-id list is identical. Every byte the model
+       would see is the same. Only the grouping changed — and the grouping is
+       the single thing this stage rests on, so the labels are now written to
+       tell a paragraph apart from a different set of neighbours.
+
+       The first fingerprint hashed the rendered prompt and the ids, so it
+       matched, and the old labels were reused with nothing going red anywhere.
+       Found by GPT-5.6-sol, 2026-08-26. */
+    const { tree, blocks } = fixture(6, 7);
+    const moved = withMovedBoundary(tree, blocks);
+
+    const before = planBatches(tree, blocks)[0]!;
+    const after = planBatches(moved, blocks)[0]!;
+
+    // The premise: everything the model sees really is unchanged.
+    expect(renderBatch(after, blocks, renderOutline(moved))).toBe(
+      renderBatch(before, blocks, renderOutline(tree)),
+    );
+    expect(after.blocks.map((b) => b.id)).toEqual(before.blocks.map((b) => b.id));
+    expect(after.setStarts).not.toEqual(before.setStarts);
+
+    // And the fingerprint sees it anyway.
+    expect(batchFingerprint(after, blocks, renderOutline(moved))).not.toBe(
+      batchFingerprint(before, blocks, renderOutline(tree)),
+    );
+  });
+
   it("changes when a paragraph's text changes", () => {
     const { tree, blocks } = fixture(6, 7);
     const outline = renderOutline(tree);
@@ -819,6 +897,25 @@ describe("batchFingerprint", () => {
     expect(batches.length).toBeGreaterThan(1);
     const prints = batches.map((b) => batchFingerprint(b, same, outline));
     expect(new Set(prints).size).toBe(prints.length);
+  });
+});
+
+describe("prefixIsCacheable", () => {
+  it("is false for the outlines our articles actually have", () => {
+    // ~660 tokens on the 141-block article and ~950 on the 360-block one, both
+    // under Sonnet 5's 1,024. So the warm-up that serialises the first batch to
+    // write a cache entry has nothing to write, and skipping it is the right
+    // call rather than a shortcut.
+    expect(prefixIsCacheable(renderOutline(fixture(6, 7).tree))).toBe(false);
+  });
+
+  it("is true once the prefix clears the floor", () => {
+    // Tested at the decision rather than through a run, because through a run
+    // the only observable is a boolean the run copied out of here — which would
+    // pass whatever the threshold said. Four characters a token, so 4,096
+    // characters is comfortably over 1,024 tokens even with the system prompt
+    // discounted entirely.
+    expect(prefixIsCacheable("x".repeat(4_096))).toBe(true);
   });
 });
 
@@ -943,6 +1040,35 @@ describe("generateLabels, resuming", () => {
     return batches;
   }
 
+
+  /**
+   * Run `fn` with every credential the Anthropic SDK would accept removed.
+   *
+   * This is how the resume tests prove no batch quietly went and asked again:
+   * with nothing to authenticate with, a single request throws. Counting calls
+   * would prove it only if the counter were wired to the thing that costs
+   * money; taking the money away needs no wiring.
+   *
+   * `ANTHROPIC_AUTH_TOKEN` as well as the API key, because the SDK accepts
+   * either and a test that removed only one would pass on a laptop and stop
+   * testing anything on a machine that had the other. GPT-5.6-sol, 2026-08-26.
+   */
+  async function noAuth(fn: () => Promise<void>): Promise<void> {
+    const saved = {
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+    };
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+    try {
+      await fn();
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v !== undefined) process.env[k] = v;
+      }
+    }
+  }
+
   let dir = "";
   beforeEach(async () => {
     dir = await mkdtemp(path.join(tmpdir(), "labels-resume-"));
@@ -957,9 +1083,7 @@ describe("generateLabels, resuming", () => {
        for exactly the right reason — which is the only way to prove a resumed
        batch did not quietly go and ask again. Counting calls would prove the
        same thing only if the counter were wired to the thing that costs money. */
-    const key = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
+    await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
       const batches = await checkpointFor(dir, tree, blocks);
 
@@ -976,58 +1100,81 @@ describe("generateLabels, resuming", () => {
          disagreeing on a resumed run is the intended behaviour, and pinning it
          here is what stops someone "fixing" one of them. */
       expect(run.file.batches?.reduce((n, r) => n + r.inputTokens, 0)).toBe(100 * batches.length);
-    } finally {
-      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
-    }
+    });
   });
 
   it("records the manifest that lets a stale complete set be spotted", async () => {
-    const key = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
+    await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
       await checkpointFor(dir, tree, blocks);
       const run = await generateLabels({ tree, blocks, slug: "test", dir });
 
       expect(run.file.sourceHash).toBe(hashBlocks(blocks));
       expect(run.file.structureVersion).toBe(tree.version);
-      expect(run.file.outlineHash).toMatch(/^[0-9a-f]{16}$/);
-    } finally {
-      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
-    }
+      /* Not just "sixteen hex characters" — that passes for any hash of
+         anything, including one taken over a constant. What the field claims is
+         that it changes when the structure changes, so that is what is checked. */
+      expect(run.file.structureHash).toBe(structureHash(tree));
+      const moved = withMovedBoundary(tree, blocks);
+      expect(structureHash(moved)).not.toBe(structureHash(tree));
+    });
   });
 
-  it("reuses nothing when the structure has moved under the checkpoint", async () => {
-    // Same blocks, same source hash, different tree. The manifest cannot see
-    // this — the per-batch fingerprints are what catch it, which is why the
-    // resume is not allowed to stop at the manifest.
+  it("reuses nothing when only a sibling boundary has moved under the checkpoint", async () => {
+    /* Same blocks, same source hash, same titles and gists — so the manifest
+       agrees and the rendered prompt is identical. Only the grouping moved.
+
+       Driven through `generateLabels` rather than by comparing fingerprints by
+       hand, because the wiring is the part that can be wrong: a check that
+       computes both sides itself passes just as happily when the resume path
+       never consults it. With no credentials, a run that refuses to resume has
+       to go to the model, and going to the model throws. */
     const { tree, blocks } = fixture(6, 7);
     await checkpointFor(dir, tree, blocks);
+    const moved = withMovedBoundary(tree, blocks);
 
-    const moved: Tree = {
-      ...tree,
-      nodes: Object.fromEntries(
-        Object.entries(tree.nodes).map(([id, node]) => [
-          id,
-          node.title ? { ...node, title: `${node.title}, revised` } : node,
-        ]),
-      ),
+    await noAuth(async () => {
+        await expect(generateLabels({ tree: moved, blocks, slug: "test", dir })).rejects.toThrow(
+          /Could not resolve authentication/,
+        );
+    });
+
+    // And the control: unmoved, the same checkpoint resumes everything.
+    await noAuth(async () => {
+        const run = await generateLabels({ tree, blocks, slug: "test", dir });
+        expect(run.resumed).toBe(run.batches);
+    });
+  });
+
+  it("refuses an entry that does not answer for exactly this batch's blocks", () => {
+    /* Belt and braces behind the fingerprint. `usableCheckpoint` can only ask
+       whether an entry is well-formed; the coverage gate at the end only asks
+       whether every block ended up with a label. Between them, an entry with one
+       extra id would overwrite a neighbouring batch's label and the run would
+       report success. */
+    const { tree, blocks } = fixture(6, 7);
+    const batch = planBatches(tree, blocks)[0]!;
+    const exact = {
+      fingerprint: "ff00",
+      labels: Object.fromEntries(batch.blocks.map((b) => [b.id, "A label"])),
+      record: { blocks: [], setStarts: [], inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, ms: 0 },
     };
-    const outline = renderOutline(moved);
-    const reusable = usableCheckpoint(
-      JSON.parse(await readFile(path.join(dir, "labels-progress.json"), "utf8")),
-      { version: "labels/1", generator: MODEL, slug: "test", sourceHash: hashBlocks(blocks) },
-    );
-    expect(reusable.size).toBeGreaterThan(0);
-    for (const batch of planBatches(moved, blocks)) {
-      expect(reusable.has(batchFingerprint(batch, blocks, outline))).toBe(false);
-    }
+    expect(coversExactly(exact, batch)).toBe(true);
+
+    const extra = { ...exact, labels: { ...exact.labels, "spya-999999": "Not ours" } };
+    expect(coversExactly(extra, batch)).toBe(false);
+
+    const short = { ...exact, labels: { ...exact.labels } };
+    delete short.labels[batch.blocks[0]!.id];
+    expect(coversExactly(short, batch)).toBe(false);
+
+    // Same count, one id swapped — the case a length check alone would miss.
+    const swapped = { ...exact, labels: { ...short.labels, "spya-999999": "Not ours" } };
+    expect(coversExactly(swapped, batch)).toBe(false);
   });
 
   it("clears the checkpoint only when asked, and leaves it there until then", async () => {
-    const key = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
+    await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
       await checkpointFor(dir, tree, blocks);
       const file = path.join(dir, "labels-progress.json");
@@ -1036,19 +1183,40 @@ describe("generateLabels, resuming", () => {
       // Still there: the artefacts have not been written yet, and until they
       // have, this file is the only copy of what the run bought.
       expect(existsSync(file)).toBe(true);
+      /* And stamped by *this* run, which is what lets the delete below know it
+         is not some other process's live working state. The first version never
+         wrote the file on a fully-resumed run, so the stamp stayed with the run
+         that had failed and `clearCheckpoint` refused for ever — a leak the
+         hand-built checkpoint in this test, which carries no stamp at all, was
+         about to hide. */
+      const stamped = JSON.parse(readFileSync(file, "utf8")) as { runId?: string };
+      expect(typeof stamped.runId).toBe("string");
+
       await run.clearCheckpoint();
       expect(existsSync(file)).toBe(false);
       // And calling it twice is not an error.
       await run.clearCheckpoint();
-    } finally {
-      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
-    }
+    });
+  });
+
+  it("will not delete a checkpoint another run has claimed", async () => {
+    await noAuth(async () => {
+      const { tree, blocks } = fixture(6, 7);
+      await checkpointFor(dir, tree, blocks);
+      const file = path.join(dir, "labels-progress.json");
+      const run = await generateLabels({ tree, blocks, slug: "test", dir });
+
+      // Somebody else claims it between the artefacts landing and the delete.
+      const theirs = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+      await writeFile(file, JSON.stringify({ ...theirs, runId: "another-process" }), "utf8");
+
+      await run.clearCheckpoint();
+      expect(existsSync(file)).toBe(true);
+    });
   });
 
   it("writes nothing at all when no directory is given", async () => {
-    const key = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
+    await noAuth(async () => {
       const { tree, blocks } = fixture(6, 7);
       await checkpointFor(dir, tree, blocks);
       // No `dir`, so the checkpoint sitting right there is not read — the run
@@ -1060,25 +1228,21 @@ describe("generateLabels, resuming", () => {
       await expect(generateLabels({ tree, blocks, slug: "test" })).rejects.toThrow(
         /Could not resolve authentication/,
       );
-    } finally {
-      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
-    }
+    });
   });
 
-  it("says whether the shared prefix was big enough for the cache to take it", async () => {
-    const key = process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    try {
-      // A six-section outline is a few hundred characters. Under the floor, so
-      // the run says so rather than reporting a zero that a broken cache would
-      // report too, and does not serialise the first batch to warm nothing.
-      const { tree, blocks } = fixture(6, 7);
-      await checkpointFor(dir, tree, blocks);
-      const run = await generateLabels({ tree, blocks, slug: "test", dir });
-      expect(run.cacheable).toBe(false);
-    } finally {
-      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
-    }
+  it("reports the cache estimate and the call count together", async () => {
+    await noAuth(async () => {
+        // A fully resumed run made no calls, so its zeros in the cache figures
+        // mean nothing at all — which is exactly why `calls` is reported beside
+        // `estimatedCacheable` rather than the flag being asked to carry it.
+        const { tree, blocks } = fixture(6, 7);
+        await checkpointFor(dir, tree, blocks);
+        const run = await generateLabels({ tree, blocks, slug: "test", dir });
+        expect(run.estimatedCacheable).toBe(false);
+        expect(run.calls).toBe(0);
+        expect(run.cacheReadTokens).toBe(0);
+    });
   });
 });
 
@@ -1133,13 +1297,28 @@ describe("allOrStop, and the queue behaviour it depends on", () => {
        nothing else here would notice until a run hung in the dark. */
     const controller = new AbortController();
     const queue = new PQueue({ concurrency: 1 });
+    let secondRan = false;
     const first = queue.add(async () => {
       await new Promise((r) => setTimeout(r, 20));
       return "ran";
     });
-    const queued = queue.add(async () => "should never run", { signal: controller.signal });
+    const queued = queue.add(
+      async () => {
+        secondRan = true;
+        return "should never run";
+      },
+      { signal: controller.signal },
+    );
+    /* The abort-then-clear order the run itself uses, so the test exercises the
+       sequence rather than one half of it. */
     controller.abort();
+    queue.clear();
     await expect(queued).rejects.toThrow();
     await expect(first).resolves.toBe("ran");
+    await queue.onIdle();
+    // The rejection is not the whole claim: the callback must never run either,
+    // or the "stop paying" half of fail-fast buys nothing.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(secondRan).toBe(false);
   });
 });

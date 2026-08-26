@@ -432,10 +432,19 @@ about to send — prompt version, model, effort, system prompt, the block ids, a
 rendered user message. Sol was explicit that matching on ids is *not* correct, and the reason is the
 one this whole stage rests on: the boundaries, the crumbs, the gists and the outline can all move
 while the same paragraphs sit in the same call, and a label written to tell a paragraph apart from a
-different set of neighbours is answering a question nobody asked any more. Hashing the bytes makes
-that impossible to get wrong, because the bytes *are* the question. The ids go in as well, so two
-byte-identical sections — repeated boilerplate, a table's header row — cannot collide and fill one
-batch from the other's labels.
+different set of neighbours is answering a question nobody asked any more. The ids go in as well, so
+two byte-identical sections — repeated boilerplate, a table's header row — cannot collide and fill
+one batch from the other's labels.
+
+**And the bytes were not enough**, which the next review found. Move one paragraph from a lowest-level
+section into the one beside it, leave both titles and gists alone, and let the packing put both in the
+same call: the outline is identical, the section preamble is identical, the numbered paragraphs are
+identical and in the same order, the block-id list is identical. Every byte the model would see is
+the same, and the sibling grouping — the single thing this stage rests on — has moved. The old labels
+would have been reused with nothing going red. `setStarts` and the sets' own ids and blocks are in the
+fingerprint now, none of which the model ever sees, and
+[`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) builds exactly that tree and
+asserts the rendered prompt is byte-identical *and* the fingerprint is not.
 
 **The writes are serialised.** Four batches landing at once would each read the accumulated list,
 each build a file, and the last rename would win — a checkpoint quietly holding one batch where it
@@ -450,10 +459,16 @@ will never run — a hang rather than a failure. That claim about the dependency
 its own, because if a p-queue upgrade changed it nothing else here would notice until a run hung in
 the dark.
 
-**A manifest on `labels.json`** — `sourceHash`, `outlineHash`, `structureVersion` — so a *stale*
-complete set can be told from a current one, which atomic writes do not give us. The outline hash is
-the one that earns its place: boundaries can move without a single block changing, and `sourceHash`
-alone would call that current.
+**A manifest on `labels.json`** — `sourceHash`, `structureHash`, `structureVersion` — so a *stale*
+complete set can be told from a current one, which atomic writes do not give us. The structure hash
+is the one that earns its place: boundaries can move without a single block changing, and
+`sourceHash` alone would call that current. It hashes every node's range, parent, title and gist,
+*not* the outline the prompt shows the model — the first version hashed `renderOutline`, which is
+titles and indentation, so two trees cutting the article in completely different places produced the
+same hash. **Nothing reads the manifest yet**: the `toc` step has no freshness check of its own, so
+the pipeline still decides it is done by whether the files exist. Recording it is what makes writing
+that check a small job; until it is written, it is evidence rather than a guard, and saying so is
+better than implying otherwise.
 
 Two smaller things came with it. `generateLabels` builds its Anthropic client on first use rather
 than up front, so a fully-resumed run needs no API key — which is also what lets a test prove no
@@ -461,6 +476,58 @@ batch quietly went and asked again, by deleting the key and watching the run suc
 now reports `resumed`, and reports its token counts for **this run's calls only** while
 `file.batches` keeps the per-batch figures of whatever call produced each label set. The two
 deliberately do not add up on a resumed run.
+
+### What the third review found, and the one thing left open
+
+GPT-5.6-sol reviewed the checkpoint on the day it was built and did not call it clean. Two findings
+were high severity. The first — a boundary change reusing the old labels — is fixed above. The
+second is **not built, and is the largest remaining path to a green, complete-looking, internally
+inconsistent article**:
+
+> `writeAtomic` is atomic for one file only. The three artefacts are separate renames. Two writers
+> can leave `labels.json` and `blocks.json` from run B beside `tree.json` from run A. All files
+> exist, so the pipeline declares the step done.
+
+The same defect exists inside a *single* process during a forced regeneration: the old `tree.json`
+sits there while new labels and blocks land, so a crash before the last rename leaves a
+complete-looking mixed generation. Ordering and atomic renames were never going to fix that; only a
+publication boundary is. Sol's shape for it: a per-slug interprocess lock, a generation directory
+with one atomic "current generation" pointer, the generation id on the checkpoint and on all three
+outputs, and a completion step that validates the set.
+
+**Not built here, deliberately, and it is Greg's call rather than mine.** It is not this stage's to
+build — it spans stage 4, [`src/pipeline.ts`](../../src/pipeline.ts) and the store — and Sol's own
+alternative to the generation directory is "or a database transaction", which is what
+[the Postgres migration](postgres-migration.md) is in the middle of delivering. Building a
+filesystem generation scheme now is work with a known expiry date. The risk in the meantime is bounded
+by the fact that nobody runs two ingests of one article at once on purpose.
+
+What *was* taken from that finding is the cheap half: the checkpoint carries a `runId`, so
+`clearCheckpoint` will not delete a file another process has claimed — and a fully-resumed run
+rewrites the file first, without which the stamp would stay with the run that failed and the delete
+would refuse for ever. That bug was live for about twenty minutes and the test that would have caught
+it was hiding it, because the checkpoint it hand-built carried no stamp at all.
+
+Three smaller things from the same review:
+
+- **`usableCheckpoint` was validating shape, not fit.** It asked whether an entry was well-formed;
+  nothing asked whether it answered for the blocks the batch was about to send. Between that and
+  `assertEveryBlockLabelled` — which asks whether every block got *a* label, not whether the right
+  call wrote it — an entry with one extra id would have overwritten a neighbouring batch's label and
+  the run would have reported success. `coversExactly` now checks at the point where the answer is
+  known.
+- **An abort during the retry was dressed as a second model failure.** A cancelled ingest, or a
+  sibling batch ending the run, came back as "failed twice" with a truncation story about a call that
+  never happened. It is rethrown as itself now.
+- **`TocRun.labelBatches` was printed as "calls".** After a resume it would have said three calls
+  having made two. `labelCalls` and `labelsResumed` are separate fields.
+
+And it named seven tests that overclaimed. The worst was one that had been vacuous since before this
+work — `batchParts`' "refuses to guess when the boundary is missing" asserted something true on the
+ordinary path and never reached the branch it named. That branch is not reachable through the public
+API at all, so the test now checks what *is* checkable — that the two halves reassemble into exactly
+what `renderBatch` wrote — and the file says the branch is defensive rather than pretending to cover
+it.
 
 ### The warm-up that was warming nothing
 
@@ -472,11 +539,15 @@ a prefix under **1,024 tokens**, and on both committed articles this prefix is w
 roughly 660 tokens on the 141-block article and 950 on the 360-block one. So the serialisation bought
 a discount that was never available.
 
-It is now conditional on the prefix clearing the floor, and the run reports `cacheable` — because
-`cacheReadTokens: 0` has two causes needing opposite responses (nothing to cache, which is fine; a
-cache that has stopped hitting, which is a bug), and without the flag they are the same zero. The
-CLI says which. That is [silent success](../reusable/silent-success.md) in its purest form: the
-labels were right, the number was zero, and zero was what working looked like too.
+It is now conditional on the prefix clearing the floor, and the run reports `estimatedCacheable`
+beside `calls` — because `cacheReadTokens: 0` has *several* causes needing opposite responses
+(nothing to cache; a run that made one call or none, so nothing to read it back with; and a cache
+that has stopped hitting, which is a bug). The first version of this reported one flag and claimed it
+separated them, which it did not: a resumed run reports zero too. The pair does. And the name says
+`estimated` because `estimateTokens` is four characters a token, so a prefix within a few percent of
+the floor could fall either side — accepted, since the worst case is a few cents. That is
+[silent success](../reusable/silent-success.md) in its purest form: the labels were right, the number
+was zero, and zero was what working looked like too.
 
 ### What the eval got wrong <a id="what-the-eval-got-wrong"></a>
 
