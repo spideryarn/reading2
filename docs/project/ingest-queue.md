@@ -232,18 +232,30 @@ So in practice: the server dies during `toc`, you press Retry, and `fetch`, `ext
 are skipped in milliseconds while `toc` starts again. That is "picks up from where it started" for
 the case that matters — the two model calls, which are the expensive part.
 
-**What is not built, honestly.** The check is *existence*, not correctness. A file
-that is present but truncated, or that was written by an older version of a prompt, counts as done.
-The three things that would close the gap, roughly in order of value:
+**The check used to be existence, and it is not any more.** A step now declares `produces` — the
+*kinds* of thing it makes, `tree`, `labels`, `blocks` — beside the old `outputs` list of paths, and
+an **artefact store** ([`src/store/artifacts.ts`](../../src/store/artifacts.ts), file adapter
+[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)) answers whether they are all there.
+It answers by **parsing**, not by `stat`ing, which is the fix for the truncation hazard this section
+used to list as unbuilt: a `writeFile` killed halfway leaves a file that exists and will not parse,
+and that used to report its step done. `stepIsDone` takes a store, so the same question will be
+asked of Postgres columns without the pipeline changing. See
+[postgres-storage-implementation.md § Step 11](../plans/postgres-storage-implementation.md), half B.
 
-1. **Content hashing.** [architecture.md § Storage](architecture.md#storage) already specifies that
-   `tree.json` is keyed on `hash(blocks.json) + prompt version + model id`. **One step implements it
-   now** — `tweets`, via the optional `isDone` above — and that is the shape the rest should follow:
-   `done()` becomes "the artefact is current" rather than "the artefact exists", and a prompt change
-   invalidates the right things by itself. `tree.json` and `arc.json` still carry no hash, so they
-   are still existence-only, and `arc` still needs the force-cascade to notice that its tree moved.
-2. **Atomic artefact writes.** Job records are written temp-then-rename; the pipeline stages are not.
-   A crash mid-write leaves a truncated file that the next run treats as finished.
+**What is still not built, honestly.** Three things, roughly in order of value:
+
+1. **A freshness stamp for every step.** [architecture.md § Storage](architecture.md#storage)
+   specifies that `tree.json` is keyed on `hash(blocks.json) + prompt version + model id`. Three
+   steps implement it — `tweets` and `summary` via the optional `isDone` above, `glossary` via the
+   newer `stamp`, which hands the store four values and lets one `sameStamp` do the comparing.
+   `tree.json` and `arc.json` carry no hash at all, so `toc` and `arc` are still presence-only, and
+   `arc` still needs the force-cascade to notice that its tree moved. `labels.json` *does* carry
+   one, which is what `toc`'s stamp is read from today even though nothing yet compares it.
+2. **Atomic artefact writes across a step's whole set.** `toc` and `labels` write temp-then-rename,
+   and the store's `write` does too; the other stages still write in place, and none of it makes the
+   *pair* `extract` produces atomic. A kill between two renames leaves one artefact of two. That
+   state is caught rather than prevented — `has` requires all of `produces` — and only a database
+   transaction prevents it.
 3. **Automatic resume on startup**, rather than a sweep to `error` and a Retry button. Cheap once
    (1) and (2) hold, and unwise before then: automatically re-running steps against artefacts we
    cannot vouch for is how you get a tree built for the previous version of an article.

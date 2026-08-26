@@ -34,6 +34,7 @@ import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone, type StepContext } from "./pipeline.js";
+import { createFsArtifactStore } from "./store/artifacts-fs.js";
 import { readingMinutes } from "./reading-time.js";
 import { isStale } from "./tweets.js";
 import type {
@@ -667,12 +668,19 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
     cacheArticle: false,
   };
 
+  /* A store pinned to the directory we actually found, not to `data/<slug>/`.
+     `articleDir` falls back to `example/` for an article with no directory of
+     its own, and the default store would then report every stage of the fixture
+     unfinished — the page saying nothing has run over an article it is
+     displaying. Same `ctx.dir`, so the two halves of each row agree. */
+  const store = createFsArtifactStore(() => ({ dir: ctx.dir, htmlFile: ctx.htmlFile }));
+
   const stages: StageState[] = await Promise.all(
     STEP_ORDER.map(async (step) => ({
       step,
       label: STEPS[step].label,
       outputs: STEPS[step].outputs(ctx).map((file) => path.relative(ROOT, file)),
-      done: await stepIsDone(STEPS[step], ctx),
+      done: await stepIsDone(STEPS[step], ctx, store),
     })),
   );
 
