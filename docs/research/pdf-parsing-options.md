@@ -187,10 +187,23 @@ pages to images yourself on Vercel* (their v1 and v2 pain), and *figures are the
 ## The decision
 
 **v1 = pdf.js text layer as the free baseline + a vision model reading page-range chunks in
-parallel, checked against that baseline.** Claude Haiku 4.5 is the incumbent and the tie-break
-default; **which model actually reads the pages is decided by the bake-off**, not here — see
-[the second round](#second-round-2026-08-26) and
-[the plan](../plans/pdf-ingestion.md#which-model-and-which-vendor). Reasons, in order:
+parallel, checked against that baseline.**
+
+> **Settled by measurement, 2026-08-26: the model is Gemini 3.7 Flash through OpenRouter.** Not on
+> the benchmark scores this document spends its length on, and not on the price-per-token table
+> either — the measured cost gap was 1.7×, where two price-per-token numbers predict 2.5×. It won on
+> one thing: every Claude Haiku 4.5 variant silently dropped a page of a scan, three runs out of
+> three, and Gemini read it. The evidence is in
+> [the plan](../plans/pdf-ingestion.md#the-bake-off-and-what-it-decided-2026-08-26) and
+> [`evals/pdf/baselines/bakeoff-2026-08-26.json`](../../evals/pdf/baselines/bakeoff-2026-08-26.json).
+>
+> Which is a small lesson about this document. Nothing in the research below predicted the finding
+> that actually decided it, and one of the two findings from the hour — that putting the PDF before
+> the instruction makes the model skip a page — is not the kind of thing any amount of reading
+> would have turned up. **A bake-off is not a tiebreaker for the reading; it is the only part of it
+> that is evidence.**
+
+Reasons for the shape, in order:
 
 1. ~~**No new vendor.**~~ **Superseded 2026-08-26** — see [the second round](#second-round-2026-08-26).
    The original reasoning was that Gemini Flash is cheaper and benchmarks higher but costs a second
@@ -201,7 +214,8 @@ default; **which model actually reads the pages is decided by the bake-off**, no
 2. **The image is nearly free once you pay for the output**, and it is what makes scans, columns
    and headings work without heuristics.
 3. **A cheap model, not a frontier one.** Greg: *"I'm hoping we won't need a frontier model."*
-   Transcription is not reasoning. `MODEL` (Sonnet 5) is the escalation tier, on request, recorded
+   Transcription is not reasoning — and the bake-off bore this out, with a $0.005-a-page model
+   scoring 0.93–0.95 recall on a dense two-column paper. `MODEL` (Sonnet 5) is the escalation tier, on request, recorded
    in `meta.json` — never a silent switch.
 4. **The text layer is kept and used**, not thrown away: it is the page count, the "is this a scan"
    signal, the title, the verification baseline, and (v2) the page-number map.
@@ -210,7 +224,8 @@ default; **which model actually reads the pages is decided by the bake-off**, no
    model pass follows it anyway; it stays on the table as the cheap first pass of v2.
 6. **MuPDF.js** was rejected on AGPL; **`unpdf`** over bare `pdfjs-dist` is a toss-up we settle
    when the code is written — `unpdf` if the legacy build needs shims on Vercel, bare pdf.js if it
-   doesn't.
+   doesn't. The bake-off used bare `pdfjs-dist` (`legacy/build/pdf.mjs`) on a laptop and it was
+   fine, which says nothing about Vercel.
 
 ## Second round, 2026-08-26
 
@@ -242,6 +257,14 @@ OpenRouter's `mistral-ocr` engine runs OCR 4.1 or the older, Mistral-deprecated 
 whether dots.ocr, olmOCR or InternVL are listed there at all.
 
 ### Mistral OCR: not the transcriber, possibly the witness
+
+> **Run, 2026-08-26.** It works, it costs $0.002 a page to parse, and it came back in 6 seconds. Two
+> things the run added that the reading below could not: its output arrives as **one flat markdown
+> blob with no page boundaries** — two pages in a single string, so the per-page check cannot run
+> against it without reconstructing pages ourselves — and a second call within seconds was refused
+> with *"The document parsing engine is currently rate limited."* It also misread the library stamp
+> on the Wellcome scan as "NELLOGNE LIBRARY INSTITUTE", which is the encouraging kind of error:
+> visible, checkable, and not a fluent invented sentence.
 
 The two searches disagreed, and the disagreement is the useful part.
 
