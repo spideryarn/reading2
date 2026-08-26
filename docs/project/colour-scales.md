@@ -30,8 +30,8 @@ values and one that changes the *shape*:
 
 - **Dark colours vanish.** ColorBrewer's `Blues` starts at `#f7fbff` and ends at `#08306b`; on
   `--background` (`oklch(0.145 0 0)`) the last three steps are darker than the page. Three of
-  Okabe–Ito's eight are lifted here for exactly this reason, and the two darkest steps of the heat
-  ramp carry a warning not to paint them on the page.
+  Okabe–Ito's eight are lifted here for exactly this reason, and the dark end of the heat ramp
+  carries a warning not to paint it on the page.
 - **A diverging scale's white pivot becomes its loudest point.** RdBu, coolwarm, PiYG and the rest
   all pivot on white, because on paper the neutral value should be the quietest thing there. Drop
   one onto black unchanged and the *middle* is now the brightest thing on the page — so a scale
@@ -98,6 +98,49 @@ eighth are a stretch, and the ninth wears a colour it shares with an earlier one
 
 That is survivable only because of the next section.
 
+### Nobody else has solved overlapping highlights either
+
+Worth knowing before anyone assumes there was an obvious answer we missed. Multi-colour highlights
+that can overlap on the same words are **not a solved problem in the tools you would expect to have
+solved it**:
+
+- **Hypothes.is** has had multi-colour highlighting as an open, unimplemented feature request since
+  2017 ([product-backlog#198](https://github.com/hypothesis/product-backlog/issues/198)). Two
+  annotations on the same sentence just double up the same yellow.
+- **Readwise Reader** does not support multiple highlight colours at all. Their own docs tell you to
+  use *tags* when you want more than one kind of highlight — they moved the distinction out of
+  colour entirely.
+- **PDF annotators** generally treat overlapping same-colour highlights as a *bug report*: the
+  double alpha goes muddy, and users file it.
+
+The techniques that exist, and what each costs:
+
+| Technique | What it loses |
+|---|---|
+| `mix-blend-mode: multiply` | two colours drift toward brown, three toward black; text contrast degrades per layer |
+| Priority / z-order (the CSS Custom Highlight API has a literal `priority` property) | the overlap itself — you can no longer see that two things met here |
+| First-match precedence | same as priority |
+| **Stacked underline bars, one per highlight** | ~3px of leading, and it caps out |
+| Left-edge gutter bar | phrase-level precision; it can only say "something is in this paragraph" |
+| Striped / hatched background | legibility — at 17px type the stripe period is bigger than the letterforms |
+
+The fourth is what Greg picked and what is built, and it is the one that keeps the colour off the
+glyph background entirely — which is why the text's contrast is **identical** whether one search
+matched or four. Everything else on that list makes the words harder to read exactly where the
+reader most cares.
+
+We take the gutter bar too, at paragraph scale, because the two answer different questions.
+
+### The contrast trap this design sidesteps
+
+WCAG 1.4.3's 4.5:1 applies to the **composited** colour, not to the flat hex you wrote down. Stack
+two 30% washes and the number you need to check is a colour that exists nowhere in your stylesheet,
+that no browser tool will compute for you, and that changes with how many highlights happen to
+overlap at that spot.
+
+Splitting the channels removes the question rather than answering it: the wash never composites with
+another wash, so the prose contrast has exactly one value and it is the same one it has always had.
+
 ### Colour is never the only carrier
 
 Under deuteranopia the two warm slots (1, vermilion, and 6, orange) converge, separated only by
@@ -141,6 +184,32 @@ The hashed preference (rather than "first search gets slot 0") exists only to sh
 position-based assignment means deleting the first of five shifts *all four* of the others, so every
 colour on the page changes at once.
 
+### The "random" case, which is what this is
+
+Greg's ask named three kinds, and the third was *categorical/distinctive/random* — colours for
+things you do not know about in advance. That is exactly the situation here: a saved search is
+created by a reader typing a question, and there is no list of them to design against.
+
+There are two ways to do it, and the choice is not close.
+
+**Hash to a continuous hue.** The classic recipe is the golden-angle rotation (Martin Ankerl, 2009):
+start anywhere and add 137.508° each time, so every new hue lands in the largest remaining gap and
+the set stays maximally spread however many you generate. It is elegant and it is wrong here for two
+reasons. It gives no colour-blindness guarantee at all — two categories can land 15° apart and be
+indistinguishable. And done in HSL, which is how it is usually done, the perceived lightness swings
+wildly by hue even with S and L numerically fixed: yellows come out loud, blues come out muddy. (The
+fix for the second half is to rotate hue in OKLCh at fixed L and C, which is genuinely better and
+still does not fix the first half.)
+
+**Hash to an index into a curated palette**, which is what `assignSlots` does. Every colour has been
+chosen for mutual distinctness and colour-blind safety by somebody who looked at all eight together,
+and the degradation past the end of the palette is a repeat rather than a colour nobody vetted.
+
+The rule that falls out, and it is the general one: **use a fixed palette up to its size; only reach
+for golden-angle-in-OKLCh beyond it.** We do not have a beyond — the ninth search repeats a hue,
+because a ninth *distinguishable* hue is not available at this point and pretending otherwise would
+be worse than repeating.
+
 ## Sequential — nine steps that mean "this much of it"
 
 **Inferno**, from matplotlib — Nathaniel Smith and Stéfan van der Walt's set, presented at SciPy
@@ -157,6 +226,15 @@ Every step is lighter than the one before it. That single property is what makes
 greyscale printing, every dichromacy, and a bad projector, without any of them having to be thought
 about — because lightness is the channel all three of those preserve.
 
+Measured rather than assumed: these nine stops run L 0.048 → 0.978 in near-even steps, checked in
+[`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts) — which also pins that the steps
+stay *roughly even*, because monotonic is necessary and not sufficient. A ramp that spends six steps
+between L 0.90 and 0.95 is still monotonic and its top third is still six colours nobody can tell
+apart. That is the specific complaint against the naive blackbody ramp (MATLAB's and matplotlib's
+`hot`), which blows out to white too early and washes out its high values. **Inferno is the fix for
+exactly that** while keeping the same visual vocabulary, which is the second reason to prefer it
+here over rolling our own black→red→yellow ramp.
+
 It is also the property `jet` and every other rainbow ramp lacks, which is the whole of why they are
 wrong for ordered data. A rainbow has bright bands in the middle (yellow, cyan) and dark ones at the
 ends, so it **invents boundaries the data does not have** and hides differences it does. The case is
@@ -164,12 +242,19 @@ made in Borland and Taylor, *Rainbow Color Map (Still) Considered Harmful* (IEEE
 and Applications, 2007), and restated for a wider audience in Crameri, Shephard and Heron, *The
 misuse of colour in science communication* (Nature Communications, 2020).
 
-### Do not paint the bottom two stops on the page
+### Start at `--heat-2` when painting on the page
 
-`--heat-0` (`#000004`) and `--heat-1` (`#1b0c41`) are darker than `--background`, so a value near
-zero would be drawn as a hole. Whatever uses this ramp should either start at `--heat-2` or paint it
-on a lighter surface. Both dark stops are kept anyway, so that the ramp is the published one and can
-be sampled correctly if it is ever drawn on white.
+Two claims, and only the first is arithmetic. `--heat-0` (`#000004`, L 0.048) is genuinely darker
+than `--background` (L 0.145), so a value near zero would be drawn as a hole. `--heat-1` (`#1b0c41`,
+L 0.217) is *above* the page — but by 0.07, which reads as a smudge rather than as a value.
+
+An earlier version of this page said both were darker than the page, which was wrong about the
+second, and the error survived writing because nothing measured it. Both boundaries are now pinned
+in [`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts), including that `--heat-2` —
+the stop this advice sends you to — really is clear of the page.
+
+The dark stops are kept anyway, so the ramp is the published one and can be sampled correctly if it
+is ever drawn on white.
 
 ## Diverging — nine steps with a middle that means "neither"
 
@@ -194,10 +279,44 @@ printed number, a label, a position — so the hue is a shortcut rather than the
 it as the only carrier of a good/bad judgement. This is the same rule the categorical set follows,
 and for the same reason.
 
+Blue against **orange** is actually the pair the literature cites most often — it is the
+Wong/Okabe–Ito opposition, and it is ColorBrewer's PuOr. It is not used here for a reason local to
+this app rather than a general one: orange is the brand, and a scale whose "positive" end wears the
+colour that means *Spideryarn* everywhere else would be one hue doing two jobs on one page. Blue ↔
+red is the next-best colour-blind-safe pair and has no such conflict.
+
+### These two are generated, not transcribed — and here is why
+
+**There is no canonical dark-ground diverging scale to copy.** Searching for one in 2026 turns up an
+open design problem rather than a named scheme; every published diverging scale pivots on white. So
+these are built from the one property that makes Fabio Crameri's `vik` colour-blind-safe *by
+construction*: **luminance symmetric about the midpoint.**
+
+That property is orientation-free. A dichromat who cannot separate the two hues can still read
+distance-from-neutral off the lightness — and that works just as well with the symmetry mirrored
+about a dark pivot as about a white one. So both arms are the same five lightnesses in the same
+order,
+
+```
+L   0.82   0.705   0.59   0.475   0.36   0.475   0.59   0.705   0.82
+    ├──────────── blue ────────────┤ pivot ├──────────── red ─────────┤
+```
+
+with only hue and a chroma taper differing between them, and chroma clamped per step to what sRGB
+can actually display at that lightness.
+
+**The first version of this was hand-picked hex and it was wrong.** `--div-3` came out *darker than
+the pivot*, so the blue arm dipped below the middle and climbed back — which is precisely the
+non-monotonic-lightness fault that this whole page says makes rainbow ramps invent boundaries. It
+was caught by measuring, after the paragraph asserting the opposite had already been written. Nine
+plausible hex codes tell you nothing; the relationship between them is the entire content of a
+colour scale, and it is now measured in
+[`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts).
+
 ### The dark pivot, again
 
-Both scales pivot on `#4f4f52`, a dark neutral a little above the page, with lightness climbing
-toward both ends. See [The page is near-black](#the-page-is-near-black-so-every-published-scale-is-upside-down)
+Both scales pivot on a dark neutral a little above the page, with lightness climbing toward both
+ends. See [The page is near-black](#the-page-is-near-black-so-every-published-scale-is-upside-down)
 above — this is where that rule bites hardest, because getting it wrong does not look broken, it
 looks like the middle of your data is the interesting part.
 
@@ -210,11 +329,18 @@ which is almost always zero, and the ends are then asymmetric — which is hones
 
 ## What is not decided
 
-- **No `viridis`.** Wanted the moment something needs a sequential ramp with no temperature in it.
-  One more block of nine stops when it happens.
-- **Nothing checks these against a colour-blindness simulator in CI.** The right test is a render
-  through a dichromacy transform with a minimum ΔE between every pair, and it does not exist. Today
-  the check is a person looking at `/design`.
+- **No `viridis`, and no `cividis`.** Viridis is wanted the moment something needs a sequential ramp
+  with no temperature in it. Cividis (Nuñez, Anderton & Renslow, PLOS ONE 2018) is the one built
+  specifically so that colour-blind and non-colour-blind viewers see near-identical gradients, and
+  is the right choice over inferno anywhere the colour is doing more work than the number beside it.
+  One more block of nine stops each, when either is wanted.
+- **Nothing checks these against a colour-blindness simulator.** The lightness properties *are*
+  measured now ([`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts)), which is the
+  half that catches the silent failures. The other half — a dichromacy transform with a minimum
+  CIEDE2000 between every pair — is not built. The concrete way to do it by hand is
+  [Viz Palette](https://susielu.com/data-viz/viz-palette) (Susie Lu & Elijah Meeks), which renders a
+  palette across real chart types and flags pairs that are too close under deuteranomaly and
+  protanopia; the npm package `color-blind` would let it become a test.
 - **The eight categorical hues have not been measured, only sourced.** Okabe–Ito is well attested;
   the three lifted values are ours, and lifting a colour changes its relationships with the others
   by an amount nobody here has computed.
@@ -243,3 +369,16 @@ which is almost always zero, and the ends are then asymmetric — which is hones
 - Borland & Taylor, *Rainbow Color Map (Still) Considered Harmful*, IEEE CG&A 27(2), 2007
 - Crameri, Shephard & Heron, *The misuse of colour in science communication*, Nature Communications
   11, 5444 (2020) — <https://doi.org/10.1038/s41467-020-19160-7>
+- Nuñez, Anderton & Renslow, *Optimizing colormaps with consideration for color vision deficiency*
+  (cividis), PLOS ONE 13(7):e0199239, 2018
+- Fabio Crameri, *Scientific Colour Maps* — <https://www.fabiocrameri.ch/colourmaps/> (`vik` is the
+  diverging scale whose luminance symmetry these two are built on)
+- Martin Ankerl, *How to Generate Random Colors Programmatically* (the golden-angle recipe), 2009 —
+  <https://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/>
+- Viz Palette, Susie Lu & Elijah Meeks — <https://susielu.com/data-viz/viz-palette>
+- Hypothes.is, multi-colour highlighting — open since 2017 —
+  <https://github.com/hypothesis/product-backlog/issues/198>
+- CSS Custom Highlight API, `Highlight.priority` —
+  <https://developer.mozilla.org/en-US/docs/Web/API/Highlight/priority>
+- Björn Ottosson, *A perceptual color space for image processing* (OKLab) —
+  <https://bottosson.github.io/posts/oklab/> (the matrices `tests/colour-scales.test.ts` uses)

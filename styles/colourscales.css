@@ -113,10 +113,18 @@
        agree. Viridis would be the choice for a quantity with no temperature in
        it, and is worth adding beside this when one turns up.
 
+       Inferno rather than a naive blackbody ramp (MATLAB's and matplotlib's
+       `hot`) for the reason that ramp is the textbook example of the fault
+       below: it blows out to white too early, so the top third of its range
+       washes out and high values stop being distinguishable from each other.
+       Inferno keeps the same visual vocabulary and fixes exactly that.
+
        The property that matters is **monotonic lightness**: every step is
        lighter than the one before it, which is what makes the ramp survive
        greyscale, dichromacy and a bad projector without any of them needing to
-       be thought about. It is also the property `jet` and every other rainbow
+       be thought about. Measured here, not assumed — these nine stops run
+       L 0.048 → 0.978 in near-even steps, and `tests/colour-scales.test.ts`
+       checks it so a hand-edited stop cannot quietly break the ordering. It is also the property `jet` and every other rainbow
        ramp lacks, which is the whole of why they are wrong — a rainbow has
        bright bands in the middle, so it invents boundaries the data does not
        have and hides differences it does. Borland and Taylor put the case in
@@ -124,11 +132,15 @@
        Crameri, Shephard and Heron restated it for a wider audience in "The
        misuse of colour in science communication" (Nature Communications, 2020).
 
-       **Do not use `--heat-0` and `--heat-1` on `--page`.** They are darker
-       than the page is, so a value near zero would be drawn as a hole. Whatever
-       uses this ramp should either start at `--heat-2` or paint it on a lighter
-       surface; the two dark stops are kept so that the ramp is the published
-       one and can be sampled correctly if it is ever drawn on white.
+       **Start this ramp at `--heat-2` when painting on `--page`.** Two separate
+       facts, and only the first is arithmetic: `--heat-0` is genuinely darker
+       than the page (L 0.048 against 0.145), so a value near zero would be
+       drawn as a hole; `--heat-1` is *above* the page but by only 0.07, which
+       reads as a smudge rather than as a value. The dark stops are kept anyway
+       so the ramp is the published one and can be sampled correctly if it is
+       ever drawn on white. Both boundaries are pinned in
+       `tests/colour-scales.test.ts` — an earlier version of this comment said
+       both stops were darker than the page, which was wrong about the second.
        ================================================================== */
 
     --heat-0: #000004;
@@ -155,8 +167,27 @@
        page, and a scale whose middle shouts is not a diverging scale, it is a
        diverging scale read upside down. So both of these pivot on a dark
        neutral a little above `--background`, and lightness climbs toward *both*
-       ends. Same shape as the published ones, turned the right way up for this
-       page.
+       ends. Same shape as the published ones, turned the right way up.
+
+       There is **no canonical dark-ground diverging scale to copy** — a web
+       search for one in 2026 turns up an open design problem rather than a
+       named scheme. So these are generated rather than transcribed, from the
+       one property that makes Fabio Crameri's `vik` colour-blind-safe *by
+       construction*: **luminance symmetric about the midpoint.** That property
+       does not care which way up it is, so mirroring it about a dark pivot
+       keeps it. The two arms are the same five lightnesses in the same order —
+
+           L  0.82  0.705  0.59  0.475  0.36  0.475  0.59  0.705  0.82
+
+       — with only hue and a chroma taper differing between them, and chroma
+       clamped per step to what sRGB can actually show at that lightness.
+       `tests/colour-scales.test.ts` measures it rather than trusting this
+       comment, and it is measured because **the first version of this scale was
+       wrong**: hand-picked hexes that looked plausible put `--div-3` *darker*
+       than the pivot, so the blue arm dipped below the middle and came back up.
+       Nothing about that is visible in a list of hex codes, and it is precisely
+       the non-monotonic-lightness fault that makes rainbow ramps invent
+       boundaries the data does not have.
 
        **`--div-*` is blue ↔ red, and it is the one to use.** Red and green is
        what people ask for, because red-bad/green-good is a convention almost
@@ -167,7 +198,16 @@
        which side they are on. Blue against red keeps the warm/cool opposition
        that makes the convention work, keeps the "hot" end hot, and survives
        every common dichromacy — which is why ColorBrewer's own colour-blind-safe
-       filter keeps RdBu and drops RdYlGn.
+       filter keeps RdBu, PiYG, PuOr and BrBG, and drops RdYlGn, RdGy and
+       Spectral.
+
+       Blue ↔ **orange** is the pair the literature cites most often — it is the
+       Wong/Okabe–Ito opposition, and it is ColorBrewer's PuOr. It is not used
+       here for a reason local to this app rather than a general one: orange is
+       the brand (`--spideryarn-orange`), and a scale whose "positive" end is the
+       colour that means *Spideryarn* everywhere else would be a hue doing two
+       jobs on one page. Blue ↔ red is the next-best CB-safe pair and has no
+       such conflict.
 
        **`--div-rg-*` is red ↔ green, and it is here because it was asked for.**
        Use it where the reader already knows which end is which from something
@@ -176,25 +216,26 @@
        carrier of a good/bad judgement.
        ================================================================== */
 
-    /* Blue (0) through neutral (4) to red (8). */
-    --div-0: #7fb3ff;
-    --div-1: #5a8fe0;
-    --div-2: #3e6bb0;
-    --div-3: #2c4878;
-    --div-4: #4f4f52;
-    --div-5: #7a3846;
-    --div-6: #b04a54;
-    --div-7: #de6a6a;
-    --div-8: #ff9090;
+    /* Blue (0) through neutral (4) to red (8). Hue 255 and 27. */
+    --div-0: #9cc7ff;
+    --div-1: #72a3e0;
+    --div-2: #5a7faf;
+    --div-3: #475e7b;
+    --div-4: #3b3d40;
+    --div-5: #78504b;
+    --div-6: #aa6962;
+    --div-7: #da867c;
+    --div-8: #ffaba1;
 
-    /* Red (0) through neutral (4) to green (8). Read the note above first. */
-    --div-rg-0: #ff9090;
-    --div-rg-1: #de6a6a;
-    --div-rg-2: #b04a54;
-    --div-rg-3: #7a3846;
-    --div-rg-4: #4f4f52;
-    --div-rg-5: #3a6b46;
-    --div-rg-6: #4a9159;
-    --div-rg-7: #62b872;
-    --div-rg-8: #86e39a;
+    /* Red (0) through neutral (4) to green (8). Hue 27 and 148.
+       Read the note above before reaching for this one. */
+    --div-rg-0: #ffaba1;
+    --div-rg-1: #da867c;
+    --div-rg-2: #aa6962;
+    --div-rg-3: #78504b;
+    --div-rg-4: #403c3b;
+    --div-rg-5: #47654b;
+    --div-rg-6: #598b60;
+    --div-rg-7: #71b27a;
+    --div-rg-8: #8fd99a;
 }
