@@ -77,3 +77,18 @@ describe("the furniture fold", () => {
     expect(repeatedLines([page, page, page, page]).size).toBe(0);
   });
 });
+
+describe("the baseline has been told the same things the model was", () => {
+  it("joins a word the page broke across a line, because the model is told to", async () => {
+    const pass = await pass0(EASY);
+    const page8 = baselineFor(pass, 8).join(" ");
+    /* The `easy` fixture prints a citation URL broken at `…/27/rock-` /
+       `waga.html`. A model that obeys rule 2 returns it joined, and the first
+       version of this baseline then had no token matching what it returned —
+       so a correct transcription lost recall and a real one was accused of
+       inventing a URL. src/pdf.ts § mendHyphens. */
+    expect(page8).toContain("rockwaga.html");
+    expect(page8).not.toContain("rock-");
+  });
+});
+

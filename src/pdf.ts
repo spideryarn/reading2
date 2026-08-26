@@ -70,6 +70,74 @@ export interface Pass0 {
   furniture: Set<string>;
 }
 
+/**
+ * **One unit of a page, as the model is asked to return it** — the shape the
+ * whole stage is built around, so it lives here rather than in whichever file
+ * needed it first.
+ *
+ * `page` is the *printed* page of the original document, not the index within
+ * whatever chunk was sent, and it is on every record even though v1's reader
+ * never shows it: the check in src/pdf-score.ts cannot assert that a page was
+ * transcribed without it, and "view the scanned page" needs it later.
+ */
+export interface PdfRecord {
+  page: number;
+  type: RecordType;
+  text: string;
+  /** This record continues the one before it — the same paragraph broken across a column or a page. */
+  continues: boolean;
+  /** The model could not read some of this. Its text will contain ⟦illegible⟧. */
+  uncertain: boolean;
+}
+
+/**
+ * The vocabulary, deliberately small. Everything here renders to one HTML
+ * element in code, so malformed nesting and stray attributes are not something
+ * the model can produce.
+ *
+ * **The last three are transcribed and then thrown away, and that is the design
+ * rather than an oddity.** v1 does not show footnotes, references or a
+ * publisher's cover page — Greg's call, and it stands. The obvious way to
+ * implement "does not show" is to tell the model not to transcribe them, and
+ * that is what the first version did. It quietly broke the only check this
+ * stage has: the baseline is the PDF's own text layer, which contains every
+ * footnote, so a page whose footnotes were correctly dropped looks exactly like
+ * a page whose last paragraph was lost. The threshold then has to be loose
+ * enough to allow 20–40% of an academic page to be missing, at which point it
+ * cannot see a lost paragraph at all.
+ *
+ * So the model transcribes them, labels them, and `RENDERED` below drops them.
+ * The check compares like with like, the gate can be tight, and v2 showing
+ * footnotes is a change to one set rather than a change to the prompt, the
+ * check and the thresholds together.
+ */
+export type RecordType =
+  | "heading1"
+  | "heading2"
+  | "heading3"
+  | "paragraph"
+  | "quote"
+  | "listitem"
+  | "figure"
+  | "table"
+  | "code"
+  | "footnote"
+  | "reference"
+  | "cover";
+
+/** What v1 puts on the page. Everything else is transcribed, checked, and not shown. */
+export const RENDERED: ReadonlySet<RecordType> = new Set<RecordType>([
+  "heading1",
+  "heading2",
+  "heading3",
+  "paragraph",
+  "quote",
+  "listitem",
+  "figure",
+  "table",
+  "code",
+]);
+
 /** How many pages must share a line before it is furniture rather than prose. */
 const FURNITURE_PAGES = 3;
 
@@ -127,7 +195,17 @@ export function repeatedLines(pages: { text: string }[]): Set<string> {
  * in its smallest form: a security option that is a comment.
  */
 export async function pass0(source: string | Uint8Array): Promise<Pass0> {
-  const data = typeof source === "string" ? new Uint8Array(await readFile(source)) : source;
+  /**
+   * **A copy, and it is not defensive tidiness.** pdf.js takes *ownership* of
+   * the array it is given: it transfers the underlying buffer to its worker and
+   * leaves the caller holding a detached one. Every later use of those bytes
+   * then fails — `Cannot transfer object of unsupported type` from the next
+   * library to touch them, which names neither this function nor the reason.
+   * Found by src/pdf-read.ts, which hashes the file and cuts pages out of it
+   * after asking pass 0 what is in it.
+   */
+  const data =
+    typeof source === "string" ? new Uint8Array(await readFile(source)) : new Uint8Array(source);
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
 
   const pages: PageText[] = [];
@@ -176,9 +254,39 @@ export async function pass0(source: string | Uint8Array): Promise<Pass0> {
 export function baselineFor(pass: Pass0, page: number): string[] {
   const found = pass.pages.find((p) => p.page === page);
   if (!found) return [];
-  return found.text
-    .split("\n")
-    .filter((line) => line.trim() && !pass.furniture.has(foldLine(line)));
+  return mendHyphens(
+    found.text.split("\n").filter((line) => line.trim() && !pass.furniture.has(foldLine(line))),
+  );
+}
+
+/**
+ * Join a line that ends in a hyphen to the one after it, dropping the hyphen —
+ * because that is exactly what the model is told to do, and the baseline has to
+ * have been told the same things.
+ *
+ * Without it, a *correct* transcription loses recall on every hyphenated word:
+ * the page holds `skull-` and `shape.html` as two tokens, the model returns
+ * `skullshape.html` as one, and neither matches the other. Small, and it lands
+ * on the one metric everything else is judged against, so it is worth the
+ * dozen lines.
+ *
+ * The cost, stated: a line genuinely ending in a hyphen — `self-` in
+ * "self- and other-regarding" — is joined to the next word wrongly. That
+ * produces one wrong token in the baseline rather than two, which is the
+ * cheaper of the two mistakes, and it is rare in a way that hyphenation at a
+ * line break is not.
+ */
+function mendHyphens(lines: string[]): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    const previous = out.at(-1);
+    if (previous !== undefined && /(\p{L})[-\u2010\u00ad]$/u.test(previous)) {
+      out[out.length - 1] = previous.replace(/[-\u2010\u00ad]$/u, "") + line.trimStart();
+      continue;
+    }
+    out.push(line);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- CLI
