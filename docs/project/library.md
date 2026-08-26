@@ -272,8 +272,15 @@ Six chips above the shelf — **Added**, **Last opened**, **Title**, **Length**,
 **Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
 identically, so switching between them keeps your place in the order: there is only one order.
 Clicking the key you are already on reverses it; clicking a key you are not on starts at *that key's*
-natural end, so going from "newest first" to Title gives you A-to-Z rather than Z-to-A. All of it is
-in the URL — [url-state.md § The library's own five](url-state.md#the-librarys-own-five).
+natural end, so going from "newest first" to Title gives you A-to-Z rather than Z-to-A;
+**shift-clicking adds a second key**, so you can ask for the longest article of each author. All of
+it is in the URL — [url-state.md § The library's own five](url-state.md#the-librarys-own-five).
+
+Dates are **relative** — "opened yesterday", "added 3 days ago" — up to about a month, after which
+they hand back to a real date, because nobody counts in days at that range. The exact timestamp is
+always one hover away in [the details tooltip](#the-tooltip). The clock is re-read once a minute so
+a shelf left open does not quietly go stale — [`relative-time.ts`](../../src/web/relative-time.ts)
+and [`useNow.ts`](../../src/web/useNow.ts).
 
 The two views are not a real one and a decoration. **The card is a decision aid** — what the piece
 says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article
@@ -293,43 +300,67 @@ this one at the top?* has to be answerable from the card. So the date on the rig
 becomes the sort key's own value: **Last opened** makes it "opened 25 Aug", **Questions** makes it
 "3 questions". **Added** and **Length** change nothing, because the card already carries both.
 
-That is `SortSpec.note` in [`library-sort.ts`](../../src/web/library-sort.ts), and it is why the
-sorts are a table of data rather than a map of comparators — the comparator is the smallest thing a
-sort key needs to know about itself.
+That is `CARD_NOTES` in [`library-columns.tsx`](../../src/web/library-columns.tsx), and it is the
+clearest reason a headless table was the right kind of library: TanStack owns the ordering and has
+no opinion at all about how a row is drawn, so this feature survived the switch untouched. A
+batteries-included grid would have made it a fight.
 
 ### Three rules a browser cannot check
 
 The sort moved from the server into the client, and three things came with it that look right on
-screen and are wrong. All three are pinned in
-[`tests/library-sort.test.ts`](../../tests/library-sort.test.ts):
+screen and are wrong. All three are now **configuration** rather than code, which is exactly why
+[`tests/library-sorting.test.ts`](../../tests/library-sorting.test.ts) builds a real table and
+asserts the order that comes out of it: a test that re-implemented the comparator would go on
+passing while the config that actually runs was wrong.
 
 - **The fixture stays at the foot of every sort, both directions.** The server has always kept it
   there. Sort by Length in the browser without carrying that rule over and a committed demo excerpt
-  sits above the reader's own library.
+  sits above the reader's own library. Done with `sinkLast` rather than TanStack's row pinning,
+  because pinning is a *feature* — something a reader turns on for a row they care about — and
+  spending its state on a rule about our data would leave it occupied the day anybody wants the
+  real thing.
 - **A missing value sorts last in *both* directions** — that one comparison is deliberately *not*
   multiplied by the direction. Ascending by "last opened" would otherwise fill the top of the shelf
   with everything you have never opened. That is a useful thing to want, and it is what the Unread
   chip is for; smuggling it into the low end of a sort makes it unavailable in the other direction
   and unexplained in both.
-- **Every comparison ends in a total order** — ties fall through to title and then slug. Without the
-  last step, equal rows keep whatever order the server sent, and a reload can quietly reshuffle the
-  shelf.
+- **Every comparison ends in a total order.** TanStack's last-resort tiebreak is `rowA.index` —
+  literally the order the data arrived in — so the array is sorted by slug before the table sees it.
+  Done at the door rather than inside a `sortingFn`, because a tiebreak inside one gets multiplied
+  by the descending inversion and would reverse with the arrow, which is not what a tiebreak is.
 
-Two smaller ones, same file: an **unparseable** date is absent rather than zero (`Date.parse("soon")`
-is `NaN`, and `NaN` in a subtraction makes every comparison return `NaN` — a sort that does nothing
-at all), and **`0` is a value, not absent** (a falsy check would put every unopened article below
-every opened one in both directions).
+Two smaller ones, same file, and both are now properties of the *accessors*: an **unparseable** date
+must come back as `undefined` rather than `NaN` (`sortUndefined` triggers on `=== undefined` and
+nothing else, and `NaN` compares false in both directions — a sort that does nothing at all), and
+**`0` is a value, not absent**, so `opens: 0` sorts at the low end rather than being banished to the
+bottom with the unknowns.
 
-### No table library
+### TanStack Table, headless — and where it stops
 
-Researched per [third-party-library-selection.md](../reusable/third-party-library-selection.md) and
-declined. TanStack Table v8 ranked first — headless, ~15 kB, and what shadcn's own data-table recipe
-wraps — but the same research put the hand-rolled version at 60–120 lines and called it *"arguably
-the more boring choice"* at this scale, with no grouping, pinning, virtualisation or column
-resizing wanted. The deciding argument is that the thing a headless table would have given us free is
-sorted rows, and the feature we actually wanted is the card that says what it is sorted by, which is
-our own markup either way. The full comparison, the v8-not-v9 reasoning, and what would make us
-revisit are in [library-sorting.md](../plans/library-sorting.md).
+Researched per [third-party-library-selection.md](../reusable/third-party-library-selection.md),
+hand-rolled first, then switched on 2026-08-26 at Greg's call: *"because I think we'll also want this
+kind of thing in other places"*. So the seam is built for reuse —
+[`src/web/lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) and
+[`table-sort.ts`](../../src/web/lib/table-sort.ts) know nothing about the library, and a page that
+wants sortable rows defines columns and gets the chips and the table.
+
+**v8, not v9.** v9 went stable in early August 2026 with a breaking API, shadcn has not migrated its
+own examples, and there is essentially no training data for it — so models write v8 and it silently
+does not work.
+
+**Headless means it owns the rules and none of the markup**, which is the split that made it worth
+adopting: every `<th>`, `<td>` and chip is still ours, so the card that says what it is sorted by
+survived the move unchanged. Three of its options are decisions rather than defaults, and are set
+in `useSortedTable`: `sortUndefined: "last"` (its own default flips with the arrow),
+`enableSortingRemoval: false` ("unsorted" has no meaning here), and `enableMultiSort`.
+
+**Two things it does not do, and both were found by a test.** Its last-resort tiebreak is *the order
+the data arrived in*, so the data is sorted by slug before it is handed over. And its built-in
+`"text"` sort compares code points — it puts "Étude" after "zebra" and "Part 10" before "Part 2" —
+so the title column keeps an `Intl.Collator`. Both looked like straight swaps.
+
+The full comparison, the honest cost, and what is still deliberately hand-written are in
+[library-sorting.md](../plans/library-sorting.md).
 
 ## What a card says, and why
 
@@ -465,10 +496,12 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | File | What it does |
 |---|---|
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the fetch, the URL state, and the four narrowings that turn a list of articles into the list on screen |
-| [`src/web/library-sort.ts`](../../src/web/library-sort.ts) | **the sorts as data**, and the three rules above — pure, and the reason they are testable |
-| [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the chips: sort key, direction, Unread, cards-or-table |
+| [`src/web/library-columns.tsx`](../../src/web/library-columns.tsx) | **what the shelf can be sorted by**, and how each column is drawn — the whole of what this page tells the table |
+| [`src/web/lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) | **reusable**: the chips, the dense table, and the three TanStack options that are decisions |
+| [`src/web/lib/table-sort.ts`](../../src/web/lib/table-sort.ts) | **reusable**: sorting state ⇄ URL, the collator, and `sinkLast` |
+| [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the two controls that are the shelf's own: Unread, and cards-or-table |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the card, the five buttons, rename-in-place, the details tooltip — shared by both views |
-| [`src/web/ShelfTable.tsx`](../../src/web/ShelfTable.tsx) | the dense table: the same list, painted the other way |
+| [`src/web/relative-time.ts`](../../src/web/relative-time.ts), [`src/web/useNow.ts`](../../src/web/useNow.ts) | "3 days ago", and the clock that keeps it true |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the add box and the progress list — [ingest-queue.md](ingest-queue.md) |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | where Add takes you: `/add/<a whole URL>` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | [`src/web/router.ts`](../../src/web/router.ts) | `/` vs `/read/<slug>`, and `navigate` |
@@ -487,7 +520,8 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`tests/library.test.ts`](../../tests/library.test.ts), [`tests/router.test.ts`](../../tests/router.test.ts), [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | the shelf, the routes, the slugs |
 | [`tests/shelf.test.ts`](../../tests/shelf.test.ts), [`tests/library-search.test.ts`](../../tests/library-search.test.ts) | archive, rename, opens — and the search that must survive a re-extraction |
 | [`tests/library-hits.test.ts`](../../tests/library-hits.test.ts), [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) | the link's parameters; and the Postgres half, which had never had a query run against it |
-| [`tests/library-sort.test.ts`](../../tests/library-sort.test.ts) | the sorting rules, including the two that make a sort silently do nothing |
+| [`tests/library-sorting.test.ts`](../../tests/library-sorting.test.ts) | the sorting rules, asserted against a **real TanStack table** rather than a stand-in |
+| [`tests/table-sort.test.ts`](../../tests/table-sort.test.ts), [`tests/relative-time.test.ts`](../../tests/relative-time.test.ts) | the URL round-trip and `sinkLast`; and where "days ago" stops helping |
 
 Styling is Tailwind utilities, not a block in [`styles.css`](../../src/web/styles.css). That is the
 rule rather than a preference: this page is chrome, and chrome is what shadcn and Tailwind were

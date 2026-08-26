@@ -1,0 +1,295 @@
+/**
+ * The shelf's columns: what you can sort it by, and how each one is drawn.
+ *
+ * This is the whole of what the library page has to say about its own table.
+ * The chips, the header row, the sorting rules and the URL round-trip all come
+ * from src/web/lib/DataTable.tsx and are not specific to this page.
+ *
+ * Greg, 2026-08-26:
+ *
+ * > Make the set of docs on the homepage nicely sortable (e.g. by when added,
+ * > when last opened, how many words, how many actions/interactions performed)
+ *
+ * Two of those six keys are the "actions/interactions", and they are the only
+ * two we can honestly count: opens and questions are the only reader
+ * interactions stored as numbers. Chat threads and saved searches are
+ * deliberately absent, for the reason the details tooltip already gives — they
+ * have not moved to Postgres, so a count would read 7 on the filesystem and 0
+ * in production. See docs/project/library.md § The tooltip.
+ *
+ * ## Two things about the accessors
+ *
+ * **A missing value must be `undefined`, never `null` and never `NaN`.**
+ * TanStack's `sortUndefined: "last"` triggers on `=== undefined` and on nothing
+ * else, so a date we cannot parse has to come back as `undefined` or it sorts
+ * as `NaN` — and `NaN` compares false in both directions, which is a sort that
+ * silently does nothing.
+ *
+ * **`0` is a value.** `opens: 0` and `comments: 0` are answers, not absences,
+ * so they are returned as themselves and sort at the low end rather than being
+ * banished to the bottom with the unknowns.
+ */
+
+import type { LibraryEntry } from "../types.js";
+import type { SortableColumn } from "./lib/DataTable.js";
+import { localeText, numberOrMissing } from "./lib/table-sort.js";
+import { Link } from "./Link.js";
+import { timeAgo } from "./relative-time.js";
+import { readHref } from "./router.js";
+import { Actions, Details, TitleEditor } from "./ShelfEntry.js";
+import type { Shelf } from "./ShelfEntry.js";
+import { Tooltip } from "./Tooltip.js";
+
+/** Parsed to a number, or `undefined` for absent and unparseable alike. */
+function at(iso: string | undefined): number | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? undefined : t;
+}
+
+/**
+ * What the card should say on its meta line while this column is the sort.
+ *
+ * The "best of all worlds" half of the design, and the half no table library
+ * was ever going to provide: a card sorted by something it does not show is a
+ * list in an order the reader cannot check — *why is this one at the top?* has
+ * to be answerable from the card. Sorting by Questions turns the date at the
+ * bottom right into "3 questions"; by Last opened, into "opened yesterday".
+ *
+ * Keyed by column id, and every sortable column has one, so the card can never
+ * be sorted by something it cannot describe. `Length` is the exception with a
+ * reason: the word count is already on the card, so it says when the article
+ * was added instead of repeating itself.
+ */
+export type CardNote = (entry: LibraryEntry, now: number) => string;
+
+/** The one every other column falls back to, and the one an unknown id gets. */
+export const ADDED_NOTE: CardNote = (e, now) =>
+  `added ${timeAgo(e.addedAt, now) ?? "at some point"}`;
+
+export const CARD_NOTES: Record<string, CardNote> = {
+  added: ADDED_NOTE,
+  // Both already show their value on the card — the word count is right there,
+  // and a title is the card's own heading — so they say when it was added
+  // rather than repeating what the reader can already see.
+  length: ADDED_NOTE,
+  title: ADDED_NOTE,
+  opened: (e, now) => {
+    const when = timeAgo(e.lastOpenedAt, now);
+    return when ? `opened ${when}` : "never opened";
+  },
+  opens: (e) =>
+    e.opens === 0 ? "never opened" : e.opens === 1 ? "opened once" : `opened ${e.opens} times`,
+  questions: (e) =>
+    e.comments === 0 ? "no questions" : e.comments === 1 ? "1 question" : `${e.comments} questions`,
+};
+
+/** The default sort: exactly the order the shelf had before any of this existed. */
+export const DEFAULT_BY = ["added"];
+
+/**
+ * The order the chips appear in, which is **not** the order of the columns.
+ *
+ * The table wants the article first, because that is what a row is; the chip
+ * row wants Added first, because that is the default sort and the shelf's
+ * resting state should be the leftmost thing you see. Two different orders for
+ * two different controls, said once here.
+ *
+ * Anything sortable and missing from this list is appended rather than dropped
+ * — a new column must not be able to vanish from the chip row by being
+ * forgotten here. A cross-family review noticed Added had quietly stopped being
+ * first when the chips started following column order, 2026-08-26.
+ */
+export const CHIP_ORDER = ["added", "opened", "title", "length", "opens", "questions"];
+
+/**
+ * `now` is passed in rather than read here so that every relative date on one
+ * render agrees with every other, and so nothing in this file reads the clock.
+ */
+export function libraryColumns(shelf: Shelf, now: number): SortableColumn<LibraryEntry>[] {
+  return [
+    {
+      id: "title",
+      header: "Article",
+      accessorFn: (e) => e.title,
+      sortDescFirst: false,
+      sortingFn: localeText<LibraryEntry>(),
+      meta: {
+        label: "Title",
+        hint: "Alphabetically, ignoring case and accents",
+        ends: ["A to Z", "Z to A"],
+        fluid: true,
+      },
+      cell: ({ row }) => <TitleCell entry={row.original} shelf={shelf} />,
+    },
+    {
+      id: "added",
+      header: "Added",
+      accessorFn: (e) => at(e.addedAt),
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<LibraryEntry>(),
+      meta: {
+        label: "Added",
+        hint: "When the article was fetched and built",
+        ends: ["oldest first", "newest first"],
+      },
+      /* The details tooltip hangs off this cell, which is where the card puts
+         it too — one trigger, one place to look. The accessible name starts
+         with the visible text, or `aria-label` would replace the date the
+         reader can see with words they cannot say back. */
+      cell: ({ row }) => {
+        const when = timeAgo(row.original.addedAt, now) ?? "unknown";
+        return (
+          <Tooltip content={<Details entry={row.original} />} placement="top">
+            <button
+              type="button"
+              aria-label={`${when} — details of ${row.original.title}`}
+              className="tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
+            >
+              {when}
+            </button>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      id: "opened",
+      header: "Last opened",
+      accessorFn: (e) => at(e.lastOpenedAt),
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<LibraryEntry>(),
+      meta: {
+        label: "Last opened",
+        hint: "When you last opened the reading view",
+        ends: ["longest ago first", "most recent first"],
+      },
+      /* An em dash rather than a blank: an empty cell reads as data we failed
+         to load, and "never opened" is a fact. */
+      cell: ({ row }) =>
+        timeAgo(row.original.lastOpenedAt, now) ?? <span title="Never opened">—</span>,
+    },
+    {
+      id: "opens",
+      header: "Opens",
+      accessorFn: (e) => e.opens,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<LibraryEntry>(),
+      meta: {
+        label: "Times opened",
+        hint: "How many times you have opened it",
+        ends: ["least opened first", "most opened first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <Count value={row.original.opens} />,
+    },
+    {
+      id: "questions",
+      header: "Questions",
+      accessorFn: (e) => e.comments,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<LibraryEntry>(),
+      meta: {
+        label: "Questions",
+        hint: "How many questions you have asked about it",
+        ends: ["fewest first", "most first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <Count value={row.original.comments} highlight />,
+    },
+    {
+      id: "length",
+      header: "Words",
+      accessorFn: (e) => e.words,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<LibraryEntry>(),
+      meta: {
+        label: "Length",
+        hint: "How many words the article is",
+        ends: ["shortest first", "longest first"],
+        numeric: true,
+      },
+      cell: ({ row }) => <Count value={row.original.words} />,
+    },
+    {
+      id: "actions",
+      header: () => <span className="tw:sr-only">Actions</span>,
+      enableSorting: false as const,
+      meta: { label: "Actions", hint: "", ends: ["", ""], noChip: true },
+      cell: ({ row }) => <RowActions entry={row.original} shelf={shelf} />,
+    },
+  ];
+}
+
+/* ----------------------------------------------------------------- cells -- */
+
+function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
+  const sub = [entry.byline, entry.siteName, `~${entry.minutes} min`].filter(Boolean).join(" · ");
+
+  /* The same in-place rename the card offers, and deliberately the same
+     component: the three-outcome contract (`undefined` cancelled, `null` reset
+     to the extractor's title, a string is that title) is subtle enough that a
+     second copy would get one of them wrong. Which article is being renamed
+     lives on the shelf hook, because in this view the input and the pencil that
+     opened it are two different cells. */
+  if (shelf.renaming === entry.slug) {
+    return (
+      <TitleEditor
+        entry={entry}
+        className="tw:text-sm"
+        onDone={(title) => {
+          if (title === undefined) shelf.cancelRename();
+          else void shelf.rename(entry.slug, title);
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      {/* No stretched link here: a whole row as one click target would swallow
+          the buttons at the end of it, and the card already learned that lesson
+          (library.md § The card is no longer one big link). The title is the
+          link, and only the title. */}
+      <Link
+        href={readHref(entry.slug)}
+        className="tw:block tw:truncate tw:text-foreground tw:no-underline tw:hover:text-highlight"
+      >
+        {entry.title}
+      </Link>
+      {(sub || entry.fixture) && (
+        <span className="tw:block tw:truncate tw:text-xs tw:text-muted-foreground">
+          {sub}
+          {entry.fixture && (
+            <span className="tw:ml-1.5 tw:rounded tw:border tw:border-border tw:px-1 tw:py-0.5">
+              fixture
+            </span>
+          )}
+        </span>
+      )}
+    </>
+  );
+}
+
+/**
+ * Zero is drawn faintly rather than hidden: an empty cell in a column of
+ * numbers is ambiguous between "none" and "we don't know". The figures line up
+ * because `DataTable` puts `tabular-nums` on every `numeric` column — without
+ * it, proportionally-spaced digits do not, which is the one thing a table is
+ * for.
+ */
+function Count({ value, highlight }: { value: number; highlight?: boolean }) {
+  return (
+    <span
+      className={`${value === 0 ? "tw:opacity-40" : ""} ${
+        highlight && value > 0 ? "tw:text-highlight" : ""
+      }`}
+    >
+      {value.toLocaleString()}
+    </span>
+  );
+}
+
+/** The five buttons, in a cell. Rename opens in place, exactly as on the card. */
+function RowActions({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
+  return <Actions entry={entry} shelf={shelf} onEdit={() => shelf.beginRename(entry.slug)} />;
+}

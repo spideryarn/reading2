@@ -16,9 +16,9 @@
  *
  * See docs/project/library.md and docs/plans/library-shelf-actions-and-search.md.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry } from "../types.js";
-import { readJson } from "./lib/api.js";
+import { apiFetch, readJson } from "./lib/api.js";
 
 /** How long the Undo strip stays up. Long enough to reach, short enough not to nag. */
 const UNDO_MS = 9000;
@@ -47,6 +47,18 @@ export interface Shelf {
   /** Put an archived article back on the shelf, from the archived list. */
   restore: (slug: string) => Promise<void>;
   /**
+   * Which article is being renamed in place, if any.
+   *
+   * Up here rather than inside the card, because since 2026-08-26 there are two
+   * views of the same shelf and the *table* splits one article across two cells
+   * — the title becomes an input while the row's pencil button stays where it
+   * is. Two cells cannot share a `useState`, and one article renameable at a
+   * time is the behaviour we wanted anyway.
+   */
+  renaming: string | null;
+  beginRename: (slug: string) => void;
+  cancelRename: () => void;
+  /**
    * Say that something a button tried to do did not happen.
    *
    * Exposed so the card's own buttons — copy, re-run — report through the same
@@ -62,10 +74,11 @@ export function useShelf(): Shelf {
   const [actionError, setActionError] = useState<string | null>(null);
   const [undoable, setUndoable] = useState<LibraryEntry | null>(null);
   const [archived, setArchived] = useState<LibraryEntry[] | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reload = useCallback(() => {
-    return fetch("/api/library")
+    return apiFetch("/api/library")
       .then((r) => readJson<{ articles: LibraryEntry[] }>(r))
       .then((b) => {
         setArticles(b.articles);
@@ -97,7 +110,7 @@ export function useShelf(): Shelf {
   const patch = useCallback(
     async (slug: string, body: Record<string, unknown>): Promise<LibraryEntry> => {
       setActionError(null);
-      const r = await fetch(`/api/library/${encodeURIComponent(slug)}`, {
+      const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -159,6 +172,10 @@ export function useShelf(): Shelf {
 
   const rename = useCallback(
     async (slug: string, title: string | null) => {
+      // Closed before the request rather than after it: leaving the input open
+      // while the write is in flight invites a second Enter, and the editor has
+      // already handed its value over.
+      setRenaming(null);
       try {
         const entry = await patch(slug, { title });
         setArticles((list) => list?.map((a) => (a.slug === slug ? entry : a)) ?? null);
@@ -169,9 +186,12 @@ export function useShelf(): Shelf {
     [patch],
   );
 
+  const beginRename = useCallback((slug: string) => setRenaming(slug), []);
+  const cancelRename = useCallback(() => setRenaming(null), []);
+
   const loadArchived = useCallback(async () => {
     try {
-      const r = await fetch("/api/library?archived=1");
+      const r = await apiFetch("/api/library?archived=1");
       setArchived((await readJson<{ articles: LibraryEntry[] }>(r)).articles);
     } catch (e) {
       setActionError((e as Error).message);
@@ -199,18 +219,49 @@ export function useShelf(): Shelf {
 
   const report = useCallback((message: string) => setActionError(message), []);
 
-  return {
-    articles,
-    error,
-    reload,
-    undoable,
-    archive,
-    undo,
-    rename,
-    actionError,
-    report,
-    archived,
-    loadArchived,
-    restore,
-  };
+  /* Memoised, and that became load-bearing on 2026-08-26.
+     
+     This used to return a fresh object literal on every render, which nothing
+     minded while a card was the only consumer. Then the table arrived, and its
+     column definitions close over the shelf — so a new object every render meant
+     new columns every render, and TanStack rebuilding its whole column model
+     for a shelf that had not changed. Every field below is either a `useState`
+     value or a `useCallback`, so this identity now changes exactly when
+     something about the shelf actually has. */
+  return useMemo(
+    () => ({
+      articles,
+      error,
+      reload,
+      undoable,
+      archive,
+      undo,
+      rename,
+      actionError,
+      report,
+      archived,
+      loadArchived,
+      restore,
+      renaming,
+      beginRename,
+      cancelRename,
+    }),
+    [
+      articles,
+      error,
+      reload,
+      undoable,
+      archive,
+      undo,
+      rename,
+      actionError,
+      report,
+      archived,
+      loadArchived,
+      restore,
+      renaming,
+      beginRename,
+      cancelRename,
+    ],
+  );
 }

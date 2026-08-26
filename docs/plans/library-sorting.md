@@ -26,15 +26,17 @@ table gives it up and shows every column at once.
 
 ## What was built
 
-| Piece | File |
-|---|---|
-| The sorts as data, and the three rules | [`src/web/library-sort.ts`](../../src/web/library-sort.ts) |
-| The chips: key, direction, Unread, cards-or-table | [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) |
-| The card, the five buttons, rename, the tooltip | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) |
-| The dense table | [`src/web/ShelfTable.tsx`](../../src/web/ShelfTable.tsx) |
-| The page: fetch, URL state, the narrowings | [`src/web/Library.tsx`](../../src/web/Library.tsx) |
-| Five parameters | [`src/web/params.ts`](../../src/web/params.ts) § the library |
-| The rules, pinned | [`tests/library-sort.test.ts`](../../tests/library-sort.test.ts) |
+| Piece | File | Reusable? |
+|---|---|---|
+| The chips, the dense table, and the three TanStack options that are decisions | [`src/web/lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) | **yes** |
+| Sorting state ⇄ URL, the collator, `sinkLast` | [`src/web/lib/table-sort.ts`](../../src/web/lib/table-sort.ts) | **yes** |
+| "3 days ago", and the clock that keeps it true | [`relative-time.ts`](../../src/web/relative-time.ts), [`useNow.ts`](../../src/web/useNow.ts) | **yes** |
+| What the shelf can be sorted by, and how each column draws | [`src/web/library-columns.tsx`](../../src/web/library-columns.tsx) | no |
+| Unread, and cards-or-table | [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | no |
+| The card, the five buttons, rename, the tooltip | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | no |
+| The page: fetch, URL state, the narrowings | [`src/web/Library.tsx`](../../src/web/Library.tsx) | no |
+| Five parameters | [`src/web/params.ts`](../../src/web/params.ts) § the library | no |
+| The rules, against a real table | [`tests/library-sorting.test.ts`](../../tests/library-sorting.test.ts) | — |
 
 Six sort keys: **Added**, **Last opened**, **Title**, **Length**, **Times
 opened**, **Questions**. The last two are Greg's "how many actions/interactions
@@ -46,7 +48,7 @@ filesystem and 0 in production ([library.md § The tooltip](../project/library.m
 
 ## The five decisions worth writing down
 
-### 1. No table library — and the research says that is the close call
+### 1. TanStack Table v8 — after building it by hand first
 
 Followed [third-party-library-selection.md](../reusable/third-party-library-selection.md).
 The web research (2026-08-26) ranked **TanStack Table v8** first — headless, ~15
@@ -55,23 +57,65 @@ with v9 explicitly rejected for now: it went stable around early August 2026 wit
 a breaking API, so there is almost no Q&A or example corpus for it yet, and
 shadcn has not finished migrating ([shadcn-ui/ui#11389](https://github.com/shadcn-ui/ui/issues/11389)).
 
-We hand-rolled anyway, and the research's own honest estimate is why: **60–120
-lines**, no new dependency, and *"hand-rolling is not a compromise — it's
-arguably the more boring choice"* at tens-to-hundreds of rows with no grouping,
-pinning, virtualisation or column resizing. `library-sort.ts` came in at about
-that. What we gave up: no built-in multi-column sort, no fuzzy matcher, and we
-own tie-breaking ourselves — which is exactly what the tests below pin.
+**It was hand-rolled first, and shipped that way**, on the research's own
+estimate: 60–120 lines, no dependency, and *"hand-rolling is not a compromise —
+it's arguably the more boring choice"* at this scale. The measured sort
+machinery came to **36 lines**; the other hundred that estimate covered were the
+spec table and the controls, which no headless library was ever going to write.
 
-The thing that actually decided it is that the feature TanStack would have given
-us for free is not the feature we wanted. A headless table would have handed us
-sorted rows; it would not have handed us **the card that says what it is sorted
-by**, which is the "best of all worlds" half of the brief and is a property of
-our own card markup either way.
+Then Greg overrode it, and the reason is not about this page:
 
-Revisit if multi-column sort, saved views or virtualisation arrive. AG Grid
-(~330 kB), MUI DataGrid (wrong ecosystem — we are Tailwind, not MUI) and
-Mantine React Table (wrong ecosystem, canonical package semi-abandoned) were
-all considered and are all wrong for this.
+> Switch over to Tanstack (because I think we'll also want this kind of thing in
+> other places)
+>
+> — Greg, 2026-08-26
+
+That changes the arithmetic completely. Thirty-six lines of comparator is a bad
+trade for a dependency **once**; it is a good trade if two or three more lists
+want the same thing, because the second one costs nothing. So the code is
+arranged around that: `lib/DataTable.tsx` and `lib/table-sort.ts` contain no
+mention of the library, and a page that wants sortable rows writes column
+definitions and gets the chips and the table.
+
+AG Grid (~330 kB), MUI DataGrid (wrong ecosystem — we are Tailwind, not MUI) and
+Mantine React Table (wrong ecosystem, canonical package semi-abandoned) were all
+considered and are all wrong for this.
+
+#### Why TanStack in the end
+
+Headless is the property that mattered. It owns the sorting rules and **none of
+the markup**, so every `<th>`, `<td>` and chip stayed ours — which is why the
+card that says what it is sorted by survived the switch untouched. A batteries-
+included grid would have made that feature a fight.
+
+What we got that we did not have: **multi-column sort** (shift-click, and
+shift-Enter from the keyboard, with no code of ours involved),
+`sortUndefined: "last"` as a supported option rather than a hand-written branch,
+and a toggle rule — which end a column starts at, what a second click means,
+what shift does — that we deleted rather than maintain.
+
+What it cost: **+17.5 kB gzipped** (172.9 → 190.4 kB), measured, against the
+~15 kB the research predicted. And a second owner of state, which is the thing
+[url-state.md](../project/url-state.md) rejected react-router over — handled by
+running TanStack fully controlled, with nuqs as the only source of truth and
+`onSortingChange` writing straight to the address bar.
+
+#### The two things it does not do, both found by a test
+
+**Its last-resort tiebreak is `rowA.index`** — the order the data arrived in. So
+equal rows are only stably ordered if the incoming array is, and if it is not, a
+reload quietly reshuffles the list. The data is therefore sorted by slug before
+the table sees it. Done at the door and not inside a `sortingFn`, because a
+tiebreak inside one gets multiplied by the descending inversion: it would
+reverse with the arrow, which is not what a tiebreak is.
+
+**Its built-in `"text"` sort compares code points.** It lower-cases and uses
+`<`, so it puts "Étude" after "zebra" (É is above z in Unicode) and "Part 10"
+before "Part 2". Both wrong in the ordinary sense of wrong, and both look like a
+sort that is working. The hand-rolled version had used an `Intl.Collator`, and
+`sortingFn: "text"` looked like a straight swap for it. The only thing that said
+otherwise was an assertion carried over from the old test file — which is the
+argument for porting tests before deleting the code they tested.
 
 ### 2. The card says what it is sorted by
 
@@ -82,14 +126,20 @@ value: **Last opened** turns it into "opened 25 Aug", **Questions** into "3
 questions", **Times opened** into "opened 6 times". **Added** and **Length**
 change nothing, because the card already carries both.
 
-That is `SortSpec.note` in `library-sort.ts`, and it is why the sorts are a table
+That is `CARD_NOTES` in `library-columns.tsx`, and it is why the sorts are a table
 of data rather than a `Record<SortKey, comparator>`: the comparator is the
 smallest thing a sort key needs to know about itself.
 
-### 3. Three rules the browser cannot check, so tests do
+### 3. Three rules the browser cannot check, so a real table in a test does
 
 The sort moved from the server into the client, and three things came with it
-that look right in a browser and are wrong:
+that look right in a browser and are wrong. They are now **configuration** —
+`sortUndefined`, `sortDescFirst`, an accessor's return type — which is why
+[`tests/library-sorting.test.ts`](../../tests/library-sorting.test.ts) builds an
+actual `@tanstack/table-core` table over the real column definitions and asserts
+the order that comes out. A test that re-implemented the comparator would go on
+passing while the config that runs was wrong, which is the failure this repo
+keeps writing up.
 
 - **The fixture is pinned last, in every sort and both directions.** The server
   has always kept it at the foot of the shelf. Sort by Length in the browser
@@ -113,13 +163,18 @@ every opened one in both directions).
 
 ### 4. Clicking a key you are not on starts at *its* natural end
 
-`nextSort` is one rule for the chips and the table headers, so they cannot
-implement it twice and differently. The half that is easy to leave out is the
-second: going from "newest first" to Title must not give you Z-to-A, because
-`desc` was carried over from a key where it meant something else. Each key names
-its own two ends in its own words — "newest first", "longest first", "A to Z" —
-and those strings are what the accessible names say, because "ascending" tells
-you nothing about a date.
+Going from "newest first" to Title must not give you Z-to-A, because `desc` was
+carried over from a key where it meant something else. **This is now
+`sortDescFirst` on the column and TanStack's own toggle handler** — a
+hand-written `nextSort` was the first thing the switch deleted, and the chips
+and the headers now call the identical handler, so they cannot drift.
+
+Each key still names its own two ends in its own words — "newest first",
+"longest first", "A to Z" — because those strings are what the accessible names
+say, and "ascending" tells you nothing about a date. They live in the column's
+`meta`, which is TanStack's own mechanism for exactly this, typed by module
+augmentation so a column that forgets its label is a compile error rather than a
+chip with no words on it.
 
 ### 5. Everything is in the URL, including the search box
 
@@ -128,10 +183,12 @@ app already ran on ([url-state.md](../project/url-state.md)) and which the
 homepage was the one page not keeping. Until now the search box was `useState`
 and the order was whatever the server sent, so neither survived a reload.
 
-`dir` deliberately has **no default**: absent means "whichever way this key
-naturally goes", resolved through `SortSpec.natural`, which is what lets `?by=title`
-on its own be a sensible link. A parser default of `desc` would have made it
-Z-to-A.
+`by` and `dir` are **lists**, paired by position, because shift-click adds a
+second sort key and a compound order the URL cannot carry is an order you cannot
+reload into or send to anybody. `dir` may be shorter than `by` or absent
+entirely, and the gaps fall back to each column's own `sortDescFirst` — which is
+what lets `?by=title` on its own be a sensible link. A parser default of `desc`
+would have made that one Z-to-A.
 
 They are named `by`/`dir`/`view`/`show` rather than reusing `sort` and `order`,
 which already mean the glossary's ordering and the search results' ordering on
@@ -157,15 +214,30 @@ The research surfaced three precedents, and two of them are load-bearing here:
   line at this width, one click beats two, and the current order is readable
   without opening anything.
 
-## What was deliberately left out
+## Built in the second pass
 
-- **Multi-column sort.** Nobody has wanted it, and it needs a UI that says what
-  the second key is. The tiebreak (title, then slug) is the honest small version.
+Both of these were on the "deliberately left out" list an hour earlier, and both
+arrived with the switch to TanStack — the first because the library makes it
+nearly free, the second because Greg asked for it.
+
+- **Multi-column sort.** Shift-click a chip or a header adds a second key; the
+  chips then show an ordinal so a compound order can be read off the control.
+  `?by=length,title&dir=desc,asc`. A plain click always collapses back to one
+  key, which is what makes it safe to have — and is *not* what TanStack does on
+  its own; see the file's own note in `lib/DataTable.tsx`.
+- **Relative dates.** "opened yesterday", "added 3 days ago", up to about a
+  month, after which they hand back to a real date. The clock is re-read once a
+  minute so a shelf left open does not go stale, and the exact timestamp is
+  still one hover away in the details tooltip — which was the objection when
+  this was on the deferred list, and is answered rather than overruled.
+
+## What is still deliberately left out
+
 - **Saved views.** Notion's model, and a real feature — it needs somewhere to
   store them, which means the shelf-state tables. Not now.
-- **Relative dates** ("3 days ago"). Nicer for "last opened", and `Intl.RelativeTimeFormat`
-  would do it, but the exact time is already one hover away in the details
-  tooltip and two date formats that disagree is a thing to own.
+- **Column visibility** in the table view. TanStack gives it away free, and it
+  needs a popover we do not have; it is the first thing to reach for if the
+  table grows more columns.
 - **Filtering by what has been built** (`has.arc`, `has.glossary`, …). Available,
   and too niche to spend a chip on.
 - **Sorting the archived list.** It is a disclosure with a handful of rows in it,
@@ -265,3 +337,79 @@ The other three fixes — the passages obeying Unread, the no-op view click, and
 query — were **not** re-driven in a browser; a second pass ran out of session and the third was
 scoped to the measurement. They are small and deterministic, and the first of them has the only
 behaviour worth a second look: a search under Unread that has hits only in articles you have read.
+
+## The review of the migration
+
+A second cross-family review (`gpt-5.6-sol`, high effort) on the TanStack version. Eight findings,
+all real, and three of them were the kind that only a reviewer reading the library's own source
+would have caught. It is the strongest argument for this habit that has come up so far, because
+**every one of the three was a case of the library doing something other than what its option name
+says**, and the code around them looked right.
+
+### `?by=title` sorted Z-to-A
+
+The per-column fallback — an absent `dir` means "each key goes whichever way it naturally goes" —
+never ran, because `libraryDirParam` had `.withDefault(["desc"])`, so the parameter was never absent.
+The one link the fallback existed for was the one link it did not reach. `dir` now has no default at
+all, and the shelf leaves it out of the URL itself when `isAllNatural` says it would add nothing.
+
+The pure test passed throughout, because it called `sortingFromUrl(["title"], [], …)` directly and
+the bug lived in what nuqs handed that function. Worth remembering: a unit test of a pure function
+cannot see a wrong argument.
+
+### A hostile `by` could reverse a column, or empty the sort
+
+`sortingFromUrl` filtered unknown ids and *then* used the surviving array's index to read `dir` — so
+`?by=nonsense,title&dir=desc,asc` gave Title the direction meant for the id that had been dropped.
+Duplicate ids sorted by one column twice with contradictory instructions, and `?by=nonsense` left an
+empty sort: no chip pressed, the list in whatever order the data arrived in, and the cards still
+claiming to be sorted by Added. Now filtered inside the loop, deduplicated, and defaulted when
+nothing valid remains.
+
+### `sortUndefined: "last"` is not a comparator when both values are missing
+
+The one worth the whole exercise. TanStack 8.21.3 implements it as
+`return aUndefined ? 1 : -1` — and with *both* values undefined, `aUndefined` is true, so it answers
+`1` for `(a, b)` and `1` for `(b, a)`. It also returns before the next sort key is consulted.
+
+What that looks like: sort by Last opened, then Title, over three articles you have never opened.
+They should come out alphabetically. They come out in whatever order the array was already in, and
+nothing about the result looks wrong.
+
+So `sortUndefined` is now off entirely. The columns sort missing values *low*, consistently, both
+returning `0` when both are missing so the next key gets a turn; and the rows whose primary key is
+missing are moved to the bottom afterwards with `sinkLast` — the same helper the fixture uses. That
+gets all three properties at once: missing last whichever way the arrow points, later keys applied
+inside the missing group, and a comparator that is actually a comparator. The test for it goes red
+against the old configuration, which was checked rather than assumed.
+
+### Four smaller ones
+
+**A plain click did not always collapse a compound sort.** TanStack toggles the direction of the
+*last* key rather than replacing, so a reader could sit in a two-key order with no obvious way back
+to one. `toggleSort` now states the rule the docs claimed.
+
+**`aria-sort` was on every sorted header** once a second key was possible — WAI-ARIA wants one at a
+time. Only the primary carries it now. And the header buttons' accessible names started with
+`meta.label` ("Times opened") while the header visibly said something shorter ("Opens"), which fails
+Label-in-Name for the second time in this feature; the name is now built from the visible text.
+
+**`naturalDirections` did not mirror TanStack's own rules** — it only recognised an explicit `id` and
+treated a missing `sortDescFirst` as ascending, where TanStack derives ids from `accessorKey` and
+picks descending for numeric data *by looking at the values*. The shelf's own columns happened to say
+both explicitly, so nothing was broken; but this is a seam meant for reuse, and the next page to use
+it would have had a link that looked fine and sorted the wrong way. `SortableColumn<T>` now requires
+both at the type level.
+
+**The chips lost their deliberate order.** They followed column order once TanStack owned the
+columns, which put Title first; Added is the default sort and should be leftmost. `SortChips` takes
+an order, and appends anything missing from it rather than dropping it.
+
+### Checked and confirmed correct
+
+Worth recording, because these were the parts most likely to be subtly wrong: running TanStack fully
+controlled with nuqs as the only source of truth (nuqs updates its React state synchronously before
+the URL flush, and React flushes each discrete click separately, so two fast clicks do not lose the
+first); `sameList` making `clearOnDefault` work so the default sort writes no parameters at all;
+sorting the data by slug establishing `row.index` as a real tiebreak; `useShelf`'s memo; and both
+rename call sites after the state moved out of the card.

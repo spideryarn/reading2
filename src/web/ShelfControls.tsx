@@ -15,36 +15,36 @@
  * gives up the blurb and shows every column at once. Neither is a fallback for
  * the other.
  *
- * Everything here is a chip rather than a dropdown, deliberately: six keys fit
- * on a line at this width, one click beats two, and the current order is
- * readable without opening anything. Linear's "Display options" popover is the
- * right answer at three times this many dimensions, and is what to reach for
- * if grouping or column visibility ever arrive — see
- * docs/project/library.md § Sorting the shelf.
+ * The chips themselves are `SortChips` from lib/DataTable.tsx and know nothing
+ * about the library — they are built from the table's own columns. What is left
+ * here is the two controls that are the shelf's own: which half of it to show,
+ * and which way to draw it.
+ *
+ * Chips rather than a dropdown, deliberately: six keys fit on a line at this
+ * width, one click beats two, and the current order is readable without opening
+ * anything. Linear's "Display options" popover is the right answer at three
+ * times this many dimensions, and is what to reach for if grouping or column
+ * visibility ever arrive — see docs/project/library.md § Sorting the shelf.
  */
-import { ArrowDown, ArrowUp, EyeOff, Rows3, Table } from "lucide-react";
-import {
-  directionLabel,
-  nextSort,
-  type ShelfFilter,
-  type ShelfView,
-  SORTS,
-  type SortDir,
-  type SortKey,
-} from "./library-sort.js";
+import { EyeOff, Rows3, Table as TableIcon } from "lucide-react";
+import type { Table } from "@tanstack/react-table";
+import type { LibraryEntry } from "../types.js";
+import { SortChips } from "./lib/DataTable.js";
+
+export type ShelfView = "cards" | "table";
+export type ShelfFilter = "all" | "unread";
 
 export function ShelfControls({
-  sort,
-  dir,
-  onSort,
+  table,
+  chipOrder,
   view,
   onView,
   filter,
   onFilter,
 }: {
-  sort: SortKey;
-  dir: SortDir;
-  onSort: (next: { by: SortKey; dir: SortDir }) => void;
+  table: Table<LibraryEntry>;
+  /** Added first, because it is the default sort — see library-columns.tsx § CHIP_ORDER. */
+  chipOrder: string[];
   view: ShelfView;
   onView: (v: ShelfView) => void;
   filter: ShelfFilter;
@@ -52,37 +52,18 @@ export function ShelfControls({
 }) {
   return (
     <div className="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2">
-      {/* `fieldset`/`legend` rather than `div role="group"`: it is the element
-          the role exists to imitate, and it groups the six chips so a screen
-          reader announces them as one control rather than as six unrelated
-          buttons. The legend is visible here and carries the word "Sort". */}
-      <fieldset className="tw:m-0 tw:flex tw:min-w-0 tw:flex-wrap tw:items-center tw:gap-1 tw:border-0 tw:p-0">
-        <legend className="tw:float-left tw:mr-2 tw:p-0 tw:text-xs tw:text-muted-foreground">
-          Sort
-        </legend>
-        {SORTS.map((spec) => (
-          <SortChip
-            key={spec.key}
-            spec={spec}
-            active={spec.key === sort}
-            dir={dir}
-            onClick={() => onSort(nextSort(sort, dir, spec.key))}
-          />
-        ))}
-      </fieldset>
+      <SortChips table={table} order={chipOrder} />
 
       <div className="tw:ml-auto tw:flex tw:items-center tw:gap-2">
         <Chip
           pressed={filter === "unread"}
-          label="Unread"
           /* Every accessible name here **begins with the visible text**, so
              that somebody driving the page by voice can say what they can see —
              `aria-label` replaces the button's own words outright, and WCAG
              2.5.3 Label in Name is what that fails. The first version of this
              one said "Showing only articles you have never opened" and never
              contained the word "Unread". Caught by a cross-family review,
-             2026-08-26; the sort chips already had it right, because their
-             names are built from `spec.label`. */
+             2026-08-26. */
           describe={
             filter === "unread"
               ? "Unread — showing only articles you have never opened. Activate to show all."
@@ -114,7 +95,7 @@ export function ShelfControls({
             label="Table — every column at once, no blurb"
             onClick={() => view !== "table" && onView("table")}
           >
-            <Table size={14} />
+            <TableIcon size={14} />
           </ViewButton>
         </fieldset>
       </div>
@@ -122,53 +103,13 @@ export function ShelfControls({
   );
 }
 
-/**
- * One sort key.
- *
- * The arrow is on the active chip only, and it is the direction rather than a
- * decoration — so the shelf's order is legible from the control without hover.
- * The accessible name carries the same thing in words, because an arrow glyph
- * announces as nothing useful.
- */
-function SortChip({
-  spec,
-  active,
-  dir,
-  onClick,
-}: {
-  spec: (typeof SORTS)[number];
-  active: boolean;
-  dir: SortDir;
-  onClick: () => void;
-}) {
-  const ends = active ? directionLabel(spec.key, dir) : "";
-  return (
-    <Chip
-      pressed={active}
-      label={spec.label}
-      describe={
-        active
-          ? `Sorted by ${spec.label.toLowerCase()}, ${ends}. Activate to reverse.`
-          : `Sort by ${spec.label.toLowerCase()} — ${spec.hint}`
-      }
-      onClick={onClick}
-    >
-      {spec.label}
-      {active && (dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-    </Chip>
-  );
-}
-
 function Chip({
   pressed,
-  label,
   describe,
   onClick,
   children,
 }: {
   pressed: boolean;
-  /** Kept out of `describe` so the two can't drift; only used in the fallback title. */
-  label: string;
   describe: string;
   onClick: () => void;
   children: React.ReactNode;
@@ -178,11 +119,11 @@ function Chip({
       type="button"
       onClick={onClick}
       // Both: `title` is the hover hint, `aria-pressed` + `aria-label` are what
-      // a screen reader gets. `aria-pressed` is what makes these read as state
-      // rather than as six buttons that each do something unrelated.
+      // a screen reader gets. `aria-pressed` is what makes this read as state
+      // rather than as a button that does something unrelated.
       aria-pressed={pressed}
       aria-label={describe}
-      title={describe || label}
+      title={describe}
       className={`tw:inline-flex tw:items-center tw:gap-1 tw:rounded-full tw:border tw:px-2.5 tw:py-1 tw:text-xs tw:transition-colors ${
         pressed
           ? "tw:border-highlight tw:bg-highlight/10 tw:text-highlight"

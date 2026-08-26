@@ -1,0 +1,78 @@
+/**
+ * `3 days ago` — a timestamp said the way a reader thinks about it.
+ *
+ * Greg asked for these on 2026-08-26, and they are worth more than an absolute
+ * date on exactly the fields the shelf sorts by: *when did I last open this* is
+ * a question about distance from now, and "20 Aug 2026" makes you do the
+ * subtraction yourself.
+ *
+ * **Relative only while it is still relative.** Past about a month, "43 days
+ * ago" is worse than the date — nobody counts in days at that range — so it
+ * hands back to an absolute date. That switch is the one decision in here.
+ *
+ * The exact time is never lost: everything that prints one of these keeps the
+ * full timestamp in a tooltip or a `title`.
+ *
+ * Pure, and takes `now` as an argument, because a function that reads the clock
+ * is a function nothing can test.
+ */
+
+/** How far past which a date reads better as a date. */
+const ABSOLUTE_AFTER_DAYS = 30;
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/**
+ * `numeric: "auto"` is what turns -1 day into "yesterday" rather than "1 day
+ * ago". It is the only reason to use `Intl.RelativeTimeFormat` over arithmetic
+ * and a string, and it is also the reason this cannot be tested against exact
+ * English: a different locale says something else, correctly.
+ */
+const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+/** `12 Aug 2026`. */
+function absolute(t: number): string {
+  return new Date(t).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/**
+ * How long ago, or the date if that is too long ago.
+ *
+ * `undefined` for absent and for unparseable alike — the two are the same thing
+ * to a reader, and collapsing them here means no caller has to check for `NaN`.
+ * That matters more than it looks: `Date.parse("soon")` is `NaN`, `NaN` in a
+ * comparison is `false` in both directions, and a sort built on it silently
+ * does nothing.
+ */
+export function timeAgo(iso: string | undefined, now: number): string | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return undefined;
+
+  /* A timestamp in the future is a clock disagreeing with itself — the server's
+     against the browser's — not a fact about the article. Clamped rather than
+     rendered, because "in 4 seconds" next to an article you just opened reads
+     as a bug in a way that "just now" does not. */
+  const ago = Math.max(0, now - t);
+
+  if (ago < MINUTE) return "just now";
+  if (ago < HOUR) return relative.format(-Math.round(ago / MINUTE), "minute");
+  if (ago < DAY) return relative.format(-Math.round(ago / HOUR), "hour");
+  if (ago < ABSOLUTE_AFTER_DAYS * DAY) return relative.format(-Math.round(ago / DAY), "day");
+  return absolute(t);
+}
+
+/** `25 Aug 2026, 14:02` — where precision is the point, and the tooltip has room. */
+export function exactly(iso: string | undefined): string | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  return Number.isNaN(t)
+    ? undefined
+    : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}

@@ -30,7 +30,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 |---|---|---|---|
 | `cols` | which gist columns are on. **Absent means automatic** — fit to the window ([granularity-zoom.md § fitting](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them)). Present means the reader chose, and the window must not overrule them. | push | `?cols=0,1,2`, or `?cols=none` |
 | `text` | `1` reading mode, `0` outline mode | push | `?text=0` |
-| `spine` | whether the bird's-eye rail is on screen. **Absent means automatic** — off in outline mode, labelled only when the labels are free ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)). Present means the reader chose, in either direction. | push | `?spine=0` |
+| `spine` | whether the bird's-eye rail is on screen. **Absent means automatic** — off in outline mode, on wherever there is prose ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)). Present means the reader chose, in either direction. | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
@@ -58,16 +58,22 @@ sent to anybody. Now:
 | Param | Meaning | History | Example |
 |---|---|---|---|
 | `q` | what is in the shelf's search box — [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one) | **replace**, debounced | `?q=seth` |
-| `by` | which key the shelf is ordered by: `added`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length` |
-| `dir` | `asc` or `desc`. **Absent means this key's own natural end** — newest first for a date, longest first for a length, A-to-Z for a title | push | `?dir=asc` |
+| `by` | which keys the shelf is ordered by, coarsest first: `added`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length,title` |
+| `dir` | `asc` or `desc`, paired with `by` by position. **May be shorter than `by`, or absent, and the rest fall back to each column's own natural end** — newest first for a date, longest first for a length, A-to-Z for a title | push | `?dir=desc,asc` |
 | `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
 | `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |
 
-**`dir` has no default, and that is the same call `?spine=` and `?gate=` make.** A default of `desc`
-would be right for every key except Title, where it means Z-to-A; and putting each key's natural
-direction into the parser would move half of [`library-sort.ts`](../../src/web/library-sort.ts) into
-`params.ts`. Absent means "the reader has not chosen", which the shelf resolves through
-`SortSpec.natural`. So `?by=title` on its own is a sensible link.
+**A list rather than one value**, because a shift-click adds a second sort key, and a compound order
+the URL cannot carry is an order you cannot reload into or send to anybody. One key is a list of one.
+
+**`dir` is allowed to be shorter than `by`, or missing entirely.** A default of `desc` would be
+right for every key except Title, where it means Z-to-A; so the gaps are filled from each column's
+own `sortDescFirst`, read through `naturalDirections` in
+[`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx). That is what makes `?by=title` a link
+somebody can type. The conversion both ways lives in
+[`lib/table-sort.ts`](../../src/web/lib/table-sort.ts) and is tested there — an id the table does
+not have is dropped rather than passed on, because an unknown column sorts by nothing while looking
+like it sorted.
 
 **They are not called `sort` and `order`, and that turns out to be load-bearing.** Those two names
 are taken, by the glossary's ordering and the search results' ordering, both on `/read/<slug>`. An

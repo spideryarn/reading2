@@ -23,36 +23,13 @@ import {
 } from "lucide-react";
 import type { LibraryEntry } from "../types.js";
 import { Link } from "./Link.js";
-import { type SortKey, sortSpec } from "./library-sort.js";
+import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Tooltip } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
-import { failure } from "./lib/api.js";
+import { apiFetch, failure } from "./lib/api.js";
 
 export type Shelf = ReturnType<typeof useShelf>;
-
-/* ------------------------------------------------------------- dates ------ */
-
-/** `12 Aug 2026`. Absent or unparseable dates simply don't show. */
-export function whenAdded(iso: string | undefined): string {
-  const t = iso ? Date.parse(iso) : Number.NaN;
-  return Number.isNaN(t)
-    ? ""
-    : new Date(t).toLocaleDateString(undefined, {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-}
-
-/** `25 Aug 2026, 14:02` — the tooltip's longer form, where precision is the point. */
-export function whenExactly(iso: string | undefined): string | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  return Number.isNaN(t)
-    ? null
-    : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
 
 /* -------------------------------------------------------------- card ------ */
 
@@ -73,13 +50,21 @@ export function whenExactly(iso: string | undefined): string | null {
 export function ShelfCard({
   entry,
   shelf,
-  sort,
+  note,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
-  sort: SortKey;
+  /**
+   * What the meta line says — the sorted column's own account of this article.
+   * Chosen by the page from `CARD_NOTES` rather than worked out here, so the
+   * card cannot disagree with the chips about what it is sorted by.
+   */
+  note: string;
 }) {
-  const [editing, setEditing] = useState(false);
+  /* Shared with the table through the shelf hook rather than kept here: the
+     table splits one article across two cells, and two cells cannot share a
+     `useState`. See useShelf.ts § renaming. */
+  const editing = shelf.renaming === entry.slug;
 
   // Only the facts this article actually has. A filtered join beats a chain of
   // `&&`s that can leave a stranded separator — same reasoning as Masthead.
@@ -90,8 +75,6 @@ export function ShelfCard({
     `${entry.blocks} blocks`,
   ].filter(Boolean) as string[];
 
-  const note = sortSpec(sort).note?.(entry);
-
   return (
     <article className="tw:group tw:relative tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-5 tw:transition-colors tw:hover:border-highlight/60 tw:focus-within:border-highlight">
       <div className="tw:flex tw:items-start tw:gap-3">
@@ -99,11 +82,11 @@ export function ShelfCard({
           <TitleEditor
             entry={entry}
             onDone={(title) => {
-              setEditing(false);
               // `undefined` means "escaped" — nothing to save, and saying so
               // here rather than in the editor keeps the cancel path from
               // writing the unchanged title back to the server.
-              if (title !== undefined) void shelf.rename(entry.slug, title);
+              if (title === undefined) shelf.cancelRename();
+              else void shelf.rename(entry.slug, title);
             }}
           />
         ) : (
@@ -121,7 +104,9 @@ export function ShelfCard({
           </h2>
         )}
 
-        {!editing && <Actions entry={entry} shelf={shelf} onEdit={() => setEditing(true)} />}
+        {!editing && (
+          <Actions entry={entry} shelf={shelf} onEdit={() => shelf.beginRename(entry.slug)} />
+        )}
       </div>
 
       <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
@@ -184,10 +169,10 @@ export function ShelfCard({
               track the text, and the code did not. */}
           <button
             type="button"
-            aria-label={`${note ?? whenAdded(entry.addedAt)} — details of ${entry.title}`}
+            aria-label={`${note} — details of ${entry.title}`}
             className="tw:relative tw:ml-auto tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight"
           >
-            {note ?? whenAdded(entry.addedAt)}
+            {note}
           </button>
         </Tooltip>
       </p>
@@ -200,7 +185,7 @@ export function ShelfCard({
 /** `opened 6 times, last on 25 Aug` — or nothing at all, if it never has been. */
 function opensLine(entry: LibraryEntry): string {
   if (entry.opens === 0) return "not yet";
-  const last = whenExactly(entry.lastOpenedAt);
+  const last = exactly(entry.lastOpenedAt);
   const times = entry.opens === 1 ? "once" : `${entry.opens} times`;
   return last ? `${times}, last ${last}` : times;
 }
@@ -225,7 +210,7 @@ export function Details({ entry }: { entry: LibraryEntry }) {
   ].filter(Boolean) as string[];
 
   const rows: [string, string][] = [
-    ["Added", whenExactly(entry.addedAt) ?? "unknown"],
+    ["Added", exactly(entry.addedAt) ?? "unknown"],
     ["Opened", opensLine(entry)],
     ["Asked", entry.comments === 1 ? "1 question" : `${entry.comments} questions`],
     ["Built", built.length ? built.join(" · ") : "nothing beyond the tree"],
@@ -369,7 +354,7 @@ export function Actions({
   const rerun = useCallback(async () => {
     setRerunning(true);
     try {
-      const r = await fetch("/api/jobs", {
+      const r = await apiFetch("/api/jobs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ slug: entry.slug, force: ["fetch"] }),
