@@ -12,6 +12,7 @@ import type { Article, BlockId } from "../types.js";
 import { Library } from "./Library.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { DesignPage } from "./DesignPage.js";
+import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
 import { type ArticleView, useRoute } from "./router.js";
 import { Metadata } from "./Metadata.js";
@@ -123,6 +124,15 @@ export function App() {
       <>
         <HomeLogo />
         <DesignPage />
+      </>
+    );
+  // Not under /read/, and so not inside `ArticlePage`'s shared shell: this page
+  // has no article behind it. docs/project/reader-profile.md.
+  if (route.kind === "profile")
+    return (
+      <>
+        <HomeLogo />
+        <ProfilePage />
       </>
     );
   return (

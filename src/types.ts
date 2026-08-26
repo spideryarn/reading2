@@ -603,6 +603,40 @@ export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
 /** As `ThreadFound`, for the summaries. */
 export type SummariesFound = Omit<SummariesResponse, "profileChanged">;
 
+
+/* ------------------------------------------------------- reader profile --
+   docs/project/reader-profile.md. */
+
+/**
+ * The longest "about you" we will store.
+ *
+ * **Two values in a file of types, and here is the exception's reason.** Both
+ * pages that own a profile box show a live character counter, and the counter
+ * must say the same number the server refuses at — a second copy in the client
+ * would disagree the first time one of them changed, and the symptom would be a
+ * reader typing confidently up to a limit that is not the limit.
+ *
+ * src/profile.ts imports these rather than declaring them, so there is still
+ * one source. They are here and not there because src/profile.ts reaches for
+ * `node:crypto` and `node:fs`, and nothing under src/web/ may import a module
+ * that does — tests/client-imports.test.ts is that rule, and adding a
+ * filesystem module to its allowlist to get two integers would be exactly the
+ * fix that test tells you not to make.
+ *
+ * Larger than the per-article cap because this one is written once and read
+ * forever: it rides in every profiled prompt for the life of the shelf.
+ */
+export const MAX_PROFILE_CHARS = 1_500;
+
+/**
+ * The longest "why you're reading this one".
+ *
+ * Matches `MAX_GUIDANCE_CHARS` on the summary steer deliberately: the two boxes
+ * sit next to each other in the reader's head, and one refusing at 600 while
+ * the other refused at 900 would be a rule about nothing.
+ */
+export const MAX_PURPOSE_CHARS = 600;
+
 export interface Meta {
   slug: string;
   title: string;

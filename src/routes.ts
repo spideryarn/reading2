@@ -12,6 +12,7 @@
  *   GET    /api/library/search   `?q=…&limit=…` → passages from every article at once
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
+ *   GET    /api/models           which model writes what — { tasks: [{ task, model, effort? }] }
  *   GET    /api/reader           the reader's global profile — { profile: string | null }
  *   PATCH  /api/reader           { profile: string | null } → the same shape
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
@@ -94,6 +95,7 @@ import { cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./job
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
+import { CAPABLE_MODEL, STAGE_EFFORT, TASK_TIER, modelForOpenRouter } from "./models.js";
 import type {
   ChatThread,
   Comment,
@@ -1596,6 +1598,42 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
 }
 
 /**
+ * Which model writes what — a read of the table in src/models.ts, nothing more.
+ *
+ * A route rather than an import, and that is the whole reason it exists. The
+ * profile page wants to show this and **nothing under src/web/ may import a
+ * server module** (tests/client-imports.test.ts): src/models.ts reads
+ * `process.env`, so bundling it would ship configuration names to the browser
+ * and put one more file on the allowlist's slippery slope. One tiny GET is
+ * cheaper than that argument.
+ *
+ * Names, never keys. `TASK_TIER` and `STAGE_EFFORT` hold model ids and effort
+ * levels, which are facts about how this server is configured and not secrets —
+ * but note what is deliberately absent: no environment variable names, no
+ * provider ordering, and nothing read from `process.env` at all. What a reader
+ * gets is what the code says, not what the machine is set to.
+ */
+function modelsInUse(): {
+  tasks: { task: string; model: string; effort?: string }[];
+} {
+  const tasks = (Object.keys(TASK_TIER) as (keyof typeof TASK_TIER)[]).map((task) => {
+    /* The pipeline stages talk to the Anthropic SDK directly and so use
+       `CAPABLE_MODEL`; only the three request-path tasks go through
+       `modelFor`'s OpenRouter spelling. Showing the wrong one of those two
+       would be a page that quietly lies about what ran — src/models.ts § the
+       two spellings. */
+    const requestPath = task === "explain" || task === "chat" || task === "search";
+    const stage = task in STAGE_EFFORT ? STAGE_EFFORT[task as keyof typeof STAGE_EFFORT] : undefined;
+    return {
+      task,
+      model: requestPath ? modelForOpenRouter(task) : CAPABLE_MODEL,
+      ...(stage ? { effort: stage } : {}),
+    };
+  });
+  return { tasks };
+}
+
+/**
  * Who is reading this article, as one string, resolved from the store.
  *
  * The two halves live apart — the global one on the reader, the per-article one
@@ -1782,6 +1820,9 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
      rather than about an article. Matched on `path` like the rest, so a query
      string cannot smuggle a request past it. */
   const readerRoute = path === "/api/reader";
+  // Static as far as a request is concerned — a read of two constants. No slug
+  // and no store behind it.
+  const modelsRoute = path === "/api/models";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(url);
   // Its own endpoint rather than a field on the article payload: that one is
   // ~150KB and is fetched on every page, and stat-ing every file for it would
@@ -1849,6 +1890,10 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
        record", and a client that forgot one field would silently clear it. */
     if (shelfEntry && req.method === "PATCH") {
       send(res, 200, await patchShelf(slugPart(shelfEntry, 1), await readBody(req)));
+      return true;
+    }
+    if (modelsRoute && req.method === "GET") {
+      send(res, 200, modelsInUse());
       return true;
     }
     if (readerRoute && req.method === "GET") {

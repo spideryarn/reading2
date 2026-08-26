@@ -76,7 +76,18 @@ export type Route =
    */
   | { kind: "add"; url: string }
   /** The design reference — every primitive on one page. See DesignPage.tsx. */
-  | { kind: "design" };
+  | { kind: "design" }
+  /**
+   * You, rather than an article — `/profile`. See ProfilePage.tsx and
+   * docs/project/reader-profile.md.
+   *
+   * Not under `/read/`, and that is the whole reason it is a route of its own
+   * rather than a card on the metadata page: the thing it holds is true on
+   * every article, and a global value edited inside one article's page is a
+   * global value nobody can find. Greg, 2026-08-26: *"the user-level profile
+   * should be in its own new `/profile` page (linked to from the Home page)"*.
+   */
+  | { kind: "profile" };
 
 /**
  * The path segment for each view. `article` has none — the reading view is the
@@ -123,6 +134,9 @@ export function parseRoute(pathname: string): Route {
   // Not under /read/, because it is not about an article. It is the one page in
   // the app with no data behind it at all.
   if (/^\/design\/?$/.test(pathname)) return { kind: "design" };
+  // Beside `design` and above `/read/` for the same reason: it is not about an
+  // article, so the article regex must never get a chance at it.
+  if (/^\/profile\/?$/.test(pathname)) return { kind: "profile" };
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
   // whole other URL, slashes and all. A bare /add — nothing to add — falls
   // through to the shelf, which is where the add box is.

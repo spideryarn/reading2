@@ -222,8 +222,18 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    Masthead.tsx. Deliberately the same size and colour as `.facts` rather than a
    warning: it is a statement about provenance, and dressing it as an alarm
    would make a checked PDF look broken. The scan wording carries its own weight
-   without any help from the colour. */
-.provenance {
+   without any help from the colour.
+
+   **Not `.provenance`**, which this was for a few hours and which is taken:
+   there is a `.provenance` chip further down this file — monospace, in a dashed
+   box, right-aligned — and being declared later it simply won. The masthead
+   line came out as a debug-looking box beside a sans-serif facts line, and no
+   test could see it. A Sonnet subagent driving Chrome caught it, by reading the
+   *computed* styles rather than by looking at the screenshot: 10.88px Geist
+   Mono in a dashed border where the rule above it says 0.82rem sans, no border.
+   Reading the pixels rather than the picture is the whole reason that pass is
+   worth doing (docs/project/browser-testing.md). */
+.source-note {
   margin: 0.35rem 0 0;
   max-width: 48rem;
   font-family: var(--font-ui);
@@ -3937,6 +3947,52 @@ td.text.has-hit[data-hues="8"] {
 .srch-icon-dead { cursor: default; }
 .srch-icon-dead:hover { background: none; color: var(--ink-faint); }
 
+/* "older version", on the meta line of a saved row whose article has moved.
+   Same block as the passage count, so it reads as one more thing the row says
+   about itself rather than as a control — there is nothing to press here, and
+   the ↺ two columns over is the offer. The glyph is `--highlight`, which is
+   what every other stale banner in the app uses (`.gloss-stale svg`), and
+   deliberately NOT `--destructive`: the run has not failed, it is simply about
+   a version of the piece that has gone. */
+.srch-saved-stale {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.srch-saved-stale::before { content: "·"; margin-right: 0.2rem; }
+.srch-saved-stale svg { flex: none; color: var(--highlight); }
+
+/* The same banner the glossary and the tweet thread page carry, in the same
+   words and the same box — see `StaleNote` in SearchPanel.tsx. Sits between the
+   ticks and the results, so it reads as being about the marks below it. */
+.srch-stale {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.srch-stale p {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.srch-stale svg { flex: none; color: var(--highlight); }
+/* `p.srch-stale-hint`, not `.srch-stale-hint`: the rule above matches every `p`
+   in this box and is one class plus one element, so a bare class loses to it and
+   the hint would come out flexed, full-size and hard against the line above.
+   Specificity, not `!important`. */
+.srch-stale p.srch-stale-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+}
+
 /* ---- nothing to show, in its five flavours ---- */
 
 .srch-empty { padding: 0.85rem 0.9rem; color: var(--ink-faint); }
@@ -4833,4 +4889,129 @@ td.text.has-hit[data-hues="8"] {
 @media (any-pointer: coarse) {
   [data-swipe-step] { touch-action: pan-x; }
   [data-swipe-step] { touch-action: pan-x pinch-zoom; }
+}
+
+/* ---------------------------------------------------------- the profile --
+   The two reader-profile boxes and their microphone — /profile and the
+   metadata page. One set of rules for both, because the two differ only in
+   their words and their cap, and a microphone styled twice is a microphone
+   that looks like two different controls.
+   docs/project/reader-profile.md. */
+
+.prof-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+.prof-box-label {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+/* Deliberately the same shape as .summ-steer-box: this is the third free-text
+   box in the app about what the reader wants, and the three should not look
+   like three different mechanisms. The reading face, because this is a
+   sentence somebody writes rather than a setting they pick. */
+.prof-box-input {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-reading);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.prof-box-input:focus-visible {
+  outline: none;
+  border-color: var(--highlight);
+}
+.prof-box-input:disabled { opacity: 0.5; }
+
+.prof-box-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+.prof-box-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+/* Tabular figures so the count does not shuffle its own width as it climbs —
+   a number that jitters while you type reads as something going wrong. */
+.prof-count {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+/* Over the cap. The box does NOT stop accepting text — the server refuses and
+   says the limit, and a cap you can see and go past is a cap you can decide
+   about. This is the warning, not the wall. */
+.prof-count.over { color: var(--highlight); }
+
+.prof-box-error {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.35rem 0 0;
+  color: var(--highlight);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+}
+
+/* The unconfirmed tail of a dictation. Italic and faint because it is a guess
+   the recogniser may still revise — and it is never saved. */
+.prof-interim {
+  margin: 0.3rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-reading);
+  font-size: 0.8rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.prof-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.prof-mic:hover:not(:disabled) { color: var(--highlight-ink); border-color: var(--highlight); }
+.prof-mic:disabled { opacity: 0.4; cursor: default; }
+/* Listening. A colour change AND a different glyph (Mic → MicOff), because
+   colour alone is not a state anyone should have to rely on — and because a
+   microphone that is live is the one control in this app it is worth being
+   unambiguous about. */
+.prof-mic.on {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: var(--page);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .prof-mic.on { animation: prof-mic-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes prof-mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
 }

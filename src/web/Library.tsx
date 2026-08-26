@@ -46,7 +46,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
-import { Palette, Search, Undo2, X } from "lucide-react";
+import { Palette, Search, Undo2, User, X } from "lucide-react";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { Link } from "./Link.js";
@@ -175,6 +175,20 @@ export function Library() {
             back-link in Masthead.tsx, so the two read as one convention. */}
         <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-4">
           <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
+          <div className="tw:flex tw:items-baseline tw:gap-4">
+            {/* Home is where a global thing gets a way in. The profile page
+                holds what is true of the reader on every article, so a link to
+                it from inside one article would be a link nobody finds —
+                docs/project/reader-profile.md. It sits before Design because it
+                is for the reader and Design is developer furniture. */}
+            <Link
+              href="/profile"
+              className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+              title="What the model knows about who it is writing for"
+            >
+              <User size={13} />
+              You
+            </Link>
           <Link
             href={DESIGN_HREF}
             className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
@@ -183,6 +197,7 @@ export function Library() {
             <Palette size={13} />
             Design
           </Link>
+          </div>
         </div>
         <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
           Read deeply, at whatever level of detail you need. Pick a piece.

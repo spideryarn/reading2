@@ -40,31 +40,20 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { MAX_PROFILE_CHARS } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** `data/reader.json` — one reader, one file. See § Where this lives, below. */
 const FILE = path.join(ROOT, "data", "reader.json");
 
-/**
- * The longest "about you" we will store.
- *
- * Larger than the per-article cap because this one is written once and read
- * forever: it rides in every profiled prompt for the life of the shelf, so a
- * few hundred extra tokens are paid many times, and a few thousand would be
- * absurd. 1,500 characters is about two paragraphs, which is more than anyone
- * has ever needed to say about what they know.
- */
-export const MAX_PROFILE_CHARS = 1_500;
-
-/**
- * The longest "why you're reading this one".
- *
- * Matches `MAX_GUIDANCE_CHARS` on the summary steer deliberately: the two boxes
- * sit next to each other in the reader's head, and one refusing at 600 while
- * the other refused at 900 would be a rule about nothing.
- */
-export const MAX_PURPOSE_CHARS = 600;
+/* The caps live in src/types.ts, not here, and re-exported so that everything
+   about a profile is still reachable from this module. The reason is
+   tests/client-imports.test.ts: both pages with a profile box show a live
+   counter, the counter must say the number the server refuses at, and nothing
+   under src/web/ may import this file — it reaches for `node:crypto` and
+   `node:fs`. types.ts is pure and already shared. */
+export { MAX_PROFILE_CHARS, MAX_PURPOSE_CHARS } from "./types.js";
 
 /**
  * Trim it, settle the line endings, and call whitespace-only nothing.

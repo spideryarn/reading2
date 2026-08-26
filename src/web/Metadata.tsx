@@ -93,9 +93,11 @@ import {
   RefreshCw,
   Target,
   Trash2,
+  TriangleAlert,
   Waypoints,
 } from "lucide-react";
 import type { Article, ArticleMetadata, StageState, StepName } from "../types.js";
+import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
@@ -105,6 +107,7 @@ import { articleStats } from "./stats.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { readJson } from "./lib/api.js";
+import { ProfileBox } from "./ProfileBox.js";
 
 /**
  * Clear of the fixed bottom bar, in terms of `--dock-h` rather than a number.
@@ -154,14 +157,6 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
  * it is declined, and putting it here would promise it.
  */
 const SOON: { key: string; label: string; icon: ComponentType<{ size?: number }>; blurb: string; learned: string }[] = [
-  {
-    key: "purpose",
-    label: "Your reading purpose",
-    icon: Target,
-    blurb: "What you are reading this for, in your own words, kept with the article.",
-    learned:
-      "A genuinely good question to ask, and theirs asked it. The blocker is not the text field: this repo has exactly one reader-state store today, and a second one should not be invented for a single line of text.",
-  },
   {
     key: "rerun",
     label: "Re-run a stage",
@@ -225,6 +220,52 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
       clearTimeout(timer);
     };
   }, [slug]);
+
+  /**
+   * The per-article half of the reader profile, as a draft.
+   *
+   * Seeded from `provenance` rather than fetched separately — that endpoint is
+   * already walking this article's directory, so one more read answers it for
+   * free, which is the same argument its `comments` count already makes.
+   *
+   * `null` means "not seeded yet", so an empty box the reader has cleared is
+   * tellable from one that has not loaded. Same distinction `SummaryPanel`
+   * holds for its steer.
+   */
+  const [purposeDraft, setPurposeDraft] = useState<string | null>(null);
+  const [purposeSaved, setPurposeSaved] = useState<string | null>(null);
+  const [purposeError, setPurposeError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!provenance) return;
+    const value = provenance.purpose ?? "";
+    setPurposeDraft(value);
+    setPurposeSaved(value);
+  }, [provenance]);
+
+  /* Blur, or Cmd/Ctrl+Enter — the same moment `TitleEditor` on the shelf
+     commits at, and no debounce, because there is no debounce anywhere in this
+     client and this is not the place to introduce one. */
+  function savePurpose(): void {
+    if (purposeDraft === null || purposeSaved === null) return;
+    if (purposeDraft === purposeSaved) return;
+    const sending = purposeDraft;
+    setPurposeError(null);
+    fetch(`/api/library/${encodeURIComponent(slug)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ purpose: sending === "" ? null : sending }),
+    })
+      .then((r) => readJson<{ entry: { purpose?: string } }>(r))
+      .then((body) => {
+        /* The server's answer, not what was typed: it trims and settles line
+           endings, and the box must show the string that was actually stored —
+           otherwise every prompt carries something the reader cannot see. */
+        const stored = body.entry.purpose ?? "";
+        setPurposeSaved(stored);
+        setPurposeDraft(stored);
+      })
+      .catch((e: Error) => setPurposeError(e.message));
+  }
 
   /**
    * Where the reader was in the article, so this page can say — and so "back to
@@ -438,6 +479,65 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
             Reader state, and the only section on the page that is about you
             rather than about the article. */}
         <Section label="Your reading">
+          {/* The per-article half of the reader profile. The global half is
+              read-only here with a link to /profile, because a global value
+              edited inside one article's page is a global value nobody can
+              find — Greg, 2026-08-26. docs/project/reader-profile.md.
+
+              This is the first thing on this page that writes anything. The
+              docstring at the top still holds: nothing here is *generated* and
+              nothing is a model call. This is the reader's own words. */}
+          <div className={`${CARD} tw:mb-3 tw:p-4`}>
+            <ProfileBox
+              id="article-purpose"
+              label="Why you're reading this one"
+              placeholder="e.g. I want the evidence, not the history"
+              hint="Changes what the glossary, the summaries, chat and explanations put first — for this article only. Never what the article says."
+              value={purposeDraft ?? ""}
+              onChange={setPurposeDraft}
+              onCommit={savePurpose}
+              max={MAX_PURPOSE_CHARS}
+              disabled={purposeDraft === null}
+              rows={2}
+            />
+            <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint" aria-live="polite">
+              {purposeError ? (
+                <span className="tw:inline-flex tw:items-center tw:gap-1 tw:text-highlight">
+                  <TriangleAlert size={12} /> Not saved — {purposeError}
+                </span>
+              ) : provenance === null ? (
+                slow ? "Loading…" : ""
+              ) : (
+                "Saved when you click away, or with ⌘↵."
+              )}
+            </p>
+
+            {/* The global half, shown rather than edited. A reader looking at
+                "why is this glossary written like this" needs both answers, and
+                sending them to another page for one of them is the way to make
+                sure they never see it. */}
+            <div className="tw:mt-4 tw:border-t tw:border-border tw:pt-3">
+              <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-3">
+                <span className="tw:text-[0.7rem] tw:uppercase tw:tracking-[0.03em] tw:text-ink-faint">
+                  About you
+                </span>
+                <Link href="/profile" className="tw:text-xs tw:text-highlight">
+                  Edit on your profile →
+                </Link>
+              </div>
+              <p className="tw:mt-1 tw:mb-0 tw:font-prose tw:text-sm tw:text-muted-foreground">
+                {provenance?.profile ? (
+                  provenance.profile
+                ) : (
+                  <span className="tw:text-ink-faint">
+                    You haven't said anything about yourself yet. Everything is written for a
+                    reader we know nothing about.
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
           <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
             <Row icon={MessageCircle} label="Questions asked">
               {provenance ? (
