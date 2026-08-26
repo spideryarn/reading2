@@ -14,6 +14,29 @@ must stay in step, and nothing makes them. `security.md` predicted the `assertSl
 `explain.ts` points at `converse.ts` for a guard `converse.ts` does not have. Most of the work below
 is finishing sentences the repo already started.
 
+## Status, 2026-08-26
+
+Done, each with the tests green before it was committed:
+
+| | |
+|---|---|
+| **0.1** converse's missing stall guard | `753c741` — red test first, then the guard, plus a postmortem |
+| **0.2** search retry reminting | `99bde25` — confirmed real; the fix keys on **id and criterion**, not id alone (see below) |
+| **1.1** `Block` declared twice | `675d399` |
+| **1.2** `assertSlug` ×5 | `2c43273` — one `src/slug.ts`; overrides a written decision in `shelf.ts`, and says so |
+| **1.3** provider-error leak (6 sites) | `e95c5de` — with **2.7** folded in, as the review advised |
+| **1.7** dead code and needless exports | `7359bdb` — minus `spineWidth`/`GUTTER_PX`, whose files another agent has open |
+
+**The most useful thing that happened while implementing:** 0.2's fix, exactly as the postmortem
+proposed it, turned an existing test red — one that sends the same id with a *different criterion*
+and requires a fresh id back, because that is what stops a stray id overwriting a saved search.
+Keying the reset on the id alone would have removed that defence silently. The criterion is the
+discriminator. The lesson is worth more than the fix: **the change that makes your new red test
+green is not automatically the right change, and the test that objects may be the one holding the
+requirement.**
+
+Still open: 1.4 (18 sites), 1.5, 1.6, 1.8, all of Tier 2, all of Tier 3.
+
 ## Three rules for whoever implements this
 
 All three come from the review, and they are the difference between this plan working and
