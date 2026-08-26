@@ -22,6 +22,7 @@ import {
   MODES,
   modeParam,
   orderParam,
+  confParam,
   parseAsBit,
   parseAsBlockId,
   parseAsDepths,
@@ -92,7 +93,13 @@ describe("parseAsBit", () => {
  */
 describe("spineParam", () => {
   it("has no default, unlike text", () => {
-    expect(spineParam.defaultValue).toBeUndefined();
+    /* `in` rather than reading the property, because absent and
+       `undefined` are different things here and only one of them is the
+       design. nuqs encodes that in its types — `withDefault` is what adds
+       `defaultValue` — so reading `spineParam.defaultValue` did not
+       typecheck at all, and the assertion that it was `undefined` would
+       have stayed green even if a default had been given. */
+    expect("defaultValue" in spineParam).toBe(false);
     expect(textParam.defaultValue).toBe(true);
   });
 
@@ -315,11 +322,51 @@ describe("search mode parameters", () => {
     expect(runParam.parse("spya-k3m9ql")).toBeNull();
   });
 
-  it("reads the two orderings and defaults to the article's own", () => {
+  it("reads the three orderings and defaults to the article's own", () => {
     expect(orderParam.parse("document")).toBe("document");
     expect(orderParam.parse("confidence")).toBe("confidence");
+    expect(orderParam.parse("prioritised")).toBe("prioritised");
     expect(orderParam.parse("relevance")).toBeNull();
     expect(orderParam.defaultValue).toBe("document");
+  });
+
+  it("spells prioritised the way the glossary spells it", () => {
+    // One idea in the reader's hands, one spelling. Two would be a thing to
+    // have to remember, and `?order=prioritized` would parse to null and
+    // silently show an unfiltered list.
+    expect(orderParam.parse("prioritised")).toBe("prioritised");
+    expect(sortParam.parse("prioritised")).toBe("prioritised");
+  });
+
+  it("takes the confidence threshold as the 0-100 integer the rows print", () => {
+    expect(confParam.parse("50")).toBe(50);
+    expect(confParam.parse("0")).toBe(0);
+    expect(confParam.parse("100")).toBe(100);
+    expect(confParam.serialize(62)).toBe("62");
+    // Out of range, or not a number at all, is nobody's choice rather than a
+    // clamp — the same rule every other parser here follows.
+    for (const bad of ["101", "-1", "", "half", "5px", " 50"]) {
+      expect(confParam.parse(bad)).toBeNull();
+    }
+  });
+
+  it("refuses a 0-1 fraction rather than flooring it to zero", () => {
+    /* `?gate=` is a 0-1 fraction and sits beside this in the same URL, so `0.5`
+       is exactly the value somebody writes here by mistake. `parseInt` would
+       have made it 0 — a threshold that hides nothing, with nothing to see. */
+    expect(confParam.parse("0.5")).toBeNull();
+    expect(confParam.parse("0.85")).toBeNull();
+  });
+
+  it("gives the threshold no default of its own", () => {
+    // Absent has to keep meaning *nobody has touched this*, which is what lets
+    // the panel hide its reset button until there is something to reset. The
+    // starting position lives in search-hits.ts as PRIORITY_CONF.
+    /* `in` rather than reading `.defaultValue`: a parser built without
+       `.withDefault()` does not have the property *in its type* either, so the
+       obvious spelling fails `npm run typecheck` — which is the gate this file
+       relies on (see the `Found` fixture note in search-hits.test.ts). */
+    expect("defaultValue" in confParam).toBe(false);
   });
 
   it("keeps its ordering separate from the glossary's", () => {

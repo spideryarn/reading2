@@ -16,7 +16,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_HITS, findPassages, findPassagesStream, disagree, hitIdentities } from "../src/search.js";
-import type { SearchRequest, SearchResult } from "../src/search.js";
+import type { SearchEvent, SearchRequest, SearchResult } from "../src/search.js";
 import type { Block, Meta, SearchHit } from "../src/types.js";
 
 const meta = { title: "A piece", url: "https://example.com/a" } as Meta;
@@ -78,12 +78,17 @@ function bodyOf(fetchMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
   return JSON.parse(init.body as string);
 }
 
-async function drain(events: AsyncGenerator<{ type: string }>) {
+/* Typed as the real `SearchEvent` union rather than `{ type: string }`, so the
+   narrowing below is the compiler's and not a pair of casts. The casts were
+   worse than untidy: `as` on a widened type would have kept compiling if the
+   generator started yielding a differently-shaped hit, and this helper is what
+   every assertion in the file reads its values through. */
+async function drain(events: AsyncGenerator<SearchEvent>) {
   const hits: SearchHit[] = [];
   let done: SearchResult | undefined;
   for await (const e of events) {
-    if (e.type === "hit") hits.push((e as { hit: SearchHit }).hit);
-    else done = (e as { result: SearchResult }).result;
+    if (e.type === "hit") hits.push(e.hit);
+    else done = e.result;
   }
   return { hits, done };
 }

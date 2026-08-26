@@ -113,7 +113,17 @@ function ctxAt(at: ArtifactLocations): StepContext {
 async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
   const stamped = { version: "", generator: CAPABLE_MODEL, slug: SLUG, sourceHash: SOURCE_HASH };
 
-  await writeFile(pathFor(at, "fetch", "raw"), "<html><body>raw</body></html>", "utf-8");
+  await writeJson(pathFor(at, "fetch", "raw"), {
+    kind: "html",
+    file: "raw.html",
+    requestedUrl: "https://example.test/a",
+    url: "https://example.test/a",
+    contentType: "text/html",
+    encoding: "UTF-8",
+    bytes: 29,
+    sha256: "0".repeat(64),
+    fetchedAt: "2026-08-26T00:00:00.000Z",
+  });
   await writeFile(pathFor(at, "extract", "extractedHtml"), "<article><p>hi</p></article>", "utf-8");
   await writeJson(pathFor(at, "extract", "meta"), { slug: SLUG, title: "A title" });
   await writeJson(pathFor(at, "blocks", "blocks"), { blocks: BLOCKS });
@@ -296,7 +306,7 @@ describe("the file store round-trips every kind", () => {
    * wrong about the one on disk.
    */
   const REAL: { step: StepName; kind: ArtifactKind; from: string; file: string }[] = [
-    { step: "fetch", kind: "raw", from: "writes", file: "data/writes/raw.html" },
+    { step: "fetch", kind: "raw", from: "writes", file: "data/writes/raw.json" },
     { step: "extract", kind: "meta", from: "writes", file: "data/writes/meta.json" },
     {
       step: "extract",
@@ -323,7 +333,7 @@ describe("the file store round-trips every kind", () => {
   for (const { step, kind, file } of REAL) {
     it(`${step}/${kind}`, async () => {
       const raw = await readFile(path.join(ROOT, file), "utf-8");
-      const isText = kind === "raw" || kind === "extractedHtml" || kind === "stampedHtml";
+      const isText = kind === "extractedHtml" || kind === "stampedHtml";
       const value: unknown = isText ? raw : JSON.parse(raw);
 
       // The stamp the artefact already carries, so `write`'s consistency check
@@ -516,7 +526,7 @@ describe("a corrupt artefact does not put the article in a log line", () => {
     expect(raw).toContain("Consciousn");
 
     // And now the thing itself: reading through the store surfaces nothing.
-    expect(await store.read(where.slug ?? "leak", "toc", "blocks")).toBeNull();
+    expect(await store.read(SLUG, "toc", "blocks")).toBeNull();
   });
 
   it("describes the breakage without quoting it", () => {

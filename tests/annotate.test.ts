@@ -474,7 +474,13 @@ describe("annotateHtml — the colours of the searches that found the words", ()
     /* The slot is interpolated into a custom-property *name*, so a NaN would
        emit `var(--cat-NaN-rgb)` — a reference to a property nobody defined,
        which is not an error and simply paints nothing. Silent, so it is pinned.
-       @ts-expect-error is not needed: NaN is a number. */
+       No suppression comment is needed here: NaN is a number, so this
+       already typechecks. Note the missing `@`: TypeScript reads the
+       expect-error directive out of block comments too, so writing its
+       real spelling here — even mid-sentence, even to say we do not need
+       it — turns this prose into a directive, and the typecheck then
+       fails with an unused-directive error pointing at a comment. Which
+       is what this comment did until 2026-08-26. */
     const out = annotateHtml(HTML, [hitMark({ slot: Number.NaN })]);
     expect(out).not.toContain("data-hues");
     expect(out).not.toContain("NaN");

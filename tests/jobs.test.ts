@@ -21,6 +21,7 @@ import {
   cascadeForce,
   enqueue,
   forceForRetry,
+  freeSlug,
   getJob,
   orderSteps,
   STOPPED,
@@ -35,6 +36,7 @@ import {
   STEPS,
   stepIsDone,
 } from "../src/pipeline.js";
+import type { StepContext } from "../src/pipeline.js";
 import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
@@ -259,11 +261,18 @@ describe("forceForRetry", () => {
 describe("what a step counts as done", () => {
   // Mirrors the real split: the data directory and the `output/` HTML are
   // siblings, not nested. `contextPaths` is what the runner actually uses.
-  const ctx = {
+  /* Annotated rather than inferred, so that the next required field added to
+     StepContext lands as one error here — at the thing that is actually
+     incomplete — instead of as nine identical errors at the call sites. That
+     is how `cacheArticle` arrived: nine copies of the same complaint, none of
+     them next to the object that was missing it. */
+  const ctx: StepContext = {
     ...contextPaths("nothing-here"),
     slug: "nothing-here",
     report: () => {},
     signal: new AbortController().signal,
+    // Nothing here sends the article anywhere, so there is no prefix to pay for.
+    cacheArticle: false,
   };
 
   it("lists every file a step writes, not just the first", () => {
@@ -379,12 +388,18 @@ describe("parseJobRequest", () => {
        back tells them nothing they do not have.
 
        The trigger is a URL that will not parse — `slugFromUrl` returns "" for
-       one, and "" is not a slug. Pasting a bare domain with no scheme is the
-       ordinary way to get here, and forgetting the `https://` does not remove
-       the query string, so the realistic failing request is exactly this shape.
-       (A mistyped scheme is not: `new URL` accepts `htp://…` quite happily and
-       derives a perfectly good slug from it.) */
-    const secret = "example.com/private/a?token=SECRET-8888&key=pw-7777";
+       one, and "" is not a slug.
+
+       **The trigger changed on 2026-08-26 and the old one is worth recording**,
+       because it swapped places with the counter-example beside it. This used
+       to say that pasting a bare domain was the ordinary way here, and that a
+       mistyped scheme was not, since `new URL` accepts `htp://…` quite happily
+       and derives a perfectly good slug from it. Both halves are now the other
+       way round: `normaliseUrl` supplies the missing `https://`, so a bare
+       domain is an ordinary URL — and `slugFromUrl` refuses a scheme it could
+       never fetch, so `htp://` is the mistake that gets this far. Which is an
+       improvement on its own: that typo used to queue a job and fail at fetch. */
+    const secret = "htp://example.com/private/a?token=SECRET-8888&key=pw-7777";
     expect(() => parseJobRequest({ url: secret })).toThrow();
     try {
       parseJobRequest({ url: secret });
@@ -560,5 +575,77 @@ describe("running a job", () => {
     expect(files).toContain(`${job.id}.json`);
     // No temp file left behind: a stray `.tmp` is a write that never renamed.
     expect(files.filter((f) => f.endsWith(".tmp"))).toEqual([]);
+  });
+});
+
+/* --------------------------------------------------------------------------
+   Which directory a URL lands in, when something is already in it.
+
+   > And will this de-dupe correctly if near-identical versions of the url are
+   > used … or if we already have the article?
+   >
+   > — Greg, 2026-08-26
+
+   `freeSlug` is the only place that answers both halves, and it answers them
+   with one question: *is the thing already called this the same article?* The
+   identity test is `urlKey` (src/ingest.ts, tested there); what is tested here
+   is the ladder built on top of it.
+
+   The claim lookup is injected, so none of this touches the filesystem, the
+   network or the queue. Its default in src/jobs.ts reads `meta.json` and then
+   the live queue, which is the one line these tests do not cover.
+   -------------------------------------------------------------------------- */
+describe("freeSlug", () => {
+  /** A stand-in for "what is already called this", as an in-memory shelf. */
+  const shelf = (entries: Record<string, string>) => async (candidate: string) =>
+    entries[candidate];
+
+  it("uses the slug when nothing is called that yet", async () => {
+    expect(await freeSlug("why-trees", "https://example.com/why-trees", shelf({}))).toBe(
+      "why-trees",
+    );
+  });
+
+  it("reuses the slug when we already have this article, however it was spelled", async () => {
+    // The whole point: every one of these is the article already on the shelf,
+    // so each must land back in `why-trees` and let every step skip — rather
+    // than minting `example-why-trees` and fetching, extracting and paying for
+    // a tree a second time.
+    const have = shelf({ "why-trees": "https://www.example.com/why-trees" });
+    for (const spelling of [
+      "https://www.example.com/why-trees",
+      "http://www.example.com/why-trees",
+      "https://example.com/why-trees",
+      "https://example.com/why-trees/",
+      "https://EXAMPLE.com/Why-Trees",
+      "example.com/why-trees",
+      "https://example.com/why-trees#conclusion",
+      "https://example.com/why-trees?utm_source=twitter",
+    ]) {
+      expect(await freeSlug("why-trees", spelling, have), spelling).toBe("why-trees");
+    }
+  });
+
+  it("steps aside for a different article with the same last path segment", async () => {
+    // a.example/news and b.example/news both slug to `news`. Without this the
+    // second reader is shown the FIRST publication's article under the headline
+    // they pasted, and every step reports success — docs/reusable/silent-success.md.
+    const have = shelf({ news: "https://a.example/news" });
+    expect(await freeSlug("news", "https://b.example/news", have)).toBe("b-news");
+  });
+
+  it("numbers when even the host-prefixed name is taken", async () => {
+    const have = shelf({
+      news: "https://a.example/news",
+      "b-news": "https://b.example/other-news",
+    });
+    expect(await freeSlug("news", "https://b.example/news", have)).toBe("news-2");
+  });
+
+  it("gives up rather than looping for ever", async () => {
+    const everything = async () => "https://someone-else.example/whatever";
+    await expect(freeSlug("news", "https://b.example/news", everything)).rejects.toThrow(
+      /Too many articles/,
+    );
   });
 });
