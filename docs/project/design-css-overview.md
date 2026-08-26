@@ -39,7 +39,7 @@ started. The rule of thumb:
   dash — own one-off adjustments inside components, mostly where a shadcn component needs
   nudging.
 - **shadcn components** in [`src/web/components/ui/`](../../src/web/components/ui/) own
-  `button`, `toggle` and `collapsible`, and nothing else. What is staying hand-written, and why,
+  `button` and `toggle`, and nothing else. What is staying hand-written, and why,
   is in [web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components).
 
 The longer version, with the bugs that made each boundary necessary, is

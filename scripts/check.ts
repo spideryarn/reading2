@@ -133,24 +133,48 @@ for (const step of STEPS) {
 
 console.log(`\n${"=".repeat(60)}\nsummary\n${"=".repeat(60)}`);
 
-let gateFailed = false;
-for (const { step, code, findings } of results) {
-  // For a counted step the exit code says nothing, so the count is the truth.
-  const ok = findings === undefined ? code === 0 : findings === 0;
-  if (!ok && step.gate) gateFailed = true;
-  const mark = ok ? "✓" : step.gate ? "✗" : "!";
-  const label = ok
-    ? "clean"
-    : step.gate
-      ? "FAILED"
-      : findings === undefined
-        ? "has findings"
-        : `${findings} finding(s)`;
-  console.log(`  ${mark} ${step.name.padEnd(12)} ${label}`);
-  if (!ok && !step.gate && step.note) console.log(`      ${step.note}`);
+/**
+ * Did this step have nothing to say?
+ *
+ * A counted step's exit code does not tell you how many findings it had — but
+ * it still tells you whether the tool **ran**, and those are different
+ * questions. Reading the count alone meant a Biome or jscpd that crashed before
+ * printing anything scored zero findings and was reported as `✓ clean`: a tool
+ * that did not run, indistinguishable from a tool that found nothing. That is
+ * the bug this script's own header is about, committed inside the script that
+ * exists to catch it.
+ */
+function verdict(r: { step: Step; code: number; findings?: number }): "clean" | "findings" | "broke" {
+  if (r.findings !== undefined && r.code !== 0) return "broke";
+  if (r.findings !== undefined) return r.findings === 0 ? "clean" : "findings";
+  return r.code === 0 ? "clean" : "findings";
 }
 
-const noisy = results.filter((r) => (r.findings === undefined ? r.code !== 0 : r.findings !== 0));
+let gateFailed = false;
+for (const r of results) {
+  const { step, findings } = r;
+  const v = verdict(r);
+  if (v !== "clean" && step.gate) gateFailed = true;
+  const mark = v === "clean" ? "✓" : step.gate ? "✗" : "!";
+  const label =
+    v === "clean"
+      ? "clean"
+      : v === "broke"
+        ? `DID NOT RUN (exit ${r.code})`
+        : step.gate
+          ? "FAILED"
+          : findings === undefined
+            ? "has findings"
+            : `${findings} finding(s)`;
+  console.log(`  ${mark} ${step.name.padEnd(12)} ${label}`);
+  if (v === "broke") {
+    console.log("      the tool itself failed — its count above is not a result");
+  } else if (v === "findings" && !step.gate && step.note) {
+    console.log(`      ${step.note}`);
+  }
+}
+
+const noisy = results.filter((r) => verdict(r) !== "clean");
 
 if (gateFailed) {
   console.error("\nA gate failed. That means something is newly wrong.");

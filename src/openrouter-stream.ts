@@ -7,6 +7,12 @@
  * different causes all throw the same `AbortError`. It moved out unchanged when
  * `explain` became a stream too — see docs/plans/explain-deeper-answers.md § 2.
  *
+ * It has since grown a second job, at the bottom of the file: the parts of an
+ * OpenRouter call that **three** callers must not answer differently — where to
+ * route, and what may be repeated from a failure. `search.ts` is the third, and
+ * it does not stream at all, which is why those live here rather than inside the
+ * streaming machinery.
+ *
  * **This module knows nothing about chat, comments, articles or readers.** It
  * parses a byte stream and tells aborts apart. If something here starts needing
  * a thread id or a block id, it belongs back in its caller.
@@ -310,9 +316,17 @@ export const PROVIDER_ORDER = { order: ["anthropic"] } as const;
  *
  * The body is discarded **here, at the boundary**, rather than carried on a
  * field marked do-not-log: sensitive data parked on an object is sensitive data
- * waiting for the next serialiser to find it. Nothing diagnostic is lost that
- * was being kept — every caller already logs the status, the model and the
- * elapsed time on its own line before it throws.
+ * waiting for the next serialiser to find it.
+ *
+ * Be honest about the cost: something *was* lost. The provider's own reason used
+ * to reach the stored error and the reader's screen, and occasionally a log, and
+ * it is sometimes the fastest explanation of a failure. It was not safe to keep
+ * and it is not coming back in that form — but "nothing diagnostic was lost" (as
+ * an earlier draft of this comment claimed) is not true. What every caller still
+ * logs on its own line before throwing is the status, the model and the elapsed
+ * time, which is what separates a bad key from a slow model. If more is ever
+ * needed, the safe shape is structured and allowlisted — a request id header, or
+ * a provider error *code* — never the prose.
  *
  * The status stays **in the sentence** on purpose. It is what a later decision
  * about telling the reader "busy, try again" apart from "this is broken" would
@@ -330,4 +344,19 @@ export function providerRefused(status: number): Error {
  */
 export function providerFailedMidAnswer(): Error {
   return new Error("The model provider reported an error while answering. Try again.");
+}
+
+/**
+ * The provider answered with something that is not JSON.
+ *
+ * Its own reason is dropped for a reason that is easy to miss: V8 puts the
+ * first characters of the offending input **into the `SyntaxError` message** —
+ * `Unexpected token 'S', "SECRET art"... is not valid JSON`. So rethrowing the
+ * parse error, or handing it to `errorFields`, publishes a prefix of whatever
+ * the provider sent, which on a mangled response can be a prefix of what we
+ * sent it. Same rule as `providerRefused`, arriving by a route nobody would
+ * think to check.
+ */
+export function providerSpokeNonsense(): Error {
+  return new Error("The model provider returned an unreadable response. Try again.");
 }

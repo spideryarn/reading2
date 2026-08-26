@@ -49,6 +49,7 @@ import {
   PROVIDER_ORDER,
   providerFailedMidAnswer,
   providerRefused,
+  providerSpokeNonsense,
 } from "./openrouter-stream.js";
 import {
   type OpenRouterMessage,
@@ -422,9 +423,18 @@ export async function findPassages({
   let body: OpenRouterResponse;
   try {
     body = (await response.json()) as OpenRouterResponse;
-  } catch (err) {
-    line.error({ ...errorFields(err), model, ms: since(started) }, `unreadable reply from ${model}`);
-    throw err;
+  } catch {
+    /* The parse error itself is not logged and not rethrown: V8 quotes the
+       first characters of the input in the message, so a mangled provider
+       response would put a prefix of it — and possibly of our own prompt — into
+       the log line and into what the client is shown. See
+       `providerSpokeNonsense`. The status and the model are what a reader of
+       this line actually needs. */
+    line.error(
+      { model, ms: since(started), status: response.status },
+      `unreadable reply from ${model}`,
+    );
+    throw providerSpokeNonsense();
   }
   if (body.error) {
     line.error({ model, ms: since(started) }, `${model} returned an error`);

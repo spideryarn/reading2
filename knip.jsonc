@@ -22,14 +22,24 @@
     // again is redundant — it says so itself, as a "Remove redundant entry
     // pattern" hint. Adding a stage to package.json is therefore all it takes.
 
-    // The Vercel deploy, which is reachable only through vercel.json and so is
-    // invisible to every other tool here. `api/[...path].js` is the one file
-    // Vercel routes to; it forwards to src/vercel.ts, which vite.api.config.ts
-    // builds to api-dist/vercel.js. That indirection is deliberate — Vercel's
-    // Node builder cannot drive this repo's TypeScript 7 and ships a broken
-    // function while reporting success — see the header of api/[...path].js.
-    "api/**/*.js",
-    "src/vercel.ts",
+    // The Vercel deploy, reachable only through vercel.json and so invisible to
+    // every other tool here. Whatever is in api/ is what Vercel routes to.
+    //
+    // Deliberately `{ts,js}` and a glob rather than a filename, because this
+    // corner is mid-rewrite by someone else and has changed shape twice in one
+    // afternoon: `api/[...path].ts` → `api/[...path].js` → `api/index.js`, with
+    // the real handler moving to src/vercel.ts and vite.api.config.ts building
+    // it. (The forwarder is JavaScript on purpose: Vercel's Node builder cannot
+    // drive this repo's TypeScript 7 and ships a broken function while
+    // reporting success — the file's own header has the account.)
+    //
+    // The first version of this config named those files exactly, which meant it
+    // described a working tree rather than the repo: on a clean checkout it
+    // pointed at files that were not there and missed the ones that were. A glob
+    // is right in both states, which is what a config in a tree several agents
+    // are editing has to be.
+    "api/**/*.{ts,js}",
+    "src/vercel*.ts",
     "vite.api.config.ts",
 
     // Operational scripts and evals, each behind its own npm script.
@@ -55,7 +65,7 @@
   "project": [
     "src/**/*.{ts,tsx,css}",
     "styles/**/*.css",
-    "api/**/*.js",
+    "api/**/*.{ts,js}",
     "scripts/**/*.ts",
     "evals/**/*.ts",
     "*.{ts,mts,cts}"

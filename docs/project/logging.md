@@ -298,8 +298,19 @@ Three things follow from that, and the third is the one that matters:
    `` `OpenRouter ${status}: ${detail.slice(0, 400)}` ``, and as long as they do, every file that
    stores that message and logs it is one copy-paste away from the same leak. Putting the body
    somewhere structured — where `safeError`'s allowlist drops it — would make the pattern safe to
-   copy. That is **not done yet**; it spans three stage files and changes what the reader sees when
-   a model call fails, so it needs a decision rather than a patch. Until then the rule is: **never
+   copy.
+
+   **Done, 2026-08-26.** Not by putting the body somewhere structured but by **not keeping it at
+   all**: the failed response is drained and dropped unread, and the three files throw
+   `providerRefused(status)` / `providerFailedMidAnswer()` / `providerSpokeNonsense()` from
+   `src/openrouter-stream.ts`. Data parked on an object marked do-not-log is data waiting for the
+   next serialiser to find it. There were **six** sites, not the three counted here — each file also
+   had a second throw for an error carried inside a *successful* response — plus a seventh nobody
+   had spotted: `search.ts` rethrew `response.json()`'s `SyntaxError`, and V8 quotes the first
+   characters of the offending input in that message. What the reader sees did change, and the
+   interim wording is flagged for Greg in
+   [simplification-audit.md § A.5](../plans/simplification-audit.md). The rule below still stands
+   for every file that stores such a message: **never
    log a stored `error` string, however sure you are of what is in it.**
 
 The same review found the rule broken in a second shape, which is easier to miss because the leak and
@@ -758,7 +769,8 @@ Written down because a known gap is cheaper than a rediscovered one.
   test failing and no code changing here. The fix is `stop_details?.type`, one line in four files,
   and it costs whatever a future field would have told us. Not done: four stage files, and a
   speculative harm.
-- **The `${detail.slice(0, 400)}` throws**, described above. The real fix, and the bigger one.
+- ~~**The `${detail.slice(0, 400)}` throws**, described above. The real fix, and the bigger one.~~
+  **Done 2026-08-26** — see above. It was six sites and then seven, not three.
 
 ## Related docs
 

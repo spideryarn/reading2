@@ -285,8 +285,18 @@ describe("failures are loud", () => {
        So: it still throws, and the provider's text is nowhere in what it throws.
        The second assertion is the one that would have caught the leak. */
     fetchMock.mockResolvedValue(sse(frame({ error: { message: "upstream exploded" } })));
-    await expect(ask()).rejects.toThrow(/reported an error while answering/);
-    await expect(ask()).rejects.not.toThrow(/upstream exploded/);
+
+    /* Both assertions against ONE rejection, deliberately. Calling ask() twice
+       looks equivalent and is not: `mockResolvedValue` hands back the *same*
+       Response, so the first call consumes its stream and the second fails on an
+       already-consumed body — a different path, which would satisfy the
+       privacy assertion without ever exercising the one being tested. */
+    const err = await ask().then(
+      () => { throw new Error("expected a rejection"); },
+      (e: unknown) => e as Error,
+    );
+    expect(err.message).toMatch(/reported an error while answering/);
+    expect(err.message).not.toMatch(/upstream exploded/);
   });
 });
 

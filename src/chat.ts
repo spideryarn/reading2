@@ -320,7 +320,14 @@ export async function finishTurn(
 
      This is the same bug as the one in src/comments.ts, which was found by
      GPT/Codex and fixed there first; this file was written by copying that one
-     and brought the bug back with it. Keep the two in step. */
+     and brought the bug back with it. Keep the two in step.
+
+     **The throw site is fixed now (2026-08-26).** src/converse.ts no longer puts
+     any of the provider's body in the message — `providerRefused` in
+     src/openrouter-stream.ts — so the string this line declines to log is safe
+     today. It still declines, because a rule that holds only while every call
+     site stays careful is not a rule, and because what a reader of this line
+     needs is the status and the model, which are already on it. */
   if (patch.status === "error") {
     log("store").warn({ slug, threadId, messageId }, "chat answer failed");
   }

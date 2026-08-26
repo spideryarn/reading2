@@ -191,4 +191,31 @@ describe("saved-search storage", () => {
     const runs = await loadRuns(SLUG);
     expect(runs).toHaveLength(1);
   });
+
+  it("refuses to reset a run that already finished, however the request arrives", async () => {
+    /* Same id, same criterion — but this row is `done`, and resetting it would
+       throw away an answer the reader already has and pay for another one. The
+       criterion proves "same question", not "this is a retry": a duplicated
+       POST, a stale tab, or a replay all match on both fields. Only a run that
+       actually failed is retryable. */
+    const first = await beginRun(SLUG, "evidence", "spya-k3m9qt");
+    await finishRun(SLUG, first.id, { status: "done", hits: [] });
+
+    const again = await beginRun(SLUG, "evidence", "spya-k3m9qt");
+
+    expect(again.id).not.toBe(first.id);
+    const runs = await loadRuns(SLUG);
+    expect(runs.find((r) => r.id === first.id)?.status).toBe("done");
+  });
+
+  it("refuses to reset a run that is still running", async () => {
+    // A double-clicked POST. Resetting would abandon the call in flight and
+    // start a second paid one.
+    const first = await beginRun(SLUG, "evidence", "spya-k3m9qt");
+    expect(first.status).toBe("pending");
+
+    const again = await beginRun(SLUG, "evidence", "spya-k3m9qt");
+
+    expect(again.id).not.toBe(first.id);
+  });
 });

@@ -367,7 +367,9 @@ are a shared helper the wrong choice is visibly absent from, and a test that fai
 
 ### Still open here
 
-- **`isSlug` and `assertSlug` are two different definitions of a slug.**
+- **`isSlug` and `assertSlug` are two different definitions of a slug.** (`assertSlug` now lives in
+  [`src/slug.ts`](../../src/slug.ts) — it had been copied into five reader-state modules, which is
+  what this warning predicted; the two *rules* are still two.)
   [`src/ingest.ts`](../../src/ingest.ts) says `^[a-z0-9][a-z0-9-]*$`;
   [`src/comments.ts`](../../src/comments.ts) says `^[\w.-]+$`. Neither admits a `/`, so neither is a
   traversal, but a codebase with two answers to "what is a slug" will eventually be asked the

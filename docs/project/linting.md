@@ -1,7 +1,7 @@
 # Linting
 
 ```bash
-npm run lint         # Biome over src/, api/, tests/, scripts/, evals/, styles/ and the config files
+npm run lint         # Biome over everything biome.jsonc's `includes` allows
 npm run lint:fix     # the same, applying the fixes Biome considers safe
 ```
 
@@ -15,12 +15,16 @@ The config is [`biome.jsonc`](../../biome.jsonc), and every rule turned off in i
 > **`includes` is an allowlist, and that is the trap in it.** A path not named there is linted by
 > nothing and says so nowhere — no error, no warning, no "0 files" line in ordinary output.
 > `api/`, `evals/`, `styles/` and `drizzle.config.ts` were all in that hole until 2026-08-26:
-> typechecked by `scripts/typecheck.ts`, linted by no one. Adding a path to the **script** in
-> `package.json` does nothing on its own; it has to go in the config as well. One more
+> typechecked by `scripts/typecheck.ts`, linted by no one.
+>
+> The npm script is now just `biome lint .`, which is the fix for the second half of the trap: it
+> used to repeat the path list, so the script and the config could disagree — and did. Worse, a path
+> named in the script that does not exist makes Biome print an internal error and **still exit 0**.
+> One list, in the config, and `.` for the scope. One more
 > [silent success](../reusable/silent-success.md).
 
-Three rules that live in Biome and are not in its `recommended` set are switched on here —
-import cycles, cognitive complexity, and a fourth that was switched straight back **off** after its
+Three rules that live in Biome and are not in its `recommended` set were weighed here. **Two are
+on** — import cycles and cognitive complexity. The third was switched straight back **off** after its
 autofix was caught rewriting `import "./tailwind.css"` to `"./tailwind.js"`. That story, and the
 tools we chose not to install at all, are in [static-analysis.md](static-analysis.md).
 
@@ -101,7 +105,7 @@ npx biome lint src 2>&1 | grep -i 'unknown key\|deserialize'
   the only lever. Everything else under `src/` is still linted; this one file is not linted at all.
   Revisit when Biome learns the v4 syntax.
 - **Generated shadcn components get no exception.** The migration plan expected an `overrides` entry
-  for `src/web/components/ui/**`. It isn't needed: across `button`, `toggle` and `collapsible` the
+  for `src/web/components/ui/**`. It isn't needed: across `button` and `toggle` the
   whole crop is one fixable `useImportType` warning on `toggle.tsx`'s `import * as React`. A
   generated component is **our** code the moment it lands — that is the entire shadcn model — so fix
   the file rather than carving out the directory. Add an override only when a rule turns out to be

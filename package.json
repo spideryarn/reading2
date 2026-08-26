@@ -5,10 +5,10 @@
   "private": true,
   "scripts": {
     "test": "vitest run",
-    "lint": "biome lint --max-diagnostics=none src api tests scripts evals styles vite.config.ts vitest.config.ts vite.api.config.ts drizzle.config.ts",
-    "lint:fix": "biome lint --write --max-diagnostics=none src api tests scripts evals styles vite.config.ts vitest.config.ts vite.api.config.ts drizzle.config.ts",
-    "cycles": "biome lint --only=suspicious/noImportCycles src api tests scripts evals",
-    "complexity": "biome lint --only=complexity/noExcessiveCognitiveComplexity --max-diagnostics=none src api scripts evals",
+    "lint": "biome lint --max-diagnostics=none .",
+    "lint:fix": "biome lint --write --max-diagnostics=none .",
+    "cycles": "biome lint --only=suspicious/noImportCycles .",
+    "complexity": "biome lint --only=complexity/noExcessiveCognitiveComplexity --max-diagnostics=none .",
     "knip": "knip",
     "dupes": "jscpd src api scripts evals --min-lines 5 --min-tokens 50 --format typescript,tsx --reporters console",
     "check": "tsx scripts/check.ts",
@@ -39,7 +39,8 @@
     "db:status": "supabase status",
     "db:reset": "supabase db reset",
     "eval:caching": "tsx evals/prompt-caching.ts",
-    "eval:reorder": "tsx evals/reorder-quality.ts"
+    "eval:reorder": "tsx evals/reorder-quality.ts",
+    "eval:embeddings": "tsx evals/embedding-retrieval.ts"
   },
   "keywords": [],
   "author": "",

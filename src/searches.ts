@@ -152,10 +152,12 @@ export function update(
  * The id is **minted by the client** so `?run=` can name something real from
  * the first frame, exactly as a comment id and a thread id are.
  *
- * **An id already in the file is a retry, not a collision.** This is the branch
- * `createComment` has always had, and its absence here was a real bug: the
- * client's `retry()` resends the failed run's own id, so treating that as taken
- * minted a *second* run and answered under the new id. The old row was never
+ * **An id already in the file, with the same criterion, on a run that FAILED, is
+ * a retry rather than a collision.** All three conditions, and the third took a
+ * second pass to get right — see the comment at the check itself. This is the
+ * branch `createComment` has always had, and its absence here was a real bug:
+ * the client's `retry()` resends the failed run's own id, so treating that as
+ * taken minted a *second* run and answered under the new id. The old row was never
  * named again, which left the spinner the reader was watching turning forever —
  * the exact failure `finishRun`'s comment below says appending must never cause,
  * arriving from the other end of the same run's life. See
@@ -175,19 +177,26 @@ export async function beginRun(
 ): Promise<SearchRun> {
   let stored!: SearchRun;
   await update(slug, (runs) => {
-    /* A retry: the same id **and the same criterion**, so reset that row where
-       it sits rather than adding one.
+    /* A retry: the same id, the same criterion, **and a row that actually
+       failed**. All three, and the third is the one that took two goes to get
+       right.
 
-       The criterion is what makes this safe, and it is why this is not simply
-       "an id already here means reset". A duplicate send that asks a *different*
-       question under an id somebody already holds is still a collision and still
-       gets a minted id — the property the test below this one pins, and the one
-       that stops a stray id being a way to write over a saved search. A retry
-       resends `existing.criterion` verbatim (see `retry()` in
-       src/web/useSearch.ts), so the two cases are distinguishable, and when both
-       match, resetting is the right answer anyway: it is the same question. */
+       The criterion stops a send that asks a *different* question under an id
+       somebody already holds from overwriting it — that is still a collision and
+       still gets a minted id. But criterion equality only proves "same
+       question", never "this request is a retry": a double-clicked POST, a
+       stale tab retrying after another tab succeeded, and a replayed request all
+       match on both fields. Without the status check, each of those would reset
+       a `pending` or `done` row — abandoning a call in flight, or throwing away
+       an answer the reader already has, and paying for another one either way.
+
+       Only a run that failed is retryable. A `pending` row that is stuck because
+       the server died is not covered here and is deliberately left to delete and
+       search again, which costs one call rather than risking one. */
     const existing = wantedId
-      ? runs.find((r) => r.id === wantedId && r.criterion === criterion)
+      ? runs.find(
+          (r) => r.id === wantedId && r.criterion === criterion && r.status === "error",
+        )
       : undefined;
     if (existing) {
       stored = {
@@ -257,6 +266,12 @@ export async function finishRun(
      Nothing is lost. src/search.ts logs its own failure line with the model, the
      HTTP status and the elapsed time, which is what separates a bad key from a
      slow model.
+
+     **The durable fix landed on 2026-08-26.** src/search.ts no longer puts any
+     of the provider's body in what it throws (`providerRefused` /
+     `providerSpokeNonsense`, src/openrouter-stream.ts), so the string this line
+     declines to log is safe today. It still declines, because a rule that holds
+     only while every call site stays careful is not a rule.
 
      **This is the third file to carry this bug**, after src/comments.ts (where
      GPT/Codex found it) and src/chat.ts. All three were written by copying the
