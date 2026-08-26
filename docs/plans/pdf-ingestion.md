@@ -1491,6 +1491,21 @@ saying so. The cache key is derived from `SYSTEM` and `SCHEMA` themselves now: a
 to be remembered is a check that shares its author's blind spot, and the person who forgets to bump
 it is the person who just changed the prompt.
 
+**And the fix for its first finding broke three real pages, which only running the fixture showed.**
+Whole-token matching stopped `2012 → 12` and started reporting `1936–1940`, `9–12` and a
+hundred-character URL as invented — every one of them a *correct* transcription of a token the PDF
+had broken across a line, and two of them broken across a **page** boundary where the per-page
+hyphen mending cannot reach. The third is split three ways at a `.` and an `=`, with no hyphen
+anywhere, which no rule about hyphens will ever catch.
+
+The old packed-string `includes` tolerated all three — because it had no idea where tokens ended,
+which is precisely why it also tolerated the truncated year. So the haystack now carries every way
+two or three adjacent tokens could have been one before a line break split them. Joining only ever
+makes an entry *longer*, so a shortened number still matches nothing; the test saying so sits beside
+the two that need the joins. **The lesson is not about hyphens**: a tolerance and the flaw beside it
+came from the same missing information, and separating them meant adding the information back rather
+than picking a side.
+
 **On security**, Sol called the account *"directionally honest, but incomplete"*, and it was wrong
 about one thing:
 

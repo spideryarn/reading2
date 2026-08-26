@@ -18,8 +18,8 @@ Measured 2026-08-26, `openai/gpt-5.6-luna` through OpenRouter:
 
 | Fixture | Result |
 |---|---|
-| **easy** — 8pp born-digital | 0.998 mean recall over 7 of 8 pages, ~65 s, about a penny |
-| **harder** — 14pp two-column, three tables | 0.999 mean recall over 12 of 14 pages |
+| **easy** — 8pp born-digital | 0.997 mean recall over 8 of 8 pages, ~65 s, about a penny |
+| **harder** — 14pp two-column, three tables | 0.999 mean recall over 12 of 14 pages, the two unscored being its bibliography; 1 chunk of 5 needed a second ask |
 | **much harder** — 17pp photographic scan | every page transcribed, nothing checkable, one block marked uncertain |
 
 The pages not scored in the first two are trailing bibliographies, and the run says so out loud
