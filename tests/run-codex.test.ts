@@ -148,6 +148,14 @@ describe("childEnv", () => {
     SUPABASE_SERVICE_ROLE_KEY: "sk-svc", DATABASE_URL: "postgres://u:pw@h/db",
     GITHUB_TOKEN: "ghp_x", MY_SECRET: "s", SESSION_COOKIE: "c", SSH_AUTH_SOCK: "/tmp/sock",
     EDITOR: "vim", AUTHOR: "greg", KEYBOARD_LAYOUT: "gb",
+    // Credentials whose names carry no underscore boundary — the cost of segment matching, and
+    // the reason there are two rules rather than one.
+    PGPASSWORD: "pw", MYSQL_PWD: "pw", CI_JOB_JWT: "ey.x", KUBECONFIG: "/x/kube", NETRC: "/x/netrc",
+    REDIS_URL: "redis://u:pw@h", HTTPS_PROXY: "http://u:pw@proxy",
+    // Ordinary Linux desktop plumbing that reads like a credential and isn't.
+    XDG_SESSION_TYPE: "wayland", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/bus",
+    DESKTOP_SESSION: "gnome", SESSION_MANAGER: "local/x",
+    PWD: "/repo", OLDPWD: "/",
   };
 
   it("keeps the ordinary environment codex needs to run at all", () => {
@@ -162,6 +170,16 @@ describe("childEnv", () => {
     // A substring denylist silently eats them, and nothing downstream says why.
     expect(out.AUTHOR).toBe("greg");
     expect(out.KEYBOARD_LAYOUT).toBe("gb");
+    // SESSION is in neither rule on purpose: these are desktop plumbing, and a session variable
+    // that really is a credential is named for what it holds and caught by the word rule.
+    for (const name of [
+      "XDG_SESSION_TYPE", "DBUS_SESSION_BUS_ADDRESS", "DESKTOP_SESSION", "SESSION_MANAGER",
+    ]) {
+      expect(out[name]).toBeDefined();
+    }
+    // PWD is the working directory, not a password; only a `_PWD` suffix is.
+    expect(out.PWD).toBe("/repo");
+    expect(out.OLDPWD).toBe("/");
   });
 
   it("withholds every credential except the one codex is entitled to", () => {
@@ -169,6 +187,11 @@ describe("childEnv", () => {
     for (const name of [
       "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "SUPABASE_SERVICE_ROLE_KEY", "DATABASE_URL",
       "GITHUB_TOKEN", "MY_SECRET", "SESSION_COOKIE", "SSH_AUTH_SOCK",
+      // Names with no underscore boundary around the giveaway word. Segment matching alone let
+      // every one of these through, which is the sort of gap a denylist fails quietly at.
+      "PGPASSWORD", "MYSQL_PWD", "CI_JOB_JWT", "KUBECONFIG", "NETRC",
+      // Credentials hiding inside an ordinary-looking value.
+      "REDIS_URL", "HTTPS_PROXY",
     ]) {
       expect(out[name]).toBeUndefined();
     }

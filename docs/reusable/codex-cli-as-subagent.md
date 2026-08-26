@@ -64,15 +64,31 @@ and the model can quote that log back in its final answer — which we print. A 
 debugging tool call is enough to move an unrelated production database URL into a file and then
 into the caller's context. Nothing about that needs the model to be adversarial.
 
-So the child environment is **deny-by-default on the variable's name**: anything whose
-underscore-delimited segments include `KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `CREDENTIAL`, `AUTH`,
-`SESSION`, `COOKIE`, `PRIVATE` or `DSN`, plus `DATABASE_URL`, is withheld. `CODEX_API_KEY` is then
-re-added by name, so exactly one credential crosses and it does so on purpose.
+So the child environment is **deny-by-default on the variable's name**, by three rules, and
+`CODEX_API_KEY` is re-added afterwards so exactly one credential crosses on purpose:
 
-Segments rather than substrings, so `AUTHOR` and `KEYBOARD_LAYOUT` survive. `SSH_AUTH_SOCK` does
-not — it is a path rather than a secret, but it hands over the ssh agent. `--pass-env NAME`
-(repeatable) brings a named variable back for an MCP server that needs a token of its own, or for a
-`workspace-write` run that has to push. Each crossing is then visible in the command line.
+| Rule | Matched | Words |
+|---|---|---|
+| unambiguous words | anywhere in the name | `SECRET` `PASSWORD` `PASSWD` `CREDENTIAL` `APIKEY` `JWT` `BEARER` `_PWD` `KUBECONFIG` `NETRC` |
+| ambiguous words | whole `_`-delimited segments | `KEY` `TOKEN` `AUTH` `COOKIE` `PRIVATE` `DSN` `SIGNATURE` |
+| credential-bearing values | whole name | `DATABASE_URL` and friends, `*_URI`, `*_PROXY` |
+
+Two rules rather than one because the word decides which. Requiring a segment boundary everywhere
+loses `PGPASSWORD`, `MYSQL_PWD` and `CI_JOB_JWT`, which are exactly what they look like; matching
+substrings everywhere eats `AUTHOR` and `KEYBOARD_LAYOUT`, which are not. `SSH_AUTH_SOCK` does go —
+a path rather than a secret, but it hands over the ssh agent.
+
+`SESSION` is in none of them, deliberately: `XDG_SESSION_TYPE`, `DBUS_SESSION_BUS_ADDRESS`,
+`DESKTOP_SESSION` and `SESSION_MANAGER` are ordinary Linux desktop plumbing, and a session variable
+that really is a credential is named for what it holds — `SESSION_SECRET`, `SESSION_TOKEN` — and
+caught by the word rule anyway. `PWD` is the working directory; only a `_PWD` suffix is a password.
+
+`--pass-env NAME` (repeatable) brings a named variable back for an MCP server that needs a token of
+its own, or for a `workspace-write` run that has to push. Each crossing is then visible in the
+command line.
+
+A denylist is a guess about names, and the honest failure mode is a credential named something none
+of these rules anticipated. Treat it as reducing the blast radius rather than as a boundary.
 
 A denylist rather than an allowlist because codex needs a large and unenumerable slice of the
 environment — `PATH`, `HOME`, `TMPDIR`, `LANG`, the npm and XDG variables, whatever a plugin wants —

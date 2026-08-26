@@ -58,13 +58,30 @@ const MAX_ANSWER_READ_BYTES = 4 * 1024 * 1024;
  * Environment variables whose *names* say they hold a credential. Matched on the name because the
  * value tells you nothing — a database URL and a session cookie look like ordinary strings.
  *
- * Matched on underscore-delimited **segments**, not substrings, so `AUTHOR` and `KEYBOARD_LAYOUT`
- * survive while `GITHUB_TOKEN` and `SSH_AUTH_SOCK` do not. That last one is a socket path rather
- * than a secret, but it hands over the ssh agent, so it goes; `--pass-env SSH_AUTH_SOCK` brings it
- * back for a run that has to push.
+ * Two rules, because one doesn't fit both kinds of word.
+ *
+ * `SECRET_WORD` is matched **anywhere in the name**: these words have no innocent use in an
+ * environment variable, and requiring an underscore boundary loses `PGPASSWORD`, `MYSQL_PWD` and
+ * `CI_JOB_JWT` — all of which are exactly what they look like.
+ *
+ * `SECRET_SEGMENT` is matched on underscore-delimited **segments**, because these words do have
+ * innocent uses: `AUTHOR` is not `AUTH`, `KEYBOARD_LAYOUT` is not `KEY`. `SSH_AUTH_SOCK` does go —
+ * it is a path rather than a secret, but it hands over the ssh agent; `--pass-env SSH_AUTH_SOCK`
+ * brings it back for a run that has to push.
+ *
+ * `SESSION` is in neither, deliberately. It reads like a credential and mostly isn't:
+ * `XDG_SESSION_TYPE`, `DBUS_SESSION_BUS_ADDRESS`, `DESKTOP_SESSION` and `SESSION_MANAGER` are all
+ * ordinary Linux desktop plumbing, and a session variable that *is* a credential is named for what
+ * it holds — `SESSION_SECRET`, `SESSION_TOKEN` — and caught by the word rule anyway.
  */
-const SECRET_NAME =
-  /(^|_)(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIALS?|AUTH|DSN|SESSION|COOKIE|PRIVATE)(_|$)|DATABASE_URL|_URI$/i;
+const SECRET_WORD = /SECRET|PASSWORD|PASSWD|CREDENTIAL|APIKEY|JWT|BEARER|_PWD$|KUBECONFIG|NETRC/i;
+const SECRET_SEGMENT = /(^|_)(KEY|TOKEN|AUTH|COOKIE|PRIVATE|DSN|SIGNATURE)(_|$)/i;
+/** Names and shapes that carry credentials inside an otherwise ordinary-looking value. */
+const SECRET_VALUE_SHAPE = /^(DATABASE|REDIS|MONGO|AMQP|POSTGRES|MYSQL|CLICKHOUSE)_URL$|_URI$|_PROXY$/i;
+
+function isSecretName(name: string): boolean {
+  return SECRET_WORD.test(name) || SECRET_SEGMENT.test(name) || SECRET_VALUE_SHAPE.test(name);
+}
 /** The one credential codex is entitled to, and the only one that crosses by default. */
 const CODEX_SECRET = 'CODEX_API_KEY';
 const MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
@@ -350,21 +367,20 @@ export function runCodex(opts: {
  *
  * Dynamic on purpose: this file is documented as portable
  * (`docs/reusable/codex-cli-as-subagent.md`) and gets carried into other repos, where `src/env.ts`
- * does not exist. That one failure is expected and ignored; **everything else rethrows**, because a
- * loader that throws for any other reason has left the environment half-built, and the symptom
- * downstream is an auth failure that points at the wrong thing entirely.
+ * does not exist. That case is detected by *looking for the file* rather than by catching the
+ * import's failure — a broken import somewhere inside a loader that does exist raises the same
+ * ERR_MODULE_NOT_FOUND, and catching by code swallows it. So there is no catch at all: a loader
+ * that is absent is skipped, and a loader that is present but broken throws, rather than leaving a
+ * half-built environment to surface downstream as an auth failure pointing at the wrong thing.
  *
  * Note what this does *not* do: it does not decide what codex sees. It loads the whole file into
  * this process — every secret this repo owns — and `childEnv` below is what stops all but one of
  * them crossing into the child.
  */
 async function loadRepoEnv(): Promise<void> {
-  try {
-    const mod = await import('../src/env.js');
-    mod.loadEnvLocal();
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw e;
-  }
+  if (!existsSync(join(import.meta.dirname, '..', 'src', 'env.ts'))) return;
+  const mod = await import('../src/env.js');
+  mod.loadEnvLocal();
 }
 
 /**
@@ -393,7 +409,7 @@ export function childEnv(
   const out: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(parent)) {
     if (value === undefined) continue;
-    if (SECRET_NAME.test(name) && !allowed.has(name)) continue;
+    if (isSecretName(name) && !allowed.has(name)) continue;
     out[name] = value;
   }
   // Re-added by name after the sweep: CODEX_API_KEY matches the denylist itself, so exactly one
