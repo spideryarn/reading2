@@ -4,7 +4,7 @@ The plan is not ready to build. Four parts need redesign first.
 
 ### 1. Stop-then-delete is not a safe cancellation operation
 
-`stopChat()` only fences one `Live` entry in one Node process. Its `await live.done` does guarantee that the specifically named writer has finished when it returns `{stopped:true}` ([routes.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/routes.ts:1099)). It does not make the subsequent DELETE atomic.
+`stopChat()` only fences one `Live` entry in one Node process. Its `await live.done` does guarantee that the specifically named writer has finished when it returns `{stopped:true}` (`src/routes.ts:1099`). It does not make the subsequent DELETE atomic.
 
 A concrete loss:
 
@@ -12,12 +12,12 @@ A concrete loss:
 2. `stopChat` awaits that writer and returns.
 3. Tab B appends a second turn.
 4. Tab A sends DELETE.
-5. DELETE removes both turns. It does not call `settleThread` and has no expected-tail guard ([routes.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/routes.ts:2022)).
+5. DELETE removes both turns. It does not call `settleThread` and has no expected-tail guard (`src/routes.ts:2022`).
 
 Other broken cases:
 
-- Before `begin`, current `stopWanted` first sends the provisional id and later fire-and-forgets the real stop ([useChat.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useChat.ts:646), [useChat.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useChat.ts:937)). A `stopAndDiscard` awaiting the first request would see `{stopped:false}` and delete while the real stream continued.
-- `{stopped:false}` conflates “already finished”, “wrong attempt”, and “the writer is in another server” ([routes.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/routes.ts:1106)). Only the first is safe to treat as settled.
+- Before `begin`, current `stopWanted` first sends the provisional id and later fire-and-forgets the real stop (`src/web/useChat.ts:646`, `src/web/useChat.ts:937`). A `stopAndDiscard` awaiting the first request would see `{stopped:false}` and delete while the real stream continued.
+- `{stopped:false}` conflates “already finished”, “wrong attempt”, and “the writer is in another server” (`src/routes.ts:1106`). Only the first is safe to treat as settled.
 - With two filesystem servers, their process-local queues can load/save in the order `A load → B delete/save → A stale save`, resurrecting the thread.
 - Postgres prevents resurrection through its FK and attempt fence, but a different server cannot abort the model call. It can only delete the rows and cause the later `finish` to update nothing.
 - A concurrent sweep on another process can clear the Postgres attempt or, with filesystem storage, participate in the same stale-file overwrite. It is not a cancellation fence.
@@ -35,7 +35,7 @@ For Postgres, the final check and delete must be one transaction. Cross-process 
 
 ### 2. Lifting the existing `useChat` wholesale creates both a race and a render storm
 
-There is a specific race already documented in `ChatBand`: sending before the initial GET finishes inserts optimistic rows, then `refresh()` replaces the entire array with the older server result ([useChat.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useChat.ts:503)). The handoff waits for `loaded` precisely because otherwise every later delta targets a thread that disappeared ([App.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/App.tsx:1092)).
+There is a specific race already documented in `ChatBand`: sending before the initial GET finishes inserts optimistic rows, then `refresh()` replaces the entire array with the older server result (`src/web/useChat.ts:503`). The handoff waits for `loaded` precisely because otherwise every later delta targets a thread that disappeared (`src/web/App.tsx:1092`).
 
 After this plan:
 
@@ -45,7 +45,7 @@ After this plan:
 4. The original GET returns without it and overwrites `threads`.
 5. The answer streams invisibly.
 
-There is also a serious performance regression. Each token calls `setThreads`. If that state lives in `Reader`, each token rerenders the whole reading view. `TableView` maps every block and calls `annotateHtml` during rendering ([TableView.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/TableView.tsx:500)). Chat-mark resolution would also depend on the changing thread array. Long articles will repeatedly parse and annotate every paragraph while an answer streams.
+There is also a serious performance regression. Each token calls `setThreads`. If that state lives in `Reader`, each token rerenders the whole reading view. `TableView` maps every block and calls `annotateHtml` during rendering (`src/web/TableView.tsx:500`). Chat-mark resolution would also depend on the changing thread array. Long articles will repeatedly parse and annotate every paragraph while an answer streams.
 
 Build `?anchors=1` now, or a separate thread-summary endpoint. Keep:
 
@@ -72,10 +72,10 @@ Then retain `anchor?: ChatAnchor`, never `anchor: undefined`. With `exactOptiona
 
 Concrete missing seams:
 
-- `src/store/export.ts` currently exports thread fields individually and would omit the anchor ([export.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/export.ts:279)).
-- `src/store/import.ts` inserts thread fields individually and would discard it on import ([import.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/import.ts:632)).
-- Import must mint any referenced `block_identities` row, as it already does for comments ([import.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/import.ts:596)).
-- `pg-chat.ts` needs conditional reconstruction in `threadsFor` and insert-only columns in `upsertThread` ([pg-chat.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/pg-chat.ts:139)).
+- `src/store/export.ts` currently exports thread fields individually and would omit the anchor (`src/store/export.ts:279`).
+- `src/store/import.ts` inserts thread fields individually and would discard it on import (`src/store/import.ts:632`).
+- Import must mint any referenced `block_identities` row, as it already does for comments (`src/store/import.ts:596`).
+- `pg-chat.ts` needs conditional reconstruction in `threadsFor` and insert-only columns in `upsertThread` (`src/store/pg-chat.ts:139`).
 - The proposed migration name is already taken: `drizzle/0011_reader_profile.sql` exists.
 
 The roundtrip test is structural/canonical equality, not literal byte equality, although it will still catch `null` versus absent. Add explicit assertions for all three anchor forms.
@@ -84,23 +84,23 @@ The roundtrip test is structural/canonical equality, not literal byte equality, 
 
 The three SQL checks are necessary but insufficient. They still allow malformed ids, empty quotes and impossible offsets. Format/existence belongs in the FK; quote/start matching belongs in route validation against the authoritative rendered block.
 
-Use a composite FK `(article_id, anchor_block_id) → block_identities`. Do not use `ON DELETE SET NULL`. The plan’s premise is false: re-extraction removes a revision block, not its identity. Identities are explicitly never deleted ([schema.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/db/schema.ts:379)), which is exactly why comments survive ([schema.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/db/schema.ts:530)).
+Use a composite FK `(article_id, anchor_block_id) → block_identities`. Do not use `ON DELETE SET NULL`. The plan’s premise is false: re-extraction removes a revision block, not its identity. Identities are explicitly never deleted (`src/db/schema.ts:379`), which is exactly why comments survive (`src/db/schema.ts:530`).
 
 ### 4. The model has no durable concept of the anchor
 
 The plan creates two independent sources: structural anchor columns and a formatted first message. They can diverge immediately if the reader edits the first message; `withEdit` permits that and leaves the thread anchor unchanged.
 
-They also diverge after a long conversation. Chat sends only the latest 20 turns ([converse.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/converse.ts:215)). Once the first message falls out, the model no longer receives the anchor, although the UI and database still say the thread is tied to it.
+They also diverge after a long conversation. Chat sends only the latest 20 turns (`src/converse.ts:215`). Once the first message falls out, the model no longer receives the anchor, although the UI and database still say the thread is tied to it.
 
 Make the structural anchor canonical:
 
 - The request sends `{anchor, question}` separately.
 - The server validates the anchor and synthesises the visible first message.
 - `converse` receives the structural anchor on every turn.
-- Render it in the final variable user block, after the article cache breakpoint, so `articleWithIds` remains byte-identical ([converse.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/converse.ts:467)).
+- Render it in the final variable user block, after the article cache breakpoint, so `articleWithIds` remains byte-identical (`src/converse.ts:467`).
 - Either prohibit editing the generated anchor prefix or let editing change only the reader’s question.
 
-The full selected quote can exceed `MAX_QUESTION_CHARS = 4000` ([routes.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/routes.ts:1124)). Selecting a long paragraph would therefore open a thread optimistically and receive 413. Anchor length and question length need separate limits.
+The full selected quote can exceed `MAX_QUESTION_CHARS = 4000` (`src/routes.ts:1124`). Selecting a long paragraph would therefore open a thread optimistically and receive 413. Anchor length and question length need separate limits.
 
 Finally, selected article text is untrusted content. Copying it into the reader’s user message promotes an article’s prompt injection into something that looks like the reader’s instruction. Delimit it explicitly as quoted article data and tell the model it is not an instruction.
 
@@ -116,32 +116,32 @@ Finally, selected article text is untrusted content. Copying it into the reader�
 
 A single overlay controller should own `none | comment | chat-draft | chat-thread`. Independent `note` and chat state can both be present in a pasted URL or during batched URL updates, despite “opening one closes the other”.
 
-Keep `thread` as `replace`, matching the documented browsing rule ([params.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/params.ts:243)). Consequently Back does not step through floating panels; that is the existing deliberate `note` behaviour. A deleted thread in a shared link should, after loading confirms absence, clear `thread` with `replace` and show “conversation no longer exists”. It must not trigger auto-start and silently retarget the URL to an unrelated chat.
+Keep `thread` as `replace`, matching the documented browsing rule (`src/web/params.ts:243`). Consequently Back does not step through floating panels; that is the existing deliberate `note` behaviour. A deleted thread in a shared link should, after loading confirms absence, clear `thread` with `replace` and show “conversation no longer exists”. It must not trigger auto-start and silently retarget the URL to an unrelated chat.
 
 ### Dodging must belong to the shared floating shell
 
-`CommentDialog` owns its own pointer listeners and hides during a prose drag ([CommentDialog.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/CommentDialog.tsx:91)). The newly mounted `ChatDialog` did not see that drag’s `pointerdown`.
+`CommentDialog` owns its own pointer listeners and hides during a prose drag (`src/web/CommentDialog.tsx:91`). The newly mounted `ChatDialog` did not see that drag’s `pointerdown`.
 
 Use one floating-shell selection state:
 
 - Hide the current panel while a drag is active.
 - On invalid selection or `pointercancel`, restore it.
 - On valid mouseup, replace it atomically with the anchored draft.
-- Remove the existing `removeAllRanges()` call; otherwise the selected words disappear before a persisted chat mark exists ([App.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/App.tsx:852)).
+- Remove the existing `removeAllRanges()` call; otherwise the selected words disappear before a persisted chat mark exists (`src/web/App.tsx:852`).
 
 ### Overlapping marks need an interaction design
 
 `annotateHtml` can create one element with both `cmt` and `chat`, but that does not make both artefacts reachable.
 
-Currently `TableView` opens the first comment from `data-comment` ([TableView.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/TableView.tsx:337)). Choosing chat first would merely make the comment unreachable instead. Also, the single element has only one `::after`, already used by the comment marker ([styles.css](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/styles.css:1273)).
+Currently `TableView` opens the first comment from `data-comment` (`src/web/TableView.tsx:337`). Choosing chat first would merely make the comment unreachable instead. Also, the single element has only one `::after`, already used by the comment marker (`src/web/styles.css:1273`).
 
 An overlap needs a chooser listing both artefacts, or one combined marker that opens such a chooser. Test click and keyboard behaviour, not merely the generated classes.
 
-Index blocks by id before resolving anchors. The current comment path does `blocks.find` plus DOM parsing for every comment ([TableView.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/TableView.tsx:241)); adding every chat thread to that path amplifies it.
+Index blocks by id before resolving anchors. The current comment path does `blocks.find` plus DOM parsing for every comment (`src/web/TableView.tsx:241`); adding every chat thread to that path amplifies it.
 
 ### “Comments are closed” is not enforced by the server
 
-Deleting `useComments.ask` closes the UI path, but `POST /api/comments/:slug` still calls `commentStore.create` for any fresh client-supplied id ([routes.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/routes.ts:382)). A stale client or direct request can still create a new explanation.
+Deleting `useComments.ask` closes the UI path, but `POST /api/comments/:slug` still calls `commentStore.create` for any fresh client-supplied id (`src/routes.ts:382`). A stale client or direct request can still create a new explanation.
 
 Split retry/deepen into an existing-comment endpoint, or make the retained POST require that the id already exists. Otherwise “no way to make a new one” is only a current-component convention.
 

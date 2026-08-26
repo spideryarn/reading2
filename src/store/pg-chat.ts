@@ -67,7 +67,7 @@ import { getDb } from "../db/client.js";
 import { articles, chatMessages, chatThreads } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import type { Citation, ChatMessage, ChatThread, ToolRun } from "../types.js";
+import type { ChatAnchor, Citation, ChatMessage, ChatThread, ToolRun } from "../types.js";
 import type { ChatStore, SweepOptions } from "./contracts.js";
 import { CHAT_SWEPT, requireTail } from "./fs.js";
 import { notFound, requireSlug } from "./pg.js";
@@ -136,6 +136,39 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
  * reason `ordinal` exists — and a test that only ever writes one turn cannot
  * tell the two clauses apart.
  */
+/**
+ * The three anchor columns, back as the union `ChatAnchor` is.
+ *
+ * Returns a **fragment to spread**, not a value, so that a thread with no
+ * anchor gets no `anchor` key at all rather than `anchor: undefined`. The
+ * filesystem store omits the key, `tests/store-roundtrip.test.ts` compares the
+ * two, and an explicit undefined is not the same thing as an absent one.
+ *
+ * The middle case — a block with no quote — is a chat started from a
+ * paragraph's chat button rather than from a selection.
+ */
+function anchorOf(t: {
+  anchorBlockId: string | null;
+  anchorQuote: string | null;
+  anchorStart: number | null;
+}): { anchor?: ChatAnchor } {
+  if (!t.anchorBlockId) return {};
+  if (t.anchorQuote === null || t.anchorStart === null) return { anchor: { blockId: t.anchorBlockId } };
+  return { anchor: { blockId: t.anchorBlockId, quote: t.anchorQuote, start: t.anchorStart } };
+}
+
+/* `"quote" in anchor` rather than `anchor.quote`, because the union's first arm
+   has no such property and reading one off it is a type error rather than a
+   silent undefined. The check constraint `chat_threads_anchor_both` says these
+   two agree; this is the code that makes sure they always do. */
+function quoteOf(anchor: ChatAnchor | undefined): string | null {
+  return anchor && "quote" in anchor ? anchor.quote : null;
+}
+
+function startOf(anchor: ChatAnchor | undefined): number | null {
+  return anchor && "start" in anchor ? anchor.start : null;
+}
+
 async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<ChatThread[]> {
   const [threadRows, messageRows] = await Promise.all([
     db
@@ -162,6 +195,7 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
     title: t.title,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
+    ...anchorOf(t),
     messages: byThread.get(t.id) ?? [],
   }));
 }
@@ -217,10 +251,18 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
       title: thread.title,
       createdAt: new Date(thread.createdAt),
       updatedAt: new Date(thread.updatedAt),
+      anchorBlockId: thread.anchor?.blockId ?? null,
+      anchorQuote: quoteOf(thread.anchor),
+      anchorStart: startOf(thread.anchor),
     })
     .onConflictDoUpdate({
       target: [chatThreads.articleId, chatThreads.id],
-      // `created_at` is deliberately absent: a thread is created once.
+      /* `created_at` is deliberately absent: a thread is created once. So are
+         the three anchor columns, and for the stronger version of the same
+         reason — a conversation is about what it started as, and every later
+         turn of an anchored thread comes through here. Naming them in `set`
+         would blank the anchor on the second question, which is a mark
+         disappearing from the prose rather than an error anybody sees. */
       set: { title: thread.title, updatedAt: new Date(thread.updatedAt) },
     });
 }

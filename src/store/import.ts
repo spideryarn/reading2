@@ -629,6 +629,22 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
        a re-extraction must not delete a conversation, a saved search, or a
        looked-up term, for the same reason it must not delete a comment. */
 
+    /* An anchored conversation names a block the same way a comment does, and
+       `chat_threads_anchor_identity_fk` is just as unforgiving: import an
+       archive whose anchored paragraph is no longer in this revision and the
+       insert below takes the whole transaction down with it. Minted in one
+       statement for every thread first, exactly as the comments above do, and
+       for the same reason — the paragraph can go, the conversation stays. */
+    const anchoredBlocks = [
+      ...new Set(chat.flatMap((t) => (t.anchor ? [t.anchor.blockId] : []))),
+    ];
+    if (anchoredBlocks.length) {
+      await tx
+        .insert(blockIdentities)
+        .values(anchoredBlocks.map((blockId) => ({ articleId, blockId })))
+        .onConflictDoNothing();
+    }
+
     for (const thread of chat) {
       await tx
         .insert(chatThreads)
@@ -639,6 +655,12 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
           title: thread.title,
           createdAt: new Date(thread.createdAt),
           updatedAt: new Date(thread.updatedAt),
+          /* `"quote" in anchor` rather than `anchor.quote`: the union's
+             block-only arm has no such property, so reading one off it is a
+             type error rather than a silent undefined. */
+          anchorBlockId: thread.anchor?.blockId ?? null,
+          anchorQuote: thread.anchor && "quote" in thread.anchor ? thread.anchor.quote : null,
+          anchorStart: thread.anchor && "start" in thread.anchor ? thread.anchor.start : null,
         })
         .onConflictDoNothing();
 

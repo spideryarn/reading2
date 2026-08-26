@@ -793,10 +793,59 @@ export const chatThreads = spideryarn.table(
     createdAt: createdAt(),
     /** Bumped on every stored message, so the list can show recent first. */
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+
+    /**
+     * **The passage this conversation was started from**, as three columns.
+     *
+     * A selection in the prose sets all three; a paragraph's chat button sets
+     * only the block; an ordinary chat sets none. See `ChatAnchor` in
+     * src/types.ts for why that is a union there and not three optional fields.
+     *
+     * **Points at the IDENTITY**, exactly as `comments.blockId` does, and the
+     * plan this came from argued against that key on a premise that was simply
+     * false: a re-extraction replaces *revision blocks*, and identities are
+     * never deleted (see `blockIdentities` above). Pointing here is the whole
+     * reason a comment survives losing its paragraph, and a conversation has
+     * strictly more to lose than a comment does. Hence no `on delete set null`
+     * — there is no delete to react to.
+     *
+     * Written **on insert only**: `upsertThread`'s conflict clause does not
+     * name them, for the same reason it does not name `created_at`.
+     */
+    anchorBlockId: text("anchor_block_id"),
+    anchorQuote: text("anchor_quote"),
+    anchorStart: integer("anchor_start"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
     check("chat_threads_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /* A quote is meaningless without the block it sits in. */
+    check(
+      "chat_threads_anchor_quote_needs_block",
+      sql`${t.anchorQuote} is null or ${t.anchorBlockId} is not null`,
+    ),
+    /* Both or neither. Half an anchor is a mark drawn a few characters to the
+       left of the words it belongs to — wrong, and wrong in a way that looks
+       like a styling glitch. Same rule, same reason, as
+       `chat_messages_attempt_both`. */
+    check(
+      "chat_threads_anchor_both",
+      sql`(${t.anchorQuote} is null) = (${t.anchorStart} is null)`,
+    ),
+    check(
+      "chat_threads_anchor_start",
+      sql`${t.anchorStart} is null or ${t.anchorStart} >= 0`,
+    ),
+    /* These checks are necessary and nowhere near sufficient, which is worth
+       saying next to them: a malformed id, an empty quote, an offset past the
+       end of the block, and a quote that is not the text at that offset all
+       pass every one of them. Format and existence are the foreign key's job;
+       the rest is route validation against the rendered block. */
+    foreignKey({
+      name: "chat_threads_anchor_identity_fk",
+      columns: [t.articleId, t.anchorBlockId],
+      foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
+    }),
   ],
 );
 

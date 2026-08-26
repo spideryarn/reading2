@@ -24,12 +24,11 @@
  */
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ChatMessage, ChatThread } from "./types.js";
+import type { ChatAnchor, ChatMessage, ChatThread } from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { assertSlug } from "./slug.js";
-import { notMigratedError, STORE } from "./store/live.js";
 
 /**
  * What may be logged from this file: ids, slugs, counts, statuses.
@@ -98,19 +97,6 @@ export async function loadThreads(slug: string): Promise<ChatThread[]> {
  * in the same directory because `rename` is only atomic within one filesystem.
  */
 async function save(slug: string, threads: ChatThread[]): Promise<void> {
-  /* **Temporary scaffolding, and it belongs here rather than at each caller.**
-     In `postgres` mode the conversations are supposed to be rows, and there is
-     no Postgres chat store wired yet — so a write landing in this file would
-     report success and be invisible to every read, which src/store/index.ts
-     calls the worst available outcome. It is on `save` because every write in
-     this module funnels through here, so a write added later cannot skip it;
-     and because `save` runs before the model call on the paths that make one.
-
-     Deleted when step 10 of docs/plans/postgres-storage-implementation.md
-     lands: `pgChatStore` exists and is reviewed, and wiring it through
-     src/store/index.ts and src/routes.ts is what actually fixes this. */
-  if (STORE === "postgres") throw notMigratedError("Saving a conversation");
-
   const file = fileFor(slug);
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.tmp`;
@@ -206,6 +192,14 @@ export interface Turn {
   question: string;
   /** The thread it belongs to. Created if it does not exist yet. */
   threadId: string;
+  /**
+   * The passage this conversation is about — **only meaningful when this turn
+   * creates the thread**, which is the only branch `withTurn` applies it on.
+   *
+   * The route rejects an anchor sent for a thread that already exists rather
+   * than letting it fall through and be ignored here.
+   */
+  anchor?: ChatAnchor;
 }
 
 /**
@@ -244,7 +238,7 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question }: Turn,
+  { threadId, question, anchor }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
@@ -278,6 +272,22 @@ export function withTurn(
     title: "New chat",
     createdAt: at,
     updatedAt: at,
+    /* **Only on this branch**, which is the branch that builds a new thread.
+       A conversation is about what it started as — the same rule `title` follows
+       just below, and for a sharper reason: the anchor draws a mark in the
+       prose, so a thread that re-anchored itself would move its mark to a
+       paragraph the reader is not looking at.
+
+       An anchor arriving for a thread that already exists is not silently
+       dropped here — that would append a question about passage B to a thread
+       the database says is about passage A, with nothing anywhere disagreeing.
+       The route refuses it before we are reached. See `answerChat` in
+       src/routes.ts and docs/plans/chat-as-gateway.md § Set once.
+
+       Conditional spread, never `anchor: undefined`: `exactOptionalPropertyTypes`
+       is on and the two stores are compared field for field, where an explicit
+       undefined and an absent key are not the same thing. */
+    ...(anchor ? { anchor } : {}),
     messages: [],
   };
   const thread: ChatThread = {

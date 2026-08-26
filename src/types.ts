@@ -998,7 +998,7 @@ export interface Comment {
  * docs/project/glossary.md and docs/project/summaries.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "toc" | "arc" | "tweets" | "glossary" | "summary";
+  | "fetch" | "extract" | "blocks" | "toc" | "arc" | "tweets" | "glossary" | "summary" | "ideas";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
@@ -1178,13 +1178,87 @@ export interface ChatMessage {
  * starting, and a list of "Untitled" is worse than a list of opening lines.
  * It can be renamed afterwards.
  */
+/**
+ * The passage a conversation is about, when it was started from one.
+ *
+ * Three legal shapes, and only three:
+ *
+ *   absent                    — an ordinary chat, started from the chat panel
+ *   { blockId }               — started from a paragraph's chat button
+ *   { blockId, quote, start } — started from a selection in the prose
+ *
+ * **A union rather than `{ blockId, quote?, start? }`**, so "a quote with no
+ * offset" is not a value the type can hold. That fourth inhabitant is not an
+ * error anybody sees — `resolveMark`'s fast path takes the offset at its word —
+ * it is a mark drawn a few characters to the left of the words it belongs to,
+ * which reads as a styling glitch rather than as bad data. Same reasoning, and
+ * the same failure, as the note on `Comment.start`.
+ *
+ * `exactOptionalPropertyTypes` is on, and this shape is compared across two
+ * stores byte for byte: write it with a conditional spread
+ * (`...(anchor ? { anchor } : {})`) and never as `anchor: undefined`.
+ *
+ * The offset space is the block's *rendered text*, the one defined in
+ * src/web/annotate.ts — the same space `Comment.start` lives in, deliberately,
+ * because `resolveMark` draws both and a second spelling would mean a second
+ * resolver for the two to drift apart in.
+ *
+ * See docs/plans/chat-as-gateway.md § A thread can have an anchor.
+ */
+export type ChatAnchor =
+  | { blockId: BlockId }
+  | { blockId: BlockId; quote: string; start: number };
+
 export interface ChatThread {
   id: string;
   title: string;
   createdAt: string;
   /** Bumped on every stored message, so the list can show recent first. */
   updatedAt: string;
+  /**
+   * The passage this conversation was started from, if it was started from one.
+   *
+   * **Set on the turn that creates the thread and never again.** A conversation
+   * is about what it started as — the rule `title` already follows a few lines
+   * up, and for a sharper reason here: the anchor is what draws a mark in the
+   * prose, so a thread that re-anchored itself would move its mark to a
+   * paragraph the reader is not looking at. `withTurn` sets it only on the
+   * branch that builds a new thread, and the route refuses an anchor sent for a
+   * thread that already has one.
+   */
+  anchor?: ChatAnchor;
   messages: ChatMessage[];
+}
+
+/**
+ * A thread without its transcript — what the *reading* view is given.
+ *
+ * The reading view needs to draw a mark for every anchored conversation and say
+ * something useful when the reader hovers one. It does not need the messages,
+ * and taking them costs more than bandwidth: chat's state changes on every
+ * streamed token, so holding threads above `TableView` would re-render — and
+ * re-`annotateHtml` — every paragraph of the article hundreds of times while an
+ * answer arrives.
+ *
+ * So the reading view reads this, and only `ChatDialog` and chat mode hold the
+ * real thing. See docs/plans/chat-as-gateway.md § The reading view gets thread
+ * summaries.
+ */
+export interface ThreadSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  anchor?: ChatAnchor;
+  /** How many question-and-answer pairs. What the hover tooltip counts. */
+  turns: number;
+  /**
+   * The first line of the most recent answer, for the hover.
+   *
+   * Absent when the newest turn has not been answered yet — which is a state
+   * the tooltip has to render rather than a state that cannot happen.
+   */
+  lastLine?: string;
 }
 
 /* ---------------------------------------------------------------- search --

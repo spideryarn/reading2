@@ -43,6 +43,7 @@ import type { NewComment } from "../comments.js";
 import type {
   Article,
   ArticleMetadata,
+  ChatAnchor,
   ChatMessage,
   ChatThread,
   Comment,
@@ -393,7 +394,12 @@ export interface ChatStore {
    */
   begin(
     slug: string,
-    turn: { threadId: string; question: string },
+    /**
+     * `anchor` is applied **only when this turn creates the thread** — see
+     * `withTurn` in src/chat.ts, which both stores call. An anchor for a thread
+     * that already exists is refused by the route, not quietly dropped here.
+     */
+    turn: { threadId: string; question: string; anchor?: ChatAnchor },
     now?: () => string,
   ): Promise<Turn>;
 

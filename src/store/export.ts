@@ -45,7 +45,7 @@ import {
 } from "../db/schema.js";
 import { blocksArtefact } from "../blocks.js";
 import { log } from "../log.js";
-import type { Block, ChatMessage, Comment, SearchRun } from "../types.js";
+import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
 
 const logger = log("store");
 
@@ -80,6 +80,26 @@ export interface ExportResult {
  * useless for telling "the data changed" from "the writer changed", which is
  * the one question you are asking during a rollback.
  */
+/**
+ * A thread row's three anchor columns as a `{ anchor? }` fragment.
+ *
+ * Deliberately a near-duplicate of `anchorOf` in src/store/pg-chat.ts rather
+ * than an import from it: export reads the database directly, without going
+ * through the store, which is what makes it usable to dump an article whose
+ * store is not the live one. See the note at the top of this file.
+ */
+function anchorFragment(t: {
+  anchorBlockId: string | null;
+  anchorQuote: string | null;
+  anchorStart: number | null;
+}): { anchor?: ChatAnchor } {
+  if (!t.anchorBlockId) return {};
+  if (t.anchorQuote === null || t.anchorStart === null) {
+    return { anchor: { blockId: t.anchorBlockId } };
+  }
+  return { anchor: { blockId: t.anchorBlockId, quote: t.anchorQuote, start: t.anchorStart } };
+}
+
 async function writeJson(file: string, value: unknown): Promise<void> {
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -281,6 +301,12 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
         title: thread.title,
         createdAt: thread.createdAt.toISOString(),
         updatedAt: thread.updatedAt.toISOString(),
+        /* Spread a fragment rather than set a key, so an unanchored thread has
+           no `anchor` at all — the filesystem store omits it, and this file and
+           that one are compared byte for byte. Building the thread from named
+           fields is exactly how `tools` went missing from an export once
+           already; the anchor is the same trap one row up. */
+        ...anchorFragment(thread),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,
