@@ -28,17 +28,41 @@ import {
   loadTweets,
   lookUpTerm,
 } from "../api.js";
+import {
+  beginTurn,
+  ChatConflict,
+  deleteThread,
+  editTurn,
+  finishTurn,
+  loadThreads,
+  renameThread,
+  retryTurn,
+  update as updateThreads,
+} from "../chat.js";
 import { createComment, deleteComment, loadComments, patchComment } from "../comments.js";
+import { loadLookups, saveLookup } from "../glossary-lookups.js";
 import { searchLibrary } from "../library-search.js";
+import { log } from "../log.js";
+import {
+  beginRun,
+  deleteRun,
+  finishRun,
+  loadRuns,
+  update as updateRuns,
+} from "../searches.js";
 import { loadShelf, patchShelf, recordOpen } from "../shelf.js";
 import type {
   ArticleReader,
+  ChatStore,
   CommentStore,
+  GlossaryLookupStore,
   GlossaryStore,
   LibrarySearch,
+  SearchStore,
   ShelfStore,
+  SweepOptions,
 } from "./contracts.js";
-import type { LibraryEntry } from "../types.js";
+import type { ChatMessage, ChatThread, LibraryEntry, SearchRun } from "../types.js";
 
 export const fsArticleReader: ArticleReader = {
   loadArticle,
@@ -146,3 +170,156 @@ async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry> 
 
 /** Searching every article at once. One function, no adaptation — src/library-search.ts. */
 export const fsLibrarySearch: LibrarySearch = { searchLibrary };
+
+/* ------------------------------------------------- the reader's own state -- */
+
+/**
+ * Chat, on files. Thin, except for the sweep.
+ *
+ * The sweep is the one method with no counterpart in src/chat.ts, because on
+ * the filesystem it was never a storage concern: it lived in src/routes.ts as a
+ * `map` over the whole array inside `update`. Moving it here changes nothing
+ * about what it does — the same grace window, the same `keep` set, the same
+ * error string — it just puts it where the Postgres store can be held to it.
+ */
+export const fsChatStore: ChatStore = {
+  load: loadThreads,
+  begin: beginTurn,
+  retry: retryTurn,
+  rename: renameThread,
+  remove: deleteThread,
+
+  async finish(slug, threadId, messageId, patch, now): Promise<void> {
+    // The list is thrown away. Both call sites already did; saying so in the
+    // type is what stops the Postgres store paying for a read nobody wants.
+    await finishTurn(slug, threadId, messageId, patch, now);
+  },
+
+  async edit(slug, threadId, messageId, question, opts = {}) {
+    /* `expectedTailId` is checked here rather than inside `withEdit` because it
+       is a *client* claim, not an invariant of the data: the store is the layer
+       that knows what the client last saw. Both adapters therefore have to
+       check it, and both have to check it against the list they are about to
+       edit — reading it earlier would be checking a copy. */
+    if (opts.expectedTailId !== undefined) {
+      const threads = await loadThreads(slug);
+      requireTail(threads, threadId, opts.expectedTailId);
+    }
+    return editTurn(slug, threadId, messageId, question, opts.now);
+  },
+
+  async sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]> {
+    const threads = await loadThreads(slug);
+    const now = Date.now();
+    const orphaned = (m: ChatMessage) => {
+      if (opts.keep.has(m.id)) return false; // this process is on it
+      const started = Date.parse(m.createdAt);
+      return Number.isNaN(started) || now - started > opts.graceMs;
+    };
+    const stale = threads.some((t) =>
+      t.messages.some((m) => m.status === "pending" && orphaned(m)),
+    );
+    // The pre-check exists to avoid rewriting the file for nothing. The
+    // Postgres store deliberately drops it: an UPDATE matching no rows is free.
+    if (!stale) return threads;
+    return updateThreads(slug, (current) =>
+      current.map((t) => ({
+        ...t,
+        messages: t.messages.map((m) =>
+          m.status === "pending" && orphaned(m)
+            ? { ...m, status: "error" as const, error: CHAT_SWEPT }
+            : m,
+        ),
+      })),
+    );
+  },
+};
+
+/** What both chat sweeps write. One constant, so they cannot drift. */
+export const CHAT_SWEPT = "The server stopped before this answer finished.";
+/** What both search sweeps write. */
+export const SEARCH_SWEPT = "The server stopped before this search finished.";
+
+/**
+ * The stale-edit guard, shared by both stores.
+ *
+ * A stale tab editing an old question discards every turn added since it last
+ * looked, and today nothing notices: `withEdit` checks only that its target
+ * still exists and is a question. So tab A appends Q2 and A2, stale tab B edits
+ * Q1 and deletes both, A's answer lands on a message that is gone, and the
+ * reader — who saw a perfectly successful answer — reloads to find it missing.
+ * The mutex orders those two writes; it does not make the result correct.
+ *
+ * Deliberately narrow: no thread version, because a version column would 409
+ * two *appends* that succeed today, and inventing a failure mode is the one
+ * thing this migration must not do. Only the destructive operation is guarded,
+ * and only against its discard set having changed. `withRetry` has always had
+ * exactly this guard, by insisting on the thread's real last message.
+ */
+export function requireTail(
+  threads: ChatThread[],
+  threadId: string,
+  expectedTailId: string,
+): void {
+  const thread = threads.find((t) => t.id === threadId);
+  const tail = thread?.messages.at(-1);
+  if (tail?.id !== expectedTailId) {
+    throw new ChatConflict(
+      "This conversation has moved on since you opened it. Reload before editing.",
+    );
+  }
+}
+
+/**
+ * Searches, on files. `attempt` is always `undefined`, which is today exactly.
+ *
+ * The filesystem has no attempt column and cannot grow one usefully: the whole
+ * point of an attempt is to be compared across processes, and two servers
+ * sharing one `data/` directory is a thing nobody does. So this side stays
+ * fenced by identity alone, and the divergence is written down rather than
+ * papered over — see src/store/pg-searches.ts.
+ */
+export const fsSearchStore: SearchStore = {
+  load: loadRuns,
+  remove: deleteRun,
+
+  async begin(slug, criterion, wantedId, now) {
+    return { run: await beginRun(slug, criterion, wantedId, now), attempt: undefined };
+  },
+
+  async finish(slug, runId, patch): Promise<SearchRun | undefined> {
+    // `finishRun` returns the whole list and the caller did `.find`; doing it
+    // here is what lets the Postgres side answer with `UPDATE … RETURNING`
+    // instead of reading every run in the article back.
+    const runs = await finishRun(slug, runId, patch);
+    return runs.find((r) => r.id === runId);
+  },
+
+  async sweepPending(slug: string, opts: SweepOptions): Promise<SearchRun[]> {
+    const runs = await loadRuns(slug);
+    /* **`graceMs` is ignored here, and that is the pre-existing behaviour
+       rather than an oversight.** Today's sweep errors any `pending` run this
+       process did not start, immediately and with no grace at all. Giving the
+       filesystem a grace window would be an improvement smuggled in under a
+       migration; the Postgres store needs one because it has other processes
+       to be wrong about, and this one does not. */
+    const orphaned = (r: SearchRun) => r.status === "pending" && !opts.keep.has(r.id);
+    if (!runs.some(orphaned)) return runs;
+    const swept = await updateRuns(slug, (current) =>
+      current.map((r) =>
+        orphaned(r) ? { ...r, status: "error" as const, error: SEARCH_SWEPT } : r,
+      ),
+    );
+    log("store").warn(
+      { slug, orphans: swept.filter((r) => r.status === "error").length },
+      "swept abandoned search(es)",
+    );
+    return swept;
+  },
+};
+
+/** Glossary lookups, on files. Two functions, no adaptation. */
+export const fsGlossaryLookupStore: GlossaryLookupStore = {
+  load: loadLookups,
+  save: saveLookup,
+};

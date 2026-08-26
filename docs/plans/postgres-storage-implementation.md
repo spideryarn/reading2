@@ -438,10 +438,14 @@ index then rejects a legitimate write.
 - **`renameThread` deliberately does not touch `updated_at`.** The file does not, and the panel sorts
   by it — so "touch `updated_at` on every write", which is a habit rather than a decision, would jump a
   renamed thread to the top of the list.
-- **`sweepPending`: `NOT IN ()` is a syntax error.** Build the clause only when `keep` is non-empty.
-  This is the single most likely way to ship a sweep that 500s on the first read of an article with
-  nothing streaming. Drop the file's "is anything stale?" pre-check — it exists to avoid rewriting the
-  file, and in SQL an `UPDATE` matching zero rows is free.
+- **`sweepPending`: `NOT IN ()` — a hazard Drizzle has already handled.** Raw SQL `not in ()` is a
+  syntax error rather than "matches everything", and this was called the single most likely way to
+  ship a sweep that 500s on the first read of an article with nothing streaming. **Measured on
+  2026-08-26 and it is not: Drizzle compiles `notInArray(col, [])` to the literal `true`.** So no
+  empty-list conditional was written — a guard against a handled hazard reads as evidence the
+  hazard is live. The test for a quiet article stays regardless. Drop the file's "is anything
+  stale?" pre-check: it exists to avoid rewriting the file, and in SQL an `UPDATE` matching zero
+  rows is free.
 
 The chat error string is **not logged**; keep that as it is, for the provider-echo reason
 [`src/chat.ts`](../../src/chat.ts) gives at length.
