@@ -986,6 +986,12 @@ a hope.
 
 ## See also
 
+- [ideas.md](ideas.md) — **the third arm of this file's `Found` pipe**, and the evidence that "two
+  matchers, one downstream" was the right shape: an entire mode's worth of marks, paragraph bars,
+  spine lanes and ordering cost one resolver. It is also why `resolveOne` was extracted out of
+  `resolveHits` rather than copied — the `whole` rule has been got wrong here once already, in
+  exactly the way a second copy invites
+
 - [colour-scales.md](colour-scales.md) — the eight hues a saved search can wear, where they came
   from, and the honest ceiling on how many anyone can tell apart
 

@@ -103,6 +103,7 @@ artefacts on disk, not by reaching into another stage's code.
 | 5c | the thread — the article as numbered posts ([tweet-thread-page.md](../plans/tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
 | 5d | the glossary — the terms this piece uses, defined from it ([glossary.md](glossary.md)). **Not run by a plain add**, same as 5c | **glossary** ([`src/glossary.ts`](../../src/glossary.ts)) | `glossary.json` |
 | 5e | the summaries — the article, its parts and its sections at two lengths above the gist ([summaries.md](summaries.md)). **Not run by a plain add**, same as 5c. The only stage that makes *several* model calls, one batch per parent | **summaries** ([`src/summarise.ts`](../../src/summarise.ts)) | `summary.json` |
+| 5f | the **ideas** — the propositions the piece needs you to hold, the ones it assumes and the ones it adds ([ideas.md](ideas.md)). **Not run by a plain add**, same as 5c–5e. The first stage whose freshness covers the *tree* as well as the blocks, and the first that lets the model name block ids — so every one it names is checked against `blocks.json` | **ideas** ([`src/ideas.ts`](../../src/ideas.ts)) | `ideas.json` |
 | 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view). **Sanitises again at ingress** ([security.md](security.md#sanitised-twice-on-purpose)) — stage 3 used jsdom's parser, this one uses the browser's | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
 | 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | `data/_jobs/`, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
@@ -161,6 +162,13 @@ Filesystem, one directory per article, no database:
                     the tree by RANGE, never by node id, exactly as arc.json is —
                     and carries a `missing` count, because a batch that fails
                     loses only its own sections rather than the whole file.
+    ideas.json      the propositions the piece needs you to hold — the ones it
+                    assumes and the ones it adds (stage 5f, on demand only —
+                    ideas.md). Its sourceHash covers the TREE as well as the
+                    blocks, which no other artefact's does: the model judges what
+                    the argument rests on from the skeleton, so a re-sectioned
+                    article is a different question even when every paragraph is
+                    byte-identical.
     reader.json     per-reader state: progress, highlights, notes (all keyed by block id)
 ```
 

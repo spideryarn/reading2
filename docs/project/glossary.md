@@ -247,8 +247,9 @@ Three things in it are not obvious:
 
 ### Where the underlines are drawn
 
-`termMarks` in [`annotate.ts`](../../src/web/annotate.ts) turns the selected term into `Mark`s, which
-is the same machinery a comment uses. Two things follow:
+`termMarks` in [`annotate.ts`](../../src/web/annotate.ts) turns **the whole list** into `Mark`s —
+one entry of it until 2026-08-26, see [The underline is always there](#the-underline-is-always-there)
+— which is the same machinery a comment uses. Two things follow:
 
 - Offsets are in the **rendered-text space of `block.html`**, not `block.text`. The two strings are
   different lengths and mixing them lands a mark somewhere plausible and silently wrong — the header
@@ -686,7 +687,10 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   is consistent with the thread page and equally unsatisfying on both.
 - **No keyboard traversal of the term list.** ↑ / ↓ belong to the article
   ([keyboard.md](keyboard.md)) and taking them inside the band needs a focus story the band does not
-  have yet. Same gap chat has.
+  have yet. Same gap chat has — and the same gap is why the ‹ › stepper added to the occurrence line
+  on 2026-08-27 ([`BlockNav.tsx`](../../src/web/BlockNav.tsx)) is buttons only. Greg asked for
+  prev/next in this mode and in [ideas.md](ideas.md) at once, so it is one component in both; it does
+  not wrap, matching `stepComment`, and it nudges rather than jumps, matching `goToComment`.
 - **The prose fields are plain text, deliberately.** The model is told no Markdown, and nothing
   renders any — rendering arbitrary model output as HTML is what [security.md](security.md) is
   about. If entries ever want emphasis, the answer is a restricted renderer, not
@@ -715,6 +719,12 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 
 ## See also
 
+- [ideas.md](ideas.md) — **the sibling mode, and the other axis on this one's grid.** A term is a
+  word you look up; an idea is a proposition you hold. It also shares this panel's ‹ › stepper and,
+  more consequentially, this panel's two provenance classes: the solid left rule for what came from
+  the article and the dotted one for what came from the model. Those are reused rather than
+  re-declared, because they *are* the distinction and a second panel drawing it differently would
+  teach the reader it means something else
 - [search.md](search.md) — the other mode that marks up the prose, and the rule both follow
   about when the article may acquire marks. It is also where the third `MarkKind` came from, and
   where the account of why `annotateHtml` did not need replacing now lives

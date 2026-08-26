@@ -83,9 +83,16 @@ these, each to be judged against the principles above:
   context, cited back to block ids. **Built**, as of 2026-08-25: select a passage and the model
   explains it, researching the web when it judges it needs to. See [comments.md](comments.md).
 - **Author's glossary** — the terms this piece uses in a non-obvious way, defined from the piece
-  itself. **Built**, as of 2026-08-25: a mode in the band beside the prose, and selecting a term
-  underlines every place the article uses it. See [glossary.md](glossary.md).
+  itself. **Built**, as of 2026-08-25: a mode in the band beside the prose. Since 2026-08-26 every
+  term is underlined wherever the article uses it, in every mode, and pointing at one shows its entry
+  without opening the band. See [glossary.md](glossary.md).
+- **Ideas** — the propositions a piece needs you to hold: the ones it *assumes* without stating, and
+  the ones it *introduces*. **Built**, as of 2026-08-27, and the sibling of the glossary rather than a
+  widening of it — a term is a word you look up, an idea is a claim you hold. See
+  [ideas.md](ideas.md).
 - **Argument view** — claims, the support offered for each, and the moves the author doesn't make.
+  <br>*Distinct from Ideas above, and the line is worth keeping: a claim is what the author asserts
+  and defends **here**; an idea is a tool you could carry away and use on a different piece.*
 - **Confusion signal** — the reader marks a passage as unclear; the highest-value input we can get.
 - **Notes and highlights** anchored to block ids, surviving re-extraction — which is precisely why
   those ids are random rather than sequential
