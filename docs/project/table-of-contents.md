@@ -329,6 +329,26 @@ of the work where reasoning matters. And `COVERAGE_FLOOR` went from 0.95 to **1*
 asked for an exact set of numbered paragraphs and refuses any other set, so there is no longer a path
 by which a block is legitimately unlabelled.
 
+### Three files, and what survives a failed run
+
+Stage 4 writes `tree.json`, `blocks.json` and `labels.json`, each beside its target and renamed into
+place, the tree last. Ordering alone was not enough: `writeFile` truncates before it has anything to
+put there, and *existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is
+done", so a kill mid-write left a present, truncated tree that a retry skipped.
+
+`labels.json` carries a **manifest** — `sourceHash`, `outlineHash`, `structureVersion` — because
+atomic writes give us "whole or not there" and not "still true". A complete set of labels for an
+article that has since been re-extracted, or re-structured, looks exactly like a current one. The
+outline hash is the one that earns its place: boundaries can move without a single block changing.
+
+While the batches are running, each one's labels are appended to **`labels-progress.json`** as it
+lands. That is working state, not an artefact, which is why it is not `labels.json`: a partial
+`labels.json` would be a finished-looking article with holes in its navigation. A later run reuses a
+batch only when a fingerprint over the exact bytes of its prompt matches — never merely because the
+same block ids are in the same call, since the crumbs, gists and outline around them may all have
+moved. The first unrecoverable failure aborts every other batch rather than letting a doomed run keep
+buying answers.
+
 The whole design, the alternatives weighed against it, and what it does not yet do are in
 [docs/plans/toc-scaling.md](../plans/toc-scaling.md).
 

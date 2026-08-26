@@ -669,10 +669,21 @@ export async function generateToc(opts: {
   /* Pass two. The tree has to exist first: the batches are cut along its own
      section boundaries, so that every label a reader compares with another was
      written in the same call. src/labels.ts says why that is the rule. */
+  /* Before the labels, not after, because the checkpoint they write as they
+     land goes in here — and a directory that does not exist yet would turn the
+     first batch's saved work into a thrown ENOENT. */
+  await mkdir(outDir, { recursive: true });
+
   const labelRun = await generateLabels({
     tree: structure,
     blocks,
     slug,
+    /* Which turns checkpointing on. Each batch's labels are written here as it
+       lands, so a 429 or a 5xx eight batches into a book costs the one batch
+       rather than the eight — and the retry the queue makes (src/jobs.ts) picks
+       up where this one stopped. src/labels.ts § `usableCheckpoint` for the
+       four things that have to match before a single one is reused. */
+    dir: outDir,
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
     ...(opts.signal ? { signal: opts.signal } : {}),
   });
@@ -698,10 +709,12 @@ export async function generateToc(opts: {
      GPT-5.6-sol, 2026-08-26; see docs/plans/toc-scaling.md for what this still
      does not give us, which is a way to tell a *stale* complete set from a
      current one. */
-  await mkdir(outDir, { recursive: true });
   await writeAtomic(path.join(outDir, "labels.json"), labelRun.file);
   await writeAtomic(path.join(outDir, "blocks.json"), { blocks });
   await writeAtomic(path.join(outDir, "tree.json"), tree);
+  /* The working state is only now safe to throw away — see
+     src/labels.ts § `LabelRun.clearCheckpoint`. */
+  await labelRun.clearCheckpoint();
 
   return {
     tree,

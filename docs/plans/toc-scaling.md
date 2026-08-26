@@ -412,27 +412,71 @@ gone.** The numbers are printed and nothing is concluded from them, because a cl
 a blinded comparison across several texts and runs with its uncertainty stated, and saying so is more
 useful than a verdict nobody should act on.
 
-Still open from these reviews, and recorded rather than fixed: **there is no checkpoint.** Any failure
-that is not `BatchIncomplete` — a 429 outliving the SDK's retries, a 5xx, a refusal — rejects the
-`Promise.all` and discards every batch that had already succeeded, and the queue keeps making paid
-calls for a run that is already doomed. On the constitution that is seven wasted calls. At the book
-scale this plan targets it is the whole run, every time, for one transient. Writing each batch's
-labels to `labels.json` as they land, and resuming from it, is what makes book scale survivable, and
-it should be built before the first book.
+### The checkpoint, built
 
-Sol's smallest-correct-form for that, when it is built: persist the structure with its source hash,
-prompt version and model; fingerprint each planned batch over the rendered prompt as well as the
-outline; update a separate checkpoint file atomically as batches land, with those writes serialised
-so parallel completions cannot overwrite one another; resume only exact fingerprint matches; and
-publish the three artefacts atomically at the end. Reusing labels because their block ids match is
-*not* correct — boundaries, crumbs, gists and the outline may all have moved.
+The three things that review left open were all about the same hour: what happens when batch eight
+of a book fails. They were recorded rather than fixed at the time, and then built, still 2026-08-26,
+to Sol's own smallest-correct-form. All three are in [`src/labels.ts`](../../src/labels.ts).
 
-Two smaller things it would build now and this does not: **fail-fast cancellation**, which is cheap
-and stops paid work after a fatal batch — note `p-queue`'s `clear()` alone is wrong, because cleared
-tasks' promises never settle; the right shape is one shared `AbortSignal` passed into the Anthropic
-calls and aborted on the first unrecoverable failure. And a **manifest** carrying the source hash,
-the model and both prompt versions, so a *stale* complete set can be told from a current one — which
-atomic writes do not give us.
+**A checkpoint, in its own file.** Each batch's labels are written to `labels-progress.json` as it
+lands, and a later run reuses them. Not into `labels.json`: that file's *existence* is what
+[`src/pipeline.ts`](../../src/pipeline.ts) reads as "stage 4 is done", so a partial one would be a
+finished-looking article with holes in its navigation. Working state and artefact are different
+things and now live in different files. `clearCheckpoint()` deletes it, and the caller calls that
+**after** the artefacts are on disk rather than when `generateLabels` returns — the gap is the whole
+point, because a caller that died in between would otherwise have lost everything it had just paid
+for.
+
+**Resumed by fingerprint, never by block id.** `batchFingerprint` hashes the bytes the request was
+about to send — prompt version, model, effort, system prompt, the block ids, and both halves of the
+rendered user message. Sol was explicit that matching on ids is *not* correct, and the reason is the
+one this whole stage rests on: the boundaries, the crumbs, the gists and the outline can all move
+while the same paragraphs sit in the same call, and a label written to tell a paragraph apart from a
+different set of neighbours is answering a question nobody asked any more. Hashing the bytes makes
+that impossible to get wrong, because the bytes *are* the question. The ids go in as well, so two
+byte-identical sections — repeated boilerplate, a table's header row — cannot collide and fill one
+batch from the other's labels.
+
+**The writes are serialised.** Four batches landing at once would each read the accumulated list,
+each build a file, and the last rename would win — a checkpoint quietly holding one batch where it
+should hold four, with nothing red anywhere and the next run re-buying three answers it had already
+paid for.
+
+**Fail-fast.** One shared `AbortController`, composed with the caller's signal through
+`AbortSignal.any` so a cancelled ingest still cancels this, and aborted on the first unrecoverable
+failure. `queue.clear()` is called too, but the signal is what makes it safe: p-queue never settles a
+cleared task's promise, so clearing alone would leave `Promise.all` waiting for ever on a batch that
+will never run — a hang rather than a failure. That claim about the dependency is pinned by a test of
+its own, because if a p-queue upgrade changed it nothing else here would notice until a run hung in
+the dark.
+
+**A manifest on `labels.json`** — `sourceHash`, `outlineHash`, `structureVersion` — so a *stale*
+complete set can be told from a current one, which atomic writes do not give us. The outline hash is
+the one that earns its place: boundaries can move without a single block changing, and `sourceHash`
+alone would call that current.
+
+Two smaller things came with it. `generateLabels` builds its Anthropic client on first use rather
+than up front, so a fully-resumed run needs no API key — which is also what lets a test prove no
+batch quietly went and asked again, by deleting the key and watching the run succeed. And the run
+now reports `resumed`, and reports its token counts for **this run's calls only** while
+`file.batches` keeps the per-batch figures of whatever call produced each label set. The two
+deliberately do not add up on a resumed run.
+
+### The warm-up that was warming nothing
+
+Sol also looked at the prompt caching added to this stage while the review was running, and found it
+paying for something that could not exist. The batches share the outline as a cached prefix, and
+`generateLabels` ran the first batch alone so that its write would land before the others read —
+sound reasoning, and a whole batch of latency on every run of the stage. But Sonnet 5 will not cache
+a prefix under **1,024 tokens**, and on both committed articles this prefix is well under it:
+roughly 660 tokens on the 141-block article and 950 on the 360-block one. So the serialisation bought
+a discount that was never available.
+
+It is now conditional on the prefix clearing the floor, and the run reports `cacheable` — because
+`cacheReadTokens: 0` has two causes needing opposite responses (nothing to cache, which is fine; a
+cache that has stopped hitting, which is a bug), and without the flag they are the same zero. The
+CLI says which. That is [silent success](../reusable/silent-success.md) in its purest form: the
+labels were right, the number was zero, and zero was what working looked like too.
 
 ### What the eval got wrong <a id="what-the-eval-got-wrong"></a>
 

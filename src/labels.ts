@@ -30,10 +30,13 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
 import { MODEL } from "./models.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
@@ -208,6 +211,31 @@ export interface LabelsFile {
   version: string;
   generator: string;
   slug: string;
+  /**
+   * The manifest: enough to tell a *stale* complete set from a current one.
+   *
+   * Atomic writes give us "whole or not there". They do not give us "still
+   * true". A `labels.json` with every block labelled is indistinguishable from
+   * a current one even when the article has been re-extracted underneath it,
+   * the structure call has been re-run with different boundaries, or the model
+   * has changed — and src/pipeline.ts decides a step is done by whether its
+   * files exist, so nothing would ever look again. Raised by GPT-5.6-sol,
+   * 2026-08-26; the same shape as `sourceHash` on the glossary and the tweet
+   * thread (src/source-hash.ts), which is why it uses that hash rather than a
+   * second definition of what an article is.
+   *
+   * - `sourceHash` — the blocks these labels describe.
+   * - `outlineHash` — the *structure* they were written against, fingerprinted
+   *   over the outline text the prompt actually showed the model. Boundaries
+   *   can move without a single block changing, and when they do, a label
+   *   written to tell a paragraph apart from the wrong set of neighbours is
+   *   wrong in the one way this stage exists to prevent.
+   * - `structureVersion` — the toc prompt version off the tree, so the pair of
+   *   prompt versions is recorded rather than just this file's own.
+   */
+  sourceHash: string;
+  outlineHash: string;
+  structureVersion: string;
   labels: Record<string, string>;
   /**
    * The calls that produced these labels — **null when no call did.**
@@ -498,6 +526,113 @@ export function batchParts(
      caching at all, and invisible. */
   if (at === -1) return { shared: "", own: whole };
   return { shared: whole.slice(0, at), own: whole.slice(at + 2) };
+}
+
+/**
+ * A fingerprint of everything that decides what one batch's labels should say.
+ *
+ * **Over the rendered prompt, not over the block ids.** Resuming a batch
+ * because its ids match is the wrong rule and it is the tempting one: the
+ * boundaries, the crumbs, the gists and the whole article's outline can all
+ * have moved while the same paragraphs sit in the same call, and a label whose
+ * job is to tell a paragraph apart from its neighbours is then answering a
+ * question nobody asked any more. Hashing the bytes we were about to send makes
+ * that impossible to get wrong, because the bytes *are* the question.
+ * GPT-5.6-sol, 2026-08-26.
+ *
+ * The ids go in as well, even though the prompt already contains every one of
+ * those paragraphs' text. Two sections of an article can be byte-identical —
+ * a repeated boilerplate block, a table's header row — and a fingerprint that
+ * could collide across two batches would resume one from the other's labels,
+ * which is a wrong answer rather than a missing one.
+ *
+ * Sixteen hex characters, compared only for equality. src/source-hash.ts makes
+ * the same argument at more length.
+ */
+export function batchFingerprint(batch: Batch, blocks: Block[], outline: string): string {
+  const { shared, own } = batchParts(batch, blocks, outline);
+  const canonical = [
+    PROMPT_VERSION,
+    MODEL,
+    EFFORT,
+    SYSTEM,
+    batch.blocks.map((b) => b.id).join(","),
+    shared,
+    own,
+  ].join("\u0000");
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
+}
+
+/** One batch that came back whole, kept so a later run does not pay for it again. */
+export interface LabelCheckpointEntry {
+  fingerprint: string;
+  labels: Record<string, string>;
+  record: LabelBatchRecord;
+}
+
+/**
+ * Batches that have landed, for a run that has not finished.
+ *
+ * A separate file from `labels.json` on purpose. `labels.json` is an artefact —
+ * src/pipeline.ts reads its existence as "stage 4 is done", and the store
+ * publishes it — so a partial one would be a finished-looking article with
+ * holes in its navigation. This is working state: it is written as batches
+ * land, read only by the run that resumes it, and deleted the moment the real
+ * artefacts are published.
+ */
+export interface LabelCheckpoint {
+  version: string;
+  generator: string;
+  slug: string;
+  sourceHash: string;
+  batches: LabelCheckpointEntry[];
+}
+
+/** Where the working state lives, beside the artefacts it is working towards. */
+export const CHECKPOINT_FILE = "labels-progress.json";
+
+/**
+ * The batches in a checkpoint that this run is allowed to reuse.
+ *
+ * **Everything about this function is a refusal.** It is handed a file written
+ * by some earlier process, about an article that may since have changed, and
+ * the only interesting failure is the one where it says yes when it should have
+ * said no — a resumed run then publishes labels that were written for a
+ * different article and looks exactly like a run that worked. So the shape is
+ * checked field by field rather than cast, an unreadable or unrecognisable file
+ * is worth nothing rather than worth a guess, and the per-batch fingerprints
+ * are still matched afterwards even when everything here agrees.
+ *
+ * Returned as a map so the caller does not have to trust the order, which is
+ * whatever order four parallel batches happened to finish in.
+ */
+export function usableCheckpoint(
+  file: unknown,
+  expect: { version: string; generator: string; slug: string; sourceHash: string },
+): Map<string, LabelCheckpointEntry> {
+  const empty = new Map<string, LabelCheckpointEntry>();
+  if (typeof file !== "object" || file === null) return empty;
+  const cp = file as Partial<LabelCheckpoint>;
+  if (cp.version !== expect.version) return empty;
+  if (cp.generator !== expect.generator) return empty;
+  if (cp.slug !== expect.slug) return empty;
+  if (cp.sourceHash !== expect.sourceHash) return empty;
+  if (!Array.isArray(cp.batches)) return empty;
+
+  const out = new Map<string, LabelCheckpointEntry>();
+  for (const entry of cp.batches) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const { fingerprint, labels, record } = entry as Partial<LabelCheckpointEntry>;
+    if (typeof fingerprint !== "string" || fingerprint.length === 0) continue;
+    if (typeof labels !== "object" || labels === null) continue;
+    if (Object.values(labels).some((v) => typeof v !== "string" || v.trim().length === 0)) continue;
+    if (typeof record !== "object" || record === null) continue;
+    if (!Array.isArray(record.blocks)) continue;
+    /* Last one wins, and it does not matter which: two entries with the same
+       fingerprint were produced by the same prompt asking the same question. */
+    out.set(fingerprint, { fingerprint, labels, record });
+  }
+  return out;
 }
 
 /**
@@ -806,6 +941,32 @@ export interface LabelRun {
   batches: number;
   /** Sibling sets bigger than one call should be. Worth saying out loud; see `oversizedSets`. */
   oversized: number;
+  /**
+   * Batches taken from a checkpoint instead of being asked for again.
+   *
+   * Reported rather than folded into `batches`, because a run that resumed nine
+   * of ten batches and a run that made ten calls produce the same labels and
+   * cost twenty times different amounts. A resume that silently stopped
+   * resuming would show up here and nowhere else — the labels would still be
+   * right.
+   */
+  resumed: number;
+  /**
+   * Whether the shared prefix was long enough for the cache to take it.
+   *
+   * The point of this field is that `cacheReadTokens: 0` has two causes and
+   * they need different responses: a prefix under the model's floor (nothing to
+   * do, and nothing wrong) and a cache that has stopped hitting (a bug worth
+   * chasing). Without this they are the same zero. docs/reusable/silent-success.md.
+   */
+  cacheable: boolean;
+  /**
+   * **This run's calls only** — a resumed batch contributes nothing here, since
+   * nobody paid for it this time. The per-batch figures in `file.batches` are
+   * the other convention: they describe the call that produced each label set
+   * whenever it happened, which is what an artefact should say. The two
+   * therefore do not add up on a resumed run, on purpose.
+   */
   inputTokens: number;
   outputTokens: number;
   /* Summed across the run's batches. Reported for the reason every other count
@@ -816,6 +977,18 @@ export interface LabelRun {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   elapsedMs: number;
+  /**
+   * Throw the working state away — **call it once the artefacts are on disk**,
+   * not when this function returns.
+   *
+   * The gap is the whole point. If `generateLabels` deleted the checkpoint
+   * itself, a caller that crashed between here and writing `labels.json` would
+   * have lost every batch it had just paid for, which is the case the
+   * checkpoint exists for. A no-op when no `dir` was given, and harmless to
+   * forget: a checkpoint left behind is read by the next run, matched
+   * fingerprint by fingerprint, and either reused correctly or ignored.
+   */
+  clearCheckpoint: () => Promise<void>;
 }
 
 async function runBatch(
@@ -902,35 +1075,117 @@ export async function generateLabels(opts: {
   tree: Tree;
   blocks: Block[];
   slug: string;
+  /**
+   * Where to keep the checkpoint. **No directory, no checkpoint** — and that is
+   * a real choice rather than a default, which is why it is not silently the
+   * article's directory: a caller that has one passes it, and a caller that
+   * does not (a test, a one-off) gets the old behaviour with nothing on disk.
+   * The run reports how many batches it resumed, so a caller that meant to
+   * checkpoint and did not can see it in the numbers.
+   */
+  dir?: string;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
 }): Promise<LabelRun> {
   const started = Date.now();
   const batches = planBatches(opts.tree, opts.blocks);
   const outline = renderOutline(opts.tree);
-  const client = new Anthropic();
-  /* **Starts at one, not at `CONCURRENCY`.** All these batches share the outline
-     as their cached prefix, and a cache entry cannot be *read* until the request
-     that writes it has begun streaming. Fire four at once into a cold cache and
-     all four pay the write premium and none gets the discount — the fan-out
-     races itself. So the first batch goes alone, and the moment it has run the
-     queue opens up to the full width for the rest.
+  /* Built on first use, not up front. A run that resumes every batch from a
+     checkpoint makes no call, and should not need an API key to say so — the
+     SDK's constructor throws without one. That also makes the resume path
+     testable without a network or a credential, which is the only way a test
+     can prove a resumed batch did not quietly go and ask again. */
+  let client: Anthropic | null = null;
+  const clientFor = (): Anthropic => (client ??= new Anthropic());
+  const sourceHash = hashBlocks(opts.blocks);
+  const manifest = {
+    version: PROMPT_VERSION,
+    generator: MODEL,
+    slug: opts.slug,
+    sourceHash,
+  };
 
-     The cost is one batch's latency per run, on a pipeline stage nobody is
-     watching. See docs/research/prompt-caching-anthropic.md § Concurrency. */
-  const queue = new PQueue({ concurrency: 1 });
+  /* **Fail fast, and stop paying.** Without this, a 429 that outlives the SDK's
+     own retries rejects the `Promise.all` while every other batch carries on to
+     completion — a doomed run that keeps buying answers nobody will read. On
+     the constitution that is seven wasted calls; at the book scale this stage
+     exists for it is the whole run, every time, for one transient.
+
+     One controller, linked to the caller's signal rather than replacing it, so
+     a cancelled ingest (src/jobs.ts) still cancels this. `queue.clear()` on its
+     own would not have done: p-queue never settles a cleared task's promise, so
+     `Promise.all` would wait forever on batches that will now never run.
+     GPT-5.6-sol, 2026-08-26. */
+  const fatal = new AbortController();
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, fatal.signal])
+    : fatal.signal;
+
+  const checkpointPath = opts.dir ? path.join(opts.dir, CHECKPOINT_FILE) : null;
+  const resumable = checkpointPath
+    ? usableCheckpoint(await readJsonIfPresent(checkpointPath), manifest)
+    : new Map<string, LabelCheckpointEntry>();
+  /* Only the entries this run's own plan asks for. A checkpoint left by a run
+     against a different tree can share this article's source hash — the blocks
+     did not change, the boundaries did — and every one of its batches will
+     simply fail to match a fingerprint below. Keeping the whole map and writing
+     it back out would carry those stale entries forward for ever. */
+  const kept: LabelCheckpointEntry[] = [];
+  const writeCheckpoint = checkpointPath
+    ? serialise(async () => {
+        await writeAtomic(checkpointPath, { ...manifest, batches: kept } satisfies LabelCheckpoint);
+      })
+    : async (): Promise<void> => {};
+  /* **The warm-up, and the condition it now carries.** All these batches share
+     the outline as their cached prefix, and a cache entry cannot be *read*
+     until the request that writes it has begun streaming — so firing four at
+     once into a cold cache has all four pay the write premium and none get the
+     discount. Running the first batch alone fixes that, at the cost of one
+     batch's latency.
+
+     But only when there is a cache to warm. Sonnet 5 will not cache a prefix
+     under 1,024 tokens, and on both committed articles this prefix — the system
+     prompt plus the outline — is well under it: roughly 660 tokens on the
+     141-block article and 950 on the 360-block one. So the serialisation was
+     buying a discount that could not exist, and paying a whole batch of latency
+     for it, on every run of the stage, with nothing anywhere reporting the
+     trade. It is the exact shape of docs/reusable/silent-success.md: the labels
+     were right, the cache figures were zero, and zero was the number a working
+     cache would have shown too.
+
+     `cacheable` is returned so the zero can be read. GPT-5.6-sol, 2026-08-26.
+     See docs/research/prompt-caching-anthropic.md § Concurrency and
+     docs/project/prompt-caching.md § The floor. */
+  const prefix = batches[0] ? batchParts(batches[0], opts.blocks, outline).shared : "";
+  const cacheable = estimateTokens(SYSTEM + prefix) >= CACHE_FLOOR_TOKENS;
+  const queue = new PQueue({ concurrency: cacheable ? 1 : CONCURRENCY });
 
   let done = 0;
+  let resumed = 0;
   const report = (): void =>
     opts.onProgress?.(`${done} of ${batches.length} sections labelled`);
   report();
 
-  const results = await Promise.all(
+  const results = await allOrStop(
     batches.map((batch) =>
+      /* The signal goes to `add` as well as into the request. Without it a
+         batch still sitting in the queue when a fatal one aborts would simply
+         never run and never settle, and `Promise.all` would hang on a promise
+         with nothing left to resolve it. */
       queue.add(async () => {
+        const fingerprint = batchFingerprint(batch, opts.blocks, outline);
+        const already = resumable.get(fingerprint);
+        if (already) {
+          kept.push(already);
+          done++;
+          resumed++;
+          report();
+          return { labels: already.labels, record: already.record, fromCheckpoint: true };
+        }
+
         let out: Awaited<ReturnType<typeof runBatch>>;
         try {
-          out = await runBatch(client, batch, opts.blocks, outline, opts.signal, LABEL_HEADROOM);
+          out = await runBatch(clientFor(), batch, opts.blocks, outline, signal, LABEL_HEADROOM);
         } catch (err) {
           /* Matched on the class, not on words in the message. A message test
              would go quietly dead the first time somebody improved the wording,
@@ -938,7 +1193,7 @@ export async function generateLabels(opts: {
              as a rarer, stranger failure rather than as anything red. */
           if (!(err instanceof BatchIncomplete)) throw err;
           try {
-            out = await runBatch(client, batch, opts.blocks, outline, opts.signal, LABEL_HEADROOM * 2);
+            out = await runBatch(clientFor(), batch, opts.blocks, outline, signal, LABEL_HEADROOM * 2);
           } catch (again) {
             /* Both attempts, whatever the second one was. They are often
                different failures — a truncation carries the two budget figures
@@ -970,17 +1225,40 @@ export async function generateLabels(opts: {
            the whole point; `concurrency` is settable on a live queue. */
         queue.concurrency = CONCURRENCY;
         report();
-        return out;
-      }),
+
+        /* Written before this batch's result is handed back, so a failure in
+           the very next batch cannot lose it. The write is serialised: four
+           batches landing at once would otherwise each read `kept`, each build
+           a file, and the last rename would win, silently dropping the other
+           three — a checkpoint that quietly holds less than it should is worse
+           than no checkpoint, because the run that resumes from it pays again
+           and reports success. */
+        kept.push({ fingerprint, labels: out.labels, record: out.record });
+        await writeCheckpoint();
+        return { ...out, fromCheckpoint: false };
+      }, { signal }),
     ),
+    () => {
+      /* One failed batch is the end of the run, so stop the rest before they
+         cost anything more. `abort` cancels the in-flight requests through the
+         signal each one was given; `clear` drops the ones that have not
+         started. Both, because neither reaches the other's batches. */
+      fatal.abort();
+      queue.clear();
+    },
   );
 
   const labels: Record<string, string> = {};
+  /* Document order, because `results` follows `batches` — not the order four
+     parallel calls happened to finish in, which is what `kept` holds. */
   const records: LabelBatchRecord[] = [];
+  /* This run's own calls, for the token counts. See `LabelRun.inputTokens`. */
+  const paid: LabelBatchRecord[] = [];
   for (const result of results) {
     if (!result) continue;
     Object.assign(labels, result.labels);
     records.push(result.record);
+    if (!result.fromCheckpoint) paid.push(result.record);
   }
 
   assertEveryBlockLabelled(labels, opts.blocks);
@@ -991,20 +1269,91 @@ export async function generateLabels(opts: {
       version: PROMPT_VERSION,
       generator: MODEL,
       slug: opts.slug,
+      sourceHash,
+      outlineHash: createHash("sha256").update(outline, "utf8").digest("hex").slice(0, 16),
+      structureVersion: opts.tree.version,
       labels,
       batches: records,
     },
     batches: batches.length,
     oversized: oversizedSets(batches).length,
-    inputTokens: records.reduce((n, r) => n + r.inputTokens, 0),
-    outputTokens: records.reduce((n, r) => n + r.outputTokens, 0),
+    resumed,
+    cacheable,
+    inputTokens: paid.reduce((n, r) => n + r.inputTokens, 0),
+    outputTokens: paid.reduce((n, r) => n + r.outputTokens, 0),
     /* Summed the same way as the other two. In a healthy run one batch writes
        the outline and the rest read it, so writes should be roughly one batch's
        worth and reads the remainder — a run where writes scale with the batch
        count is one where the fan-out raced and nobody read anything. */
-    cacheReadTokens: records.reduce((n, r) => n + r.cacheReadTokens, 0),
-    cacheWriteTokens: records.reduce((n, r) => n + r.cacheWriteTokens, 0),
+    cacheReadTokens: paid.reduce((n, r) => n + r.cacheReadTokens, 0),
+    cacheWriteTokens: paid.reduce((n, r) => n + r.cacheWriteTokens, 0),
     elapsedMs: Date.now() - started,
+    clearCheckpoint: async (): Promise<void> => {
+      if (checkpointPath) await rm(checkpointPath, { force: true });
+    },
+  };
+}
+
+/**
+ * Wait for all of them, and on the first failure stop the rest.
+ *
+ * Its own function so it can be tested, because the thing it prevents costs
+ * money rather than correctness and therefore has no natural alarm: without
+ * `stop`, a batch that fails leaves every other batch running to completion,
+ * buying answers for a run that has already been abandoned. Nine good labels
+ * arriving after the tenth failed look exactly like nine good labels.
+ *
+ * **`Promise.all`, deliberately, and not a loop or `allSettled`.** It attaches
+ * a handler to every promise before any of them can reject, so the failures
+ * that arrive *after* the first one are handled rather than becoming unhandled
+ * rejections — which on Node is a crashed process, arriving from what is
+ * supposed to be the graceful path.
+ */
+export async function allOrStop<T>(work: Promise<T>[], stop: () => void): Promise<T[]> {
+  try {
+    return await Promise.all(work);
+  } catch (err) {
+    stop();
+    throw err;
+  }
+}
+
+/**
+ * Read a JSON file, or nothing at all.
+ *
+ * A checkpoint that is missing, unreadable or not JSON is worth exactly the
+ * same as one that is stale: nothing. So this returns `undefined` for all of
+ * them rather than distinguishing failures the caller has no different
+ * response to — and it deliberately does not throw, because the alternative to
+ * resuming is a run that works and costs money, not a run that cannot happen.
+ */
+async function readJsonIfPresent(file: string): Promise<unknown> {
+  try {
+    return JSON.parse(await readFile(file, "utf-8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Run an async function one at a time, however many callers ask at once.
+ *
+ * There are four batches in flight and each writes the whole checkpoint when it
+ * lands. Without this they interleave — read `kept`, serialise, write, rename —
+ * and the last rename wins, so a file that should hold four batches holds one
+ * and nothing is red. The next run then re-buys three answers it had already
+ * paid for and reports itself a success.
+ *
+ * A promise chain rather than a lock, because the only thing needed is "after
+ * the one before". A rejection is swallowed into the chain so one failed write
+ * cannot wedge every later one; the caller still sees it.
+ */
+export function serialise(fn: () => Promise<void>): () => Promise<void> {
+  let tail: Promise<void> = Promise.resolve();
+  return () => {
+    const next = tail.then(fn);
+    tail = next.catch(() => {});
+    return next;
   };
 }
 
@@ -1039,6 +1388,7 @@ async function main(): Promise<void> {
     tree,
     blocks,
     slug: path.basename(dir),
+    dir,
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
@@ -1051,8 +1401,11 @@ async function main(): Promise<void> {
      reading, which makes it the worse of the two places to get this wrong. */
   await writeAtomic(path.join(dir, "labels.json"), run.file);
   await writeAtomic(path.join(dir, "tree.json"), merged);
+  /* Only now. Until both artefacts are on disk the checkpoint is the only copy
+     of what this run bought. */
+  await run.clearCheckpoint();
 
-  console.log(`\n\nBatches:   ${run.batches}`);
+  console.log(`\n\nBatches:   ${run.batches}${run.resumed > 0 ? ` (${run.resumed} resumed)` : ""}`);
   if (run.oversized > 0) {
     console.log(
       `Warning:   ${run.oversized} section(s) are bigger than one call should be. The batches ` +
@@ -1061,7 +1414,14 @@ async function main(): Promise<void> {
     );
   }
   console.log(`Labelled:  ${Object.keys(run.labels).length} blocks`);
-  console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
+  console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out (this run's calls only)`);
+  /* Said out loud because the alternative is a pair of zeros in the cache
+     figures that a broken cache would produce too. */
+  console.log(
+    run.cacheable
+      ? `Cache:     ${run.cacheReadTokens} read, ${run.cacheWriteTokens} written`
+      : `Cache:     off — the shared prefix is under the model's ${CACHE_FLOOR_TOKENS}-token floor`,
+  );
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`\nEval:      npm run eval:toc -- ${dir}`);
 }

@@ -45,8 +45,16 @@ matching before the article is even reached.
 Note what the pipeline row does **not** mean. Each of those stages makes *one* call per run, so none
 of them caches anything for itself; the entry only pays off when two of them run close together —
 within one ingest, or a top-up landing inside the 5-minute TTL of the pass before it. That is
-opportunistic by nature, and the eval is what will say how often it actually happens. The labels row
-is the one that is reliable, because its four batches run together by construction.
+opportunistic by nature, and the eval is what will say how often it actually happens.
+
+The labels row reads as the reliable one — its four batches run together by construction — and on the
+articles we have, it caches nothing at all. Its shared prefix is the system prompt plus the tree's
+outline, and that comes to roughly **660 tokens** on the 141-block article and **950** on the
+360-block one: both under the 1,024-token floor below. So the breakpoint is accepted and does
+nothing, and it will start working on its own the day an article's outline is long enough. Until
+then `generateLabels` skips the warm-up that would otherwise pay a batch of latency to warm a cache
+that cannot exist, and reports `cacheable: false` so the zero can be told from a broken one.
+GPT-5.6-sol, 2026-08-26.
 
 ### Glossary is a third cache, and the reason is not the article
 
@@ -184,7 +192,9 @@ In rough order of how easily it happens here:
    most likely to be repeating work.
 4. **A firing fan-out.** A cache entry cannot be read until the request writing it has begun
    streaming, so four simultaneous batches all pay the write and none gets the read. `labels` starts
-   its queue at concurrency 1 and widens after the first batch returns — see
+   its queue at concurrency 1 and widens after the first batch returns — but **only when its prefix
+   clears the floor**, because the first version serialised unconditionally and so paid a whole
+   batch of latency, every run, for a discount that did not exist at these lengths. See
    [`src/labels.ts`](../../src/labels.ts).
 5. **Editing one stage's article rendering.** There is one renderer for a reason; changing it changes
    what several stages send.

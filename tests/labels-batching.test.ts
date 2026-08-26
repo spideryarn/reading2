@@ -18,22 +18,32 @@
  *
  * Deterministic — no network, no model. docs/project/testing.md.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import PQueue from "p-queue";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  allOrStop,
   assertEveryBlockLabelled,
   BatchIncomplete,
+  batchFingerprint,
   contentWords,
   detectShift,
+  generateLabels,
   mergeLabels,
   parseLabels,
   planBatches,
   batchParts,
   renderBatch,
   renderOutline,
+  serialise,
+  usableCheckpoint,
 } from "../src/labels.js";
 import type { Batch } from "../src/labels.js";
+import { MODEL } from "../src/models.js";
+import { hashBlocks } from "../src/source-hash.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 
 /** The committed fixture, for the checks that need real prose rather than made-up prose. */
@@ -728,5 +738,408 @@ describe("batchParts — the cache boundary", () => {
     // part marks no prefix, which is the safe failure.
     const { shared, own } = batchParts(batches[0]!, blocks, outline);
     expect(shared === "" ? own : shared).toBeTruthy();
+  });
+});
+
+/**
+ * The fingerprint, the checkpoint, and the resume — the three pieces that stop
+ * a transient failure eight batches into a book costing the whole book.
+ *
+ * Every test here is about the wrong-answer direction. A resume that refuses
+ * too often costs money and nothing else; a resume that accepts too readily
+ * publishes labels written for a different article, and the article looks
+ * finished. So most of what follows is checking that things are *refused*.
+ */
+describe("batchFingerprint", () => {
+  it("is stable across calls with the same inputs", () => {
+    const { tree, blocks } = fixture(6, 7);
+    const outline = renderOutline(tree);
+    const [batch] = planBatches(tree, blocks);
+    expect(batchFingerprint(batch!, blocks, outline)).toBe(
+      batchFingerprint(batch!, blocks, outline),
+    );
+  });
+
+  it("changes when the structure moves but the blocks do not — the whole point", () => {
+    // This is the case that block ids cannot see and that resuming by id would
+    // get wrong: same paragraphs, same call, different article around them. A
+    // label written to tell a paragraph apart from one set of neighbours is not
+    // a label for a different set.
+    const { tree, blocks } = fixture(6, 7);
+    const before = batchFingerprint(planBatches(tree, blocks)[0]!, blocks, renderOutline(tree));
+
+    const moved: Tree = {
+      ...tree,
+      nodes: Object.fromEntries(
+        Object.entries(tree.nodes).map(([id, node]) => [
+          id,
+          node.title === "Section 3" ? { ...node, title: "Something else entirely" } : node,
+        ]),
+      ),
+    };
+    const after = batchFingerprint(planBatches(moved, blocks)[0]!, blocks, renderOutline(moved));
+    expect(after).not.toBe(before);
+  });
+
+  it("changes when a gist the prompt shows changes", () => {
+    const { tree, blocks } = fixture(6, 7);
+    const first = planBatches(tree, blocks)[0]!;
+    const outline = renderOutline(tree);
+    const before = batchFingerprint(first, blocks, outline);
+
+    const restated: Tree = {
+      ...tree,
+      nodes: Object.fromEntries(
+        Object.entries(tree.nodes).map(([id, node]) => [
+          id,
+          node.gist ? { ...node, gist: "A different claim about the section." } : node,
+        ]),
+      ),
+    };
+    const after = batchFingerprint(planBatches(restated, blocks)[0]!, blocks, renderOutline(restated));
+    expect(after).not.toBe(before);
+  });
+
+  it("changes when a paragraph's text changes", () => {
+    const { tree, blocks } = fixture(6, 7);
+    const outline = renderOutline(tree);
+    const before = batchFingerprint(planBatches(tree, blocks)[0]!, blocks, outline);
+    const edited = blocks.map((b, i) => (i === 2 ? { ...b, text: "Rewritten entirely." } : b));
+    const after = batchFingerprint(planBatches(tree, edited)[0]!, edited, outline);
+    expect(after).not.toBe(before);
+  });
+
+  it("distinguishes two batches whose prose is identical", () => {
+    // Boilerplate repeats. If two batches could share a fingerprint, a resume
+    // would fill one from the other's labels — a wrong answer, not a gap.
+    const { tree, blocks } = fixture(4, 7);
+    const same = blocks.map((b) => ({ ...b, text: "The same sentence, every time." }));
+    const outline = renderOutline(tree);
+    const batches = planBatches(tree, same, { max: 7 });
+    expect(batches.length).toBeGreaterThan(1);
+    const prints = batches.map((b) => batchFingerprint(b, same, outline));
+    expect(new Set(prints).size).toBe(prints.length);
+  });
+});
+
+describe("usableCheckpoint", () => {
+  const expected = {
+    version: "labels/1",
+    generator: "claude-sonnet-5",
+    slug: "test",
+    sourceHash: "abc123",
+  };
+  const entry = {
+    fingerprint: "ff00",
+    labels: { "spya-000000": "A label" },
+    record: { blocks: ["spya-000000"], setStarts: [0], inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, ms: 1 },
+  };
+  const good = { ...expected, batches: [entry] };
+
+  it("accepts a checkpoint whose manifest matches, keyed by fingerprint", () => {
+    const map = usableCheckpoint(good, expected);
+    expect(map.size).toBe(1);
+    expect(map.get("ff00")?.labels).toEqual({ "spya-000000": "A label" });
+  });
+
+  for (const field of ["version", "generator", "slug", "sourceHash"] as const) {
+    it(`refuses the whole file when ${field} differs`, () => {
+      // All four, one test each, because a check that quietly stopped comparing
+      // one of them would still pass every other test in this file — and what
+      // it would then do is resume a run against a different article.
+      const map = usableCheckpoint({ ...good, [field]: "something else" }, expected);
+      expect(map.size).toBe(0);
+    });
+  }
+
+  it("is worth nothing rather than a guess when handed rubbish", () => {
+    for (const junk of [undefined, null, "a string", 42, [], { batches: "no" }]) {
+      expect(usableCheckpoint(junk, expected).size).toBe(0);
+    }
+  });
+
+  it("drops a malformed entry and keeps the good ones beside it", () => {
+    const map = usableCheckpoint(
+      {
+        ...expected,
+        batches: [
+          entry,
+          { fingerprint: "", labels: {}, record: entry.record },
+          { fingerprint: "aa11", labels: null, record: entry.record },
+          { fingerprint: "bb22", labels: { x: "" }, record: entry.record },
+          { fingerprint: "cc33", labels: { x: 4 }, record: entry.record },
+          { fingerprint: "dd44", labels: { x: "fine" }, record: { blocks: "no" } },
+          "not an object",
+        ],
+      },
+      expected,
+    );
+    expect([...map.keys()]).toEqual(["ff00"]);
+  });
+});
+
+describe("serialise", () => {
+  it("runs overlapping calls one at a time", async () => {
+    // Four batches land at once and each writes the whole checkpoint. Without
+    // this they interleave and the last rename wins, so a file that should hold
+    // four holds one — and nothing is red, because the labels are all correct.
+    const order: string[] = [];
+    let inside = 0;
+    const run = serialise(async () => {
+      inside++;
+      expect(inside).toBe(1);
+      order.push("in");
+      await new Promise((r) => setTimeout(r, 5));
+      order.push("out");
+      inside--;
+    });
+    await Promise.all([run(), run(), run(), run()]);
+    expect(order).toEqual(["in", "out", "in", "out", "in", "out", "in", "out"]);
+  });
+
+  it("keeps going after one call throws", async () => {
+    let n = 0;
+    const run = serialise(async () => {
+      n++;
+      if (n === 1) throw new Error("first one fails");
+    });
+    await expect(run()).rejects.toThrow("first one fails");
+    await expect(run()).resolves.toBeUndefined();
+    expect(n).toBe(2);
+  });
+});
+
+describe("generateLabels, resuming", () => {
+  /**
+   * A checkpoint holding every batch of a plan, written the way a run would.
+   *
+   * The labels are made up; that is fine, because what these tests check is
+   * *which* labels come back and whether anything went to the model, not what a
+   * model would have said.
+   */
+  async function checkpointFor(dir: string, tree: Tree, blocks: Block[]): Promise<Batch[]> {
+    const outline = renderOutline(tree);
+    const batches = planBatches(tree, blocks);
+    const file = {
+      version: "labels/1",
+      generator: MODEL,
+      slug: "test",
+      sourceHash: hashBlocks(blocks),
+      batches: batches.map((batch) => ({
+        fingerprint: batchFingerprint(batch, blocks, outline),
+        labels: Object.fromEntries(batch.blocks.map((b) => [b.id, `Saved label for ${b.id}`])),
+        record: {
+          blocks: batch.blocks.map((b) => b.id),
+          setStarts: batch.setStarts,
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          ms: 10,
+        },
+      })),
+    };
+    await writeFile(path.join(dir, "labels-progress.json"), JSON.stringify(file), "utf8");
+    return batches;
+  }
+
+  let dir = "";
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "labels-resume-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("makes no model call at all when every batch is in the checkpoint", async () => {
+    /* The API key is deliberately removed for this test. If a single batch went
+       to the model the SDK's constructor would throw, and the test would fail
+       for exactly the right reason — which is the only way to prove a resumed
+       batch did not quietly go and ask again. Counting calls would prove the
+       same thing only if the counter were wired to the thing that costs money. */
+    const key = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const { tree, blocks } = fixture(6, 7);
+      const batches = await checkpointFor(dir, tree, blocks);
+
+      const run = await generateLabels({ tree, blocks, slug: "test", dir });
+
+      expect(run.resumed).toBe(batches.length);
+      expect(run.batches).toBe(batches.length);
+      expect(run.inputTokens).toBe(0);
+      expect(run.outputTokens).toBe(0);
+      expect(Object.keys(run.labels).length).toBe(blocks.length);
+      expect(run.labels[blocks[0]!.id]).toBe(`Saved label for ${blocks[0]!.id}`);
+      /* The artefact keeps the per-batch figures of the calls that made these
+         labels, whenever they happened; the run reports what *it* spent. The two
+         disagreeing on a resumed run is the intended behaviour, and pinning it
+         here is what stops someone "fixing" one of them. */
+      expect(run.file.batches?.reduce((n, r) => n + r.inputTokens, 0)).toBe(100 * batches.length);
+    } finally {
+      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
+    }
+  });
+
+  it("records the manifest that lets a stale complete set be spotted", async () => {
+    const key = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const { tree, blocks } = fixture(6, 7);
+      await checkpointFor(dir, tree, blocks);
+      const run = await generateLabels({ tree, blocks, slug: "test", dir });
+
+      expect(run.file.sourceHash).toBe(hashBlocks(blocks));
+      expect(run.file.structureVersion).toBe(tree.version);
+      expect(run.file.outlineHash).toMatch(/^[0-9a-f]{16}$/);
+    } finally {
+      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
+    }
+  });
+
+  it("reuses nothing when the structure has moved under the checkpoint", async () => {
+    // Same blocks, same source hash, different tree. The manifest cannot see
+    // this — the per-batch fingerprints are what catch it, which is why the
+    // resume is not allowed to stop at the manifest.
+    const { tree, blocks } = fixture(6, 7);
+    await checkpointFor(dir, tree, blocks);
+
+    const moved: Tree = {
+      ...tree,
+      nodes: Object.fromEntries(
+        Object.entries(tree.nodes).map(([id, node]) => [
+          id,
+          node.title ? { ...node, title: `${node.title}, revised` } : node,
+        ]),
+      ),
+    };
+    const outline = renderOutline(moved);
+    const reusable = usableCheckpoint(
+      JSON.parse(await readFile(path.join(dir, "labels-progress.json"), "utf8")),
+      { version: "labels/1", generator: MODEL, slug: "test", sourceHash: hashBlocks(blocks) },
+    );
+    expect(reusable.size).toBeGreaterThan(0);
+    for (const batch of planBatches(moved, blocks)) {
+      expect(reusable.has(batchFingerprint(batch, blocks, outline))).toBe(false);
+    }
+  });
+
+  it("clears the checkpoint only when asked, and leaves it there until then", async () => {
+    const key = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const { tree, blocks } = fixture(6, 7);
+      await checkpointFor(dir, tree, blocks);
+      const file = path.join(dir, "labels-progress.json");
+
+      const run = await generateLabels({ tree, blocks, slug: "test", dir });
+      // Still there: the artefacts have not been written yet, and until they
+      // have, this file is the only copy of what the run bought.
+      expect(existsSync(file)).toBe(true);
+      await run.clearCheckpoint();
+      expect(existsSync(file)).toBe(false);
+      // And calling it twice is not an error.
+      await run.clearCheckpoint();
+    } finally {
+      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
+    }
+  });
+
+  it("writes nothing at all when no directory is given", async () => {
+    const key = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const { tree, blocks } = fixture(6, 7);
+      await checkpointFor(dir, tree, blocks);
+      // No `dir`, so the checkpoint sitting right there is not read — the run
+      // would go to the model, and with no key that throws. The point is that
+      // checkpointing is opt-in rather than inferred from a path lying around.
+      // Matched on the message, because a test that only asks "did it throw"
+      // passes just as happily when the throw came from somewhere else — and
+      // what it would then stop checking is whether the model was called.
+      await expect(generateLabels({ tree, blocks, slug: "test" })).rejects.toThrow(
+        /Could not resolve authentication/,
+      );
+    } finally {
+      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
+    }
+  });
+
+  it("says whether the shared prefix was big enough for the cache to take it", async () => {
+    const key = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      // A six-section outline is a few hundred characters. Under the floor, so
+      // the run says so rather than reporting a zero that a broken cache would
+      // report too, and does not serialise the first batch to warm nothing.
+      const { tree, blocks } = fixture(6, 7);
+      await checkpointFor(dir, tree, blocks);
+      const run = await generateLabels({ tree, blocks, slug: "test", dir });
+      expect(run.cacheable).toBe(false);
+    } finally {
+      if (key !== undefined) process.env.ANTHROPIC_API_KEY = key;
+    }
+  });
+});
+
+describe("allOrStop, and the queue behaviour it depends on", () => {
+  it("stops the rest as soon as one fails, and keeps that first error", async () => {
+    let stopped = 0;
+    const err = new Error("the 429 that ended the run");
+    await expect(
+      allOrStop(
+        [Promise.resolve(1), Promise.reject(err), new Promise(() => {})],
+        () => {
+          stopped++;
+        },
+      ),
+    ).rejects.toBe(err);
+    expect(stopped).toBe(1);
+  });
+
+  it("does not call stop when everything succeeds", async () => {
+    let stopped = 0;
+    await expect(allOrStop([Promise.resolve("a"), Promise.resolve("b")], () => { stopped++; }))
+      .resolves.toEqual(["a", "b"]);
+    expect(stopped).toBe(0);
+  });
+
+  it("handles the failures that arrive after the first one", async () => {
+    // If these were not already handled, Node would take the process down with
+    // an unhandled rejection — from the path that is meant to be the tidy one.
+    const rejections: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const later = new Promise((_, reject) => setTimeout(() => reject(new Error("second")), 5));
+      await expect(
+        allOrStop([Promise.reject(new Error("first")), later], () => {}),
+      ).rejects.toThrow("first");
+      await new Promise((r) => setTimeout(r, 20));
+      expect(rejections).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
+  it("p-queue settles a queued task's promise when the signal aborts", async () => {
+    /* Pinning a claim about a dependency, not about our code — and it is the
+       claim the whole fail-fast rests on. `queue.clear()` on its own leaves a
+       cleared task's promise unsettled for ever, so `Promise.all` would wait on
+       a batch that will never run and the process would hang rather than fail.
+       The signal is what makes it settle. If a p-queue upgrade changed this,
+       nothing else here would notice until a run hung in the dark. */
+    const controller = new AbortController();
+    const queue = new PQueue({ concurrency: 1 });
+    const first = queue.add(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      return "ran";
+    });
+    const queued = queue.add(async () => "should never run", { signal: controller.signal });
+    controller.abort();
+    await expect(queued).rejects.toThrow();
+    await expect(first).resolves.toBe("ran");
   });
 });
