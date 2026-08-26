@@ -40,7 +40,8 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `match` | which matcher search mode is using: the letters you typed, or what they mean (default `meaning`) — [search.md](search.md) | push | `?match=words` |
 | `find` | the literal text being matched, in words mode | **replace**, debounced | `?find=wet+hardware` |
 | `run` | which saved meaning-search is showing, absent for the list of them | **replace** | `?run=spya-p7w2dn` |
-| `order` | how the results list is stacked: `document` or `confidence` | push | `?order=confidence` |
+| `order` | how the results list is stacked: `document`, `confidence` or `prioritised` | push | `?order=confidence` |
+| `conf` | the bar `prioritised` hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
 | `len` | which rung of the length ladder summary mode is showing, absent for `gist` — [summaries.md](summaries.md) | push | `?len=long` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
 
@@ -297,3 +298,38 @@ its place.
 A comment id is minted by the same `mintId` as a block id ([block-ids.md](block-ids.md)), so
 `parseAsBlockId` validates it and a mangled `?note=` degrades to "no dialog" rather than to an
 error — the same bargain as `?at=`.
+
+### When `?note=` and `?at=` disagree, the note wins
+
+Two parameters in one URL can both sound like a position. Until 2026-08-26 only one of them moved the
+page: `?at=` restored the section, `?note=` opened the dialog, and nothing connected them. So
+`/read/<slug>?note=<id>` **with no `?at=` beside it** opened an explanation of a paragraph that was
+somewhere off screen, with no way to tell where. That is not an edge case — it is the ordinary shape
+of a link somebody *sends*, because `?at=` is only in the URL if the sender happened to have scrolled.
+It was recorded as open in [metadata-page.md](../plans/metadata-page.md) and is fixed now.
+
+The rule, and the reason for it: **`?at=` is a byproduct and `?note=` is the point.** Position is
+written by scrolling — debounced, replacing rather than pushing, saying where the sender's eye was
+when the address bar last caught up. A `?note=` is only ever in a URL because somebody opened a
+dialog. When the two point at different parts of the article, one of them is what the link is *about*.
+
+Nothing is lost when they agree. If the note's passage sits inside the section `?at=` restored, the
+passage is simply the finer of the two answers — and the code checks whether it is already on screen
+before moving, so that case costs no movement at all. Same check `goToComment` makes for stepping
+between comments, and for the same reason: two comments in one paragraph are the common case, and
+jolting the page between them loses the reader their place for nothing.
+
+Two things about *when*, both worth knowing before you touch it:
+
+- **It waits for the fetch.** A pasted link carries a comment id; the block that comment is anchored
+  to arrives over the wire. So the jump happens when the comments land, not when the URL is read.
+- **It fires once, for the note the page opened with.** After that, moving between comments belongs
+  to `goToComment`. Two things moving the page is two things to keep in agreement.
+
+The rule itself is `arrivalTarget` in [`scroll.ts`](../../src/web/scroll.ts) — pure, and pinned in
+[`tests/scroll.test.ts`](../../tests/scroll.test.ts). The wiring is one effect in
+[`App.tsx`](../../src/web/App.tsx), beside `goToComment`.
+
+We do **not** rewrite `?at=` to match. The scroll moves the page, the position tracker notices, and
+the URL catches up 300ms later exactly as it does for a wheel — which is the same arrangement
+`goToComment` and the arrow keys already rely on. One writer for `?at=`, and it is the page.

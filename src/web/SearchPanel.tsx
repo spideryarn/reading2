@@ -75,7 +75,13 @@ import {
 import { worthRetrying } from "../messages.js";
 import type { BlockId, SearchRun } from "../types.js";
 import type { Found } from "./search-hits.js";
-import { MIN_FIND_CHARS } from "./search-hits.js";
+import {
+  confNote,
+  CONF_STEP,
+  countAbove,
+  MIN_FIND_CHARS,
+  PRIORITY_CONF,
+} from "./search-hits.js";
 import type { HitOrder, Matcher } from "./params.js";
 import { MATCHERS } from "./params.js";
 import { nextModeIndex } from "./Dock.js";
@@ -105,6 +111,17 @@ interface Props {
   found: Found[];
   order: HitOrder;
   onOrder(next: HitOrder): void;
+  /**
+   * The same results *before* the prioritised bar, so the slider has a
+   * denominator and a track that ends where the data does. `found` is what
+   * survives; this is what there was.
+   */
+  all: Found[];
+  /** Where the bar is, resolved — `?conf=` or `PRIORITY_CONF`. */
+  gate: number;
+  /** Whether the reader has actually moved it, so the reset can stay hidden. */
+  gateMoved: boolean;
+  onGate(gate: number | null): void;
   /** The row the reader last pressed, so the list and the prose agree. */
   openKey: string | null;
   onOpen(key: string, blockId: BlockId): void;
@@ -127,8 +144,12 @@ export function SearchPanel({
   onRetry,
   onDelete,
   found,
+  all,
   order,
   onOrder,
+  gate,
+  gateMoved,
+  onGate,
   openKey,
   onOpen,
   error,
@@ -202,8 +223,12 @@ export function SearchPanel({
       )}
       <Results
         found={found}
+        all={all}
         order={order}
         onOrder={onOrder}
+        gate={gate}
+        gateMoved={gateMoved}
+        onGate={onGate}
         openKey={openKey}
         onOpen={onOpen}
         matcher={matcher}
@@ -707,10 +732,186 @@ function AllBox({
  * model failed, or the request never left the building. Telling them apart is
  * the whole of this function's length.
  */
-function Results({
+/**
+ * The count and the three order buttons.
+ *
+ * Extracted from `Results` when the prioritised bar arrived, and not only for
+ * tidiness: the filtered-empty state below renders this too. Without that, a
+ * reader who dragged the bar until nothing cleared it lost the order buttons
+ * along with the rows and could not leave prioritised mode except by finding
+ * the slider again — the controls were only in the branch that had results to
+ * show. GPT Sol's review, 2026-08-26. Keeping one component means the two
+ * branches cannot drift.
+ */
+function SortBar({
   found,
+  all,
+  waiting,
+  matcher,
   order,
   onOrder,
+}: {
+  found: number;
+  all: number;
+  waiting: number;
+  matcher: Matcher;
+  order: HitOrder;
+  onOrder(next: HitOrder): void;
+}) {
+  return (
+    <div className="srch-sort">
+      <span className="srch-count">
+        {/* `3 of 11` while the bar is hiding some of them. A bare `3` beside a
+            threshold slider is the ambiguity this whole feature has to avoid: a
+            filter that hides eight things must never look like a search that
+            found three. */}
+        {found < all ? `${found} of ${all}` : found} passage{all === 1 ? "" : "s"}
+        {/* One search of three has answered and two are still out: the count is
+            real but it is not final, and a list that grows under the reader
+            with no warning reads as a bug. Same honesty rule as the five empty
+            states above — the emptiness, or the partialness, has to say which
+            one it is. */}
+        {waiting > 0 && (
+          <>
+            {" "}
+            <LoaderCircle size={11} className="srch-spin" aria-hidden />{" "}
+            <span className="srch-count-more">{waiting} still searching</span>
+          </>
+        )}
+      </span>
+      {/* Only offered where there is something to order by. In words mode every
+          result has the same (absent) confidence, so a confidence sort would be
+          a control that visibly does nothing — the honest version of which is
+          not to draw it. */}
+      {matcher === "meaning" && (
+        <>
+          <button
+            type="button"
+            className={`srch-sort-btn${order === "document" ? " on" : ""}`}
+            onClick={() => onOrder("document")}
+            title="In the order they appear in the article"
+          >
+            by place
+          </button>
+          <button
+            type="button"
+            className={`srch-sort-btn${order === "confidence" ? " on" : ""}`}
+            onClick={() => onOrder("confidence")}
+            title="Strongest matches first — the model's own judgment about its answers"
+          >
+            by confidence
+          </button>
+          <button
+            type="button"
+            className={`srch-sort-btn${order === "prioritised" ? " on" : ""}`}
+            onClick={() => onOrder("prioritised")}
+            title="In the order they appear in the article, with the weakest matches hidden — and hidden from the article too, not just from this list"
+          >
+            prioritised
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The bar the prioritised order hangs on, and the reader's hand on it.
+ *
+ * Greg, 2026-08-26: *"a 'Prioritised' ordering/filtering ... that orders by
+ * place but thresholds by confidence, and a threshold slider to the UI"*. It is
+ * deliberately the glossary's `GateSlider` in every respect that can be shared
+ * — the same shape, the same reset, the same refusal to be a mystery dial — and
+ * differs only where the two features differ:
+ *
+ * - **the number is on screen**, and here it is already meaningful, because
+ *   0–100 confidence is the number printed on every row it is hiding. That is
+ *   the whole reason `?conf=` is in the same unit rather than a 0–1 fraction;
+ * - **the count is on screen**, `3 of 11`, which is the only feedback a drag
+ *   that happens to move nobody still gives;
+ * - **the track ends where the data does** (`confMax`), so no part of it is
+ *   dead;
+ * - **it says when it has hidden nothing, or everything** (`confNote`) — and
+ *   this matters more here than it did for the glossary, because a glossary's
+ *   gate only ever reorders, while this one takes rows away;
+ * - **it can be put back** without the reader having to remember 50.
+ *
+ * A native `<input type="range">` for the reasons the glossary's is one:
+ * draggable, arrow-key steppable, announced, touch-friendly, and `accent-color`
+ * is the whole of the styling.
+ */
+function ConfSlider({
+  all,
+  gate,
+  moved,
+  onGate,
+}: {
+  all: Found[];
+  gate: number;
+  moved: boolean;
+  onGate(gate: number | null): void;
+}) {
+  const kept = countAbove(all, gate);
+  const note = confNote(all, gate);
+  const count = `${kept} of ${all.length}`;
+
+  return (
+    <div className="srch-gate">
+      <div className="srch-gate-row">
+        <label className="srch-gate-label" htmlFor="srch-gate">
+          confidence
+        </label>
+        <span className="srch-gate-value">
+          {gate} · {count}
+        </span>
+        {/* Only once there is something to undo — the same call the glossary's
+            reset makes. */}
+        {moved && (
+          <button
+            type="button"
+            className="srch-gate-reset"
+            title={`Back to ${PRIORITY_CONF}`}
+            aria-label={`Reset the threshold to ${PRIORITY_CONF}`}
+            onClick={() => onGate(null)}
+          >
+            <RotateCcw size={11} />
+          </button>
+        )}
+      </div>
+      <input
+        id="srch-gate"
+        className="srch-gate-range"
+        type="range"
+        min={0}
+        /* A fixed 0–100, deliberately unlike the glossary's `gateMax`. Ending
+           the track at the data's own top makes sense for a product of two
+           model scores that has no natural ceiling; confidence has one, it is
+           printed on every row, and readers know it. And a moving `max` on a
+           live range input is a real bug rather than a nicety: hits stream in,
+           so the top score can rise under the reader's hand mid-drag and remap
+           the pointer beneath it. GPT Sol, 2026-08-26. */
+        max={100}
+        step={CONF_STEP}
+        value={gate}
+        title="How sure the model has to be for a passage to stay on screen. Left keeps more, right keeps fewer. Hidden passages lose their marks in the article too."
+        /* A thumb position is a number nobody can hear, and the count is what
+           the reader is actually aiming at. */
+        aria-valuetext={`${gate} out of 100, keeping ${count} passages`}
+        onChange={(e) => onGate(Number.parseInt(e.target.value, 10))}
+      />
+      {note && <p className="srch-gate-note">{note}</p>}
+    </div>
+  );
+}
+
+function Results({
+  found,
+  all,
+  order,
+  onOrder,
+  gate,
+  gateMoved,
+  onGate,
   openKey,
   onOpen,
   matcher,
@@ -723,6 +924,17 @@ function Results({
   found: Found[];
   order: HitOrder;
   onOrder(next: HitOrder): void;
+  /**
+   * The same results *before* the prioritised bar, so the slider has a
+   * denominator and a track that ends where the data does. `found` is what
+   * survives; this is what there was.
+   */
+  all: Found[];
+  /** Where the bar is, resolved — `?conf=` or `PRIORITY_CONF`. */
+  gate: number;
+  /** Whether the reader has actually moved it, so the reset can stay hidden. */
+  gateMoved: boolean;
+  onGate(gate: number | null): void;
   openKey: string | null;
   onOpen(key: string, blockId: BlockId): void;
   matcher: Matcher;
@@ -769,7 +981,12 @@ function Results({
      all-pending case; the partial case falls through to the list, which carries
      the spinner in its count line instead. Waiting on an answer you already
      have half of is not waiting. */
-  if (waiting.length > 0 && found.length === 0) {
+  /* `all`, not `found`: this guard is about whether anything has come back,
+     which is what its comment says and what the spinner claims. Written against
+     `found` it also fired when results HAD arrived and the reader's own bar was
+     hiding them — the panel then said "Reading the article for you…" over a
+     finished search and took the slider off the screen. GPT Sol, 2026-08-26. */
+  if (waiting.length > 0 && all.length === 0) {
     return (
       <div className="srch-empty">
         <p className="srch-working">
@@ -817,6 +1034,33 @@ function Results({
     );
   }
 
+  /* An empty list has two completely different causes once there is a
+     threshold, and they want opposite things done about them: the search found
+     nothing, or the reader's own bar hid everything it found. Saying "Nothing
+     matched" for the second is a lie, and worse, it hides the one control that
+     would undo it — the early return below would have taken the slider off the
+     screen along with the results. So this case keeps the slider and says what
+     actually happened. */
+  if (found.length === 0 && all.length > 0) {
+    return (
+      <>
+        {/* The order buttons come too. Without them a reader who dragged the
+            bar until nothing cleared it could not get back out of prioritised
+            order — the way out was the very control the empty state had just
+            removed. */}
+        <SortBar
+          found={0}
+          all={all.length}
+          waiting={waiting.length}
+          matcher={matcher}
+          order={order}
+          onOrder={onOrder}
+        />
+        <ConfSlider all={all} gate={gate} moved={gateMoved} onGate={onGate} />
+      </>
+    );
+  }
+
   if (found.length === 0) {
     return (
       <div className="srch-empty">
@@ -832,49 +1076,20 @@ function Results({
 
   return (
     <>
-      <div className="srch-sort">
-        <span className="srch-count">
-          {found.length} passage{found.length === 1 ? "" : "s"}
-          {/* One search of three has answered and two are still out: the count
-              is real but it is not final, and a list that grows under the
-              reader with no warning reads as a bug. Same honesty rule as the
-              five empty states above — the emptiness, or the partialness, has
-              to say which one it is. */}
-          {waiting.length > 0 && (
-            <>
-              {" "}
-              <LoaderCircle size={11} className="srch-spin" aria-hidden />{" "}
-              <span className="srch-count-more">
-                {waiting.length} still searching
-              </span>
-            </>
-          )}
-        </span>
-        {/* Only offered where there is something to order by. In words mode
-            every result has the same (absent) confidence, so a confidence sort
-            would be a control that visibly does nothing — the honest version of
-            which is not to draw it. */}
-        {matcher === "meaning" && (
-          <>
-            <button
-              type="button"
-              className={`srch-sort-btn${order === "document" ? " on" : ""}`}
-              onClick={() => onOrder("document")}
-              title="In the order they appear in the article"
-            >
-              by place
-            </button>
-            <button
-              type="button"
-              className={`srch-sort-btn${order === "confidence" ? " on" : ""}`}
-              onClick={() => onOrder("confidence")}
-              title="Strongest matches first — the model's own judgment about its answers"
-            >
-              by confidence
-            </button>
-          </>
-        )}
-      </div>
+      <SortBar
+        found={found.length}
+        all={all.length}
+        waiting={waiting.length}
+        matcher={matcher}
+        order={order}
+        onOrder={onOrder}
+      />
+      {/* Only in the order it belongs to, the same call GlossaryPanel.tsx makes
+          about its own gate: a number that means nothing in the other two
+          orders would be furniture. */}
+      {matcher === "meaning" && order === "prioritised" && (
+        <ConfSlider all={all} gate={gate} moved={gateMoved} onGate={onGate} />
+      )}
       <Legend matcher={matcher} coloured={switchedOn.length > 1} />
       <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={400}>
         <ul className="srch-hits">

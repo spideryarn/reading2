@@ -40,6 +40,37 @@ they are stuck, a brand-new tab usually clears it. A whole verification pass tha
 at 900×507 by a session that thought it had asked for 1300 tall, which made its numbers degenerate
 without making them look wrong.
 
+### Click by reference, not by pixel
+
+The `computer` tool's screenshot dimensions are not reliably 1:1 with CSS pixels here, and are not
+stable between calls, so arithmetic on a screenshot to hit a checkbox or a slider thumb lands
+somewhere else often enough to matter. On 2026-08-26 a session mis-clicked a saved-search tick that
+way and silently started a second search, which then showed up as extra results in the run it was
+measuring — a wrong measurement that looked like a finding. Use `find` and click the reference it
+returns, or drive the control from the keyboard: a range input takes Home, End and arrow keys, which
+is also the only way to check that its whole track steps 1:1.
+
+### Counting marks is not counting results
+
+A search result's highlight is drawn as **one `<mark>` per text-node run**, not one per result, so a
+passage crossing an `<em>` or a link is several marks. Counting `<mark>` elements and comparing that
+to the rows in the panel therefore disagrees on perfectly correct pages.
+
+And `data-hit` is a **space-separated list**, not one id — two results overlapping in the same run
+share a mark ([`annotate.ts`](../../src/web/annotate.ts), and the overlapping-marks wall in
+[search.md](search.md)). So it has to be split before it is counted, or a doubled-up mark reads as
+one exotic id and the total comes out low:
+
+```js
+new Set(
+  [...document.querySelectorAll("[data-hit]")].flatMap((m) => m.dataset.hit.split(" ")),
+).size
+```
+
+*That* number is comparable to `.srch-hits li`, and it is what "the panel and the prose agree"
+actually means (search.md § Prioritised). Found while checking the confidence threshold, 2026-08-26
+— and the first version of this snippet, which did not split, is why the caveat is here.
+
 ### Scroll for real, and let a frame render
 
 `window.scrollTo()` followed immediately by a DOM read measures a page mid-flight — before a

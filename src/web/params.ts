@@ -25,6 +25,14 @@
  */
 import { createParser, debounce } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
+import {
+  DEFAULT_SORT,
+  isSortKey,
+  type ShelfFilter,
+  type ShelfView,
+  type SortDir,
+  type SortKey,
+} from "./library-sort.js";
 
 /* Which article is NOT in here. It is the path — `/read/<slug>` — and has been
    since the library landed, 2026-08-25. The rule the two halves divide on:
@@ -567,9 +575,20 @@ export function resolveRuns(runs: string[] | null, run: string | null): string[]
  * in common but the word, and `sort=difficulty` arriving in search mode would
  * be a value with no meaning that something would eventually have to guess at.
  *
+ * `prioritised` is the third, added 2026-08-26 at Greg's request, and it is the
+ * only one of the three that is not purely an ordering:
+ *
+ * > add a "Prioritised" ordering/filtering (kinda like how we do with Glossary)
+ * > that orders by place but thresholds by confidence, and a threshold slider
+ *
+ * So it sorts exactly as `document` does and **hides** what falls under
+ * `?conf=`. The word is spelt as the glossary spells it (`TERM_SORTS` above),
+ * because it is the same idea in the reader's hands and two spellings of one
+ * idea is a thing to have to remember.
+ *
  * `push`: changing the order of a list is a deliberate act on the view.
  */
-const HIT_ORDERS = ["document", "confidence"] as const;
+const HIT_ORDERS = ["document", "confidence", "prioritised"] as const;
 export type HitOrder = (typeof HIT_ORDERS)[number];
 
 export const orderParam = createParser<HitOrder>({
@@ -578,6 +597,40 @@ export const orderParam = createParser<HitOrder>({
 })
   .withDefault("document")
   .withOptions({ history: "push" });
+
+/**
+ * How much confidence a result needs to stay on screen in `?order=prioritised`
+ * — the reader's own hand on the bar, the counterpart of `?gate=` above.
+ *
+ * **0–100 integer, the same unit `SearchHit.confidence` is in everywhere**, and
+ * that is deliberate rather than incidental: docs/project/search.md § the unit
+ * that changed silently is about a confidence that meant 0–1 on one side of a
+ * boundary and 0–100 on the other. A threshold in a different unit from the
+ * numbers printed on the rows it hides would be that bug wearing a slider.
+ *
+ * **No default, deliberately**, exactly as `gateParam` has none: absent has to
+ * keep meaning *nobody has touched this*, and the panel resolves it to
+ * `PRIORITY_CONF`. A default here would put the constant in two files.
+ *
+ * `replace` and debounced, for the same reason `?gate=` is: a range input fires
+ * on every pixel of a drag, and a Back button that walked back through a drag
+ * would be useless. Back should undo the `?order=` push that got you here.
+ */
+export const confParam = createParser<number>({
+  /* Digits only, and that is not pedantry. `Number.parseInt` stops at the first
+     character it does not like, so `?conf=0.5` would parse to **0** — a bar at
+     zero, hiding nothing, with no error anywhere. And `0.5` is exactly the
+     value a person would try, because `?gate=` two parsers above this one IS a
+     0-1 fraction and they sit side by side in the same URL. `Number()` is no
+     better on its own: `Number("")` is 0. So the shape is checked before the
+     range, and anything else is nobody's choice rather than a guess at one. */
+  parse: (v) => {
+    if (!/^\d{1,3}$/.test(v)) return null;
+    const n = Number(v);
+    return n <= 100 ? n : null;
+  },
+  serialize: (v) => String(v),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /* ---------------------------------------------------------- summary mode --
    Two controls, and they are the two axes of the same thing: how much summary
@@ -651,4 +704,96 @@ export const deepParam = createParser<number>({
   serialize: (v) => String(v),
 })
   .withDefault(1)
+  .withOptions({ history: "push" });
+
+/* -------------------------------------------------------- the library --- */
+
+/**
+ * The shelf's own four parameters — `/?q=seth&by=opened&dir=desc&view=table`.
+ *
+ * These live on `/`, and every parameter above lives on `/read/<slug>`. The two
+ * sets never meet: nothing carries a query string across that boundary
+ * (`readHref` mints a bare path, and `carriedSearch` in router.ts only runs
+ * between an article's own views). They are still given names of their own
+ * rather than reusing `sort` and `order` — a URL should be readable without
+ * knowing which page it is for, and a doc table with two rows called `sort`
+ * meaning different things is a doc that has to apologise for itself.
+ *
+ * The rule they are here at all is the one this file exists for: reload the
+ * homepage, or send somebody the link, and you get the same shelf back.
+ * Until 2026-08-26 the search box was `useState` and the order was the server's,
+ * so neither survived a reload.
+ */
+
+/**
+ * What is in the search box.
+ *
+ * `replace` and debounced, the same call as `?find=` and for the same reasons:
+ * written on every keystroke, browsers rate-limit history writes, and a Back
+ * button that walked backwards through a half-typed word would be useless.
+ *
+ * No validation. Any string is a legitimate thing to look for; empty is `null`,
+ * which is "not searching" rather than "searching for nothing".
+ */
+export const libraryQueryParam = createParser<string>({
+  parse: (value) => (value.trim() === "" ? null : value),
+  serialize: (value) => value,
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
+/**
+ * Which key the shelf is ordered by — `by=length`.
+ *
+ * The vocabulary is `SORTS` in library-sort.ts rather than a list repeated
+ * here, so a key cannot exist in the control and not in the URL. An unknown
+ * value returns `null` and the shelf falls back to `added`, which is the order
+ * it has always had — a mangled link degrades to the ordinary homepage.
+ */
+export const libraryByParam = createParser<SortKey>({
+  parse: (v) => (isSortKey(v) ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault(DEFAULT_SORT)
+  .withOptions({ history: "push" });
+
+/**
+ * Which way round — `dir=asc`.
+ *
+ * Absent means "whichever way this key naturally goes" (newest first for a
+ * date, longest first for a length — `SortSpec.natural`), and that is why this
+ * has **no default**: a default of `desc` would be wrong for Title, and baking
+ * each key's natural direction into the parser would put half of `SORTS` in
+ * this file. `null` here means "the reader has not chosen", which the shelf
+ * reads through `sortSpec(by).natural`.
+ */
+export const libraryDirParam = createParser<SortDir>({
+  parse: (v) => (v === "asc" || v === "desc" ? v : null),
+  serialize: (v) => v,
+}).withOptions({ history: "push" });
+
+/**
+ * Cards or the dense table — `view=table`.
+ *
+ * `push`, because switching how the whole shelf is painted is a thing Back
+ * should undo. Absent is cards, which is the shelf as it was.
+ */
+export const libraryViewParam = createParser<ShelfView>({
+  parse: (v) => (v === "cards" || v === "table" ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault("cards")
+  .withOptions({ history: "push" });
+
+/**
+ * Everything, or only what you have never opened — `show=unread`.
+ *
+ * A filter rather than an end of the "last opened" sort, because a missing
+ * value is not a small one — see library-sort.ts, which keeps unopened articles
+ * at the foot of that sort in *both* directions precisely so this chip is the
+ * only way to ask the question.
+ */
+export const libraryShowParam = createParser<ShelfFilter>({
+  parse: (v) => (v === "unread" ? v : v === "all" ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault("all")
   .withOptions({ history: "push" });

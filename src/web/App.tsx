@@ -78,7 +78,7 @@ import {
   threadParam,
 } from "./params.js";
 import { askAboutQuote, handOffToChat, takeHandoff } from "./chat-handoff.js";
-import { isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
+import { arrivalTarget, isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
   activeSectionIndex,
@@ -302,7 +302,7 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
   // `debounce(POSITION_SETTLE_MS)` and cancels nothing. throttle(0) aborts the
   // pending debounce and writes the URL on the spot. Caught by
   // exactOptionalPropertyTypes — see docs/project/typechecking.md.
-  return useCallback(
+  const jumpTo = useCallback(
     (blockId: BlockId) => {
       synced.current = blockId;
       void setAt(blockId, { history: "push", limitUrlUpdates: throttle(0) });
@@ -310,6 +310,11 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
     },
     [setAt],
   );
+
+  // `at` goes out as well as `jumpTo` because it is half of the answer to
+  // "where should this link land" — the other half being `?note=`, which the
+  // caller has and this hook does not. See arrivalTarget in scroll.ts.
+  return { at, jumpTo };
 }
 
 function Reader({ slug, article }: { slug: string; article: Article }) {
@@ -413,7 +418,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
   const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
-  const jumpTo = useReadingPosition(sections, layoutKey);
+  const { at, jumpTo } = useReadingPosition(sections, layoutKey);
 
   /**
    * Comments: selecting prose asks a question of the model, and the answer
@@ -571,6 +576,54 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
     },
     [comments, setNote],
   );
+
+  /**
+   * A `?note=` that arrived in the address bar brings its own passage into view.
+   *
+   * The gap this closes: `goToComment` above scrolls, so stepping between
+   * questions inside the reading view was always fine — but that path needs the
+   * comment in hand, and a pasted link has only an id. `/read/<slug>?note=<id>`
+   * with no `?at=` beside it therefore opened a dialog about a paragraph that
+   * was somewhere off screen, and which one was unguessable. That is exactly the
+   * shape of a link you *send someone*, because `?at=` is only ever there if the
+   * sender had scrolled. Recorded as open in docs/plans/metadata-page.md.
+   *
+   * **It waits for the fetch, and it has to.** `useComments` loads over the wire,
+   * so at the moment the URL is read we know the note's id and not its block.
+   * `arrivalTarget` returns `at` until the comment turns up, which is what the
+   * `?at=` restore has already done, so the guard below makes those renders
+   * free — and then the comment arrives and this fires once.
+   *
+   * **Once**, and that is the ref. After the first honoured arrival, moving
+   * between comments belongs to `goToComment`, which deliberately holds still
+   * when the next passage is already on screen. Re-running this on every change
+   * to `note` would be a second thing moving the page, and the two would
+   * disagree the moment either changed.
+   *
+   * `isBlockOnScreen` rather than an unconditional jump, for the same reason
+   * `goToComment` uses it: when `?note=` and `?at=` agree — the passage sits in
+   * the section the link restored — the reader is already looking at it, and a
+   * jolt would cost them their place to move them nowhere.
+   *
+   * Smooth rather than instant, unlike the `?at=` restore. That one runs before
+   * the reader has seen anything, so animating it would be theatre; this one
+   * lands after the page is up and being looked at, and the travel is what says
+   * the article moved rather than was replaced. It is also the safer of the two
+   * here: `glide` gives way to a wheel or a touch (scroll.ts), so a reader who
+   * started reading during the fetch is not dragged off their line.
+   */
+  const arriving = useRef({ at, note });
+  useEffect(() => {
+    const { at: wasAt, note: wasNote } = arriving.current;
+    if (wasNote === null) return;
+    const target = arrivalTarget(wasAt, wasNote, comments);
+    // `target === wasAt` is the two harmless cases at once: the comments have
+    // not landed, and the note is anchored to the very block the link already
+    // restored. Both mean the `?at=` restore has this covered.
+    if (target === null || target === wasAt) return;
+    arriving.current = { at: wasAt, note: null };
+    if (!isBlockOnScreen(target)) scrollToBlock(target);
+  }, [comments]);
 
   /**
    * Every block this article has, id to its plain text — for chat's citations.
@@ -822,9 +875,11 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
             /* Read at the moment of the click rather than at render, and from
                the URL rather than from state: `?at=` is where the reader is
                *now*, which is what "here" should mean in the conversation. Same
-               trick ChatBand uses. */
-            const at = new URLSearchParams(location.search).get("at");
-            handOffToChat(slug, askAboutQuote(openComment.quote, question), at);
+               trick ChatBand uses. Named apart from the `at` this component
+               holds precisely because they can differ — that difference is the
+               whole reason this line reads the URL. */
+            const atNow = new URLSearchParams(location.search).get("at");
+            handOffToChat(slug, askAboutQuote(openComment.quote, question), atNow);
             void setNote(null);
             void setMode("chat");
           }}
