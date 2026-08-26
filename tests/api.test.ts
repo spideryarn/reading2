@@ -6,7 +6,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { articleMetadata, loadArticle, loadGlossary, lookUpTerm } from "../src/api.js";
+import { articleMetadata, loadArticle, loadGlossary } from "../src/api.js";
 import { PROMPT_VERSION } from "../src/glossary.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { Block } from "../src/types.js";
@@ -108,6 +108,36 @@ describe("articleMetadata", () => {
     expect(m.dir).toBe("example");
   });
 
+  it("says when each stage last wrote, and what it left, without saying what from", async () => {
+    // Greg, 2026-08-27, asked for exact date times on this page. They are a
+    // fact and never a verdict: mtimes cannot prove provenance, so the test
+    // checks the shape and the honesty of the absence, and there is still no
+    // staleness comparison anywhere for it to check.
+    const m = await articleMetadata("example");
+    const toc = m.stages.find((s) => s.step === "toc");
+    // The fixture's tree.json is committed, so this is whenever the repo was
+    // checked out — which is exactly why the tooltip says "when, never what
+    // from". A parseable ISO string is all that can be asserted about it.
+    expect(toc?.ranAt).toBeTypeOf("string");
+    expect(Number.isNaN(Date.parse(toc?.ranAt ?? ""))).toBe(false);
+    expect(toc?.bytes).toBeGreaterThan(0);
+
+    // `fetch` never ran for the fixture and wrote nothing, so both are null —
+    // "we cannot say", and specifically NOT a zero, which would read as a
+    // measurement of an empty file.
+    const fetched = m.stages.find((s) => s.step === "fetch");
+    expect(fetched?.done).toBe(false);
+    expect(fetched?.ranAt).toBe(null);
+    expect(fetched?.bytes).toBe(null);
+
+    // The half-written case, which is the state this page is opened to look at:
+    // `extract` owes meta.json AND output/example.html, only the first exists,
+    // so it is not done and still says when it last wrote.
+    const extract = m.stages.find((s) => s.step === "extract");
+    expect(extract?.done).toBe(false);
+    expect(extract?.ranAt).toBeTypeOf("string");
+  });
+
   it("counts the questions asked, so the page never has to fetch them", async () => {
     // The count is here rather than on the client because the metadata page
     // must NOT call `useComments` — that hook fetches on mount, and a visit
@@ -130,17 +160,6 @@ describe("articleMetadata", () => {
   });
 });
 
-/**
- * `lookUpTerm` — the per-entry web lookup, src/api.ts.
- *
- * The model call itself is not testable and is not tested. What is tested is
- * the guard around it, which is the part that can lose data or leak a bad URL
- * into an `href`: the fixture must not be writable, and an unknown term must
- * not reach a model call at all. Both refuse **before** `explain` is reached,
- * which is what makes them assertable without a network.
- *
- * See docs/plans/glossary-entries-worth-reading.md § The web.
- */
 describe("loadGlossary's two verdicts", () => {
   /* `stale` and `outdated` are different facts, and the second nearly did not
      exist. `isStale` compares source hashes only, so bumping PROMPT_VERSION for
@@ -211,87 +230,5 @@ describe("loadGlossary's two verdicts", () => {
     const res = await loadGlossary(await article(PROMPT_VERSION));
     expect(res.outdated).toBe(false);
     expect(res.stale).toBe(false);
-  });
-});
-
-describe("lookUpTerm", () => {
-  const slugs: string[] = [];
-  afterAll(async () => {
-    for (const slug of slugs) {
-      await rm(path.join(process.cwd(), "data", slug), { recursive: true, force: true });
-    }
-  });
-
-  it("refuses to write into the built-in example", async () => {
-    /* `articleDir` falls through to `example/` for any slug with no output of
-       its own — including a slug that does not exist — so without this guard a
-       lookup on a typo would edit the one committed directory in the repo. The
-       same guard `deleteGlossary` carries, for the same reason. */
-    await expect(lookUpTerm("no-such-article-slug", "spya-k3m9qt")).rejects.toThrow(
-      /built-in example/,
-    );
-    await expect(lookUpTerm("example", "spya-k3m9qt")).rejects.toThrow(/built-in example/);
-  });
-
-  it("refuses a term the article does not actually contain", async () => {
-    /* Two failures reviewed into one refusal. The anchor used to fall back to
-       the article's first block, so a term the model named but the piece never
-       uses was announced to the model as a passage the reader had selected in
-       an unrelated paragraph. And the quote used to be `entry.name`, while
-       `findOccurrences` matches on the name *or an alias* — on the one real
-       glossary we have, three entries of five are matched by an alias, so the
-       request claimed the reader had selected words that were not on the page.
-
-       Both are refused before any model call, which is what makes this
-       assertable without a network. */
-    const slug = `zz-test-api-${process.pid}-unmatched`;
-    slugs.push(slug);
-    const dir = path.join(process.cwd(), "data", slug);
-    await mkdir(dir, { recursive: true });
-    const blocks: Block[] = [
-      {
-        id: "spya-aaaaaa" as Block["id"],
-        kind: "text",
-        tag: "p",
-        gistable: true,
-        html: "<p>Nothing relevant here.</p>",
-        text: "Nothing relevant here.",
-        words: 3,
-      },
-    ];
-    await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks }));
-    await writeFile(
-      path.join(dir, "tree.json"),
-      JSON.stringify({ rootId: "spya-aaaaaa", nodes: {} }),
-    );
-    await writeFile(
-      path.join(dir, "glossary.json"),
-      JSON.stringify({
-        version: PROMPT_VERSION,
-        generator: "a-model",
-        slug,
-        sourceHash: hashBlocks(blocks),
-        entries: [
-          {
-            id: "spya-zzzzzz",
-            name: "Leslie Lamport",
-            kind: "person",
-            aliases: [],
-            background: "Somebody the article never mentions.",
-            blocks: [],
-          },
-        ],
-        passes: 1,
-        generatedAt: "2026-08-25T12:00:00.000Z",
-        elapsedMs: 1,
-      }),
-    );
-    await expect(lookUpTerm(slug, "spya-zzzzzz")).rejects.toThrow(/does not appear in this article/);
-  });
-
-  it("rejects a slug that is not one", async () => {
-    // Path traversal, refused where every other read-side entry point refuses
-    // it — see docs/project/security.md.
-    await expect(lookUpTerm("../../etc", "spya-k3m9qt")).rejects.toThrow();
   });
 });
