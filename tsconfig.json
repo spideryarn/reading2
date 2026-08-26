@@ -15,6 +15,10 @@
   "include": [
     "src",
     "scripts",
+    /* The production API. It runs the same way these do — node ESM, our own
+       `.js`-suffixed relative imports — and it is the only copy of the server
+       that users ever reach, so it is the last file that should go unchecked. */
+    "api",
     /* evals/ runs the same way these do — tsx, node ESM — and reads the same
        artefacts, so it belongs to this project rather than to tests/. It is not
        part of the test suite: an eval calls a model and costs money. See

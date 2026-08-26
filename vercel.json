@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+
+  "regions": ["lhr1"],
+
+  "functions": {
+    "api/**": {
+      "maxDuration": 300,
+      "includeFiles": "certs/**"
+    }
+  },
+
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+}

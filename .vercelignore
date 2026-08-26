@@ -1,0 +1,35 @@
+# What does NOT get uploaded to Vercel.
+#
+# The moment this file exists, .gitignore stops being consulted — so anything
+# that must stay off the build machine has to be named here, including the
+# things .gitignore already covers. That is the trap in this file.
+#
+# Keep `certs/` OUT of this list. certs/supabase-ca.crt is what makes the
+# database connection verify who it is talking to; without it the connection
+# still works and is still encrypted, so its absence is invisible.
+# See docs/project/database.md and certs/README.md.
+
+.git
+node_modules
+
+# Secrets. Production values live in the Vercel project's environment settings,
+# never in a file that gets uploaded.
+.env
+.env.*
+!.env.example
+
+# Built here, not shipped from here.
+dist
+
+# Articles on this laptop. Production reads them out of Postgres.
+data
+output
+
+# Nothing in the build or the running server reads any of these.
+docs
+evals
+tests
+test
+example
+supabase
+scratch-*
