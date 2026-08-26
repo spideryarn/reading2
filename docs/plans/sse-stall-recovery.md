@@ -186,6 +186,26 @@ second watch for the same row supersedes the first instead of running beside it.
 What it cleared: the fire-and-forget `cancel`, the `wasThread`/`wasReply` capture, and the heartbeat
 lifetimes.
 
+## The tidying pass was checked in a browser, and reviewed
+
+A regression pass on 2026-08-26, after the split: chat streamed and completed twice in one thread
+(so the id-following path ran twice), a selection produced a streamed explanation, and a meaning
+search returned twelve passages. No console errors, no stuck spinners, and each POST fired once.
+The only interruptions were 503s from the dev server restarting under other agents' edits, which
+the existing error-and-retry path handled — not this code.
+
+GPT-5.6 reviewed it and said **SHIP** — the first of the three passes over this work that has. It
+confirmed the three things the split could have broken and did not: `text`, the copied `tools`,
+`began` and the two mutable row ids all keep their old lifetimes and ordering; `describeFetchFailure`
+special-cases only `StreamStalled`; and both comment and search routes really do go through
+`sse(res)`, whose 15-second beat covers every legitimate silence on them, since their own model-side
+stall limits are shorter than 60 seconds anyway.
+
+*(It took two attempts to get that verdict. The first died 79k tokens in on `Your workspace is out
+of credits` with no answer file at all — which is the failure
+[codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md) warns about, because a review that
+returned nothing looks exactly like a review that found nothing. Greg topped the key up and it ran.)*
+
 ## What is left, and what the tidying pass closed
 
 Three things were written down as open when this landed. A tidying pass the same day closed two of
@@ -193,6 +213,16 @@ them; the first is still open, and is the only one of the three that is not a sm
 
 - **A stream lost before `begin` still cannot be recovered**, and is reported as a plain failure.
   The message id is one the client invented and no amount of looking on the server will find it.
+
+  **Except for a retry, and that is GPT-5.6's correction to this paragraph.** `retry` passes the
+  server's own message id as the reply id — `run(threadId, { retry: messageId }, messageId)` — so on
+  that one path the row *is* nameable before `begin` and a watch could find it with no schema work
+  at all. `send` and `edit` both mint a fresh id and still need the correlation id below. It is not
+  simply an oversight to fix, though: a retry whose request never reached the server leaves the
+  **previous** answer sitting on disk as `done`, and a watch that adopts a settled row would put
+  that back on screen as though the retry had produced it. So the narrow fix wants a way to tell
+  "the row the server re-opened" from "the row the server never touched", which is a smaller version
+  of the same problem. Written down rather than built.
   Closing it means the client sending a correlation id that the server stores on the assistant row,
   so a watch can ask for the row by a name it chose rather than by one it was given. That is now
   more than a client change: chat rows live in Postgres as well as on disk
@@ -201,7 +231,13 @@ them; the first is still open, and is the only one of the three that is not a sm
   The window is narrow — the POST going out to `beginTurn`'s write returning — and the cost of
   losing it is one orphan row that the server's own sweep turns into a visible failure.
 - **`useComments` and `useSearch` now have the clock too**, added 2026-08-26 in the tidying pass
-  after this landed. One argument each way, and the argument for won: they are shorter waits and
+  after this landed. *(The `useSearch` half — one argument, its test, and a paragraph in
+  [search.md](../project/search.md) — is in the working tree but **not yet in a commit**, and
+  the reason is worth knowing rather than guessing at: that file is mid-flight for the
+  stale-search work recorded in [search-staleness.md](search-staleness.md), whose agent hit a
+  session limit, and it imports `src/search-stale.ts`, which is not in the repo yet. Committing
+  it alone would land a tree that does not build; committing it with their module would sweep
+  up unverified work under somebody else's message. It goes in when that lands.)* One argument each way, and the argument for won: they are shorter waits and
   neither has anywhere to *recover* to, so all a clock buys them is a failure the reader can see
   instead of a spinner that never stops — but that is the whole of the bug this plan is about, and
   a comment that has hung for ever is not improved by having hung for a shorter time. The
