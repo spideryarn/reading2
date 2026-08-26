@@ -166,10 +166,25 @@ function report(dir: string, calls: CallResult[], articleTokens: number): string
   }
   /* The verdict, stated rather than left to be inferred from the table. A
      number nobody interprets is how "0" gets read as "fine". */
-  if (read > 0) {
+  /* `read > 0` was the old bar and it was too low: the system prompt sits ahead
+     of the article in the same prefix, so a hit on that alone would clear it
+     while the article — the whole point — missed entirely. The article is the
+     bulk of the prefix, so a real reuse reads most of it. GPT Sol's review,
+     2026-08-26. */
+  const expected = Math.round(articleTokens * 0.8);
+  if (read >= expected) {
     lines.push(
-      `**PASS.** The second call read ${read.toLocaleString()} tokens from cache. ` +
-        `The article is about ${articleTokens.toLocaleString()}, so the prefix is being reused.`,
+      `**PASS.** The second call read ${read.toLocaleString()} tokens from cache, ` +
+        `against an article of about ${articleTokens.toLocaleString()} — so it is the ` +
+        "article being reused, not just the system prompt in front of it.",
+    );
+  } else if (read > 0) {
+    lines.push(
+      `**PARTIAL — treat as a failure.** The second call read ${read.toLocaleString()} ` +
+        `tokens, but the article alone is about ${articleTokens.toLocaleString()}, so ` +
+        "something ahead of the breakpoint matched and the article did not. That is the " +
+        "shape of a per-call value inside the prefix: check what varies between the two " +
+        "requests, then tests/article-prompt.test.ts for what is meant to be pinned.",
     );
   } else {
     lines.push(

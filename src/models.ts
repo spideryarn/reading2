@@ -68,3 +68,55 @@ export const MODEL = "claude-sonnet-5";
  * `openrouter:web_search` server tool. See docs/project/setup-dev.md § Secrets.
  */
 export const OPENROUTER_MODEL = "anthropic/claude-sonnet-5";
+
+/** The reasoning levels `output_config.effort` accepts. */
+export type Effort = "low" | "medium" | "high";
+
+/** The three stages that read the whole article and could share one cached copy of it. */
+export type ArticleStage = "arc" | "tweets" | "glossary";
+
+/**
+ * **How hard each article-reading stage thinks — and it lives here because it is
+ * part of the cache key, exactly like `MODEL` above.**
+ *
+ * That is not obvious and it cost us. `arc`, `tweets` and `glossary` were made
+ * to emit a byte-identical article so they could share one cached prefix, and
+ * they still could not, because arc and tweets asked for `high` and glossary for
+ * `medium`. Two stages can agree on every byte of a 47,000-token prompt and miss
+ * anyway, over a number that is not in the prompt and says nothing about the
+ * article.
+ *
+ * It was measured rather than argued: four calls, one identical 7,291-token
+ * cached block, only `effort` varying — changing it paid a full write, changing
+ * back read the original, and the two prefixes then coexisted. See
+ * docs/research/prompt-caching-anthropic.md, which also corrects that doc's
+ * earlier claim that generation parameters stay out of the key. `temperature`
+ * and `max_tokens` do; this one does not, and nothing about "it's a generation
+ * parameter" would have told you which.
+ *
+ * **So this table is also the cache grouping**: two stages share a cached
+ * article if and only if they share a value here. src/pipeline.ts reads it that
+ * way rather than keeping a second list that could disagree.
+ *
+ * **The values are not aligned, on purpose.** Aligning them would let all three
+ * share, and it was tested on two articles rather than assumed: arc at `medium`
+ * loses 11 points of vocabulary retention on one of them, and glossary at `high`
+ * gets measurably more formulaic on the other while spending 4,558 more output
+ * tokens. Neither trade is worth making to win a cache, so each stage keeps the
+ * setting its writing wants and glossary is simply a second cache. The numbers
+ * are in evals/results/effort-vs-quality.md.
+ *
+ * **The environment still wins**, like the models above:
+ * `SPIDERYARN_PIPELINE_EFFORT=medium npm run arc -- data/<slug>` overrides all
+ * three at once, which is how that comparison was run.
+ */
+export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
+  arc: "high",
+  tweets: "high",
+  glossary: "medium",
+};
+
+/** One stage's effort, with the whole-run environment override applied. */
+export function effortFor(stage: ArticleStage): Effort {
+  return (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? STAGE_EFFORT[stage];
+}

@@ -26,6 +26,7 @@ import {
   contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
+  sharesArticleCache,
   STEP_ORDER,
   STEPS,
   stepIsDone,
@@ -353,6 +354,14 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
         step.detail = detail;
       },
       signal: controller.signal,
+      /* Only pay to cache the article if something still to come in *this job*
+         can read it. `job.steps` is the whole plan, so the steps after this one
+         are the ones that could — see `sharesArticleCache`, and
+         docs/project/prompt-caching.md for why the answer is usually no. */
+      cacheArticle: sharesArticleCache(
+        step.name,
+        job.steps.slice(job.steps.indexOf(step) + 1).map((s) => s.name),
+      ),
       ...(job.guidance !== undefined && { guidance: job.guidance }),
     };
 

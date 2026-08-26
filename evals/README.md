@@ -157,3 +157,28 @@ They are the record, not a formality — the numbers quoted in
 [toc-scaling.md](../docs/plans/toc-scaling.md) come from these files, and a later change should be
 argued against them rather than against a paragraph of prose.
 [`results/README.md`](results/README.md) says which is which, and which one is no longer obtainable.
+
+## `reorder-quality.ts` — did a prompt change make the writing worse?
+
+Calls no model. It reads the arc, thread and glossary already on disk and measures three things:
+mean sentence length, how often entries open the same way (`template`), and **`vocab`** — how much
+of the wording is the author's rather than the model's, which is the one that matters.
+
+It exists because two prompt changes in a row moved the article to the front of the prompt and
+changed how hard the model thinks about it, and neither is a free edit: models weight recency, and
+effort buys reasoning that may or may not reach the page.
+
+```
+npm run eval:reorder -- data/<slug>              # print the current numbers
+npm run eval:reorder -- data/<slug> --against <copy>   # compare against a kept copy
+```
+
+Committed results: [reorder-quality-before.md](results/reorder-quality-before.md) (the incumbent, to
+compare against) and [effort-vs-quality.md](results/effort-vs-quality.md) (`high` against `medium`
+on two articles, which is what decided that the three stages do **not** align their effort).
+
+Note the shape of a bug it had: it read glossary entries from a field called `gloss` that had been
+renamed, mapped every entry to `""`, filtered them all out and printed *"no artefact on disk —
+skipped"* about a glossary that was sitting right there. An eval that quietly measures nothing reads
+exactly like an eval with nothing to measure. See
+[silent-success.md](../docs/reusable/silent-success.md).

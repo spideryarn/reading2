@@ -30,7 +30,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
-import { MODEL } from "./models.js";
+import { MODEL, effortFor } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
@@ -363,6 +363,22 @@ export async function generateTweets(opts: {
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
+  /**
+   * Mark the article as a cache breakpoint.
+   *
+   * **Off by default, because a cache write costs 1.25x and a prefix nobody
+   * reads never earns it back.** Each of these stages makes one call per run, so
+   * none of them caches anything for itself; the entry only pays off if a stage
+   * in the same group (src/models.ts § STAGE_EFFORT) runs behind it, inside the
+   * 5-minute TTL. Ordinary ingest stops at `arc` — tweets, glossary and summary
+   * are things a reader asks for later — so on the normal path that reader never
+   * arrives, and marking unconditionally was a premium paid on every article
+   * against a read that does not come. src/jobs.ts sets this from the steps the
+   * job actually has left. Raised by GPT Sol's review, 2026-08-26; see
+   * docs/project/prompt-caching.md.
+   */
+  cacheArticle?: boolean;
+
 }): Promise<TweetsRun> {
   /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
      own parse error quotes the first characters of what it was handed. Nothing
@@ -399,7 +415,7 @@ export async function generateTweets(opts: {
     model: MODEL,
     max_tokens: maxTokens,
     thinking: { type: "adaptive" },
-    output_config: { effort: "high" },
+    output_config: { effort: effortFor("tweets") },
     /* Article first, this stage's instructions second — the prefix runs from the
        top of the request, so the article has to precede anything stage-specific
        for the arc, the glossary and this to share one entry.
@@ -408,7 +424,7 @@ export async function generateTweets(opts: {
       {
         type: "text" as const,
         text: articleText(meta, blocks),
-        cache_control: { type: "ephemeral" as const },
+        ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
       },
       { type: "text" as const, text: SYSTEM },
     ],

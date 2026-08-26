@@ -663,6 +663,8 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
     htmlFile: contextPaths(slug).htmlFile,
     report: () => undefined,
     signal: new AbortController().signal,
+    // Nothing is sent to a model here, so there is nothing to cache.
+    cacheArticle: false,
   };
 
   const stages: StageState[] = await Promise.all(

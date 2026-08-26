@@ -27,6 +27,7 @@ import { fetchHtml } from "./fetch.js";
 import { generateGlossary, glossaryIsCurrent } from "./glossary.js";
 import { generateSummaries, summariesAreCurrent } from "./summarise.js";
 import { log } from "./log.js";
+import { type ArticleStage, STAGE_EFFORT } from "./models.js";
 import { generateToc } from "./toc.js";
 import { generateTweets, threadIsCurrent } from "./tweets.js";
 import type { Meta, StepName } from "./types.js";
@@ -102,6 +103,24 @@ export const STEP_ORDER: StepName[] = [
 export const DEFAULT_INGEST_STEPS: StepName[] = ["fetch", "extract", "blocks", "toc", "arc"];
 
 /**
+ * Will any of `later` read the cached article that `step` is about to write?
+ *
+ * Two stages share a cached article when they render it the same way **and**
+ * send the same `output_config.effort`, because effort is part of the cache key
+ * — measured, and the reason glossary is not in the same group as arc and
+ * tweets despite sending identical bytes. See src/models.ts § `STAGE_EFFORT`,
+ * which is the grouping: this reads that table rather than keeping a second
+ * list beside it that could quietly disagree.
+ *
+ * Anything not in the table is not an article-reading stage and shares nothing.
+ */
+export function sharesArticleCache(step: StepName, later: readonly StepName[]): boolean {
+  const group = STAGE_EFFORT[step as ArticleStage];
+  if (group === undefined) return false;
+  return later.some((s) => STAGE_EFFORT[s as ArticleStage] === group);
+}
+
+/**
  * Steps the positional force-cascade must not sweep in — `cascadeForce`, in
  * src/jobs.ts. Forcing an earlier step does **not** force one of these; they
  * have to be named.
@@ -171,6 +190,18 @@ export interface StepContext {
    * `summariesAreCurrent` in src/summarise.ts.
    */
   guidance?: string;
+  /**
+   * Whether this step should pay to cache the article it is about to send.
+   *
+   * True only when a *later step in this same job* renders the same article the
+   * same way and asks the model to think about it at the same effort — which is
+   * what `sharesArticleCache` decides. A cache write costs 1.25x, so marking a
+   * prefix nobody reads is a straight loss, and on the ordinary ingest path
+   * (which stops at `arc`) nobody does read it.
+   *
+   * Steps that do not read the whole article ignore this.
+   */
+  cacheArticle: boolean;
 }
 
 export interface PipelineStep {
@@ -542,6 +573,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         dir: ctx.dir,
         onProgress: ctx.report,
         signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
       });
       plog.info(
         {
@@ -582,6 +614,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         dir: ctx.dir,
         onProgress: ctx.report,
         signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
       });
       const over = run.over > 0 ? `, ${run.over} over ${run.thread.limit}` : "";
       /* `run.thread.generator` is this stage's model id — it is already stored
@@ -627,6 +660,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         dir: ctx.dir,
         onProgress: ctx.report,
         signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
       });
       const total = run.glossary.entries.length;
       plog.info(

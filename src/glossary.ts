@@ -43,10 +43,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
 import { mintUniqueId } from "./ids.js";
-import { MODEL } from "./models.js";
+import { MODEL, effortFor } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { parseJsonFrom } from "./parse-json.js";
+import { articleText } from "./article-prompt.js";
 import type {
   Block,
   BlockId,
@@ -875,17 +877,14 @@ Nothing else may be omitted.`;
  * subcategory of something already on the list.
  */
 function renderPrompt(opts: {
-  meta: Meta | null;
   tree: Tree;
-  blocks: Block[];
   count: number;
   existing: GlossaryEntry[];
 }): string {
-  const { meta, tree, blocks, count, existing } = opts;
+  const { tree, count, existing } = opts;
   const skeleton = partsOf(tree)
     .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
     .join("\n\n");
-  const body = blocks.map((b) => b.text).filter(Boolean).join("\n\n");
 
   const already =
     existing.length === 0
@@ -908,28 +907,38 @@ If there are genuinely no more terms worth an entry, return {"entries": []}.
 That is a real answer and a better one than padding.
 `;
 
+  /* **The article is not in here any more, and that is deliberate.** It moved to
+     a cached `system` block (see `generateGlossary`), so what is left is only
+     the part that changes between passes — the count, and the growing list of
+     terms already found.
+
+     That list used to sit directly *before* the article. Every top-up pass grew
+     it, which moved every byte of the article behind it, so each pass
+     invalidated the one before it. Glossary is the stage that calls repeatedly
+     over one piece, so it was the stage with the most to gain and the ordering
+     that guaranteed it gained nothing. docs/plans/prompt-caching.md. */
   return `Find up to ${count} terms. Fewer is fine — a short piece has few, and a
 list padded to a number is worse than a short list.
 ${already}
-=== THE ARTICLE ===
-
-Title: ${meta?.title ?? tree.slug}${meta?.byline ? `\nWritten by ${meta.byline}.` : ""}${
-    meta?.siteName ? `\nPublished by ${meta.siteName}.` : ""
-  }
-
 === ITS SHAPE ===
 
-${skeleton}
-
-=== ITS FULL TEXT ===
-
-${body}`;
+${skeleton}`;
 }
 
-/** Strip a stray code fence if the model wraps its JSON despite instructions. */
+/**
+ * Strip a stray code fence if the model wraps its JSON despite instructions.
+ *
+ * The parse goes through src/parse-json.ts, and the reason is that **nothing in
+ * this file logs**. A step that throws is logged by src/jobs.ts with
+ * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
+ * quotes the first characters of whatever it was handed. So a plain
+ * `JSON.parse` here writes part of the model's writing about the article into
+ * the log, from a file that never calls the logger at all. An error is a value
+ * that travels, and where it is thrown is not where it is written down.
+ */
 function parseJson(raw: string): { entries?: unknown } {
   const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  return JSON.parse(trimmed);
+  return parseJsonFrom(trimmed, "the glossary response");
 }
 
 export interface GlossaryRun {
@@ -944,6 +953,12 @@ export interface GlossaryRun {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  /* What the cache did on this call. Reported next to the token counts because
+     a cache that has silently stopped hitting is indistinguishable from one that
+     is working — same answer, no error, a bigger bill.
+     docs/reusable/silent-success.md. */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   elapsedMs: number;
 }
 
@@ -967,11 +982,35 @@ export async function generateGlossary(opts: {
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
+  /**
+   * Mark the article as a cache breakpoint.
+   *
+   * **Off by default, because a cache write costs 1.25x and a prefix nobody
+   * reads never earns it back.** Each of these stages makes one call per run, so
+   * none of them caches anything for itself; the entry only pays off if a stage
+   * in the same group (src/models.ts § STAGE_EFFORT) runs behind it, inside the
+   * 5-minute TTL. Ordinary ingest stops at `arc` — tweets, glossary and summary
+   * are things a reader asks for later — so on the normal path that reader never
+   * arrives, and marking unconditionally was a premium paid on every article
+   * against a read that does not come. src/jobs.ts sets this from the steps the
+   * job actually has left. Raised by GPT Sol's review, 2026-08-26; see
+   * docs/project/prompt-caching.md.
+   */
+  cacheArticle?: boolean;
+
 }): Promise<GlossaryRun> {
-  const { blocks } = JSON.parse(
+  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
+     own parse error quotes the first characters of what it was handed. Nothing
+     in this file logs, but a step that throws is logged by src/jobs.ts with
+     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
     await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-  ) as { blocks: Block[] };
-  const tree = JSON.parse(await readFile(path.join(opts.dir, "tree.json"), "utf-8")) as Tree;
+    "blocks.json",
+  );
+  const tree = parseJsonFrom<Tree>(
+    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
+    "tree.json",
+  );
   // Optional, and only ever used to tell the model what it is reading. A
   // missing meta.json is not worth failing the whole stage over.
   const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
@@ -1034,15 +1073,32 @@ export async function generateGlossary(opts: {
       model: MODEL,
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
-      system: SYSTEM,
+      output_config: { effort: effortFor("glossary") },
+      /* Two system blocks, breakpoint on the first. The article goes *before*
+         this stage's instructions because the cache prefix runs from the very
+         top of the request — tools, then system, then messages — so anything
+         ahead of the article that differs between stages breaks the match
+         before it starts.
+
+         **This stage makes one call per invocation, not several.** A top-up is a
+         separate run, so it reads what the previous one wrote only if it lands
+         inside the 5-minute TTL — a question about when somebody clicks, not
+         something the code can promise. The reliable win here is cross-stage:
+         the arc and the thread send these same bytes, and in one ingest the
+         three share an entry. docs/research/prompt-caching-callsites.md. */
+      system: [
+        {
+          type: "text" as const,
+          text: articleText(meta, blocks),
+          ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+        },
+        { type: "text" as const, text: SYSTEM },
+      ],
       messages: [
         {
           role: "user",
           content: renderPrompt({
-            meta,
             tree,
-            blocks,
             count,
             existing: existing?.entries ?? [],
           }),
@@ -1110,6 +1166,8 @@ export async function generateGlossary(opts: {
     model: MODEL,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
+    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
     elapsedMs: Date.now() - started,
   };
 }

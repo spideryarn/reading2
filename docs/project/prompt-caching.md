@@ -82,10 +82,17 @@ has nothing to do with the article — silently puts them in different caches. B
 text was necessary and it was not sufficient, and no amount of reading the two prompts side by side
 would have shown it.
 
-**What has not been decided** is which way to resolve it: raise glossary to `high`, which changes its
-output and its cost for reasons that have nothing to do with glossary quality, or accept two caches
-and stop describing this as three-way sharing. The doc now says two, because that is what the code
-does today.
+**Decided, by measuring it** ([effort-vs-quality.md](../../evals/results/effort-vs-quality.md)):
+the efforts stay as they are, and glossary stays a second cache. Two articles, three stages, both
+values — arc at `medium` loses 11 points of vocabulary retention on one article, and glossary at
+`high` gets markedly more formulaic on the other while spending 4,558 more output tokens. No value
+wins, so aligning would mean paying in writing quality to win a cache. The settings on disk were
+chosen for what each stage writes, and that is the right reason to choose them.
+
+The effort table now lives in [`src/models.ts`](../../src/models.ts) beside `MODEL`, because both
+are part of the cache key, and **that table is the cache grouping** — `sharesArticleCache` in
+[`src/pipeline.ts`](../../src/pipeline.ts) reads it rather than keeping a second list that could
+drift back out of agreement with it.
 
 ### And on the normal path, the pipeline breakpoints lose money
 
@@ -100,9 +107,16 @@ comes. On the constitution it is about **2.4¢ an article** — small, and relia
 
 The paragraph above already called this opportunistic. The correction GPT Sol supplied is that
 misses are not the unlucky case here, they are the *default* case, which is a different thing to
-write in a doc and a different thing to decide about. Two ways out: mark the prefix only when the
-job actually schedules a compatible stage behind it, or drop these breakpoints until the logs show
-reuse worth having. The counts are already logged, so the evidence will arrive on its own.
+write in a doc and a different thing to decide about.
+
+**So the breakpoint is now conditional.** A stage marks the article only when a later step *in the
+same job* is in its cache group — `sharesArticleCache` in [`src/pipeline.ts`](../../src/pipeline.ts),
+set from `job.steps` in [`src/jobs.ts`](../../src/jobs.ts) and carried on `StepContext.cacheArticle`.
+An ordinary ingest therefore marks nothing, a job that asks for arc and tweets together marks the
+arc, and a `npm run glossary` by hand marks nothing, which is correct: there is no second call.
+
+The default is **off**. A cache write costs 1.25× and an unread prefix never earns it back, so the
+question a stage has to answer is not "could this be cached" but "is anyone coming".
 The request path gets three entries rather than one because the three differ *before* the article:
 search sends no tools, chat and explain send `openrouter:web_search`, and all three have their own
 system prompt. Unifying those to chase one shared entry would mean degrading three prompts to suit an

@@ -107,7 +107,16 @@ async function textsOf(dir: string): Promise<{ source: string; parts: Record<str
       thread: (thread?.tweets ?? []).map((t) => t.text).filter(Boolean),
       /* The gloss, not the name — the name is a term lifted from the article and
          would score a perfect retention that means nothing. */
-      glossary: (glossary?.entries ?? []).map((e) => e.gloss ?? "").filter(Boolean),
+      /* `senseHere` and `background`, not `gloss` — the field was renamed when an
+         entry started saying two things (docs/project/glossary.md), and this line
+         went on reading the old name. It did not throw: it mapped every entry to
+         "", `filter(Boolean)` emptied the array, and the eval printed "no artefact
+         on disk — skipped" for a glossary that was sitting right there. An eval
+         that quietly measures nothing is worse than one that crashes.
+         docs/reusable/silent-success.md. */
+      glossary: (glossary?.entries ?? [])
+        .map((e) => [e.senseHere, e.background].filter(Boolean).join(" "))
+        .filter(Boolean),
     },
   };
 }
