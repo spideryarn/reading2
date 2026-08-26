@@ -40,14 +40,14 @@
  * Skips loudly when there is no database — see tests/db-schema.test.ts.
  */
 
-import { rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles } from "../src/db/schema.js";
+import { articleRevisions, articles, blockIdentities, revisionBlocks } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { fsChatStore, fsGlossaryLookupStore, fsSearchStore } from "../src/store/fs.js";
@@ -60,6 +60,8 @@ loadEnvLocal();
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SLUG = "test-reader-state-parity";
 const ARTICLE_ID = "00000000-0000-4000-8000-00000000ab00";
+/** Its one published revision — see the fixture below, which fills both stores. */
+const REVISION_ID = "00000000-0000-4000-8000-00000000ab01";
 const THREAD = "spya-thread";
 
 let reachable = false;
@@ -134,15 +136,78 @@ function clock(): () => string {
 }
 
 when("the filesystem and Postgres stores agree about the reader's state", () => {
+  /**
+   * The two paragraphs both stores are made to agree about.
+   *
+   * Ids from the real alphabet — `abcdefghjkmnpqrstuvwxyz023456789`, no `i`,
+   * `l`, `o` or `1`. An invalid one is not rejected; the store quietly mints its
+   * own, and the test is then about something else.
+   */
+  const BLOCKS = [
+    { id: "spya-parqty", tag: "p", kind: "text", text: "A spandrel is a leftover.", words: 4,
+      html: "<p>A spandrel is a leftover.</p>", gistable: true },
+    { id: "spya-parqtz", tag: "p", kind: "text", text: "A pendentive carries a dome.", words: 5,
+      html: "<p>A pendentive carries a dome.</p>", gistable: true },
+  ] as const;
+
+  /**
+   * **A real article on BOTH sides**, which is the whole point of the fixture.
+   *
+   * It used to be an article that existed in Postgres with no revision, and did
+   * not exist on disk at all — two different situations being compared, which
+   * `sourceHash` was the first field to notice. The filesystem store's
+   * `currentSourceHash` falls through to `example/` for a slug with no
+   * directory, mirroring what `articleDir` actually serves the reader; Postgres
+   * has no fixture fallback and answered `undefined`. Neither store was wrong.
+   * The fixture was.
+   *
+   * The alternative was excluding `sourceHash` from the comparison, which
+   * removes the divergence by removing the check. Giving both stores the same
+   * two paragraphs costs a revision row and a `blocks.json`, and makes every
+   * field that depends on the article's content testable rather than this one
+   * field untestable.
+   */
   beforeEach(async () => {
     const db = getDb();
     await db.delete(articles).where(eq(articles.slug, SLUG));
-    await db
-      .insert(articles)
-      // No `currentRevisionId`, so nothing lists it.
-      .values({ id: ARTICLE_ID, ownerId: currentOwnerId(), slug: SLUG })
-      .onConflictDoNothing();
-    await rm(path.join(ROOT, "data", SLUG), { recursive: true, force: true });
+    await db.insert(articles).values({ id: ARTICLE_ID, ownerId: currentOwnerId(), slug: SLUG });
+    await db.insert(articleRevisions).values({
+      id: REVISION_ID,
+      articleId: ARTICLE_ID,
+      ownerId: currentOwnerId(),
+      status: "published",
+    });
+    /* The ids exist as identities first — `revision_blocks` has a foreign key
+       onto `block_identities`, which is the spine enforcing itself: an id is
+       minted once for an article and every later revision points at the same
+       one. See docs/project/block-ids.md. */
+    await db.insert(blockIdentities).values(
+      BLOCKS.map((b) => ({ articleId: ARTICLE_ID, blockId: b.id })),
+    );
+    await db.insert(revisionBlocks).values(
+      BLOCKS.map((b, ordinal) => ({
+        articleId: ARTICLE_ID,
+        revisionId: REVISION_ID,
+        blockId: b.id,
+        ordinal,
+        tag: b.tag,
+        kind: b.kind,
+        text: b.text,
+        words: b.words,
+        html: b.html,
+        gistable: b.gistable,
+      })),
+    );
+    await db.update(articles).set({ currentRevisionId: REVISION_ID }).where(eq(articles.id, ARTICLE_ID));
+
+    const dir = path.join(ROOT, "data", SLUG);
+    await rm(dir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: BLOCKS }), "utf8");
+    /* `tree.json` too: `hashDir` in src/searches.ts requires it before it will
+       hash a directory, for the same reason `articleDir` does — a half-finished
+       ingest must not be fingerprinted while the reader is shown the fixture. */
+    await writeFile(path.join(dir, "tree.json"), JSON.stringify({ rootId: BLOCKS[0].id, nodes: {} }), "utf8");
   });
 
   afterAll(async () => {
