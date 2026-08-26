@@ -1099,9 +1099,12 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 
 /* The one tooltip the pointer may enter. Every other one on this page must not
    take hover — a spine tooltip that landed under the pointer would keep itself
-   open — but the glossary term's card carries a link out to the term's page and
-   a button into the glossary band, and a link you cannot reach is a picture of
-   a link. TermTooltip.tsx. */
+   open — but the prose hover card carries links out and buttons in, and a link
+   you cannot reach is a picture of a link. ProseHoverCard.tsx.
+
+   The `hover-card` class it is always paired with is not decoration: it is what
+   the delegated `pointerover` listener tests to tell "the pointer moved into
+   the panel" from "the pointer left the words". useHoverCard.ts. */
 .tooltip-anchor.interactive { pointer-events: auto; }
 
 /* Colour is set on the element in Tooltip.tsx, not here — see the note there.
@@ -1262,7 +1265,7 @@ mark.cmt[data-mark-end]::after {
    reversed it — *"Glossary entries should always be underlined in the verbatim
    text column, even outside Glossary mode, and hover should show a rich
    tooltip"* — and the principle moved rather than lost: what arrives on the
-   reader's initiative is now the **card** (TermTooltip.tsx). The line is just a
+   reader's initiative is now the **card** (ProseHoverCard.tsx). The line is just a
    line.
 
    Which is why the line got quieter. A 7% wash behind one pressed term is a
@@ -3688,9 +3691,10 @@ td.text.has-hit[data-hues="8"] {
 }
 .gloss-link a:hover { color: var(--highlight-ink); }
 
-/* -------------------------------------------------- the term hover card --
-   What a reader gets for pointing at an underlined term in the prose —
-   TermTooltip.tsx, one panel for the whole page rather than one per mark.
+/* ------------------------------------------------- the prose hover card --
+   What a reader gets for pointing at something in the prose — an underlined
+   glossary term, one of the article's own hyperlinks, or a phrase that is both.
+   ProseHoverCard.tsx, one panel for the whole page rather than one per target.
 
    It reuses `.tooltip` for the surface, so it is the same object as every other
    hover panel here and inherits the raised ground, the border and the shadow.
@@ -3702,24 +3706,24 @@ td.text.has-hit[data-hues="8"] {
    the reader wants the rest — the scores, the occurrence list, the web check —
    the foot of the card takes them to the band, which is where all of that
    already lives. */
-.tooltip.term-card { max-width: 21rem; }
+.tooltip.prose-card { max-width: 21rem; }
 
 /* Two entries only where two terms overlap the same words. A rule between
    them, because they are separate claims about separate terms and running them
    together would read as one long entry. */
-.term-card-body + .term-card-body {
+.prose-card-body + .prose-card-body {
   margin-top: 0.55rem;
   padding-top: 0.55rem;
   border-top: 1px solid var(--rule);
 }
 
-.term-card-head {
+.prose-card-head {
   display: flex;
   align-items: baseline;
   gap: 0.35rem;
   margin: 0 0 0.35rem;
 }
-.term-card-name {
+.prose-card-name {
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 0.82rem;
@@ -3733,19 +3737,19 @@ td.text.has-hit[data-hues="8"] {
    between "in this piece" and "background" is a claim about where the words
    came from, and a reader who learned it in the band should not have to learn
    it again here. See `.gloss-part-senseHere`. */
-.term-card-part { margin-bottom: 0.4rem; }
-.term-card-part:last-child { margin-bottom: 0; }
-.term-card-part-senseHere { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
-.term-card-part-background { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part { margin-bottom: 0.4rem; }
+.prose-card-part:last-child { margin-bottom: 0; }
+.prose-card-part-senseHere { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part-background { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
 /* Checked on a day, by a search, which is a different kind of thing from either
    of the two above — so a ground rather than a rule, exactly as `.gloss-look`
    does it in the band. */
-.term-card-part-looked {
+.prose-card-part-looked {
   padding: 0.35rem 0.45rem;
   border-radius: 4px;
   background: var(--panel);
 }
-.term-card-label {
+.prose-card-label {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -3757,8 +3761,8 @@ td.text.has-hit[data-hues="8"] {
   letter-spacing: 0.04em;
   text-transform: lowercase;
 }
-.term-card-label svg { flex: none; }
-.term-card-text {
+.prose-card-label svg { flex: none; }
+.prose-card-text {
   margin: 0;
   color: var(--ink-soft);
   font-family: var(--font-ui);
@@ -3766,9 +3770,72 @@ td.text.has-hit[data-hues="8"] {
   line-height: 1.45;
 }
 
+/* The link half of the card. Three shapes for the three honest answers — an
+   anchor into this article, a link out, and something we could not parse — and
+   they are visibly different so a reader learns to tell them apart at a glance.
+   See ProseHoverCard.tsx § LinkCard, and link-preview.ts for why these facts. */
+
+/* A rule when a term card is sitting on top of it. The two halves are separate
+   claims about the same phrase — what the author means by it, and where they
+   are sending you — and running them together would read as one entry. */
+.prose-card-body.divided {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* The destination, big enough to be the answer. The host IS the answer for most
+   links, so it gets the weight the term's name gets in the half above. */
+.prose-card-host {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0 0 0.2rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* `PDF` — a chip rather than a word in the sentence, because it answers a
+   different question from the host ("what will I get" rather than "where"). */
+.prose-card-file {
+  flex: none;
+  padding: 0.05rem 0.28rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  color: var(--ink-faint);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+/* What the path says, when it says anything. Faint: it is a hint read off an
+   address, not a title anybody wrote. */
+.prose-card-trail {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+/* An href we could not describe — shown whole, because the only honest thing
+   left to do is let the reader look at it themselves. */
+.prose-card-url {
+  color: var(--ink-faint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+/* The one destination we can actually SHOW, because it is on this page. The
+   author's own words, quoted — hence the rule down the side, which is the same
+   mark the glossary's "in this piece" section uses for the same reason. */
+.prose-card-quote {
+  border-left: 2px solid var(--rule-strong);
+  padding-left: 0.5rem;
+  font-style: italic;
+}
+
 /* The two ways out: the term's own page, and the entry in the band. Both are
    why this tooltip takes pointer events at all — see `.tooltip-anchor.interactive`. */
-.term-card-foot {
+.prose-card-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3779,8 +3846,8 @@ td.text.has-hit[data-hues="8"] {
   font-family: var(--font-ui);
   font-size: 0.68rem;
 }
-.term-card-link,
-.term-card-open {
+.prose-card-link,
+.prose-card-open {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -3788,20 +3855,20 @@ td.text.has-hit[data-hues="8"] {
   font-family: inherit;
   font-size: inherit;
 }
-.term-card-link:hover,
-.term-card-open:hover { color: var(--highlight-ink); }
-.term-card-link svg,
-.term-card-open svg { flex: none; }
+.prose-card-link:hover,
+.prose-card-open:hover { color: var(--highlight-ink); }
+.prose-card-link svg,
+.prose-card-open svg { flex: none; }
 /* Pushed right whether or not there is a link to its left, so the button does
    not jump about between one term and the next. */
-.term-card-open {
+.prose-card-open {
   margin-left: auto;
   padding: 0;
   border: none;
   background: none;
   cursor: pointer;
 }
-.term-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+.prose-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
 /* Where the piece uses it. The ids are `BlockRef`s, so they are real links —
    right-click gives you a URL to the paragraph, and left-click jumps. */

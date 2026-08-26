@@ -33,7 +33,7 @@ import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
-import { TermTooltip } from "./TermTooltip.js";
+import { ProseHoverCard } from "./ProseHoverCard.js";
 import { useGlossary, useGlossaryTerms } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
@@ -823,6 +823,11 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * because a citation chip shows the paragraph it points at on hover, and
    * building a separate Set of ids beside this would be a second copy of the
    * same fact.
+   *
+   * Since 2026-08-27 the hover card on the article's *own* links reads it too,
+   * for the same reason and with the same words: an in-article `#fragment` is
+   * the one link whose destination we can actually show, because it is on this
+   * page. ProseHoverCard.tsx.
    */
   const blockText = useMemo(
     () => new Map(article.blocks.map((b) => [b.id, b.text])),
@@ -1151,14 +1156,21 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           }}
         />
       )}
-      {/* The card that appears when the pointer rests on an underlined term.
-          One panel for the whole page rather than one per mark — the marks are
-          injected HTML and there are hundreds of them. TermTooltip.tsx.
+      {/* The card that appears when the pointer rests on an underlined term or
+          on one of the article's own hyperlinks. One panel for the whole page
+          rather than one per target — they are injected HTML and there are
+          hundreds of them. ProseHoverCard.tsx.
 
-          Outside the mode band below on purpose: the underlines are drawn in
-          every mode now, so the thing that explains them has to be there in
-          every mode too. */}
-      <TermTooltip entries={terms} onOpen={openTermInGlossary} />
+          Outside the mode band below on purpose: the underlines and the links
+          are in the prose in every mode, so the thing that explains them has to
+          be there in every mode too. */}
+      <ProseHoverCard
+        entries={terms}
+        sourceUrl={article.meta.url ?? null}
+        blockText={blockText}
+        onOpenTerm={openTermInGlossary}
+        onJump={jumpTo}
+      />
 
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —

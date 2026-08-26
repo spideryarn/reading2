@@ -59,9 +59,11 @@ export function isWebUrl(value: string): boolean {
  * `""` lets the caller say "that page" and move on. Throwing was the third
  * option and it is the one this module exists to avoid — see `isWebUrl`.
  *
- * Three copies of this live in the client (ChatPanel, CommentDialog,
- * GlossaryPanel). ChatPanel's now points here; the other two should follow when
- * somebody is next in those files.
+ * Three copies of this used to live in the client (ChatPanel, CommentDialog,
+ * GlossaryPanel). ChatPanel and GlossaryPanel now point here — the latter on
+ * 2026-08-27, when the glossary's hover card became a second caller of its
+ * private copy. CommentDialog is the last one, and should follow when somebody
+ * is next in that file.
  */
 export function hostOf(url: string): string {
   try {

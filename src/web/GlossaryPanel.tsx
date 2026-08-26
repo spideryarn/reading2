@@ -78,7 +78,14 @@ import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { Tooltip } from "./Tooltip.js";
-import { isWebUrl } from "../urls.js";
+/* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
+   in this file, CommentDialog and ChatPanel should converge on it "when somebody
+   is next in those files" — the hover card (ProseHoverCard.tsx) made this the
+   second caller of the private copy, which is the moment to stop copying it.
+   The behaviours differ on an unparseable URL: the shared one answers "" so the
+   caller can say "that page", where this copy answered with the whole URL.
+   Unreachable here — `safeUrl` parsed it server-side before it was stored. */
+import { hostOf, isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
@@ -1450,16 +1457,4 @@ function Progress(props: {
   );
 }
 
-/**
- * `en.wikipedia.org`, so a link says where it goes without spending a line on it.
- *
- * Exported for the hover card (TermTooltip.tsx), which shows the same link for
- * the same entry and must shorten it the same way.
- */
-export function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
+

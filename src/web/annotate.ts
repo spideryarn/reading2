@@ -49,7 +49,7 @@ import type { Block, BlockId } from "../types.js";
  * every term in the list is drawn, in every mode, since 2026-08-26 — and inert
  * to the *click*, because pressing it should do what pressing the prose has
  * always done. Hovering one is not inert: it opens the term's card
- * (TermTooltip.tsx), which is the affordance that replaced the underline
+ * (ProseHoverCard.tsx), which is the affordance that replaced the underline
  * appearing and disappearing. `hit` is a search result: transient in
  * the same way, inert in the same way, and the only kind whose *intensity*
  * carries information — see `strength`.
@@ -475,7 +475,7 @@ export interface TermSelection {
  * — *"Glossary entries should always be underlined in the verbatim text column,
  * even outside Glossary mode"* — so the underline is now a standing property of
  * the article, and the thing that arrives on the reader's initiative is the
- * hover card (TermTooltip.tsx) rather than the line itself. Two consequences
+ * hover card (ProseHoverCard.tsx) rather than the line itself. Two consequences
  * worth knowing: the mark had to get quieter (a wash behind every term in the
  * piece is a wash behind half the article — styles.css § mark.term), and the
  * emphasis it used to carry moved onto `open`.

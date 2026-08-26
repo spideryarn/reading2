@@ -72,7 +72,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 |---|---|
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
-| [`src/web/TermTooltip.tsx`](../../src/web/TermTooltip.tsx) | the other one — see below |
+| [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
 | [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
 `Tooltip` is deliberately generic — nothing in it knows about the spine. The obvious second customer
@@ -81,7 +81,7 @@ its column.
 
 ### The second implementation, and why there is one
 
-`TermTooltip.tsx` (2026-08-26) does not use `Tooltip`, and the reason is not that it wanted something
+`ProseHoverCard.tsx` (2026-08-26) does not use `Tooltip`, and the reason is not that it wanted something
 different — it is that `Tooltip`'s whole interface is *wrap a React element*. Its triggers are the
 `<mark>`s in the verbatim column, which are **injected HTML**: the prose goes in through
 `dangerouslySetInnerHTML` because [`annotate.ts`](../../src/web/annotate.ts) cuts the text nodes and

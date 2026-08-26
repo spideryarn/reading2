@@ -295,7 +295,7 @@ opened. Four things follow, and three of them are the interesting part:
 
 Point at an underlined term and its entry appears — name, what the author means by it, what you need
 to bring to it, the web answer if somebody has already asked for one, and a way into the band.
-[`TermTooltip.tsx`](../../src/web/TermTooltip.tsx).
+[`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx).
 
 **It is not [`Tooltip.tsx`](../../src/web/Tooltip.tsx)**, and the reason is the same one that shapes
 `annotateHtml`: the marks are injected HTML, not React elements, so there is nothing to clone a ref
