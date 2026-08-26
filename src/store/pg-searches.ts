@@ -53,10 +53,11 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, searchRuns } from "../db/schema.js";
+import { articles, revisionBlocks, searchRuns } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_RUNS, withRun } from "../searches.js";
+import { hashBlocks } from "../source-hash.js";
 import type { SearchHit, SearchRun } from "../types.js";
 import type { SearchStore, SweepOptions } from "./contracts.js";
 import { notFound, requireSlug } from "./pg.js";
@@ -108,7 +109,40 @@ function toRun(row: typeof searchRuns.$inferSelect): SearchRun {
     hits: row.hits as SearchHit[],
     ...(row.model === null ? {} : { model: row.model }),
     ...(row.error === null ? {} : { error: row.error }),
+    ...(row.sourceHash === null ? {} : { sourceHash: row.sourceHash }),
   };
+}
+
+/**
+ * The fingerprint of the article as this store has it — the Postgres half of
+ * `currentSourceHash` in src/searches.ts.
+ *
+ * **The same `hashBlocks`, not a second one that agrees today.** That is the
+ * whole reason src/source-hash.ts is its own module: two fingerprints of one
+ * article can only ever disagree, and the day they do, a run stored through one
+ * store reports itself current against the other's idea of current. The
+ * function's parameter was widened to the two fields it reads so this query
+ * could feed it directly.
+ *
+ * `order by ordinal`, for the reason src/store/pg.ts § `blocksFor` gives at
+ * length: block ids carry no position, so without the clause the rows come back
+ * in whatever order the planner likes — which in development is usually
+ * insertion order, so a hash computed here would match the file's in every test
+ * and drift in production. A hash over reordered rows is a different hash, so
+ * this would present every saved search as out of date and nothing would say
+ * why.
+ *
+ * `undefined` for an article with no blocks, which `isStale` treats as stale —
+ * the same answer the filesystem gives for a `blocks.json` it cannot read.
+ */
+async function sourceHashFor(articleId: string, db: Db | Tx = getDb()): Promise<string | undefined> {
+  const rows = await db
+    .select({ id: revisionBlocks.blockId, text: revisionBlocks.text })
+    .from(revisionBlocks)
+    .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
+    .where(eq(articles.id, articleId))
+    .orderBy(asc(revisionBlocks.ordinal));
+  return rows.length ? hashBlocks(rows) : undefined;
 }
 
 /**
@@ -140,6 +174,10 @@ export const pgSearchStore: SearchStore = {
     return runsFor(await articleIdFor(slug));
   },
 
+  async sourceHash(slug: string): Promise<string | undefined> {
+    return sourceHashFor(await articleIdFor(slug));
+  },
+
   async begin(
     slug: string,
     criterion: string,
@@ -153,8 +191,15 @@ export const pgSearchStore: SearchStore = {
 
     const run = await db.transaction(async (tx) => {
       await lockArticle(tx, articleId);
+      /* Inside the lock, so the fingerprint and the row are written against one
+         state of the article. Outside it, a re-extraction committing between
+         the two reads would stamp a run with a hash of blocks the model was
+         never shown — which reads as *current* and is the one verdict this
+         column exists to get right. The filesystem half cannot take a lock and
+         says so where it reads (src/searches.ts § beginRun). */
+      const sourceHash = await sourceHashFor(articleId, tx);
       const existing = await runsFor(articleId, tx);
-      const { run: decided, kind } = withRun(existing, criterion, wantedId, at);
+      const { run: decided, kind } = withRun(existing, criterion, wantedId, at, sourceHash);
 
       if (kind === "reset") {
         /* **The predicate is repeated in the UPDATE on purpose.**
@@ -175,6 +220,12 @@ export const pgSearchStore: SearchStore = {
             hits: [],
             model: null,
             error: null,
+            /* `?? null`, not a conditional spread: this is an UPDATE, and
+               leaving the key out would keep the *failed* attempt's hash on a
+               row that is about to be answered afresh — the same reason `hits`,
+               `model` and `error` are cleared rather than left. `withRun`
+               rebuilds the run for exactly this. */
+            sourceHash: decided.sourceHash ?? null,
             attemptId: attempt,
             attemptStartedAt: DB_NOW,
           })
@@ -207,6 +258,7 @@ export const pgSearchStore: SearchStore = {
           criterion,
           status: "pending",
           hits: [],
+          sourceHash: decided.sourceHash ?? null,
           createdAt: new Date(decided.createdAt),
           attemptId: attempt,
           attemptStartedAt: DB_NOW,

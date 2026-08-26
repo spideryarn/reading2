@@ -46,7 +46,13 @@ const NONE: ReadonlySet<string> = new Set();
  * here into tests of something else: the tie-break test compared two minted
  * ids and passed for no reason. Asserted rather than remembered.
  */
-const FIXTURE_IDS = ["spya-runaa2", "spya-runbb2", "spya-aaa002", "spya-zzz002"] as const;
+const FIXTURE_IDS = [
+  "spya-runaa2",
+  "spya-runbb2",
+  "spya-runcc2",
+  "spya-aaa002",
+  "spya-zzz002",
+] as const;
 
 let reachable = false;
 
@@ -335,6 +341,57 @@ when("the Postgres searches store", () => {
     await pgSearchStore.begin(SLUG, "first", "spya-aaa002", fixed);
     const order = (await pgSearchStore.load(SLUG)).map((r) => r.id);
     expect(order).toEqual(["spya-aaa002", "spya-zzz002"]);
+  });
+
+  /**
+   * The article a saved run was answered against, through the Postgres half.
+   *
+   * `search_runs.source_hash` is what lets the panel say a search is out of
+   * date. A column the store forgets to write, or forgets to read back, fails
+   * in the quietest possible way: `isStale` counts a missing hash as stale, so
+   * the banner appears on every saved search for ever and nothing anywhere
+   * reports an error. See docs/project/search.md § A saved search says which
+   * article it answered.
+   *
+   * This fixture article deliberately has **no revision** (see the header), so
+   * the store has no blocks to fingerprint. That makes it the right place to
+   * pin the `undefined` end of the contract; the two stores agreeing on a real
+   * article's hash is tests/store-parity.test.ts, which has real articles in
+   * both.
+   */
+  describe("the article a run was answered against", () => {
+    it("has no fingerprint to offer for an article with no blocks", async () => {
+      // Not an empty string and not a throw: "we cannot tell" is a value, and
+      // `isStale` reads it as stale.
+      expect(await pgSearchStore.sourceHash(SLUG)).toBeUndefined();
+    });
+
+    it("leaves the key off a run it could not fingerprint", async () => {
+      // Absent, not null. Postgres answers `null` where the file simply had no
+      // key, and `exactOptionalPropertyTypes` makes those different types — the
+      // same trap `model` and `error` are checked for above.
+      const { run } = await pgSearchStore.begin(SLUG, "no blocks to hash");
+      expect("sourceHash" in run).toBe(false);
+    });
+
+    it("reads a stored fingerprint back off the row", async () => {
+      /* Written straight into the table rather than through `begin`, because
+         this fixture has no blocks for `begin` to hash — what is under test is
+         `toRun`, which is the half that would silently drop the column while
+         every write test stayed green. */
+      const hash = "0123456789abcdef";
+      await getDb().insert(searchRuns).values({
+        articleId: ARTICLE_ID,
+        id: "spya-runcc2",
+        ownerId: currentOwnerId(),
+        criterion: "imported from a file",
+        status: "done",
+        hits: [],
+        sourceHash: hash,
+      });
+      const [stored] = await pgSearchStore.load(SLUG);
+      expect(stored?.sourceHash).toBe(hash);
+    });
   });
 
   it("404s for an article that is not there, and 400s for a non-slug", async () => {

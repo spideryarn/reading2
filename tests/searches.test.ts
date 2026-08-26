@@ -10,11 +10,22 @@
  * Same shape as tests/comments.test.ts, because src/searches.ts is the same
  * shape as src/comments.ts.
  */
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { beginRun, deleteRun, finishRun, loadRuns, MAX_RUNS, update } from "../src/searches.js";
-import type { SearchHit } from "../src/types.js";
+import {
+  beginRun,
+  currentSourceHash,
+  deleteRun,
+  finishRun,
+  isStale,
+  loadRuns,
+  MAX_RUNS,
+  readSearches,
+  update,
+} from "../src/searches.js";
+import type { Block, SearchHit, SearchRun } from "../src/types.js";
+import { hashBlocks } from "../src/source-hash.js";
 import { kindOfMessage, providerHttpFailure, worthRetrying } from "../src/messages.js";
 
 const SLUG = "test-searches-fixture";
@@ -249,5 +260,198 @@ describe("a failure survives being written down and read back", () => {
     await finishRun(SLUG, run.id, { status: "error", error: providerHttpFailure(429).message });
     const [stored] = await loadRuns(SLUG);
     expect(worthRetrying(stored?.error)).toBe(true);
+  });
+});
+
+/**
+ * A saved search is an answer about the article **as it was**.
+ *
+ * Re-extract the piece and the hits point into a text that has moved: blocks
+ * the model cited may be gone, and the ones that remain may say something else.
+ * Nothing about that has a symptom — the panel lists the same passages, the
+ * marks land wherever the quotes still match, and the reader has no way to know
+ * they are looking at an answer to an older version of the question.
+ *
+ * So the run records the fingerprint of the blocks it was answered against,
+ * exactly as a tweet thread, a glossary and a set of summaries already do
+ * (src/source-hash.ts). Same hash, same word for it, one definition of
+ * "current" for the whole article.
+ */
+describe("a saved search knows which article it answered", () => {
+  const ONE: Block[] = [
+    {
+      id: "spya-k3m9qt",
+      tag: "p",
+      kind: "text",
+      text: "He rejects the idea that mind is software running on wet hardware.",
+      words: 12,
+      html: "<p>He rejects the idea that mind is software running on wet hardware.</p>",
+      gistable: true,
+    },
+  ];
+  /** The same article after a re-extraction that changed the words. */
+  const TWO: Block[] = [{ ...ONE[0]!, text: "A thermostat has no interior.", words: 5 }];
+
+  /** A run from before runs recorded what they were answered against. */
+  const OLD_RUN: SearchRun = {
+    id: "spya-k3m9qt",
+    criterion: "saved last week",
+    createdAt: "2026-08-20T00:00:00.000Z",
+    status: "done",
+    hits: [HIT],
+  };
+
+  /**
+   * A real article directory, which means **both** files.
+   *
+   * `articleDir` in src/api.ts will not serve a directory that has only one of
+   * them, and `currentSourceHash` mirrors that rule — so a fixture writing
+   * `blocks.json` alone would be hashing a directory the reader is not being
+   * shown. Writing both is what makes this test about the same article the app
+   * would put on screen.
+   */
+  const writeBlocks = async (blocks: Block[]) => {
+    await mkdir(DIR, { recursive: true });
+    await writeFile(path.join(DIR, "blocks.json"), JSON.stringify({ blocks }), "utf8");
+    await writeFile(
+      path.join(DIR, "tree.json"),
+      JSON.stringify({ version: "1", generator: "t", slug: SLUG, rootId: "n0", nodes: {} }),
+      "utf8",
+    );
+  };
+
+  it("records the fingerprint of the article it was answered against", async () => {
+    await writeBlocks(ONE);
+    const run = await beginRun(SLUG, "arguments against the main claim");
+    expect(run.sourceHash).toBe(hashBlocks(ONE));
+  });
+
+  /**
+   * The bug, stated as the lie it tells: the article moves underneath a saved
+   * run and the run goes on presenting itself as an answer about this article.
+   */
+  it("stops claiming to be current once the article moves underneath it", async () => {
+    await writeBlocks(ONE);
+    const run = await beginRun(SLUG, "arguments against the main claim");
+    await finishRun(SLUG, run.id, { status: "done", hits: [HIT], model: "m" });
+
+    // The article is re-extracted. Nothing tells the saved run.
+    await writeBlocks(TWO);
+
+    const [stored] = await loadRuns(SLUG);
+    expect(stored!.sourceHash).toBe(hashBlocks(ONE));
+    expect(stored!.sourceHash).not.toBe(hashBlocks(TWO));
+    expect(isStale(stored!, await currentSourceHash(SLUG))).toBe(true);
+  });
+
+  it("is not out of date while the article has not moved", async () => {
+    // The other half, and the one that stops "say it is stale" being the fix.
+    // A banner on every saved search is the same amount of information as no
+    // banner at all.
+    await writeBlocks(ONE);
+    const run = await beginRun(SLUG, "arguments against the main claim");
+    expect(isStale(run, await currentSourceHash(SLUG))).toBe(false);
+  });
+
+  it("counts a run written before we recorded this as out of date", async () => {
+    // The honest answer for every search saved before 2026-08-26: we do not
+    // know, and "cannot tell" has to fall on the side that says so.
+    await writeBlocks(ONE);
+    expect(isStale({ ...OLD_RUN }, await currentSourceHash(SLUG))).toBe(true);
+  });
+
+  it("counts an article nobody could fingerprint as out of date too", () => {
+    // The same rule, the other way round — src/api.ts § loadGlossary reaches
+    // for it in the same words: "Unknown counts as stale: the honest answer,
+    // and the safe way round to be wrong."
+    expect(isStale({ sourceHash: "0123456789abcdef" }, undefined)).toBe(true);
+  });
+
+  /**
+   * The fixture fallback, which is the one case a naive implementation gets
+   * silently wrong.
+   *
+   * `loadArticle` serves `example/` for a slug with no directory of its own
+   * (src/api.ts § `articleDir`), so a search on such a slug is answered against
+   * the fixture's blocks. Hashing `data/<slug>/blocks.json` and finding nothing
+   * would make every saved search on that article read as out of date for ever,
+   * with the article on screen perfectly unchanged.
+   */
+  it("fingerprints the fixture when that is the article being served", async () => {
+    const example = JSON.parse(
+      await readFile(path.resolve(import.meta.dirname, "..", "example", "blocks.json"), "utf8"),
+    ) as { blocks: Block[] };
+
+    // No directory of its own, so this slug is served from example/.
+    const hash = await currentSourceHash("test-searches-no-such-article");
+    expect(hash).toBe(hashBlocks(example.blocks));
+  });
+
+  it("ignores a directory that is not a whole article", async () => {
+    /* Half an ingest: blocks written, tree not. `articleDir` refuses this and
+       shows the fixture instead, so hashing it here would fingerprint one
+       article while the reader looks at another. */
+    await mkdir(DIR, { recursive: true });
+    await writeFile(path.join(DIR, "blocks.json"), JSON.stringify({ blocks: ONE }), "utf8");
+
+    expect(await currentSourceHash(SLUG)).not.toBe(hashBlocks(ONE));
+  });
+
+  it("re-answers a retried run against today's article, not the failed attempt's", async () => {
+    // A retry is a fresh model call over whatever the piece says now. Carrying
+    // the failed attempt's hash forward would date the new answer to a version
+    // of the article it never saw — and it would read as current.
+    await writeBlocks(ONE);
+    const first = await beginRun(SLUG, "evidence", "spya-k3m9qt");
+    await finishRun(SLUG, first.id, { status: "error", error: "the model timed out" });
+
+    await writeBlocks(TWO);
+    const again = await beginRun(SLUG, "evidence", "spya-k3m9qt");
+
+    expect(again.id).toBe(first.id); // the retry branch, not a fresh mint
+    expect(again.sourceHash).toBe(hashBlocks(TWO));
+    expect(isStale(again, await currentSourceHash(SLUG))).toBe(false);
+  });
+
+  it("hands the panel the runs and the fingerprint to judge them by, in one read", async () => {
+    await writeBlocks(ONE);
+    await beginRun(SLUG, "arguments against the main claim");
+    const { runs, sourceHash } = await readSearches(SLUG);
+    expect(sourceHash).toBe(hashBlocks(ONE));
+    expect(runs.map((r) => isStale(r, sourceHash))).toEqual([false]);
+  });
+
+  /**
+   * The whole article, not only the blocks the run cited.
+   *
+   * The tempting economy is to fingerprint just the cited paragraphs, so an
+   * edit elsewhere leaves the run alone. It is wrong: the model was shown every
+   * block and chose these, so a section added afterwards makes the answer
+   * incomplete in a way no hash over the old hits could notice. The run would
+   * report itself current while the passage the reader wants sits in text
+   * nothing has searched.
+   */
+  it("is out of date when a section it never cited is added", async () => {
+    await writeBlocks(ONE);
+    const run = await beginRun(SLUG, "arguments against the main claim");
+    await finishRun(SLUG, run.id, { status: "done", hits: [HIT], model: "m" });
+
+    await writeBlocks([
+      ...ONE,
+      {
+        id: "spya-r7wx24",
+        tag: "p",
+        kind: "text",
+        text: "A section that arrived in the re-extraction, quoted by nobody.",
+        words: 10,
+        html: "<p>A section that arrived in the re-extraction, quoted by nobody.</p>",
+        gistable: true,
+      },
+    ]);
+
+    // The cited block is untouched, and the run is still out of date.
+    const [stored] = await loadRuns(SLUG);
+    expect(stored!.hits[0]!.blockId).toBe(ONE[0]!.id);
+    expect(isStale(stored!, await currentSourceHash(SLUG))).toBe(true);
   });
 });

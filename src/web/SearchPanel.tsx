@@ -74,6 +74,7 @@ import {
 } from "lucide-react";
 import { worthRetrying } from "../messages.js";
 import type { BlockId, SearchRun } from "../types.js";
+import type { SavedSearch } from "./useSearch.js";
 import type { Found } from "./search-hits.js";
 import {
   confNote,
@@ -93,8 +94,11 @@ interface Props {
   /** The literal query, in words mode. Live-bound to `?find=`. */
   find: string | null;
   onFind(next: string | null): void;
-  /** Every saved meaning-search for this article. */
-  runs: SearchRun[];
+  /**
+   * Every saved meaning-search for this article, each carrying whether the
+   * article has moved since it was answered — `SavedSearch` in useSearch.ts.
+   */
+  runs: SavedSearch[];
   /** False until the fetch has answered — see `SearchApi.loaded`. */
   loaded: boolean;
   /** Which of them are switched on — `?runs=`. Possibly none, which is the default. */
@@ -221,6 +225,14 @@ export function SearchPanel({
           onDelete={onDelete}
         />
       )}
+      {/* Above the results and below the ticks, because it is about the marks
+          in the article as much as about the list: a stale run's passages are
+          drawn wherever their quotes still match, and where the words have
+          moved they land on the wrong ones or on nothing at all. Only for
+          searches that are actually switched on — a warning about a run whose
+          box is unticked is a warning about nothing on screen. */}
+      <StaleNote runs={matcher === "meaning" ? runs : []} active={active} />
+
       <Results
         found={found}
         all={all}
@@ -533,7 +545,7 @@ function Saved({
   onRetry,
   onDelete,
 }: {
-  runs: SearchRun[];
+  runs: SavedSearch[];
   loaded: boolean;
   active: string[];
   slots: Map<string, number>;
@@ -617,7 +629,28 @@ function Saved({
                         <AlertTriangle size={11} /> failed
                       </>
                     ) : (
-                      `${run.hits.length} passage${run.hits.length === 1 ? "" : "s"}`
+                      <>
+                        {run.hits.length} passage{run.hits.length === 1 ? "" : "s"}
+                        {/* Said on the row, not only in a banner, because with
+                            several searches on there is no longer one run for a
+                            shared area to be about — the same reason the retry
+                            moved down here. The words are the tweet thread
+                            page's, deliberately: this is the same fact about
+                            the same article and it should not need a second
+                            vocabulary (docs/plans/tweet-thread-page.md). */}
+                        {run.stale && (
+                          <span
+                            className="srch-saved-stale"
+                            title={
+                              "This search describes an older version of the article. The text was " +
+                              "re-fetched or re-extracted afterwards, so its passages may have moved " +
+                              "— or gone. ↺ puts the question back in the box so you can ask it again."
+                            }
+                          >
+                            <AlertTriangle size={11} /> older version
+                          </span>
+                        )}
+                      </>
                     )}
                   </span>
                 </span>
@@ -669,6 +702,52 @@ function Saved({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * The article moved and these searches did not.
+ *
+ * The same fact the tweet thread page and the glossary panel already state, in
+ * the same words — *"describes an older version of the article"* — because it
+ * is the same fact about the same article and a second vocabulary for it would
+ * make a reader learn twice (docs/plans/tweet-thread-page.md,
+ * src/web/GlossaryPanel.tsx).
+ *
+ * **What it deliberately does not offer is a button.** Every other stale banner
+ * in this app offers to rewrite the artefact, because there is exactly one of
+ * them and rewriting it is what the reader wants. A saved search is not an
+ * artefact of the article: it is the reader's own question, several of them can
+ * be stale at once, and "run them all again" would spend a model call per row
+ * on questions the reader may no longer be asking. So the offer is the ↺ that
+ * is already on every row — it puts the question back in the box, and pressing
+ * **find** is the second click. That is the same two-clicks-not-one rule
+ * `Rewrite` on the thread page settled on, arrived at from the other direction.
+ *
+ * Counted rather than named. With eight ticked and three stale, listing three
+ * criteria here would be a paragraph; the ⚠ on each row says which.
+ */
+function StaleNote({ runs, active }: { runs: SavedSearch[]; active: string[] }) {
+  /* `done` only. A pending run has no passages to be wrong about yet, and a
+     failed one has none at all — flagging either would put a warning on a row
+     that is already saying something truer about itself. */
+  const stale = runs.filter((r) => active.includes(r.id) && r.status === "done" && r.stale);
+  if (stale.length === 0) return null;
+
+  return (
+    <div className="srch-stale">
+      <p>
+        <AlertTriangle size={13} />
+        {stale.length === 1
+          ? "This search describes an older version of the article."
+          : `${stale.length} of these searches describe an older version of the article.`}
+      </p>
+      <p className="srch-stale-hint">
+        The text was re-fetched or re-extracted after {stale.length === 1 ? "it was" : "they were"}{" "}
+        answered, so the marks may sit on words that have moved — or be missing where the words have
+        gone. ↺ on a row puts its question back in the box.
+      </p>
     </div>
   );
 }
