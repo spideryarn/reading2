@@ -7,7 +7,7 @@
 | `@supabase/supabase-js@^2.112.4` | **installed** |
 | The Google credentials, under Supabase's own variable names in `.env.local` | **done** |
 | `[auth.external.google]` in `supabase/config.toml`, and a stack restart | **done** — `/auth/v1/settings` now reports `google: true` |
-| The redirect URI registered with Google | **not done, and blocking.** Measured: Google answers `redirect_uri_mismatch`. See [step 0](#step-0-what-greg-has-to-click-10-minutes-and-nobody-else-can-do-it). |
+| `http://127.0.0.1:54361/auth/v1/callback` registered on the Google OAuth client | **done** — it was rejected with `redirect_uri_mismatch` an hour earlier; the check now returns 0. Still to do on the remote project: [step 0](#step-0-what-greg-has-to-click-10-minutes-and-nobody-else-can-do-it). |
 | Everything in the app — client, gate, screen, tests | **not started** |
 | **A cross-family review** | **could not run.** See [§ The review that did not happen](#the-review-that-did-not-happen). |
 
@@ -196,9 +196,11 @@ U=$(curl -s -o /dev/null -w "%{redirect_url}" "http://127.0.0.1:54361/auth/v1/au
 curl -s "$U" | grep -c redirect_uri_mismatch     # 0 = Google accepts it. 1 = not registered yet.
 ```
 
-Run on 2026-08-26 this printed **1**: Google rejects the local callback today, so this step is
-genuinely blocking and not a formality. Google can take a few minutes to propagate a new URI, so
-re-run it a couple of times before concluding anything.
+Run on 2026-08-26 before the URI was added this printed **1**, and after it printed **0** — so the
+check discriminates, which is the only property that makes it worth having. It is genuinely
+blocking rather than a formality: without it, nothing downstream can work and the failure arrives
+as a Google error page rather than as anything our code could report. Google can take a few minutes
+to propagate a new URI, so re-run a couple of times before concluding anything.
 
 **In the Supabase dashboard** for `alschkahzfagtppxspfq` → Authentication → Sign In / Providers →
 Google: enable it, paste the same client id and secret. (The dashboard shows you its callback URL —
@@ -287,6 +289,30 @@ curl -sI "http://127.0.0.1:54361/auth/v1/authorize?provider=google" | grep -i ^l
 That second command is the whole point of this step. It is the only way to learn what GoTrue will
 send Google without going through a browser, and getting it wrong is the single most likely way this
 whole plan stalls.
+
+### Test the whole Google round trip before writing any app code
+
+Worth doing in this order, because it separates "Google and Supabase are talking" from "our React
+is right", and those two failures look identical from a login screen that does nothing.
+
+Count the users first, so there is a before-picture:
+
+```bash
+curl -s "$SUPABASE_URL/auth/v1/admin/users" -H "apikey: $SECRET" -H "Authorization: Bearer $SECRET" \
+  | python3 -c 'import sys,json;print([(u["email"],u["app_metadata"].get("provider")) for u in json.load(sys.stdin)["users"]])'
+```
+
+On 2026-08-26 that was two users, both `email` — `dev@spideryarn.local` and a probe account. Then
+open this in a browser and sign in as normal:
+
+```
+http://127.0.0.1:54361/auth/v1/authorize?provider=google&redirect_to=http://localhost:5273
+```
+
+Run the count again. **A third user, with provider `google`, is the proof.** No client library, no
+sign-in screen, no `apiFetch` — if this works, everything left is React, and if it does not, no
+amount of React was ever going to help. `http://localhost:5273` is already in
+`additional_redirect_urls`, so the round trip lands somewhere real.
 
 ---
 
