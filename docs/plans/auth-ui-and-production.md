@@ -162,6 +162,28 @@ byte-identical to a copy taken before. A gate test that has never been seen to f
 twenty-odd characters that make it an actual key. Checking the hit rather than trusting it is the
 whole reason to write these down.
 
+**The local Google round trip is still unverified, and the reason is worth writing down** — it is
+[Sol's finding #2](#the-cross-family-review-and-what-it-changed) happening exactly as predicted.
+The `/**` entries were added to `supabase/config.toml`, but **GoTrue reads that file when its
+container starts**, and the container has been up since before the edit:
+
+```
+$ docker inspect supabase_auth_spideryarn2 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep URI_ALLOW
+GOTRUE_URI_ALLOW_LIST=http://localhost:5273,http://127.0.0.1:5273
+```
+
+Two exact roots, no `/**`. So a Google sign-in today succeeds *at Supabase* and then returns the
+reader to the bare site URL instead of to `/auth/callback` — the callback page never runs, and the
+reader's saved place is never restored. Which is not a red error anywhere; it looks like landing on
+the shelf.
+
+That is visible in the local user table: `greg@gregdetre.com` has a `last_sign_in_at` from this
+evening, from a sign-in that went through Google fine and came back to the wrong address.
+
+**`npx supabase stop && npx supabase start` applies it.** Not done here, because several agents
+share this stack and a restart would interrupt whatever they are mid-request on. Worth one line to
+whoever restarts next.
+
 **What is deliberately not done here:** email in production (needs SMTP), `owner_id` scoping (needs
 [Greg's decision](#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is)), and everything
 in part 4 that requires a dashboard.

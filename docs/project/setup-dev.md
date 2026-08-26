@@ -52,12 +52,27 @@ must only ever hold the *publishable* key. `tests/no-secrets-in-bundle.test.ts` 
 decodes JWT payloads rather than searching for the word `service_role` — a legacy service-role key
 does not contain it in the clear.
 
-Two things that will waste your afternoon otherwise. Vite reads `.env.local` itself for `VITE_`
-variables, and it reads it **at startup**, so a new one needs `npm run dev` restarting. And the
-local redirect allow-list in [`supabase/config.toml`](../../supabase/config.toml) names
-`http://localhost:5273` and `http://127.0.0.1:5273` with `/**` — **if another agent already has
-5273 and Vite picks 5275, Google sign-in will be refused** for a reason that has nothing to do with
-your code.
+Three things that will waste your afternoon otherwise.
+
+**Vite reads `.env.local` at startup**, so a new `VITE_` variable needs `npm run dev` restarting.
+
+**The redirect allow-list is baked into the running container, not read from the file.**
+[`supabase/config.toml`](../../supabase/config.toml) names `http://localhost:5273` and
+`http://127.0.0.1:5273` with `/**`, and GoTrue only picks that up when it starts. Check what is
+actually live rather than what the file says:
+
+```bash
+docker inspect supabase_auth_spideryarn2 \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' | grep URI_ALLOW_LIST
+```
+
+If `/**` is missing there, `npx supabase stop && npx supabase start`. Until you do, a Google
+sign-in **succeeds** and then returns you to the bare site URL instead of `/auth/callback` — so
+the callback never runs and you lose your place, with nothing anywhere saying why.
+
+**And the port has to be 5273.** Several agents run `npm run dev` in this one tree; if 5273 is
+taken, Vite quietly picks 5274 or 5275, which is not on the allow-list, and Google sign-in fails
+for a reason that has nothing to do with your code.
 
 It is needed by the two LLM calls that happen in a request handler rather than in the pipeline:
 the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
