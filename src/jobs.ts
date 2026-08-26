@@ -35,7 +35,10 @@ import {
 } from "./pipeline.js";
 import type { Job, JobStep, StepName } from "./types.js";
 
-export type { Job, JobStatus, JobStep, StepName, StepStatus } from "./types.js";
+/* `JobStatus` and `StepStatus` were on this line too and nothing imported them
+   from either module — they are only ever used structurally, inside types.ts,
+   as the type of `Job.status` and `JobStep.status`. */
+export type { Job, JobStep, StepName } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 

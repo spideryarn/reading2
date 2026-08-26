@@ -60,7 +60,7 @@ export const DEV_OWNER_ID = "00000000-0000-4000-8000-000000000001" as OwnerId;
 export const DEV_OWNER_EMAIL = process.env.SPIDERYARN_OWNER_EMAIL ?? "dev@spideryarn.local";
 
 /** Narrow a string to an `OwnerId`, checking it is uuid-shaped. */
-export function asOwnerId(value: string): OwnerId {
+function asOwnerId(value: string): OwnerId {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error(`not a uuid: ${value}`);
   }

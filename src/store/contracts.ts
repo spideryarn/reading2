@@ -21,8 +21,13 @@
  * 2. `ArtifactWriter` — what the pipeline stages write. Today that is
  *    `PipelineStep.outputs(ctx): string[]`, an interface that returns **file
  *    paths**, implemented across eight stage modules. There is no single file.
- * 3. `CommentStore`, `ChatStore`, `SearchStore`, `JobStore` — reader and queue
- *    state, each with its own module and its own in-memory assumptions.
+ * 3. `CommentStore` and `JobStore` — reader and queue state, each with its own
+ *    module and its own in-memory assumptions. Chat and searches belong to this
+ *    group and have **no interface here yet**: they still write straight to the
+ *    filesystem, which is why `postgres` mode currently serves them from files.
+ *    That is item 10 of docs/plans/postgres-storage-implementation.md, not an
+ *    oversight — but this list said `ChatStore` and `SearchStore` were declared
+ *    here when they were not, which is worse than saying nothing.
  *
  * ## What is deliberately NOT in here
  *

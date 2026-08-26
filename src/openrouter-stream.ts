@@ -262,7 +262,7 @@ export interface Usage {
   cache_write_tokens?: number;
 }
 
-export interface Annotation {
+interface Annotation {
   type: string;
   url_citation?: { url?: string; title?: string };
 }

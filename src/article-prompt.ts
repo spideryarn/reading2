@@ -53,7 +53,7 @@ import type { Block, Meta } from "./types.js";
  * right place. Converse uses the automatic top-level form instead — see
  * docs/research/prompt-caching-openrouter.md.
  */
-export interface TextPart {
+interface TextPart {
   type: "text";
   text: string;
   cache_control?: { type: "ephemeral" };

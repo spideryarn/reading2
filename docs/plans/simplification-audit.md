@@ -403,7 +403,7 @@ Postgres migration is visibly in flight, and Sol notes deleting it would throw a
 `ChatStore`/`SearchStore` are a storage-correctness task belonging to that migration, not to this
 plan. Tier 1.7 only fixes the misleading comment. **No decision needed — recorded as closed.**
 
-### A.3 One definition of a slug, or two? — mostly an engineering check
+### A.3 One definition of a slug, or two?
 Both reviewers reclassified this. Fable checked the disk: every slug under `data/` already satisfies
 the strict rule, and slugs are *minted* through `isSlug` (`jobs.ts:679`), so a nonconforming one
 could only be historical. **Plan:** do 1.2 with the loose rule, then query the remote `articles`

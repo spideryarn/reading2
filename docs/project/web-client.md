@@ -34,7 +34,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/BlockRef.tsx`](../../src/web/BlockRef.tsx) | one block id, drawn small and faint and linked to itself — [block-ids.md § Showing an id](block-ids.md#showing-an-id) |
 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the CSS entry point.** Four guards, the token bridge, and the `@import` that puts `styles.css` in a layer — [§ Tailwind and shadcn](#tailwind-and-shadcn-components) |
 | [`src/web/styles.css`](../../src/web/styles.css) + [`styles/tokens.css`](../../styles/tokens.css) | reading typography and brand tokens, lifted from [the original version](original-version/overview.md). Both now load *inside* `@layer app`, via `tailwind.css` — the map of all four stylesheets is [design-css-overview.md](design-css-overview.md) |
-| [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle`, `collapsible` |
+| [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
 | [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
 | [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | ask the model about a selected passage — [comments.md](comments.md) |
@@ -79,6 +79,14 @@ So two things are permanent — **where you are** (the spine) and **what you are
 prose) — and the band between them is the working surface. `?mode=` says which mode owns it,
 absent meaning the granularity columns; `fitView` reserves the band's width; and four CSS rules add
 a `--mode-w` term that is `0px` in the default mode.
+
+"Permanent" means *no mode takes it away*, which is the claim Greg's framing is making, and it is
+still true. It is not a promise the reader cannot put the rail away themselves: the `Spine` pill in
+the controls bar does exactly that, in every mode, and it is the one granularity-bar control that
+stays on screen in one ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
+[url-state.md](url-state.md) for `?spine=`). The prose is the half with no off switch: `?text=0` hides it
+in the table-of-contents mode and nowhere else, which is what `proseVisible` in
+[`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice.
 
 Chat is the first mode that is not the table of contents
 ([chat-mode.md](../plans/chat-mode.md)). Adding a second — the Glossary in Greg's example — is a

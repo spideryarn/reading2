@@ -49,7 +49,7 @@ export async function* readEvents(body: ReadableStream<Uint8Array>): AsyncGenera
   }
 }
 
-export function parseFrame(frame: string): ServerEvent | null {
+function parseFrame(frame: string): ServerEvent | null {
   let name = "message";
   const data: string[] = [];
   for (const line of frame.split("\n")) {

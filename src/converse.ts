@@ -670,8 +670,15 @@ export async function* converse({
    src/openrouter-stream.ts when explain.ts became a stream too and needed all
    of them. Nothing about them changed.
 
-   `readerAborted` and `stoppedByReader` are re-exported rather than left to be
-   imported from the new module, because tests/converse-stop.test.ts imports
-   them from here and, more to the point, they are *about* chat's stop button —
-   this is where a reader looking for them will come. */
-export { readerAborted, stoppedByReader } from "./openrouter-stream.js";
+   `stoppedByReader` is re-exported rather than left to be imported from the new
+   module, because tests/converse-stop.test.ts imports it from here and, more to
+   the point, it is *about* chat's stop button — this is where a reader looking
+   for it will come.
+
+   `readerAborted` was re-exported beside it on the same reasoning and nothing
+   ever took it: converse.ts and explain.ts both import it straight from
+   openrouter-stream.js, and the test named above imports only `stoppedByReader`.
+   Dropped 2026-08-26 — the discoverability argument is real, but it was being
+   made on behalf of a reader who never arrived, and a re-export nobody uses is
+   one more name to keep true. */
+export { stoppedByReader } from "./openrouter-stream.js";

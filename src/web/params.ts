@@ -43,7 +43,7 @@ import { isSpideryarnId } from "../ids.js";
  * the reader to settle also means the URL records where they *landed*, not
  * every section they flew over on the way.
  */
-export const POSITION_SETTLE_MS = 300;
+const POSITION_SETTLE_MS = 300;
 
 /**
  * A block id, validated on the way in.
@@ -181,7 +181,7 @@ export const noteParam = parseAsBlockId.withOptions({ history: "replace" });
  * instead of to an error. Same rule as `parseAsBlockId`. Note that `about=`
  * therefore degrades safely too, for any link main.tsx did not catch.
  */
-export const PANELS = ["questions"] as const;
+const PANELS = ["questions"] as const;
 export type Panel = (typeof PANELS)[number];
 
 export const panelParam = createParser<Panel>({
@@ -388,7 +388,7 @@ export const matchParam = createParser<Matcher>({
   serialize: (v) => v,
 }).withOptions({ history: "push" });
 
-export const DEFAULT_MATCHER: Matcher = "meaning";
+const DEFAULT_MATCHER: Matcher = "meaning";
 
 /**
  * Which matcher a URL is asking for, when it may not say.
@@ -473,7 +473,7 @@ export const runParam = parseAsBlockId.withOptions({ history: "replace" });
  *
  * `push`: changing the order of a list is a deliberate act on the view.
  */
-export const HIT_ORDERS = ["document", "confidence"] as const;
+const HIT_ORDERS = ["document", "confidence"] as const;
 export type HitOrder = (typeof HIT_ORDERS)[number];
 
 export const orderParam = createParser<HitOrder>({

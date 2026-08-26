@@ -101,7 +101,7 @@ export function CitedText({ text, blocks, onJump, live = false, className }: Pro
  * results and kept two lengths for it —
  * docs/project/original-version/search-and-chat.md.
  */
-export function CitedBlock({ id, text }: { id: BlockId; text: string }) {
+function CitedBlock({ id, text }: { id: BlockId; text: string }) {
   const shown = snippet(text);
   return (
     <>

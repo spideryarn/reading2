@@ -215,9 +215,9 @@
    scoped to `[data-slot]`, which shadcn stamps on every element it generates,
    so nothing else on the page is touched.
 
-   Reading the generated sources, the gap is small: button, toggle and
-   collapsible all set their own radius, background, font-size, font-weight and
-   outline in the cva base string. What they assume and do not state is
+   Reading the generated sources, the gap is small: button and toggle both set
+   their own radius, background, font-size, font-weight and outline in the cva
+   base string. What they assume and do not state is
    `button { background-color: transparent }` — without it a UA gives buttons a
    grey face that the `ghost` and `outline` variants never override, so they
    arrive with a background they are specifically supposed to lack — and the

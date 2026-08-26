@@ -2,10 +2,12 @@
  * Shared types for the artefacts on disk, used by both the API loader and the
  * React client. See docs/project/architecture.md#storage.
  *
- * `Block` mirrors the interface exported by src/blocks.ts (pipeline stage 3).
- * It is duplicated rather than imported because blocks.ts pulls in jsdom, which
- * must not reach the browser bundle. If stage 3 changes its shape, change this
- * too.
+ * `Block` is declared **here and only here**, and src/blocks.ts (pipeline
+ * stage 3) imports it. It used to be duplicated, on the reasoning that blocks.ts
+ * pulls in jsdom and jsdom must not reach the browser bundle — true of a value
+ * import, but an `import type` is erased, so the duplication bought nothing and
+ * cost the one guarantee that matters: that the file writing blocks.json and
+ * the thirty-five files reading it agree about its shape.
  *
  * `TreeNode` must stay in sync with docs/project/granularity-zoom.md#node-shape.
  */
@@ -395,22 +397,25 @@ export interface GlossaryResponse {
    ladder, which is the gap their own docs record
    (docs/project/original-version/summaries.md). */
 
-/**
- * A rung of the ladder, above the gist.
- *
- * `gist` is not in here on purpose: it is one sentence, it lives on the tree
- * node (stage 4), and nothing about it is this stage's to write. The panel
- * offers it as the shortest rung by reading the tree, so the ladder the reader
- * sees has three steps while only two are generated.
- *
- * **Named, not numbered, and the steps are not even.** One sentence, then a few
- * sentences, then a paragraph or more. That unevenness is a finding rather than
- * a shrug — theirs ran 10, 15, 25, 30, 50, 100, 200, 400, 800 tokens, fine at
- * the bottom and geometric at the top, because the difference between a phrase
- * and a sentence changes what a line can *do* while the difference between two
- * long summaries is just more of the same.
- */
-export type SummaryRung = "short" | "long";
+/* ------------------------------------------------------ the rungs, and why --
+   The ladder above the gist is `short` and `long`, and they are two fields on
+   `SummaryEntry` below rather than one field holding a rung name — which is why
+   there is no `SummaryRung` type here. There was one until 2026-08-26; it was
+   declared, never referenced, and survived because an unused *exported* type
+   looks exactly like one some other module uses. Its reasoning is worth more
+   than the declaration was, so it stays here:
+
+   `gist` is deliberately not a rung: it is one sentence, it lives on the tree
+   node (stage 4), and nothing about it is this stage's to write. The panel
+   offers it as the shortest rung by reading the tree, so the ladder the reader
+   sees has three steps while only two are generated.
+
+   **Named, not numbered, and the steps are not even.** One sentence, then a few
+   sentences, then a paragraph or more. That unevenness is a finding rather than
+   a shrug — theirs ran 10, 15, 25, 30, 50, 100, 200, 400, 800 tokens, fine at
+   the bottom and geometric at the top, because the difference between a phrase
+   and a sentence changes what a line can *do* while the difference between two
+   long summaries is just more of the same. */
 
 /**
  * One node's summaries, anchored the way the arc is: **by block range, never by

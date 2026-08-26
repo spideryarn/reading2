@@ -25,7 +25,7 @@ import path from "node:path";
  * docs/project/supabase-local.md. certs/README.md says why committing a
  * certificate is right here.
  */
-export const DEFAULT_CA_PATH = path.resolve(import.meta.dirname, "../../certs/supabase-ca.crt");
+const DEFAULT_CA_PATH = path.resolve(import.meta.dirname, "../../certs/supabase-ca.crt");
 
 /** What `pg` wants in its `ssl` option, in the three shapes we ever produce. */
 export type SslDecision =
