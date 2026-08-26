@@ -147,6 +147,68 @@ The direct test of a label's job needs a person: show a label with its 5–9 sib
 shuffled, and ask which paragraph it points to. Measure correct identification, time, and whether
 distinctive terms survived. `--shuffle` prints those sets ready to hand to someone.
 
+## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
+
+```
+npm run eval:embeddings
+SPIDERYARN_JUDGE_MODEL=claude-opus-5 npm run eval:embeddings   # a real second opinion
+```
+
+**This one spends money twice**: it embeds the whole shelf with each candidate model (a twentieth of
+a penny) and it calls a judge model once per query (a few cents). Both are the point. Everything
+cheaper — MTEB tables, vendor benchmark pages — answers a question about somebody else's corpus, and
+the research that recommended `openai/text-embedding-3-small` said as much out loud: it could not
+find an apples-to-apples English-retrieval comparison and argued from overall MTEB means, which mix
+multilingual scores into a number we would only ever use on English essays. A recommendation with a
+citation attached is still a guess. This file is the measurement.
+
+It embeds all 495 gistable blocks with each *arm*, runs 18 hand-written reader-style questions —
+committed in the file, and phrased in the reader's words rather than the author's, so word matching
+cannot answer them — takes each arm's top 5, and judges the **union** of every list once per query,
+blind: 221 (query, passage) pairs. Every arm is then scored against identical judgements; judging
+each list separately would let the same passage score 1 for one arm and 2 for another, and part of
+the gap between arms would be the judge's own noise.
+
+An **arm is a model plus how that model is asked**, not just a model id. Voyage takes an `input_type`
+(`"query"` / `"document"`) and OpenRouter passes it through — the vectors differ from the untyped
+ones at cosine 0.93 — so withholding it would be running Voyage wrong and calling the result a fact
+about Voyage. Each contender is run the way its own vendor says to; `voyage-4-lite` is *also* run
+untyped, as its own arm, so the size of that choice is in the output rather than asserted in a
+comment.
+
+Five things in it are worth copying into the next eval that compares options:
+
+- **A verdict with an interval, and the ability to return "too close to call".** A paired bootstrap
+  over the 18 queries against the leading arm, printed beside the point estimates, with each row
+  labelled *behind* or *tied*. It matters: the top two arms here differ by 0.033 on mean score and
+  **are** tied, while the bottom arm differs by 0.333 and is genuinely behind. Point estimates alone
+  would have made those look like the same kind of fact — see the seam-test story below for the last
+  time this folder got that wrong.
+- **A second judge.** Judgements are cached in a file **named after the judge**, so re-running under
+  a different one is a genuine re-derivation rather than a re-read of the first judge's cache. The
+  two judges agreed on 84.6% of pairs and changed nothing directional.
+- **A cache keyed by the text, not the id.** `judgementKey` hashes the passage and query text into
+  the key, because a block id is stable across re-extraction *by design* — so keying a cached opinion
+  on it would silently serve a verdict about prose that has since changed. The judge model and rubric
+  version are checked at file level, so a mismatch says so instead of looking like a cold cache.
+- **A baseline that isn't a straw man.** The shipped literal matcher ANDs every term, so it returns
+  nothing at all for all eighteen sentence-shaped queries — true, and useless as a comparison. So a
+  deliberately generous word matcher (OR over content words, ranked) is measured too. Semantic
+  search beating the first proves little; beating the second is the number that matters.
+- **An error message that names the cause.** OpenRouter answers "No endpoints available matching your
+  guardrail restrictions and data policy" with a **404**, which reads like a bad model id and is
+  actually the account's privacy settings. Since two different `OPENROUTER_API_KEY`s are in play here
+  and `src/env.ts` lets the exported one beat the file, the eval now prints which key it used and how
+  to switch, rather than the raw 404.
+
+Result, 2026-08-26: **`voyageai/voyage-4`** — tied with `openai/text-embedding-3-small` on every
+measure under both judges, and winning the tie-break on dimensions (1024 vs 1536) and billing
+(OpenRouter credits vs BYOK). `baai/bge-m3`, the cheapest and originally preferred option, is the one
+arm that is clearly behind. Numbers, the tie-break stated in full, and the OpenRouter account
+prerequisite are in
+[results/embedding-retrieval-2026-08-26.md](results/embedding-retrieval-2026-08-26.md);
+the decision is recorded in [search.md](../docs/project/search.md).
+
 ## Results
 
 `results/` holds one JSON per run, named by slug and timestamp to the minute, committed. The minute

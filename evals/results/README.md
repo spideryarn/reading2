@@ -26,6 +26,29 @@ measure was largely reporting how many headings each article has.
 
 `reorder-quality-before.md` belongs to a different piece of work and is not part of the above.
 
+## `embedding-retrieval-*` — which embedding model, 2026-08-26
+
+Written by `npm run eval:embeddings`. The write-up is
+[embedding-retrieval-2026-08-26.md](embedding-retrieval-2026-08-26.md); the JSONs are the raw
+retrieval and per-query scores behind it.
+
+| File | What it is |
+|---|---|
+| `embedding-retrieval-2026-08-26T0907.json` | The five-arm run, judged by Claude Sonnet 5 (the repo default, `src/models.ts`). |
+| `embedding-retrieval-2026-08-26T0908.json` | **The same retrieval, judged again by Claude Opus 5.** Not a duplicate — it is the check on whether the verdict is a fact about the models or one judge's opinion. It is not: the two agree on 84.6% of the 221 pairs and nothing directional moves. |
+| `embedding-retrieval-judgements-claude-<model>.json` | One judgement cache per judge. **Named after the judge on purpose** — a single shared cache would let the second judge silently re-read the first one's answers and "agree" with itself. Each file records the judge and the rubric version it was made under, and is discarded rather than half-used if either has moved. |
+
+The judgement caches are the reusable part. The embeddings and the retrieval are deterministic and
+cost fractions of a penny to redo; the judgements are the expensive, non-deterministic half, so a
+re-run against a new candidate arm only pays for the passages no incumbent had surfaced.
+
+**Absolute scores from these two files may not be quoted beside a run with a different arm set.**
+Relevance is judged over the union of every arm's top 5, so adding an arm lengthens the list the
+judge calibrates against and it grades a shade more strictly. A two-arm run of this same harness
+earlier the same day put `3-small` at P@5 64.4% and `bge-m3` at 42.2%; these five-arm files read
+61.1% and 37.8% for identical retrieval. The gap did not move — the scale did. Those two-arm files
+were deleted rather than kept, precisely so nobody reads a row across.
+
 ## `prompt-caching-*.md` — the article is really being cached
 
 Written by `npm run eval:caching`, 2026-08-26, against the live API. Three articles, each searched

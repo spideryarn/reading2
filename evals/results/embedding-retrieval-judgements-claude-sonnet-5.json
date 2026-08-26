@@ -1,0 +1,890 @@
+{
+  "judgeModel": "claude-sonnet-5",
+  "rubricVersion": 1,
+  "judgements": {
+    "q04:5e598e3e0c51 spya-v52g4f:bce294679800": {
+      "score": 0,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-zw2m7u:4377d6ded965": {
+      "score": 1,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-ahtr6e:4fe1e19f6154": {
+      "score": 2,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-un9fjn:e9e3a3bb6270": {
+      "score": 2,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-p4vmm0:69caab8e7f7b": {
+      "score": 0,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-tb4wr2:35221f24a6b3": {
+      "score": 0,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-b0086e:9fd9da09c982": {
+      "score": 1,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-jnwfxp:e7241bf499e5": {
+      "score": 2,
+      "why": ""
+    },
+    "q04:5e598e3e0c51 spya-sk4su6:e568c2c9b71c": {
+      "score": 0,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-mcn70k:aea020357bb2": {
+      "score": 0,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-q87wbn:17388a3bf224": {
+      "score": 0,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-cepmwf:45a9ebbee7e3": {
+      "score": 1,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-rxejt8:d2f81049ff4b": {
+      "score": 0,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-xvm37k:ebcdcacd10d3": {
+      "score": 1,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-cqh5wq:157d2f87598a": {
+      "score": 1,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-npjt4j:a3bbb1095f43": {
+      "score": 2,
+      "why": ""
+    },
+    "q02:f6194211bd79 spya-s0gn3k:5070ee07e23c": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-z2b4ny:cf47f4967c8a": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-g9r8cr:1c451a4ada3b": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-d9n02m:1b235b111a8d": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-dzx75n:88ff7914fc63": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-tgnssb:56635187b851": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-mq59bu:aaab21b38cf9": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-uk9ye2:e2b30b324f99": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-fa94aj:71da0219839a": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-nh8mt7:3be236ee31a1": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-p8ky7g:df0de070e2e2": {
+      "score": 1,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-rgrzer:acdea1c49e78": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-cvyfqe:c7a8f8286583": {
+      "score": 2,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-bbg92b:e8f70065eef0": {
+      "score": 0,
+      "why": ""
+    },
+    "q03:55ed476f7b6c spya-epw4h3:db789c83a5b1": {
+      "score": 1,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-hzp9yz:ac14b76ce1d2": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-t3mubq:d10012ceccb6": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-k850tu:fea11d682209": {
+      "score": 2,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-pfkhtt:59c7dc7c7abe": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-kzkj5e:c17356726b51": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-xhvztm:23ef34c203e6": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-xk9gne:4df9fdcaf9f0": {
+      "score": 1,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-w257ta:844f402621f3": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-dzx75n:88ff7914fc63": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-gvzuc4:e8c1838b6a82": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-arj7ry:e8a7af2a0398": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-e07b82:c8fc9159c4bc": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-cvaqgs:f3f89560c2d7": {
+      "score": 1,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-ahs2q7:d94b1fc1c741": {
+      "score": 0,
+      "why": ""
+    },
+    "q06:f93b91925342 spya-b228ay:e6b28d69e1d7": {
+      "score": 0,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-hj5y6s:3395b462db72": {
+      "score": 2,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-w8z40d:6c3bc226d556": {
+      "score": 1,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-ps0kap:73ed4d6cca23": {
+      "score": 2,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-hrydkk:5682e87e84b8": {
+      "score": 1,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-b59nm2:e858464008cf": {
+      "score": 2,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-vys3vj:89c71a80acd2": {
+      "score": 2,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-pfkhtt:59c7dc7c7abe": {
+      "score": 2,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-da9tvt:dff46edc270d": {
+      "score": 2,
+      "why": ""
+    },
+    "q05:dd421a2aef6c spya-j0a9rq:e6ba29a52064": {
+      "score": 0,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-n393ru:cd7a442b2a8c": {
+      "score": 0,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-zg9me8:7019981a49c0": {
+      "score": 2,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-sq9v5k:a5612131bc22": {
+      "score": 1,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-jrbs6m:6e79df630476": {
+      "score": 0,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-gw0hsq:c73909e55f1b": {
+      "score": 0,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-t54yqa:a4a432ce0a21": {
+      "score": 0,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-fz5xq5:d10160bd874b": {
+      "score": 0,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-v98v5u:a32f5d1a873a": {
+      "score": 0,
+      "why": ""
+    },
+    "q07:4a668db50961 spya-cepmwf:45a9ebbee7e3": {
+      "score": 0,
+      "why": ""
+    },
+    "q08:9806e13b7da0 spya-rg89zv:2a8482d63c05": {
+      "score": 0,
+      "why": ""
+    },
+    "q08:9806e13b7da0 spya-hzp9yz:ac14b76ce1d2": {
+      "score": 1,
+      "why": ""
+    },
+    "q08:9806e13b7da0 spya-b59nm2:e858464008cf": {
+      "score": 1,
+      "why": ""
+    },
+    "q08:9806e13b7da0 spya-da9tvt:dff46edc270d": {
+      "score": 1,
+      "why": ""
+    },
+    "q08:9806e13b7da0 spya-dp8sem:cb422b8adfe6": {
+      "score": 2,
+      "why": ""
+    },
+    "q08:9806e13b7da0 spya-ps0kap:73ed4d6cca23": {
+      "score": 0,
+      "why": ""
+    },
+    "q08:9806e13b7da0 spya-xhvztm:23ef34c203e6": {
+      "score": 2,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-bqd0mc:3ced01750fb9": {
+      "score": 1,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-ut5bsd:dadf1300f9b1": {
+      "score": 0,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-mcn70k:aea020357bb2": {
+      "score": 0,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-b54jrm:e4f8e289d0ac": {
+      "score": 0,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-e7fdmb:3646fac5bda5": {
+      "score": 0,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-us4vyy:a88553cebda6": {
+      "score": 0,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-vrvp8b:022e68ccdbd5": {
+      "score": 1,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-b475w8:74ae4484e6d7": {
+      "score": 1,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-ck7c7b:74fe8bf2c0e1": {
+      "score": 2,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-qzphan:6eb6cb6ca82e": {
+      "score": 1,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-s43krv:0ce6fd1063e7": {
+      "score": 0,
+      "why": ""
+    },
+    "q10:9611cbf429bf spya-hzbk48:290bcbd66e6c": {
+      "score": 2,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-d3g67c:fba4c54d1723": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-arj7ry:e8a7af2a0398": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-smzw4j:d6025201f54a": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-mybknt:be761a1ae34a": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-t29n67:175d2e039321": {
+      "score": 1,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-cqh2pq:fc5b62f96fd2": {
+      "score": 2,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-bdb52c:f759b3255af9": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-nxxnrj:ea479c45585c": {
+      "score": 1,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-egkyk2:139ff24026c2": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-wpcmm0:1630105eb71c": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-rn8y3y:89a55c2caa1d": {
+      "score": 1,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-ga052d:e0677540a3ca": {
+      "score": 1,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-f87ghx:299d043895b4": {
+      "score": 1,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-cvaqgs:f3f89560c2d7": {
+      "score": 1,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-mcn70k:aea020357bb2": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-xvm37k:ebcdcacd10d3": {
+      "score": 0,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-xk9gne:4df9fdcaf9f0": {
+      "score": 1,
+      "why": ""
+    },
+    "q01:58b951aba633 spya-cxy0eb:fabdf9ef6841": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-ut5bsd:dadf1300f9b1": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-gf9fdf:ec7c9396a8e5": {
+      "score": 2,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-bqd0mc:3ced01750fb9": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-ydx92v:8b981cb98a60": {
+      "score": 1,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-s0gn3k:5070ee07e23c": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-drsrwy:c7c2dad23400": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-q87wbn:17388a3bf224": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-z4bud7:9331f6407052": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-m6ng8g:dd7462f2ec48": {
+      "score": 2,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-y2xjyr:09d15e165c4c": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-x8b23s:0b1818f2dac8": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-z3w4p4:60463791bf7c": {
+      "score": 1,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-g7uvnq:7bcfa5d05c84": {
+      "score": 0,
+      "why": ""
+    },
+    "q09:9fb3d9007415 spya-xxhd05:f97909dad291": {
+      "score": 1,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-egkyk2:139ff24026c2": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-wm8c60:ce75265da290": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-hwmjkq:35cbab577c4a": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-wpcmm0:1630105eb71c": {
+      "score": 2,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-dzx75n:88ff7914fc63": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-arj7ry:e8a7af2a0398": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-kzkj5e:c17356726b51": {
+      "score": 2,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-c57hgx:aae6369bdae0": {
+      "score": 1,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-bst8br:e40f50379f33": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-w8z40d:6c3bc226d556": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-p7g68t:63a0fde9c8f3": {
+      "score": 0,
+      "why": ""
+    },
+    "q13:43a83ee60f9e spya-mcn70k:aea020357bb2": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-wbpdja:4bd7a8ed1a3c": {
+      "score": 2,
+      "why": ""
+    },
+    "q11:113be99c02db spya-nr2han:27348b98c0cb": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-p75b5w:f5af195b60ab": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-hek4mp:5b489db6c3c7": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-s0gn3k:5070ee07e23c": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-pwrpcx:1109c75ce7e1": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-qbx2p2:698d7af7bd6f": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-h7snd5:8e76e52918c7": {
+      "score": 1,
+      "why": ""
+    },
+    "q11:113be99c02db spya-egkyk2:139ff24026c2": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-xe9fac:6710844a0343": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-w257ta:844f402621f3": {
+      "score": 1,
+      "why": ""
+    },
+    "q11:113be99c02db spya-xn53gk:751aead992aa": {
+      "score": 2,
+      "why": ""
+    },
+    "q11:113be99c02db spya-cx2tn6:f51995ad20ff": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-g9ng20:29d4d9b57315": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-ahs2q7:d94b1fc1c741": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-yypbg0:652f4d197afd": {
+      "score": 0,
+      "why": ""
+    },
+    "q11:113be99c02db spya-p9jjsz:845b4ed95d45": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-nr2han:27348b98c0cb": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-c02z4b:dd6e025ca534": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-pd58xp:d4cf8eb5054a": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-pajjkn:92fa5abc9449": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-s0gn3k:5070ee07e23c": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-x8b23s:0b1818f2dac8": {
+      "score": 2,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-gnvhk6:116b0da6fd3e": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-vgrj84:41d69e435db5": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-uftaze:a07faefa1f59": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-nv8qm6:e7563c162489": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-dajzd7:b1eb60cee6f7": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-nh48sh:f92d528f9318": {
+      "score": 0,
+      "why": ""
+    },
+    "q14:dbbbccffee7f spya-my2d4a:3a2064ffb33c": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-yypbg0:652f4d197afd": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-z7zzwv:3d97c70da948": {
+      "score": 2,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-ekarxh:3e474db86a38": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-zzw20p:137f0d8eea07": {
+      "score": 1,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-s0gn3k:5070ee07e23c": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-arj7ry:e8a7af2a0398": {
+      "score": 2,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-dxtntk:cb66dcee1427": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-bdb52c:f759b3255af9": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-smzw4j:d6025201f54a": {
+      "score": 1,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-xdmpa0:76f697befbec": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-h7dmbb:01e673a74b6c": {
+      "score": 0,
+      "why": ""
+    },
+    "q16:effd8ec70698 spya-gm3xu0:6f1ab944bb18": {
+      "score": 1,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-rqzp97:34a3f426ab1a": {
+      "score": 1,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-z79mew:3c777f5d077e": {
+      "score": 2,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-kjfjgm:6f2c56c9c884": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-dqx7dn:8ccdc94fd98d": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-qcevgh:dcd86179b50f": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-gm3xu0:6f1ab944bb18": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-zzw20p:137f0d8eea07": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-fqwvqr:614dac282fe6": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-zg9me8:7019981a49c0": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-bst8br:e40f50379f33": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-mcaa4g:ee76e7394469": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-uezxr9:2d752971011c": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-tphbr6:b35b617c5910": {
+      "score": 0,
+      "why": ""
+    },
+    "q17:b38b7dbdb3b3 spya-hg7u0a:8aed3b753a64": {
+      "score": 0,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-hm8bb7:d12bc8dc65f5": {
+      "score": 0,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-bqd0mc:3ced01750fb9": {
+      "score": 0,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-y2xjyr:09d15e165c4c": {
+      "score": 2,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-nue72j:a2b93226413f": {
+      "score": 1,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-drsrwy:c7c2dad23400": {
+      "score": 0,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-vd50av:e76d3c9809d9": {
+      "score": 2,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-dr48uq:ac0192de0bff": {
+      "score": 1,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-jfma0c:77c8c5830993": {
+      "score": 2,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-p04khr:273d513b2a5b": {
+      "score": 2,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-csknkx:c49060fab97f": {
+      "score": 1,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-yv2eka:81f9d93a11d6": {
+      "score": 2,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-bapt40:c55eda376625": {
+      "score": 1,
+      "why": ""
+    },
+    "q15:06c37e16f256 spya-wpy9e2:2818002b9f01": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-yv2eka:81f9d93a11d6": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-u97r7e:b64725f84b04": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-q874wt:015a2f25c43e": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-smzw4j:d6025201f54a": {
+      "score": 1,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-rh232t:64a4e93c2c26": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-z7ym5f:1bae0b2f9f64": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-rg89zv:2a8482d63c05": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-rhkc9x:9b55b00bfb61": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-b475w8:74ae4484e6d7": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-z79mew:3c777f5d077e": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-zzw20p:137f0d8eea07": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-gm3xu0:6f1ab944bb18": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-awr74r:907d4932b7c7": {
+      "score": 0,
+      "why": ""
+    },
+    "q18:8e74f6ed2dc8 spya-rqzp97:34a3f426ab1a": {
+      "score": 2,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-uftaze:a07faefa1f59": {
+      "score": 0,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-rhkc9x:9b55b00bfb61": {
+      "score": 1,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-t4tkyr:8189ac12224c": {
+      "score": 2,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-ecseh8:e1cf96924cde": {
+      "score": 1,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-ahs2q7:d94b1fc1c741": {
+      "score": 0,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-ut5bsd:dadf1300f9b1": {
+      "score": 1,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-b54jrm:e4f8e289d0ac": {
+      "score": 0,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-n58h2w:4f2b060d996f": {
+      "score": 0,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-z3w4p4:60463791bf7c": {
+      "score": 0,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-uhgsp2:46147820ba32": {
+      "score": 2,
+      "why": ""
+    },
+    "q12:ec1277dfc0f7 spya-cammdp:efff172f228d": {
+      "score": 1,
+      "why": ""
+    }
+  }
+}

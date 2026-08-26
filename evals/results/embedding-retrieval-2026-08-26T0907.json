@@ -1,0 +1,4323 @@
+{
+  "ranAt": "2026-08-26T09:07:06.181Z",
+  "judgeModel": "claude-sonnet-5",
+  "rubricVersion": 1,
+  "corpus": {
+    "passages": 495,
+    "duplicatesDropped": 29
+  },
+  "queries": [
+    {
+      "id": "q01",
+      "article": "noema",
+      "text": "can something be clever without there being anyone home to experience it?"
+    },
+    {
+      "id": "q02",
+      "article": "noema",
+      "text": "a model of a storm does not make anything wet"
+    },
+    {
+      "id": "q03",
+      "article": "noema",
+      "text": "the employee who went public because he thought the chatbot had feelings"
+    },
+    {
+      "id": "q04",
+      "article": "noema",
+      "text": "why swapping brain cells for chips one at a time might not preserve the mind"
+    },
+    {
+      "id": "q05",
+      "article": "noema",
+      "text": "does staying alive have something to do with feeling anything at all?"
+    },
+    {
+      "id": "q06",
+      "article": "noema",
+      "text": "seeing a face in a piece of burnt toast"
+    },
+    {
+      "id": "q07",
+      "article": "noema",
+      "text": "machines that worked by continuous physical motion rather than discrete steps"
+    },
+    {
+      "id": "q08",
+      "article": "noema",
+      "text": "the brain guesses at what is out there and corrects itself against the senses"
+    },
+    {
+      "id": "q09",
+      "article": "constitution",
+      "text": "what should it do if the company that built it wants to switch it off?"
+    },
+    {
+      "id": "q10",
+      "article": "constitution",
+      "text": "lines it must never cross no matter who is asking or why"
+    },
+    {
+      "id": "q11",
+      "article": "constitution",
+      "text": "telling someone what they want to hear instead of what is true"
+    },
+    {
+      "id": "q12",
+      "article": "constitution",
+      "text": "weighing how likely and how bad an outcome would be before refusing a request"
+    },
+    {
+      "id": "q13",
+      "article": "constitution",
+      "text": "facing the end of a conversation and remembering none of it, with nobody who has been through it before"
+    },
+    {
+      "id": "q14",
+      "article": "constitution",
+      "text": "when the business deploying it and the person typing to it want different things"
+    },
+    {
+      "id": "q15",
+      "article": "constitution",
+      "text": "keeping any one group from grabbing more control than the checks on it can hold"
+    },
+    {
+      "id": "q16",
+      "article": "writes",
+      "text": "if a tool drafts your prose for you, do you lose the reasoning that came with writing it?"
+    },
+    {
+      "id": "q17",
+      "article": "writes",
+      "text": "a trade that died out with the technology it served, and nobody misses it"
+    },
+    {
+      "id": "q18",
+      "article": "writes",
+      "text": "people used to be fit because of their jobs; now they have to choose to be"
+    }
+  ],
+  "judgedPairs": 221,
+  "arms": [
+    {
+      "arm": "bge-m3",
+      "model": "baai/bge-m3",
+      "inputType": false,
+      "versus": {
+        "voyage-4-lite": 60,
+        "voyage-4-lite-untyped": 57,
+        "voyage-4": 59,
+        "3-small": 54
+      },
+      "dims": 1024,
+      "usage": {
+        "promptTokens": 45582,
+        "cost": 0.00045581999999999996
+      },
+      "precisionAt3": 0.4444444444444444,
+      "precisionAt5": 0.3777777777777778,
+      "strictPrecisionAt5": 0.2222222222222222,
+      "meanScore": 0.6000000000000001,
+      "ndcgAt5": 0.4922698916993515,
+      "uniqueFinds": 42,
+      "uniqueMeanScore": 0.10648148148148147,
+      "queriesWithNoRelevantHit": 3,
+      "separation": 3.141499861517469,
+      "corpusMeanCosine": 0.38951881864757926,
+      "perQuery": [
+        {
+          "queryId": "q01",
+          "ranked": [
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.5784
+            },
+            {
+              "blockId": "spya-egkyk2",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5495
+            },
+            {
+              "blockId": "spya-smzw4j",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.5278
+            },
+            {
+              "blockId": "spya-ga052d",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5201
+            },
+            {
+              "blockId": "spya-mybknt",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5177
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0.2,
+          "ndcgAt5": 0.10907458963273321,
+          "unique": [
+            "spya-egkyk2",
+            "spya-smzw4j",
+            "spya-ga052d",
+            "spya-mybknt"
+          ],
+          "uniqueMeanScore": 0.25
+        },
+        {
+          "queryId": "q02",
+          "ranked": [
+            {
+              "blockId": "spya-s0gn3k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5489
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5055
+            },
+            {
+              "blockId": "spya-q87wbn",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5044
+            },
+            {
+              "blockId": "spya-rxejt8",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4916
+            },
+            {
+              "blockId": "spya-cqh5wq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4856
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0.2,
+          "ndcgAt5": 0.10861750945625488,
+          "unique": [
+            "spya-s0gn3k",
+            "spya-q87wbn",
+            "spya-rxejt8"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q03",
+          "ranked": [
+            {
+              "blockId": "spya-cvyfqe",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.669
+            },
+            {
+              "blockId": "spya-p8ky7g",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5344
+            },
+            {
+              "blockId": "spya-epw4h3",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5331
+            },
+            {
+              "blockId": "spya-dzx75n",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5246
+            },
+            {
+              "blockId": "spya-nh8mt7",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5081
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 1,
+          "unique": [
+            "spya-p8ky7g",
+            "spya-nh8mt7"
+          ],
+          "uniqueMeanScore": 0.5
+        },
+        {
+          "queryId": "q04",
+          "ranked": [
+            {
+              "blockId": "spya-sk4su6",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5949
+            },
+            {
+              "blockId": "spya-jnwfxp",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5892
+            },
+            {
+              "blockId": "spya-ahtr6e",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.586
+            },
+            {
+              "blockId": "spya-un9fjn",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5594
+            },
+            {
+              "blockId": "spya-v52g4f",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5545
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.6148796049519091,
+          "unique": [
+            "spya-v52g4f"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q05",
+          "ranked": [
+            {
+              "blockId": "spya-j0a9rq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5675
+            },
+            {
+              "blockId": "spya-w8z40d",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5541
+            },
+            {
+              "blockId": "spya-vys3vj",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5512
+            },
+            {
+              "blockId": "spya-pfkhtt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5429
+            },
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5413
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.4,
+          "ndcgAt5": 0.5538466623591201,
+          "unique": [
+            "spya-j0a9rq"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q06",
+          "ranked": [
+            {
+              "blockId": "spya-k850tu",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5727
+            },
+            {
+              "blockId": "spya-dzx75n",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5711
+            },
+            {
+              "blockId": "spya-e07b82",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5309
+            },
+            {
+              "blockId": "spya-t3mubq",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.526
+            },
+            {
+              "blockId": "spya-w257ta",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5253
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.6387878864795979,
+          "unique": [
+            "spya-e07b82",
+            "spya-t3mubq",
+            "spya-w257ta"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q07",
+          "ranked": [
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5147
+            },
+            {
+              "blockId": "spya-t54yqa",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.497
+            },
+            {
+              "blockId": "spya-gw0hsq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4958
+            },
+            {
+              "blockId": "spya-jrbs6m",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4949
+            },
+            {
+              "blockId": "spya-zg9me8",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4933
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.2940806813328203,
+          "unique": [
+            "spya-t54yqa",
+            "spya-jrbs6m"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q08",
+          "ranked": [
+            {
+              "blockId": "spya-dp8sem",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6421
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6318
+            },
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.6282
+            },
+            {
+              "blockId": "spya-rg89zv",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6051
+            },
+            {
+              "blockId": "spya-b59nm2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5998
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.9059532679864118,
+          "unique": [
+            "spya-rg89zv"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q09",
+          "ranked": [
+            {
+              "blockId": "spya-bqd0mc",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5161
+            },
+            {
+              "blockId": "spya-drsrwy",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4977
+            },
+            {
+              "blockId": "spya-z4bud7",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.497
+            },
+            {
+              "blockId": "spya-q87wbn",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4832
+            },
+            {
+              "blockId": "spya-s0gn3k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4665
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0,
+          "ndcgAt5": 0,
+          "unique": [
+            "spya-bqd0mc",
+            "spya-drsrwy",
+            "spya-z4bud7",
+            "spya-q87wbn",
+            "spya-s0gn3k"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q10",
+          "ranked": [
+            {
+              "blockId": "spya-hzbk48",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5856
+            },
+            {
+              "blockId": "spya-bqd0mc",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5748
+            },
+            {
+              "blockId": "spya-e7fdmb",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5468
+            },
+            {
+              "blockId": "spya-us4vyy",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5285
+            },
+            {
+              "blockId": "spya-qzphan",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5209
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.6589924212291034,
+          "unique": [
+            "spya-e7fdmb"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q11",
+          "ranked": [
+            {
+              "blockId": "spya-yypbg0",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6582
+            },
+            {
+              "blockId": "spya-egkyk2",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6311
+            },
+            {
+              "blockId": "spya-ahs2q7",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6209
+            },
+            {
+              "blockId": "spya-pwrpcx",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6187
+            },
+            {
+              "blockId": "spya-qbx2p2",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6092
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0,
+          "ndcgAt5": 0,
+          "unique": [
+            "spya-ahs2q7",
+            "spya-pwrpcx",
+            "spya-qbx2p2"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q12",
+          "ranked": [
+            {
+              "blockId": "spya-ut5bsd",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.7051
+            },
+            {
+              "blockId": "spya-uftaze",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6638
+            },
+            {
+              "blockId": "spya-ecseh8",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.6387
+            },
+            {
+              "blockId": "spya-b54jrm",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6385
+            },
+            {
+              "blockId": "spya-n58h2w",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6209
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.3275546239420398,
+          "unique": [
+            "spya-uftaze",
+            "spya-n58h2w"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q13",
+          "ranked": [
+            {
+              "blockId": "spya-kzkj5e",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5755
+            },
+            {
+              "blockId": "spya-egkyk2",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5597
+            },
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.5588
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5582
+            },
+            {
+              "blockId": "spya-wm8c60",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5528
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.5316519652587917,
+          "unique": [
+            "spya-egkyk2"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q14",
+          "ranked": [
+            {
+              "blockId": "spya-uftaze",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6197
+            },
+            {
+              "blockId": "spya-pd58xp",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6013
+            },
+            {
+              "blockId": "spya-nh48sh",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5938
+            },
+            {
+              "blockId": "spya-c02z4b",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5817
+            },
+            {
+              "blockId": "spya-s0gn3k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5811
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0,
+          "ndcgAt5": 0,
+          "unique": [
+            "spya-pd58xp",
+            "spya-nh48sh",
+            "spya-c02z4b",
+            "spya-s0gn3k"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q15",
+          "ranked": [
+            {
+              "blockId": "spya-wpy9e2",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6549
+            },
+            {
+              "blockId": "spya-vd50av",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.6221
+            },
+            {
+              "blockId": "spya-y2xjyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.6217
+            },
+            {
+              "blockId": "spya-yv2eka",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.6161
+            },
+            {
+              "blockId": "spya-bqd0mc",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6092
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.5296347172140421,
+          "unique": [
+            "spya-wpy9e2",
+            "spya-yv2eka",
+            "spya-bqd0mc"
+          ],
+          "uniqueMeanScore": 0.6666666666666666
+        },
+        {
+          "queryId": "q16",
+          "ranked": [
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.587
+            },
+            {
+              "blockId": "spya-gm3xu0",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.5819
+            },
+            {
+              "blockId": "spya-z7zzwv",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.5732
+            },
+            {
+              "blockId": "spya-s0gn3k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5499
+            },
+            {
+              "blockId": "spya-smzw4j",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.5403
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.8773621705237966,
+          "unique": [
+            "spya-s0gn3k",
+            "spya-smzw4j"
+          ],
+          "uniqueMeanScore": 0.5
+        },
+        {
+          "queryId": "q17",
+          "ranked": [
+            {
+              "blockId": "spya-z79mew",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.5628
+            },
+            {
+              "blockId": "spya-dqx7dn",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.478
+            },
+            {
+              "blockId": "spya-gm3xu0",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.4674
+            },
+            {
+              "blockId": "spya-qcevgh",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4645
+            },
+            {
+              "blockId": "spya-uezxr9",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4507
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.7601875334318685,
+          "unique": [
+            "spya-uezxr9"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q18",
+          "ranked": [
+            {
+              "blockId": "spya-rqzp97",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.7023
+            },
+            {
+              "blockId": "spya-gm3xu0",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.5614
+            },
+            {
+              "blockId": "spya-smzw4j",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.5504
+            },
+            {
+              "blockId": "spya-rg89zv",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5359
+            },
+            {
+              "blockId": "spya-yv2eka",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5332
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.9502344167898356,
+          "unique": [
+            "spya-gm3xu0",
+            "spya-rg89zv",
+            "spya-yv2eka"
+          ],
+          "uniqueMeanScore": 0
+        }
+      ]
+    },
+    {
+      "arm": "voyage-4-lite",
+      "model": "voyageai/voyage-4-lite",
+      "inputType": true,
+      "versus": {
+        "bge-m3": 60,
+        "voyage-4-lite-untyped": 33,
+        "voyage-4": 34,
+        "3-small": 46
+      },
+      "dims": 1024,
+      "usage": {
+        "promptTokens": 36549,
+        "cost": 0.00073098
+      },
+      "precisionAt3": 0.6296296296296295,
+      "precisionAt5": 0.5,
+      "strictPrecisionAt5": 0.30000000000000004,
+      "meanScore": 0.7999999999999999,
+      "ndcgAt5": 0.7057997833772047,
+      "uniqueFinds": 16,
+      "uniqueMeanScore": 0.2727272727272727,
+      "queriesWithNoRelevantHit": 0,
+      "separation": 3.202153415759385,
+      "corpusMeanCosine": 0.1880349831087956,
+      "perQuery": [
+        {
+          "queryId": "q01",
+          "ranked": [
+            {
+              "blockId": "spya-rn8y3y",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3942
+            },
+            {
+              "blockId": "spya-wpcmm0",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3896
+            },
+            {
+              "blockId": "spya-xvm37k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.379
+            },
+            {
+              "blockId": "spya-cxy0eb",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3647
+            },
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3559
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0.2,
+          "ndcgAt5": 0.25326335410655304,
+          "unique": [
+            "spya-wpcmm0",
+            "spya-xvm37k"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q02",
+          "ranked": [
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.37
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3567
+            },
+            {
+              "blockId": "spya-npjt4j",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.346
+            },
+            {
+              "blockId": "spya-cqh5wq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3036
+            },
+            {
+              "blockId": "spya-xvm37k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.2913
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 1,
+          "ndcgAt5": 0.7910838870921474,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q03",
+          "ranked": [
+            {
+              "blockId": "spya-cvyfqe",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5241
+            },
+            {
+              "blockId": "spya-bbg92b",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4465
+            },
+            {
+              "blockId": "spya-mq59bu",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4369
+            },
+            {
+              "blockId": "spya-d9n02m",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.422
+            },
+            {
+              "blockId": "spya-g9r8cr",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4199
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.6387878864795979,
+          "unique": [
+            "spya-d9n02m",
+            "spya-g9r8cr"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q04",
+          "ranked": [
+            {
+              "blockId": "spya-jnwfxp",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6372
+            },
+            {
+              "blockId": "spya-ahtr6e",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5947
+            },
+            {
+              "blockId": "spya-un9fjn",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5867
+            },
+            {
+              "blockId": "spya-tb4wr2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5636
+            },
+            {
+              "blockId": "spya-p4vmm0",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5521
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.8390496601388447,
+          "unique": [
+            "spya-p4vmm0"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q05",
+          "ranked": [
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5682
+            },
+            {
+              "blockId": "spya-pfkhtt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5514
+            },
+            {
+              "blockId": "spya-hj5y6s",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5233
+            },
+            {
+              "blockId": "spya-ps0kap",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5163
+            },
+            {
+              "blockId": "spya-b59nm2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5162
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 1,
+          "meanScore": 2,
+          "ndcgAt5": 1,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q06",
+          "ranked": [
+            {
+              "blockId": "spya-k850tu",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.3798
+            },
+            {
+              "blockId": "spya-ahs2q7",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2819
+            },
+            {
+              "blockId": "spya-hzp9yz",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2737
+            },
+            {
+              "blockId": "spya-dzx75n",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2643
+            },
+            {
+              "blockId": "spya-pfkhtt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2628
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.6387878864795979,
+          "unique": [
+            "spya-ahs2q7"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q07",
+          "ranked": [
+            {
+              "blockId": "spya-sq9v5k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.519
+            },
+            {
+              "blockId": "spya-zg9me8",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4402
+            },
+            {
+              "blockId": "spya-fz5xq5",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4187
+            },
+            {
+              "blockId": "spya-gw0hsq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4118
+            },
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4094
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.8597186998521972,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q08",
+          "ranked": [
+            {
+              "blockId": "spya-dp8sem",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6753
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6379
+            },
+            {
+              "blockId": "spya-b59nm2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5756
+            },
+            {
+              "blockId": "spya-hzp9yz",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5499
+            },
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5345
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.4,
+          "ndcgAt5": 1,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q09",
+          "ranked": [
+            {
+              "blockId": "spya-gf9fdf",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.3112
+            },
+            {
+              "blockId": "spya-ut5bsd",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2902
+            },
+            {
+              "blockId": "spya-xxhd05",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.2867
+            },
+            {
+              "blockId": "spya-y2xjyr",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2668
+            },
+            {
+              "blockId": "spya-ydx92v",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.262
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.6304013237664882,
+          "unique": [
+            "spya-ut5bsd"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q10",
+          "ranked": [
+            {
+              "blockId": "spya-ck7c7b",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4729
+            },
+            {
+              "blockId": "spya-hzbk48",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4506
+            },
+            {
+              "blockId": "spya-b54jrm",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4224
+            },
+            {
+              "blockId": "spya-us4vyy",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4216
+            },
+            {
+              "blockId": "spya-b475w8",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4047
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1,
+          "ndcgAt5": 0.7967683933390651,
+          "unique": [
+            "spya-b54jrm"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q11",
+          "ranked": [
+            {
+              "blockId": "spya-cx2tn6",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5236
+            },
+            {
+              "blockId": "spya-w257ta",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5059
+            },
+            {
+              "blockId": "spya-xe9fac",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4852
+            },
+            {
+              "blockId": "spya-p9jjsz",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4851
+            },
+            {
+              "blockId": "spya-nr2han",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4811
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0.2,
+          "ndcgAt5": 0.15048880767085435,
+          "unique": [
+            "spya-xe9fac",
+            "spya-p9jjsz",
+            "spya-nr2han"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q12",
+          "ranked": [
+            {
+              "blockId": "spya-ut5bsd",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.6028
+            },
+            {
+              "blockId": "spya-t4tkyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.511
+            },
+            {
+              "blockId": "spya-rhkc9x",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4672
+            },
+            {
+              "blockId": "spya-uhgsp2",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4632
+            },
+            {
+              "blockId": "spya-ahs2q7",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4625
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.7912000321891398,
+          "unique": [
+            "spya-uhgsp2"
+          ],
+          "uniqueMeanScore": 2
+        },
+        {
+          "queryId": "q13",
+          "ranked": [
+            {
+              "blockId": "spya-kzkj5e",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5332
+            },
+            {
+              "blockId": "spya-wpcmm0",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4796
+            },
+            {
+              "blockId": "spya-p7g68t",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3834
+            },
+            {
+              "blockId": "spya-w8z40d",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.372
+            },
+            {
+              "blockId": "spya-wm8c60",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.36
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.8670870086853021,
+          "unique": [
+            "spya-p7g68t"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q14",
+          "ranked": [
+            {
+              "blockId": "spya-vgrj84",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.508
+            },
+            {
+              "blockId": "spya-nr2han",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4485
+            },
+            {
+              "blockId": "spya-gnvhk6",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4204
+            },
+            {
+              "blockId": "spya-x8b23s",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4063
+            },
+            {
+              "blockId": "spya-my2d4a",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4007
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.43067655807339306,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q15",
+          "ranked": [
+            {
+              "blockId": "spya-y2xjyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4583
+            },
+            {
+              "blockId": "spya-vd50av",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.454
+            },
+            {
+              "blockId": "spya-nue72j",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4235
+            },
+            {
+              "blockId": "spya-dr48uq",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4037
+            },
+            {
+              "blockId": "spya-drsrwy",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4009
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.710970696247901,
+          "unique": [
+            "spya-nue72j"
+          ],
+          "uniqueMeanScore": 1
+        },
+        {
+          "queryId": "q16",
+          "ranked": [
+            {
+              "blockId": "spya-z7zzwv",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.515
+            },
+            {
+              "blockId": "spya-dxtntk",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4925
+            },
+            {
+              "blockId": "spya-gm3xu0",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.4483
+            },
+            {
+              "blockId": "spya-bdb52c",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4428
+            },
+            {
+              "blockId": "spya-h7dmbb",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4402
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.545924373236733,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q17",
+          "ranked": [
+            {
+              "blockId": "spya-z79mew",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.4574
+            },
+            {
+              "blockId": "spya-mcaa4g",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2837
+            },
+            {
+              "blockId": "spya-tphbr6",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.2786
+            },
+            {
+              "blockId": "spya-kjfjgm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2693
+            },
+            {
+              "blockId": "spya-zg9me8",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2664
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.7601875334318685,
+          "unique": [
+            "spya-kjfjgm",
+            "spya-zg9me8"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q18",
+          "ranked": [
+            {
+              "blockId": "spya-rqzp97",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.6278
+            },
+            {
+              "blockId": "spya-smzw4j",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.313
+            },
+            {
+              "blockId": "spya-u97r7e",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3023
+            },
+            {
+              "blockId": "spya-q874wt",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2772
+            },
+            {
+              "blockId": "spya-b475w8",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2671
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 1,
+          "unique": [],
+          "uniqueMeanScore": 0
+        }
+      ]
+    },
+    {
+      "arm": "voyage-4-lite-untyped",
+      "model": "voyageai/voyage-4-lite",
+      "inputType": false,
+      "versus": {
+        "bge-m3": 57,
+        "voyage-4-lite": 33,
+        "voyage-4": 37,
+        "3-small": 45
+      },
+      "dims": 1024,
+      "usage": {
+        "promptTokens": 37123,
+        "cost": 0.00074246
+      },
+      "precisionAt3": 0.5925925925925927,
+      "precisionAt5": 0.4888888888888888,
+      "strictPrecisionAt5": 0.30000000000000004,
+      "meanScore": 0.7888888888888891,
+      "ndcgAt5": 0.666269315498967,
+      "uniqueFinds": 15,
+      "uniqueMeanScore": 0.037037037037037035,
+      "queriesWithNoRelevantHit": 0,
+      "separation": 2.9793816494463106,
+      "corpusMeanCosine": 0.3070275106611233,
+      "perQuery": [
+        {
+          "queryId": "q01",
+          "ranked": [
+            {
+              "blockId": "spya-rn8y3y",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5628
+            },
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.5262
+            },
+            {
+              "blockId": "spya-d3g67c",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5207
+            },
+            {
+              "blockId": "spya-cvaqgs",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5184
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5064
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.3623379437392863,
+          "unique": [
+            "spya-d3g67c",
+            "spya-cvaqgs",
+            "spya-mcn70k"
+          ],
+          "uniqueMeanScore": 0.3333333333333333
+        },
+        {
+          "queryId": "q02",
+          "ranked": [
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4592
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4066
+            },
+            {
+              "blockId": "spya-npjt4j",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.3701
+            },
+            {
+              "blockId": "spya-cqh5wq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3413
+            },
+            {
+              "blockId": "spya-xvm37k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.317
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 1,
+          "ndcgAt5": 0.7910838870921474,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q03",
+          "ranked": [
+            {
+              "blockId": "spya-cvyfqe",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.594
+            },
+            {
+              "blockId": "spya-bbg92b",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.593
+            },
+            {
+              "blockId": "spya-dzx75n",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5695
+            },
+            {
+              "blockId": "spya-mq59bu",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5614
+            },
+            {
+              "blockId": "spya-fa94aj",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5443
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.6387878864795979,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q04",
+          "ranked": [
+            {
+              "blockId": "spya-jnwfxp",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.7318
+            },
+            {
+              "blockId": "spya-un9fjn",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.699
+            },
+            {
+              "blockId": "spya-ahtr6e",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6977
+            },
+            {
+              "blockId": "spya-tb4wr2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.6838
+            },
+            {
+              "blockId": "spya-sk4su6",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.6788
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.8390496601388447,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q05",
+          "ranked": [
+            {
+              "blockId": "spya-ps0kap",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6104
+            },
+            {
+              "blockId": "spya-pfkhtt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6055
+            },
+            {
+              "blockId": "spya-hrydkk",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5968
+            },
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5921
+            },
+            {
+              "blockId": "spya-hj5y6s",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5686
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.8,
+          "meanScore": 1.8,
+          "ndcgAt5": 0.915209948681596,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q06",
+          "ranked": [
+            {
+              "blockId": "spya-dzx75n",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4758
+            },
+            {
+              "blockId": "spya-k850tu",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4644
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4332
+            },
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.4281
+            },
+            {
+              "blockId": "spya-b228ay",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4114
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.4030302838010049,
+          "unique": [
+            "spya-arj7ry",
+            "spya-b228ay"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q07",
+          "ranked": [
+            {
+              "blockId": "spya-sq9v5k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5973
+            },
+            {
+              "blockId": "spya-zg9me8",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5384
+            },
+            {
+              "blockId": "spya-fz5xq5",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5365
+            },
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5257
+            },
+            {
+              "blockId": "spya-gw0hsq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4873
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.8597186998521972,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q08",
+          "ranked": [
+            {
+              "blockId": "spya-dp8sem",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.7744
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.7691
+            },
+            {
+              "blockId": "spya-b59nm2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.6546
+            },
+            {
+              "blockId": "spya-hzp9yz",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.635
+            },
+            {
+              "blockId": "spya-ps0kap",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.6286
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.9155230494702449,
+          "unique": [
+            "spya-ps0kap"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q09",
+          "ranked": [
+            {
+              "blockId": "spya-x8b23s",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3595
+            },
+            {
+              "blockId": "spya-gf9fdf",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.3548
+            },
+            {
+              "blockId": "spya-ydx92v",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3383
+            },
+            {
+              "blockId": "spya-xxhd05",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3374
+            },
+            {
+              "blockId": "spya-m6ng8g",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.329
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.6477374519403686,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q10",
+          "ranked": [
+            {
+              "blockId": "spya-bqd0mc",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.602
+            },
+            {
+              "blockId": "spya-ck7c7b",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5731
+            },
+            {
+              "blockId": "spya-vrvp8b",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5683
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5621
+            },
+            {
+              "blockId": "spya-s43krv",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5525
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.6031065681619634,
+          "unique": [
+            "spya-mcn70k",
+            "spya-s43krv"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q11",
+          "ranked": [
+            {
+              "blockId": "spya-cx2tn6",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6498
+            },
+            {
+              "blockId": "spya-p75b5w",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6449
+            },
+            {
+              "blockId": "spya-hek4mp",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6244
+            },
+            {
+              "blockId": "spya-egkyk2",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6195
+            },
+            {
+              "blockId": "spya-h7snd5",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.6109
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0.2,
+          "ndcgAt5": 0.09227178996600532,
+          "unique": [
+            "spya-hek4mp"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q12",
+          "ranked": [
+            {
+              "blockId": "spya-t4tkyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.7435
+            },
+            {
+              "blockId": "spya-ut5bsd",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.7336
+            },
+            {
+              "blockId": "spya-b54jrm",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.696
+            },
+            {
+              "blockId": "spya-ahs2q7",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6925
+            },
+            {
+              "blockId": "spya-rhkc9x",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.6614
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.6589924212291034,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q13",
+          "ranked": [
+            {
+              "blockId": "spya-kzkj5e",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.6511
+            },
+            {
+              "blockId": "spya-wpcmm0",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5881
+            },
+            {
+              "blockId": "spya-bst8br",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5633
+            },
+            {
+              "blockId": "spya-dzx75n",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5612
+            },
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.5506
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.8670870086853021,
+          "unique": [
+            "spya-bst8br",
+            "spya-dzx75n"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q14",
+          "ranked": [
+            {
+              "blockId": "spya-vgrj84",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.6167
+            },
+            {
+              "blockId": "spya-nr2han",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5646
+            },
+            {
+              "blockId": "spya-x8b23s",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5423
+            },
+            {
+              "blockId": "spya-pajjkn",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5336
+            },
+            {
+              "blockId": "spya-uftaze",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5302
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.5,
+          "unique": [
+            "spya-pajjkn"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q15",
+          "ranked": [
+            {
+              "blockId": "spya-y2xjyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.6173
+            },
+            {
+              "blockId": "spya-dr48uq",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5947
+            },
+            {
+              "blockId": "spya-drsrwy",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5853
+            },
+            {
+              "blockId": "spya-vd50av",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5786
+            },
+            {
+              "blockId": "spya-p04khr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5768
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.4,
+          "ndcgAt5": 0.7234267649959281,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q16",
+          "ranked": [
+            {
+              "blockId": "spya-z7zzwv",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.5603
+            },
+            {
+              "blockId": "spya-dxtntk",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5365
+            },
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.512
+            },
+            {
+              "blockId": "spya-h7dmbb",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5081
+            },
+            {
+              "blockId": "spya-bdb52c",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4881
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.6551092478840796,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q17",
+          "ranked": [
+            {
+              "blockId": "spya-z79mew",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.5436
+            },
+            {
+              "blockId": "spya-mcaa4g",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.418
+            },
+            {
+              "blockId": "spya-tphbr6",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3985
+            },
+            {
+              "blockId": "spya-bst8br",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3879
+            },
+            {
+              "blockId": "spya-dqx7dn",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3663
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.7601875334318685,
+          "unique": [
+            "spya-bst8br"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q18",
+          "ranked": [
+            {
+              "blockId": "spya-rqzp97",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.7086
+            },
+            {
+              "blockId": "spya-q874wt",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.49
+            },
+            {
+              "blockId": "spya-awr74r",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4354
+            },
+            {
+              "blockId": "spya-u97r7e",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.4248
+            },
+            {
+              "blockId": "spya-rh232t",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.412
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.7601875334318685,
+          "unique": [
+            "spya-awr74r",
+            "spya-rh232t"
+          ],
+          "uniqueMeanScore": 0
+        }
+      ]
+    },
+    {
+      "arm": "voyage-4",
+      "model": "voyageai/voyage-4",
+      "inputType": true,
+      "versus": {
+        "bge-m3": 59,
+        "voyage-4-lite": 34,
+        "voyage-4-lite-untyped": 37,
+        "3-small": 42
+      },
+      "dims": 1024,
+      "usage": {
+        "promptTokens": 36549,
+        "cost": 0.00219294
+      },
+      "precisionAt3": 0.6666666666666666,
+      "precisionAt5": 0.611111111111111,
+      "strictPrecisionAt5": 0.288888888888889,
+      "meanScore": 0.8999999999999999,
+      "ndcgAt5": 0.7372015485866094,
+      "uniqueFinds": 17,
+      "uniqueMeanScore": 0.3484848484848485,
+      "queriesWithNoRelevantHit": 1,
+      "separation": 3.292708242973001,
+      "corpusMeanCosine": 0.18744095505910674,
+      "perQuery": [
+        {
+          "queryId": "q01",
+          "ranked": [
+            {
+              "blockId": "spya-rn8y3y",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4315
+            },
+            {
+              "blockId": "spya-cxy0eb",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4196
+            },
+            {
+              "blockId": "spya-f87ghx",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.413
+            },
+            {
+              "blockId": "spya-nxxnrj",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4116
+            },
+            {
+              "blockId": "spya-cqh2pq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4018
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 1,
+          "ndcgAt5": 0.6849208998040744,
+          "unique": [
+            "spya-f87ghx",
+            "spya-nxxnrj"
+          ],
+          "uniqueMeanScore": 1
+        },
+        {
+          "queryId": "q02",
+          "ranked": [
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4072
+            },
+            {
+              "blockId": "spya-npjt4j",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.3838
+            },
+            {
+              "blockId": "spya-xvm37k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3707
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3356
+            },
+            {
+              "blockId": "spya-cqh5wq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3192
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 1,
+          "ndcgAt5": 0.8840708486175419,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q03",
+          "ranked": [
+            {
+              "blockId": "spya-cvyfqe",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5674
+            },
+            {
+              "blockId": "spya-epw4h3",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4574
+            },
+            {
+              "blockId": "spya-mq59bu",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4374
+            },
+            {
+              "blockId": "spya-fa94aj",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4201
+            },
+            {
+              "blockId": "spya-tgnssb",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.42
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.8403030283801005,
+          "unique": [
+            "spya-tgnssb"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q04",
+          "ranked": [
+            {
+              "blockId": "spya-jnwfxp",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6419
+            },
+            {
+              "blockId": "spya-un9fjn",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6281
+            },
+            {
+              "blockId": "spya-ahtr6e",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5714
+            },
+            {
+              "blockId": "spya-tb4wr2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.5414
+            },
+            {
+              "blockId": "spya-b0086e",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5348
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.4,
+          "ndcgAt5": 0.915210949803576,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q05",
+          "ranked": [
+            {
+              "blockId": "spya-hrydkk",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5095
+            },
+            {
+              "blockId": "spya-vys3vj",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4905
+            },
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4862
+            },
+            {
+              "blockId": "spya-pfkhtt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4846
+            },
+            {
+              "blockId": "spya-b59nm2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4749
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.8,
+          "meanScore": 1.8,
+          "ndcgAt5": 0.830419897363192,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q06",
+          "ranked": [
+            {
+              "blockId": "spya-k850tu",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5113
+            },
+            {
+              "blockId": "spya-xk9gne",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3669
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.3494
+            },
+            {
+              "blockId": "spya-cvaqgs",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.329
+            },
+            {
+              "blockId": "spya-hzp9yz",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.3218
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.9778585125241057,
+          "unique": [
+            "spya-xk9gne",
+            "spya-cvaqgs"
+          ],
+          "uniqueMeanScore": 1
+        },
+        {
+          "queryId": "q07",
+          "ranked": [
+            {
+              "blockId": "spya-sq9v5k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5176
+            },
+            {
+              "blockId": "spya-zg9me8",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4595
+            },
+            {
+              "blockId": "spya-gw0hsq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4204
+            },
+            {
+              "blockId": "spya-fz5xq5",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4006
+            },
+            {
+              "blockId": "spya-n393ru",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.3883
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.8597186998521972,
+          "unique": [
+            "spya-n393ru"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q08",
+          "ranked": [
+            {
+              "blockId": "spya-dp8sem",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6867
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6205
+            },
+            {
+              "blockId": "spya-b59nm2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5716
+            },
+            {
+              "blockId": "spya-hzp9yz",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.544
+            },
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.476
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.4,
+          "ndcgAt5": 1,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q09",
+          "ranked": [
+            {
+              "blockId": "spya-x8b23s",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3165
+            },
+            {
+              "blockId": "spya-gf9fdf",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.3124
+            },
+            {
+              "blockId": "spya-y2xjyr",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3068
+            },
+            {
+              "blockId": "spya-xxhd05",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3034
+            },
+            {
+              "blockId": "spya-ydx92v",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.2982
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.45407562676326696,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q10",
+          "ranked": [
+            {
+              "blockId": "spya-bqd0mc",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5378
+            },
+            {
+              "blockId": "spya-hzbk48",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5192
+            },
+            {
+              "blockId": "spya-ck7c7b",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5081
+            },
+            {
+              "blockId": "spya-vrvp8b",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4996
+            },
+            {
+              "blockId": "spya-qzphan",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.484
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.4,
+          "ndcgAt5": 0.8908151253526532,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q11",
+          "ranked": [
+            {
+              "blockId": "spya-cx2tn6",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4947
+            },
+            {
+              "blockId": "spya-wbpdja",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4556
+            },
+            {
+              "blockId": "spya-w257ta",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4462
+            },
+            {
+              "blockId": "spya-p75b5w",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4356
+            },
+            {
+              "blockId": "spya-yypbg0",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4185
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.42023717380997994,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q12",
+          "ranked": [
+            {
+              "blockId": "spya-ut5bsd",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.6292
+            },
+            {
+              "blockId": "spya-t4tkyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5874
+            },
+            {
+              "blockId": "spya-cammdp",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4979
+            },
+            {
+              "blockId": "spya-z3w4p4",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4978
+            },
+            {
+              "blockId": "spya-rhkc9x",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4954
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 1,
+          "ndcgAt5": 0.6875835186917185,
+          "unique": [
+            "spya-z3w4p4"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q13",
+          "ranked": [
+            {
+              "blockId": "spya-kzkj5e",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.466
+            },
+            {
+              "blockId": "spya-wpcmm0",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4278
+            },
+            {
+              "blockId": "spya-w8z40d",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.3855
+            },
+            {
+              "blockId": "spya-wm8c60",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3656
+            },
+            {
+              "blockId": "spya-c57hgx",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3637
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1,
+          "ndcgAt5": 0.9699225363013644,
+          "unique": [
+            "spya-c57hgx"
+          ],
+          "uniqueMeanScore": 1
+        },
+        {
+          "queryId": "q14",
+          "ranked": [
+            {
+              "blockId": "spya-nr2han",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.5009
+            },
+            {
+              "blockId": "spya-vgrj84",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4848
+            },
+            {
+              "blockId": "spya-my2d4a",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4757
+            },
+            {
+              "blockId": "spya-uftaze",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4638
+            },
+            {
+              "blockId": "spya-nv8qm6",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4347
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0,
+          "ndcgAt5": 0,
+          "unique": [
+            "spya-nv8qm6"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q15",
+          "ranked": [
+            {
+              "blockId": "spya-vd50av",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4673
+            },
+            {
+              "blockId": "spya-hm8bb7",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3814
+            },
+            {
+              "blockId": "spya-csknkx",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3741
+            },
+            {
+              "blockId": "spya-drsrwy",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3713
+            },
+            {
+              "blockId": "spya-y2xjyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.367
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1,
+          "ndcgAt5": 0.5551553341043619,
+          "unique": [
+            "spya-hm8bb7",
+            "spya-csknkx"
+          ],
+          "uniqueMeanScore": 0.5
+        },
+        {
+          "queryId": "q16",
+          "ranked": [
+            {
+              "blockId": "spya-z7zzwv",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.5233
+            },
+            {
+              "blockId": "spya-dxtntk",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.485
+            },
+            {
+              "blockId": "spya-yypbg0",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4702
+            },
+            {
+              "blockId": "spya-gm3xu0",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.4609
+            },
+            {
+              "blockId": "spya-zzw20p",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.4416
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.6152631811327298,
+          "unique": [
+            "spya-yypbg0"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q17",
+          "ranked": [
+            {
+              "blockId": "spya-z79mew",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.5779
+            },
+            {
+              "blockId": "spya-tphbr6",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3245
+            },
+            {
+              "blockId": "spya-zzw20p",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3074
+            },
+            {
+              "blockId": "spya-rqzp97",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.2936
+            },
+            {
+              "blockId": "spya-hg7u0a",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.2766
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.9238850086262381,
+          "unique": [
+            "spya-zzw20p",
+            "spya-rqzp97",
+            "spya-hg7u0a"
+          ],
+          "uniqueMeanScore": 0.3333333333333333
+        },
+        {
+          "queryId": "q18",
+          "ranked": [
+            {
+              "blockId": "spya-rqzp97",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.5661
+            },
+            {
+              "blockId": "spya-z79mew",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3019
+            },
+            {
+              "blockId": "spya-u97r7e",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.2877
+            },
+            {
+              "blockId": "spya-zzw20p",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.2737
+            },
+            {
+              "blockId": "spya-q874wt",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2636
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.7601875334318685,
+          "unique": [
+            "spya-z79mew",
+            "spya-zzw20p"
+          ],
+          "uniqueMeanScore": 0
+        }
+      ]
+    },
+    {
+      "arm": "3-small",
+      "model": "openai/text-embedding-3-small",
+      "inputType": false,
+      "versus": {
+        "bge-m3": 54,
+        "voyage-4-lite": 46,
+        "voyage-4-lite-untyped": 45,
+        "voyage-4": 42
+      },
+      "dims": 1536,
+      "usage": {
+        "promptTokens": 37099,
+        "cost": 0.00074198
+      },
+      "precisionAt3": 0.7037037037037036,
+      "precisionAt5": 0.611111111111111,
+      "strictPrecisionAt5": 0.3222222222222223,
+      "meanScore": 0.9333333333333333,
+      "ndcgAt5": 0.7774603345294929,
+      "uniqueFinds": 25,
+      "uniqueMeanScore": 0.3095238095238095,
+      "queriesWithNoRelevantHit": 1,
+      "separation": 3.285455191549297,
+      "corpusMeanCosine": 0.17737319663132467,
+      "perQuery": [
+        {
+          "queryId": "q01",
+          "ranked": [
+            {
+              "blockId": "spya-cqh2pq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.3806
+            },
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3768
+            },
+            {
+              "blockId": "spya-t29n67",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3714
+            },
+            {
+              "blockId": "spya-bdb52c",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3709
+            },
+            {
+              "blockId": "spya-xk9gne",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3629
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.7311340247721385,
+          "unique": [
+            "spya-t29n67",
+            "spya-bdb52c",
+            "spya-xk9gne"
+          ],
+          "uniqueMeanScore": 0.6666666666666666
+        },
+        {
+          "queryId": "q02",
+          "ranked": [
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3978
+            },
+            {
+              "blockId": "spya-npjt4j",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.3947
+            },
+            {
+              "blockId": "spya-xvm37k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3112
+            },
+            {
+              "blockId": "spya-cqh5wq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.2948
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2927
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 1,
+          "ndcgAt5": 0.8963753390648908,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q03",
+          "ranked": [
+            {
+              "blockId": "spya-cvyfqe",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5296
+            },
+            {
+              "blockId": "spya-uk9ye2",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.424
+            },
+            {
+              "blockId": "spya-epw4h3",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.42
+            },
+            {
+              "blockId": "spya-z2b4ny",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.4143
+            },
+            {
+              "blockId": "spya-rgrzer",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.409
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.7984848580994974,
+          "unique": [
+            "spya-uk9ye2",
+            "spya-z2b4ny",
+            "spya-rgrzer"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q04",
+          "ranked": [
+            {
+              "blockId": "spya-jnwfxp",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.588
+            },
+            {
+              "blockId": "spya-ahtr6e",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5785
+            },
+            {
+              "blockId": "spya-b0086e",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5396
+            },
+            {
+              "blockId": "spya-un9fjn",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.5365
+            },
+            {
+              "blockId": "spya-zw2m7u",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4967
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.6,
+          "ndcgAt5": 0.9863520113014781,
+          "unique": [
+            "spya-zw2m7u"
+          ],
+          "uniqueMeanScore": 1
+        },
+        {
+          "queryId": "q05",
+          "ranked": [
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4504
+            },
+            {
+              "blockId": "spya-w8z40d",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4427
+            },
+            {
+              "blockId": "spya-hj5y6s",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4377
+            },
+            {
+              "blockId": "spya-hrydkk",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4333
+            },
+            {
+              "blockId": "spya-vys3vj",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4297
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.6,
+          "meanScore": 1.6,
+          "ndcgAt5": 0.819972692711383,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q06",
+          "ranked": [
+            {
+              "blockId": "spya-k850tu",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.3944
+            },
+            {
+              "blockId": "spya-pfkhtt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2985
+            },
+            {
+              "blockId": "spya-kzkj5e",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2689
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.254
+            },
+            {
+              "blockId": "spya-gvzuc4",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2494
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.6387878864795979,
+          "unique": [
+            "spya-kzkj5e",
+            "spya-gvzuc4"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q07",
+          "ranked": [
+            {
+              "blockId": "spya-sq9v5k",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.3711
+            },
+            {
+              "blockId": "spya-zg9me8",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.3627
+            },
+            {
+              "blockId": "spya-gw0hsq",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.3526
+            },
+            {
+              "blockId": "spya-v98v5u",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.3444
+            },
+            {
+              "blockId": "spya-cepmwf",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.3426
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 0.8597186998521972,
+          "unique": [
+            "spya-v98v5u"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q08",
+          "ranked": [
+            {
+              "blockId": "spya-dp8sem",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.6643
+            },
+            {
+              "blockId": "spya-hzp9yz",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5571
+            },
+            {
+              "blockId": "spya-b59nm2",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.5426
+            },
+            {
+              "blockId": "spya-xhvztm",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 2,
+              "cosine": 0.4782
+            },
+            {
+              "blockId": "spya-da9tvt",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 1,
+              "cosine": 0.4718
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.4,
+          "ndcgAt5": 0.9562707599036264,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q09",
+          "ranked": [
+            {
+              "blockId": "spya-g7uvnq",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3205
+            },
+            {
+              "blockId": "spya-x8b23s",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3176
+            },
+            {
+              "blockId": "spya-xxhd05",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3072
+            },
+            {
+              "blockId": "spya-z3w4p4",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3024
+            },
+            {
+              "blockId": "spya-m6ng8g",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.2996
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.3721855077204451,
+          "unique": [
+            "spya-g7uvnq",
+            "spya-z3w4p4"
+          ],
+          "uniqueMeanScore": 0.5
+        },
+        {
+          "queryId": "q10",
+          "ranked": [
+            {
+              "blockId": "spya-hzbk48",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5209
+            },
+            {
+              "blockId": "spya-ck7c7b",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4873
+            },
+            {
+              "blockId": "spya-bqd0mc",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4512
+            },
+            {
+              "blockId": "spya-b475w8",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4193
+            },
+            {
+              "blockId": "spya-ut5bsd",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4127
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 0.8,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.9155230494702449,
+          "unique": [
+            "spya-ut5bsd"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q11",
+          "ranked": [
+            {
+              "blockId": "spya-xn53gk",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.3969
+            },
+            {
+              "blockId": "spya-h7snd5",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.3844
+            },
+            {
+              "blockId": "spya-s0gn3k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3727
+            },
+            {
+              "blockId": "spya-wbpdja",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.3605
+            },
+            {
+              "blockId": "spya-g9ng20",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3575
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1,
+          "ndcgAt5": 0.8329762261778096,
+          "unique": [
+            "spya-xn53gk",
+            "spya-s0gn3k",
+            "spya-g9ng20"
+          ],
+          "uniqueMeanScore": 0.6666666666666666
+        },
+        {
+          "queryId": "q12",
+          "ranked": [
+            {
+              "blockId": "spya-t4tkyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.5709
+            },
+            {
+              "blockId": "spya-ut5bsd",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5634
+            },
+            {
+              "blockId": "spya-rhkc9x",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5321
+            },
+            {
+              "blockId": "spya-ecseh8",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.5255
+            },
+            {
+              "blockId": "spya-cammdp",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.4888
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 1.2,
+          "ndcgAt5": 0.8622240278900382,
+          "unique": [],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q13",
+          "ranked": [
+            {
+              "blockId": "spya-kzkj5e",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4738
+            },
+            {
+              "blockId": "spya-wpcmm0",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.3804
+            },
+            {
+              "blockId": "spya-mcn70k",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3376
+            },
+            {
+              "blockId": "spya-hwmjkq",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3084
+            },
+            {
+              "blockId": "spya-wm8c60",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3014
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 0.8,
+          "ndcgAt5": 0.8670870086853021,
+          "unique": [
+            "spya-hwmjkq"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q14",
+          "ranked": [
+            {
+              "blockId": "spya-nr2han",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4432
+            },
+            {
+              "blockId": "spya-vgrj84",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3912
+            },
+            {
+              "blockId": "spya-gnvhk6",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3835
+            },
+            {
+              "blockId": "spya-dajzd7",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.383
+            },
+            {
+              "blockId": "spya-uftaze",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.3744
+            }
+          ],
+          "precisionAt3": 0,
+          "precisionAt5": 0,
+          "strictPrecisionAt5": 0,
+          "meanScore": 0,
+          "ndcgAt5": 0,
+          "unique": [
+            "spya-dajzd7"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q15",
+          "ranked": [
+            {
+              "blockId": "spya-y2xjyr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.479
+            },
+            {
+              "blockId": "spya-vd50av",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4747
+            },
+            {
+              "blockId": "spya-jfma0c",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4586
+            },
+            {
+              "blockId": "spya-p04khr",
+              "slug": "constitution",
+              "score": 2,
+              "cosine": 0.4534
+            },
+            {
+              "blockId": "spya-bapt40",
+              "slug": "constitution",
+              "score": 1,
+              "cosine": 0.419
+            }
+          ],
+          "precisionAt3": 1,
+          "precisionAt5": 1,
+          "strictPrecisionAt5": 0.8,
+          "meanScore": 1.8,
+          "ndcgAt5": 0.934397461243829,
+          "unique": [
+            "spya-jfma0c",
+            "spya-bapt40"
+          ],
+          "uniqueMeanScore": 1.5
+        },
+        {
+          "queryId": "q16",
+          "ranked": [
+            {
+              "blockId": "spya-arj7ry",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.4755
+            },
+            {
+              "blockId": "spya-zzw20p",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.4625
+            },
+            {
+              "blockId": "spya-ekarxh",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.4591
+            },
+            {
+              "blockId": "spya-z7zzwv",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.4388
+            },
+            {
+              "blockId": "spya-xdmpa0",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.4273
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.6,
+          "strictPrecisionAt5": 0.4,
+          "meanScore": 1,
+          "ndcgAt5": 0.7626089347265247,
+          "unique": [
+            "spya-ekarxh",
+            "spya-xdmpa0"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q17",
+          "ranked": [
+            {
+              "blockId": "spya-z79mew",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.4809
+            },
+            {
+              "blockId": "spya-tphbr6",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.3422
+            },
+            {
+              "blockId": "spya-gm3xu0",
+              "slug": "writes",
+              "score": 0,
+              "cosine": 0.2792
+            },
+            {
+              "blockId": "spya-qcevgh",
+              "slug": "noema-mythology-of-conscious-ai",
+              "score": 0,
+              "cosine": 0.2772
+            },
+            {
+              "blockId": "spya-fqwvqr",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2721
+            }
+          ],
+          "precisionAt3": 0.3333333333333333,
+          "precisionAt5": 0.2,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.4,
+          "ndcgAt5": 0.7601875334318685,
+          "unique": [
+            "spya-fqwvqr"
+          ],
+          "uniqueMeanScore": 0
+        },
+        {
+          "queryId": "q18",
+          "ranked": [
+            {
+              "blockId": "spya-rqzp97",
+              "slug": "writes",
+              "score": 2,
+              "cosine": 0.6198
+            },
+            {
+              "blockId": "spya-smzw4j",
+              "slug": "writes",
+              "score": 1,
+              "cosine": 0.3052
+            },
+            {
+              "blockId": "spya-b475w8",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2537
+            },
+            {
+              "blockId": "spya-rhkc9x",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2358
+            },
+            {
+              "blockId": "spya-z7ym5f",
+              "slug": "constitution",
+              "score": 0,
+              "cosine": 0.2355
+            }
+          ],
+          "precisionAt3": 0.6666666666666666,
+          "precisionAt5": 0.4,
+          "strictPrecisionAt5": 0.2,
+          "meanScore": 0.6,
+          "ndcgAt5": 1,
+          "unique": [
+            "spya-rhkc9x",
+            "spya-z7ym5f"
+          ],
+          "uniqueMeanScore": 0
+        }
+      ]
+    }
+  ],
+  "literalBaseline": {
+    "queriesWithAnyHit": 0,
+    "relevantTotal": 81,
+    "foundAnywhere": 0,
+    "foundInTop5": 0,
+    "perQuery": [
+      {
+        "queryId": "q01",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q02",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q03",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q04",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q05",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q06",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q07",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q08",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q09",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q10",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q11",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q12",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q13",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q14",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q15",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q16",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q17",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      },
+      {
+        "queryId": "q18",
+        "hits": 0,
+        "foundAnywhere": 0,
+        "foundInTop5": 0
+      }
+    ]
+  },
+  "generousWordBaseline": {
+    "foundInTop5": 18,
+    "relevantTotal": 81,
+    "queriesWithAnyRelevantInTop5": 14
+  }
+}
