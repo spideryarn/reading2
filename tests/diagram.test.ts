@@ -15,10 +15,18 @@
  *  2. nothing is ever laid out outside the band's width;
  *  3. a collapsed node keeps its own row and loses only its subtree.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { BlockId, NodeId } from "../src/types.js";
+import type { Block, BlockId, NodeId, Tree } from "../src/types.js";
 import {
   charsThatFit,
+  DIAGRAMS,
+  type DiagramKind,
+  type DiagramNode,
+  GIST_PX,
+  LABEL_PX,
+  layoutDiagram,
+  MAX_DRAWN_DEPTH,
   layoutMindmap,
   layoutStrata,
   layoutTree,
@@ -26,7 +34,7 @@ import {
   walk,
   wrapText,
 } from "../src/web/diagram.js";
-import type { SummaryNode } from "../src/web/tree.js";
+import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
 
 /**
  * A `SummaryNode` by hand.
@@ -341,5 +349,79 @@ describe("nodeAt", () => {
 
   it("is null above the first row, rather than guessing the root", () => {
     expect(nodeAt(layoutStrata(fixture(), OPTS).nodes, null)).toBeNull();
+  });
+});
+
+/**
+ * The same three rules, against the **committed example article** rather than a
+ * fixture built to be convenient.
+ *
+ * The tree above has four sections with tidy short titles. This one has 45
+ * nodes, real headings, real gists, and a shape nobody chose — which is the
+ * only kind of input that catches a budget that was very slightly too generous.
+ * `example/` is in git; `data/` is not (version-control.md), so this is the
+ * largest real article a test can reach on a fresh clone.
+ *
+ * Run across the whole width range the band can actually take: `MODE_MIN` is
+ * 288 and `MODE_IDEAL` is 400 (src/web/layout.ts), and the narrow end is where
+ * a label runs out.
+ */
+describe("the three pictures, against the real example article", () => {
+  const tree = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
+  const raw = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
+  const blocks = (Array.isArray(raw) ? raw : (raw as { blocks: Block[] }).blocks) as Block[];
+  const real = buildSummaryTree(tree, blocks, null);
+
+  /* The estimate `wrapText` used for this line, which is the only honest ruler
+     for a label it wrapped. Getting THIS wrong is how a check reports a bug that
+     is not there — it happened twice while writing these, both times by
+     measuring a 10.5px gist line at title size. */
+  const lineWidth = (n: DiagramNode, i: number, kind: DiagramKind) =>
+    (n.lines[i]?.length ?? 0) * (i >= n.titleLines ? GIST_PX : (LABEL_PX[kind]?.[n.depth] ?? 12)) * 0.52;
+
+  for (const kind of DIAGRAMS) {
+    for (const width of [288, 320, 400]) {
+      it(`${kind} at ${width}px stays inside the band and draws no impossible box`, () => {
+        expect(real).not.toBeNull();
+        if (!real) return;
+        const layout = layoutDiagram(kind, real, { width, height: 700, collapsed: NONE });
+        expect(layout.nodes.length).toBeGreaterThan(0);
+
+        for (const n of layout.nodes) {
+          for (const v of [n.x, n.y, n.w, n.h, n.labelX, n.labelY]) expect(v).toBeTypeOf("number");
+          for (const v of [n.x, n.y, n.w, n.h, n.labelX, n.labelY]) expect(Number.isFinite(v)).toBe(true);
+          expect(n.w).toBeGreaterThanOrEqual(0);
+          expect(n.h).toBeGreaterThanOrEqual(0);
+          expect(n.x).toBeGreaterThanOrEqual(-0.5);
+          expect(n.x + n.w).toBeLessThanOrEqual(width + 0.5);
+
+          n.lines.forEach((_, i) => {
+            if (n.rotated) return; // its budget is the box's HEIGHT, not its width
+            const w = lineWidth(n, i, kind);
+            const left =
+              n.anchor === "start" ? n.labelX : n.anchor === "end" ? n.labelX - w : n.labelX - w / 2;
+            expect(left, `${kind} ${n.number} line ${i} starts left of the band`).toBeGreaterThan(-1);
+            expect(left + w, `${kind} ${n.number} line ${i} runs past the band`).toBeLessThanOrEqual(
+              width + 1,
+            );
+          });
+        }
+      });
+    }
+  }
+
+  it("never draws deeper than MAX_DRAWN_DEPTH, whatever the tree holds", () => {
+    /* The example tree goes to depth 3. All three layouts assume 2 — strata has
+       three x positions and would stack depth 3 on depth 2, and mindmap reads
+       exactly two levels of children. `buildSummaryTree` stops at 2 today, so
+       this is guarding the assumption rather than the current caller. */
+    expect(Math.max(...Object.values(tree.nodes).map((n) => n.depth))).toBeGreaterThan(
+      MAX_DRAWN_DEPTH,
+    );
+    if (!real) return;
+    for (const kind of DIAGRAMS) {
+      const layout = layoutDiagram(kind, real, { width: 320, height: 700, collapsed: NONE });
+      for (const n of layout.nodes) expect(n.depth).toBeLessThanOrEqual(MAX_DRAWN_DEPTH);
+    }
   });
 });
