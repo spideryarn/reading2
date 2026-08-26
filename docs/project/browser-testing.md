@@ -192,6 +192,32 @@ screenshots showed live, correctly-updating content. Read it as "hidden means su
 do not read the converse, and do not take a `"hidden"` reading as proof that what you just saw on
 screen wasn't real. Found 2026-08-25, checking the video embed's layout.
 
+**And sometimes a tab is asleep past all of this: no click reaches the page at all.** Twice on
+2026-08-26, in two separate sessions, a tab took no real click — not the thing under test, and not a
+plain toggle button with no scrolling, no rAF and nothing article-specific in it. `aria-pressed` did
+not move. A fresh tab, a resize and a wait all failed to revive it, and a screenshot rendered the
+page perfectly while the tab stayed dead, which is the same lie described above. The workarounds
+below do not help, because the problem is not the animation — it is that the page is not receiving
+events.
+
+So **probe for a live tab before spending a session on one, and probe with frames rather than with
+`visibilityState`**, which lies in both directions:
+
+```js
+// Frames actually rendered in half a second. 0 means the tab is asleep.
+await new Promise((done) => {
+  let frames = 0;
+  const tick = () => { frames++; requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+  setTimeout(() => { console.log('[probe] frames', frames); done(); }, 500);
+});
+```
+
+Then click one control that has nothing to do with what you are testing and check its state changed.
+If either says no, stop and say so: "could not test" is a real result and takes a minute, where
+working round a dead tab takes half an hour and produces something worse than nothing — a detailed
+report about behaviour nobody observed.
+
 **A hidden tab does not scroll smoothly at all — it does not scroll.** Not "it jumps instead of
 animating": `window.scrollTo({ behavior: "smooth" })` returns normally and `window.scrollY` is
 unchanged a second later, because the animation is driven by the same rendering step. The same is now
