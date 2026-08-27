@@ -282,6 +282,47 @@ because those two clear different state. So there are two states and one `mode` 
 `const passages = mode === "ideas" ? ideaFound : found` — and everything downstream reads that one
 expression. GPT Sol found this in the plan, before it was written.
 
+## The band's own layout, and the thing a screenshot found
+
+Three defects, all found by looking at it on 2026-08-27 and none of them visible from the code.
+
+**The panel had no scroller, and lost most of itself.** `.mode-band` is a fixed flex column running
+from the controls bar down to the dock, and its `min-height: 0` exists for a child that scrolls:
+`.gloss-list` next door has one, so do `.chat-scroll`, `.summ-scroll` and `.diag-scroll`. This panel
+put the two groups straight into the column. With one idea open on a 700px-tall window, the whole
+second group — nine ideas on the noema piece — and the **Find them again** button below it sat 474px
+past the bottom of the band, with no way to reach any of it. Measured, not eyeballed. It is invisible
+on a tall window with everything collapsed, which is the state you build in, and it is the
+[silent-success](../reusable/silent-success.md) shape: the panel renders, the content is *there* in
+the DOM, and every check short of looking says fine.
+
+The head and the footer stay outside the scroller, which is the arrangement
+[`GlossaryPanel.tsx`](../../src/web/GlossaryPanel.tsx) already had: the control that regenerates
+these must not be something you have to scroll ten ideas to find.
+
+**Every line below the head was flush against the band's borders.** The head is inset `0.7rem`;
+the groups, the ideas, the quoted passages and the footer were all at x = the band's left border and
+ran into its right one. The padding now lives once on `.ideas-scroll` rather than on each part.
+
+**The stepper was a sibling of its label, so it took a whole row to itself.** `BlockNav` renders a
+`<span>`, and a `<span>` in a block context is its own line — the stylesheet's `margin-left: auto`
+had nothing to push against, and the comment beside it claimed an arrangement that was not
+happening. It goes *inside* the `<p class="gloss-part-label">` now, the way the glossary's
+*"used in 3 places"* line has always had it, which is both a row back and the arrows where the eye
+already expects them.
+
+Two things were improved while the file was open, rather than fixed:
+
+- **The group headings are sticky** inside the scroller. Which half you are looking at is the whole
+  point of the mode, and on a nine-idea group the heading is off screen for most of the time you
+  spend under it. The containing block is the group, many times the height of the heading, so the
+  range is real — see [css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md)
+  for the case where it silently is not.
+- **The break between the two groups is heavier than the rule between two ideas** (`--rule-strong`
+  against `--rule`), and each group's count is pushed hard right to line up with the *"10 ideas"* in
+  the head. Nine introduced ideas under one assumed one is the normal shape on a long article (see
+  [What is still open](#what-is-still-open)), and the list was reading as ten of the same thing.
+
 ## Prev / next, in both modes
 
 Greg, 2026-08-26: *"There should also be a way in both Ideas and Glossary modes to jump to prev/next
@@ -302,6 +343,12 @@ exemplifying block"*. [`BlockNav.tsx`](../../src/web/BlockNav.tsx) is that, in b
   entry.blocks[0]`), because there the two facts are the same fact. Found in a browser both times,
   which is where it had to be found: from the code, *"nothing stepped to yet"* and *"on the first"*
   are two perfectly reasonable states that happen to look identical here.
+- **And a deep link is a selection too.** `/read/<slug>?mode=ideas&idea=<id>` never pressed
+  anything, so the jump — which fires on the press — never fired, and the same *"– / 3"* was back:
+  three washed passages, none of them emphasised, and › going to passage two. `IdeasBand` now opens
+  the first resolved passage whenever nothing is open, which covers both routes in. **It opens
+  without scrolling anybody**: a shared URL carries `?at=` as well, and the reader's own position in
+  the article beats our idea of where they should be looking. Only the press earns the scroll.
 - **The glossary can key it on block ids and ideas cannot.** `findOccurrences` pushes each block at
   most once, so a term's ids are unique; an idea's occurrences are quoted passages and two can sit in
   one paragraph, so that side keys on `Found.key`.

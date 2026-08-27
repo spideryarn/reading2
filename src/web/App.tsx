@@ -1366,6 +1366,21 @@ function IdeasBand({
     if (openKey && !found.some((f) => f.key === openKey)) onOpenKey(null);
   }, [found, openKey, onOpenKey]);
 
+  /* Standing on the first passage is the state a selected idea is *in* — and it
+     is the state whether the reader got there by pressing the row or by opening
+     a URL that already had `?idea=` in it. The jump below only fires on a press,
+     so a deep link drew three washed passages, emphasised none of them, and put
+     "– / 3" in the stepper; the reader's first press of › then took them to
+     passage two. Same bug the glossary had, fixed there by deriving rather than
+     seeding, and it reaches this panel from the other end. Browser, 2026-08-27.
+
+     **It opens without moving anybody.** A shared URL carries `?at=` too, and
+     the reader's own position in the article beats our idea of where they
+     should be looking. Only the press earns the scroll. */
+  useEffect(() => {
+    if (openKey === null && found.length > 0) onOpenKey(found[0]!.key);
+  }, [found, openKey, onOpenKey]);
+
   /* Selecting an idea arrives at its first passage — and it has to be the first
      one that RESOLVED, which cannot be decided in the panel: until the
      selection changes, nothing has resolved that idea's occurrences at all.

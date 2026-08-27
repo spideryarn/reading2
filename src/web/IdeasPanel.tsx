@@ -196,57 +196,73 @@ export function IdeasPanel({
             </div>
           ) : null}
 
-          {GROUPS.map(({ provenance, heading, blurb }) => {
-            const mine = all.filter((i) => i.provenance === provenance);
-            /* No heading over nothing. A piece really can have no unstated
-               premises worth naming, and an empty labelled section says "we
-               looked and found none" in a way an absent one does not — but it
-               says it in the most expensive place on screen, above the ideas
-               that ARE there. */
-            if (mine.length === 0) return null;
-            return (
-              <section key={provenance} className="ideas-group">
-                <h3>
-                  {heading}
-                  <span className="gloss-count">{mine.length}</span>
-                </h3>
-                <p className="ideas-blurb">{blurb}</p>
-                <ul className="ideas-list">
-                  {mine.map((idea) => (
-                    <IdeaRow
-                      key={idea.id}
-                      idea={idea}
-                      open={idea.id === ideaId}
-                      onSelect={() => {
-                        /* Pressing the open one clears it, which is the only
-                           way to take the marks back out — a selection you
-                           cannot cancel is a mode inside a mode. The glossary
-                           next door does exactly this. */
-                        if (idea.id === ideaId) return onIdea(null);
-                        onIdea(idea.id);
-                        /* **The jump lives in `IdeasBand`, not here**, and
-                           that is forced rather than chosen. Selecting jumps to
-                           the first occurrence — pressing a row is arriving
-                           somewhere, unlike the stepper below, which leaves you
-                           alone if the target is already on screen — but it has
-                           to be the first *resolved* one, and this panel only
-                           holds the resolved passages of the idea that is
-                           **already** selected. The stored list can name a
-                           block a re-extraction removed, so jumping to
-                           `idea.occurrences[0]` does nothing at all: the reader
-                           presses an idea, the marks appear off screen, and the
-                           page sits still. GPT Sol, 2026-08-27. */
-                      }}
-                      found={idea.id === ideaId ? found : []}
-                      openKey={openKey}
-                      onOpenKey={onOpenKey}
-                      onJump={onJump}
-                    />
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
+          {/* **The scroller, and it was missing.** `.mode-band` is a fixed
+              flex column from the controls bar to the dock, and every other
+              band puts a `flex: 1; min-height: 0; overflow-y: auto` child
+              inside it — `.gloss-list` next door, `.chat-scroll`,
+              `.summ-scroll`. This one had the groups as direct children, so
+              with one idea open on a 700px window the nine ideas in the second
+              group and the Find-them-again button below them were 474px past
+              the bottom of the band with no way to reach any of them. Measured
+              in a browser, 2026-08-27; invisible from the code, and invisible
+              on a tall window with everything collapsed.
+
+              The head and the footer stay outside it, which is the arrangement
+              GlossaryPanel already had: the button that regenerates these must
+              not be something you have to scroll to. */}
+          <div className="ideas-scroll">
+            {GROUPS.map(({ provenance, heading, blurb }) => {
+              const mine = all.filter((i) => i.provenance === provenance);
+              /* No heading over nothing. A piece really can have no unstated
+                 premises worth naming, and an empty labelled section says "we
+                 looked and found none" in a way an absent one does not — but it
+                 says it in the most expensive place on screen, above the ideas
+                 that ARE there. */
+              if (mine.length === 0) return null;
+              return (
+                <section key={provenance} className="ideas-group">
+                  <h3>
+                    {heading}
+                    <span className="gloss-count">{mine.length}</span>
+                  </h3>
+                  <p className="ideas-blurb">{blurb}</p>
+                  <ul className="ideas-list">
+                    {mine.map((idea) => (
+                      <IdeaRow
+                        key={idea.id}
+                        idea={idea}
+                        open={idea.id === ideaId}
+                        onSelect={() => {
+                          /* Pressing the open one clears it, which is the only
+                             way to take the marks back out — a selection you
+                             cannot cancel is a mode inside a mode. The glossary
+                             next door does exactly this. */
+                          if (idea.id === ideaId) return onIdea(null);
+                          onIdea(idea.id);
+                          /* **The jump lives in `IdeasBand`, not here**, and
+                             that is forced rather than chosen. Selecting jumps to
+                             the first occurrence — pressing a row is arriving
+                             somewhere, unlike the stepper below, which leaves you
+                             alone if the target is already on screen — but it has
+                             to be the first *resolved* one, and this panel only
+                             holds the resolved passages of the idea that is
+                             **already** selected. The stored list can name a
+                             block a re-extraction removed, so jumping to
+                             `idea.occurrences[0]` does nothing at all: the reader
+                             presses an idea, the marks appear off screen, and the
+                             page sits still. GPT Sol, 2026-08-27. */
+                        }}
+                        found={idea.id === ideaId ? found : []}
+                        openKey={openKey}
+                        onOpenKey={onOpenKey}
+                        onJump={onJump}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
 
           {/* Below the list, not above it: this is the thing you reach for
               after reading them and disagreeing, not before. */}
@@ -326,6 +342,12 @@ function IdeaRow({
           )}
 
           <div className="ideas-where">
+            {/* **The stepper goes INSIDE the label**, the way it does in the
+                glossary's "used in 3 places" line. It was a sibling, and a
+                `<span>` sibling in a block context is its own line: the
+                stylesheet's `margin-left: auto` had nothing to push against, so
+                the arrows sat under the heading at the left margin and spent a
+                whole row saying what fits beside four words. */}
             <p className="gloss-part-label">
               {/* The heading is the whole of "this is a hypothesis". An assumed
                   idea is BY DEFINITION not in the article, so "assumed in"
@@ -338,30 +360,30 @@ function IdeaRow({
                   disagrees with the rows under it is the panel telling the
                   reader two things. GPT Sol, 2026-08-27. */}
               <span className="gloss-count">{found.length}</span>
-            </p>
 
-            {/* Built from what actually RESOLVED, not from what was stored. After
-                a re-extraction some occurrences no longer find their block or
-                their words, and a counter that counted the stored list would
-                say "2 of 5" and step through three. */}
-            <BlockNav
-              /* `Found.key` is the occurrence's identity — one idea can be
-                 needed twice in the same paragraph, so a block id is not one.
-                 Mapped here rather than widening `Found`, because `key` means
-                 exactly this already and a second id field on it would be two
-                 names for one thing. */
-              targets={found.map((f) => ({ id: f.key, blockId: f.blockId }))}
-              currentId={openKey}
-              onGo={(key, blockId) => {
-                onOpenKey(key);
-                /* `nudgeTo`, not `onJump` — stepping between neighbours leaves
-                   the reader alone when the next one is already in front of
-                   them. Pressing an occurrence row below always jumps, because
-                   that is arriving somewhere rather than moving along. */
-                nudgeTo(blockId, onJump);
-              }}
-              noun={assumed ? "passage" : "statement"}
-            />
+              {/* Built from what actually RESOLVED, not from what was stored. After
+                  a re-extraction some occurrences no longer find their block or
+                  their words, and a counter that counted the stored list would
+                  say "2 of 5" and step through three. */}
+              <BlockNav
+                /* `Found.key` is the occurrence's identity — one idea can be
+                   needed twice in the same paragraph, so a block id is not one.
+                   Mapped here rather than widening `Found`, because `key` means
+                   exactly this already and a second id field on it would be two
+                   names for one thing. */
+                targets={found.map((f) => ({ id: f.key, blockId: f.blockId }))}
+                currentId={openKey}
+                onGo={(key, blockId) => {
+                  onOpenKey(key);
+                  /* `nudgeTo`, not `onJump` — stepping between neighbours leaves
+                     the reader alone when the next one is already in front of
+                     them. Pressing an occurrence row below always jumps, because
+                     that is arriving somewhere rather than moving along. */
+                  nudgeTo(blockId, onJump);
+                }}
+                noun={assumed ? "passage" : "statement"}
+              />
+            </p>
 
             <ol className="ideas-occurrences">
               {found.map((f) => (

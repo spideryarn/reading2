@@ -5949,13 +5949,52 @@ tr:hover .block-chat,
 
    docs/plans/ideas-mode.md. */
 
-.ideas-group { margin: 0.9rem 0 0; }
-.ideas-group:first-of-type { margin-top: 0.4rem; }
+/* The scroller. `.mode-band` is a fixed column between the controls bar and
+   the dock, and its `min-height: 0` exists for exactly this child — without one
+   the panel's own content decides the panel's height, which a fixed element
+   cannot honour, so everything past the dock is simply unreachable. The groups
+   were direct children until 2026-08-27 and it cost the second group entirely
+   whenever an idea was open on a laptop window. Same three properties as
+   `.gloss-list`, `.chat-scroll` and `.summ-scroll`.
+
+   **The horizontal padding is here rather than on each part**, and it was
+   missing altogether: every line of this panel below the head sat flush against
+   the band's left border and ran into its right one, while the head above it
+   was inset 0.7rem. `overscroll-behavior` for the reason `.summ-scroll` gives —
+   wheeling past the end of the ideas must not start scrolling the article. */
+.ideas-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.7rem 0.7rem;
+}
+
+.ideas-group { margin: 0; padding: 0.5rem 0 0; }
+/* The two groups are the whole point of the mode, so the break between them is
+   heavier than the rule between two ideas inside one — `--rule-strong` against
+   the `--rule` on `.ideas-item`. Nine introduced ideas under one assumed one is
+   the normal shape on a long article (docs/project/ideas.md), and without this
+   the list read as ten of the same thing. */
+.ideas-group + .ideas-group {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--rule-strong);
+}
 .ideas-group > h3 {
+  /* Sticky, so the answer to *which half am I looking at* survives scrolling
+     past the heading — which on a nine-idea group is most of the time you spend
+     in it. The containing block is the group, which is many times the height of
+     the heading, so the range is real: see docs/reusable/css-sticky-containing-block.md
+     for the case where it silently is not. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
   margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  background: var(--panel);
   color: var(--ink-soft);
   font-family: var(--font-ui);
   font-size: 0.66rem;
@@ -5963,6 +6002,9 @@ tr:hover .block-chat,
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* Hard right, under the "10 ideas" in the head — the two counts mean the same
+   kind of thing and lining them up is what says so. */
+.ideas-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
 /* The group's own sentence, under its heading. It is doing real work: "the
    piece leans on these and never states them" is the whole difference between
    the two groups, and a reader who has not read the plan has no other way to
@@ -6052,7 +6094,14 @@ tr:hover .block-chat,
   line-height: 1.35;
 }
 
-.ideas-again { margin-top: 1rem; }
+/* Pinned under the scroller rather than at the end of it, the way the
+   glossary's `Foot` is: the control that regenerates these must not be
+   something you have to scroll ten ideas to reach. */
+.ideas-again {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
 
 /* ---- arc, force, cluster: the graph pictures ---- */
 
