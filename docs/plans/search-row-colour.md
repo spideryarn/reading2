@@ -273,7 +273,47 @@ wanted and the opposite of what the docstring claimed.
   and the fixture is oldest first — the picker was fine and the test had the order backwards, which
   is why rows are now addressed by the words on them.
 
-**Not checked in a browser, and this is the one gap.** Greg asked for a Claude-in-Chrome pass and
+### The browser pass, in the end
+
+It ran (the extension was connected later the same day) and found three things,
+all now fixed: the **preview harness was not reproducing the band at all** —
+`.mode-band` is `position: fixed; width: var(--mode-w)` and that property is
+declared on `.reader`, so a plain `<div style={{width:288}}>` left it unset and
+the band shrink-wrapped to 824–930px, making every placement reading meaningless;
+the **faint ring was too faint** at 35% opacity, one mark at two volumes rather
+than two marks, so the two now differ in weight as well as in strength; and the
+**docstring was wrong about focus** for the second time.
+
+What it confirmed, with the band genuinely 288px wide: the popover lands at
+x 87–208 inside a band running 24–312, comfortably clear of both edges, and
+`flip` never needs to fire because the trigger sits at the *right* of a 288px
+band with 260px of room to its left. The grid reads as an ordered spectrum —
+warms, greens, blues, violets, grey last. Picking slot 8, a hue no automatic
+assignment can produce, paints correctly end to end. No console errors.
+
+**Focus, settled.** After a *real mouse click* the trigger keeps focus; one Tab
+reaches the first swatch; picking returns focus to the trigger. Opened any other
+way — programmatically, or from the keyboard — focus lands on the first swatch,
+because Floating UI branches on whether the opening event carried pointer
+coordinates. An earlier pass reported "focus never moves", which was true of the
+case it tested and wrong as a general claim.
+
+**One trap worth recording**, both halves of it from
+[browser-testing.md](../project/browser-testing.md): the tab reported
+`document.hasFocus() === false` until a real click gave it focus, which makes
+every `activeElement` reading before that worthless — and a click aimed by
+eye off a screenshot landed one button to the right, on ↺, quietly putting the
+criterion back in the box. Coordinates were computed from
+`getBoundingClientRect()` × the screenshot's scale factor after that.
+
+**Two attempts at this pass died to a flaky network** (one API error mid-run,
+one 600-second stall), and the GPT Sol review of the palette change died the same
+way — it finished its analysis and timed out before writing an answer, which on
+the surface looks exactly like a review that found nothing. It found nothing
+*that anybody read*; the palette half of this work has had no cross-family
+review. Worth running when the network is behaving.
+
+**Originally not checked in a browser at all:** Greg asked for a Claude-in-Chrome pass and
 the extension was not connected (`list_connected_browsers` returned `[]`), so there is no honest
 way to claim it. Two things only a real browser can judge are therefore unverified: **where
 Floating UI puts the panel** at the narrowest band (288px, hard against the left of the reading

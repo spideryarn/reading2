@@ -1588,12 +1588,20 @@ function Hit({
  *
  * ## What the popover has to get right
  *
- * - **A grid of buttons, with focus moved into it and returned afterwards.**
- *   `FloatingFocusManager` at `modal={false}`, so focus is *not* trapped —
- *   tabbing past the last cell leaves the popover and closes it, which is the
- *   behaviour wanted for a small menu beside a row. (This paragraph said
- *   "focus trapped" until GPT Sol's review pointed out that `modal={false}`
- *   means exactly the opposite of that.)
+ * - **A grid of buttons, keyboard-reachable, with focus returned afterwards.**
+ *   `FloatingFocusManager` at `modal={false}`, so focus is *not* trapped, and
+ *   — measured in a browser rather than assumed — **a real mouse click does
+ *   not move focus into the panel at all**: the trigger keeps it, one Tab
+ *   lands on the first swatch, and picking one puts focus back on the trigger.
+ *   That is the right behaviour for a small non-modal menu beside a row (a
+ *   mouse user is not yanked somewhere they did not ask to be) and it is not
+ *   what this paragraph claimed twice: it said "focus trapped" until GPT Sol
+ *   pointed out that `modal={false}` means the opposite, and then "focus moved
+ *   into it" until a browser pass showed the trigger still holding it after a
+ *   real click. Opened any other way — programmatically, or from the keyboard
+ *   — focus *does* land on the first swatch, because Floating UI branches on
+ *   whether the opening event carried pointer coordinates. Both paths reach
+ *   the same place; only the first keystroke differs.
  * - **`useDismiss` rather than our own outside-click listener**, so it closes on
  *   Escape and on a press anywhere else without a second mechanism to keep in
  *   step with the panel's other dismissals.
