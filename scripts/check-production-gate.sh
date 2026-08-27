@@ -74,11 +74,19 @@ for H in "${HOSTS[@]}"; do
   # No secret-shaped key in what was actually SERVED — not in the local dist/.
   # A legacy service-role key does not contain the string "service_role" in the
   # clear; it is inside the JWT payload, so decode anything JWT-shaped.
+  #
+  # The prefix needs KEY MATERIAL after it. A bare `grep sb_secret_` matches
+  # supabase-js's own `key.startsWith("sb_secret_")` — the library checking a
+  # prefix, carrying no key — and this line reported a leaked key in the live
+  # bundle for as long as that library has been in it. Found 2026-08-27 by
+  # scripts/deploy.ts making the identical mistake and being pointed at
+  # production. A security check that cries wolf is worse than none: the second
+  # time it fires, nobody looks.
   echo "  scanning served JS for secret-shaped keys…"
   leaked=0
   for asset in $(grep -o '/assets/[A-Za-z0-9._-]*\.js' <<<"$body" | sort -u); do
     js=$(curl -s --max-time 30 "$H$asset" || true)
-    grep -q "sb_secret_" <<<"$js" && leaked=1
+    grep -qE "sb_secret_[A-Za-z0-9_-]{16,}" <<<"$js" && leaked=1
     while read -r tok; do
       payload=$(cut -d. -f2 <<<"$tok" | tr '_-' '/+')
       case "$(base64 -d 2>/dev/null <<<"${payload}==" | tr -cd '[:print:]')" in

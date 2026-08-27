@@ -37,6 +37,9 @@
 
 import { defineConfig } from "vite";
 
+import { resolveBuildStamp } from "./scripts/build-stamp.js";
+import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
+
 /**
  * The two packages that must be bundled rather than left external.
  *
@@ -58,7 +61,34 @@ import { defineConfig } from "vite";
  */
 const BUNDLE_ANYWAY = ["html-encoding-sniffer", "@exodus/bytes"];
 
+/**
+ * Which commit this function came from, compiled in rather than read from the
+ * environment at request time.
+ *
+ * `/api/health` reports it as `build`, **alongside** the `commit` it already
+ * reports from `process.env.VERCEL_GIT_COMMIT_SHA`. Both are kept because they
+ * answer different questions — one says what Vercel believes it deployed, the
+ * other says what actually compiled — and the day they disagree is the day
+ * worth hearing about. scripts/build-stamp.ts has the rest of the reasoning.
+ */
+const stamp = resolveBuildStamp();
+
 export default defineConfig({
+  /* The server half of the source-map upload, and the half that is easy to
+     forget. `vercel.json` builds the client first and this second, so a plugin
+     living only in vite.config.ts would have run before `api-dist/vercel.js.map`
+     existed. Same release string as the client, from the same stamp. */
+  plugins: sentrySourceMaps(stamp.commit, "./api-dist/**/*.map"),
+  /* Constants, not `process.env` lookups, so the value cannot be changed by the
+     running environment after the fact — which is the entire point of a stamp.
+     Read in src/vercel-health.ts behind a `typeof` guard, because in dev there
+     is no define and this module is not the one serving requests. */
+  define: {
+    __SPIDERYARN_BUILD_COMMIT__: JSON.stringify(stamp.commit),
+    __SPIDERYARN_BUILD_TIME__: JSON.stringify(stamp.builtAt),
+    __SPIDERYARN_BUILD_SOURCE__: JSON.stringify(stamp.source),
+    __SPIDERYARN_BUILD_DEPLOYMENT__: JSON.stringify(stamp.deploymentId),
+  },
   /* `ssr.noExternal`, not just `rollupOptions.external` below. Vite decides what
      an SSR build externalises before Rollup's own `external` hook is consulted,
      so the hook alone left these two as bare imports and the fix did nothing —
@@ -74,6 +104,12 @@ export default defineConfig({
        bytes to save, and a stack trace out of production that points at a real
        line is worth more than any of them. */
     minify: false,
+    /* Unminified is not the same as mapped. Every module in `src/` is
+       concatenated into one `vercel.js`, so a frame says line 12,431 of a file
+       nobody wrote — readable, and about the wrong file. The map is what turns
+       that back into src/routes.ts. Emitted only when it can be uploaded and
+       then deleted; see scripts/sentry-build.ts. */
+    sourcemap: sentryUploadEnabled(),
     rollupOptions: {
       external: (id: string) => {
         if (id.startsWith(".") || id.startsWith("/") || id.startsWith("\0")) return false;

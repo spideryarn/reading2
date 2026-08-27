@@ -49,8 +49,64 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import { sql } from "drizzle-orm";
+
+import { getDb } from "./db/client.js";
 import { sslDecisionFor } from "./db/ssl.js";
+import {
+  ACTUAL_SCHEMA_SQL,
+  compareSchema,
+  declaredTables,
+  driftWarnings,
+  readActualSchema,
+} from "./db/schema-drift.js";
 import { STORE, listArticles } from "./store/index.js";
+
+/**
+ * Compiled in by vite.api.config.ts. Not `process.env` — the whole value of a
+ * stamp is that the running environment cannot change it after the fact.
+ */
+declare const __SPIDERYARN_BUILD_COMMIT__: string;
+declare const __SPIDERYARN_BUILD_TIME__: string;
+declare const __SPIDERYARN_BUILD_SOURCE__: string;
+declare const __SPIDERYARN_BUILD_DEPLOYMENT__: string | null;
+
+/**
+ * What this artefact says about itself: the commit that compiled it, when, and
+ * how it worked that out.
+ *
+ * **`typeof` rather than a plain read**, because there is no `define` outside
+ * the API build — `npm run dev` mounts src/routes.ts directly and never loads
+ * this module, but a test that imports it would otherwise die on a
+ * `ReferenceError` rather than see the honest answer, which is that nothing
+ * built it.
+ *
+ * ## Why a missing stamp is reported here and not warned about
+ *
+ * This file's own header says a boolean nobody reads is not a check. This is
+ * the exception, and it is worth being explicit about why rather than letting
+ * it look like the same mistake:
+ *
+ * **the reader is `scripts/deploy.ts`**, which compares this against the sha it
+ * just pushed. That is a real assertion, and it is the only place the
+ * comparison can be made, because this handler does not know what anybody
+ * *intended* to deploy — only what it is. A handler that warned on `unknown`
+ * would 503 every `vercel deploy` from a working directory, which is a
+ * deliberate escape hatch (docs/project/deployment.md § From the working tree)
+ * and produces no git metadata by construction. Failing the deployment you
+ * meant to make, over a field describing how it was made, is worse than not
+ * checking.
+ */
+const build = {
+  commit: typeof __SPIDERYARN_BUILD_COMMIT__ === "string" ? __SPIDERYARN_BUILD_COMMIT__ : null,
+  builtAt: typeof __SPIDERYARN_BUILD_TIME__ === "string" ? __SPIDERYARN_BUILD_TIME__ : null,
+  source: typeof __SPIDERYARN_BUILD_SOURCE__ === "string" ? __SPIDERYARN_BUILD_SOURCE__ : null,
+  /* The deployment this function was BUILT for, which is not the same as the
+     one serving the request: a commit can be deployed twice, and every
+     commit-based check passes over the wrong one of the two. */
+  deploymentId:
+    typeof __SPIDERYARN_BUILD_DEPLOYMENT__ === "string" ? __SPIDERYARN_BUILD_DEPLOYMENT__ : null,
+};
 
 /**
  * What this deployment needs, and what stops working without each one.
@@ -322,6 +378,82 @@ async function cachedStoreCheck(warnings: string[]): Promise<StoreCheck> {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Schema drift                                                        */
+/* ------------------------------------------------------------------ */
+
+type SchemaCheck =
+  | { tables: number; missing: string[]; requiredExtra: string[] }
+  | { error: string };
+
+let schemaCached: { at: number; value: SchemaCheck; warnings: string[] } | null = null;
+let schemaInFlight: Promise<SchemaCheck> | null = null;
+
+/**
+ * Does this database have the columns this build selects?
+ *
+ * **The last backstop, not the first listener.** By the time this speaks, the
+ * deployment is already serving; the check that is supposed to stop a bad
+ * deploy is `npm run db:check` in front of the build. This one exists for the
+ * drift that arrives *without* a deploy — a migration applied by hand, a
+ * restored snapshot, a revoked grant — and for saying plainly what the 500s
+ * mean when the gate has been skipped. GPT Sol's review, findings 1 and 6.
+ *
+ * Cached and coalesced exactly like `cachedStoreCheck` above, and for the same
+ * reason: this endpoint is public and unauthenticated, so any query behind it
+ * is an amplifier unless a hundred simultaneous callers share one answer.
+ *
+ * A failure becomes `error`, never an empty column list — "the query did not
+ * run" and "the database has no columns" must not arrive looking the same,
+ * which is the whole of docs/reusable/silent-success.md.
+ */
+async function cachedSchemaCheck(warnings: string[]): Promise<SchemaCheck> {
+  const now = Date.now();
+  if (schemaCached && now - schemaCached.at < CACHE_MS) {
+    warnings.push(...schemaCached.warnings);
+    return schemaCached.value;
+  }
+
+  if (schemaInFlight) {
+    const value = await schemaInFlight;
+    warnings.push(...(schemaCached?.warnings ?? []));
+    return value;
+  }
+
+  const mine: string[] = [];
+  const run = async (): Promise<SchemaCheck> => {
+    let value: SchemaCheck;
+    try {
+      const result = await getDb().execute(sql.raw(ACTUAL_SCHEMA_SQL));
+      const rows = (result as unknown as { rows: Record<string, unknown>[] }).rows;
+      const report = compareSchema(declaredTables(), readActualSchema(rows));
+      value = {
+        tables: report.declaredTables,
+        missing: report.missingOrInaccessible,
+        requiredExtra: report.requiredButUndeclared,
+      };
+      mine.push(...driftWarnings(report));
+    } catch (err) {
+      /* Same bargain as the store check: the whole error to the log, a bounded
+         amount to an unauthenticated caller. */
+      const message = (err as Error).message ?? "";
+      console.error("[health] schema check failed", { message });
+      value = { error: message.slice(0, 200) };
+    }
+    schemaCached = { at: Date.now(), value, warnings: mine };
+    return value;
+  };
+
+  schemaInFlight = run();
+  try {
+    const value = await schemaInFlight;
+    warnings.push(...mine);
+    return value;
+  } finally {
+    schemaInFlight = null;
+  }
+}
+
 const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
 
 /**
@@ -499,7 +631,14 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
     warnings.push(`SPIDERYARN_STORE is '${STORE}', so reads come from a filesystem this host has no durable copy of`);
   }
 
-  const failed = "error" in store || "error" in ssl;
+  /* Only when Postgres is actually serving reads. On a filesystem store there
+     is no schema to drift, and `getDb()` would throw for want of a
+     DATABASE_URL — an error that would read as drift rather than as "this
+     deployment does not use a database". The `STORE` warning above already
+     covers that case, and covers it better. */
+  const schema = STORE === "postgres" ? await cachedSchemaCheck(warnings) : undefined;
+
+  const failed = "error" in store || "error" in ssl || (schema !== undefined && "error" in schema);
   const ok = !failed && warnings.length === 0;
 
   res.statusCode = ok ? 200 : 503;
@@ -517,8 +656,15 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
         sawUrl: req.url ?? null,
         node: process.version,
         region: process.env.VERCEL_REGION ?? null,
+        /* What Vercel believes it deployed, read at request time. Kept beside
+           `build` rather than replaced by it: this one is the platform's
+           opinion, `build` is the artefact's own, and they can differ. */
         commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+        build,
         store,
+        /* Absent rather than null on a filesystem store, so that "not checked"
+           and "checked and found nothing" cannot be confused in the output. */
+        ...(schema === undefined ? {} : { schema }),
         ssl,
         env,
       },

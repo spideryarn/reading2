@@ -1,0 +1,1157 @@
+/**
+ * Ship what is committed, and prove it arrived.
+ *
+ *     npm run deploy
+ *     npm run deploy -- --dry-run          # every local gate, nothing external
+ *     npm run deploy -- --verify-only      # check what is live, deploy nothing
+ *     npm run deploy -- --force-gate=test  # named, loud, printed in the summary
+ *
+ * The plan, the measurements behind each step and the decisions Greg made are in
+ * docs/plans/deploy-pipeline.md. The judgements live in scripts/deploy-checks.ts
+ * so that each of them can be tested against the broken state rather than only
+ * the working one.
+ *
+ * ## The three things this file is built around
+ *
+ * **What ships is the commit, not the disk.** A push builds on Vercel's machine
+ * from a clone, so another agent's uncommitted edits — of which there are always
+ * some in this tree — cannot reach production. The corollary is the one that
+ * keeps biting: a green build *here* says nothing about whether `main` builds,
+ * because your working tree may contain the file your commit imports. That has
+ * broken `main` three times. So the gates run against a worktree of the exact
+ * sha, never against the working tree.
+ *
+ * **One sha, from the first gate to the last check.** Several agents commit into
+ * this tree, and HEAD's green/red status has a half-life of minutes — it moved
+ * three times while this script was being written. So the sha is captured once
+ * and *pushed by name* (`<sha>:refs/heads/main`), rather than pushing whatever
+ * `main` has become since the tests ran. A plain `git push origin main` would
+ * gate one commit and ship another, and everything downstream would still be
+ * describing the first.
+ *
+ * **Liveness is not the question.** Nearly every check that could be written
+ * here passes over a perfectly healthy deployment three commits old. So every
+ * post-deploy check is anchored to the sha *and* to the deployment id, and both
+ * artefacts carry a stamp saying what built them (scripts/build-stamp.ts).
+ */
+
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { closeSync, cpSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, writeSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { Pool } from "pg";
+
+import { sslDecisionFor } from "../src/db/ssl.js";
+import {
+  assetUrlsIn,
+  describeRedirect,
+  findSecretsInBundle,
+  judgeClientBuild,
+  judgeDeployments,
+  judgeHealth,
+  judgeLogs,
+  ledgerDivergence,
+  migratorUrlFrom,
+  migrationState,
+  rollbackAdvice,
+  scanSql,
+  type Expected,
+  type JournalEntry,
+  type LogLine,
+  type VercelDeployment,
+} from "./deploy-checks.js";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SCOPE = "greg-detre";
+const PROJECT_ID = "prj_I739wqovZ54zt2oTBbZjPIke4IEY";
+const TEAM_ID = "team_Xu0cDrurD3h6PIeMZblXJEIL";
+const HOST = "https://www.spideryarn.com";
+const REGION = "lhr1";
+
+/**
+ * **Pinned, and not `@latest`.** The globally installed CLI (48.6.0) cannot read
+ * log history at all — its `logs` is a live tail "from now and for 5 minutes at
+ * most", and tailing it captures nothing, which looks exactly like an app with
+ * no errors. 59.x has `--since` and `--deployment`.
+ *
+ * A pin rather than `@latest` because this runs in a release path: `@latest`
+ * changes the tool that judges a deploy without anything changing in the repo,
+ * and the day it changes its output format this script starts reporting a clean
+ * log for every deployment. Bump it deliberately, with the version in the diff.
+ */
+const LOGS_CLI = "vercel@59.7.0";
+
+/* ------------------------------------------------------------------ */
+/* Saying things                                                       */
+/* ------------------------------------------------------------------ */
+
+const GREEN = "[32m";
+const RED = "[31m";
+const DIM = "[2m";
+const OFF = "[0m";
+
+/** A CLI, so `console.log`, deliberately. docs/project/logging.md. */
+const say = (s = "") => console.log(s);
+const step = (n: string) => say(`\n${DIM}──${OFF} ${n}`);
+const ok = (s: string) => say(`  ${GREEN}ok  ${OFF} ${s}`);
+const bad = (s: string) => say(`  ${RED}FAIL${OFF} ${s}`);
+const info = (s: string) => say(`  ${DIM}·${OFF}    ${s}`);
+
+const failures: string[] = [];
+const forced: string[] = [];
+/** Set once migrations have run, so a later failure can say the dangerous thing. */
+let schemaAdvanced = 0;
+/** Set once the push has happened, so the summary cannot claim a deploy that did not occur. */
+let didDeploy = false;
+
+function record(name: string, problems: string[]): boolean {
+  if (problems.length === 0) {
+    ok(name);
+    return true;
+  }
+  bad(name);
+  for (const p of problems) say(`         ${p}`);
+  failures.push(name);
+  return false;
+}
+
+/**
+ * A gate, and its one escape hatch.
+ *
+ * `--force-gate=<name>` is named rather than blanket, and is printed in the
+ * final summary, because an override nobody can see afterwards is the same as
+ * never having had a gate.
+ */
+function gate(name: string, passed: boolean, why: () => string): void {
+  if (passed) {
+    ok(name);
+    return;
+  }
+  if (FORCED_GATES.has(name)) {
+    bad(`${name} — FORCED past with --force-gate=${name}`);
+    say(`${DIM}${why()}${OFF}`);
+    forced.push(name);
+    return;
+  }
+  bad(name);
+  say(`${DIM}${why()}${OFF}`);
+  say(`         ${DIM}override with --force-gate=${name} if you have decided this is not yours${OFF}`);
+  failures.push(name);
+}
+
+/* ------------------------------------------------------------------ */
+/* Flags                                                               */
+/* ------------------------------------------------------------------ */
+
+const argv = process.argv.slice(2);
+const has = (f: string) => argv.includes(f);
+const flagValue = (f: string) => {
+  const inline = argv.find((a) => a.startsWith(`${f}=`));
+  if (inline) return inline.slice(f.length + 1);
+  const i = argv.indexOf(f);
+  return i >= 0 ? argv[i + 1] : undefined;
+};
+
+const DRY_RUN = has("--dry-run");
+const VERIFY_ONLY = has("--verify-only");
+const SKIP_MIGRATIONS = has("--skip-migrations");
+const TARGET_HOST = flagValue("--host") ?? HOST;
+const FORCED_GATES = new Set(
+  argv.filter((a) => a.startsWith("--force-gate=")).map((a) => a.slice("--force-gate=".length)),
+);
+
+/* ------------------------------------------------------------------ */
+/* Small helpers                                                       */
+/* ------------------------------------------------------------------ */
+
+function git(...args: string[]): string {
+  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }).trim();
+}
+
+/**
+ * `opts.env` may set a variable **or unset one**, by giving it `undefined`.
+ *
+ * Unsetting matters as much as setting here: the preflight build has to run in
+ * an environment it fully describes, and a stray `DATABASE_URL` exported in
+ * somebody's shell would otherwise reach the guards in src/store/index.ts and
+ * make the gate's answer depend on whose terminal it ran in.
+ */
+function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...opts.env };
+  for (const [key, value] of Object.entries(opts.env ?? {})) if (value === undefined) delete env[key];
+  const r = spawnSync(cmd, args, {
+    cwd: opts.cwd ?? ROOT,
+    env,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return { code: r.status ?? 1, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+}
+
+const tail = (s: string, n = 25) => s.trimEnd().split("\n").slice(-n).join("\n");
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function envFile(file: string): Record<string, string> {
+  if (!existsSync(file)) return {};
+  const out: Record<string, string> = {};
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line.trim());
+    if (m?.[1]) out[m[1]] = (m[2] ?? "").trim().replace(/^["']|["']$/g, "");
+  }
+  return out;
+}
+
+/** Safe to print: parsed, so a `@` inside the password cannot fool it. */
+function withoutPassword(connection: string): string {
+  try {
+    const u = new URL(connection);
+    u.password = "";
+    u.searchParams.delete("password");
+    return u.toString();
+  } catch {
+    return "(a connection string that is not a parsable URL)";
+  }
+}
+
+/**
+ * A Vercel API token: `VERCEL_TOKEN`, else the one the CLI already holds from
+ * `vercel login`. Read, never printed.
+ */
+function vercelToken(): string {
+  const fromEnv = process.env.VERCEL_TOKEN?.trim();
+  if (fromEnv) return fromEnv;
+  for (const file of [
+    path.join(homedir(), "Library/Application Support/com.vercel.cli/auth.json"),
+    path.join(homedir(), ".local/share/com.vercel.cli/auth.json"),
+  ]) {
+    if (!existsSync(file)) continue;
+    const token = (JSON.parse(readFileSync(file, "utf8")) as { token?: string }).token;
+    if (token) return token;
+  }
+  throw new Error("No Vercel token. Set VERCEL_TOKEN, or run `vercel login`.");
+}
+
+async function vercelApi<T>(pathAndQuery: string): Promise<T> {
+  const res = await fetch(`https://api.vercel.com${pathAndQuery}`, {
+    headers: { Authorization: `Bearer ${vercelToken()}` },
+  });
+  if (!res.ok) throw new Error(`Vercel API answered ${res.status} for ${pathAndQuery.split("?")[0]}`);
+  return (await res.json()) as T;
+}
+
+/* ------------------------------------------------------------------ */
+/* Only one deploy at a time                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * **Two deploys at once is not hypothetical here.** Several agents work this
+ * tree, and two overlapping runs would each capture a different sha, both find
+ * the same pending migrations, and both try to apply them — drizzle takes no
+ * lock of any kind (read from the installed 0.45.2 source), so the second one
+ * arrives at a `CREATE TABLE` that now exists and reads like a broken migration.
+ *
+ * A file, not a database lock, because it has to cover the push and the polling
+ * too, not only the migration.
+ */
+function takeLock(): () => void {
+  const file = path.join(ROOT, ".git", "spideryarn-deploy.lock");
+  let fd: number;
+  try {
+    fd = openSync(file, "wx");
+  } catch {
+    const held = existsSync(file) ? readFileSync(file, "utf8").trim() : "(unreadable)";
+    throw new Error(
+      `Another deploy is running: ${held}\n` +
+        `  If you are sure it is not, delete ${path.relative(ROOT, file)} and try again.`,
+    );
+  }
+  writeSync(fd, `pid ${process.pid} since ${new Date().toISOString()}\n`);
+  closeSync(fd);
+  return () => rmSync(file, { force: true });
+}
+
+/* ------------------------------------------------------------------ */
+/* 1. Preflight                                                        */
+/* ------------------------------------------------------------------ */
+
+async function preflight(): Promise<string> {
+  step("Preflight");
+
+  const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+  if (branch !== "main") {
+    bad(`on branch '${branch}', not main`);
+    failures.push("branch");
+  } else {
+    ok(`on ${branch}`);
+  }
+
+  const sha = git("rev-parse", "HEAD");
+  info(`deploying ${sha.slice(0, 8)}  ${git("log", "-1", "--format=%s")}`);
+
+  /* Read-only: `git fetch` of one branch moves no local ref and touches
+     nobody's work. */
+  run("git", ["fetch", "origin", "main", "--quiet"]);
+  const behind = Number(git("rev-list", "--count", `${sha}..origin/main`) || "0");
+  const ahead = Number(git("rev-list", "--count", `origin/main..${sha}`) || "0");
+  if (behind > 0) {
+    bad(`${behind} commit(s) on origin/main that this one is not built on — merge first`);
+    failures.push("behind origin");
+  } else {
+    ok(`origin/main is an ancestor${ahead ? `, ${ahead} commit(s) to push` : ", nothing to push"}`);
+  }
+
+  /* Information, not a gate. A push ships commits, so somebody else's edits are
+     harmless — but naming them is how you notice that the change you meant to
+     deploy is one of them. */
+  const dirty = git("status", "--short").split("\n").filter(Boolean);
+  if (dirty.length) {
+    info(`${dirty.length} uncommitted file(s) in this tree — none of them will ship:`);
+    for (const line of dirty.slice(0, 6)) say(`         ${DIM}${line}${OFF}`);
+    if (dirty.length > 6) say(`         ${DIM}… and ${dirty.length - 6} more${OFF}`);
+  }
+
+  /**
+   * **Has somebody rolled back?** A `vercel rollback` turns off auto-assignment
+   * of production domains, and Vercel does not turn it back on until a
+   * deployment is promoted. Until then every push builds and goes live nowhere,
+   * silently. Checked *here*, before the database is touched, because
+   * discovering it after a migration means having advanced the schema for code
+   * that will never serve.
+   */
+  try {
+    const project = await vercelApi<{ autoAssignCustomDomains?: boolean }>(
+      `/v9/projects/${PROJECT_ID}?teamId=${TEAM_ID}`,
+    );
+    if (project.autoAssignCustomDomains === false) {
+      bad("Vercel is not auto-assigning production domains");
+      say("         Somebody rolled back. Until a deployment is promoted, a push builds and");
+      say("         goes live nowhere. Promote the one you want first:");
+      say(`         vercel promote <deployment-url> --scope ${SCOPE} --yes`);
+      failures.push("auto-assign is off");
+    } else {
+      ok("Vercel will assign the production domains to a new deployment");
+    }
+  } catch (err) {
+    record("read the Vercel project", [(err as Error).message]);
+  }
+
+  /**
+   * **Is the local database up?** Roughly a dozen suites turn themselves into
+   * `describe.skip` when `DATABASE_URL` is unreachable — deliberately, so that a
+   * laptop with no container can still run the rest. As a *deploy gate* that is
+   * a hole: every Postgres test silently absent, and the run still green.
+   *
+   * Checked directly rather than by counting skips, because a threshold on a
+   * skip count is a number that rots.
+   */
+  const local = envFile(path.join(ROOT, ".env.local")).DATABASE_URL;
+  let reachable = false;
+  if (local) {
+    const pool = new Pool({ connectionString: local, max: 1, connectionTimeoutMillis: 5000 });
+    try {
+      await pool.query("select 1");
+      reachable = true;
+    } catch {
+      /* reported below */
+    } finally {
+      await pool.end().catch(() => {});
+    }
+  }
+  gate("local database is up", reachable, () =>
+    "         Without it about a dozen store/Postgres suites turn themselves into describe.skip,\n" +
+    "         so the test gate below would go green having run none of them. `npm run db:start`.",
+  );
+
+  /* Migration history consistency — two agents generating from a diverged
+     snapshot. A second, and green today. */
+  const check = run("npx", ["drizzle-kit", "check"]);
+  record("drizzle-kit check", check.code === 0 ? [] : [tail(check.out, 10)]);
+
+  return sha;
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. The gates, at the commit about to be pushed                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The smallest environment in which this repo will build, spelled out.
+ *
+ * **Every value here is a placeholder and none of them is reachable.** They
+ * exist because `vite.config.ts` imports `src/routes.ts`, which reaches
+ * `src/store/index.ts`, which **throws at import** when the configuration it
+ * sees is incoherent for production — and `vite build` sets `NODE_ENV=production`
+ * whatever you are doing. Nothing in the build ever connects to any of them; the
+ * guards only ask whether they are set and whether they agree with each other.
+ *
+ * Named here rather than inherited from `.env.local` on purpose: what
+ * production-parity needs should be a list somebody can read, not whatever
+ * happens to be in one person's file. The cost is that the list can fall behind
+ * the guards — it did, within hours, when a second guard was added requiring the
+ * Supabase Storage pair — so `explainBuildFailure` below turns that into a
+ * pointer at this constant rather than an accusation against the commit.
+ *
+ * `DATABASE_URL: undefined` is deliberate. Left inherited it would be a real
+ * connection string for a *different* project from the placeholder
+ * `SUPABASE_URL` above, and `projectMismatch` would refuse the pair — correctly,
+ * and for a reason that has nothing to do with the commit being gated.
+ */
+const BUILD_ENV: NodeJS.ProcessEnv = {
+  SPIDERYARN_STORE: "postgres",
+  SUPABASE_URL: "https://deploy-preflight.supabase.co",
+  SUPABASE_SERVICE_ROLE_KEY: "placeholder-for-the-preflight-build",
+  VITE_SUPABASE_URL: "https://deploy-preflight.supabase.co",
+  VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_placeholder_for_the_preflight_build",
+  DATABASE_URL: undefined,
+};
+
+/**
+ * Was that the commit's fault, or this script's?
+ *
+ * A build that dies loading `vite.config.ts` has not compiled a line of the
+ * commit. It is almost always one of the import-time guards finding `BUILD_ENV`
+ * short of something — and reporting that as "the build failed" sends whoever
+ * reads it to look for a bug that is not there, which is worse than saying
+ * nothing. So the two cases are told apart, and named.
+ */
+function explainBuildFailure(output: string): string {
+  const configLoad = /failed to load config from/.test(output);
+  const ourGuard = /src\/store\/index\.ts|src\/env\.ts|src\/web\/lib\/supabase\.ts/.test(output);
+  if (configLoad && ourGuard) {
+    return (
+      `${tail(output, 12)}\n\n` +
+      "         ^ this is BUILD_ENV in scripts/deploy.ts being short of a variable, not a\n" +
+      "           broken commit — an import-time guard refused before any code was compiled.\n" +
+      "           Add the variable it names to BUILD_ENV (a placeholder value is fine; nothing\n" +
+      "           in a build connects to any of them) and run this again."
+    );
+  }
+  return tail(output);
+}
+
+/**
+ * Build, typecheck and test a worktree of `sha`, not the working tree.
+ *
+ * `git worktree add --detach` shares the object database rather than cloning —
+ * 0.3s, measured — and has its own HEAD and index, so it alters neither the main
+ * checkout nor anybody's staged work. It is the only non-destructive way to ask
+ * "does the *commit* work?", which matters because `git stash`, `git checkout --`
+ * and `git clean` are forbidden here: other agents' only copy of their work is
+ * in this tree. `--lock` closes the one race there is, which is somebody else's
+ * `git worktree prune` running while this one exists.
+ *
+ * ## The environment, and why the gates get different amounts of it
+ *
+ * The build gets **one named variable**, not an inherited `.env.local`.
+ * `vite.config.ts` imports `src/routes.ts`, which reaches `src/store/index.ts`,
+ * which throws at import when `NODE_ENV=production` and `SPIDERYARN_STORE` is
+ * not `postgres` — so a clean checkout of a perfectly good commit fails with a
+ * message about the store, and the gate's first act would be to accuse an
+ * innocent commit. What production-parity needs should be a documented list.
+ *
+ * The tests cannot have that today, and this says so rather than being quiet:
+ * the suite is **not hermetic**. In a clean worktree 26 files fail — the client
+ * ones cannot be collected without `VITE_SUPABASE_URL`, and the pipeline ones
+ * `ENOENT` on `data/`, which is gitignored. So `.env.local` is linked and
+ * `data/` is **copied**. Copied rather than linked because the tests create and
+ * delete directories under `data/`, and a link would point that at the real one.
+ * It is 25MB and an APFS clone takes 0.07s, so there is nothing to trade.
+ */
+function gatesAt(sha: string): void {
+  step(`Gates, at ${sha.slice(0, 8)} — in a worktree, not in this tree`);
+
+  const dir = mkdtempSync(path.join(tmpdir(), "spideryarn-deploy-"));
+  const wt = path.join(dir, "tree");
+
+  try {
+    const added = run("git", [
+      "worktree",
+      "add",
+      "--detach",
+      "--lock",
+      "--reason",
+      "npm run deploy is checking this commit",
+      "--quiet",
+      wt,
+      sha,
+    ]);
+    if (added.code !== 0) {
+      record("worktree", [tail(added.out, 8)]);
+      return;
+    }
+
+    /**
+     * Dependencies. Sharing the main tree's `node_modules` is what makes this
+     * gate cost two seconds instead of twenty-four — but it is only honest while
+     * the lockfile has not moved, because a shared `node_modules` describes
+     * *this laptop*, not the commit. When the lockfile is part of what is
+     * shipping, the cheap version cannot see a dependency that was added, so it
+     * escalates rather than warning: a warning about a gate that cannot see the
+     * thing it is gating is not a gate.
+     */
+    const lockChanged = git("diff", "--name-only", "origin/main", sha).split("\n").includes("package-lock.json");
+    if (lockChanged) {
+      info("package-lock.json is part of this deploy — installing properly rather than sharing node_modules");
+      const ci = run("npm", ["ci", "--silent", "--no-audit", "--no-fund"], { cwd: wt });
+      if (ci.code !== 0) {
+        record("npm ci at this commit", [tail(ci.out, 15)]);
+        return;
+      }
+    } else {
+      symlinkSync(path.join(ROOT, "node_modules"), path.join(wt, "node_modules"));
+    }
+
+    const client = run("npm", ["run", "--silent", "build"], { cwd: wt, env: BUILD_ENV });
+    const api = client.code
+      ? { code: 1, out: "" }
+      : run("npx", ["vite", "build", "--config", "vite.api.config.ts"], { cwd: wt, env: BUILD_ENV });
+    gate("build", client.code === 0 && api.code === 0, () => explainBuildFailure(client.out || api.out));
+
+    /* Only the tests need the personal state, so only they get it. */
+    const envLocal = path.join(ROOT, ".env.local");
+    if (existsSync(envLocal)) symlinkSync(envLocal, path.join(wt, ".env.local"));
+    if (existsSync(path.join(ROOT, "data"))) {
+      cpSync(path.join(ROOT, "data"), path.join(wt, "data"), { recursive: true });
+    }
+    info("tests run with .env.local linked and data/ copied — the suite is not hermetic");
+
+    const tc = run("npm", ["run", "--silent", "typecheck"], { cwd: wt, env: BUILD_ENV });
+    gate("typecheck", tc.code === 0, () => tail(tc.out, 20));
+
+    const t = run("npm", ["run", "--silent", "test"], { cwd: wt });
+    gate("test", t.code === 0, () => tail(t.out, 30));
+  } finally {
+    /* Both, in this order: `worktree remove` unregisters it (and `--force`
+       overrides the `--lock` above), `rmSync` takes the temp directory. A
+       worktree left registered makes the next run fail on a path that has gone. */
+    run("git", ["worktree", "remove", "--force", wt]);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Migrations                                                       */
+/* ------------------------------------------------------------------ */
+
+interface MigrationPlan {
+  url: string;
+  pending: JournalEntry[];
+  appliedBefore: number;
+}
+
+/**
+ * Read a file **as it is at the commit being deployed**, not as it is on disk.
+ *
+ * The disk is being edited by several agents, and a migration that appears
+ * between the gate and the apply would be applied without ever having been
+ * built or tested against. `git show` costs nothing and removes the window.
+ */
+function fileAt(sha: string, repoPath: string): string | null {
+  try {
+    return execFileSync("git", ["show", `${sha}:${repoPath}`], {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Say which database is about to change, and what is about to change in it,
+ * **before** anything changes.
+ *
+ * `inet_server_addr()` is the line that would have caught the incident
+ * scripts/db-migrate.ts is written around: `.env.local` overrode the shell,
+ * migrations went to the laptop, and the command printed `✓ migrations applied`.
+ * A local Postgres answers `127.0.0.1`; the real host answers its own address.
+ * Evidence, rather than an assumption about what a URL ought to mean.
+ */
+async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
+  step("Migrations");
+
+  const prod = envFile(path.join(ROOT, ".env.prod"));
+  if (!prod.DATABASE_URL) {
+    record("read .env.prod", ["no DATABASE_URL in .env.prod — cannot reach the remote"]);
+    return null;
+  }
+
+  let url: string;
+  try {
+    url = migratorUrlFrom(prod.DATABASE_URL, prod.DATABASE_PASSWORD ?? "");
+  } catch (err) {
+    record("migration credential", [(err as Error).message]);
+    return null;
+  }
+  info(`target ${withoutPassword(url)}`);
+
+  const ssl = sslDecisionFor(url);
+  if (ssl.mode !== "verified") {
+    record("migration TLS", [`TLS mode is ${ssl.mode}: ${ssl.why}`]);
+    return null;
+  }
+
+  const pool = new Pool({ connectionString: url, max: 1, ssl: ssl.ssl });
+  try {
+    const who = await pool.query(
+      "select current_database() db, current_user usr, inet_server_addr()::text addr, version() v",
+    );
+    const r = who.rows[0] as { db: string; usr: string; addr: string; v: string };
+    info(`answering: ${r.db} as ${r.usr} at ${r.addr} — ${r.v.slice(0, 24)}`);
+
+    const journalText = fileAt(sha, "drizzle/meta/_journal.json");
+    if (!journalText) {
+      record("read the journal at this commit", ["drizzle/meta/_journal.json is not in this commit"]);
+      return null;
+    }
+    const journal = (JSON.parse(journalText) as { entries: JournalEntry[] }).entries;
+
+    const ledger = await pool.query(
+      "select hash, created_at from spideryarn_migrations.__drizzle_migrations order by created_at desc",
+    );
+    const rows = ledger.rows as { hash: string; created_at: number }[];
+    const appliedBefore = ledger.rowCount ?? 0;
+    const newest = rows[0];
+    const last = newest ? Number(newest.created_at) : null;
+
+    /* The stronger check, and the one counting cannot do: drizzle stores a
+       sha256 of each migration file and then never looks at it again, so a
+       database that applied a *different* 0016 is indistinguishable from a
+       healthy one by counting. */
+    const hashes = new Map<string, string>();
+    for (const e of journal) {
+      const sql = fileAt(sha, `drizzle/${e.tag}.sql`);
+      if (sql !== null) hashes.set(e.tag, createHash("sha256").update(sql).digest("hex"));
+    }
+    if (!record("the applied history matches this commit", ledgerDivergence(journal, hashes, rows))) return null;
+
+    const state = migrationState(journal, last, appliedBefore);
+    if (state.ahead > 0) {
+      record("migration ledger", [
+        `the database has ${state.ahead} migration(s) this commit does not contain`,
+      ]);
+      return null;
+    }
+
+    if (state.pending.length === 0) {
+      ok("nothing pending — the remote is in step with this commit");
+      return { url, pending: [], appliedBefore };
+    }
+
+    info(`${state.pending.length} pending:`);
+    for (const e of state.pending) say(`         ${e.tag}`);
+
+    /* A report, not a gate — Greg's call. Two of these cannot work at all
+       though, so naming them turns a baffling error into an obvious one. */
+    for (const e of state.pending) {
+      const sql = fileAt(sha, `drizzle/${e.tag}.sql`);
+      if (!sql) continue;
+      const found = scanSql(sql);
+      for (const s of found.nonTransactional)
+        say(`         ${RED}${e.tag}: ${s} will fail — the migrator wraps every file in one transaction${OFF}`);
+      for (const s of found.destructive)
+        say(`         ${DIM}${e.tag}: ${s} — the old code keeps serving until the new build is promoted${OFF}`);
+    }
+
+    return { url, pending: state.pending, appliedBefore };
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Apply, then prove the ledger moved by exactly what was pending.
+ *
+ * The assertion is the point. A run that applies nothing while something was
+ * pending is the failure this whole script exists to make loud — it is what
+ * `✓ migrations applied` said on the day it migrated the laptop.
+ */
+async function applyMigrations(plan: MigrationPlan): Promise<void> {
+  const r = run("npm", ["run", "--silent", "db:migrate"], {
+    env: { DATABASE_URL: plan.url, DB_MIGRATE_ALLOW_REMOTE: "yes" },
+  });
+  schemaAdvanced = plan.pending.length;
+  if (r.code !== 0) {
+    record("apply migrations", [tail(r.out, 20)]);
+    return;
+  }
+
+  const ssl = sslDecisionFor(plan.url);
+  const pool = new Pool({ connectionString: plan.url, max: 1, ssl: ssl.ssl });
+  try {
+    const after = await pool.query("select count(*)::int n from spideryarn_migrations.__drizzle_migrations");
+    const moved = (after.rows[0] as { n: number }).n - plan.appliedBefore;
+    record(
+      `apply ${plan.pending.length} migration(s)`,
+      moved === plan.pending.length
+        ? []
+        : [`the ledger moved by ${moved}, not ${plan.pending.length} — something else applied migrations too`],
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 4-5. Push, and wait for the deployment that is ours                 */
+/* ------------------------------------------------------------------ */
+
+async function listDeployments(query: string): Promise<VercelDeployment[]> {
+  const res = await vercelApi<{ deployments?: (VercelDeployment & { createdAt?: number })[] }>(
+    `/v7/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&target=production&${query}`,
+  );
+  return res.deployments ?? [];
+}
+
+/** The production deployment a rollback would go to. Captured before we change anything. */
+async function currentlyServing(): Promise<VercelDeployment | null> {
+  const list = await listDeployments("state=READY&limit=10");
+  return list.find((d) => d.readySubstate === "PROMOTED") ?? list[0] ?? null;
+}
+
+/**
+ * Wait until the deployment for this sha is *serving*, not merely built.
+ *
+ * Two things beyond the obvious. `READY` means the build succeeded; a build can
+ * succeed and be aliased to nothing, so `readySubstate: "PROMOTED"` is what says
+ * it is answering. And the deployment must have been **created after our push**
+ * — otherwise a redeploy of the same sha from an hour ago satisfies the sha
+ * filter, and every check downstream then describes the wrong build in
+ * convincing detail.
+ */
+async function waitForDeployment(sha: string, after: number): Promise<VercelDeployment | null> {
+  step("Waiting for Vercel");
+  const deadline = Date.now() + 12 * 60_000;
+  let said = "";
+
+  while (Date.now() < deadline) {
+    const all = (await listDeployments(`sha=${sha}&limit=10`)) as (VercelDeployment & {
+      createdAt?: number;
+    })[];
+    const fresh = all.filter((d) => (d.createdAt ?? 0) >= after);
+    const verdict = judgeDeployments(fresh, sha);
+
+    if (verdict.kind === "failed") {
+      bad(`the build ${verdict.state}`);
+      const logs = run("vercel", [
+        "inspect",
+        `https://${verdict.deployment.url}`,
+        "--logs",
+        "--scope",
+        SCOPE,
+      ]);
+      say(`${DIM}${tail(logs.out, 30)}${OFF}`);
+      failures.push("build on Vercel");
+      return null;
+    }
+    if (verdict.kind === "built-not-live") {
+      bad(`built, but not promoted (readySubstate: ${verdict.deployment.readySubstate})`);
+      say(`         vercel promote https://${verdict.deployment.url} --scope ${SCOPE} --yes`);
+      failures.push("promotion");
+      return null;
+    }
+    if (verdict.kind === "live") {
+      ok(`live: https://${verdict.deployment.url}  (${verdict.deployment.uid})`);
+      return verdict.deployment;
+    }
+
+    const now =
+      verdict.kind === "absent"
+        ? all.length
+          ? "Vercel has the commit but has not started a new deployment yet"
+          : "waiting for Vercel to notice the push"
+        : "building";
+    if (now !== said) {
+      info(now);
+      said = now;
+    }
+    await sleep(5000);
+  }
+
+  bad("gave up waiting after 12 minutes");
+  failures.push("deployment timed out");
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. Verify                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One request, never following redirects.
+ *
+ * `redirect: "manual"` is load-bearing: a protected URL answers 302 to Vercel's
+ * login page, and a client that follows it reads 200 off the login page and
+ * calls the site up. That is the specific way a smoke test lies, and this
+ * project has shipped a check with exactly that shape.
+ */
+async function get(url: string, init: RequestInit = {}) {
+  const res = await fetch(url, {
+    redirect: "manual",
+    ...init,
+    headers: { "cache-control": "no-cache", ...(init.headers ?? {}) },
+  });
+  return { status: res.status, headers: res.headers, body: await res.text() };
+}
+
+/** A path nothing routes to, so its only possible answer is the gate's 401. */
+const smokePath = (id: string) => `/api/__deploy-smoke__/${encodeURIComponent(id)}`;
+
+/** `/api/health`, and the two stamps that say which build is answering. */
+async function verifyHealth(expected: Expected): Promise<void> {
+  /* One retry on the first request only, for a cold start. Latency is never a
+     gate — a slow answer is a working deployment. */
+  let health = await get(`${TARGET_HOST}/api/health`);
+  if (health.status >= 500 || health.status === 0) {
+    await sleep(4000);
+    health = await get(`${TARGET_HOST}/api/health`);
+  }
+
+  const redirected = describeRedirect(health.status, health.headers.get("location"));
+  if (redirected) {
+    record("GET /api/health", [redirected]);
+    return;
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(health.body) as Record<string, unknown>;
+  } catch {
+    record("GET /api/health", [`not JSON (${health.status}): ${health.body.slice(0, 140)}`]);
+    return;
+  }
+  record("GET /api/health", judgeHealth(body, { ...expected, path: "/api/health", region: REGION }));
+
+  /* The client half of the stamp. A working page in front of an API that has
+     moved is the failure nothing else here would notice. */
+  const stamp = await get(`${TARGET_HOST}/build.json`);
+  let clientBuild: { commit?: string; deploymentId?: string } | null = null;
+  try {
+    clientBuild = stamp.status === 200 ? (JSON.parse(stamp.body) as typeof clientBuild) : null;
+  } catch {
+    clientBuild = null;
+  }
+  record("GET /build.json — the page's own stamp", judgeClientBuild(clientBuild, expected));
+}
+
+/**
+ * `NODEJS_HELPERS=0` still holds. Every field is asserted, not just `bytes`: a
+ * truncated read, a body that did not parse, and the helpers being back on are
+ * three different faults, and only one of them makes `bytes` zero.
+ */
+async function verifyRequestBody(): Promise<void> {
+  const sent = JSON.stringify({ hello: "world", from: "npm run deploy" });
+  const probe = await get(`${TARGET_HOST}/api/health`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: sent,
+  });
+
+  const problems: string[] = [];
+  if (probe.status !== 200) problems.push(`answered ${probe.status}`);
+  else {
+    try {
+      const p = JSON.parse(probe.body) as Record<string, unknown>;
+      if (p.ok !== true) problems.push("ok is not true");
+      if (p.bytes !== sent.length)
+        problems.push(
+          `${p.bytes} of ${sent.length} bytes arrived — something read the stream before our handler did`,
+        );
+      if (p.contentLength !== sent.length) problems.push(`content-length arrived as ${p.contentLength}`);
+      if (p.parsedAsJson !== true) problems.push("the body did not survive as JSON");
+      if (p.truncated !== false) problems.push("the probe truncated the body");
+      if (p.helpersDisabled !== true) problems.push("NODEJS_HELPERS is not '0' on the project");
+    } catch {
+      problems.push("the probe's own answer was not JSON");
+    }
+  }
+  record("POST /api/health — a request body survives the platform", problems);
+}
+
+/**
+ * The gate holds — and, in the first of these, three other things at once.
+ *
+ * **Three segments, unauthenticated.** That one request proves what nothing
+ * else here does: that Vercel's catch-all rewrite carries a multi-segment path
+ * (`/api/article/writes` used to 404 at the *platform*, before any of our code
+ * ran, and so appeared in no log we write); that the auth gate covers a route
+ * nothing matches, rather than falling through; and — since it reaches
+ * `handleApi` — that the logging path works, which is what makes the log step
+ * below mean anything at all.
+ */
+async function verifyGate(smoke: string): Promise<void> {
+  const smokeRes = await get(`${TARGET_HOST}${smoke}`);
+  const problems: string[] = [];
+  if (smokeRes.status !== 401) problems.push(`answered ${smokeRes.status}, not 401`);
+  if (!smokeRes.body.includes("auth-none"))
+    problems.push(
+      `answered '${smokeRes.body.slice(0, 80)}' — that is not our gate, so the platform answered instead of the function`,
+    );
+  record("a three-segment API path is refused by our gate, not by Vercel", problems);
+
+  for (const [method, route] of [
+    ["GET", "/api/library"],
+    ["POST", "/api/jobs"],
+  ] as const) {
+    const r = await get(`${TARGET_HOST}${route}`, {
+      method,
+      ...(method === "POST"
+        ? { headers: { "content-type": "application/json" }, body: '{"url":"https://example.com"}' }
+        : {}),
+    });
+    record(
+      `${method} ${route} refused`,
+      r.status === 401 ? [] : [`answered ${r.status}, not 401 — anyone with the address can do this`],
+    );
+  }
+}
+
+/** The page, the JavaScript it asks for, and what is inside that JavaScript. */
+async function verifyPage(): Promise<void> {
+  const home = await get(`${TARGET_HOST}/`);
+  const assets = assetUrlsIn(home.body);
+
+  const problems: string[] = [];
+  if (home.status !== 200) problems.push(`GET / answered ${home.status}`);
+  if (!(home.headers.get("content-type") ?? "").includes("text/html"))
+    problems.push(`served as ${home.headers.get("content-type")}, not HTML`);
+  /* Vercel's "Deployment has failed" page is also a 200, and is what the branch
+     alias served on 2026-08-26. */
+  if (home.body.includes("Deployment has failed"))
+    problems.push("this is Vercel's deployment-failed page, served as a 200");
+  if (!home.body.includes('id="root"')) problems.push("no #root — this is not our index.html");
+  /* A page with no scripts would make the scan below vacuously clean. */
+  if (assets.length === 0) problems.push("the page loads no JavaScript at all");
+  record("GET / is the app", problems);
+
+  /* In what was actually SERVED, not in the local dist/. */
+  const leaks: string[] = [];
+  for (const asset of assets) {
+    const js = await get(`${TARGET_HOST}${asset}`);
+    if (js.status !== 200) {
+      leaks.push(`${asset} answered ${js.status} — the page asks for an asset that is not there`);
+      continue;
+    }
+    for (const found of findSecretsInBundle(js.body)) leaks.push(`${asset} contains ${found}`);
+  }
+  record(`${assets.length} served asset(s) exist and carry no secret`, leaks);
+}
+
+/**
+ * A path returning 200 is the worst way to be missing: the SPA catch-all
+ * answered `/robots.txt` with `200 text/html`, which a crawler reads as *no
+ * such file* rather than as a rule. The body is checked too — a `text/plain`
+ * 200 holding our index.html would satisfy a content-type check.
+ */
+async function verifyRobots(): Promise<void> {
+  const robots = await get(`${TARGET_HOST}/robots.txt`);
+  const type = robots.headers.get("content-type") ?? "";
+  const problems: string[] = [];
+  if (robots.status !== 200) problems.push(`answered ${robots.status}`);
+  if (!type.includes("text/plain")) problems.push(`served as ${type} — the SPA catch-all has eaten it`);
+  if (!/disallow/i.test(robots.body)) problems.push("has no Disallow rule in it");
+  record("GET /robots.txt is a real file with a rule in it", problems);
+}
+
+async function verify(expected: Expected, smoke: string): Promise<void> {
+  step(`Verifying ${TARGET_HOST}`);
+  await verifyHealth(expected);
+  await verifyRequestBody();
+  await verifyGate(smoke);
+  await verifyPage();
+  await verifyRobots();
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. Logs                                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What the deployment actually said about the requests we just made.
+ *
+ * **An empty result is a failed check here, not a quiet pass**, and that is the
+ * whole design of this step. Two separate reasons an empty log means nothing:
+ *
+ *  - `/api/health` is answered in src/vercel.ts *before* the logging middleware,
+ *    so it writes no line at all. Measured: tailing the log while curling both
+ *    endpoints caught the `/api/library` 401 and nothing whatever for the 200.
+ *  - the globally installed CLI cannot read history, so the wrong `vercel` on
+ *    the PATH produces the same empty output as a healthy quiet app.
+ *
+ * So the check is not "are there no errors" but "**is the line I know I caused
+ * here**" — the three-segment smoke request, which goes through `handleApi` and
+ * therefore logs. Once that line is found, the absence of errors beside it is
+ * worth something.
+ */
+function readLogs(deployment: VercelDeployment, since: Date, smoke: string): void {
+  step("Logs");
+
+  const r = run("npx", [
+    "-y",
+    LOGS_CLI,
+    "logs",
+    "--scope",
+    SCOPE,
+    "--deployment",
+    deployment.uid,
+    "--json",
+    "--since",
+    since.toISOString(),
+    "--limit",
+    "100",
+  ]);
+
+  const lines: LogLine[] = r.out
+    .split("\n")
+    .filter((l) => l.startsWith("{"))
+    .flatMap((l) => {
+      try {
+        return [JSON.parse(l) as LogLine];
+      } catch {
+        return [];
+      }
+    })
+    .filter((x) => !x.deploymentId || x.deploymentId === deployment.uid);
+
+  if (lines.length === 0) {
+    record("read this deployment's logs", [
+      `${LOGS_CLI} returned nothing for ${deployment.uid}.`,
+      "That is not evidence of health. Either the query failed, or the CLI is too old to have",
+      "history at all — and an empty log looks identical to a quiet app.",
+    ]);
+    return;
+  }
+
+  const { loud, byStatus } = judgeLogs(lines);
+  info(`${lines.length} line(s): ${[...byStatus].map(([s, n]) => `${n}×${s}`).join(", ")}`);
+
+  /* The line we know we caused. Without it, "no errors" is an empty set we made
+     ourselves. */
+  const sawSmoke = lines.some((l) => (l.requestPath ?? l.message ?? "").includes("__deploy-smoke__"));
+  record("the log contains the request this script made", sawSmoke ? [] : [
+    `nothing in the log mentions ${smoke}, though it was made and answered 401.`,
+    "Logs may be lagging; re-run with --verify-only, or look in the dashboard before trusting the line below.",
+  ]);
+
+  if (loud.length === 0) {
+    ok("nothing at error level, on any of the three readings of it");
+  } else {
+    bad(`${loud.length} line(s) look like a real failure`);
+    for (const l of loud.slice(0, 5)) say(`         ${String(l.message ?? "").slice(0, 300)}`);
+    failures.push("errors in the log");
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* The run                                                             */
+/* ------------------------------------------------------------------ */
+
+async function main(): Promise<void> {
+  if (VERIFY_ONLY) {
+    await verify({ commit: null }, smokePath("verify-only"));
+    return summarise(null);
+  }
+
+  const release = takeLock();
+  try {
+    const sha = await preflight();
+    gatesAt(sha);
+    if (failures.length) return summarise(null);
+
+    let plan: MigrationPlan | null = null;
+    if (SKIP_MIGRATIONS) {
+      step("Migrations");
+      info("skipped (--skip-migrations)");
+    } else {
+      plan = await migrationPlan(sha);
+      if (failures.length) return summarise(null);
+    }
+
+    if (DRY_RUN) {
+      step("Dry run");
+      info("stopping here. Nothing pushed, no migration applied, nothing on Vercel touched.");
+      info(`next would be: apply ${plan?.pending.length ?? 0} migration(s), then push ${sha.slice(0, 8)}`);
+      return summarise(null);
+    }
+
+    /* Captured before anything changes, so the rollback advice names the build
+       that was serving when this run started rather than whatever is there now. */
+    const wasServing = await currentlyServing();
+
+    if (plan && plan.pending.length > 0) await applyMigrations(plan);
+    if (failures.length) return summarise(wasServing ? `https://${wasServing.url}` : null);
+
+    step("Push");
+    const pushedAt = Date.now();
+    /* By name, not `origin main`: the sha that was gated is the sha that ships,
+       whatever anybody has committed in the meantime. A non-fast-forward here is
+       the right answer — somebody else pushed, and this run is now describing a
+       commit that is not the tip. */
+    const pushed = run("git", ["push", "origin", `${sha}:refs/heads/main`]);
+    if (pushed.code !== 0) {
+      record(`git push ${sha.slice(0, 8)}:refs/heads/main`, [tail(pushed.out, 10)]);
+      return summarise(wasServing ? `https://${wasServing.url}` : null);
+    }
+    didDeploy = true;
+    ok(`pushed ${sha.slice(0, 8)} to origin/main`);
+
+    const deployment = await waitForDeployment(sha, pushedAt);
+    if (!deployment) return summarise(wasServing ? `https://${wasServing.url}` : null);
+
+    const smoke = smokePath(deployment.uid);
+    await verify({ commit: sha, deploymentId: deployment.uid }, smoke);
+    readLogs(deployment, new Date(pushedAt), smoke);
+
+    return summarise(failures.length && wasServing ? `https://${wasServing.url}` : null);
+  } finally {
+    release();
+  }
+}
+
+function summarise(previous: string | null): void {
+  say();
+  if (forced.length) {
+    /* "DEPLOYED WITH …" would be a lie on a dry run, and the whole value of this
+       banner is that it can be believed when it appears in a real one. */
+    const what = didDeploy ? "DEPLOYED" : "CHECKED";
+    say(`${RED}${what} WITH ${forced.join(", ").toUpperCase()} GATE(S) FORCED${OFF}`);
+    say(`${DIM}An override is a debt entry, not a workflow. docs/plans/deploy-pipeline.md${OFF}`);
+    say();
+  }
+
+  if (failures.length === 0) {
+    say(didDeploy ? `${GREEN}Deployed and verified.${OFF}` : `${GREEN}All checks passed. Nothing was deployed.${OFF}`);
+    return;
+  }
+
+  say(`${RED}${failures.length} check(s) failed:${OFF} ${failures.join(", ")}`);
+
+  /**
+   * **The dangerous state, said out loud.** A migration ran and the code did
+   * not ship, so production is serving the previous build against the new
+   * schema. That is survivable precisely because migrations here are additive —
+   * and it is the moment somebody reaches for a schema rollback, which is the
+   * one thing that would turn a recoverable half-deploy into an outage.
+   */
+  if (schemaAdvanced > 0 && failures.some((f) => f !== "errors in the log")) {
+    say();
+    say(`${RED}SCHEMA ADVANCED; CODE MAY NOT HAVE.${OFF}`);
+    say(`${schemaAdvanced} migration(s) were applied to the remote before this failed.`);
+    say("Do NOT roll the schema back — there are no down-migrations, and the old code");
+    say("is serving happily against the new schema because the migration was additive.");
+    say("Fix forward: correct the problem and run `npm run deploy` again.");
+  }
+
+  if (previous) {
+    say();
+    for (const line of rollbackAdvice(previous, SCOPE)) say(line);
+  }
+  process.exitCode = 1;
+}
+
+await main();

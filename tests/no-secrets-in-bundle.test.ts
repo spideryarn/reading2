@@ -27,39 +27,30 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { findSecretsInBundle } from "../scripts/deploy-checks.js";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(ROOT, "dist");
 
-/** A three-part JWT. Deliberately loose: the point is to decode candidates, not to validate. */
-const JWT = /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
-
 /**
- * A secret key, **with key material after the prefix**.
+ * **One implementation, shared with the deploy script.**
  *
- * `text.includes("sb_secret_")` was the first version and it fired on the first
- * bundle it saw — on the SDK's own
- * `key.startsWith("sb_publishable_") || key.startsWith("sb_secret_")`, which is
- * the library checking a prefix rather than carrying a key. A detector that
- * cries wolf on every build is a detector that gets deleted, so it wants the
- * twenty-odd characters that make it an actual credential.
+ * There were two copies of this rule, and on 2026-08-27 the *other* one shipped
+ * with the bug this one had already fixed and written up: a bare
+ * `includes("sb_secret_")`, which matches supabase-js's own
+ * `key.startsWith("sb_secret_")` and so reported a leaked key in the live
+ * production bundle. Two copies of a security rule is one copy and one liability
+ * — see scripts/deploy-checks.ts, where the rule now lives, and the note there
+ * about why the trailing key material is required.
+ *
+ * The labels differ from that module's on purpose: these name what a *test*
+ * found, and pinning the exact wording of somebody else's message is how a test
+ * comes to fail over a rewording.
  */
-const SECRET_KEY = /sb_secret_[A-Za-z0-9_-]{16,}/;
-
-/** Anything that grants more than the publishable key does. */
 function secretsIn(text: string): string[] {
-  const found: string[] = [];
-  if (SECRET_KEY.test(text)) found.push("sb_secret_ key");
-  for (const token of text.match(JWT) ?? []) {
-    const payload = token.split(".")[1] ?? "";
-    let decoded = "";
-    try {
-      decoded = Buffer.from(payload, "base64url").toString("utf8");
-    } catch {
-      continue;
-    }
-    if (decoded.includes("service_role")) found.push("legacy service_role JWT");
-  }
-  return found;
+  return findSecretsInBundle(text).map((what) =>
+    what.includes("sb_secret") ? "sb_secret_ key" : "legacy service_role JWT",
+  );
 }
 
 function filesIn(dir: string): string[] {
