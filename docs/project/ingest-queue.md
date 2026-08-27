@@ -4,14 +4,19 @@ Paste a URL on the homepage and an article appears on the shelf a minute or two 
 stages ticking over while you watch. Since 2026-08-26 the watching happens on a page of its own,
 `/add/<the URL>` — [§ The add page](#the-add-page).
 
-> **Where the record lives is moving, and half of it has.** The job record is an in-memory `Map`
-> plus `data/_jobs/*.json` — one process's memory and one process's disk — which is exactly why
-> `POST /api/jobs/:id/advance` cannot work on a serverless host: the browser's next call may land on
-> an instance whose Map is empty. There is now a tested `JobStore` with both adapters
-> ([`src/store/jobs.ts`](../../src/store/jobs.ts)), and **it is not yet wired**; the upload record
-> beside it *has* moved. What remains, and the reason it stopped where it did, is
-> [durable-queue-and-uploads.md § 8](../plans/durable-queue-and-uploads.md). Read that before
-> believing anything below about where a job is kept.
+> **The record moved on 2026-08-27, and the artefacts did not.** A job now lives behind `JobStore`
+> ([`src/store/jobs.ts`](../../src/store/jobs.ts)) — a filesystem adapter writing the same
+> `data/_jobs/*.json` as before, and a Postgres one — so `POST /api/jobs/:id/advance` can be answered
+> by an instance that did not create the job. p-queue and the in-memory `Map` are gone with it, and
+> what replaced them is a **claim**: an attempt token, a lease, and every write fenced on
+> `id = $id and attempt_id = $attempt and status = 'running'`.
+>
+> **This does not make an ingest work on Vercel, and the section below saying it nearly does is the
+> mistake worth not repeating.** Every stage still writes `data/<slug>/*.json` and `stepIsDone` reads
+> those files, so invocation A writes `raw.json` to an ephemeral disk and invocation B finds nothing
+> and fetches again. The job is durable; the *pipeline* is not. That is
+> [transactional-stage-runner.md](../plans/transactional-stage-runner.md), which is planned,
+> reviewed and not built.
 
 > Now let's think about the "Add" functionality that takes a URL as an argument. There should be
 > some kind of queue that processes things (e.g. fetch, Mozilla Readability, sanitiser), and ideally
@@ -496,18 +501,35 @@ address checks before each redirect hop, and typed failures carrying a sentence 
 Those sentences are what a failed step shows. It takes an `AbortSignal`, so cancelling a job stops
 the fetch rather than waiting it out. See [fetching.md](fetching.md).
 
-## The queue: p-queue
+## The queue: it was p-queue, and now it is an index and a loop
 
-Chosen 2026-08-25 against
-[third-party-library-selection.md](../reusable/third-party-library-selection.md). **p-queue 9.3.3**,
-published a month before it was picked; 33.6M downloads a week, 4.3k stars, one small pure-ESM
-package with no dependencies and nothing to install alongside it. Concurrency, priorities, pause and
-`AbortSignal` are the API.
+**p-queue is gone as of 2026-08-27**, and the reason is worth keeping because the library was never
+the problem. It was chosen on 2026-08-25 against
+[third-party-library-selection.md](../reusable/third-party-library-selection.md) — **p-queue 9.3.3**,
+33.6M downloads a week, one small pure-ESM package, concurrency and `AbortSignal` in the API — and
+the rejected list below is still the right list for the question that was being asked.
 
-**Concurrency is 1, deliberately.** Three of the six steps are long model calls billed by the token
-and one is a fetch of somebody else's server. Running two articles at once would double the spend
-rate, halve the politeness, and turn the progress display into a race — for a single reader adding a
-handful of articles a day, in exchange for nothing.
+What changed is the question. Concurrency 1 was a promise **this process** made, and the moment
+there can be two instances it stops being a fact. It is now `jobs_only_one_running`, a partial unique
+index that the database enforces across all of them; a second claim comes back as a `23505` and the
+caller is told `busy`. The loop that keeps a laptop's job going after the tab is closed is the pump
+in [`src/jobs.ts`](../../src/jobs.ts), which is `advanceJob` in a `for(;;)` with a backoff — the same
+primitive the browser calls, with nothing privileged about it.
+
+**Concurrency is still 1, and still deliberately.** Three of the six steps are long model calls
+billed by the token and one is a fetch of somebody else's server. Running two articles at once would
+double the spend rate, halve the politeness, and turn the progress display into a race — for a
+single reader adding a handful of articles a day, in exchange for nothing. Raise it by changing the
+index, not by changing a number in a constructor.
+
+**The pump does not start on Vercel.** It cannot outlive the invocation that made it, so all it
+could produce there is a `running` row whose claimant is already frozen. The browser is the only
+driver in production, which is what the advance endpoint was built for.
+
+### The rejected list, kept
+
+Still the right answers to the 2026-08-25 question, and pg-boss is still the first thing to
+re-evaluate — see [§ When this becomes Postgres](#when-this-becomes-postgres).
 
 | Rejected | Why |
 |---|---|

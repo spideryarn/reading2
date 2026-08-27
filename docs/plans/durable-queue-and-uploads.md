@@ -498,7 +498,28 @@ have meant writing that function twice.
 
 ---
 
-## 8. The wiring, specified rather than started
+## 8. The wiring — **built, 2026-08-27**
+
+> Everything below was written as a specification and is kept as the record of one. It was built on
+> 2026-08-27 exactly as written, with three additions that only showed up once the code was being
+> moved rather than described:
+>
+> - **`noteProgress`**, a fenced write that keeps the claim. Without it a step's label — the present
+>   tense that [ingest-queue.md](../project/ingest-queue.md) spends a section on — would only appear
+>   after the step it describes had finished. GPT Sol's review of the *next* plan found the same
+>   hole independently, which is some evidence it was real.
+> - **`activeForSlug`**, because `freeSlug` has to know a slug is spoken for by a job that has not
+>   written a `meta.json` yet, and the `Map` scan it used to do had nowhere to go.
+> - **`pauseForTests`** on the filesystem adapter, because `get` now hands back a *clone*. The
+>   advance tests reached "the process died under this job" by mutating the record `getJob` returned,
+>   which worked only because there was no store to copy it.
+>
+> And one behaviour closed rather than moved: `listJobs` outside a request used to return
+> **everybody's** jobs, so that `prune` could sweep them. Retention is now `trimFinished(owner, keep)`
+> called with the finishing job's own owner, so nothing needs that hole any more and it is gone.
+> `tests/owner-jobs.test.ts` says so where it used to say the opposite.
+
+
 
 Everything above is built except the change that makes it reachable: `src/jobs.ts` still holds the
 `Map`. That is **one piece of work and it is the whole module**, so it is specified here rather than

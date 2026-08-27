@@ -6,18 +6,38 @@
  * >
  * > — Greg, 2026-08-25
  *
- * Three things live here — the queue (p-queue, concurrency 1), the job records
- * and their persistence under `data/_jobs/`, and the sweep that turns jobs
- * abandoned by a server restart into visible errors. The *pipeline* is
- * src/pipeline.ts; this file knows how to run a list of steps and nothing about
- * what any of them do.
+ * Two things live here — running a list of steps, and deciding *which* step and
+ * *whether*. Where the job records live is no longer this file's business: they
+ * are behind `JobStore` (src/store/jobs.ts), which has a filesystem adapter
+ * writing the same `data/_jobs/<id>.json` as before and a Postgres one. The
+ * *pipeline* is src/pipeline.ts; this file knows how to run a list of steps and
+ * nothing about what any of them do.
  *
- * See docs/project/ingest-queue.md for the design, the library choice, and an
- * honest account of what "idempotent" does and does not mean here yet.
+ * ## What changed on 2026-08-27, and why every line of it is deletion
+ *
+ * This module held a `Map`, a write queue, a load-from-disk, a restart sweep
+ * and a p-queue. All five were correct and all five were **one process's**, so
+ * `POST /api/jobs` creating a job in instance A and `POST /api/jobs/<id>/advance`
+ * landing on instance B meant a 404 on a job that plainly existed. They moved
+ * to src/store/jobs-fs.ts unchanged; what replaced them here is a **claim**.
+ *
+ * The claim is the whole design and it is three lines of SQL: an attempt token,
+ * a lease, and every write fenced on `id = $id and attempt_id = $attempt and
+ * status = 'running'`. One claim covers one step and is then released, because
+ * a claim held across requests leaves the job `running` with a token nobody
+ * holds and the next advance is told `busy` until the lease lapses — the
+ * endpoint deadlocking itself on the happy path.
+ *
+ * **An expired lease is not a takeover.** The job is failed and Retry is the
+ * reader's to press. Guessing that an owner is dead is how two runners end up
+ * writing one article, and it only becomes safe when the artefact writes are
+ * transactional — docs/plans/transactional-stage-runner.md, which is not built.
+ *
+ * See docs/project/ingest-queue.md for the design and the library choice, and
+ * docs/plans/durable-queue-and-uploads.md for the review that took the first
+ * version of this apart.
  */
-import PQueue from "p-queue";
-import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { createHash } from "node:crypto";
 import { mintId } from "./ids.js";
 /* The store the pipeline reads and writes through. Named for the role rather
    than imported under its own name, because the role is what changes: the
@@ -27,17 +47,15 @@ import { mintId } from "./ids.js";
    src/store/index.ts — that file is the *reader's* store, and switching the
    pipeline over is a separate decision from switching reads over. */
 import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
+import { fsJobStore } from "./store/jobs-fs.js";
+import { pgJobStore } from "./store/pg-jobs.js";
+import { StaleAttemptError, type JobEnding, type JobStore } from "./store/jobs.js";
+import { STORE } from "./store/live.js";
 import { readRaw } from "./fetch.js";
 import { failureKindOf } from "./job-failure.js";
 import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
-import {
-  currentOwnerId,
-  environmentOwnerId,
-  type OwnerId,
-  requestOwner,
-  runAsOwner,
-} from "./owner.js";
+import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import {
   articleExists,
   assertProduced,
@@ -52,7 +70,7 @@ import {
   stepLabel,
   urlForSlug,
 } from "./pipeline.js";
-import type { FailureKind } from "./messages.js";
+import { INTERRUPTED, type FailureKind } from "./messages.js";
 import type { Job, JobStep, JobUpload, StepName } from "./types.js";
 
 /* `JobStatus` and `StepStatus` were on this line too and nothing imported them
@@ -60,202 +78,48 @@ import type { Job, JobStep, JobUpload, StepName } from "./types.js";
    as the type of `Job.status` and `JobStep.status`. */
 export type { Job, JobStep, StepName } from "./types.js";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
+/**
+ * **Where the job records live is no longer this file's business.**
+ *
+ * `data/_jobs/`, the in-memory `Map`, the serialised writes, the tombstones and
+ * the load-from-disk all moved to src/store/jobs-fs.ts, unchanged, behind
+ * `JobStore`. Selected here rather than in src/store/index.ts for the same
+ * reason src/upload-records.ts selects its own: that file is the *reader's*
+ * store and it imports fs.ts, which imports src/pipeline.ts, which this file
+ * imports — asking from there would be an import cycle, and `npm run check`
+ * gates on cycles.
+ */
+const store: JobStore = STORE === "postgres" ? pgJobStore : fsJobStore;
 
 /**
- * `data/_jobs/`, and the underscore is load-bearing.
+ * Abort handles for steps **this process** is running, so they can be stopped.
  *
- * Jobs live under `data/` because they are per-installation state like
- * everything else there, and `data/` is gitignored. The prefix keeps them out
- * of the article namespace: `listArticles` walks `data/*` and skips names
- * starting with `_` explicitly (src/api.ts) rather than relying on this
- * directory happening to lack a blocks.json.
+ * The one piece of queue state that is still a `Map` and has to be. An
+ * `AbortController` cannot be shared between instances — a signal is a thing a
+ * running function is listening to, and a second instance has no function to
+ * interrupt. So Stop is two halves: `requestCancel` writes `cancelling` where
+ * everybody can see it, and this aborts the step if the step happens to be
+ * here. An instance that is not running it reads the flag at its next step
+ * boundary instead, which is a moment later and correct.
  */
-const JOBS_DIR = path.join(ROOT, "data", "_jobs");
-
-/**
- * The jobs this process knows about, live.
- *
- * In memory as well as on disk because progress is written far more often than
- * it is worth persisting — the model steps report every half second — and
- * because a poll should never lose a race with a write. Disk is what survives a
- * restart; this map is what answers a request.
- */
-const jobs = new Map<string, Job>();
-
-/** Abort handles for jobs that are queued or running, so they can be cancelled. */
 const aborts = new Map<string, AbortController>();
 
 /**
- * Concurrency 1, deliberately.
+ * How long a claim is good for, and how long before that the claimant stops.
  *
- * Three of the six steps are long model calls billed by the token, and one is a
- * fetch of somebody else's server. Running two articles at once would double
- * the spend rate, halve the politeness, and make the progress display a race —
- * for a single reader adding a handful of articles a day, in exchange for
- * nothing. Raise it here if that ever stops being true.
+ * The lease is under Vercel's 300-second kill, so an invocation cannot outlive
+ * its own claim — but that is a fact about one host, not a guarantee, and on a
+ * laptop a model call can run as long as it likes. So the claimant sets **its
+ * own timer** at `LEASE_MS - DEADLINE_MARGIN_MS` and aborts the step itself.
+ *
+ * That ordering is the whole point and it is why there is no heartbeat. A lease
+ * that can be renewed means an expired lease says *probably dead*; a lease
+ * nothing renews, with the claimant guaranteed to have unwound before it lapses,
+ * means an expired lease says *definitely over its own deadline*. Only the
+ * second is safe to act on, and `noteProgress` deliberately does not touch it.
  */
-const queue = new PQueue({ concurrency: 1 });
-
-function jobFile(id: string): string {
-  return path.join(JOBS_DIR, `${id}.json`);
-}
-
-/**
- * One write at a time per job, and the last one in flight for each.
- *
- * Two writes for one job can overlap, and one pair did: cancelling a running
- * job made p-queue reject the outer promise — whose `.catch` wrote the job as
- * cancelled — while `runJob` was independently unwinding and writing the same
- * job from its own error path. Both renamed the same temp file, the second got
- * ENOENT because the first had already moved it, and the unhandled rejection
- * **killed the dev server**.
- *
- * That particular pair is gone (the signal no longer goes to `queue.add` — see
- * the note there), but serialising is the right answer regardless: it is not
- * worth having to prove, every time a transition is added, that no two of them
- * can ever be in flight together.
- */
-const writes = new Map<string, Promise<void>>();
-
-/** Jobs the reader has dismissed. A late write must not bring one back. */
-const forgotten = new Set<string>();
-
-/** Distinct per call, so two writes for the same job cannot share a temp file. */
-let writeCounter = 0;
-
-async function writeOnce(job: Job): Promise<void> {
-  await mkdir(JOBS_DIR, { recursive: true });
-  /* Write, then rename. A job file is read by whatever starts next after a
-     crash, so a half-written one is worse than a missing one: it parses as
-     nothing and takes the record of what happened with it. `rename` within a
-     directory is atomic, so a reader sees the old file or the new one, never
-     half of either. The suffix carries a counter as well as the pid — the pid
-     alone is constant within a process, which is exactly the case that broke. */
-  const tmp = `${jobFile(job.id)}.${process.pid}.${++writeCounter}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(job, null, 2)}\n`, "utf8");
-  await rename(tmp, jobFile(job.id));
-}
-
-/**
- * Queue a write behind whatever is already writing this job.
- *
- * **Never rejects.** A job record is a convenience — the in-memory map is what
- * answers every request — and a full disk should not be able to kill the reader's
- * server from inside a background job. But it is not nothing either: it is what
- * the restart sweep reads, so a failure is said out loud rather than swallowed.
- */
-function persist(job: Job): Promise<void> {
-  const next = (writes.get(job.id) ?? Promise.resolve())
-    .then(() => (forgotten.has(job.id) ? undefined : writeOnce(job)))
-    .catch((err: Error) => {
-      /* `errorFields`, not `err.message`. This line used to be a `console.error`
-         that printed the message and threw the stack away — and the stack is the
-         only part that says *which* write failed, out of the several this file
-         queues. That loss is the whole reason the logger exists. */
-      log("jobs").error(
-        { ...errorFields(err), jobId: job.id, slug: job.slug },
-        `could not write the record for job ${job.id} — ${job.slug}`,
-      );
-    });
-  writes.set(job.id, next);
-  // Drop the chain once it drains, so finished jobs do not sit in this map for
-  // as long as the process lives.
-  void next.then(() => {
-    if (writes.get(job.id) === next) writes.delete(job.id);
-  });
-  return next;
-}
-
-/* ---------------------------------------------------------------- startup --
-   Anything on disk marked `running` was left there by a process that is no
-   longer alive — this one has just started and its queue is empty. Saying so
-   out loud is the whole point: a status of `running` on disk does not mean work
-   is happening, and a spinner that spins for ever is the worst of the available
-   outcomes. Exactly the argument `sweepOrphaned` makes for orphaned comments in
-   src/routes.ts.
-
-   What it says instead changed on 2026-08-26, and the change is the whole of
-   `docs/plans/ingest-resume.md` § 2. */
-
-/**
- * A job the process stopped under is **waiting**, not failed.
- *
- * Returns true if anything changed, so the caller knows whether to write.
- *
- * ## Why this stopped meaning `error`
- *
- * It used to mark the job `error` with *"The server stopped before this
- * finished"*, and mark its running step `error` too. That reasoning was sound
- * for one long-lived process — this process has just started, so nothing can be
- * running, so anything that says it is running is a lie — and it is wrong the
- * moment work is *expected* to pause and continue. Closing a tab, restarting
- * the dev server, or a serverless instance being torn down between steps are
- * all interruptions, not faults, and calling them failures put a red card and a
- * Retry button in front of the reader for something that had gone perfectly
- * well up to that point.
- *
- * With `POST /api/jobs/:id/advance` (`advanceJob` below) there is now something
- * that picks a paused job back up, so "waiting" is a state with a way out of it
- * rather than a nicer word for stuck.
- *
- * ## Why `queued` and not a sixth status
- *
- * Because `queued` already means exactly this: *nobody is running this job and
- * it still has work to do*. A `waiting` or `paused` member of `JobStatus` would
- * have to be learned by every switch over it — `isBusy` in
- * src/web/useJobs.ts, `activeFor` and `prune` and `forgetJob` here, the busy
- * check on the card in src/web/AddArticle.tsx — and every one of those would
- * want to treat it the way it already treats `queued`. A status nothing
- * distinguishes is not a status.
- *
- * The one thing this loses is the *reason* the job stopped, and it is worth
- * losing: a job that carries on where it left off does not need to explain an
- * interruption the reader may never have noticed.
- *
- * ## The running step goes back to `pending`, not to `error`
- *
- * It did not fail; it did not happen. `beginStep`'s marker in the artefact
- * store (src/store/artifacts.ts) is what stops its half-written output being
- * mistaken for a finished one, so `stepIsDone` will answer false and the step
- * will run again — which is the resume, and it is derived from the artefacts
- * rather than from this status.
- *
- * ## Except when the reader had already pressed Stop
- *
- * `cancelling` means an abort was asked for and had not landed when the process
- * went. Nothing is going to deliver it now, and resuming a job somebody stopped
- * would be the one interruption they *did* notice. So that one lands
- * `cancelled`, which is what they asked for.
- */
-export function sweepStopped(job: Job): boolean {
-  if (job.status !== "running" && job.status !== "queued") return false;
-
-  let changed = false;
-  for (const step of job.steps) {
-    if (step.status === "running") {
-      step.status = "pending";
-      delete step.startedAt;
-      changed = true;
-    }
-  }
-
-  if (job.cancelling) {
-    markCancelled(job);
-    return true;
-  }
-
-  if (job.status !== "queued") {
-    job.status = "queued";
-    changed = true;
-  }
-  return changed;
-}
-
-/** The three statuses a job never leaves. */
-function isFinished(job: Job): boolean {
-  return job.status === "done" || job.status === "error" || job.status === "cancelled";
-}
+const LEASE_MS = 4 * 60_000;
+const DEADLINE_MARGIN_MS = 20_000;
 
 /**
  * The reader stopped it — the same four fields wherever that is decided.
@@ -323,63 +187,6 @@ export function cascadeForce(steps: StepName[], forced: Set<StepName>): Set<Step
   );
 }
 
-let loaded: Promise<void> | null = null;
-
-async function loadFromDisk(): Promise<void> {
-  let files: string[] = [];
-  try {
-    files = (await readdir(JOBS_DIR)).filter((f) => f.endsWith(".json"));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    return; // nothing has ever been queued here
-  }
-
-  /* Collected and reported once, rather than a line each.
-     `data/_jobs/` grows without limit until `prune` runs, so "one warn per
-     unreadable file" is bounded by nothing — and this runs on the first request
-     after a cold start, where Vercel allows 256 log lines for the whole
-     request. A hundred corrupt records would spend the entire budget saying the
-     same thing a hundred times, and bury the request that triggered it.
-     A count, plus enough names to go and look. Raised by GPT/Codex in review. */
-  const unreadable: string[] = [];
-
-  for (const file of files) {
-    let job: Job;
-    try {
-      job = JSON.parse(await readFile(path.join(JOBS_DIR, file), "utf8")) as Job;
-    } catch {
-      unreadable.push(file);
-      continue;
-    }
-    /* **A record written before jobs had owners belongs to the one owner there
-       was.** Not a guess: this field arrived on 2026-08-27 and until that
-       morning every job in this directory was queued by the single process-wide
-       owner, which is the one the environment still names. Stamping it here
-       rather than leaving it undefined keeps the invariant that a `Job` in
-       memory always has an owner, so nothing downstream has to ask. */
-    if (!job.ownerId) job.ownerId = environmentOwnerId();
-    if (sweepStopped(job)) await persist(job);
-    jobs.set(job.id, job);
-  }
-
-  /* Still not worth failing a page load over — but not worth passing over in
-     silence either. A record that will not parse means a process died in the
-     middle of writing it, which is a thing that happened rather than a thing
-     that is missing, and the file names are the only clue left to it. */
-  if (unreadable.length > 0) {
-    log("jobs").warn(
-      { count: unreadable.length, files: unreadable.slice(0, 5), of: files.length },
-      `skipped ${unreadable.length} unreadable job record(s) of ${files.length}`,
-    );
-  }
-}
-
-/** Load once, and make every entry point wait for it. */
-function ready(): Promise<void> {
-  loaded ??= loadFromDisk();
-  return loaded;
-}
-
 /* ------------------------------------------------------------------ running -- */
 
 /**
@@ -442,14 +249,25 @@ type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
  * to keep the marker discipline, the cancel bookkeeping and the failure kinds
  * in step, and they would drift on the first change to any of them.
  *
- * **Never throws.** A failure is an outcome, recorded on the job and on the
- * step, because both callers have to persist the same story about it.
+ * **Never throws — with one exception, and it is not a step failure.** A failure
+ * is an outcome, recorded on the job and on the step, because both callers have
+ * to tell the same story about it. The exception is `StaleAttemptError` out of
+ * `note`: that does not mean the step went wrong, it means *this claimant no
+ * longer owns this job*, and carrying on would spend a model call whose result
+ * nothing will accept. It propagates, and `advanceJob` turns it into `busy`.
+ *
+ * **Nothing here writes the job.** The steps array is mutated in memory and
+ * `note` is called at the two moments a reader would notice — a skip, and a
+ * step starting. The claimant's own release or finish is what records the
+ * outcome, in one write, so there is exactly one fenced statement per step
+ * rather than a trickle that each has to be fenced separately.
  */
 async function runStep(
   job: Job,
   step: JobStep,
   controller: AbortController,
   jlog: Log,
+  note: () => Promise<void>,
 ): Promise<StepOutcome> {
   const { dir, htmlFile } = contextPaths(job.slug);
 
@@ -495,7 +313,7 @@ async function runStep(
     // stage skips the four before it — so at `info` this would be the bulk of
     // the log and the lines that matter would be sitting in it.
     jlog.debug({ step: step.name }, `step skipped: ${step.name} — ${job.slug}`);
-    await persist(job);
+    await note();
     return "skipped";
   }
 
@@ -507,7 +325,7 @@ async function runStep(
   step.startedAt = new Date().toISOString();
   delete step.error;
   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
-  await persist(job);
+  await note();
 
   try {
     /* Bracketing the run, not decorating it. A step that dies between two of
@@ -546,7 +364,6 @@ async function runStep(
     // The title only exists once extraction has run, and the moment it does
     // is the moment the progress card can stop calling the article by its slug.
     if (step.name === "extract") job.title = step.detail;
-    await persist(job);
     return "ran";
   } catch (err) {
     const message = (err as Error).message;
@@ -579,7 +396,6 @@ async function runStep(
       /* Not on a cancel: the reader stopped it, and a stopped job is always
          worth starting again. */
       recordFailureKind(job, undefined);
-      await persist(job);
       return "cancelled";
     }
     job.status = "error";
@@ -587,107 +403,114 @@ async function runStep(
     recordFailureKind(job, failureKindOf(err));
     job.finishedAt = new Date().toISOString();
     delete job.cancelling;
-    await persist(job);
     return "failed";
   }
 }
 
 /**
- * Every step is done or skipped: close the job off.
+ * The job is over, however it ended: write it once, fenced, and tidy up.
  *
- * Shared by both drivers for the same reason `runStep` is — the pruning and the
- * one-line-per-job log are part of finishing, not part of looping.
+ * **One write per ending, not three.** `runStep` used to persist the failure
+ * and then the caller persisted the job around it; with a fenced store that
+ * would be two statements either of which can be refused, and a job left
+ * half-ended. So `runStep` records the story in memory and this commits it.
+ *
+ * Retention runs on **this job's owner** rather than sweeping everybody, which
+ * is both cheaper and more correct: the old version walked every job in the
+ * process's memory, and a store cannot enumerate owners without reading every
+ * row it has.
  */
-async function finishDone(job: Job, jlog: Log, startedMs: number): Promise<void> {
-  job.status = "done";
-  job.finishedAt = new Date().toISOString();
-  delete job.cancelling;
-  await persist(job);
-  jlog.info({ ms: since(startedMs), status: "done" }, `job done: ${job.slug}`);
-  await prune();
+async function endJob(
+  job: Job,
+  attempt: string,
+  ending: JobEnding,
+  jlog: Log,
+  startedMs: number,
+): Promise<Job> {
+  const after = await store.finish(job.id, attempt, ending);
+  const line = { ms: since(startedMs), status: ending.status };
+  /* `warn` for a cancel, because the reader chose it and it is neither a fault
+     nor a clean finish. An `error` outcome stays at `info` — the step that
+     failed has already logged the stack at `error`, and repeating it would
+     double every failure in an alert count. */
+  if (ending.status === "cancelled") jlog.warn(line, `job cancelled: ${job.slug}`);
+  else jlog.info(line, `job ${ending.status}: ${job.slug}`);
+  await store.trimFinished(job.ownerId, KEEP_FINISHED);
+  return after;
+}
+
+/** What `runStep` left on the job, as the ending the store wants. */
+function endingFrom(job: Job, status: JobEnding["status"]): JobEnding {
+  return {
+    status,
+    steps: job.steps,
+    ...(job.error !== undefined && { error: job.error }),
+    ...(job.failureKind !== undefined && { failureKind: job.failureKind }),
+    ...(job.title !== undefined && { title: job.title }),
+  };
 }
 
 /**
- * Run one job's steps in order, stopping at the first failure.
+ * Keep advancing one job until there is nothing left to do.
  *
- * **Stopping is right, not lazy.** Every step consumes the artefact the one
- * before it wrote, so carrying on past a failure would run the two expensive
- * model calls against whatever stale file happened to be on disk — and produce
- * a tree for the previous version of the article, which looks entirely fine.
+ * **The replacement for p-queue, and for `runJob`.** Both are gone, and so is
+ * the library: concurrency 1 is no longer a promise a package makes, it is
+ * `jobs_only_one_running` — a partial unique index the database enforces across
+ * every instance, where p-queue could only speak for this one.
+ *
+ * The first draft of this exited on `busy`, and
+ * [GPT Sol](../docs/plans/durable-queue-and-uploads-review-sol.md) was right
+ * that a loop which exits on `busy` is not a pump: job A takes the single slot,
+ * job B's loop is told `busy` once and stops, and nothing ever restarts it.
+ * What "close the tab and it still finishes" means on a laptop is that
+ * something keeps asking. So `busy` **backs off and asks again**.
+ *
+ * **Not started on Vercel.** A pump cannot outlive the invocation that made it,
+ * so all it could produce there is a `running` row whose claimant is already
+ * frozen. The browser is the only driver in production, which is the whole
+ * reason the advance endpoint exists.
+ *
+ * `runAsOwner`, because a job outlives the request that made it and an
+ * AsyncLocalStorage context is captured when an async resource is made. Without
+ * it the pump runs in whoever's continuation happened to start it — measured,
+ * not guessed, when this was a p-queue callback: with concurrency 1, the whole
+ * of Bob's job ran in Alice's context. src/owner.ts § `runAsOwner`.
  */
-async function runJob(job: Job, controller: AbortController): Promise<void> {
-  /* A child logger, made here and used locally. Not a module-level "current
-     job" variable: Vercel's Fluid Compute runs several requests concurrently in
-     one instance, so a shared one would stamp lines with whichever article was
-     most recently started — intermittently, and only in production. Rule 4 at
-     the top of src/log.ts. */
-  const jlog = log("jobs").child({ jobId: job.id, slug: job.slug });
-  const jobStarted = Date.now();
+const PUMP_BACKOFF_MS = 250;
+const PUMP_BACKOFF_MAX_MS = 5_000;
 
-  /* One line per job however it ends, so an ingest can be found by its end as
-     well as its start. `warn` for a cancel, because the reader chose it and it
-     is neither a fault nor a clean finish. An `error` outcome stays at `info`
-     here on purpose — the step that failed has already logged the stack at
-     `error`, and repeating it would double every failure in an alert count. */
-  const finished = (status: Job["status"]) => {
-    const line = { ms: since(jobStarted), status };
-    if (status === "cancelled") jlog.warn(line, `job cancelled: ${job.slug}`);
-    else jlog.info(line, `job ${status}: ${job.slug}`);
-  };
-
-  // Cancelled while it sat in the queue. `cancelJob` cannot mark it for us —
-  // p-queue no longer removes it (see the note at `queue.add`) — so the check
-  // belongs here, before anything is written.
-  if (controller.signal.aborted) {
-    markCancelled(job);
-    await persist(job);
-    finished("cancelled");
-    return;
-  }
-
-  job.status = "running";
-  job.startedAt = new Date().toISOString();
-  await persist(job);
-
-  for (const step of job.steps) {
-    if (controller.signal.aborted) {
-      markCancelled(job);
-      await persist(job);
-      finished("cancelled");
-      return;
+function pump(id: string, owner: OwnerId): void {
+  if (process.env.VERCEL) return;
+  void runAsOwner(owner, async () => {
+    let backoff = PUMP_BACKOFF_MS;
+    for (;;) {
+      let advanced: Advanced | null;
+      try {
+        advanced = await advanceJob(id);
+      } catch (err) {
+        /* `advanceJob` records its own step failures, so anything reaching here
+           is a bug in it — and must be visible rather than swallowed. Visible
+           to the *reader* is not enough: the card turning red says the message
+           and loses the stack, which is the only part that says where the bug
+           is, and this is the one path where nobody can guess it from the step
+           that failed, because no step failed. */
+        log("jobs").error({ ...errorFields(err), jobId: id }, "the job pump threw");
+        return;
+      }
+      if (!advanced || advanced.done) return;
+      if (!advanced.busy) {
+        backoff = PUMP_BACKOFF_MS;
+        continue;
+      }
+      /* Somebody else has it — another instance, another tab, or the single
+         running slot is taken by a different job. Either way the answer is the
+         same: wait and ask again. Doubling to a ceiling rather than a fixed
+         wait, because the common case is a step that takes a second and the
+         expensive case is a model call that takes two minutes. */
+      await new Promise((r) => setTimeout(r, backoff));
+      backoff = Math.min(backoff * 2, PUMP_BACKOFF_MAX_MS);
     }
-
-    const outcome = await runStep(job, step, controller, jlog);
-    if (outcome === "cancelled" || outcome === "failed") {
-      finished(job.status);
-      return;
-    }
-
-    /* Checked after as well as before — a step that ignores the signal runs
-       to completion regardless, and starting the next one would spend a
-       model call on a job the reader has already stopped.
-       **And checked here, after this step is recorded done, rather than by
-       throwing.** Unwinding a finished step through `runStep`'s catch marked it
-       `error`, and `forceForRetry` then forces the first step that is not
-       done — so pressing Stop as `toc` finished, then Retry, bought that
-       model call a second time. Moving `finishStep` earlier did not fix that
-       on its own, because the *job record*, not the marker, is what Retry
-       reads. Found by review, 2026-08-26; the first fix for it was
-       incomplete.
-
-       Only after a step that actually **ran**. A skip costs nothing and did not
-       observe the signal, so the check at the top of the next turn is the right
-       place to notice a cancel that arrived during one. */
-    if (outcome === "ran" && controller.signal.aborted) {
-      jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
-      markCancelled(job, "Cancelled");
-      await persist(job);
-      finished("cancelled");
-      return;
-    }
-  }
-
-  await finishDone(job, jlog, jobStarted);
+  });
 }
 
 /* ------------------------------------------------------------- advancing --
@@ -696,17 +519,6 @@ async function runJob(job: Job, controller: AbortController): Promise<void> {
    watching it. Designed in docs/plans/job-queue-rethink.md § Decided, and it is
    what makes docs/plans/ingest-resume.md work.
    -------------------------------------------------------------------------- */
-
-/**
- * Jobs an `advanceJob` call is inside a step of, right now, in this process.
- *
- * Separate from `aborts` even though `advanceJob` writes to both, because the
- * two answer different questions: `aborts` is *"can this be stopped"* and is
- * also set for every job sitting in the p-queue, while this is *"is a request
- * already running a step of this one"*. Keeping them apart is what lets the
- * log line say which of the two owners turned a caller away.
- */
-const advancing = new Set<string>();
 
 /** What one `POST /api/jobs/:id/advance` did. */
 export interface Advanced {
@@ -744,124 +556,160 @@ export interface Advanced {
  * Called twice at once, the second call is turned away with `busy` rather than
  * starting a second runner over the same files.
  *
- * ## How this and the in-process queue keep out of each other's way
+ * ## How two callers keep out of each other's way
  *
- * They do not share work; they take turns, and the rule is **advance refuses
- * while the queue owns the job**.
+ * They do not, and they do not need to. There is **one claim**, and whoever
+ * takes it runs; everybody else is told `busy` and asks again. The pump is not
+ * privileged — it is this same function in a loop.
  *
- * `enqueue` puts an `AbortController` in `aborts` the moment it creates a job
- * and removes it only when the p-queue's promise for that job has settled — so
- * `aborts.has(id)` is exactly "this process still intends to run it". Advance
- * checks that first and answers `busy`, which the client reads as *wait and ask
- * again*. Nothing is lost: the queue is finishing the job, and the browser's
- * poll shows it happening.
+ * That replaced a rule that had to be agreed rather than enforced: *advance
+ * refuses while the in-process queue owns the job*, checked by asking whether
+ * this process held an `AbortController` for it. Sound inside one process, and
+ * meaningless the moment there are two — instance B has no entry for a job
+ * instance A is halfway through, so it would cheerfully start a second runner
+ * over the same article and neither would know.
  *
- * That makes advance a **no-op for a job this process queued**, which is most
- * jobs on this laptop, and exactly the point. What is left for it is the case
- * the queue cannot serve: a job whose process is gone. On Vercel that is every
- * job after the invocation that started it freezes; here it is a job that
- * survived a dev-server restart, which `sweepStopped` now leaves `queued` and
- * waiting rather than marking failed.
+ * ## What this deliberately does not do
  *
- * **What this deliberately does not do:** take a job away from an owner that
- * has stopped making progress. A frozen instance that still holds an entry in
- * `aborts` will keep answering `busy` for as long as it lives, and no amount of
- * elapsed time will change that answer. Guessing that an owner is dead is how
- * two runners end up writing one article — the fault
- * docs/plans/job-queue-rethink.md names in pgmq — and the honest fix is the
- * attempt token and the fenced write, which is item 2 and item 3 of that plan's
- * list and is not built yet. Until then the recovery is Stop, then Retry.
+ * **Take a job away from a claimant whose lease has run out.** The job is
+ * failed, with a sentence saying it was interrupted, and Retry is the reader's
+ * to press. Guessing that an owner is dead is how two runners end up writing
+ * one article — the fault docs/plans/job-queue-rethink.md names in pgmq — and
+ * the guess is only safe once every durable write is inside the fenced
+ * transaction, which is docs/plans/transactional-stage-runner.md and is not
+ * built.
+ *
+ * What makes an expired lease *mean* something in the meantime is the
+ * claimant's own deadline: see `LEASE_MS`. It aborts itself first, so a lapsed
+ * lease says "the process is gone" rather than "the process is slow".
  *
  * @returns null if there is no such job, so the route can 404.
  */
 export async function advanceJob(id: string): Promise<Advanced | null> {
-  await ready();
-  const job = jobs.get(id);
-  /* Somebody else's is `null`, as a missing one is. This is the route that runs
-     a pipeline step, so leaving it open was somebody else's model spend on
-     demand. See `mine` — and note it returns true outside a request, which is
-     what lets `runJob` below drive the very same function. */
-  if (!mine(job)) return null;
+  const owner = currentOwnerId();
+  const attempt = mintId();
+  const outcome = await store.claim(id, owner, attempt, LEASE_MS);
 
-  // Already over. Safe to call for ever, which is what makes a client loop that
-  // races its own poll harmless.
-  if (isFinished(job)) return { job, ran: null, busy: false, done: true };
-
-  /* Somebody else has it. The p-queue (see the note above) or another request
-     mid-step. `cancelling` counts too: Stop has been pressed and the abort has
-     not landed, so starting another step would spend a model call on a job the
-     reader has already stopped. */
-  if (aborts.has(job.id) || advancing.has(job.id) || job.cancelling === true) {
-    return { job, ran: null, busy: true, done: false };
+  switch (outcome.kind) {
+    /* Somebody else's is `gone`, as a missing one is. This is the route that
+       runs a pipeline step, so leaving it open was somebody else's model spend
+       on demand. */
+    case "gone":
+      return null;
+    /* Already over. Safe to call for ever, which is what makes a client loop
+       that races its own poll harmless. */
+    case "finished":
+      return { job: outcome.job, ran: null, busy: false, done: true };
+    /* Held by another claimant, or the single running slot is taken by a
+       different job, or Stop has been pressed and the abort has not landed.
+       All three are *wait and ask again*, which is what the client does. */
+    case "busy":
+      return { job: (await store.get(id, owner)) as Job, ran: null, busy: true, done: false };
+    case "stopping":
+      return { job: outcome.job, ran: null, busy: true, done: false };
   }
 
+  const job = outcome.job;
   /* A child logger, made here and used locally — never a module-level "current
-     job". Rule 4 at the top of src/log.ts, and it matters more here than in
-     `runJob`: several advance requests for *different* jobs really can be in
+     job". Rule 4 at the top of src/log.ts, and it matters more here than
+     anywhere: several advance requests for *different* jobs really can be in
      flight in one instance at once. */
   const jlog = log("jobs").child({ jobId: job.id, slug: job.slug });
   const startedMs = Date.now();
   const controller = new AbortController();
-
-  /* Claimed **synchronously**, before the first `await` below. Two requests
-     arriving together are two turns of one event loop, so as long as nothing
-     yields between the check above and these two lines, the second one sees the
-     claim. Put an `await` in that gap and both start a step. */
-  advancing.add(job.id);
   aborts.set(job.id, controller);
 
-  try {
-    if (job.status !== "running") {
-      job.status = "running";
-      // `??=`: a resumed job started once already, and the card's "how long has
-      // this been going" should not restart every time a tab picks it back up.
-      job.startedAt ??= new Date().toISOString();
-      await persist(job);
-    }
+  /**
+   * **The claimant's own deadline, and it has to fire before the lease.**
+   *
+   * Without this the lease is a promise nobody keeps: a local model call can
+   * run for as long as it likes, the lease lapses, `failExpired` marks the job
+   * interrupted — and the step is still running, still spending, about to write
+   * artefacts for a job that has been failed. Aborting ourselves first makes an
+   * expired lease mean *the process is gone*, which is the only reading it is
+   * safe to act on. See `LEASE_MS`.
+   */
+  let overran = false;
+  const deadline = setTimeout(() => {
+    overran = true;
+    controller.abort(new Error(INTERRUPTED.message));
+  }, LEASE_MS - DEADLINE_MARGIN_MS);
 
+  const note = async () => {
+    await store.noteProgress(job.id, attempt, job.steps);
+  };
+
+  try {
     for (const step of job.steps) {
-      const outcome = await runStep(job, step, controller, jlog);
+      const outcome = await runStep(job, step, controller, jlog, note);
 
       if (outcome === "skipped") continue;
 
       if (outcome === "cancelled" || outcome === "failed") {
-        /* Read off the outcome rather than off `job.status`, which the compiler
-           has narrowed to "running" from the assignment above and cannot know
-           `runStep` just changed. Same two lines `runJob`'s `finished` writes:
-           `warn` for a cancel, because the reader chose it and it is neither a
-           fault nor a clean finish; `info` for an error, because the step that
-           failed has already logged the stack. */
-        const status = outcome === "cancelled" ? "cancelled" : "error";
-        const line = { ms: since(startedMs), status, step: step.name };
-        if (status === "cancelled") jlog.warn(line, `job cancelled: ${job.slug}`);
-        else jlog.info(line, `job error: ${job.slug}`);
-        return { job, ran: step.name, busy: false, done: true };
+        /* Read off the outcome rather than off `job.status`: `runStep` records
+           the story on the record in memory and this is the one write that
+           commits it. An overrun is neither a cancel nor a step's fault — the
+           step was interrupted by its own claimant — so it ends as an error
+           the reader may retry, with `INTERRUPTED`'s wording rather than
+           whatever the abort happened to say. */
+        const ending = overran
+          ? {
+              status: "error" as const,
+              steps: job.steps,
+              error: INTERRUPTED.message,
+              failureKind: INTERRUPTED.kind,
+              ...(job.title !== undefined && { title: job.title }),
+            }
+          : endingFrom(job, outcome === "cancelled" ? "cancelled" : "error");
+        const after = await endJob(job, attempt, ending, jlog, startedMs);
+        return { job: after, ran: step.name, busy: false, done: true };
       }
 
-      // It ran. One step per call, so stop here — even if the next one would
-      // only skip. The caller comes straight back for it, and a request that
-      // returns keeps every step inside its own serverless invocation, which
-      // is the whole reason this endpoint exists.
+      /* It ran. One step per call, so stop here — even if the next one would
+         only skip. The caller comes straight back for it, and a request that
+         returns keeps every step inside its own serverless invocation, which is
+         the whole reason this endpoint exists. */
       if (controller.signal.aborted) {
         jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
         markCancelled(job, "Cancelled");
-        await persist(job);
-        return { job, ran: step.name, busy: false, done: true };
+        const after = await endJob(job, attempt, endingFrom(job, "cancelled"), jlog, startedMs);
+        return { job: after, ran: step.name, busy: false, done: true };
       }
       const finished = job.steps.every((s) => s.status === "done" || s.status === "skipped");
-      if (finished) await finishDone(job, jlog, startedMs);
-      return { job, ran: step.name, busy: false, done: finished };
+      const after = finished
+        ? await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs)
+        : /* Not over: **let the claim go.** One claim covers one step, so the
+             next request — a different token — can have it. Holding it across
+             requests would leave the job `running` with a token nobody holds
+             and every later advance told `busy` until the lease lapsed, which
+             is this endpoint deadlocking itself on the happy path. GPT Sol,
+             2026-08-27. */
+          await store.releaseStep(job.id, attempt, job.steps, {
+            ...(job.title !== undefined && { title: job.title }),
+          });
+      return { job: after, ran: step.name, busy: false, done: finished };
     }
 
     // Every step skipped: there was nothing left to do. A job re-added after
     // its article was already on the shelf lands here on its first call.
-    await finishDone(job, jlog, startedMs);
-    return { job, ran: null, busy: false, done: true };
+    const after = await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs);
+    return { job: after, ran: null, busy: false, done: true };
+  } catch (err) {
+    /* **The claim went somewhere else while we were inside a step.** Not a step
+       failure and not ours to record: the row says somebody else owns this job,
+       so any write we made would be refused anyway. Report it the way a losing
+       claimant is reported, and let the client ask again. */
+    if (err instanceof StaleAttemptError) {
+      jlog.warn({ jobId: job.id }, `lost the claim mid-step — ${job.slug}`);
+      const now = await store.get(job.id, owner);
+      return now ? { job: now, ran: null, busy: true, done: false } : null;
+    }
+    throw err;
   } finally {
-    advancing.delete(job.id);
+    clearTimeout(deadline);
     // Only ours. `aborts` is keyed by job id and this call put the entry there,
-    // so deleting it here cannot take the p-queue's — the check at the top
-    // guarantees there wasn't one.
+    // so deleting it here cannot take another claimant's — it has none in this
+    // process, because the claim is what stops two of us being inside one job.
     aborts.delete(job.id);
   }
 }
@@ -937,8 +785,6 @@ export interface EnqueueRequest {
  * find out what happened to it.
  */
 export async function enqueue(request: EnqueueRequest): Promise<Job> {
-  await ready();
-
   // `DEFAULT_INGEST_STEPS`, not `STEP_ORDER`. They were the same list until
   // `tweets` arrived — a step you can ask for by name that must not run on
   // every add, because it costs a model call nobody asked for.
@@ -946,159 +792,131 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   if (names.length === 0) {
     throw Object.assign(new Error("A job needs at least one step."), { status: 400 });
   }
+  const owner = currentOwnerId();
+  const forced = cascadeForce(names, new Set(request.force ?? []));
+  const workKey = workKeyFor(names, forced, request.guidance, request.profile, request.upload);
 
-  // A fresh add carries a URL; a late step run on its own takes it from disk.
-  // When both exist and disagree, `freeSlug` has already moved us to a slug of
-  // our own, so this cannot silently adopt somebody else's article.
+  /* **The loop is the deduplication, and the insert is what decides.**
+   *
+   * This used to be: look for an active job on this slug, compare it with
+   * `sameWork`, and insert if nothing matched — with a long comment explaining
+   * why there must be no `await` between the look and the insert. That comment
+   * is gone with the code, because the look and the insert are now one
+   * statement: `enqueueOrGet` inserts and lets `jobs_active_slug` refuse, and
+   * the row that comes back is either the job already doing this work or the
+   * job holding the name for something else.
+   *
+   * Which is the difference between narrower and closed. Two instances each
+   * scanning their own memory each found nothing and each started paying for
+   * the same article, and no amount of care about `await` placement in one
+   * process could have stopped it.
+   *
+   * **20 tries.** `freeSlug` and `freeUploadSlug` already walk to `-99`, so a
+   * loop this long only runs when somebody else takes the name in the gap
+   * between our asking and our inserting — twenty of those in a row is not a
+   * collision, it is a fault.
+   */
   let slug = request.url
     ? await freeSlug(request.slug, request.url)
     : request.upload
       ? await freeUploadSlug(request.slug, request.upload.id)
       : request.slug;
-  /* **Never for an upload**, and not only because it would find nothing. It
-     reads the `meta.json` at `slug`, and `slug` can still move below — so a
-     URL read here from an article we then step aside from would be carried onto
-     a job for a *different* document. It is also an `await`, and the
-     reconciliation below has to be the last thing before the insert. */
-  const url = request.url ?? (request.upload ? undefined : await urlForSlug(slug));
-  const forced = cascadeForce(names, new Set(request.force ?? []));
 
-  // Already in hand: hand back the job doing it rather than starting a second
-  // one over the same files. A double-click on Add is all it takes, and the
-  // second job would run every step against artefacts the first had just
-  // written, report a row of successes, and cost two more model calls for a
-  // result nobody asked for.
-  //
-  // **Only for an identical request.** Matching on the slug alone would let a
-  // queued `{steps:["arc"]}` swallow a refresh that arrived a second later —
-  // the caller gets a job id, watches it succeed, and the refresh never
-  // happened. Anything else queues behind, which is safe: concurrency is 1 and
-  // a cancelled job now really does release its slot last (see `queue.add`).
-  const running = activeFor(slug);
-  if (running && sameWork(running, names, forced, request.guidance, request.profile, request.upload))
-    return running;
-
-  /* **The last word on the slug, and it has to be here rather than in
-     `freeUploadSlug`.** That function does I/O — `articleExists` reads a file —
-     so between the answer it gives and the `jobs.set` below there is an `await`
-     that another request can run inside. Two uploads called `paper.pdf`,
-     arriving together, both see `paper` free and both take it; `sameWork` says
-     they are different work, so neither is handed the other's job, and the
-     second one's steps then find the first one's artefacts, skip, and report a
-     row of successes over somebody else's document.
-
-     From here to `jobs.set` there is no `await`, and `activeFor` reads the same
-     in-memory map, so re-asking synchronously closes the window completely
-     *within this process*. Across processes it does not, and nothing in this
-     file does — that is the same gap `data/_jobs/` has, and it closes when the
-     queue moves to Postgres (docs/plans/job-queue-rethink.md).
-
-     Uploads only. A URL is allowed to land on an existing slug: `freeSlug`
-     compares `urlKey`, so an occupied slug means *the same article*, which is
-     exactly what should be joined rather than avoided. GPT Sol, 2026-08-27. */
-  if (request.upload) {
-    for (let tries = 0; tries < 20; tries++) {
-      const held = activeFor(slug);
-      /* Free, or held by this very upload (a retry). Either way it is ours, and
-         **this check is the last thing before the insert with no `await` after
-         it** — which is what makes it airtight rather than merely narrower. */
-      if (!held || held.upload?.id === request.upload.id) break;
-      /* Re-allocated rather than bumped with a counter. The racing job is in
-         the map now, so `freeUploadSlug` *sees* it this time and derives the
-         next free name properly — where a counter appended here would have to
-         guess, and could land on a finished article's slug that only
-         `articleExists` knows about. */
-      slug = await freeUploadSlug(request.slug, request.upload.id);
+  for (let tries = 0; ; tries++) {
+    if (tries >= 20) {
+      throw Object.assign(new Error(`Too many articles already called "${request.slug}".`), {
+        status: 409,
+      });
     }
+
+    /* **Never for an upload**, and not only because it would find nothing. It
+       reads the `meta.json` at `slug`, and `slug` can still move below — so a
+       URL read here from an article we then step aside from would be carried
+       onto a job for a *different* document. */
+    const url = request.url ?? (request.upload ? undefined : await urlForSlug(slug));
+
+    const wanted: Job = {
+      id: mintId(),
+      /* Read here rather than inside the pump, because by the time the pump
+         gets to it the request is long gone. src/owner.ts § `runAsOwner`. */
+      ownerId: owner,
+      slug,
+      ...(url ? { url } : {}),
+      ...(request.upload ? { upload: request.upload } : {}),
+      steps: names.map((n) => newStep(n, forced.has(n), request.upload !== undefined)),
+      status: "queued",
+      createdAt: new Date().toISOString(),
+      ...(request.guidance ? { guidance: request.guidance } : {}),
+      ...(request.profile ? { profile: request.profile } : {}),
+    };
+
+    const { job, created, sameWork } = await store.enqueueOrGet(wanted, workKey);
+
+    if (!created) {
+      /* Already in hand: hand back the job doing it rather than starting a
+         second one over the same files. A double-click on Add is all it takes.
+
+         **Only for identical work.** Matching on the slug alone would let a
+         queued `{steps:["arc"]}` swallow a refresh that arrived a second later
+         — the caller gets a job id, watches it succeed, and the refresh never
+         happened. */
+      if (sameWork) return job;
+      /* The slug is taken by *different* work. Re-allocate rather than append a
+         counter here: the racing job is in the store now, so `freeSlug` sees it
+         this time and derives the next free name properly, where a counter
+         would have to guess and could land on a finished article's slug that
+         only `articleExists` knows about. */
+      slug = request.url
+        ? await freeSlug(request.slug, request.url)
+        : request.upload
+          ? await freeUploadSlug(request.slug, request.upload.id)
+          : `${request.slug}-${tries + 2}`;
+      continue;
+    }
+
+    /* The step list and the forced list, because "why did this job cost two
+       model calls" and "why did it finish in a second" are both answered here
+       and nowhere else. Not the URL: `slug` already identifies the article, and
+       the log is a reading history either way — see the note in src/log.ts. */
+    log("jobs").info(
+      { jobId: job.id, slug, steps: names, forced: [...forced] },
+      `job queued: ${slug} — ${names.join(", ")}${forced.size ? ` (forced: ${[...forced].join(", ")})` : ""}`,
+    );
+
+    pump(job.id, owner);
+    return job;
   }
+}
 
-  const job: Job = {
-    id: mintId(),
-    /* Read here rather than inside `runJob`, because by the time the queue gets
-       to it the request is long gone — and, worse, the context it runs in is
-       whoever's continuation drained the queue. src/owner.ts § `runAsOwner`. */
-    ownerId: currentOwnerId(),
-    slug,
-    ...(url ? { url } : {}),
-    ...(request.upload ? { upload: request.upload } : {}),
-    steps: names.map((n) => newStep(n, forced.has(n), request.upload !== undefined)),
-    status: "queued",
-    createdAt: new Date().toISOString(),
-    ...(request.guidance ? { guidance: request.guidance } : {}),
-    ...(request.profile ? { profile: request.profile } : {}),
-  };
-
-  jobs.set(job.id, job);
-  const controller = new AbortController();
-  aborts.set(job.id, controller);
-  await persist(job);
-
-  /* The step list and the forced list, because "why did this job cost two model
-     calls" and "why did it finish in a second" are both answered here and
-     nowhere else. Not the URL: `slug` already identifies the article, and the
-     log is a reading history either way — see the note on `url` in src/log.ts. */
-  log("jobs").info(
-    { jobId: job.id, slug, steps: names, forced: [...forced] },
-    `job queued: ${slug} — ${names.join(", ")}${forced.size ? ` (forced: ${[...forced].join(", ")})` : ""}`,
-  );
-
-  /* **No `signal` on `queue.add`.**
-   *
-   * It looks like exactly the right option and it is a trap. p-queue races the
-   * running task against the signal: on abort it rejects the outer promise and
-   * *starts the next task immediately*, without waiting for the aborted one to
-   * unwind. Verified against the installed version — the order is
-   * `old-start, new-start, old-rejected, old-end`.
-   *
-   * Which means cancelling a running job releases the slot while its stage is
-   * still running. Press Stop and then Retry and the retry's `blocks` can be
-   * rewriting the HTML and the ids while the cancelled one is still writing
-   * them, because `runBlocks` does not watch the signal. Concurrency 1 stops
-   * being true at precisely the moment it matters.
-   *
-   * So the signal stays inside `runJob`, which checks it between every step and
-   * hands it to the steps that can use it. The promise this queues settles only
-   * when the job has really stopped.
-   */
-  void queue
-    /* **`runAsOwner`, because a queued callback does not inherit a context.**
-     *
-       An AsyncLocalStorage context is captured when an async resource is made,
-       and p-queue stores a plain function in an array — so the context this
-       runs in is whoever's continuation happened to drain the queue. Measured
-       rather than guessed: with concurrency 1, Alice's job then Bob's puts
-       *the whole of Bob's* in Alice's context, because it is invoked from
-       inside the completion of Alice's.
-
-       Nothing in `runJob` reads the owner today, so this is a landmine rather
-       than a live bug — and precisely the kind that goes off silently later,
-       writing one reader's article under another reader's name and reporting
-       success. Capturing it on the job and re-entering here costs one line.
-       GPT Sol, 2026-08-27; src/owner.ts § `runAsOwner`. */
-    .add(() => runAsOwner(job.ownerId, () => runJob(job, controller)))
-    .catch(async (err: Error) => {
-      // `runJob` handles its own step failures, so anything reaching here is a
-      // bug in it — and must be visible rather than swallowed.
-      //
-      // Visible to the *reader* was all this did: the card turned red and said
-      // the message. The stack — the only part that says where the bug is —
-      // went nowhere at all, and this is the one path where nobody can guess it
-      // from the step that failed, because no step failed.
-      log("jobs").error(
-        { ...errorFields(err), jobId: job.id, slug: job.slug },
-        `the job runner threw — ${job.slug}`,
-      );
-      job.status = "error";
-      job.error = err.message;
-      job.finishedAt = new Date().toISOString();
-      delete job.cancelling;
-      await persist(job);
-    })
-    .finally(() => {
-      aborts.delete(job.id);
-    });
-
-  return job;
+/**
+ * A fingerprint of exactly what `sameWork` compares, computed once.
+ *
+ * **Immutable, which `job.steps` is not.** Statuses move as a job runs, so a
+ * key derived from the record on each comparison would answer differently at
+ * the end of a job than at the start — and the question being asked is *is this
+ * the same request*, which does not change because a step finished.
+ *
+ * It has to hash the same five things `sameWork` reads and nothing else, or
+ * there are two rules for one question and they drift. `tests/jobs.test.ts`
+ * holds them together: for a set of jobs, the two must agree every time.
+ */
+export function workKeyFor(
+  names: StepName[],
+  forced: Set<StepName>,
+  guidance?: string,
+  profile?: string,
+  upload?: JobUpload,
+): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        steps: names.map((n) => [n, forced.has(n)]),
+        upload: upload?.id ?? "",
+        guidance: guidance ?? "",
+        profile: profile ?? "",
+      }),
+    )
+    .digest("hex");
 }
 
 /**
@@ -1109,10 +927,8 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
  * no gap: `enqueue` awaits `ready()` and a read of meta.json, and two requests
  * arriving together will both get past any check made before those.
  */
-function activeFor(slug: string): Job | undefined {
-  return [...jobs.values()].find(
-    (j) => j.slug === slug && (j.status === "queued" || j.status === "running"),
-  );
+async function activeFor(slug: string): Promise<Job | undefined> {
+  return store.activeForSlug(slug, currentOwnerId());
 }
 
 /**
@@ -1129,7 +945,7 @@ function activeFor(slug: string): Job | undefined {
  * `?? ""` on both sides so "no steer" and "" are one case rather than two that
  * fail to match each other.
  */
-function sameWork(
+export function sameWork(
   job: Job,
   names: StepName[],
   forced: Set<StepName>,
@@ -1291,7 +1107,7 @@ export async function freeUploadSlug(
  * both find the directory empty and both take it.
  */
 async function slugIsSpokenFor(candidate: string, mine: string): Promise<boolean> {
-  const other = activeFor(candidate);
+  const other = await activeFor(candidate);
   if (other && other.upload?.id !== mine) return true;
   if (!(await articleExists(candidate))) return false;
   const manifest = await readRaw(contextPaths(candidate).dir);
@@ -1307,7 +1123,7 @@ async function slugIsSpokenFor(candidate: string, mine: string): Promise<boolean
  * article, since it got the slug from here in the first place.
  */
 async function onShelfOrInFlight(candidate: string): Promise<string | undefined> {
-  return (await urlForSlug(candidate)) ?? activeFor(candidate)?.url;
+  return (await urlForSlug(candidate)) ?? (await activeFor(candidate))?.url;
 }
 
 /**
@@ -1324,55 +1140,6 @@ async function onShelfOrInFlight(candidate: string): Promise<string | undefined>
  */
 const KEEP_FINISHED = 50;
 
-/** Drop the oldest finished jobs once there are too many. Successes go first. */
-/**
- * **`KEEP_FINISHED` per reader, not `KEEP_FINISHED` in total.**
- *
- * Global was right while there was one reader and is wrong now: a busy reader
- * would silently evict a quiet one's entire history, and the quiet one would
- * open the page to find their last few ingests had never happened. Grouping
- * costs three lines and the cap goes on meaning what it says.
- */
-async function prune(): Promise<void> {
-  for (const owner of new Set([...jobs.values()].map((j) => j.ownerId))) {
-    await pruneOwner(owner);
-  }
-}
-
-async function pruneOwner(owner: OwnerId): Promise<void> {
-  const finished = [...jobs.values()].filter(
-    (j) => j.ownerId === owner && j.status !== "queued" && j.status !== "running",
-  );
-  if (finished.length <= KEEP_FINISHED) return;
-  const doomed = finished
-    .sort((a, b) => {
-      // Successes before failures, so successes are what gets dropped; then
-      // oldest first within each.
-      const kind = Number(a.status !== "done") - Number(b.status !== "done");
-      return kind !== 0 ? kind : a.createdAt < b.createdAt ? -1 : 1;
-    })
-    .slice(0, finished.length - KEEP_FINISHED);
-  for (const job of doomed) await forgetJobUnchecked(job.id).catch(() => {});
-}
-
-/**
- * **Is this job the caller's business?**
- *
- * `true` outside a request, which is the load-bearing half. The housekeeping
- * sweep, the CLI and the pipeline are not readers and have nobody to answer to
- * — and a sweep that could only delete its own jobs would leave every real
- * user's finished job in `data/_jobs/` for ever. Inside a request there IS a
- * reader, and they get their own and nothing else.
- *
- * `requestOwner()` rather than `currentOwnerId()` for exactly that reason: the
- * question here is "is there somebody to answer to", not "who". src/owner.ts.
- */
-function mine(job: Job | undefined): job is Job {
-  if (!job) return false;
-  const asking = requestOwner();
-  return asking === null || job.ownerId === asking;
-}
-
 /**
  * Newest first, so the homepage shows what just happened at the top.
  *
@@ -1383,10 +1150,7 @@ function mine(job: Job | undefined): job is Job {
  * the rest of the API. GPT Sol, 2026-08-27.
  */
 export async function listJobs(): Promise<Job[]> {
-  await ready();
-  return [...jobs.values()]
-    .filter((job) => mine(job))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return store.list(currentOwnerId());
 }
 
 /**
@@ -1397,9 +1161,7 @@ export async function listJobs(): Promise<Job[]> {
  * status: "no such job" is all a stranger should learn about an id they guessed.
  */
 export async function getJob(id: string): Promise<Job | null> {
-  await ready();
-  const job = jobs.get(id);
-  return mine(job) ? job : null;
+  return (await store.get(id, currentOwnerId())) ?? null;
 }
 
 /**
@@ -1416,21 +1178,27 @@ export async function getJob(id: string): Promise<Job | null> {
  * that stays a Stop button reads as a click that missed.
  */
 export async function cancelJob(id: string): Promise<Job | null> {
-  await ready();
-  const job = jobs.get(id);
-  // Somebody else's is `null`, exactly as a missing one is. See `mine`.
-  if (!mine(job)) return null;
-  if (job.status === "done" || job.status === "error" || job.status === "cancelled") {
-    return job;
-  }
-  job.cancelling = true;
+  const owner = currentOwnerId();
+  const job = await store.get(id, owner);
+  // Somebody else's is `null`, exactly as a missing one is.
+  if (!job) return null;
+  if (job.status === "done" || job.status === "error" || job.status === "cancelled") return job;
+
+  /* **Idle first, then ask.** A job nobody is inside can be cancelled outright,
+     and `cancelIdle` is the one statement that both decides that and does it —
+     asking and then acting would let a claim arrive in between and cancel a job
+     out from under a running step.
+
+     If a claimant does hold it, all we can do is say so where they will see it:
+     `requestCancel` writes `cancelling`, the claim refuses while it is set, and
+     the claimant reads it at its next step boundary. Plus the local abort, for
+     the common case that the claimant is this very process — which is what
+     makes Stop feel instant rather than "at the end of this model call". */
+  const idle = await store.cancelIdle(id, owner);
+  if (idle) return idle;
+  const asked = await store.requestCancel(id, owner);
   aborts.get(id)?.abort();
-  if (job.status === "queued") {
-    job.status = "cancelled";
-    job.finishedAt = new Date().toISOString();
-  }
-  await persist(job);
-  return job;
+  return asked ?? job;
 }
 
 /**
@@ -1449,11 +1217,10 @@ export async function cancelJob(id: string): Promise<Job | null> {
  * not finish, and let `cascadeForce` take it from there.
  */
 export async function retryJob(id: string): Promise<Job | null> {
-  await ready();
-  const old = jobs.get(id);
   /* Somebody else's is `null`, as a missing one is — and this one spends money,
-     so it is the worst of the four to leave open. See `mine`. */
-  if (!mine(old)) return null;
+     so it is the worst of the four to leave open. */
+  const old = await store.get(id, currentOwnerId());
+  if (!old) return null;
 
   return await enqueue({
     slug: old.slug,
@@ -1495,39 +1262,7 @@ export function forceForRetry(steps: JobStep[]): StepName[] {
  * write queued behind the delete would do the same thing.
  */
 export async function forgetJob(id: string): Promise<boolean> {
-  await ready();
-  // `false` for somebody else's, as for a missing one. See `mine`.
-  if (!mine(jobs.get(id))) return false;
-  return forgetJobUnchecked(id);
-}
-
-/**
- * Delete a job whoever it belongs to. **Never reachable from a route.**
- *
- * `prune` is the only caller, and it needs this because it runs *inside* a
- * job's owner scope — `runJob` → `finishDone` → `prune` — so the checked
- * version above would quietly refuse to tidy every other reader's finished
- * jobs. Quietly is the problem: `prune` would go on picking the same doomed
- * records every time, deleting nothing, and `data/_jobs/` would grow without
- * limit while the housekeeping reported success.
- * docs/reusable/silent-success.md.
- */
-async function forgetJobUnchecked(id: string): Promise<boolean> {
-  await ready();
-  const job = jobs.get(id);
-  if (!job) return false;
-  if (job.status === "queued" || job.status === "running") {
-    throw Object.assign(new Error("That job is still running. Cancel it first."), {
-      status: 409,
-    });
-  }
-  jobs.delete(id);
-  forgotten.add(id);
-  await writes.get(id)?.catch(() => {});
-  try {
-    await unlink(jobFile(id));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-  }
-  return true;
+  // `false` for somebody else's, as for a missing one — and the store is what
+  // refuses a job that is still going, so there is one rule rather than two.
+  return store.forget(id, currentOwnerId());
 }

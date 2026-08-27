@@ -25,7 +25,8 @@ import {
   freeSlug,
   getJob,
   orderSteps,
-  sweepStopped,
+  sameWork,
+  workKeyFor,
 } from "../src/jobs.js";
 import {
   contextPaths,
@@ -38,6 +39,7 @@ import {
 } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
+import { fsJobStore, pauseForTests, sweepStopped } from "../src/store/jobs-fs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
@@ -582,6 +584,89 @@ async function settle(id: string) {
   throw new Error("job never finished");
 }
 
+describe("the work key", () => {
+  /**
+   * **Two rules for one question drift, so they are held together here.**
+   *
+   * `sameWork` is what decides whether a caller is handed the job already
+   * running; `workKeyFor` is the hash the database compares when two instances
+   * ask at once. They have to answer identically for every pair, or the
+   * process that loses the race gets a different answer from the process that
+   * wins it — and the symptom is a reader watching somebody else's article
+   * succeed under their own headline, which is the exact fault
+   * `jobs_active_slug` exists to stop.
+   *
+   * Pairwise over a small grid rather than a list of cases, because the way to
+   * get this wrong is to add a field to one and not the other, and a grid
+   * notices a new field the day somebody adds it to `sameWork`.
+   */
+  const GRID: {
+    names: StepName[];
+    forced: StepName[];
+    guidance?: string;
+    profile?: string;
+    upload?: { id: string; filename: string };
+  }[] = [
+    { names: ["fetch"], forced: [] },
+    { names: ["fetch"], forced: ["fetch"] },
+    { names: ["fetch", "extract"], forced: [] },
+    { names: ["fetch"], forced: [], guidance: "be brief" },
+    { names: ["fetch"], forced: [], guidance: "be long" },
+    { names: ["fetch"], forced: [], profile: "a physicist" },
+    { names: ["fetch"], forced: [], upload: { id: "spya-upl001", filename: "a.pdf" } },
+    { names: ["fetch"], forced: [], upload: { id: "spya-upl002", filename: "a.pdf" } },
+  ];
+
+  const asJob = (g: (typeof GRID)[number]): Job => ({
+    id: "spya-testjb",
+    slug: "a-slug",
+    ownerId: DEV_OWNER_ID,
+    steps: g.names.map((n) => step(n, "pending")).map((st, i) => ({
+      ...st,
+      ...(g.forced.includes(g.names[i] as StepName) ? { force: true } : {}),
+    })),
+    status: "queued",
+    createdAt: "2026-08-25T10:00:00.000Z",
+    ...(g.guidance ? { guidance: g.guidance } : {}),
+    ...(g.profile ? { profile: g.profile } : {}),
+    ...(g.upload ? { upload: g.upload } : {}),
+  });
+
+  it("agrees with sameWork on every pair, both ways round", () => {
+    for (const a of GRID) {
+      for (const b of GRID) {
+        const same = sameWork(
+          asJob(a),
+          b.names,
+          new Set(b.forced),
+          b.guidance,
+          b.profile,
+          b.upload,
+        );
+        const keysMatch =
+          workKeyFor(a.names, new Set(a.forced), a.guidance, a.profile, a.upload) ===
+          workKeyFor(b.names, new Set(b.forced), b.guidance, b.profile, b.upload);
+        expect(
+          { pair: [a, b], sameWork: same, sameKey: keysMatch },
+          `sameWork and workKeyFor disagree`,
+        ).toEqual({ pair: [a, b], sameWork: same, sameKey: same });
+      }
+    }
+  });
+
+  it("does not depend on how far the job has got", () => {
+    /* The reason the key is computed once in `enqueue` and never recomputed.
+       `job.steps` mutates as a job runs, so a key derived from the record would
+       answer differently at the end than at the start — and "is this the same
+       request" does not change because a step finished. */
+    const g = GRID[2] as (typeof GRID)[number];
+    const before = workKeyFor(g.names, new Set(g.forced));
+    // Same request, one step in.
+    const after = workKeyFor(g.names, new Set(g.forced));
+    expect(after).toBe(before);
+  });
+});
+
 describe("running a job", () => {
   it("hands back the job already working on a slug rather than starting a second", async () => {
     // A double-click on Add. Both requests must land on one job: the second
@@ -766,17 +851,8 @@ async function fixtureWithRawJson(slug: string): Promise<void> {
  * It has to happen *after* the in-process queue has let the job go, or advance
  * would correctly refuse to touch a job somebody else owns.
  */
-function pause(job: Job, from: number): void {
-  job.status = "queued";
-  delete job.error;
-  delete job.finishedAt;
-  delete job.failureKind;
-  for (const step of job.steps.slice(from)) {
-    step.status = "pending";
-    delete step.error;
-    delete step.detail;
-    delete step.finishedAt;
-  }
+async function pause(job: Job, from: number): Promise<void> {
+  await pauseForTests(job.id, from);
 }
 
 describe("advancing a job one step at a time", () => {
@@ -817,7 +893,7 @@ describe("advancing a job one step at a time", () => {
     expect(settled.status).toBe("error");
 
     const fetched = vi.spyOn(STEPS.fetch, "run");
-    pause(settled, 1);
+    await pause(settled, 1);
 
     const advanced = await advanceJob(queued.id);
     expect(advanced).not.toBeNull();
@@ -847,7 +923,7 @@ describe("advancing a job one step at a time", () => {
       await fixtureWithRawJson(slug);
       return "stubbed";
     });
-    pause(job, 0);
+    await pause(job, 0);
 
     const first = await advanceJob(queued.id);
     expect(fetched).toHaveBeenCalledTimes(1);
@@ -903,7 +979,7 @@ describe("advancing a job one step at a time", () => {
       await fixtureWithRawJson(slug);
       return "stubbed";
     });
-    pause(job, 0);
+    await pause(job, 0);
 
     const [a, b] = await Promise.all([advanceJob(queued.id), advanceJob(queued.id)]);
     expect(fetched).toHaveBeenCalledTimes(1);
@@ -926,16 +1002,33 @@ describe("advancing a job one step at a time", () => {
     expect(loser?.done).toBe(false);
   });
 
-  it("refuses while the in-process queue still owns the job", async () => {
-    /* The rule that keeps the two drivers off each other: advance stands aside
-       for as long as this process intends to run the job itself. Checked
-       without waiting, because `enqueue` claims the job before it returns. */
+  it("refuses while somebody else holds the claim", async () => {
+    /* **The rule that replaced "advance stands aside for the in-process queue".**
+     *
+     * That rule was an agreement between two drivers inside one process, and it
+     * was checked by asking whether this process had an `AbortController` for
+     * the job. It could not survive a second instance, which is the whole reason
+     * the claim exists — so the rule is now: one claim, and whoever holds it
+     * runs. The pump is not privileged; it is just another caller.
+     *
+     * Taken through the store directly rather than by racing the pump. An
+     * earlier version of this queued a job and immediately advanced it, and
+     * passed because the pump happened to claim first — a test whose result
+     * depends on which of two async callers wins is not testing the rule, it is
+     * observing a scheduler. */
     const slug = "test-advance-queue-owns";
     const queued = await enqueue({ slug, steps: ["fetch"] });
+    const held = await fsJobStore.claim(queued.id, DEV_OWNER_ID, "spya-someone", 60_000);
+    /* The pump may have got there first, and that is fine — either way somebody
+       holds it and the assertions below are about what advance says to whoever
+       does not. */
     const advanced = await advanceJob(queued.id);
     expect(advanced?.busy).toBe(true);
     expect(advanced?.ran).toBeNull();
     expect(advanced?.done).toBe(false);
+    if (held.kind === "claimed") {
+      await fsJobStore.releaseStep(queued.id, "spya-someone", queued.steps, {});
+    }
     await settle(queued.id);
   });
 

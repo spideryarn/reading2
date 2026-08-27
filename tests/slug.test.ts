@@ -73,8 +73,11 @@ describe("assertSlug", () => {
     // And it could never be minted, which is the half that was always a rule.
     expect(isSlug("_jobs")).toBe(false);
 
-    // The other direction, still worth pinning: the queue builds its own path.
-    const jobs = readFileSync(new URL("../src/jobs.ts", import.meta.url), "utf8");
+    /* The other direction, still worth pinning: the queue builds its own path.
+       It builds it in src/store/jobs-fs.ts since 2026-08-27 — the whole of the
+       queue's persistence moved behind `JobStore` — and the rule travelled with
+       the code rather than being left pointing at the file it used to be in. */
+    const jobs = readFileSync(new URL("../src/store/jobs-fs.ts", import.meta.url), "utf8");
     expect(jobs).toMatch(/const JOBS_DIR = path\.join\(ROOT, "data", "_jobs"\)/);
     expect(jobs).not.toMatch(/assertSlug/);
   });

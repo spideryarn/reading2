@@ -117,7 +117,7 @@ function persist(job: Job): Promise<void> {
  * instead. Left `queued` rather than failed, so a dev-server restart is a pause
  * and not an abandoned ingest.
  */
-function sweepStopped(job: Job): boolean {
+export function sweepStopped(job: Job): boolean {
   if (job.status !== "running" && job.status !== "queued") return false;
   let changed = false;
   for (const step of job.steps) {
@@ -425,6 +425,36 @@ export function expireLeaseForTests(id: string): void {
 /** Put a token back on a job that has already ended — what the fence's third condition is for. */
 export function reattachAttemptForTests(id: string, attempt: string): void {
   attempts.set(id, { attempt, expires: Date.now() + 60_000 });
+}
+
+/**
+ * Put a settled job back into the state a stopped server leaves behind.
+ *
+ * The third seam, and it arrived when `get` started handing back a **clone**.
+ * The advance tests used to reach this state by mutating the record `getJob`
+ * returned — which worked only because that was the live object, i.e. because
+ * the queue had no store. Copying is the store doing its job, so the way to
+ * build "the process died under this job" moved in here beside the other two.
+ *
+ * Exactly what `sweepStopped` writes: `queued`, nothing running, the steps
+ * before `from` still finished. `from` is how far the job is meant to have got.
+ */
+export async function pauseForTests(id: string, from: number): Promise<void> {
+  const job = index.get(id);
+  if (!job) throw new Error(`No such job to pause: ${id}`);
+  job.status = "queued";
+  delete job.error;
+  delete job.finishedAt;
+  delete job.failureKind;
+  delete job.cancelling;
+  attempts.delete(id);
+  for (const step of job.steps.slice(from)) {
+    step.status = "pending";
+    delete step.error;
+    delete step.detail;
+    delete step.finishedAt;
+  }
+  await persist(job);
 }
 
 /** Forget everything this process is holding, so one test file cannot leak into another. */

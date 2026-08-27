@@ -149,18 +149,28 @@ describe("a job Alice queued", () => {
 
 describe("outside a request", () => {
   /**
-   * **The half that has to stay open, and it is not an oversight.**
+   * **The hole that used to be here closed on 2026-08-27, and it closed because
+   * the thing it existed for went away.**
    *
-   * The housekeeping sweep, the CLI and the pipeline are not readers and have
-   * nobody to answer to. A sweep that could only see its own jobs would leave
-   * every real user's finished job in `data/_jobs/` for ever — and would do it
-   * silently, picking the same doomed records on every pass and deleting none.
+   * `listJobs` used to return *everybody's* outside a request, on the grounds
+   * that the housekeeping sweep is not a reader and has nobody to answer to: a
+   * `prune()` that could only see its own jobs would pick the same doomed
+   * records on every pass and delete none, silently, while `data/_jobs/` grew
+   * without limit.
    *
-   * So `mine()` asks "is there a reader to answer to", not "who is it", and
-   * `requestOwner()` returning `null` is what says there is not.
+   * That reasoning was sound and it was about `prune`. Retention is now
+   * `trimFinished(owner, keep)` on the store, called with the *finishing job's*
+   * own owner — so the sweep no longer needs to see anybody else's, and there
+   * is nothing left that does. The rule is one rule: you get your own.
+   *
+   * Which is the better shape as well as the smaller one. "Is there a reader to
+   * answer to" was a second question the store would have had to be taught, and
+   * a store method that answers `undefined` for one caller and everything for
+   * another is one forgotten argument away from being the disclosure this file
+   * is about.
    */
-  it("the CLI and the sweep still see every job", async () => {
+  it("gets the environment's own jobs and nobody else's", async () => {
     const all = await listJobs();
-    expect(all.map((j) => j.id)).toContain(alicesJob.id);
+    expect(all.map((j) => j.id)).not.toContain(alicesJob.id);
   });
 });
