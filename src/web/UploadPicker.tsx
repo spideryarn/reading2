@@ -48,6 +48,8 @@ export function UploadPicker() {
      because nothing renders it and a re-render must not lose it. */
   const file = useRef<File | null>(null);
   const abort = useRef<AbortController | null>(null);
+  /** Whether a send is in flight *right now*, rather than as of the last render. */
+  const sending = useRef(false);
 
   /* **A counter, not a boolean.** `dragleave` fires every time the pointer
      crosses into a child element — the icon, the button, the text — and each of
@@ -86,7 +88,15 @@ export function UploadPicker() {
    */
   async function send() {
     const chose = file.current;
-    if (!chose || sent !== null) return;
+    /* **A ref, not `sent !== null`.** `sent` is the value from the last render,
+       and `setSent(0)` does not change it until the next one — so two clicks
+       inside one tick, which is a double-click or an agent clicking twice
+       because the first looked like it had not registered, both read `null` and
+       both start. That mints two grants, sends the file twice, and navigates
+       twice. The ref is written before the first `await`, so the second caller
+       sees it however fast it arrives. */
+    if (!chose || sending.current) return;
+    sending.current = true;
     const controller = new AbortController();
     abort.current = controller;
     setProblem(null);
@@ -105,6 +115,7 @@ export function UploadPicker() {
       setSent(null);
     } finally {
       abort.current = null;
+      sending.current = false;
     }
   }
 
@@ -147,10 +158,16 @@ export function UploadPicker() {
           setDragging(false);
           take(e.dataTransfer.files);
         }}
+        /* No fill of its own when it is idle. It used to be `bg-background`,
+           which on this page is *darker* than the card it sits in — so a
+           section already made of one grey box gained a second, darker box
+           inside it, and the dashed rule (the thing that actually says "drop
+           here") was the least visible part of it. Transparent, the rule is
+           the whole control. The orange wash on drag still says caught-it. */
         className={`tw:flex tw:flex-col tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-dashed tw:px-4 tw:py-5 tw:text-center tw:transition-colors ${
           dragging
             ? "tw:border-highlight tw:bg-highlight/10"
-            : "tw:border-border tw:bg-background"
+            : "tw:border-border tw:bg-transparent"
         }`}
       >
         <Upload size={16} className="tw:text-muted-foreground" />

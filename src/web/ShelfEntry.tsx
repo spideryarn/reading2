@@ -410,7 +410,11 @@ export function Actions({
           rel="noopener noreferrer"
           title="Open the original page"
           aria-label="Open the original page"
-          className="tw:rounded tw:p-1.5 tw:text-muted-foreground tw:no-underline tw:hover:bg-highlight/10 tw:hover:text-foreground"
+          /* An `<a>` wearing the button's clothes, so the row does not have a
+             gap in it where the one link sits. Kept in step with `IconButton`
+             below by hand — a shared helper would have to take an element
+             type, which is more machinery than five utilities are worth. */
+          className="tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
         >
           <ExternalLink size={14} />
         </a>
@@ -448,7 +452,12 @@ export function IconButton({
       // An icon-only button with neither is a button called "".
       title={label}
       aria-label={label}
-      className={`tw:rounded tw:p-1.5 tw:text-muted-foreground tw:disabled:opacity-50 ${
+      /* A fixed 28px square rather than `p-1.5` round a 14px glyph. Same
+         reason as the shelf's view toggle (ShelfControls.tsx): a stated size
+         is what lets controls in a row agree without anybody re-doing the
+         arithmetic when an icon changes. `rounded-md` rather than `rounded`,
+         because 4px was the only 4px radius on the page. */
+      className={`tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:disabled:opacity-50 ${
         destructive
           ? "tw:hover:bg-destructive/10 tw:hover:text-destructive"
           : "tw:hover:bg-highlight/10 tw:hover:text-foreground"

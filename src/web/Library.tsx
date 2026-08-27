@@ -49,7 +49,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
-import { Palette, Search, Undo2, User, X } from "lucide-react";
+import { ChevronRight, Palette, Search, Undo2, User, X } from "lucide-react";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
@@ -64,6 +64,7 @@ import {
   libraryShowParam,
   libraryViewParam,
 } from "./params.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { DESIGN_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
@@ -72,8 +73,10 @@ import { useLibrarySearch } from "./useLibrarySearch.js";
 import { useNow } from "./useNow.js";
 import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
+import { useRenderCount } from "./perf.js";
 
 export function Library() {
+  useRenderCount("Library");
   const shelf = useShelf();
   const { articles, error, reload } = shelf;
   const slow = useSlow(articles === null);
@@ -90,6 +93,11 @@ export function Library() {
   const [show, setShow] = useQueryState("show", libraryShowParam);
 
   const query = rawQuery ?? "";
+
+  /* The tab. Bare, this is the homepage and so the one page that leads with the
+     app's own name; narrow the shelf and what you narrowed it to takes the
+     front instead. See src/web/page-title.ts. */
+  useDocumentTitle(pageTitle({ kind: "library", query, unread: show === "unread" }));
   /* No `dir` in the URL means "each key goes whichever way it naturally goes",
      which is a different answer per column — so this stays an empty list rather
      than a default, and `sortingFromUrl` fills the gaps. See params.ts, where
@@ -422,14 +430,20 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search titles, authors, and the text of every article"
           aria-label="Search the library"
-          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight"
+          /* A ring as well as a border colour on focus. A 1px border changing
+             from grey to orange is about one pixel's worth of colour on a
+             near-black page, which is not enough to find the box you have just
+             tabbed into — and this input suppresses the browser's own ring
+             with `outline-none`, so nothing else was drawing one. Same
+             treatment on the URL box in AddArticle.tsx. */
+          className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
         />
         {value && (
           <button
             type="button"
             onClick={() => onChange("")}
             aria-label="Clear the search"
-            className="tw:absolute tw:right-2 tw:top-1/2 tw:-translate-y-1/2 tw:rounded tw:p-1 tw:text-muted-foreground tw:hover:text-foreground"
+            className="tw:absolute tw:right-2 tw:top-1/2 tw:inline-flex tw:size-7 tw:-translate-y-1/2 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
           >
             <X size={14} />
           </button>
@@ -656,11 +670,21 @@ function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
 
   return (
     <section className="tw:mt-10">
+      {/* A chevron, because this is a disclosure and nothing else said so — the
+          words alone changed from "Show" to "Hide", and that was the only thing
+          that moved. `-ml-2` keeps the *text* on the page's left margin while
+          the hit area extends past it, so giving it padding did not shunt the
+          label right. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="tw:rounded tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:hover:text-foreground"
+        aria-expanded={open}
+        className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
       >
+        <ChevronRight
+          size={13}
+          className={`tw:transition-transform ${open ? "tw:rotate-90" : ""}`}
+        />
         {open ? "Hide deleted" : "Show deleted"}
       </button>
 
@@ -683,7 +707,7 @@ function Archived({ shelf }: { shelf: ReturnType<typeof useShelf> }) {
               <button
                 type="button"
                 onClick={() => void shelf.restore(a.slug)}
-                className="tw:inline-flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded tw:px-2 tw:py-1 tw:text-highlight tw:hover:bg-highlight/10"
+                className="tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-md tw:px-2.5 tw:text-xs tw:text-highlight tw:transition-colors tw:hover:bg-highlight/10"
               >
                 <Undo2 size={14} />
                 Put back
@@ -711,7 +735,7 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
       <button
         type="button"
         onClick={onUndo}
-        className="tw:inline-flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded tw:px-2 tw:py-1 tw:text-highlight tw:hover:bg-highlight/10"
+        className="tw:inline-flex tw:h-7 tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-md tw:px-2.5 tw:text-xs tw:text-highlight tw:transition-colors tw:hover:bg-highlight/10"
       >
         <Undo2 size={14} />
         Undo

@@ -211,18 +211,37 @@
 
 /* ------------------------------------------- the bit of preflight we need --
    We do not import preflight (see the header). shadcn's components are written
-   assuming it, so this puts back the two rules they actually depend on —
-   scoped to `[data-slot]`, which shadcn stamps on every element it generates,
-   so nothing else on the page is touched.
+   assuming it, so this puts back the rules they actually depend on.
 
-   Reading the generated sources, the gap is small: button and toggle both set
-   their own radius, background, font-size, font-weight and outline in the cva
-   base string. What they assume and do not state is
-   `button { background-color: transparent }` — without it a UA gives buttons a
-   grey face that the `ghost` and `outline` variants never override, so they
-   arrive with a background they are specifically supposed to lack — and the
-   universal `border: 0 solid`, without which `tw:border` produces nothing
-   visible because the border-style is still `none`.
+   **It was scoped to `[data-slot]` until 2026-08-27, and that was too narrow.**
+   shadcn stamps `data-slot` on every element it generates, so the reset covered
+   shadcn's Button and nothing else — and most of the buttons in this app are
+   hand-written. Measured on the shelf that day: **36 of 59 buttons carried the
+   UA's own `2px outset white` border**, and all 59 had `cursor: default`.
+
+   You could see it. The shelf's cards/table toggle was two bright white boxes
+   because neither hand-rolled button set a border, and the browser's default is
+   not `none` — it is `outset`, in white, and no colour utility touches its
+   *style*. `SortChips` in lib/DataTable.tsx already carried a bare `tw:border-0`
+   with no comment: someone hit this, fixed their own fieldset, and had no reason
+   to suspect it was general.
+
+   This is the [silent-success](docs/reusable/silent-success.md) shape, and it is
+   the same one `tailwind.css` already tells a story about two blocks down — the
+   previous app's `prefers-reduced-motion` guard covering two class names while
+   fifteen animations ran. A reset that is present, documented, and covers a
+   minority of what it names.
+
+   So: every `<button>`, not only shadcn's.
+
+   - `border: 0 solid` — without it `tw:border` produces nothing visible,
+     because the border-*style* is still whatever the UA said.
+   - `background-color: transparent` — a UA gives buttons a grey face that
+     `ghost` and `outline` never override, so they arrive with a background they
+     are specifically supposed to lack.
+   - `cursor: pointer` — Tailwind v4's own preflight dropped this (v3 had it),
+     and shadcn does not set it either, so nothing in this app had it. Not on
+     `:disabled`, where a pointer promises something that will not happen.
 
    `box-sizing: border-box`, the one part of preflight worth having globally,
    styles.css already sets on `*`.
@@ -238,12 +257,21 @@
    Nothing said so. The utilities were generated, twMerge had resolved them
    correctly, and the class was on the element; it was simply outranked. Only
    `getComputedStyle` on the real page showed it. `base` is named, sits below
-   `app`, and is where preflight belongs anyway.  */
+   `app`, and is where preflight belongs anyway — which is also what makes
+   widening this safe: the reading view's own buttons (`.controls button` in
+   styles.css) set border, background and cursor themselves, in `@layer app`,
+   and still win.  */
 @layer base {
+  button,
   [data-slot] {
     border: 0 solid;
   }
+  button,
   button[data-slot] {
     background-color: transparent;
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
   }
 }

@@ -145,9 +145,17 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="example.com/an-essay-worth-reading"
             spellCheck={false}
-            className="tw:min-w-0 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight/60"
+            className="tw:min-w-0 tw:flex-1 tw:rounded-md tw:border tw:border-border tw:bg-background tw:px-3 tw:py-2 tw:font-mono tw:text-[13px] tw:text-foreground tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight tw:focus:ring-2 tw:focus:ring-highlight/25"
           />
-          <Button type="submit" variant="outline" disabled={!slug}>
+          {/* **The default variant, not `outline`.** This is the one thing the
+              shelf exists to let you do, and until 2026-08-27 it was drawn as
+              the quietest control on the page — a grey slab that, next to a
+              grey input inside a grey card, was hard to find and (being
+              disabled until the box has a URL in it) read as permanently
+              switched off. Filling it orange costs nothing: the disabled state
+              still says so, at 50% opacity, and now says it about something you
+              can see. */}
+          <Button type="submit" disabled={!slug}>
             Add
           </Button>
         </div>

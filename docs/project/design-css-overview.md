@@ -172,6 +172,81 @@ so one wide code sample in one paragraph dragged the whole article's furniture o
 `display: block` on the `<table>` is load-bearing and is not a typo: `overflow` does nothing on
 `display: table`.
 
+## Controls: one height, one radius, one hover
+
+Added 2026-08-27, after Greg looked at the shelf and said the buttons were ugly. He was right, and
+the reason turned out to be one line of CSS rather than taste.
+
+### The reset covered a minority of what it named
+
+We do not import Tailwind's preflight (the header of
+[`tailwind.css`](../../src/web/tailwind.css) says why, and it is a good reason — it would reset the
+article author's own HTML inside `.prose`). The replacement was scoped to `[data-slot]`, the
+attribute shadcn stamps on everything it generates.
+
+Most of the buttons in this app are not shadcn's. Measured on the shelf that morning:
+
+| | before | after |
+|---|---|---|
+| buttons carrying the UA's own `2px outset white` border | **36 of 59** | 0 |
+| buttons with `cursor: default` | **59 of 59** | 0 |
+
+Both numbers are the same bug. A browser's default `border-style` for a `<button>` is not `none`,
+it is `outset` — and no colour utility touches a border's *style*, so `tw:border-border` on a
+hand-rolled button recoloured a border that was still white and still 2px. Tailwind v4's preflight
+also dropped v3's `button { cursor: pointer }`, and shadcn does not set it, so nothing in the app
+had it.
+
+You could see the first one: the shelf's cards/table toggle was **two bright white boxes**, 33px
+tall in a 38.6px fieldset, standing a head above the 26px pills beside it. `SortChips` in
+[`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) already carried a bare `tw:border-0` with no
+comment — somebody hit this, fixed their own fieldset, and had no reason to think it was general.
+
+This is [silent-success](../reusable/silent-success.md) again, and it is the *same shape* as the
+story `tailwind.css` already tells two blocks further down: the previous app's
+`prefers-reduced-motion` guard covering two class names while fifteen animations ran regardless. A
+reset that is present, documented, and covers a minority of what it names. **The check that would
+have caught it is one line in a console** — count the buttons whose computed `border-style` is
+neither `none` nor `solid` — and it is worth running after anything that touches this file.
+
+### Two hover languages, and the orange one won
+
+`--accent` is a raised dark grey **surface**, not the orange; both `tokens.css` and `styles.css`
+carry shouted comments about that name. shadcn's `outline` and `ghost` both hovered to `bg-accent`,
+while every hand-rolled control on the shelf hovered to `bg-highlight/10`. Same page, two answers.
+The variants were repainted to the app's own; see the header comment in
+[`button.tsx`](../../src/web/components/ui/button.tsx), which is now **two** local edits rather than
+one.
+
+`outline` lost more than a hover. It shipped `dark:bg-input/30` over `bg-background` plus
+`shadow-xs`, and every `dark:` here means *always* (the `@custom-variant` in `tailwind.css`), so it
+rendered as a muddy translucent grey slab — `oklab(0.3 0 0 / 0.3)` — under a 5%-black drop shadow
+that a near-black page cannot show. That is what made **Add**, the one thing the shelf exists to let
+you do, the quietest control on the page. It is `default` now, and orange.
+
+One more thing that only bites on a dark ground: `hover:bg-primary/90` composites the orange over
+what is behind it, so the stock hover makes an orange button **darker**. `hover:brightness-110`
+instead.
+
+### The numbers
+
+Not a scale — the page has no spacing scale and this does not invent one — but the controls on a
+list page now agree, and agreeing is the whole of it:
+
+| | height | radius |
+|---|---|---|
+| sort chips, Unread, Undo, Show deleted, card icon buttons, the view toggle | **28px** (`h-7` / `size-7`) | pill for state, `rounded-md` (8px) otherwise |
+| the view toggle's two halves | 24px (`size-6`) inside the 28px box | `rounded-sm` (6px) = outer 8 − 2px padding |
+| shadcn `size="sm"` | 32px | `rounded-md` |
+| shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
+
+The chip is stated as a **height**, not as padding, in `chipClass` in
+[`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) — that is what lets an icon-only control in
+the same row agree with a text one without anybody redoing the arithmetic when an icon changes. It
+is exported because the shelf has two more chips of its own
+([`ShelfControls.tsx`](../../src/web/ShelfControls.tsx)) and the class string had been copied out
+character for character.
+
 ## What is not written down yet
 
 The honest list. Each of these currently lives only as values in `styles.css`, and someone will
@@ -180,7 +255,9 @@ eventually have to decide whether they are a system or an accident:
 - **The z-index budget.** Nine values between 1 and 80, and their ordering is real — the spine is
   45, the tooltip 80 *because* it must clear the spine and both sticky bars. Written as a comment
   on one line of `styles.css`, nowhere else. This is the most likely thing to break next.
-- **Spacing.** No scale. `rem` values chosen per rule.
+- **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
+  settled — see [Controls](#controls-one-height-one-radius-one-hover) above — but that is one row
+  of one page agreeing with itself, not a scale, and it should not be read as one.
 - **Breakpoints.** Exactly one, `max-width: 760px`, plus the widths at which the columns are given
   up, computed in JS rather than in CSS ([`layout.ts`](../../src/web/layout.ts)). The interesting
   responsive behaviour is not in the stylesheet at all. (The spine used to be in that sentence too,

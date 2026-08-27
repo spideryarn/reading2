@@ -29,7 +29,7 @@
 import { EyeOff, Rows3, Table as TableIcon } from "lucide-react";
 import type { Table } from "@tanstack/react-table";
 import type { LibraryEntry } from "../types.js";
-import { SortChips } from "./lib/DataTable.js";
+import { chipClass, SortChips } from "./lib/DataTable.js";
 
 export type ShelfView = "cards" | "table";
 export type ShelfFilter = "all" | "unread";
@@ -75,7 +75,20 @@ export function ShelfControls({
           Unread
         </Chip>
 
-        <fieldset className="tw:m-0 tw:flex tw:items-center tw:gap-0.5 tw:rounded-md tw:border tw:border-border tw:p-0.5">
+        {/* **28px, the same as a chip**, and the arithmetic is the whole reason
+            this reads as one row rather than three. The box is `h-7` and its
+            children `size-6`: 24 + 2×1px padding + 2×1px border = 28. Before
+            2026-08-27 it was `p-1.5` icons in an unmeasured box and came out
+            **33px inside a 38.6px fieldset**, standing a head above the pills
+            beside it — and each button carried the UA's `2px outset white`
+            border on top of that, because a hand-rolled `<button>` had no
+            preflight to flatten it (tailwind.css § the bit of preflight we
+            need). Two bright boxes where there should have been one quiet one.
+
+            `rounded-sm` inside `rounded-md` is not a guess either: an inner
+            radius should be the outer one minus the padding between them, and
+            here that is 8 − 2 = 6px, which is what `radius-sm` resolves to. */}
+        <fieldset className="tw:m-0 tw:flex tw:h-7 tw:items-center tw:gap-0.5 tw:rounded-md tw:border tw:border-border tw:p-px">
           <legend className="tw:sr-only">How the shelf is shown</legend>
           {/* `onView` only fires on a change. These are the one control here
               whose buttons can be pressed while already on — a sort chip
@@ -124,11 +137,9 @@ function Chip({
       aria-pressed={pressed}
       aria-label={describe}
       title={describe}
-      className={`tw:inline-flex tw:items-center tw:gap-1 tw:rounded-full tw:border tw:px-2.5 tw:py-1 tw:text-xs tw:transition-colors ${
-        pressed
-          ? "tw:border-highlight tw:bg-highlight/10 tw:text-highlight"
-          : "tw:border-border tw:bg-transparent tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground"
-      }`}
+      // The same pill the sort chips wear, from the one place that spells it —
+      // see `chipClass` in lib/DataTable.tsx on why it is not written twice.
+      className={chipClass(pressed)}
     >
       {children}
     </button>
@@ -153,10 +164,10 @@ function ViewButton({
       aria-pressed={pressed}
       aria-label={label}
       title={label}
-      className={`tw:rounded tw:p-1.5 tw:transition-colors ${
+      className={`tw:inline-flex tw:size-6 tw:items-center tw:justify-center tw:rounded-sm tw:transition-colors ${
         pressed
-          ? "tw:bg-highlight/10 tw:text-highlight"
-          : "tw:bg-transparent tw:text-muted-foreground tw:hover:text-foreground"
+          ? "tw:bg-highlight/15 tw:text-highlight"
+          : "tw:bg-transparent tw:text-muted-foreground tw:hover:bg-highlight/10 tw:hover:text-foreground"
       }`}
     >
       {children}

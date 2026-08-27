@@ -202,6 +202,30 @@ export function useSortedTable<T>({
 /* ------------------------------------------------------------ the chips --- */
 
 /**
+ * The one pill every toggle-shaped control on a list page wears.
+ *
+ * Exported because the shelf has two of its own beside these — Unread, and the
+ * cards/table pair (ShelfControls.tsx) — and until 2026-08-27 the class string
+ * was copied out character for character. Three copies of a border colour is
+ * three chances for one of them to drift, and nothing would have said so: they
+ * sit on the same row, so the drift shows up as a row that looks slightly
+ * wrong rather than as anything you could grep for.
+ *
+ * `h-7` is the number that matters. It was `py-1`, which made a chip 26px while
+ * the toggle beside it measured 33 — see ShelfControls.tsx. Stating the height
+ * rather than the padding is what lets an icon-only control in the same row
+ * agree with a text one without anybody doing the arithmetic.
+ */
+export function chipClass(pressed: boolean): string {
+  return [
+    "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-full tw:border tw:px-3 tw:text-xs tw:transition-colors",
+    pressed
+      ? "tw:border-highlight/70 tw:bg-highlight/10 tw:text-highlight"
+      : "tw:border-border tw:bg-transparent tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:bg-highlight/5 tw:hover:text-foreground",
+  ].join(" ");
+}
+
+/**
  * One chip per sortable column.
  *
  * The arrow is on the sorted ones only, and it is the direction rather than
@@ -271,11 +295,7 @@ export function SortChips<T>({
               aria-pressed={sorted !== false}
               aria-label={describe}
               title={describe}
-              className={`tw:inline-flex tw:items-center tw:gap-1 tw:rounded-full tw:border tw:px-2.5 tw:py-1 tw:text-xs tw:transition-colors ${
-                sorted
-                  ? "tw:border-highlight tw:bg-highlight/10 tw:text-highlight"
-                  : "tw:border-border tw:bg-transparent tw:text-muted-foreground tw:hover:border-highlight/50 tw:hover:text-foreground"
-              }`}
+              className={chipClass(sorted !== false)}
             >
               {meta.label}
               {multiple && sorted && (
