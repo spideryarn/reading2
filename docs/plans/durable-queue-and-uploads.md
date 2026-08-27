@@ -86,6 +86,15 @@ half B stage 5), the cutover flag flip (step 13), the staging-object sweep, pg-b
 
 ## 1. The job record behind a store seam
 
+> **Half built, 2026-08-27.** The contract ([`src/store/jobs.ts`](../../src/store/jobs.ts)) and the
+> Postgres adapter ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) exist and are tested, including the
+> fence. **Not yet wired**: `src/jobs.ts` still holds the `Map`, and there is no filesystem adapter,
+> so nothing reaches the store yet. That is the state the step-10 notes call the most dangerous one
+> in the table, so it is written here rather than left to the file list — and the reason it stopped
+> at this line is § 7: the wiring's *shape* depends on which way the artefact half goes, because
+> hydrate-and-push would sit inside `runOneStep` in exactly the place claim/release does.
+
+
 ### The contract is transitions, not patches
 
 `JobStore` as declared carries `claim(attemptId, leaseMs)`, `heartbeat` and `rescueExpired` — the
@@ -171,6 +180,12 @@ still holds and is exactly why a dev-server restart leaves a job resumable.
 ---
 
 ## 2. The fence, rewritten after the review
+
+> **Built and tested, 2026-08-27**, in `pg-jobs.ts` and `tests/store-jobs-pg.test.ts`. Two of those
+> tests earned their comments the hard way and both are worth knowing about: the constraint check
+> matched nothing at all because Drizzle wraps the driver error, and the fence test passed with
+> `status = 'running'` removed until it was rebuilt on the state that condition is actually for.
+
 
 The first draft got two things wrong here and both were criticals. They are corrected in place rather
 than quietly replaced, because the wrong version is the one somebody will re-derive.
