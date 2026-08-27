@@ -123,10 +123,22 @@ rather than of the project and so is not the kind of thing a move checklist asks
 about. That, and the `robots.txt` that answered `200 text/html`, are in
 [Who can reach it](#who-can-reach-it).
 
+### The apex is pinned to 308
+
+`redirectStatusCode` came across as `null`, which Vercel serves as **307** — a
+*temporary* redirect, for a relationship that is permanent. Pinned to **308** on
+the day, with `PATCH /v9/projects/<project>/domains/<domain>` and a body of
+`{"redirect":"www.spideryarn.com","redirectStatusCode":308}`. Two reasons, both
+GPT Sol's: apex→www is canonical whoever owns the apps, and a default nobody
+documents is a thing that can change under you.
+
 ### Rollback
 
-The same call with the projects swapped, in about a minute. The old project is
-kept deployed and domainless precisely so this stays true.
+The same call with the projects swapped — the apex should follow `www` back the
+same way it came, since it is still a redirect pointing at it in the same
+project. The old project is kept deployed and domainless precisely so this stays
+true. "About a minute" is what it took, not a guarantee; check both projects'
+domain lists and both live names afterwards rather than assuming.
 
 ### What happened to the old app
 
@@ -360,7 +372,7 @@ is read by nothing.
 | `ANTHROPIC_API_KEY` | the pipeline stages. Note it is *not* in `.env.local` — it comes from Greg's shell, so it is the easy one to forget |
 | `OPENROUTER_API_KEY` | explain, and chat |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **still not set, and read at BUILD time — this is the live bug.** Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next one. Missing means `src/web/lib/supabase.ts` throws at module load and the site is a blank page. **It already has**: the bundle now being served on `www.spideryarn.com` contains no project URL and no key, only the SDK's own `*.supabase.co` wildcard. Set both on the project *before* the next build. [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. Production only, so a preview still throws. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 
 ## `/api/health`, and why to look at it first
@@ -532,11 +544,21 @@ reader is told about it is the only symptom most people will ever report.
 
 ## Still to do before this is a real deployment
 
-0. **Get `main` building**, which it is not as of 2026-08-26 — see
+0. ~~**Get `main` building**~~ — green on 2026-08-27, commit `6e0d62f`.
+
+   **It broke the same way a third time first, and that is the point of this
+   entry.** The push that was meant to fix the blank page failed on
+   `[UNRESOLVED_IMPORT] Could not resolve './LandingPage.js'` and `'./perf.js'` —
+   `src/web/App.tsx` had been committed importing two modules still sitting
+   untracked on somebody's disk. Same cause as both earlier times: see
    [the two do not agree](#the-two-do-not-agree-and-git-is-the-one-telling-the-truth).
-   The exports it is missing are already committed *locally*; they have simply
-   not been pushed. Until that happens every git deploy fails, and the address
-   below serves the last good build from before the connection.
+   It went green once those two files were committed, with nothing else changed.
+
+   Three times is a pattern rather than an accident, and the
+   [named-pathspec commit rule](version-control.md) is what causes it — naming
+   only your own files is exactly what lets you leave your own dependency
+   behind. The cheap habit that would catch it: after committing, ask git what
+   the *commit* contains rather than what your disk does.
 1. ~~**The database.**~~ **Done, 2026-08-26.** Schema applied to
    `alschkahzfagtppxspfq`: 14 migrations, 14 tables, `spideryarn_app` granted and
    verified, `spideryarn` confirmed invisible to the Data API by a real anonymous
@@ -571,6 +593,26 @@ reader is told about it is the only symptom most people will ever report.
 Three things that reading tells you which a `Ready` status does not: reads are coming from Postgres
 rather than an empty disk, the server's certificate is being *checked* rather than merely encrypted
 against, and the commit is the one you think it is.
+
+**And one thing it does not tell you, learned later the same day: whether the page renders.**
+`/api/health` is served by the API; the reading view is a separate bundle, and it was throwing at
+module load while every line above stayed green — see [auth.md](auth.md). A healthy `/api/health` and
+a blank site are perfectly compatible. **Load it in a browser.**
+
+**On the domain, 2026-08-27, commit `6e0d62f`:**
+
+```
+spideryarn.com      308 -> https://www.spideryarn.com/
+www.spideryarn.com  200   commit 6e0d62f, postgres, 5 articles, lhr1
+/api/library        401 … [auth-none]
+/robots.txt         200 text/plain          Disallow: /
+x-robots-tag        noindex, nofollow
+```
+
+The apex `308` is deliberate rather than the default: it was `307` (Vercel's default when
+`redirectStatusCode` is `null`) until GPT Sol pointed out that apex→www is a permanent canonical
+relationship whatever app happens to own it, and that relying on an undocumented default is a second
+reason not to. `PATCH /v9/projects/<project>/domains/<domain>` sets it.
 
 Getting there needed one fix, and it is the best example this repo has of why `Ready` means nothing.
 The first successful build in seven hours returned `500` to every request, because

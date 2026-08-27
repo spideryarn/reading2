@@ -4,17 +4,29 @@
 [docs/research/auth-options.md](../research/auth-options.md) — this file is the decision and where
 its pieces live.
 
-**Built, locally, on 2026-08-27.** In production it is **half true, and the halves fail
-differently** — see [§ What is not done](#what-is-not-done). The *server* gate is deployed and
-enforcing: an unauthenticated `/api/library` on `www.spideryarn.com` returns
-`401 … [auth-none]`. The *browser* half is not working, because `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_PUBLISHABLE_KEY` are read at build time and are not set on the Vercel project, so
-[`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load exactly as it
-promises to. Nobody can sign in there yet.
+**Built 2026-08-27, and live on `www.spideryarn.com` the same day.** The server gate refuses
+anonymous requests (`401 … [auth-none]`) and the browser half can sign somebody in.
 
-That combination is safe rather than dangerous — no session can be obtained, so the gate refuses
-everything — but it is safe by accident, and the accident is load-bearing until those two variables
-are set. [deployment.md § Environment variables](deployment.md#environment-variables).
+**For a few hours it could not, and the shape of that is worth keeping.** `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` are read at **build** time, and they were not set on the Vercel
+project — so [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) threw at module load,
+exactly as its comment promises, and **the whole site was a blank page**. Not a broken sign-in
+button: nothing rendered at all, because the throw happens before React mounts.
+
+Three things that made it hard to see, all worth remembering:
+
+- **The server half looked fine throughout.** `/api/health` answered, `/api/library` returned its
+  401. Every check you would naturally run on "is auth working in production" passed, because they
+  all test the half that was working. [silent success](../reusable/silent-success.md) again.
+- **`curl` cannot see it.** The HTML shell returns `200` with the right `<title>`; the failure is a
+  console error in the browser. It took loading the page in a real one to know.
+- **It was safe, and safe by accident.** No session could be obtained, so the gate refused
+  everything — but that is the blank page doing the work, not the design.
+
+The variables are set on **Production only**, so a preview deployment still throws this. See
+[deployment.md § Environment variables](deployment.md#environment-variables) and
+[§ The domain](deployment.md#the-domain), since the move onto the custom domain is what made a
+blank page matter.
 
 **The build is planned in [auth-supabase.md](../plans/auth-supabase.md)** (2026-08-26) — what to
 click in Google Cloud and in the Supabase dashboard, the client seam, the gate, the tests, and an
