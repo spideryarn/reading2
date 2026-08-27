@@ -258,19 +258,53 @@ async function vercelApi<T>(pathAndQuery: string): Promise<T> {
  */
 function takeLock(): () => void {
   const file = path.join(ROOT, ".git", "spideryarn-deploy.lock");
-  let fd: number;
+
+  const claim = () => {
+    const fd = openSync(file, "w");
+    writeSync(fd, `${process.pid}\n${new Date().toISOString()}\n`);
+    closeSync(fd);
+    /* **Released on the way out, however we leave.** The first version returned
+       a function and trusted `finally`, and a `finally` does not run when the
+       process is killed — which happened within the hour, to a run piped into
+       `head`: `head` closed the pipe, the process took SIGPIPE, and the lock
+       outlived it. Every later run then refused, correctly and uselessly. */
+    process.on("exit", () => rmSync(file, { force: true }));
+    return () => rmSync(file, { force: true });
+  };
+
+  if (!existsSync(file)) return claim();
+
+  const [heldPid = "", since = ""] = readFileSync(file, "utf8").split("\n");
+  const pid = Number(heldPid);
+
+  /**
+   * **Is the holder still alive?** Signal 0 sends nothing and only asks. A stale
+   * lock and a live one look identical on disk, and the stale case is the common
+   * one — anything that kills the process leaves a file behind. Refusing to
+   * deploy because of a run that ended an hour ago is a check that has stopped
+   * being about deploying and started being about itself.
+   */
+  let alive = false;
   try {
-    fd = openSync(file, "wx");
+    if (Number.isFinite(pid) && pid > 0) {
+      process.kill(pid, 0);
+      alive = true;
+    }
   } catch {
-    const held = existsSync(file) ? readFileSync(file, "utf8").trim() : "(unreadable)";
+    /* ESRCH — no such process. EPERM would mean it exists and is not ours,
+       which cannot happen for a lock this process's own user wrote. */
+  }
+
+  if (alive) {
     throw new Error(
-      `Another deploy is running: ${held}\n` +
-        `  If you are sure it is not, delete ${path.relative(ROOT, file)} and try again.`,
+      `Another deploy is running: pid ${pid}, started ${since}.\n` +
+        "  Wait for it, or stop it. Two deploys at once would each capture a different\n" +
+        "  commit and both try to apply the same pending migrations.",
     );
   }
-  writeSync(fd, `pid ${process.pid} since ${new Date().toISOString()}\n`);
-  closeSync(fd);
-  return () => rmSync(file, { force: true });
+
+  info(`taking over a stale lock from pid ${pid || "?"} (started ${since || "?"}); that process is gone`);
+  return claim();
 }
 
 /* ------------------------------------------------------------------ */
