@@ -498,7 +498,65 @@ have meant writing that function twice.
 
 ---
 
-## 8. Open
+## 8. The wiring, specified rather than started
+
+Everything above is built except the change that makes it reachable: `src/jobs.ts` still holds the
+`Map`. That is **one piece of work and it is the whole module**, so it is specified here rather than
+begun — the half-done state of a file several agents share is the expensive one, and
+[a peer commit can ship it](../../CLAUDE.md).
+
+**What has to change, in order.**
+
+1. **Delete the persistence machinery.** `JOBS_DIR`, `jobFile`, `writeOnce`, `persist`, `writes`,
+   `forgotten`, `writeCounter`, `loadFromDisk`, `ready`, `sweepStopped` and the `jobs` Map itself all
+   moved to [`jobs-fs.ts`](../../src/store/jobs-fs.ts) unchanged. Removing them from `src/jobs.ts` is
+   deletion, not rewriting.
+2. **Add the work key.** `sameWork` compares five things — the ordered step names, each step's
+   `force`, the upload id, `guidance` and `profile`. The key is a hash over exactly those, computed
+   once in `enqueue` and never recomputed, because `job.steps` mutates as the job runs and a key
+   derived from a running job answers differently at the end than at the start:
+
+   ```ts
+   function workKeyFor(names, forced, guidance, profile, upload): string {
+     return createHash("sha256")
+       .update(JSON.stringify({
+         steps: names.map((n) => [n, forced.has(n)]),
+         upload: upload?.id ?? "",
+         guidance: guidance ?? "",
+         profile: profile ?? "",
+       }))
+       .digest("hex");
+   }
+   ```
+
+   **A test has to pin the two together**, or they drift into two rules for one question: for a set
+   of jobs, `sameWork(...)` and `workKeyFor(...) === storedKey` must agree every time.
+3. **`enqueue` becomes a loop around `enqueueOrGet`.** The slug reconciliation and the synchronous
+   `activeFor` re-check both go: the store answers `created: false, sameWork: true` (hand that job
+   back) or `sameWork: false` (allocate the next suffix and try again, bounded). That deletes the
+   most delicate comment in the file — the one explaining why there must be no `await` between the
+   check and the insert — because the check and the insert become one statement.
+4. **`advanceJob` gains claim and release.** `claim` at the top instead of the `aborts`/`advancing`
+   sets; `releaseStep` after a step that ran; `finish` on the terminal paths. The step list it passes
+   is the job's own `steps` array after `runStep` has updated it. `Advanced.busy` is now whatever
+   `claim` said rather than a guess about who else is inside.
+5. **The claimant enforces its own deadline** — §2. A timer at `leaseMs − margin` that aborts the
+   step's signal, so the lease can only expire after the claimant has already unwound.
+6. **`runJob` and p-queue become the pump** — §5. `while (!done) await advanceJob(id)`, backing off
+   on `busy`, not started on Vercel. Concurrency 1 stops being p-queue's promise and becomes
+   `jobs_only_one_running`.
+7. **The rest follow the store**: `listJobs` → `list`, `getJob` → `get`, `cancelJob` → `cancelIdle`
+   then `requestCancel`, `forgetJob` → `forget`, `prune` → `trimFinished`, and `freeSlug`'s
+   claim lookup asks the store rather than the Map.
+
+**Two things to know before starting.** `tests/jobs.test.ts` currently fails typecheck (its fixtures
+predate `Job.ownerId`) and carries an order-dependent assertion about two simultaneous advance
+callers — so fix those first, or a regression will be indistinguishable from the breakage already
+there. And `runStep` is about to be restructured by the stage-runner work § 7 chose, so keep the
+claim/release *outside* it: that boundary is what survives.
+
+## 9. Open
+
 
 1. ~~**A or B**~~ — **decided: A**, above.
 2. **The active-slug index refuses a second differently-shaped job** where today it queues behind.

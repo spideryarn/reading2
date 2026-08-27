@@ -4,6 +4,15 @@ Paste a URL on the homepage and an article appears on the shelf a minute or two 
 stages ticking over while you watch. Since 2026-08-26 the watching happens on a page of its own,
 `/add/<the URL>` — [§ The add page](#the-add-page).
 
+> **Where the record lives is moving, and half of it has.** The job record is an in-memory `Map`
+> plus `data/_jobs/*.json` — one process's memory and one process's disk — which is exactly why
+> `POST /api/jobs/:id/advance` cannot work on a serverless host: the browser's next call may land on
+> an instance whose Map is empty. There is now a tested `JobStore` with both adapters
+> ([`src/store/jobs.ts`](../../src/store/jobs.ts)), and **it is not yet wired**; the upload record
+> beside it *has* moved. What remains, and the reason it stopped where it did, is
+> [durable-queue-and-uploads.md § 8](../plans/durable-queue-and-uploads.md). Read that before
+> believing anything below about where a job is kept.
+
 > Now let's think about the "Add" functionality that takes a URL as an argument. There should be
 > some kind of queue that processes things (e.g. fetch, Mozilla Readability, sanitiser), and ideally
 > a progress indicator.
