@@ -274,7 +274,7 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     mode: "diagram",
     icon: Network,
     label: "Diagram",
-    blurb: "The article's shape as a picture: to scale, as a tree, or as a mindmap",
+    blurb: "The article's shape as a picture: as an outline, as a graph, or as paragraphs placed by meaning",
   },
   {
     mode: "chat",

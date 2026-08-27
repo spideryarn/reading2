@@ -1,19 +1,27 @@
 /**
  * The Diagram mode's geometry — src/web/diagram.ts.
  *
- * All three pictures are pure functions of the tree, which is the reason they
- * are in their own module: **every failure here is silent in a browser.** SVG
- * does not clip text and does not error on a negative width; a band laid out
- * past the right edge, a label drawn over the article, a `strata` column that
- * loses one row per section — all of them render, and all of them look like a
- * design choice.
+ * Every picture is a pure function of the tree (or, for the two scatters, of
+ * the tree and the server's projection), which is the reason they are in their
+ * own modules: **every failure here is silent in a browser.** SVG does not clip
+ * text and does not error on a negative width; a band laid out past the right
+ * edge, a label drawn over the article, a column that loses one row per section
+ * — all of them render, and all of them look like a design choice.
  *
- * The rules under test are the three the review flagged as the ones that "look
- * right in a browser and are wrong":
+ * The rules under test are the ones the review flagged as "look right in a
+ * browser and are wrong":
  *
- *  1. siblings exactly partition their parent, with no seam and no overlap;
- *  2. nothing is ever laid out outside the band's width;
- *  3. a collapsed node keeps its own row and loses only its subtree.
+ *  1. nothing is ever laid out outside the band's width;
+ *  2. a collapsed node keeps its own row and loses only its subtree;
+ *  3. no picture draws deeper than the layouts assume.
+ *
+ * **Four pictures here, and there were eight** — Greg cut Strata, Mindmap, Arc
+ * and Cluster on 2026-08-27. The tests that went with them went too; what is
+ * left is deliberately not a smaller version of the same file, because two of
+ * the rules above (siblings partitioning their parent, a picture growing past
+ * the scroller to keep a band clickable) were facts about `strata` and about
+ * nothing that is still drawn. Keeping them as assertions over `tree` would
+ * have been a test that passes for a reason unrelated to why it was written.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -26,9 +34,8 @@ import {
   GIST_PX,
   LABEL_PX,
   MAX_DRAWN_DEPTH,
-  layoutMindmap,
-  layoutStrata,
   layoutTree,
+  stepRows,
   nodeAt,
   walk,
   wrapText,
@@ -180,75 +187,6 @@ describe("walk", () => {
   });
 });
 
-describe("layoutStrata", () => {
-  it("is to scale: a part nine times longer is nine times taller", () => {
-    const { nodes } = layoutStrata(fixture(), OPTS);
-    const a = nodes.find((n) => n.id === "a");
-    const b = nodes.find((n) => n.id === "b");
-    expect(a && b).toBeTruthy();
-    expect((b?.h ?? 0) / (a?.h ?? 1)).toBeCloseTo(9, 1);
-  });
-
-  it("siblings exactly partition their parent — no seam, no overlap", () => {
-    /* THE bug this file exists for. `endRow` is inclusive, so a band that ends
-       at `rowToY(endRow)` is one row short, and every sibling boundary gains a
-       hairline gap that reads as a design flourish. Asserted to the sub-pixel,
-       because at 600px for 100 rows one row is 6px and would be visible — but at
-       6000px it is 0.6px and would not, which is how this ships. */
-    const { nodes } = layoutStrata(fixture(), OPTS);
-    const a = nodes.find((n) => n.id === "a");
-    const b = nodes.find((n) => n.id === "b");
-    expect((a?.y ?? 0) + (a?.h ?? 0)).toBeCloseTo(b?.y ?? 0, 6);
-
-    const a1 = nodes.find((n) => n.id === "a1");
-    const a2 = nodes.find((n) => n.id === "a2");
-    expect((a1?.y ?? 0) + (a1?.h ?? 0)).toBeCloseTo(a2?.y ?? 0, 6);
-    // And the children exactly fill the parent, top and bottom.
-    expect(a1?.y).toBeCloseTo(a?.y ?? 0, 6);
-    expect((a2?.y ?? 0) + (a2?.h ?? 0)).toBeCloseTo((a?.y ?? 0) + (a?.h ?? 0), 6);
-  });
-
-  it("keeps every band inside the band's width", () => {
-    for (const n of layoutStrata(fixture(), OPTS).nodes) {
-      expect(n.x).toBeGreaterThanOrEqual(0);
-      expect(n.x + n.w).toBeLessThanOrEqual(OPTS.width);
-    }
-  });
-
-  it("grows past the scroller rather than drawing a band nobody can click", () => {
-    /* A tiny section inside a long article. Fitted to 600px it would be under a
-       pixel tall — present, correct, and unusable. The picture scrolls instead. */
-    const tiny = node("t", "2.3", 2, 98, 98, [], "b");
-    const root = fixture();
-    root.children[1]?.children.push(tiny);
-    const fitted = layoutStrata(root, OPTS);
-    expect(fitted.height).toBeGreaterThan(OPTS.height);
-    const drawn = fitted.nodes.find((n) => n.id === "t");
-    expect(drawn?.h ?? 0).toBeGreaterThanOrEqual(5.9);
-  });
-
-  it("does not stay stretched for bands the reader has closed", () => {
-    /* The height is driven by the smallest DRAWN node. Driving it from the tree
-       instead would leave the picture scrolling for a sliver that is no longer
-       on it — right the first time, wrong after one click, and invisible in a
-       test that only ever renders the open tree. */
-    const tiny = node("t", "2.3", 2, 98, 98, [], "b");
-    const root = fixture();
-    root.children[1]?.children.push(tiny);
-    const closed = layoutStrata(root, { ...OPTS, collapsed: new Set(["b" as NodeId]) });
-    expect(closed.height).toBeLessThanOrEqual(OPTS.height);
-  });
-
-  it("reports an axis that maps row 0 to the top and the last row to the bottom", () => {
-    const { axis } = layoutStrata(fixture(), OPTS);
-    expect(axis).not.toBeNull();
-    const y = (row: number) => (axis ? axis.top + (row / axis.rows) * axis.height : Number.NaN);
-    const first = layoutStrata(fixture(), OPTS).nodes.find((n) => n.id === "root");
-    expect(y(0)).toBeCloseTo(first?.y ?? 0, 6);
-    expect(y(100)).toBeCloseTo((first?.y ?? 0) + (first?.h ?? 0), 6);
-  });
-});
-
 describe("layoutTree", () => {
   it("indents by depth and never runs a label off the right edge", () => {
     const { nodes } = layoutTree(fixture(), OPTS);
@@ -293,44 +231,30 @@ describe("layoutTree", () => {
   });
 });
 
-describe("layoutMindmap", () => {
-  it("alternates parts left and right of the trunk", () => {
-    const { nodes, width } = layoutMindmap(fixture(), OPTS);
-    const a = nodes.find((n) => n.id === "a");
-    const b = nodes.find((n) => n.id === "b");
-    expect((a?.x ?? 0) + (a?.w ?? 0)).toBeGreaterThan(width / 2);
-    expect(b?.x ?? width).toBeLessThan(width / 2);
+describe("stepRows", () => {
+  it("gives one rung per distinct start row, not one per node", () => {
+    /* **The whole reason the step buttons walk rows.** `layoutTree` is
+       preorder, so the root, part 1 and section 1.1 all begin on row 0 — a
+       ladder built from nodes would spend its first three rungs going nowhere,
+       and a button that moves nothing looks broken rather than correct. */
+    const { nodes } = layoutTree(fixture(), OPTS);
+    expect(nodes.length).toBeGreaterThan(stepRows(nodes).length);
+    expect(stepRows(nodes)).toEqual([0, 4, 10, 50]);
   });
 
-  it("keeps every node inside the band, on both sides", () => {
-    for (const n of layoutMindmap(fixture(), OPTS).nodes) {
-      expect(n.x).toBeGreaterThanOrEqual(0);
-      expect(n.x + n.w).toBeLessThanOrEqual(OPTS.width);
-    }
+  it("is ascending whatever order the picture drew in", () => {
+    /* Force settles its bubbles by physics and hands them back in graph order,
+       not in reading order. The ladder is a claim about the *article*, so it
+       cannot inherit whichever order a layout happened to build. */
+    const shuffled = [...layoutTree(fixture(), OPTS).nodes].reverse();
+    const rows = stepRows(shuffled);
+    expect(rows).toEqual([...rows].sort((a, b) => a - b));
   });
 
-  it("is still in document order down the page", () => {
-    // The one property a published mindmap grammar would have taken from us.
-    const nodes = layoutMindmap(fixture(), OPTS).nodes;
-    const a = nodes.find((n) => n.id === "a");
-    const b = nodes.find((n) => n.id === "b");
-    expect(a?.y ?? 0).toBeLessThan(b?.y ?? 0);
-  });
-
-  it("draws a trunk that stops at the last part rather than trailing off", () => {
-    const { links, nodes } = layoutMindmap(fixture(), OPTS);
-    const trunk = links.find((l) => l.id === "trunk");
-    expect(trunk).toBeTruthy();
-    const end = Number(trunk?.d.split("V")[1]?.trim());
-    const last = nodes.filter((n) => n.depth === 1).pop();
-    expect(end).toBeLessThanOrEqual((last?.y ?? 0) + (last?.h ?? 0) + 20);
-  });
-
-  it("drops a closed part's twigs and keeps the part", () => {
-    const { nodes } = layoutMindmap(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
-    expect(nodes.some((n) => n.id === "a")).toBe(true);
-    expect(nodes.some((n) => n.id === "a1")).toBe(false);
-    expect(nodes.some((n) => n.id === "b1")).toBe(true);
+  it("is empty for a picture with nothing on it, rather than [0]", () => {
+    // The panel disables both buttons off `starts.length`, so a phantom rung
+    // would leave a live button that steps to a node that is not there.
+    expect(stepRows([])).toEqual([]);
   });
 });
 
@@ -338,23 +262,23 @@ describe("nodeAt", () => {
   it("marks the deepest node the reader is inside, not the outermost", () => {
     // Marking the part when the section is on screen tells the reader something
     // they already knew. Same rule as the summary panel's follow mark.
-    const { nodes } = layoutStrata(fixture(), OPTS);
+    const { nodes } = layoutTree(fixture(), OPTS);
     expect(nodeAt(nodes, 5)).toBe("a2");
     expect(nodeAt(nodes, 60)).toBe("b2");
   });
 
   it("marks a collapsed node itself rather than nothing", () => {
-    const { nodes } = layoutStrata(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
+    const { nodes } = layoutTree(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
     expect(nodeAt(nodes, 5)).toBe("a");
   });
 
   it("is null above the first row, rather than guessing the root", () => {
-    expect(nodeAt(layoutStrata(fixture(), OPTS).nodes, null)).toBeNull();
+    expect(nodeAt(layoutTree(fixture(), OPTS).nodes, null)).toBeNull();
   });
 });
 
 /**
- * The same three rules, against the **committed example article** rather than a
+ * The same rules, against the **committed example article** rather than a
  * fixture built to be convenient.
  *
  * The tree above has four sections with tidy short titles. This one has 45
@@ -367,7 +291,7 @@ describe("nodeAt", () => {
  * 288 and `MODE_IDEAL` is 400 (src/web/layout.ts), and the narrow end is where
  * a label runs out.
  */
-describe("the three pictures, against the real example article", () => {
+describe("every picture, against the real example article", () => {
   const tree = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
   const raw = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
   const blocks = (Array.isArray(raw) ? raw : (raw as { blocks: Block[] }).blocks) as Block[];
@@ -397,7 +321,6 @@ describe("the three pictures, against the real example article", () => {
           expect(n.x + n.w).toBeLessThanOrEqual(width + 0.5);
 
           n.lines.forEach((_, i) => {
-            if (n.rotated) return; // its budget is the box's HEIGHT, not its width
             const w = lineWidth(n, i, kind);
             const left =
               n.anchor === "start" ? n.labelX : n.anchor === "end" ? n.labelX - w : n.labelX - w / 2;
@@ -412,10 +335,11 @@ describe("the three pictures, against the real example article", () => {
   }
 
   it("never draws deeper than MAX_DRAWN_DEPTH, whatever the tree holds", () => {
-    /* The example tree goes to depth 3. All three layouts assume 2 — strata has
-       three x positions and would stack depth 3 on depth 2, and mindmap reads
-       exactly two levels of children. `buildSummaryTree` stops at 2 today, so
-       this is guarding the assumption rather than the current caller. */
+    /* The example tree goes to depth 3. The layouts assume 2 — `layoutTree`
+       indents by depth and would run a fourth level off a 288px band, and the
+       stylesheet has font sizes for `diag-d0` to `diag-d2` and nothing below.
+       `buildSummaryTree` stops at 2 today, so this is guarding the assumption
+       rather than the current caller. */
     expect(Math.max(...Object.values(tree.nodes).map((n) => n.depth))).toBeGreaterThan(
       MAX_DRAWN_DEPTH,
     );
@@ -437,7 +361,7 @@ describe("the three pictures, against the real example article", () => {
  */
 describe("siblingRuns", () => {
   it("counts each node among its own siblings, not among its level", () => {
-    const { nodes } = layoutStrata(fixture(), OPTS);
+    const { nodes } = layoutTree(fixture(), OPTS);
     const runs = siblingRuns(nodes);
     const of = (id: string) => runs[nodes.findIndex((n) => n.id === id)];
 
@@ -452,7 +376,7 @@ describe("siblingRuns", () => {
   });
 
   it("counts a closed parent's siblings without counting its hidden children", () => {
-    const { nodes } = layoutStrata(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
+    const { nodes } = layoutTree(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
     const runs = siblingRuns(nodes);
     const of = (id: string) => runs[nodes.findIndex((n) => n.id === id)];
     expect(of("a")).toEqual({ size: 2, pos: 1 });

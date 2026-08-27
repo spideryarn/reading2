@@ -106,7 +106,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mount(kind: "force" | "strata" = "force") {
+function mount(kind: "force" | "tree" = "force") {
   const { root: tree, blocks } = article();
   act(() => {
     root.render(
@@ -228,9 +228,9 @@ describe("what the panel asks the server for", () => {
        also what a genuinely missing request looks like. */
     const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
-    mount("strata");
+    mount("tree");
     await settle();
-    expect(calls, "strata must not buy anything").toEqual([]);
+    expect(calls, "the Tree picture must not buy anything").toEqual([]);
 
     act(() => root.unmount());
     root = createRoot(host);

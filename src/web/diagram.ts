@@ -1,6 +1,6 @@
 /**
- * **The Diagram mode's geometry** — three pictures of one article's structure,
- * computed as pure numbers so they can be tested without a browser.
+ * **The Diagram mode's shared vocabulary, and the one picture that is an
+ * outline** — computed as pure numbers so it can be tested without a browser.
  *
  * Greg, 2026-08-26:
  *
@@ -43,51 +43,36 @@
  * lives here rather than inside a component, because that is what makes the
  * three sorting rules below testable.
  *
- * ## The three pictures, and the axis they share
+ * ## What is left, after the cut
  *
  * ```
- *      strata                tree                  mindmap
- *   ┌──┬───────────┐   ┌───────────────┐    ┌───────────────┐
- *   │▐ │▌ 1 Waking │   │ ● Being You   │    │      ◉        │
- *   │▐ │▌   up     │   │ ├─● 1 Waking  │    │   ╭──┴──╮     │
- *   │▐ ├───────────┤   │ │ └─● 1.1 The │    │ ┌─┴─┐   │     │
- *   │▐ │▌ 1.1 The  │   │ │    body     │    │ │ 1 │   │     │
- *   │▐ │▌   body   │   │ ├─● 2 The     │    │ └───┘   │     │
- *   ├──┼───────────┤   │ │   hard      │    │     ╭───┴──╮  │
- *   │▐ │▌ 2 The    │   │ └─● 3 Being   │    │     │  2   │  │
- *   │▐ │▌   hard   │   └───────────────┘    │     ╰──────╯  │
- *   └──┴───────────┘                        └───────────────┘
- *    depth as thin      depth as indent      depth as a stem
- *    rails; height       and elbows;          off a centre
- *    ∝ words             one row each         trunk
+ *        tree                  force              drift / trail
+ *   ┌───────────────┐   ┌───────────────┐    ┌───────────────┐
+ *   │ ● Being You   │   │    ◯───◯      │    │  ·   ·  ·     │
+ *   │ ├─● 1 Waking  │   │   ╱ ╲ ╱       │    │ ·  ·   ·  ·   │
+ *   │ │ └─● 1.1 The │   │  ◯───◯····◯   │    │   ·  ·        │
+ *   │ │    body     │   │   ╲   ╲       │    │  ·   ·  ·   · │
+ *   │ ├─● 2 The     │   │    ◯───◯      │    │ ·  ·      ·   │
+ *   │ └─● 3 Being   │   │                │    │   ·  ·  ·     │
+ *   └───────────────┘   └───────────────┘    └───────────────┘
+ *    depth as indent    sections pulled       one dot per
+ *    and elbows;        together by the       paragraph, placed
+ *    one row each       words they share      by what it is about
  * ```
  *
- * `strata` is the only one whose vertical axis is *linear in the article*, and
- * it is the one that answers the question the gist columns cannot: **how much
- * of this piece is that section?** A section holding forty blocks and one
- * holding three look identical in an L2 cell — the complaint recorded in
- * docs/project/original-version/structure-panel.md against the previous version.
- * Here one is thirteen times taller.
+ * Only the first is in this file. `force` is [diagram-d3.ts](./diagram-d3.ts)
+ * over [graph.ts](./graph.ts); `drift` and `trail` are
+ * [scatter.ts](./scatter.ts) over the server's projection. What they all share
+ * — `DiagramNode`, `DiagramLink`, `wrapText`, `LABEL_PX` — lives here, which is
+ * why a router that knows about all three is its own file
+ * ([diagrams.ts](./diagrams.ts)) rather than a function at the bottom of this
+ * one.
  *
- * **In words, since 2026-08-27** — `DiagramOptions.wordsBefore`. It counted
- * *blocks* first, which GPT Sol correctly called an overclaim: a section of
- * eight long paragraphs and one of eight one-line list items came out the same
- * height, and a thousand-word code block was one row. Blocks is still the
- * fallback when no word counts are supplied, so the pure layout stays testable
- * against a tree alone.
- *
- * It is still **not** the unit the spine uses. The spine is sized from measured
- * pixel heights (Spine.tsx), which is better again and costs a layout pass this
- * panel has not got — so the two rails are close but not interchangeable, and a
- * position on one cannot be copied to the other. See docs/project/diagram.md.
- *
- * `tree` and `mindmap` keep document *order* but not document *scale* — every
- * node gets the room its label needs. That is a deliberate split rather than an
- * inconsistency: a map that is faithful about size cannot also be legible about
- * names, because the sliver problem the spine has (Spine.tsx) is the same
- * problem here. So one of the three is honest about proportion and two are
- * honest about text, and the toggle is how the reader asks for the one they
- * want.
+ * **`tree` keeps document order but not document scale**: every node gets the
+ * room its label needs. That was a deliberate split while `strata` existed to
+ * be the honest-about-proportion half of the pair, and it is worth saying
+ * plainly that the pair is now a single: nothing in this mode is to scale any
+ * more. The spine beside the band still is.
  *
  * ## Why text is wrapped by counting characters
  *
@@ -107,29 +92,26 @@ import type { SummaryNode } from "./tree.js";
 /**
  * Which picture. In the URL as `?diagram=` — see params.ts § diagramParam.
  *
- * Six, in two groups. The first three are hand-rolled and draw the **tree**
- * (this file); the last three are driven by D3 ([diagram-d3.ts](./diagram-d3.ts),
- * over [graph.ts](./graph.ts)). The order runs from the most faithful to the
- * article's own shape to the most interpretive, which is also roughly from
- * cheapest to most surprising.
+ * **Four, and there were eight.** Greg cut Strata, Mindmap, Arc and Cluster on
+ * 2026-08-27, and the four that went share one property: each of them was a
+ * second way of drawing something another picture already draws. Mindmap and
+ * Cluster were both the containment tree with different geometry — the
+ * comparison GPT Sol had already said `tree` won. Arc drew the vocabulary edges
+ * that `force` draws, on a line rather than in a plane. Strata was the odd one
+ * out and the real loss: it was to scale, and nothing here is any more. Its
+ * question — *how much of the piece is that section?* — is now answered by the
+ * spine beside the band and by the paragraph count on a tree row, which is
+ * weaker and is the price of a toggle bar you can take in at a glance.
  *
- * **Only two of the last three are graph pictures.** `arc` and `force` draw the
- * vocabulary edges — the relationships a tree cannot hold. `cluster` throws them
- * away and redraws the containment tree with d3-hierarchy's algorithm; it is
- * there to be compared against the hand-rolled `tree`, and GPT Sol's review
- * recommends cutting it on the grounds that the comparison is now done and
- * `tree` won. Recorded in docs/plans/diagram-mode.md rather than acted on.
+ * What is left is one picture per **kind of thing to say**: `tree` is the
+ * outline (this file), `force` is the relationships a tree cannot hold
+ * ([diagram-d3.ts](./diagram-d3.ts) over [graph.ts](./graph.ts)), and `drift`
+ * and `trail` are the article as paragraphs placed by meaning
+ * ([scatter.ts](./scatter.ts)). The order runs from the most faithful to the
+ * article's own shape to the most interpretive, which is also from cheapest to
+ * most surprising: the first costs nothing, the last three cost a model call.
  */
-export const DIAGRAMS = [
-  "strata",
-  "tree",
-  "mindmap",
-  "arc",
-  "force",
-  "cluster",
-  "drift",
-  "trail",
-] as const;
+export const DIAGRAMS = ["tree", "force", "drift", "trail"] as const;
 export type DiagramKind = (typeof DIAGRAMS)[number];
 
 /**
@@ -176,11 +158,10 @@ export interface DiagramNode {
    * wrong renders a gist line at title size and pushes it out of the band.
    */
   titleLines: number;
-  /** Rotated a quarter turn, for a tall thin band that can only hold text sideways. */
-  rotated?: boolean;
   /**
    * A mark drawn apart from the box, for the pictures whose hit target is a row
-   * but whose *node* is a point on a spine — `arc` and `cluster`.
+   * but whose *node* is a point — a scatter dot's 3px circle inside a hit
+   * rectangle big enough to press with a finger.
    *
    * Separate from `x`/`y`/`w`/`h` on purpose: those are what the reader has to
    * be able to hit, and a 3px circle is not that. Conflating the two is how a
@@ -284,12 +265,13 @@ export interface DiagramLayout {
   nodes: DiagramNode[];
   links: DiagramLink[];
   /**
-   * The extent of the article's own axis, for tests — present only on the
-   * picture whose vertical axis really is the article.
+   * The extent of the article's own axis, for tests — present only on a
+   * picture whose vertical axis really is the article, which today means
+   * `drift` (scatter.ts).
    *
-   * `rows` is in whatever unit that picture is measuring in, which since
-   * 2026-08-27 is **words** when `wordsBefore` is supplied and blocks otherwise.
-   * **Nothing outside this file may do arithmetic with it**; use `nowY` below.
+   * `rows` is in whatever unit that picture is measuring in.
+   * **Nothing outside the layout that produced it may do arithmetic with it**;
+   * use `nowY` below.
    */
   axis: { top: number; height: number; rows: number } | null;
   /**
@@ -304,8 +286,8 @@ export interface DiagramLayout {
    * all the same length. Found by GPT Sol, 2026-08-27.
    *
    * A unit conversion belongs where the unit is decided. There is exactly one
-   * place that knows whether this axis is words or blocks, and it is
-   * `layoutStrata`.
+   * place that knows what unit a given picture's axis is in, and it is the
+   * layout function that chose it.
    */
   nowY: number | null;
 }
@@ -320,19 +302,18 @@ export interface DiagramOptions {
   /**
    * Where the reader is, as a row index into the article's blocks — so that the
    * one function that knows this picture's unit can convert it. See
-   * `DiagramLayout.nowY`.
+   * `DiagramLayout.nowY`. Also what the panel's step buttons move.
    */
   atRow?: number | null;
   /**
    * Words per block, as a prefix sum — `wordsBefore` from graph.ts.
    *
-   * Optional, and what it changes is `strata`'s vertical axis: without it a row
-   * is a row and the picture is to scale in **blocks**, which is what the first
-   * round shipped and what GPT Sol correctly called an overclaim (eight long
-   * paragraphs and eight one-line list items came out the same height). With it
-   * the axis is **words**, which is what "how much of the piece" meant all
-   * along. Optional rather than required so the pure layout functions stay
-   * testable against a tree alone.
+   * Optional, and left in place after `strata` — the picture it was added for —
+   * was cut, because it is how any future picture would make its vertical axis
+   * mean **words** rather than blocks. Eight long paragraphs and eight one-line
+   * list items are the same number of blocks and very different amounts of
+   * article; that was GPT Sol's finding against the first round of `strata`,
+   * and it is the sort of thing worth keeping the input for.
    */
   wordsBefore?: readonly number[];
 }
@@ -382,13 +363,9 @@ const CHAR_W = 0.52;
 export const UNLABELLED: ReadonlySet<DiagramKind> = new Set<DiagramKind>(["drift", "trail"]);
 
 export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
-  strata: { 0: 11, 1: 10, 2: 11 },
   tree: { 0: 12, 1: 12, 2: 12 },
-  mindmap: { 0: 12, 1: 11.5, 2: 10.5 },
-  arc: { 0: 11, 1: 11, 2: 11 },
   // Only a number goes inside a force bubble, and it is small.
   force: { 0: 10, 1: 10, 2: 10 },
-  cluster: { 0: 11, 1: 11, 2: 11 },
   /* Nothing is written on a scatter dot at all — `lines` is always empty
      (src/web/scatter.ts). These entries exist because the record is keyed by
      `DiagramKind` and a missing one would be a type error rather than a
@@ -411,13 +388,9 @@ export const GIST_PX = 10.5;
  * as slightly uneven spacing rather than as an overflow.
  */
 export const LINE_STEP: Record<DiagramKind, { title: number; gist: number }> = {
-  strata: { title: 13, gist: 13 },
   tree: { title: 15, gist: 12 },
-  mindmap: { title: 13, gist: 13 },
-  // All three D3 pictures put one line on a node and the rest in the footer.
-  arc: { title: 13, gist: 13 },
+  // Force puts one line on a node and the rest in the footer card.
   force: { title: 12, gist: 12 },
-  cluster: { title: 13, gist: 13 },
   // The two scatters write nothing on a dot; everything is in the card.
   drift: { title: 13, gist: 13 },
   trail: { title: 13, gist: 13 },
@@ -508,12 +481,12 @@ export function wrapText(text: string, maxChars: number, maxLines: number): stri
  * The deepest level any picture draws.
  *
  * `buildSummaryTree` already stops at 2 by default and `DiagramBand` takes the
- * default, so today this changes nothing. It is here because **all three
- * layouts silently assume it**: `layoutStrata` has three x positions and would
- * stack depth 3 on top of depth 2, and `layoutMindmap` reads exactly two levels
- * of children and would drop a third without saying so. Raising
- * `buildSummaryTree`'s limit for some other caller must not quietly change what
- * this file draws, so the ceiling is asserted here rather than inherited.
+ * default, so today this changes nothing. It is here because the layouts
+ * silently assume it — `layoutTree` indents by depth and would run a fourth
+ * level off the right edge of a 288px band, and the stylesheet has font sizes
+ * for `diag-d0` to `diag-d2` and nothing below. Raising `buildSummaryTree`'s
+ * limit for some other caller must not quietly change what this file draws, so
+ * the ceiling is asserted here rather than inherited.
  */
 export const MAX_DRAWN_DEPTH = 2;
 
@@ -542,163 +515,6 @@ export function walk(
   };
   visit(root, -1);
   return out;
-}
-
-/* ── strata: the picture that is to scale ───────────────────────────────── */
-
-/** The two thin rails on the left, then the labelled column. */
-const ROOT_W = 7;
-const PART_W = 20;
-const RAIL_GAP = 2;
-/** Below this a band cannot hold a line of text, so it is left blank. */
-const LABEL_MIN_H = 13;
-/** No band may be thinner than this, or it cannot be clicked. Drives the height. */
-const MIN_BAND_H = 6;
-/**
- * The most viewports tall `strata` may grow chasing a clickable smallest band.
- * Six screens is already a long scroll for something whose whole promise is
- * "the shape of the article at a glance".
- */
-const MAX_STRATA_SCROLL = 6;
-
-/**
- * **Strata** — indented proportional bands. Vertical position *is* position in
- * the article, and a band's height *is* how much of the article it is.
- *
- * The one thing to understand: the height is `max(what fits, what is legible)`.
- * The picture wants to be exactly the height of the scroller, because a map you
- * have to scroll is a worse map — but a fifty-section article at 600px gives
- * each section 12px, and a two-paragraph section inside that is 1px, which is
- * not a band, it is a line. So when the smallest band would fall under
- * `MIN_BAND_H` the whole picture is scaled up and scrolls instead. Scrolling a
- * map is a cost; a map with unclickable parts is a bug.
- */
-export function layoutStrata(root: SummaryNode, opts: DiagramOptions): DiagramLayout {
-  const entries = walk(root, opts.collapsed);
-  const pad = 4;
-
-  /**
-   * The article's vertical axis, in whatever unit we have.
-   *
-   * **Words when `wordsBefore` is given, blocks otherwise**, and the difference
-   * is the one thing this picture claims. `scale(row)` is "how much of the
-   * article is above row `row`", `span` is the whole of it, and every `y` below
-   * is a ratio of the two — so switching unit changes one function and nothing
-   * else. That is the point of doing it this way rather than with a flag: there
-   * is no branch further down that could be updated for one unit and not the
-   * other.
-   */
-  const words = opts.wordsBefore;
-  const usable = words !== undefined && words.length > root.endRow + 1;
-  const scale = (row: number) =>
-    usable && words ? (words[Math.min(row, words.length - 1)] ?? 0) : row;
-  const base = scale(root.startRow);
-  const span = Math.max(1, scale(root.endRow + 1) - base);
-  const rows = span;
-
-  /* How tall must the picture be for the thinnest thing on it to be usable?
-     The thinnest thing is the smallest *drawn* node, and a collapsed node's
-     children are not drawn — so this is computed from `entries`, never from
-     the tree, or closing a section would leave the picture stretched for
-     bands that are no longer on it. */
-  const extent = (n: { startRow: number; endRow: number }) =>
-    scale(n.endRow + 1) - scale(n.startRow);
-  /* **Zero-extent nodes are excluded from the scale, not floored into it.**
-     Measuring in words, a section of nothing but images genuinely has zero,
-     where it could never have had zero blocks. Flooring it at one word and then
-     asking "how tall must this be for the smallest band to be six pixels"
-     answers *six pixels per word of the whole article* — a 5,000-word piece
-     gives a 30,000px diagram. Found by GPT Sol with exactly that probe,
-     2026-08-27. Such a node still gets its one-pixel band below; it just does
-     not get a vote on the scale. */
-  const smallest = entries.reduce(
-    (min, e) => {
-      if (e.node.node.depth === 0) return min;
-      const x = extent(e.node);
-      return x > 0 ? Math.min(min, x) : min;
-    },
-    Number.POSITIVE_INFINITY,
-  );
-  const viewport = Math.max(60, opts.height - pad * 2);
-  /* **And even a positive smallest gets a ceiling.** One section that is a
-     twentieth of a per cent of a long article still asks for forty viewports,
-     and a map you scroll for a minute is not a map. Past the cap the smallest
-     bands go under MIN_BAND_H and get hard to hit — a real cost, but a smaller
-     one than a diagram nobody can take in, and the other five pictures are one
-     press away. */
-  const needed = Number.isFinite(smallest) ? (rows / smallest) * MIN_BAND_H : 0;
-  /* `viewport` floors at 60 because `opts.height` is a measured `clientHeight`,
-     and a scroller that has not been laid out yet measures 0 — which without a
-     floor gives a NEGATIVE height, a `rowToY` that runs upwards, and bands with
-     negative `h` that SVG draws as nothing at all. No error, no warning, an
-     empty picture. */
-  const height = Math.min(viewport * MAX_STRATA_SCROLL, Math.max(viewport, needed));
-
-  const rowToY = (row: number) => pad + ((scale(row) - base) / span) * height;
-  const deepestX = ROOT_W + RAIL_GAP + PART_W + RAIL_GAP;
-
-  const nodes: DiagramNode[] = entries.map((e) => {
-    const { node: n } = e;
-    const y = rowToY(n.startRow);
-    // endRow is inclusive, so the band runs to the START of the row after it —
-    // which is what makes consecutive siblings exactly partition their parent
-    // with no seam and no overlap. Using endRow itself loses one row per band.
-    const h = Math.max(1, rowToY(n.endRow + 1) - y);
-    const x = n.node.depth === 0 ? 0 : n.node.depth === 1 ? ROOT_W + RAIL_GAP : deepestX;
-    const w = n.node.depth === 0 ? ROOT_W : n.node.depth === 1 ? PART_W : opts.width - deepestX;
-
-    const label = n.number ? `${n.number}  ${n.node.title}` : n.node.title;
-    let lines: string[] = [];
-    let rotated = false;
-    if (n.node.depth >= 2 && h >= LABEL_MIN_H) {
-      lines = wrapText(label, charsThatFit(w - 10, LABEL_PX.strata[2] ?? 11), Math.max(1, Math.floor((h - 4) / LINE_STEP.strata.title)));
-    } else if (n.node.depth === 1 && h >= 46) {
-      // A part band is 20px wide and can only hold text sideways. Its budget is
-      // its HEIGHT, which is the axis it is long on — the one place in this file
-      // where the two are swapped, and the reason `rotated` exists at all.
-      lines = wrapText(n.node.title, charsThatFit(h - 12, LABEL_PX.strata[1] ?? 10), 1);
-      rotated = true;
-    }
-
-    return {
-      id: n.node.id,
-      blockId: n.node.range[0],
-      depth: n.node.depth,
-      number: n.number,
-      title: n.node.title,
-      ...(n.gist !== undefined && { gist: n.gist }),
-      blocks: n.blocks,
-      startRow: n.startRow,
-      endRow: n.endRow,
-      part: e.part,
-      x,
-      y,
-      w,
-      h,
-      labelX: rotated ? x + w / 2 : x + 5,
-      labelY: rotated ? y + h / 2 : y + 12,
-      anchor: rotated ? "middle" : "start",
-      lines,
-      titleLines: lines.length,
-      ...(rotated && { rotated }),
-      hasChildren: n.children.length > 0,
-      collapsed: e.collapsed,
-    };
-  });
-
-  /* The you-are-here line, converted HERE, by the one function that knows what
-     unit this axis is in. `atRow` is a block index whatever the axis measures. */
-  const at = opts.atRow;
-  const nowY = at === null || at === undefined ? null : rowToY(Math.max(0, at));
-
-  return {
-    width: opts.width,
-    height: height + pad * 2,
-    nodes,
-    links: [],
-    axis: { top: pad, height, rows },
-    nowY,
-  };
 }
 
 /* ── tree: the picture that is legible ──────────────────────────────────── */
@@ -793,198 +609,26 @@ export function layoutTree(root: SummaryNode, opts: DiagramOptions): DiagramLayo
   return { width: opts.width, height: Math.max(opts.height, y + 10), nodes, links, axis: null, nowY: null };
 }
 
-/* ── mindmap: the picture that is a picture ─────────────────────────────── */
-
-const TRUNK_PAD = 16;
-const PART_GAP = 14;
-const TWIG_H = 17;
-
 /**
- * **Mindmap** — a trunk down the centre, parts hanging off it on alternating
- * sides, sections as twigs off their part.
+ * **The rows a picture can step between** — ascending, deduplicated, and what
+ * the panel's ↑ / ↓ buttons walk.
  *
- * The published mindmap grammar — Markmap's, Mermaid's — grows *sideways* from
- * a root, and Luna is blunt about what that costs here: *"traditional mindmaps
- * expand sideways … do not naturally preserve a strict top-to-bottom reading
- * order"*. In a 288px band a sideways mindmap is not a styling problem, it is
- * the wrong shape.
+ * Rows rather than nodes, and that is the whole design of the step controls.
+ * A layout's `nodes` are in *preorder*, so on a tree the root, part 1 and
+ * section 1.1 all begin on the same row: stepping by node would press ↓ three
+ * times and move the article nowhere, which reads as a broken button. Distinct
+ * start rows make one press always one visible move — and they make the *unit*
+ * come out right by itself, sections on the tree pictures and single paragraphs
+ * on the two scatters, because those are the rows those pictures draw.
  *
- * So this keeps the mindmap's *look* — a spine, curved stems, rounded label
- * pills — and throws away its axis. Down is still later in the article. That is
- * a herringbone rather than a mindmap, strictly, and calling it a mindmap in the
- * toggle is a concession to what a reader will be looking for.
- *
- * Sides alternate by part index rather than by which side has room, because a
- * picture that rearranges itself when a section is closed is a picture you have
- * to re-read.
+ * Here rather than in the component so it can be tested: the failure it guards
+ * against is a button that looks fine and does nothing, which is the shape
+ * docs/reusable/silent-success.md is about.
  */
-export function layoutMindmap(root: SummaryNode, opts: DiagramOptions): DiagramLayout {
-  const trunkX = Math.round(opts.width / 2);
-  const half = trunkX - TRUNK_PAD;
-  const nodes: DiagramNode[] = [];
-  const links: DiagramLink[] = [];
-
-  const rootLines = wrapText(root.node.title, charsThatFit(opts.width - 24, LABEL_PX.mindmap[0] ?? 12), 2);
-  const rootH = 8 + rootLines.length * 14;
-  nodes.push({
-    id: root.node.id,
-    blockId: root.node.range[0],
-    depth: 0,
-    number: "",
-    title: root.node.title,
-    ...(root.gist !== undefined && { gist: root.gist }),
-    blocks: root.blocks,
-    startRow: root.startRow,
-    endRow: root.endRow,
-    part: -1,
-    x: 12,
-    y: 8,
-    w: opts.width - 24,
-    h: rootH,
-    labelX: trunkX,
-    labelY: 8 + 15,
-    anchor: "middle",
-    lines: rootLines,
-    titleLines: rootLines.length,
-    hasChildren: root.children.length > 0,
-    collapsed: opts.collapsed.has(root.node.id) && root.children.length > 0,
-  });
-
-  let y = 8 + rootH + PART_GAP;
-  let lastStemY: number | null = null;
-  const rootBottom = 8 + rootH;
-  const parts = opts.collapsed.has(root.node.id) ? [] : root.children;
-
-  parts.forEach((p, i) => {
-    const left = i % 2 === 1;
-    const closed = opts.collapsed.has(p.node.id) && p.children.length > 0;
-    const twigs = closed ? [] : p.children;
-
-    const pillW = Math.max(48, half - 6);
-    const label = `${p.number}  ${p.node.title}`;
-    const pillLines = wrapText(label, charsThatFit(pillW - 14, LABEL_PX.mindmap[1] ?? 11.5), 2);
-    const pillH = 7 + pillLines.length * 13;
-    const pillX = left ? trunkX - TRUNK_PAD - pillW : trunkX + TRUNK_PAD;
-    const pillY = y;
-    const stemY = pillY + pillH / 2;
-
-    /* The stem: a bezier out of the trunk into the middle of the pill. Both
-       control points sit on the horizontal through their own end, which is what
-       makes it leave the trunk and arrive at the pill flat rather than at an
-       angle — the difference between a branch and a diagonal line. */
-    const trunkEnd = left ? trunkX - TRUNK_PAD : trunkX + TRUNK_PAD;
-    const mid = (trunkX + trunkEnd) / 2;
-    links.push({
-      id: `stem-${p.node.id}`,
-      d: `M ${trunkX} ${Math.min(stemY, y - PART_GAP / 2)} C ${trunkX} ${stemY} ${mid} ${stemY} ${trunkEnd} ${stemY}`,
-      part: i,
-      depth: 1,
-      kind: "parent",
-    });
-
-    nodes.push({
-      id: p.node.id,
-      blockId: p.node.range[0],
-      depth: 1,
-      number: p.number,
-      title: p.node.title,
-      ...(p.gist !== undefined && { gist: p.gist }),
-      blocks: p.blocks,
-      startRow: p.startRow,
-      endRow: p.endRow,
-      part: i,
-      x: pillX,
-      y: pillY,
-      w: pillW,
-      h: pillH,
-      labelX: pillX + pillW / 2,
-      labelY: pillY + 14,
-      anchor: "middle",
-      lines: pillLines,
-      titleLines: pillLines.length,
-      hasChildren: p.children.length > 0,
-      collapsed: closed,
-    });
-
-    /* **Twigs hang under their pill, not beside it.** Beside it was the first
-       shape and it is the trap this band is full of: a pill fills its half of
-       the width, so "beside" leaves about 7px for a title. Under it, indented
-       from the pill's OUTER edge and running back towards the trunk, a twig gets
-       the pill's width less an indent — around 120px, which is a short title.
-
-       Indenting from the outer edge rather than from the trunk side is what
-       keeps the two columns mirror images of each other; indenting from the
-       trunk would make the left part's twigs run off the left edge and the
-       right part's run into the trunk. */
-    let ty = pillY + pillH + 4;
-    const dotX = left ? pillX + 13 : pillX + pillW - 13;
-    twigs.forEach((c) => {
-      const cy = ty + TWIG_H / 2;
-      const textX = left ? dotX + 7 : dotX - 7;
-      const budget = left ? trunkX - TRUNK_PAD - textX - 2 : textX - (trunkX + TRUNK_PAD) - 2;
-      nodes.push({
-        id: c.node.id,
-        blockId: c.node.range[0],
-        depth: 2,
-        number: c.number,
-        title: c.node.title,
-        ...(c.gist !== undefined && { gist: c.gist }),
-        blocks: c.blocks,
-        startRow: c.startRow,
-        endRow: c.endRow,
-        part: i,
-        // The hit target spans from the twig's dot to the trunk, so a 4px
-        // circle is not what the reader has to hit.
-        x: left ? dotX - 5 : trunkX + TRUNK_PAD,
-        y: ty,
-        w: left ? trunkX - TRUNK_PAD - dotX + 5 : dotX + 5 - trunkX - TRUNK_PAD,
-        h: TWIG_H,
-        labelX: textX,
-        labelY: cy + 4,
-        anchor: left ? "start" : "end",
-        lines: wrapText(`${c.number} ${c.node.title}`, charsThatFit(budget, LABEL_PX.mindmap[2] ?? 10.5), 1),
-        titleLines: 1,
-        hasChildren: false,
-        collapsed: false,
-      });
-      ty += TWIG_H;
-    });
-
-    /* One sub-spine per part rather than one connector per twig: the twig dots
-       all sit on it, so a connector each would be the same line drawn N times,
-       and the overlap shows as a darker stroke at the top. */
-    if (twigs.length > 0) {
-      links.push({
-        id: `sub-${p.node.id}`,
-        d: `M ${dotX} ${pillY + pillH} V ${ty - TWIG_H / 2}`,
-        part: i,
-        depth: 2,
-        kind: "parent",
-      });
-    }
-
-    lastStemY = stemY;
-    y = Math.max(ty, pillY + pillH) + PART_GAP;
-  });
-
-  /* The trunk is drawn last because it needs to know where the last part is.
-     **It stops at the last stem, not at the bottom of the picture** — a trunk
-     that ran on past the final branch would be claiming there is more article
-     below, which is the one thing a structure diagram must not do. The first
-     version ran to `y`, which is past the last part's twigs; it looked like a
-     deliberate tail. */
-  const trunkBottom = lastStemY ?? rootBottom;
-  links.unshift({
-    id: "trunk",
-    d: `M ${trunkX} ${rootBottom} V ${trunkBottom}`,
-    part: -1,
-    depth: 0,
-    /* The trunk is the root holding all its parts, which is containment drawn
-       as one stroke rather than as one per part. Same claim, fewer lines. */
-    kind: "parent",
-  });
-
-  return { width: opts.width, height: Math.max(opts.height, y + 8), nodes, links, axis: null, nowY: null };
+export function stepRows(nodes: readonly DiagramNode[]): number[] {
+  const seen = new Set<number>();
+  for (const n of nodes) seen.add(n.startRow);
+  return [...seen].sort((a, b) => a - b);
 }
 
 /**

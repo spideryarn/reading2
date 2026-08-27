@@ -3,7 +3,7 @@
  *
  * ```
  *  ┌── spine ──┬────── DIAGRAM (this panel) ──────┬──── the article ────┐
- *  │           │  DIAGRAM   strata · tree · map   │                     │
+ *  │           │  DIAGRAM  tree · force · drift   │                     │
  *  │  ▇▇▇▇▇▇▇  │ ──────────────────────────────── │  Being You opens    │
  *  │  ▇▇▇▇     │ ▐ ▌█ 1  Waking up                │  with a story about │
  *  │  ▇▇▇      │ ▐ ▌█                             │  waking from        │
@@ -25,9 +25,11 @@
  * ## Three things it does that a picture of a tree does not have to
  *
  * **It says where you are.** The node the reader is standing in is marked, and
- * on `strata` — the one picture whose vertical axis really is the article — a
- * line is drawn across at the exact row. That is the whole reason this is a
- * mode inside the reading view rather than an export.
+ * on `drift` — whose vertical axis really is the article — a line is drawn
+ * across at the exact row. There is a pair of step buttons under the picture
+ * that walk the article from here, and the arrow keys do the same inside it.
+ * That is the whole reason this is a mode inside the reading view rather than
+ * an export.
  *
  * **It is clickable all the way down.** Every node is a real focusable element
  * with a name, and Enter jumps the article to it — the same `onJump` a gist
@@ -51,17 +53,14 @@
  * hover card (docs/project/tooltips.md); the spine is 1.5rem wide and has nowhere
  * to put a strip.
  */
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ChartScatter,
   ChevronDown,
   ChevronRight,
-  GitBranch,
+  ChevronUp,
   Network,
   Route,
-  Share2,
-  Signal,
-  Spline,
   Waypoints,
 } from "lucide-react";
 import type { Block, BlockId, NodeId } from "../types.js";
@@ -73,6 +72,7 @@ import {
   type DiagramNode,
   type LinkKind,
   nodeAt,
+  stepRows,
 } from "./diagram.js";
 import { layoutDiagram } from "./diagrams.js";
 import { type ArticleGraph, buildGraph, wordsBefore } from "./graph.js";
@@ -81,6 +81,9 @@ import { type UseProjection, useProjection } from "./useProjection.js";
 import { RAMP_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
 import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
+import { stepTarget } from "./keynav.js";
+import { activeSectionIndex } from "./position.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
 
 interface Props {
   /**
@@ -98,8 +101,9 @@ interface Props {
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
   /**
-   * Every block of the article, in order — what the graph pictures are built
-   * from (src/web/graph.ts), and what lets `strata` be to scale in words.
+   * Every block of the article, in order — what the Force picture's graph is
+   * built from (src/web/graph.ts), and what the two scatters name their lanes
+   * from.
    *
    * The whole array rather than a derived summary, because the graph needs the
    * prose to count terms over and the word counts are already on it. It is the
@@ -114,43 +118,37 @@ interface Props {
   onHue(hue: ScatterHue): void;
 }
 
-/** What each picture is called where the reader meets it, and what it promises. */
-const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Signal; blurb: string }> = {
-  strata: {
-    label: "Strata",
-    icon: Signal,
-    blurb: "To scale — how tall a section is here is how much of the article it is",
-  },
+/**
+ * What each picture is called where the reader meets it, and what it promises.
+ *
+ * **Three fields rather than one, and the third is the one readers ask for.**
+ * `blurb` says what the picture shows; `how` says where it comes from and what
+ * it costs. Three of these four spend a model call the first time they are
+ * drawn, and a toggle bar that does not say which is a toggle bar where one
+ * press is free and the next one bills you — see docs/project/diagram.md.
+ *
+ * Both are rendered in a real hover card (Tooltip.tsx) rather than a `title`
+ * attribute. The native tooltip waits about a second, cannot be styled, cannot
+ * be read by touch, and truncates at the OS's own idea of a line — for a
+ * sentence explaining what a picture *is*, that is close to not being there.
+ */
+const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb: string; how: string }> = {
   tree: {
     label: "Tree",
     icon: Network,
-    blurb: "The outline as a branching tree, every name legible, sizes not to scale",
+    blurb: "The outline as a branching tree — every part, every section, in the order they were written.",
+    how: "Free: drawn from the contents page, which the article already has. Click a row to go there; the chevron folds a part away.",
   },
-  mindmap: {
-    label: "Mindmap",
-    icon: Share2,
-    blurb: "A trunk down the middle with the parts hanging off it, still in reading order",
-  },
-  /* The three below draw the GRAPH, not the tree — sections joined by the words
-     they share as well as by where they sit (src/web/graph.ts). Their blurbs say
-     what each one is *for*, because unlike the first three they are not showing
-     the reader something they could have worked out from the contents page. */
-  arc: {
-    label: "Arc",
-    icon: Spline,
-    blurb:
-      "Every section on one line in reading order, with an arc wherever two of them are about the same things — a long arc is the piece doubling back",
-  },
+  /* Force draws the GRAPH, not the tree — sections joined by the words they
+     share as well as by where they sit (src/web/graph.ts). Its blurb says what
+     it is *for*, because unlike the tree it is not showing the reader something
+     they could have worked out from the contents page. */
   force: {
     label: "Force",
     icon: Waypoints,
     blurb:
-      "The same relationships settled by physics: sections that share vocabulary pull together, while down the page stays reading order",
-  },
-  cluster: {
-    label: "Cluster",
-    icon: GitBranch,
-    blurb: "The tidy dendrogram d3-hierarchy draws — every section at the same depth, evenly spaced",
+      "Sections as bubbles, settled by physics: ones that talk about the same things pull together, while down the page stays reading order.",
+    how: "The solid lines are free — reading order, containment, and words two sections share. The dotted ones cost one model call, and say the two passages mean something similar.",
   },
   /* The last two draw neither the tree nor the graph: one dot per PARAGRAPH,
      placed by what the paragraph is about (src/web/scatter.ts). They are the
@@ -159,28 +157,30 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Signal; blurb: 
     label: "Drift",
     icon: ChartScatter,
     blurb:
-      "One dot per paragraph: down the page is still the article, sideways is what it is talking about — so a subject the piece returns to is a second cluster far below the first",
+      "One dot per paragraph: down the page is still the article, sideways is what it is talking about — so a subject the piece returns to is a second cluster far below the first.",
+    how: "Costs one model call the first time, which reads every paragraph. Sideways is either one sliding scale or a column per topic — the Sideways control switches between them.",
   },
   trail: {
     label: "Trail",
     icon: Route,
     blurb:
-      "The same dots with both axes spent on meaning, joined in reading order — so you can see whether the piece travels through its subject or circles back over it",
+      "The same dots with both axes spent on meaning, joined in reading order — so you can see whether the piece travels through its subject or circles back over it.",
+    how: "Shares Drift's model call, so opening one pays for both. This is the only picture here where down the page is not later in the article; colour by Progress if you need that back.",
   },
 };
 
-/** The three that need the graph rather than the tree. */
 /**
  * The pictures that draw a you-are-here line, and therefore the only ones for
  * which the reader's position is an input to layout.
  *
  * **This said `["strata"]` and that was wrong**, which is worth leaving in the
- * file because of how the mistake was made: `atRow` was grepped for in
- * diagram.ts and diagram-d3.ts, both of which really do ignore it everywhere
- * but `layoutStrata`, and scatter.ts — where `drift` draws its position line
- * (scatter.ts:430) and `trail` brightens the chain around the reader
- * (scatter.ts:556) — was simply not one of the files looked at. A grep over the
- * wrong set of files reads exactly like a grep that found everything.
+ * file because of how the mistake was made — and `strata` has since been cut,
+ * so this set is now exactly the two pictures the mistake left out. `atRow` was
+ * grepped for in diagram.ts and diagram-d3.ts, both of which really did ignore
+ * it everywhere but `layoutStrata`, and scatter.ts — where `drift` draws its
+ * position line and `trail` brightens the chain around the reader — was simply
+ * not one of the files looked at. A grep over the wrong set of files reads
+ * exactly like a grep that found everything.
  *
  * The failure it would have shipped is the quiet kind: two pictures whose
  * you-are-here line silently stops following you. Nothing throws, nothing
@@ -188,17 +188,14 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Signal; blurb: 
  * both behaviours — passes, because the layout functions were never the thing
  * that changed. Caught by a GPT Sol review of the built code, 2026-08-27.
  *
- * `drift` and `trail` also fall back to `layoutStrata` while their projection
- * is still loading (diagrams.ts:52-60), so they would have lost the line in the
- * fallback too.
- *
+
  * A set rather than an equality test because the next picture to grow a `nowY`
- * has to add itself here, and a `kind === "strata"` buried in a memo is not
+ * has to add itself here, and a `kind === "drift"` buried in a memo is not
  * somewhere anybody would think to look.
  */
-const NEEDS_AT_ROW = new Set<DiagramKind>(["strata", "drift", "trail"]);
+const NEEDS_AT_ROW = new Set<DiagramKind>(["drift", "trail"]);
 
-const NEEDS_GRAPH = new Set<DiagramKind>(["arc", "force", "cluster"]);
+const NEEDS_GRAPH = new Set<DiagramKind>(["force"]);
 
 /**
  * The two that need the server's projection of the article, and are a **flat
@@ -427,24 +424,26 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
 
   /* **Built only when a graph picture is on.** Counting terms over a whole
      article is cheap — a few milliseconds for sixty sections — but it is not
-     free, and three of the six pictures never look at it. Same reasoning that
+     free, and three of the four pictures never look at it. Same reasoning that
      keeps `DiagramBand` from fetching anything: a reader who never leaves
-     `strata` should not pay for the other three. */
+     `tree` should not pay for the other three. */
   const wantsGraph = NEEDS_GRAPH.has(kind);
   /* **Only Force, and only Force.** This is the one thing the panel asks the
      server for, it costs a model call the first time, and it is the only fetch
      in the reading view a reader can start without pressing something that says
-     what it will do. So the gate is narrow on purpose: not "a graph picture" —
-     `force`, which is the picture Greg asked to put the dotted lines on. See
+     what it will do. So the gate is narrow on purpose: `force`, which is the
+     picture Greg asked to put the dotted lines on, and nothing else. See
      useSimilar.ts. */
   const similar = useSimilar(slug, kind === "force");
   const graph = useMemo(
     () => (root && wantsGraph ? buildGraph(root, blocks, collapsed, similar.pairs) : null),
-    // `wantsGraph`, NOT `kind`: stepping between Arc, Force and Cluster does not
-    // change the graph, and keying on `kind` rebuilt the whole term index on
-    // every one of those presses. On a 150-section article that is 100ms of
-    // main thread for a result byte-identical to the one just thrown away.
-    // GPT Sol's finding, 2026-08-27.
+    // `wantsGraph`, NOT `kind`: there were three graph pictures when this was
+    // written, and stepping between them did not change the graph — keying on
+    // `kind` rebuilt the whole term index on every one of those presses, 100ms
+    // of main thread on a 150-section article for a result byte-identical to
+    // the one just thrown away. GPT Sol's finding, 2026-08-27. Only Force is
+    // left, so the two now coincide; the boolean stays because it says what the
+    // dependency actually is.
     //
     // `similar.pairs` is a *stable* array — the hook hands back the same one
     // until a new answer lands — so this rebuilds exactly twice per article:
@@ -472,7 +471,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   );
 
   /* **What is actually drawn**, which is not the same as which toggle is
-     pressed: until the projection lands, `layoutDiagram` falls back to `strata`
+     pressed: until the projection lands, `layoutDiagram` falls back to `tree`
      (see diagrams.ts). Deriving the role, the palette and the strip from the
      *picture on screen* rather than from `kind` is what stops the panel telling
      a screen reader it is showing a list of paragraphs while it is showing a
@@ -490,23 +489,25 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     [wantsPoints, projection.points, projection.k, blocks],
   );
 
-  /* `strata` is to scale in WORDS. Computed here rather than taken from `graph`,
-     which is null unless a graph picture is on: the prefix sum is one pass over
-     an array we already hold, where the graph builds a whole term index. */
+  /* Words per block, as a prefix sum. Nothing draws a to-scale axis since
+     `strata` was cut, so no picture reads this today — it is still computed
+     because it is one pass over an array we already hold, and because
+     `DiagramOptions.wordsBefore` is how any future axis would mean words
+     rather than blocks. */
   const words = useMemo(() => wordsBefore(blocks), [blocks]);
 
-  /* `arc`, `force` and `cluster` return `nowY: null` and never read `atRow`, so
-     for those three it was a dependency nobody looked at — and `atRow` changes
-     every time the reader scrolls into a new section.
+  /* `tree` and `force` return `nowY: null` and never read `atRow`, so for them
+     it was a dependency nobody looked at — and `atRow` changes every time the
+     reader scrolls into a new section.
 
      That made scrolling with Force open re-run the whole layout, which is a
      300-tick d3 simulation measured at 39ms on a 60-section article and 113ms
      at 150, to produce a picture identical to the one just discarded: a hitch
-     per section, all the way down a long article. Those three are also the
-     expensive layouts, so excluding exactly them is where the whole saving is.
+     per section, all the way down a long article. Force is also the expensive
+     layout, so excluding it is where the whole saving is.
 
-     `strata`, `drift` and `trail` keep it — see `NEEDS_AT_ROW` above, and note
-     that the first version of this left two of them out. GPT Sol's finding,
+     `drift` and `trail` keep it — see `NEEDS_AT_ROW` above, and note that the
+     first version of this left both of them out. GPT Sol's finding,
      2026-08-27. */
   const followsReader = NEEDS_AT_ROW.has(kind) ? atRow : null;
   const layout: DiagramLayout | null = useMemo(() => {
@@ -548,6 +549,85 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   const nodes = layout?.nodes ?? [];
   const rovingId =
     roving !== null && nodes.some((n) => n.id === roving) ? roving : (nodes[0]?.id ?? null);
+
+  /** The ladder the ↑ / ↓ buttons walk — see `stepRows` in diagram.ts. */
+  const starts = useMemo(() => stepRows(layout?.nodes ?? []), [layout]);
+
+  /* Where in that ladder the reader is standing, 1-based, for the readout
+     between the two buttons. The same arithmetic the reading-position code
+     uses, over rows rather than pixels. */
+  const readerRow = atRow ?? starts[0] ?? 0;
+  const rung = starts.length > 0 ? activeSectionIndex(starts, readerRow) + 1 : 0;
+  /** What one press moves by, in the reader's own words. */
+  const unit = drawingPoints ? "paragraph" : "section";
+
+  /**
+   * One step through the article, and the picture follows because it is drawn
+   * from `atRow`.
+   *
+   * `stepTarget` is **keynav.ts's**, not a second copy of the rule: ↓ is always
+   * the next item, and ↑ part-way into an item goes to the top of the item you
+   * are in before it steps back. That is the track-skip rule from every music
+   * player (docs/project/keyboard.md), and having these buttons disagree with
+   * the arrow keys about what ↑ means would be worse than not having them.
+   */
+  const stepTo = (dir: -1 | 1) => {
+    const row = stepTarget(starts, readerRow, dir);
+    if (row === null) return;
+    const id = nodeAt(nodes, row);
+    const node = nodes.find((n) => n.id === id);
+    if (!node) return;
+    setRoving(node.id);
+    onJump(node.blockId);
+  };
+  const canStep = (dir: -1 | 1) =>
+    starts.length > 0 && stepTarget(starts, readerRow, dir) !== null;
+
+  /* The pointer's position, mirrored into a ref so the follow-scroll below can
+     read it without re-running every time the pointer leaves the picture. */
+  const hovering = useRef(false);
+  hovering.current = hover !== null;
+
+  /**
+   * **The picture scrolls to keep up with the reader.**
+   *
+   * Without this the mark moves and the row it is on can be two screens up
+   * inside `.diag-scroll`, which on a long `tree` is the whole picture doing
+   * nothing while the article moves. Same idea as the summary panel following
+   * the reader (docs/project/summaries.md), and the same two rules: it keys on
+   * the *target* rather than on scroll events, so it never has to ask whether a
+   * scroll was ours or theirs, and it does nothing while the pointer is in the
+   * picture — a reader comparing two bands must not have one of them slide out
+   * from under the pointer.
+   *
+   * It also does nothing when the row is already comfortably in view, which is
+   * most presses. Nudging a row that is fine is how a panel ends up in a slow
+   * permanent drift.
+   *
+   * `hovering` is a **ref** rather than a dependency on purpose: reading it at
+   * fire time is what keeps `hover` out of the dependency list, and `hover` in
+   * the list would re-run this every time the pointer left the picture — which
+   * is exactly the scroll this is trying not to do.
+   */
+  useEffect(() => {
+    if (here === null || hovering.current) return;
+    const el = scroller.current;
+    const g = el?.querySelector<SVGGElement>(`[data-diag-id="${here}"]`);
+    if (!el || !g) return;
+    const box = g.getBoundingClientRect();
+    const view = el.getBoundingClientRect();
+    const margin = 12;
+    if (box.top >= view.top + margin && box.bottom <= view.bottom - margin) return;
+    const top = el.scrollTop + (box.top - view.top) - (view.height - box.height) / 2;
+    /* **`scrollTo` is not everywhere, and its absence throws.** The DOM this
+       renders into under test has `scrollTop` and no `scrollTo` at all, and an
+       unguarded call took the whole panel down inside a passive effect — five
+       red tests for a scroll nobody was asserting. Assigning `scrollTop` is the
+       older API and is universal; it just jumps rather than glides, which is
+       the right thing to lose. */
+    if (typeof el.scrollTo === "function") el.scrollTo({ top, behavior: "smooth" });
+    else el.scrollTop = top;
+  }, [here]);
 
   /**
    * What the graph says about the node the card is describing: which other
@@ -591,18 +671,52 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
    * traversal. Left and Right are the tree-specific half: on an open parent
    * Left closes it, otherwise it goes *to* the parent; Right opens a closed
    * parent, otherwise it steps into the first child.
+   *
+   * **↑ and ↓ move the article as well as the tabstop**, which is not what the
+   * tree pattern says and is what Greg asked for: *"make sure the up/down
+   * buttons work, so that we can use the keyboard to move up/down blocks in the
+   * text and also follow the progression in the diagram"* (2026-08-27). The
+   * pattern's own answer is that arrows move focus and Enter activates, and
+   * that is right for a file tree, where activating means opening something
+   * you cannot undo. Here activating means scrolling — the cheapest, most
+   * reversible thing this app does — so following focus costs nothing and turns
+   * the picture into something you can read the article *with* rather than
+   * something you read and then leave. It is the documented follow-focus
+   * variant, and the pattern the gist columns beside this panel already use.
+   *
+   * ← and → do **not** follow, on the two pictures where they mean open and
+   * close: folding a part away is a statement about the picture and should not
+   * move the reader out of the paragraph they are in. On the two scatters,
+   * where sideways is just another word for a step, they do.
    */
   const onKeyNav = (e: React.KeyboardEvent, node: DiagramNode) => {
     const i = nodes.findIndex((n) => n.id === node.id);
+    /** Move the tabstop only — for the sideways keys, which mean structure. */
     const step = (d: number) => rove(nodes[Math.min(nodes.length - 1, Math.max(0, i + d))]?.id ?? null);
+    /**
+     * Move the tabstop and take the article with it.
+     *
+     * **The keypress is what stops the two from fighting.** `onJump` scrolls
+     * the prose, which moves `?at=`, which moves `here` — and the window-level
+     * ↑ / ↓ handler in keynav.ts would *also* have stepped the article, by a
+     * section, at the same time as this steps it by a node. Two different
+     * distances from one press. The `preventDefault()` at each call site is
+     * what keynav now checks for; see its `defaultPrevented` guard.
+     */
+    const follow = (d: number) => {
+      const next = nodes[Math.min(nodes.length - 1, Math.max(0, i + d))];
+      if (!next) return;
+      rove(next.id);
+      onJump(next.blockId);
+    };
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        step(1);
+        follow(1);
         return;
       case "ArrowUp":
         e.preventDefault();
-        step(-1);
+        follow(-1);
         return;
       case "Home":
         e.preventDefault();
@@ -615,15 +729,16 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
       case "ArrowRight":
         e.preventDefault();
         // On a flat list of paragraphs there is nothing to open, so sideways is
-        // the same step as down — which is what a listbox promises.
-        if (flat) step(1);
+        // the same step as down — which is what a listbox promises, and it
+        // follows the reader for the same reason down does.
+        if (flat) follow(1);
         else if (node.hasChildren && node.collapsed) toggle(node.id);
         else if (node.hasChildren) step(1); // preorder: the next node IS the first child
         return;
       case "ArrowLeft": {
         e.preventDefault();
         if (flat) {
-          step(-1);
+          follow(-1);
           return;
         }
         if (node.hasChildren && !node.collapsed) {
@@ -659,43 +774,78 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
       {/* One tab stop, arrows inside — the radio pattern, and the same shape
           Dock.tsx's mode switcher already has. Three tab stops was the version
           this had first, and it is a role describing a widget the code does not
-          implement. Found by GPT Sol, 2026-08-26. */}
+          implement. Found by GPT Sol, 2026-08-26.
+
+          **Each button carries a hover card rather than a `title`**, on Greg's
+          ask: *"add tooltips when hovering over each Diagram button to explain
+          how it works"* (2026-08-27). The card says two things — what the
+          picture shows, and where it comes from — because three of these four
+          spend a model call the first time they are drawn, and a row of chips
+          where one press is free and the next one bills you should say so
+          before the press rather than after it. `TooltipGroup` makes the
+          neighbours open instantly once one is open, so reading along the row
+          is one gesture rather than four waits. */}
       <div className="diag-kinds" role="radiogroup" aria-label="Which diagram">
-        {DIAGRAMS.map((k, i) => {
-          const ui = KIND_UI[k];
-          const Icon = ui.icon;
-          return (
-            /* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot carry an icon beside its label, and styling one to match means hiding the input and faking every state it already had */
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={k === kind}
-              tabIndex={k === kind ? 0 : -1}
-              className={`diag-kind${k === kind ? " on" : ""}`}
-              title={ui.blurb}
-              onClick={() => onKind(k)}
-              onKeyDown={(e) => {
-                const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-                if (d === 0) return;
-                e.preventDefault();
-                // Wraps, as the radio pattern specifies.
-                const next = DIAGRAMS[(i + d + DIAGRAMS.length) % DIAGRAMS.length];
-                if (next) {
-                  onKind(next);
-                  // The newly-checked button is the new tab stop, so focus has
-                  // to follow it or the next arrow press goes nowhere.
-                  (e.currentTarget.parentElement?.children[
-                    (i + d + DIAGRAMS.length) % DIAGRAMS.length
-                  ] as HTMLElement | undefined)?.focus();
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+          {DIAGRAMS.map((k, i) => {
+            const ui = KIND_UI[k];
+            const Icon = ui.icon;
+            return (
+              <Tooltip
+                key={k}
+                placement="bottom"
+                className="tip-soon"
+                content={
+                  <>
+                    <div className="tip-soon-head">{ui.label}</div>
+                    <p>{ui.blurb}</p>
+                    <p className="diag-tip-how">{ui.how}</p>
+                  </>
                 }
-              }}
-            >
-              <Icon size={12} />
-              {ui.label}
-            </button>
-          );
-        })}
+              >
+                {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot carry an icon beside its label, and styling one to match means hiding the input and faking every state it already had */}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={k === kind}
+                  tabIndex={k === kind ? 0 : -1}
+                  className={`diag-kind${k === kind ? " on" : ""}`}
+                  onClick={() => onKind(k)}
+                  onKeyDown={(e) => {
+                    const d =
+                      e.key === "ArrowRight" || e.key === "ArrowDown"
+                        ? 1
+                        : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                          ? -1
+                          : 0;
+                    if (d === 0) return;
+                    e.preventDefault();
+                    // Wraps, as the radio pattern specifies.
+                    const at = (i + d + DIAGRAMS.length) % DIAGRAMS.length;
+                    const next = DIAGRAMS[at];
+                    if (!next) return;
+                    onKind(next);
+                    /* The newly-checked button is the new tab stop, so focus has
+                       to follow it or the next arrow press goes nowhere. Found
+                       by id rather than by walking the parent's children, which
+                       is what this did before the buttons grew a `<Tooltip>`
+                       wrapper — the wrapper clones its child rather than adding
+                       an element, so the walk still worked, and relying on that
+                       is one refactor away from a control that silently stops
+                       moving. */
+                    document
+                      .querySelector<HTMLElement>(`.diag-kinds [data-diag-kind="${next}"]`)
+                      ?.focus();
+                  }}
+                  data-diag-kind={k}
+                >
+                  <Icon size={12} />
+                  {ui.label}
+                </button>
+              </Tooltip>
+            );
+          })}
+        </TooltipGroup>
       </div>
 
       {/* The two things a scatter lets the reader change, and neither is a
@@ -801,7 +951,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               failure, a network drop and a broken deploy as the embedding model
               being down. GPT Sol's finding, 2026-08-27. */}
           {projection.status === "error" &&
-            `${projection.error ?? "Could not place these paragraphs, and the reason did not come back."} The picture below is Strata instead.`}
+            `${projection.error ?? "Could not place these paragraphs, and the reason did not come back."} The picture below is the Tree instead.`}
         </p>
       )}
 
@@ -959,6 +1109,51 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         )}
       </div>
 
+      {/* **↑ / ↓ as real buttons, big enough for a thumb.**
+          Greg, 2026-08-27: *"add big up/down buttons for touch devices (e.g.
+          iPad)"*. On a keyboard the arrows already do this — inside the picture
+          they step a node and take the article with them, and anywhere else
+          keynav.ts steps a section. On an iPad there are no arrows, and the
+          panel's own hit targets are 6px tall, so the only way to walk the
+          article from here was to hit dots one at a time.
+
+          Under the picture rather than over it, for the reason the whole
+          footer card is there: this band is a column of small things being
+          compared against each other, and a floating control covers the
+          neighbours that are the point of the comparison.
+
+          The readout in the middle is not decoration — it is what says which
+          unit a press moves by, which is the one thing that changes between
+          pictures (a section on Tree and Force, a paragraph on the two
+          scatters) and the one thing a pair of arrows cannot show. */}
+      <div className="diag-step">
+        <button
+          type="button"
+          className="diag-step-btn"
+          onClick={() => stepTo(-1)}
+          disabled={!canStep(-1)}
+          aria-label={`Previous ${unit}`}
+        >
+          <ChevronUp size={22} />
+        </button>
+        {/* `aria-live` off: this changes on every scroll, and a screen reader
+            announcing "12 of 47" continuously while the reader moves down the
+            page is noise over the prose they are actually reading. The buttons
+            say what they do, and the card below says where you have landed. */}
+        <span className="diag-step-at" title={`${unit} ${rung} of ${starts.length}`}>
+          {starts.length > 0 ? `${rung} / ${starts.length}` : "—"}
+        </span>
+        <button
+          type="button"
+          className="diag-step-btn"
+          onClick={() => stepTo(1)}
+          disabled={!canStep(1)}
+          aria-label={`Next ${unit}`}
+        >
+          <ChevronDown size={22} />
+        </button>
+      </div>
+
       <DetailCard
         node={card}
         ramp={ramp}
@@ -1062,7 +1257,7 @@ function kept(p: UseProjection): string {
      flat view keeps, of a view that is not there. GPT Sol's finding,
      2026-08-27. */
   if (p.blocks < 2) {
-    return "Not enough prose here to place — a paragraph needs a dozen words before the model can say what it is about. The picture below is Strata instead.";
+    return "Not enough prose here to place — a paragraph needs a dozen words before the model can say what it is about. The picture below is the Tree instead.";
   }
   const held = Math.round((p.variance[0] + p.variance[1]) * 100);
   const short = p.skipped.tooShort + p.skipped.nonProse;
@@ -1276,22 +1471,11 @@ function NodeShape({
           y={node.y}
           width={node.w}
           height={node.h}
-          rx={kind === "mindmap" ? Math.min(9, node.h / 2) : node.depth === 2 ? 2 : 1}
+          rx={node.depth === 2 ? 2 : 1}
         />
       )}
-      {/* A mindmap twig is a dot on its part's sub-spine, and the dot sits on
-          the far side of the label from the text — which is the side `anchor`
-          already names, so the geometry does not have to carry it twice. */}
-      {kind === "mindmap" && node.depth === 2 && (
-        <circle
-          className="diag-dot"
-          cx={node.anchor === "start" ? node.labelX - 7 : node.labelX + 7}
-          cy={node.y + node.h / 2}
-          r={3}
-        />
-      )}
-      {/* `arc` and `cluster` put the node on a spine and the hit target across
-          the whole row, so the mark is carried separately — see `dot` in
+      {/* The two scatters put a 3px dot inside a hit rectangle big enough to
+          press with a finger, so the mark is carried separately — see `dot` in
           diagram.ts for why those are not the same rectangle. */}
       {node.dot && (
         <circle className="diag-dot" cx={node.dot.x} cy={node.dot.y} r={node.dot.r} />
@@ -1302,9 +1486,6 @@ function NodeShape({
         x={node.labelX}
         y={node.labelY}
         textAnchor={node.anchor}
-        {...(node.rotated && {
-          transform: `rotate(-90 ${node.labelX} ${node.labelY})`,
-        })}
       >
         {node.lines.map((line, i) => (
           <tspan
@@ -1327,8 +1508,8 @@ function NodeShape({
       </text>
 
       {/* The paragraph count, on the pictures that have room for it. The answer
-          to "how much am I not seeing" — which `strata` answers with the height
-          of the band itself and therefore does not need in text. */}
+          to "how much am I not seeing", which nothing else in this picture
+          says. */}
       {kind === "tree" && (
         <text className="diag-count" x={node.w - 6} y={node.y + 11} textAnchor="end">
           {node.blocks}

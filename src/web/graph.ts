@@ -17,9 +17,10 @@
  *  1. **Words, not blocks.** A `Block` carries its own word count, so a section
  *     can be measured by how much there is to *read* rather than by how many
  *     paragraph-shaped things it contains. That closes the gap GPT Sol found in
- *     the first round — `strata` promised "how much of the piece" and delivered
- *     a count of blocks, so eight long paragraphs and eight one-line list items
- *     came out the same height (docs/project/diagram.md).
+ *     the first round — the `strata` picture, since cut, promised "how much of
+ *     the piece" and delivered a count of blocks, so eight long paragraphs and
+ *     eight one-line list items came out the same height
+ *     (docs/project/diagram.md).
  *  2. **Sequence.** One section follows another, and that is a relation the tree
  *     records only implicitly, in the order of a `children` array.
  *  3. **Vocabulary.** Two sections that talk about the same things are related
@@ -33,7 +34,7 @@
  * occurrences ourselves rather than asking: **a question with a checkable answer
  * should not be sent to something that can invent one.** Term overlap is
  * arithmetic. It is also free, and instant, and works on an article nobody has
- * paid a model call for — which is the property that made `strata` the default
+ * paid a model call for — which is the property that makes `tree` the default
  * picture and is worth keeping.
  *
  * The measure is ordinary tf-idf over the sections of one article, which is the
@@ -129,7 +130,9 @@ export interface ArticleGraph {
    * Words before each row, plus a final total — a prefix sum over the article's
    * blocks, so any row range converts to a word range in constant time.
    *
-   * This is what lets `strata` be to scale in words instead of in blocks. Length
+   * Nothing draws a to-scale axis since `strata` was cut, so this has no reader
+   * today; it stays because it is the one thing that would let a picture's
+   * vertical axis mean words rather than blocks, and it costs one pass. Length
    * `blocks.length + 1`.
    */
   wordsBefore: number[];
@@ -288,10 +291,11 @@ const dot = (a: Map<string, number>, b: Map<string, number>): number => {
 /**
  * Words before each block, plus a final total — a prefix sum, length `n + 1`.
  *
- * Exported on its own because `strata` wants it and wants **nothing else** from
- * this file: it is one pass over an array the panel already holds, where
- * `buildGraph` builds a whole term index. A picture that does not use the graph
- * should not have to build one to be measured in words.
+ * Exported on its own so a picture can be measured in words without wanting
+ * **anything else** from this file: it is one pass over an array the panel
+ * already holds, where `buildGraph` builds a whole term index. A picture that
+ * does not use the graph should not have to build one to be measured in words.
+ * `strata`, the picture this was split out for, has since been cut.
  */
 export function wordsBefore(blocks: readonly Block[]): number[] {
   const out: number[] = [0];

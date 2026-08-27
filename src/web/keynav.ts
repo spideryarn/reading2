@@ -334,6 +334,24 @@ export function useArrowNav(
       // rungs long, so a held key would arrive at the end before you saw it move.
       if (e.repeat) return;
       if (isTyping(e.target)) return;
+      /**
+       * **Somebody nearer the keypress already dealt with it.**
+       *
+       * This listener is on `window`, in the bubble phase, so it sees every
+       * arrow press in the app — including the ones a focused widget has
+       * already handled. The diagram's picture is a `role="tree"` whose ↑ / ↓
+       * step one node *and take the article with them*; without this guard the
+       * same press then also ran the whole step below, and the reader got one
+       * press moving them one node and one section at once — two distances,
+       * one key, and neither of them wrong on its own.
+       *
+       * `defaultPrevented` rather than a list of elements to exclude, because
+       * the list is the thing that goes stale: a widget that grows arrow-key
+       * handling later has to remember to come back here, and nothing would
+       * fail if it did not. Calling `preventDefault()` is already what a
+       * handler does to say "this key was mine".
+       */
+      if (e.defaultPrevented) return;
 
       // ← / → change the stride rather than taking one: they move the aim
       // across the columns, which is what the pointer does when you slide it

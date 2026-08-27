@@ -692,27 +692,31 @@ export const rungParam = createParser<Rung>({
 /**
  * Which picture the Diagram mode is drawing.
  *
- * Three of them, and the toggle is not a skin — see src/web/diagram.ts for what
- * each one is honest about. Short version: `strata` is to scale and therefore
- * cannot always be legible; `tree` and `mindmap` are legible and therefore
- * cannot be to scale. That is a real choice a reader makes, so it belongs in
- * the URL like every other bit of view state (docs/project/url-state.md).
+ * Four of them, and the toggle is not a skin — see src/web/diagram.ts for what
+ * each one is honest about, and for why there were eight until 2026-08-27.
+ * Short version: `tree` is the outline, `force` is the relationships an outline
+ * cannot hold, and `drift` and `trail` are the article as paragraphs placed by
+ * meaning. That is a real choice a reader makes, so it belongs in the URL like
+ * every other bit of view state (docs/project/url-state.md).
  *
- * `strata` is the default because it is the one that says something the rest of
- * this app does not already say: how much of the article a section actually is.
+ * **`tree` is the default because it is the only one that is free.** The other
+ * three all spend a model call the moment they are drawn, and a default that
+ * bills the reader for opening a mode is not a default — it is a purchase
+ * nobody agreed to. (The old default, `strata`, was free too, and was cut.)
  *
  * `push`, like `?rung=` and `?cols=`. Switching picture is a deliberate act on
  * the view and Back should undo it — and unlike stepping between glossary terms,
  * you do not do it twice in ten seconds.
  *
- * An unknown value degrades to `strata` rather than throwing, the same rule as
- * every other parser in this file.
+ * **A cut picture's name degrades to `tree`** rather than throwing, the same
+ * rule as every other parser in this file — which is what stops a link somebody
+ * pasted in August, saying `?diagram=strata`, from opening a broken page.
  */
 export const diagramParam = createParser<DiagramKind>({
   parse: (v) => (DIAGRAMS.includes(v as DiagramKind) ? (v as DiagramKind) : null),
   serialize: (v) => v,
 })
-  .withDefault("strata")
+  .withDefault("tree")
   .withOptions({ history: "push" });
 
 /**
@@ -747,7 +751,7 @@ export const diagramAxisParam = createParser<ScatterAxis>({
 /**
  * What a dot's colour means on the two scatter pictures.
  *
- * `section` is the default and matches the other six pictures — the same eight
+ * `section` is the default and matches the other two pictures — the same eight
  * hues, meaning the same thing. `progress` is a sequential ramp from the start
  * of the article to the end, and it is the one that matters on **Trail**, whose
  * vertical axis is no longer position: without it nothing in that picture says

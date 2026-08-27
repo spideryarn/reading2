@@ -473,7 +473,7 @@ describe("what the force picture draws", () => {
     const { root, blocks } = twoParts();
     const opts = { width: 320, height: 600, collapsed: NONE };
     const graph = buildGraph(root, blocks);
-    for (const kind of ["strata", "tree", "mindmap", "arc", "force", "cluster"] as const) {
+    for (const kind of ["tree", "force"] as const) {
       for (const l of layoutDiagram(kind, root, opts, graph).links) {
         expect(l.kind, `${kind} link ${l.id}`).toBeTruthy();
       }

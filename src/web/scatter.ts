@@ -393,10 +393,11 @@ function excerpt(text: string, max = 180): string {
  * a shape rather than a line: a topic the article returns to is a second stack
  * of dots at the same horizontal position, a long way further down.
  *
- * ### Rows, not words, and that is not an inconsistency with `strata`
+ * ### Rows, not words
  *
- * `strata` is to scale in words because its bands are *areas* — a long section
- * is a tall band, which is the whole claim. A dot has no extent, so spacing
+ * The `strata` picture — cut on 2026-08-27 — was to scale in words, because its
+ * bands were *areas*: a long section was a tall band, which was the whole
+ * claim. A dot has no extent, so spacing
  * dots by words does not make anything to scale: it piles every dot in a dense
  * section on top of its neighbours and leaves white space where the article was
  * brisk. Rows space them evenly, which is what a scatter needs, and the dot's

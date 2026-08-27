@@ -4333,6 +4333,101 @@ td.text.has-hit[data-hues="8"] {
 .srch-icon-dead { cursor: default; }
 .srch-icon-dead:hover { background: none; color: var(--ink-faint); }
 
+/* ---------------------------------------------------------------------------
+   The colour picker — eight swatches and "Automatic", in a floating panel.
+   SearchPanel.tsx § ColourPicker says why there is no library behind it.
+
+   Portalled, so none of this is inside the 288px band: the panel is a sibling
+   of <body> and Floating UI places it. That is the reason a 4×2 grid fits at
+   all next to a row whose four controls already share about 5rem.
+
+   z-index below .tooltip-anchor's 100, and above the drawer's 95, for the same
+   reason the tooltip is where it is — it is about the row you just pressed, so
+   nothing may cover it. It is *below* the tooltip because a tooltip is a fact
+   and this is a control: if the two ever overlap, the fact should win.
+   --------------------------------------------------------------------------- */
+.srch-swatches {
+  z-index: 99;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.35rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  /* The tooltip's shadow, because it is the same kind of object: a small panel
+     lifted off the page near the thing it belongs to. */
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  font-family: var(--font-ui);
+}
+.srch-swatch-grid {
+  display: grid;
+  /* Four across, two down, for eight. Wider than tall because the panel sits
+     beside a row in a vertical list, and a tall one would cover the rows above
+     and below the one being recoloured. */
+  grid-template-columns: repeat(4, 1.35rem);
+  gap: 0.25rem;
+}
+.srch-swatch {
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  /* A hairline in the page's own ink rather than in the hue, so the two
+     darkest swatches still have an edge against the panel. `color-mix` in
+     **oklab**, the rule tokens.css carries at length: `--ink` is achromatic
+     with an explicitly-specified hue, and polar interpolation would drag the
+     result off towards a colour nobody asked for. */
+  border: 1px solid color-mix(in oklab, var(--ink) 18%, transparent);
+  border-radius: var(--radius);
+  /* The hue itself, from the custom property SearchPanel sets inline — which
+     holds `var(--cat-N-rgb)` and never a colour. Nothing in this stylesheet
+     knows what colour any of these are either. */
+  background: rgb(var(--cat-rgb));
+  cursor: pointer;
+}
+/* A ring outside the swatch rather than a tick inside it. A glyph on top of an
+   arbitrary hue is a contrast problem with eight different answers — white
+   reads on the blue and vanishes on the yellow — and the ring is drawn in the
+   page's own ink, on the page's own background, so it is the same legibility
+   on all eight. `box-shadow` rather than `outline` so the gap between the ring
+   and the swatch is the page showing through. */
+.srch-swatch.current {
+  box-shadow:
+    0 0 0 2px var(--surface-raised),
+    0 0 0 3px var(--ink);
+}
+.srch-swatch:hover { border-color: color-mix(in oklab, var(--ink) 55%, transparent); }
+.srch-swatch:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+/* The ninth choice, and the only one with words on it — "whichever colour it
+   would have had" cannot be drawn as a colour, because which colour that is
+   depends on the other searches. Full width under the grid so it reads as one
+   more item in the same list rather than as a reset button in a corner. */
+.srch-swatch-auto {
+  padding: 0.2rem 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: 0.72rem;
+  text-align: center;
+  cursor: pointer;
+}
+.srch-swatch-auto:hover {
+  background: color-mix(in oklab, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+.srch-swatch-auto.current { color: var(--ink); border-color: var(--rule-strong); }
+.srch-swatch-auto:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -1px;
+}
+
 /* "older version", on the meta line of a saved row whose article has moved.
    Same block as the passage count, so it reads as one more thing the row says
    about itself rather than as a control — there is nothing to press here, and
@@ -5458,6 +5553,102 @@ td.text.has-hit[data-hues="8"] {
   }
 }
 
+/* ------------------------------------------- the timer and the device -----
+   Both live in the strip, and both exist because of what the reader could not
+   tell apart without them. docs/plans/microphone-device-and-recording.md. */
+
+/* `m:ss`. Tabular figures so the row does not shuffle sideways every time the
+   seconds tick over — the one thing a timer must not do is draw attention to
+   itself once a second. */
+.prof-elapsed {
+  flex: none;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The microphone's own name, as the browser gives it. Shown only on the quiet
+   line: while sound is arriving the bars have already answered the question and
+   this is noise. It can be long ("Microsoft Teams Audio Device (Virtual)"), so
+   it is the one thing in the row allowed to shrink and clip. */
+.prof-mic-device {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--ink-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prof-mic-device::before { content: "· "; }
+
+.prof-mic-change {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--highlight-ink, var(--highlight));
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.prof-mic-change:hover { color: var(--highlight); }
+
+.prof-mic-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+.prof-mic-picker select {
+  min-width: 0;
+  max-width: 22rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.prof-mic-picker-note { color: var(--ink-faint); opacity: 0.75; }
+
+/* ------------------------------------------------- the kept recording -----
+   Shown only after a dictation that transcribed nothing. The button downloads
+   a file; it deliberately does not promise to open Finder, which no web page
+   can do. src/web/mic-recording.ts. */
+.prof-recording {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.prof-recording-what { min-width: 0; color: var(--ink-faint); }
+.prof-recording-save,
+.prof-recording-drop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  cursor: pointer;
+}
+.prof-recording-save:hover,
+.prof-recording-drop:hover {
+  border-color: var(--highlight);
+  color: var(--highlight-ink, var(--highlight));
+}
+.prof-recording-drop { padding: 0.15rem 0.25rem; }
+
 .prof-mic {
   display: inline-flex;
   align-items: center;
@@ -5656,6 +5847,68 @@ td.text.has-hit[data-hues="8"] {
   color: var(--highlight-ink);
 }
 
+/* The second paragraph of a kind's hover card — where it comes from and what it
+   costs, under what it shows. Quieter than the blurb above it, because it is
+   the footnote to a sentence rather than a second sentence. `.tip-soon p` sets
+   the shared shape; this only takes the colour down. */
+.tip-soon p.diag-tip-how { color: var(--ink-faint); }
+
+/* ---- the step bar ----
+ *
+ * ↑ / ↓ under the picture, big enough for a thumb. Greg asked for these for the
+ * iPad (2026-08-27), and the size is the whole feature: the picture's own hit
+ * targets are a 6px band or a 3px dot, which is fine for a mouse and is not a
+ * touch target at all. 44px is Apple's own minimum and WCAG 2.2's Target Size
+ * (Minimum) is 24 — this takes the larger, because the two buttons sit next to
+ * each other and the cost of missing is going somewhere you did not mean to.
+ *
+ * A grid of three rather than `space-between`, so the readout is centred on the
+ * panel rather than centred on whatever is left over — the two buttons are the
+ * same width today and a `space-between` layout would move the number the
+ * moment one of them was not.
+ *
+ * `border-top` and no `border-bottom`: the footer card under it already has
+ * one, and two rules 44px apart read as a boxed-off widget rather than as part
+ * of the panel. */
+.diag-step {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.diag-step-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  border-radius: calc(var(--radius) * 0.5);
+  background: var(--surface-raised);
+  color: var(--ink-faint);
+  cursor: pointer;
+  /* The buttons fill their thirds, which is what makes them the biggest thing
+     a finger can land on in this panel. */
+  width: 100%;
+}
+.diag-step-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--rule-strong); }
+.diag-step-btn:active:not(:disabled) { background: var(--panel); }
+/* **Disabled, not hidden.** At the two ends of the article one of these does
+   nothing, and a button that disappeared would move the other one under the
+   reader's thumb between presses. */
+.diag-step-btn:disabled { opacity: 0.3; cursor: default; }
+.diag-step-at {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  /* Tabular figures, or the number jitters sideways as it counts past 9 and 99
+     — which on a control the reader is holding down reads as the layout being
+     unstable rather than as a number changing. */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .diag-scroll {
   flex: 1;
   min-height: 0;
@@ -5741,24 +5994,12 @@ td.text.has-hit[data-hues="8"] {
    than as a base plus overrides — a base rule beaten by a longer selector is
    exactly how the tree's titles ended up painted at 10px after being budgeted
    for 12. */
-.diag-strata .diag-node.diag-d0 .diag-label { font-size: 11px; }
-.diag-strata .diag-node.diag-d1 .diag-label { font-size: 10px; }
-.diag-strata .diag-node.diag-d2 .diag-label { font-size: 11px; }
 .diag-tree .diag-node.diag-d0 .diag-label { font-size: 12px; }
 .diag-tree .diag-node.diag-d1 .diag-label { font-size: 12px; }
 .diag-tree .diag-node.diag-d2 .diag-label { font-size: 12px; }
-.diag-mindmap .diag-node.diag-d0 .diag-label { font-size: 12px; }
-.diag-mindmap .diag-node.diag-d1 .diag-label { font-size: 11.5px; }
-.diag-mindmap .diag-node.diag-d2 .diag-label { font-size: 10.5px; }
-.diag-arc .diag-node.diag-d0 .diag-label { font-size: 11px; }
-.diag-arc .diag-node.diag-d1 .diag-label { font-size: 11px; }
-.diag-arc .diag-node.diag-d2 .diag-label { font-size: 11px; }
 .diag-force .diag-node.diag-d0 .diag-label { font-size: 10px; }
 .diag-force .diag-node.diag-d1 .diag-label { font-size: 10px; }
 .diag-force .diag-node.diag-d2 .diag-label { font-size: 10px; }
-.diag-cluster .diag-node.diag-d0 .diag-label { font-size: 11px; }
-.diag-cluster .diag-node.diag-d1 .diag-label { font-size: 11px; }
-.diag-cluster .diag-node.diag-d2 .diag-label { font-size: 11px; }
 
 /* The gist, on the one picture that draws one. It is on the <tspan> rather than
    the <text>, so it beats the sizes above by being on the element itself —
@@ -5792,34 +6033,7 @@ td.text.has-hit[data-hues="8"] {
 .diag-tree .diag-link { stroke: rgb(var(--cat-rgb) / 0.4); }
 .diag-tree .diag-link.diag-d1 { stroke: rgb(var(--cat-rgb) / 0.55); }
 
-/* ---- mindmap ---- */
-
-/* The trunk is the one line in the picture that is not about a part, so it is
-   the one line that is neutral. Thicker than a stem, because everything hangs
-   off it and a spine that reads as just another branch is not a spine. */
-.diag-mindmap .diag-link.diag-d0 { stroke: var(--rule-strong); stroke-width: 2; }
-.diag-mindmap .diag-link.diag-d1 {
-  stroke: rgb(var(--cat-rgb) / 0.7);
-  stroke-width: 1.75;
-  stroke-linecap: round;
-}
-.diag-mindmap .diag-link.diag-d2 { stroke: rgb(var(--cat-rgb) / 0.35); }
-/* A twig has no box of its own — its dot and its label are the whole of it —
-   so the generic depth-2 fill is turned off here. **`:not(.here):not(.on)` is
-   load-bearing**: this selector is longer than `.diag-node.here .diag-box`, so
-   without the guard it also turns off the you-are-here ring and the focus ring,
-   and the deepest node the reader is standing in is the one node on the mindmap
-   with no mark at all. Found by GPT Sol, 2026-08-26. */
-.diag-mindmap .diag-node.diag-d2:not(.here):not(.on) .diag-box {
-  fill: transparent;
-  stroke: none;
-}
-.diag-mindmap .diag-node.diag-d2:hover .diag-box { fill: rgb(var(--cat-rgb) / 0.18); }
-.diag-mindmap .diag-node.diag-d2.here .diag-box,
-.diag-mindmap .diag-node.diag-d2.on .diag-box { fill: rgb(var(--cat-rgb) / 0.18); }
-.diag-mindmap .diag-node.diag-d1 .diag-label { fill: var(--ink); }
-
-/* ---- you are here, on strata ---- */
+/* ---- you are here ---- */
 
 line.diag-now {
   stroke: var(--highlight);
@@ -6308,22 +6522,7 @@ tr:hover .block-chat,
   border-top: 1px solid var(--rule);
 }
 
-/* ---- arc, force, cluster: the graph pictures ---- */
-
-/* An arc's stroke width IS its weight, quantised to three steps — the eye can
-   rank two arcs side by side without a legend, which a continuous width cannot
-   do at these sizes. `depth` on the link is carrying the weight bucket here
-   rather than a tree depth; see layoutArc. */
-.diag-arc .diag-link { stroke: rgb(var(--cat-0-rgb) / 0.28); fill: none; }
-.diag-arc .diag-link.diag-d1 { stroke: rgb(var(--cat-0-rgb) / 0.42); stroke-width: 1.4; }
-.diag-arc .diag-link.diag-d2 { stroke: rgb(var(--cat-0-rgb) / 0.6); stroke-width: 2; }
-/* The spine, which is not an arc and must not read as the strongest one. */
-.diag-arc .diag-link.diag-d0[id="arc-spine"],
-.diag-arc .diag-link#arc-spine { stroke: var(--rule-strong); stroke-width: 1.5; }
-.diag-arc .diag-node .diag-box { fill: transparent; stroke: none; }
-.diag-arc .diag-node:hover .diag-box,
-.diag-arc .diag-node.on .diag-box { fill: var(--surface-raised); }
-.diag-arc .diag-node.here .diag-box { fill: transparent; stroke: var(--highlight); stroke-width: 1.5; }
+/* ---- force: the graph picture ---- */
 
 /* Force: the link IS the relationship, and the five kinds are five different
  * claims. Rendering them as five shades of grey would be a texture rather than
@@ -6335,12 +6534,30 @@ tr:hover .block-chat,
  * apart. Even so, none of them relies on colour alone: the fact is thin and
  * solid, the arithmetic is medium and solid, the model's opinion is dotted.
  *
- * Ordered here by how much the edge knows — src/web/graph.ts § EdgeKind. */
+ * Ordered here by how much the edge knows — src/web/graph.ts § EdgeKind.
+ *
+ * ## Everything that is not the chain got quieter, 2026-08-27
+ *
+ * Greg: *"In Force, make the dotted links a bit fainter, and maybe also the
+ * other non-sequential links, so it's easier to see."*
+ *
+ * The picture had five kinds of line all competing at roughly the same
+ * loudness, and on a sixty-section article that is a mesh you look *at* rather
+ * than through. The reading-order chain is the one line that is a fact about
+ * the article rather than a claim about it, and it is what the reader is
+ * following, so it keeps its weight and everything else steps back from it.
+ *
+ * **The order is unchanged and that is the point.** The ladder in graph.ts §
+ * EdgeKind still holds: the author's own cross-reference is the brightest of
+ * the four quiet ones, the arithmetic is next, the model's opinion is faintest.
+ * What changed is the gap between the chain and the rest, not the ranking
+ * inside the rest — a fainter dotted line is still a dotted line, and it is
+ * still the only one drawn with a dash. */
 .diag-force .diag-link { fill: none; }
 
 /* Containment. Faintest of the five: it is the least surprising thing a
    diagram of a document can tell you, and the bubbles' positions say it too. */
-.diag-force .diag-link-parent { stroke: var(--rule); stroke-width: 0.75; opacity: 0.35; }
+.diag-force .diag-link-parent { stroke: var(--rule); stroke-width: 0.7; opacity: 0.22; }
 
 /* Reading order — the chain, with the arrowhead. Neutral rather than
    categorical, because it is the one line that belongs to no part in
@@ -6359,7 +6576,7 @@ tr:hover .block-chat,
 
 /* Shared distinctive words. Sky blue, medium — the measure the picture has
    always had, unchanged so a reader who knew this picture still recognises it. */
-.diag-force .diag-link-vocabulary { stroke: rgb(var(--cat-0-rgb) / 0.5); stroke-width: 1.4; }
+.diag-force .diag-link-vocabulary { stroke: rgb(var(--cat-0-rgb) / 0.3); stroke-width: 1.1; }
 
 /* Similar meaning, per the embedding model. **Dotted, and the dash is the
    honest part**: it is the only line here that costs money, the only one that
@@ -6368,8 +6585,8 @@ tr:hover .block-chat,
    what this is. Bluish green, so it never reads as a variant of the blue
    vocabulary edge it is there to be compared against. */
 .diag-force .diag-link-semantic {
-  stroke: rgb(var(--cat-2-rgb) / 0.7);
-  stroke-width: 1.2;
+  stroke: rgb(var(--cat-2-rgb) / 0.4);
+  stroke-width: 1.1;
   stroke-dasharray: 1 3.5;
   stroke-linecap: round;
 }
@@ -6382,7 +6599,7 @@ tr:hover .block-chat,
    Vermilion, the one hue in this trio that reads as a mark rather than as
    structure. */
 .diag-force .diag-link-anchor {
-  stroke: rgb(var(--cat-1-rgb) / 0.9);
+  stroke: rgb(var(--cat-1-rgb) / 0.72);
   stroke-width: 1.2;
 }
 .diag-force .diag-node .diag-box { stroke-width: 1; }
@@ -6404,17 +6621,18 @@ tr:hover .block-chat,
    the kind, repeating the picture's own colours so a row and the line it
    explains are recognisably the same thing. */
 .diag-card-links li { border-left: 2px solid transparent; padding-left: 0.4rem; }
+/* **Not the same alphas as the lines themselves**, and deliberately so. A line
+   in the picture is one of hundreds crossing each other, so it is drawn faint
+   enough to look through; a rule beside four rows of text is on its own, and at
+   0.3 on this ground it is not there at all. Both are the same hue at full
+   saturation, which is what makes a row and the line it explains recognisably
+   the same thing — the alpha is a fact about how crowded the surface is. */
 .diag-card-link-anchor { border-left-color: rgb(var(--cat-1-rgb) / 0.9); }
-.diag-card-link-vocabulary { border-left-color: rgb(var(--cat-0-rgb) / 0.5); }
+.diag-card-link-vocabulary { border-left-color: rgb(var(--cat-0-rgb) / 0.55); }
 .diag-card-link-semantic { border-left-color: rgb(var(--cat-2-rgb) / 0.7); }
 /* The author's own words, so they read as a quotation rather than as our copy. */
 .diag-card-link-anchor .diag-card-linkterms { font-style: italic; }
 
-.diag-cluster .diag-link { stroke: rgb(var(--cat-rgb) / 0.45); fill: none; }
-.diag-cluster .diag-node .diag-box { fill: transparent; stroke: none; }
-.diag-cluster .diag-node:hover .diag-box,
-.diag-cluster .diag-node.on .diag-box { fill: var(--surface-raised); }
-.diag-cluster .diag-node.here .diag-box { fill: transparent; stroke: var(--highlight); stroke-width: 1.5; }
 
 /* The modes segment, when the window is too narrow to spell them out.
  *

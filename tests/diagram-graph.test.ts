@@ -20,7 +20,6 @@ import { describe, expect, it } from "vitest";
 import type { Block, BlockId, NodeId, Tree } from "../src/types.js";
 import { buildGraph, terms, wordsBefore } from "../src/web/graph.js";
 import { layoutDiagram } from "../src/web/diagrams.js";
-import { hierarchyInput } from "../src/web/diagram-d3.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
 
 /**
@@ -351,25 +350,11 @@ describe("buildGraph", () => {
   });
 });
 
-describe("hierarchyInput", () => {
-  it("rebuilds the nesting from the containment edges alone", () => {
-    const { root, blocks } = article();
-    const h = hierarchyInput(buildGraph(root, blocks));
-    expect(h?.id).toBe("n1");
-    expect(h?.children?.map((c) => c.id)).toEqual(["n2", "n5"]);
-    expect(h?.children?.[0]?.children?.map((c) => c.id)).toEqual(["n3", "n4"]);
-    // A leaf has no `children` key at all, which is what d3-hierarchy wants —
-    // an empty array makes it an internal node with no children, and
-    // `cluster()` then spaces it as though it had some.
-    expect(h?.children?.[0]?.children?.[0]?.children).toBeUndefined();
-  });
-});
-
-describe("the D3 layouts", () => {
+describe("the Force layout", () => {
   const { root, blocks } = article();
   const graph = buildGraph(root, blocks);
 
-  for (const kind of ["arc", "force", "cluster"] as const) {
+  for (const kind of ["force"] as const) {
     it(`${kind} keeps every node and every label inside the band`, () => {
       for (const width of [288, 320, 400]) {
         const l = layoutDiagram(kind, root, { ...OPTS, width }, graph);
@@ -430,39 +415,6 @@ describe("the D3 layouts", () => {
       const cur = byDoc[i];
       if (!prev || !cur) continue;
       expect(mid(cur), `${cur.number} is drawn above ${prev.number}`).toBeGreaterThan(mid(prev) - 1);
-    }
-  });
-
-  it("cluster never draws two labels through each other", () => {
-    /* Found in a browser, not here — which is why it is here now. `cluster()`
-       puts a parent at the mean of its children, so a parent of three lands on
-       exactly the middle child's row, and in the transposed view that is two
-       labels at the same `y` drawn straight through one another. Nothing errors;
-       it just looks like garbled text.
-
-       Checked against the REAL example article, because the synthetic fixture
-       above has two children per part and would never produce the collision. */
-    const tree2 = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
-    const rawB = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
-    const blocks2 = (Array.isArray(rawB) ? rawB : (rawB as { blocks: Block[] }).blocks) as Block[];
-    const r2 = buildSummaryTree(tree2, blocks2, null);
-    expect(r2).not.toBeNull();
-    if (!r2) return;
-    const l = layoutDiagram("cluster", r2, OPTS, buildGraph(r2, blocks2));
-    const drawn = l.nodes.filter((n) => n.lines.length > 0);
-    for (const a of drawn) {
-      for (const b of drawn) {
-        if (a === b) continue;
-        // Two labels collide when their baselines are within a line of each
-        // other AND their text ranges overlap horizontally.
-        const sameLine = Math.abs(a.labelY - b.labelY) < 9;
-        const aEnd = a.labelX + (a.lines[0]?.length ?? 0) * 11 * 0.52;
-        const overlapX = a.labelX < b.labelX + 4 && aEnd > b.labelX;
-        expect(
-          sameLine && overlapX,
-          `"${a.lines[0]}" and "${b.lines[0]}" are drawn through each other`,
-        ).toBe(false);
-      }
     }
   });
 
@@ -530,30 +482,13 @@ describe("the D3 layouts", () => {
     ).toBeLessThan(unlinked);
   });
 
-  it("arc puts the sections on the spine in exact reading order", () => {
-    const nodes = layoutDiagram("arc", root, OPTS, graph).nodes;
-    for (let i = 1; i < nodes.length; i++) {
-      const prev = nodes[i - 1];
-      const cur = nodes[i];
-      if (!prev || !cur) continue;
-      expect(cur.y).toBeGreaterThan(prev.y);
-      expect(cur.startRow).toBeGreaterThanOrEqual(prev.startRow);
-    }
-  });
-
-  it("arc draws one arc per vocabulary edge, plus the spine", () => {
-    const l = layoutDiagram("arc", root, OPTS, graph);
-    const vocab = graph.edges.filter((e) => e.kind === "vocabulary").length;
-    expect(l.links.filter((x) => x.id === "arc-spine")).toHaveLength(1);
-    expect(l.links.filter((x) => x.id.startsWith("arc"))).toHaveLength(vocab + 1);
-  });
 });
 
 /**
  * The same, against the committed example article — 45 real nodes, real prose.
  * `data/` is not in git, so `example/` is the largest real thing a test can read.
  */
-describe("the graph pictures, against the real example article", () => {
+describe("the Force picture, against the real example article", () => {
   const tree = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
   const raw = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
   const blocks = (Array.isArray(raw) ? raw : (raw as { blocks: Block[] }).blocks) as Block[];
@@ -599,7 +534,7 @@ describe("the graph pictures, against the real example article", () => {
     }
   });
 
-  for (const kind of ["arc", "force", "cluster"] as const) {
+  for (const kind of ["force"] as const) {
     it(`${kind} stays inside the band on the real article`, () => {
       expect(root).not.toBeNull();
       if (!root) return;

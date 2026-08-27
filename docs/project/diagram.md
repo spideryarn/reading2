@@ -1,13 +1,13 @@
 # Diagram mode
 
-The article as a picture, in the middle band — eight of them, one toggle, and
+The article as a picture, in the middle band — four of them, one toggle, and
 the reader's position marked on every one.
 
 - **The geometry** — [`src/web/diagram.ts`](../../src/web/diagram.ts) for the
-  three tree pictures, [`diagram-d3.ts`](../../src/web/diagram-d3.ts) for the
-  three graph ones, [`scatter.ts`](../../src/web/scatter.ts) for the two made of
-  paragraphs, and [`diagrams.ts`](../../src/web/diagrams.ts) is the router that
-  knows about all three. Pure functions, no DOM, tested in
+  outline, [`diagram-d3.ts`](../../src/web/diagram-d3.ts) for the graph,
+  [`scatter.ts`](../../src/web/scatter.ts) for the two made of paragraphs, and
+  [`diagrams.ts`](../../src/web/diagrams.ts) is the router that knows about all
+  three. Pure functions, no DOM, tested in
   [`tests/diagram.test.ts`](../../tests/diagram.test.ts),
   [`diagram-graph.test.ts`](../../tests/diagram-graph.test.ts) and
   [`scatter.test.ts`](../../tests/scatter.test.ts).
@@ -18,7 +18,7 @@ the reader's position marked on every one.
 - **What the server computes for the last two** —
   [`src/projection.ts`](../../src/projection.ts) over
   [`src/article-vectors.ts`](../../src/article-vectors.ts).
-- **Why nothing was installed for the first three** —
+- **Why nothing was installed for the Tree** —
   [diagram-mode.md](../plans/diagram-mode.md), which has the whole library
   survey and the answers on Mermaid and on generated images. What changed when
   the data got richer is in [`diagram-d3.ts`](../../src/web/diagram-d3.ts).
@@ -37,39 +37,28 @@ It is a **mode**, in the sense [url-state.md](url-state.md) and
 and the prose, the article stays exactly where it was, and `?mode=diagram` says
 so. The fifth one, and it cost `MODES` one word.
 
-## The eight pictures
+## The four pictures
 
 ```
-      strata                tree                  mindmap
-   ┌──┬───────────┐   ┌───────────────┐    ┌───────────────┐
-   │▐ │▌ 1 Waking │   │ ● Being You   │    │      ◉        │
-   │▐ │▌   up     │   │ ├─● 1 Waking  │    │   ╭──┴──╮     │
-   │▐ ├───────────┤   │ │ └─● 1.1 The │    │ ┌─┴─┐   │     │
-   │▐ │▌ 1.1 The  │   │ │    body     │    │ │ 1 │   │     │
-   │▐ │▌   body   │   │ ├─● 2 The     │    │ └───┘   │     │
-   ├──┼───────────┤   │ │   hard      │    │     ╭───┴──╮  │
-   │▐ │▌ 2 The    │   │ └─● 3 Being   │    │     │  2   │  │
-   │▐ │▌   hard   │   └───────────────┘    │     ╰──────╯  │
-   └──┴───────────┘                        └───────────────┘
+        tree                  force              drift / trail
+   ┌───────────────┐   ┌───────────────┐    ┌───────────────┐
+   │ ● Being You   │   │    ◯───◯      │    │  ·   ·  ·     │
+   │ ├─● 1 Waking  │   │   ╱ ╲ ╱       │    │ ·  ·   ·  ·   │
+   │ │ └─● 1.1 The │   │  ◯───◯····◯   │    │   ·  ·        │
+   │ │    body     │   │   ╲   ╲       │    │  ·   ·  ·   · │
+   │ ├─● 2 The     │   │    ◯───◯      │    │ ·  ·      ·   │
+   │ └─● 3 Being   │   │               │    │   ·  ·  ·     │
+   └───────────────┘   └───────────────┘    └───────────────┘
 ```
-
-Eight of them, in three groups. The first three draw the **tree** and are
-hand-rolled; the middle three draw a **graph** and are driven by D3; the last
-two draw **one dot per paragraph**, placed by an embedding of what that
-paragraph is about.
 
 | | Vertical axis is | Honest about | Not honest about |
 |---|---|---|---|
-| **Strata** (default, `?diagram=strata`) | the article, linearly in **words** | how much of the piece a section *is* | names — a 6px band holds none |
-| **Tree** (`?diagram=tree`) | one row per node, sized to its own text | every name, and the nesting | size |
-| **Mindmap** (`?diagram=mindmap`) | parts down a centre trunk | shape, at a glance | size, and it stops at two levels |
-| **Arc** (`?diagram=arc`) | exact reading order, one row per section | *where* the piece returns to something | size; and it shows relatedness, not argument |
-| **Force** (`?diagram=force`) | reading order, **pinned** (`fy`) | *what* clusters with what, and now **five kinds of relationship** | exact position — it is a physics settlement |
-| **Cluster** (`?diagram=cluster`) | the dendrogram's even spread | the shape of the nesting | size, and where you are in the article |
+| **Tree** (default, `?diagram=tree`) | one row per node, sized to its own text | every name, and the nesting | size |
+| **Force** (`?diagram=force`) | reading order, **pinned** (`fy`) | *what* clusters with what, across **five kinds of relationship** | exact position — it is a physics settlement |
 | **Drift** (`?diagram=drift`) | the article, linearly in **rows** | *where* the piece returns to a subject | how far apart two subjects are — the sideways axis is a projection |
 | **Trail** (`?diagram=trail`) | **nothing** — it is the second component | whether the piece travels or circles | position, except through the chain and the colour |
 
-**Seven of the eight keep document order down the page.** That was the one
+**Three of the four keep document order down the page.** That was the one
 property nothing was allowed to give up, and it is what ruled out every mindmap
 and graph library in the survey: they spend width to show depth, and in a 288px
 band width is the axis we have not got.
@@ -82,79 +71,81 @@ is still in the picture, as a line you can follow rather than as a direction you
 can assume. Nothing else here gives the rule up, and nothing should without a
 reason of that size.
 
-### Why strata is the default
+### There were eight, and four were cut
 
-It is the only thing in this app that answers *"how much of the article is that
-section?"* The gist columns cannot — a section holding forty blocks and one
-holding three are identical L2 cells, which is the complaint
+Greg, 2026-08-27:
+
+> Remove Strata, Mindmap, Arc, Cluster.
+
+The four that went share one property: **each of them was a second way of
+drawing something another picture already draws.** Mindmap and Cluster were both
+the containment tree with different geometry — which is the comparison GPT Sol
+had already called for `tree` on the grounds that it was done and `tree` had
+won. Arc drew the vocabulary edges that Force draws, on a line rather than in a
+plane. Eight chips is also more than a 288px band can show without wrapping to
+two rows, and a toggle you have to read twice is not a toggle you press.
+
+**Strata is the real loss, and it is worth naming rather than tidying away.** It
+was the only picture here that was *to scale*: a band's height was how much of
+the article that section is, in words, and it was the only thing in this app
+that answered **"how much of the piece is that section?"** The gist columns
+cannot — a section holding forty blocks and one holding three are identical L2
+cells, which is the complaint
 [structure-panel.md](original-version/structure-panel.md) records against the
-previous version. Here one is thirteen times taller, and the whole shape of a
-piece — a long setup, three even middle parts, an abrupt end — is one glance.
+previous version.
 
-#### It is to scale in words, since 2026-08-27
+What answers that question now is weaker: the **spine** beside the band, which
+is sized from measured pixel heights and is better again at proportion but
+carries no names, and the **paragraph count** on a Tree row, which is a number
+rather than a shape. If the question comes back, `strata` is in the history of
+[`diagram.ts`](../../src/web/diagram.ts) and its arithmetic was tested.
 
-It used to count **blocks**, which is a weaker claim than "how much of the
-piece" — eight long paragraphs and eight one-line list items came out the same
-height, and a thousand-word code block was one row. GPT Sol flagged it in review
-and this doc recorded it as the obvious next change; building the graph
-(below) made it nearly free, because a `Block` was carrying its own word count
-all along.
+`DiagramOptions.wordsBefore` is still on the options object and still computed,
+which is deliberate: nothing reads it today, and it is the one seam that would
+let a future picture's vertical axis mean **words** rather than blocks. That
+distinction was GPT Sol's finding against the first round of `strata` — eight
+long paragraphs and eight one-line list items are the same number of blocks and
+very different amounts of article — and it cost a whole round to learn.
 
-The axis is now a prefix sum of words (`wordsBefore` in
-[`graph.ts`](../../src/web/graph.ts)), passed to `layoutStrata` as an option. It
-is still not what the **spine** measures — the spine is sized from rendered pixel
-heights, which is better again and costs a layout pass this panel has not got —
-so the two rails are close but not identical, and a search hit's position cannot
-simply be copied from one to the other.
+**A cut picture's name in a URL opens the Tree** rather than an error, which is
+the same "degrade to something real" rule every parser in
+[`params.ts`](../../src/web/params.ts) follows, and the one place here that has
+an actual pasted link behind it. Pinned in `tests/url-state.test.ts`.
 
-What is left of the old caveat: a section of nothing but images legitimately has
-zero words, where it could never have had zero blocks. `layoutStrata` floors
-every extent at 1 so that such a section is a thin band rather than a division by
-zero.
+### Why the Tree is the default
 
-#### The old caveat, kept for the record
+**It is the only one that is free.** Stage 4 already wrote a gist onto every
+internal node and the block ranges already give the sizes, so the Tree needs no
+artefact, no job and no model call — the band fetches nothing at all until you
+press something else. The other three all spend a model call the moment they are
+drawn: Force buys the dotted lines from `useSimilar`, and Drift and Trail buy the
+projection from `useProjection`.
 
-Worth being exact about, because "to scale" invites the stronger reading. A block
-is whatever stage 3 split out ([architecture.md](architecture.md)) — a paragraph,
-a heading, a list item, a figure, a code block. So:
+That is the whole argument. **A default that bills the reader for opening a mode
+is not a default, it is a purchase nobody agreed to** — and it is why the hover
+card on each chip says where the picture comes from as well as what it shows.
 
-- eight long paragraphs and eight one-line list items are the same height;
-- a thousand-word code block is one row;
-- a section that is mostly headings looks longer than it reads.
+### Each chip says what it is, and what it costs
 
-It is the same unit the summary panel's `18¶` badge already counts, so the two
-agree with each other. It is **not** the unit the spine uses: the spine is sized
-from *measured pixel heights* (`Spine.tsx`), which is the better answer and costs
-a layout pass this panel has not got. Weighting each block by its text length
-would close most of the gap without measuring anything, and is the obvious next
-change — noted below rather than done, because it needs a weight per block
-threading through [`buildSummaryTree`](../../src/web/tree.ts), which several
-other panels share.
+Greg, 2026-08-27:
 
-Flagged by GPT Sol in review, 2026-08-26; the previous wording here promised
-paragraphs and delivered blocks.
+> add tooltips when hovering over each Diagram button to explain how it works
 
-It is also the picture that **costs nothing**. Stage 4 already wrote a gist onto
-every internal node and the block ranges already give the sizes, so unlike chat,
-glossary, search and summary there is no artefact to wait for, no job to run and
-no model call to pay for. The band fetches nothing at all. See `DiagramBand` in
-[`App.tsx`](../../src/web/App.tsx).
+A real hover card ([`Tooltip.tsx`](../../src/web/Tooltip.tsx), Floating UI),
+not the `title` attribute the chips had before. Two paragraphs: **what the
+picture shows**, then **where it comes from and what it costs**. `TooltipGroup`
+makes the neighbours open instantly once one is open, so reading along the row
+is one gesture rather than four separate waits — the same shape `Dock.tsx`'s
+mode switcher uses.
 
-### Why "mindmap" is not really a mindmap
+The `title` attribute was not a smaller version of this. It waits about a
+second, cannot be styled, truncates at the OS's own idea of a line, and does not
+exist at all on a touch device — for a sentence whose job is to explain what a
+picture *is*, that is close to not being there.
 
-A published mindmap grows sideways from a root. This one is a **herringbone**: a
-trunk down the middle, parts alternating left and right in reading order,
-sections stacked under their part. It keeps the mindmap's look — a spine, curved
-stems, rounded pills — and throws away its axis. Calling it Mindmap in the toggle
-is a concession to what a reader will be looking for.
+## The graph Force is drawn from
 
-Sides alternate by part index rather than by which side has room, because a
-picture that rearranges itself when you close a section is a picture you have to
-read again.
-
-## The graph the middle three are drawn from
-
-`arc`, `force` and `cluster` need more than the tree, and
+Force needs more than the tree, and
 [`graph.ts`](../../src/web/graph.ts) builds it. **Five kinds of edge, and they
 are not five versions of one claim.** They form a ladder, ordered by how much
 each one actually knows — which is why the stylesheet gives each its own weight
@@ -309,6 +300,33 @@ money, the only one that can be confidently wrong, and the only one whose
 reasoning nobody can read. A dotted line is the drawing convention for
 *inferred*, which is exactly what it is.
 
+#### Everything that is not the chain got quieter, 2026-08-27
+
+> In Force, make the dotted links a bit fainter, and maybe also the other
+> non-sequential links, so it's easier to see.
+>
+> — Greg, 2026-08-27
+
+Five kinds of line all competing at about the same loudness is a mesh you look
+*at* rather than through. The reading-order chain is the one line that is a fact
+about the article rather than a claim about it, and it is what the reader is
+following — so it keeps its weight and everything else steps back from it:
+containment 0.35 → 0.22, vocabulary 0.5 → 0.3, semantic 0.7 → 0.4, anchor 0.9 →
+0.72.
+
+**The ladder is unchanged and that is the point.** The order below still holds:
+the author's own cross-reference is the brightest of the four quiet ones, the
+arithmetic is next, the model's opinion is faintest. What moved is the gap
+between the chain and the rest, not the ranking inside the rest — a fainter
+dotted line is still dotted, and it is still the only one drawn with a dash.
+
+The **footer card's** left rules did not move with them, deliberately. A line in
+the picture is one of hundreds crossing each other and is drawn faint enough to
+look through; a rule beside four rows of text is on its own, and at 0.3 on this
+ground it is not there at all. Same hue at full saturation in both places — the
+alpha is a fact about how crowded the surface is, not about what the line
+claims.
+
 #### The scale trap, which is invisible on screen
 
 A tf-idf cosine between two sections of one article runs about 0.12–0.5. An
@@ -398,9 +416,10 @@ that takes 300ms and cannot be wrong about which build it was looking at.
 - **Click anything** → the article jumps there, through the same `onJump` a gist
   cell, a spine segment and an arrow key use.
 - **Keyboard** → the picture is one tab stop, not one per node, and the arrows
-  move inside it: ↑ / ↓ step through the drawn order, Home / End jump to the
-  ends, Enter jumps the article. **←** closes an open node and otherwise goes to
-  its parent; **→** opens a closed one and otherwise steps into its first child.
+  move inside it: ↑ / ↓ step through the drawn order **and take the article with
+  them**, Home / End jump to the ends, Enter jumps the article. **←** closes an
+  open node and otherwise goes to its parent; **→** opens a closed one and
+  otherwise steps into its first child.
   That is the [W3C tree-view pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/),
   and it is written out rather than inherited because SVG has no `ul` and no
   `button` — which is also why each node carries `aria-level`, `aria-setsize` and
@@ -410,13 +429,71 @@ that takes 300ms and cannot be wrong about which build it was looking at.
   (A tab stop per node was the first version. On a forty-section article that is
   forty presses of Tab to get past the panel, and a role describing a widget the
   code had not implemented. GPT Sol's finding, 2026-08-26.)
+- **↑ / ↓ as buttons**, under the picture, 44px tall — see
+  [§ the step bar](#the-step-bar-and-the-key-that-was-firing-twice) below.
 - **The chevron on a tree row** toggles; the row itself jumps. Two gestures at
   nearly the same pixel, which is why they are two targets — the file-tree
   convention, and it matters more here because the shapes are small.
-- **Where you are** is a ring on the deepest node you are inside, and on strata
+- **Where you are** is a ring on the deepest node you are inside, and on Drift
   also a dashed line drawn across at your exact row. The ring is orange rather
   than a fill change, because the fill already means *which part* and a position
   marker must not change colour as you read.
+
+### The step bar, and the key that was firing twice
+
+Greg, 2026-08-27:
+
+> For each Diagram, make sure the up/down buttons work, so that we can use the
+> keyboard to move up/down blocks in the text and also follow the progression in
+> the diagram. And add big up/down buttons for touch devices (e.g. iPad).
+
+Three things, and the first was a bug.
+
+**↑ and ↓ were firing twice.** The picture's own key handler stepped the roving
+tabstop one node; the window-level handler in
+[`keynav.ts`](../../src/web/keynav.ts) *also* saw the same press and stepped the
+article one section. One key, two distances, neither of them wrong on its own —
+and the visible symptom is a picture whose highlight and whose article disagree
+about how far you just moved. `keynav` now bails on `e.defaultPrevented`, which
+is the general fix: **calling `preventDefault()` is already how a handler says
+"this key was mine"**, and a list of elements to exclude is the version that
+goes stale the next time some widget grows arrow keys.
+
+**The arrows now follow.** ↑ / ↓ inside the picture move the tabstop *and* jump
+the article, which is not what the tree-view pattern says. The pattern's answer
+— arrows move focus, Enter activates — is right for a file tree, where
+activating opens something you cannot undo. Here activating means *scrolling*,
+the cheapest and most reversible thing this app does, so following focus costs
+nothing and turns the picture into something you read the article **with**. It
+is the documented follow-focus variant, and it is what the gist columns beside
+this panel already do. ← and → do not follow on the Tree, where they mean open
+and close: folding a part away is a statement about the picture, and should not
+move the reader out of the paragraph they are in.
+
+**And a pair of real buttons**, because an iPad has no arrow keys and this
+panel's own hit targets are a 6px band or a 3px dot. 44px tall — Apple's own
+minimum, where WCAG 2.2's Target Size (Minimum) is 24 — because the two sit next
+to each other and the cost of missing is going somewhere you did not mean to.
+Under the picture rather than over it, for the same reason the whole footer card
+is there.
+
+**They step by distinct start row, not by node**, and that is the one piece of
+design in them. `layout.nodes` is in preorder, so on a Tree the root, part 1 and
+section 1.1 all begin on the same row — stepping by node would press ↓ three
+times and move the article nowhere, which reads as a broken button. Rows make
+one press always one visible move, and they make the *unit* come out right by
+itself: sections on Tree and Force, single paragraphs on Drift and Trail,
+because those are the rows those pictures draw. The readout between the buttons
+(`12 / 47`) is what says which. The step rule itself is `stepTarget` from
+`keynav.ts` rather than a second copy, so ↑ here means what ↑ means everywhere:
+part-way into an item it goes to the top of the item you are in before it steps
+back, which is the track-skip rule from every music player.
+
+**The picture scrolls to keep up.** `.diag-scroll` nudges the marked node into
+view when it goes out of it — keyed on the target rather than on scroll events,
+so it never has to ask whether a scroll was ours or the reader's, and suppressed
+entirely while the pointer is in the picture, because a band you are comparing
+against its neighbour must not slide out from under you.
 
 ### The footer card, rather than a floating tooltip
 
@@ -734,26 +811,6 @@ each of those, which is a browser question rather than an arithmetic one.
 - **No cross-reference arcs, yet.** The article's own internal links
   ([`internal-links.ts`](../../src/web/internal-links.ts)) would make this a real
   graph rather than a tree. The most interesting thing left, and a second feature.
-- **Cluster may not survive either, and `d3-hierarchy` goes with it.** GPT Sol's
-  round-two verdict: *"Cut Cluster and d3-hierarchy. It adds no richer
-  relationship and is less content-legible than the existing Tree. 'Comparison'
-  is not enough reason for a permanent sixth toggle."* That is probably right —
-  it draws the containment tree the hand-rolled `tree` already draws, discards
-  the vocabulary edges entirely, and needed a 12px label offset to stop
-  `cluster()` drawing parents through their own middle child. It is kept for now
-  because this round was asked to try several things, and trying includes finding
-  out. `d3-shape` goes too if it goes: one cubic connector is not a dependency.
-- **Mindmap may not survive.** Two independent reviews — GPT Sol, and a browser
-  pass looking at all three side by side — picked it as the weakest and as the
-  one to cut if one had to go: legible, but busier than the other two, lopsided
-  when an article has few parts, and the first to truncate its labels at 288px.
-  It is here because Greg asked for a mindmap by name, and because this is the
-  round that finds out which ideas earn their place. The honest replacement for
-  the third slot is the arcs below, which would put a real *graph* there rather
-  than a third tree.
-- **No block weighting.** Strata counts blocks, not words — see above. Giving
-  each block a weight would make the picture honest about length rather than
-  about count, and is the most valuable small change left here.
 - **No UMAP, and no t-SNE.** They would separate the clusters far more prettily
   and they were rejected on a *claim* rather than on a cost: their distances do
   not mean anything. The gaps in a UMAP plot are an artefact of its own
@@ -762,8 +819,8 @@ each of those, which is a browser question rather than an arithmetic one.
   one-directional and the strip says which direction. Also: a dependency, and
   reproducible only with a seeded generator.
 - **No cluster-count control**, and no way to ask for a different `k`. It is
-  derived and capped, and a slider would be a fourth control in a band that now
-  has three.
+  derived and capped, and a slider would be a fourth control in a band that
+  already has three.
 - **No lane names inside the picture.** They are in a legend above it and in each
   chip's hover. Three words down a 33px lane would truncate to nothing; rotating
   them costs vertical room the picture is using. Open question for Greg.
@@ -774,10 +831,12 @@ each of those, which is a browser question rather than an arithmetic one.
   lands, [`src/article-vectors.ts`](../../src/article-vectors.ts) is the one file
   that changes.
 - **No search hits on the picture.** The spine paints them
-  ([search.md](search.md)) and strata is the same kind of rail, so most of that
-  work is done. Note the two axes are *not* identical — the spine measures
-  rendered pixels and strata counts blocks — so hit positions would have to be
-  recomputed rather than copied.
+  ([search.md](search.md)); Drift is the one picture left whose vertical axis is
+  the article, so it is the one that could. Note the two axes are *not*
+  identical — the spine measures rendered pixels and Drift counts rows — so hit
+  positions would have to be recomputed rather than copied.
+- **Nothing here is to scale any more.** See
+  [§ There were eight](#there-were-eight-and-four-were-cut). The spine still is.
 - **Collapse state is not in the URL.** Everything else about the view is
   ([url-state.md](url-state.md)), and this is the exception: node ids are
   positional and a re-run of `npm run toc` renumbers them

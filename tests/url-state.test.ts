@@ -484,13 +484,23 @@ describe("runsParam and the legacy run= it replaced", () => {
  * every other parser in params.ts makes, and worth pinning for the two newest.
  */
 describe("the diagram parameters", () => {
-  it("takes any of the eight pictures and falls back to strata", () => {
-    expect(diagramParam.parse("trail")).toBe("trail");
+  it("takes any of the four pictures and falls back to the free one", () => {
+    expect(diagramParam.parse("tree")).toBe("tree");
+    expect(diagramParam.parse("force")).toBe("force");
     expect(diagramParam.parse("drift")).toBe("drift");
-    expect(diagramParam.parse("strata")).toBe("strata");
+    expect(diagramParam.parse("trail")).toBe("trail");
     // A picture from a version this build has never heard of.
     expect(diagramParam.parse("hyperbolic")).toBeNull();
-    expect(diagramParam.defaultValue).toBe("strata");
+    /* **And one this build used to have.** Strata, Mindmap, Arc and Cluster
+       were cut on 2026-08-27, and a `?diagram=strata` in somebody's bookmark
+       has to open the Tree rather than a broken page — which is the same rule
+       as the line above, and the one that has an actual link behind it. */
+    expect(diagramParam.parse("strata")).toBeNull();
+    expect(diagramParam.parse("mindmap")).toBeNull();
+    /* `tree` because it is the only picture that costs nothing: the other three
+       all spend a model call the moment they are drawn, and a URL somebody
+       mistyped should not bill them. */
+    expect(diagramParam.defaultValue).toBe("tree");
   });
 
   it("defaults sideways to lanes, and refuses anything it cannot draw", () => {
@@ -503,7 +513,7 @@ describe("the diagram parameters", () => {
 
   it("defaults colour to the section hues the other pictures use", () => {
     /* `section` rather than `progress`, so that a reader who has learnt what
-       green means on the other six pictures does not have to learn a second
+       green means on the other two pictures does not have to learn a second
        thing on these two. Trail is the picture that wants `progress`, and
        asking for it is one press. */
     expect(diagramHueParam.parse("section")).toBe("section");

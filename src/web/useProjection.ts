@@ -20,7 +20,7 @@
  *
  * **It never blocks the picture.** Unlike Force — which is four fifths drawn
  * without any of this — Drift and Trail have *nothing* to draw without it, so
- * they fall back to `strata` until the answer lands (see `layoutDiagram`) and
+ * they fall back to `tree` until the answer lands (see `layoutDiagram`) and
  * the strip beside the picture says what is happening. A picture of something
  * real with a line of explanation beats a spinner over an empty box.
  *

@@ -1,5 +1,5 @@
 /**
- * **The three D3-driven pictures**, and what installing D3 actually bought.
+ * **The Force picture**, and what installing D3 actually bought.
  *
  * Greg, 2026-08-27: *"Ok, let's also try some D3 ones. Try a bunch, e.g.
  * force-weighted graphs, creating a richer data structure to lay things out."*
@@ -16,9 +16,12 @@
  * approximation is a real algorithm, `d3-force` is a good implementation of it,
  * and re-deriving it here would be the actual mistake.
  *
- * So: `d3-force` earns its place outright, `d3-hierarchy` is here to be
- * *compared against* the hand-rolled tree rather than to replace it, and
- * `d3-shape` draws one class of path.
+ * So: `d3-force` earns its place outright. `d3-hierarchy` and `d3-shape` were
+ * also installed, for the Arc and Cluster pictures — **both of which were cut
+ * on 2026-08-27, and both packages went with them.** The verdict on
+ * `d3-hierarchy` therefore ends where the first round left it: it was here to
+ * be *compared against* the hand-rolled tree, the comparison was run, and the
+ * hand-rolled tree won.
  *
  * ## Determinism, which a force layout does not have for free
  *
@@ -76,9 +79,6 @@ import {
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from "d3-force";
-import { cluster as d3cluster, hierarchy as d3hierarchy } from "d3-hierarchy";
-import { linkHorizontal } from "d3-shape";
-import type { NodeId } from "../types.js";
 import {
   charsThatFit,
   type DiagramLayout,
@@ -187,7 +187,9 @@ export function layoutForce(graph: ArticleGraph, opts: DiagramOptions): DiagramL
      later section above an earlier one — because `forceY` cannot hold an order
      it has no room to hold, and `forceCollide` wins when the rows it is given
      are thinner than the circles. Giving each node a minimum vertical share
-     makes the picture scroll instead, which is the same bargain `strata` makes.
+     makes the picture scroll instead, which is the bargain every picture in
+     this band eventually makes: a map you scroll is worse than one you do not,
+     and a map with unclickable parts is broken.
      Sol confirmed 5 and 60 leaves were geometrically fine; this is about
      density, not about the forces. */
   const height = Math.max(opts.height, 420, drawn.length * MIN_ROW_FOR_FORCE);
@@ -297,7 +299,7 @@ export function layoutForce(graph: ArticleGraph, opts: DiagramOptions): DiagramL
       /* Only the number goes inside the bubble. A title would need a bubble the
          width of a title, and then the picture is a stack of boxes rather than a
          graph — the full name is a hover away in the footer card, which is the
-         same bargain `strata`'s thin bands make. */
+         same bargain every small target in this band makes. */
       lines: r >= 9 ? wrapText(s.n.number, charsThatFit(r * 1.9, LABEL_PX.force?.[s.n.depth] ?? 10), 1) : [],
       titleLines: 1,
       hasChildren: false,
@@ -460,237 +462,4 @@ export function arrowPath(a: Sim, b: Sim): string {
   const ux = dx / dist;
   const uy = dy / dist;
   return `M ${ax + ux * trimA} ${ay + uy * trimA} L ${bx - ux * trimB} ${by - uy * trimB}`;
-}
-
-/**
- * **Arc** — every section on one vertical spine in exact reading order, with the
- * vocabulary edges drawn as arcs bulging out to the right.
- *
- * The classic arc diagram, and it is the one graph form that *wants* to be
- * narrow and tall: the nodes need one axis and the edges use the other. Nothing
- * moves, nothing is approximated, and unlike `force` the vertical axis is exact
- * rather than merely strongly preferred — so this is the picture to read when
- * the question is *where* the article doubles back on itself, and `force` is the
- * one to read when the question is *what clusters with what*.
- *
- * A long arc between two distant sections is the interesting mark: the article
- * returned to something it had left behind.
- */
-export function layoutArc(graph: ArticleGraph, opts: DiagramOptions): DiagramLayout {
-  const spine = 20;
-  const drawn = graph.nodes.filter((n) => n.depth > 0);
-  const rowH = 19;
-  const height = Math.max(opts.height, drawn.length * rowH + 24);
-  const top = 14;
-
-  const y = new Map<NodeId, number>();
-  drawn.forEach((n, i) => {
-    y.set(n.id, top + i * rowH);
-  });
-
-  const maxWords = Math.max(1, ...drawn.map((n) => n.words));
-  const labelX = spine + 12;
-  const avail = opts.width - labelX - 30;
-
-  const nodes: DiagramNode[] = drawn.map((n) => {
-    const cy = y.get(n.id) ?? top;
-    const r = 2.5 + Math.sqrt(n.words / maxWords) * 4;
-    return {
-      id: n.id,
-      blockId: n.blockId,
-      depth: n.depth,
-      number: n.number,
-      title: n.title,
-      ...(n.gist !== undefined && { gist: n.gist }),
-      blocks: n.blocks,
-      startRow: n.startRow,
-      endRow: n.endRow,
-      part: n.part,
-      // The row is the hit target, from the spine to the right edge.
-      x: 0,
-      y: cy - rowH / 2,
-      w: opts.width,
-      h: rowH,
-      labelX,
-      labelY: cy + 3.5,
-      anchor: "start",
-      lines: wrapText(
-        n.number ? `${n.number}  ${n.title}` : n.title,
-        charsThatFit(avail, LABEL_PX.arc?.[n.depth] ?? 11),
-        1,
-      ),
-      titleLines: 1,
-      hasChildren: false,
-      collapsed: false,
-      dot: { x: spine, y: cy, r },
-    };
-  });
-
-  const links: DiagramLink[] = [];
-  // The spine itself, so the column of dots reads as a sequence rather than as
-  // a coincidence. First, so everything else draws over it.
-  if (drawn.length > 1) {
-    const first = y.get(drawn[0]?.id ?? ("" as NodeId)) ?? top;
-    const last = y.get(drawn[drawn.length - 1]?.id ?? ("" as NodeId)) ?? top;
-    /* `sequence`, honestly: the spine IS the reading order, drawn as one line
-       instead of as a chain of arrows because on Arc every node is already on
-       it. */
-    links.push({ id: "arc-spine", d: `M ${spine} ${first} V ${last}`, part: -1, depth: 0, kind: "sequence" });
-  }
-  for (const [i, e] of graph.edges.filter((e) => e.kind === "vocabulary").entries()) {
-    const a = y.get(e.source);
-    const b = y.get(e.target);
-    if (a === undefined || b === undefined) continue;
-    /* The bulge is proportional to the gap, capped at the room available — an
-       arc between neighbours should be a small hop and one across the whole
-       article should be a big sweep, because that difference IS the finding.
-       Capping stops the longest arc leaving the band. */
-    const bulge = Math.min(spine - 4 + (opts.width - spine) * 0.42, Math.abs(b - a) * 0.34 + 6);
-    links.push({
-      id: `arc${i}-${e.source}-${e.target}`,
-      d: `M ${spine} ${a} C ${spine + bulge} ${a} ${spine + bulge} ${b} ${spine} ${b}`,
-      part: -1,
-      // Weight, quantised into the three stroke widths the stylesheet has, so
-      // the eye can rank an arc without a legend. See `DiagramLink.depth` —
-      // this picture's use of that field is a band, not a depth.
-      depth: e.weight > 0.45 ? 2 : e.weight > 0.25 ? 1 : 0,
-      kind: "vocabulary",
-    });
-  }
-
-  return { width: opts.width, height, nodes, links, axis: null, nowY: null };
-}
-
-/**
- * **Cluster** — `d3-hierarchy.cluster()`, the real tidy dendrogram, transposed
- * so it grows down the page instead of across it.
- *
- * This is here to be **compared against** the hand-rolled `tree`, not to replace
- * it, and the comparison is the point of building it. `cluster()` puts every
- * leaf at the same depth and spaces them evenly, which is what makes a dendrogram
- * look like a dendrogram; our `tree` gives every row the height its own text
- * needs and lets depth fall where it may. The first is a better picture of the
- * *shape*; the second is a better picture of the *content*.
- *
- * The transpose is the whole trick, and it is the trap from the first round
- * turned inside out: `cluster().size([height, width])` lays out with the *first*
- * axis as the sibling spread and the second as depth, so reading the result as
- * `(y, x)` rather than `(x, y)` gives siblings down the page and depth across —
- * which is the only orientation that fits a 288px band. Left as d3 hands it
- * over, this is the wide left-to-right dendrogram Luna warned about.
- */
-export function layoutCluster(graph: ArticleGraph, root: HierarchyInput, opts: DiagramOptions): DiagramLayout {
-  const drawn = graph.nodes.filter((n) => n.depth > 0);
-  const rowH = 20;
-  const height = Math.max(opts.height, drawn.length * rowH + 30);
-  const pad = 12;
-  const depthSpan = Math.min(70, opts.width * 0.24);
-
-  const h = d3hierarchy(root);
-  // size([spread, depth]) — see the doc comment: the axes come back swapped.
-  d3cluster<HierarchyInput>().size([height - pad * 2, depthSpan]).separation(() => 1)(h);
-
-  const link = linkHorizontal<unknown, { x: number; y: number }>()
-    .x((d) => d.y)
-    .y((d) => d.x);
-
-  const nodes: DiagramNode[] = [];
-  const links: DiagramLink[] = [];
-
-  for (const d of h.descendants()) {
-    const g = graph.byId.get(d.data.id);
-    if (!g) continue;
-    // `d.x` is the sibling spread and `d.y` is the depth — the swap, applied.
-    const cy = pad + (d.x ?? 0);
-    const cx = pad + (d.y ?? 0);
-    if (d.parent) {
-      const py = pad + (d.parent.x ?? 0);
-      const px = pad + (d.parent.y ?? 0);
-      links.push({
-        id: `c-${d.parent.data.id}-${d.data.id}`,
-        d:
-          link({ source: { x: py, y: px }, target: { x: cy, y: cx } } as never) ??
-          `M ${px} ${py} L ${cx} ${cy}`,
-        part: g.part,
-        depth: g.depth,
-        kind: "parent",
-      });
-    }
-    /* **An internal node's label sits above its dot, a leaf's sits on it.**
-       `cluster()` places a parent at the mean of its children's positions, so a
-       parent of three children lands on *exactly* the middle child's row — and
-       in this transposed view that means two labels at the same `y`, one
-       indented and one not, drawn straight through each other. Found in a
-       browser: the root's label collided with "2.1 Intelligence is about doing",
-       and "1 Why the question matters" with "1.2 When, not if".
-
-       This is not a bug in `cluster()`. A dendrogram labels its *leaves*; the
-       whole layout is designed around spacing those evenly and letting parents
-       fall between. Labelling every node is our requirement, so the offset is
-       ours to add. Leaves are the fixed skeleton, so the parents are what move.
-
-       Leaf spacing is around 50px on a real article, so a 12px lift clears the
-       row comfortably and still reads as belonging to its own dot. */
-    const internal = (d.children?.length ?? 0) > 0;
-    const lift = internal ? 12 : 0;
-    const textX = cx + 8;
-    nodes.push({
-      id: g.id,
-      blockId: g.blockId,
-      depth: g.depth,
-      number: g.number,
-      title: g.title,
-      ...(g.gist !== undefined && { gist: g.gist }),
-      blocks: g.blocks,
-      startRow: g.startRow,
-      endRow: g.endRow,
-      part: g.part,
-      x: cx - 4,
-      y: cy - lift - rowH / 2,
-      w: opts.width - cx + 4,
-      h: rowH,
-      labelX: textX,
-      labelY: cy - lift + 3.5,
-      anchor: "start",
-      lines: wrapText(
-        g.number ? `${g.number}  ${g.title}` : g.title,
-        charsThatFit(opts.width - textX - 6, LABEL_PX.cluster?.[g.depth] ?? 11),
-        1,
-      ),
-      titleLines: 1,
-      /* **Read from the graph, not from what happens to be drawn.** These were
-         `d.children.length > 0` and a hardcoded `false`, and the hierarchy is
-         built from the graph — which already had the closed node's children
-         removed. So closing a node made it look childless, its chevron and its
-         `aria-expanded` vanished, and Arrow-Right had nothing left to reopen.
-         A one-way control. GPT Sol's finding, 2026-08-27. */
-      hasChildren: (d.children?.length ?? 0) > 0 || opts.collapsed.has(g.id),
-      collapsed: opts.collapsed.has(g.id),
-      dot: { x: cx, y: cy, r: 3 },
-    });
-  }
-
-  return { width: opts.width, height, nodes, links, axis: null, nowY: null };
-}
-
-/** What `d3-hierarchy` is handed: ids and children, nothing else. */
-export interface HierarchyInput {
-  id: NodeId;
-  children?: HierarchyInput[];
-}
-
-/** The graph's containment edges, as the nested shape d3-hierarchy wants. */
-export function hierarchyInput(graph: ArticleGraph): HierarchyInput | null {
-  const kids = new Map<NodeId, NodeId[]>();
-  for (const e of graph.edges) {
-    if (e.kind !== "parent") continue;
-    kids.set(e.source, [...(kids.get(e.source) ?? []), e.target]);
-  }
-  const rootNode = graph.nodes.find((n) => n.depth === 0) ?? graph.nodes[0];
-  if (!rootNode) return null;
-  const build = (id: NodeId): HierarchyInput => {
-    const cs = kids.get(id);
-    return cs && cs.length > 0 ? { id, children: cs.map(build) } : { id };
-  };
-  return build(rootNode.id);
 }

@@ -147,7 +147,7 @@ Two places say it, because either one alone has a hole:
 An experiment whose behaviour you cannot predict before you commit to it isn't testable by the person
 running it.
 
-## Four rules, each with a reason
+## Five rules, each with a reason
 
 ### ↑ is not the mirror of ↓
 
@@ -167,6 +167,21 @@ you never saw. `event.repeat` is dropped. Press it again if you want to go again
 
 This matters more for ↑ / ↓ than it did for ← / →, because holding an arrow down to scroll is a
 thing people actually do. Here it does nothing after the first step.
+
+### A widget that already handled the key keeps it
+
+The listener is on `window`, in the bubble phase, so it sees **every** arrow press in the app —
+including the ones a focused widget has already dealt with. The Diagram mode's picture is a
+`role="tree"` whose ↑ / ↓ step one node and take the article with them
+([diagram.md](diagram.md#the-step-bar-and-the-key-that-was-firing-twice)); before 2026-08-27 the
+same press then also ran the step below, so one key moved the reader one node *and* one section at
+once. Two distances, neither wrong on its own, and what you see is a highlight and an article that
+disagree about how far you just went.
+
+`keynav` now returns early on `e.defaultPrevented`. That is the general form rather than a list of
+elements to skip: **calling `preventDefault()` is already how a handler says "this key was mine"**,
+and a list is the version that silently goes stale the next time some component grows arrow keys and
+nobody remembers to come back here.
 
 ### Rapid presses chain from the last target, not from the page
 
