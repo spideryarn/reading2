@@ -222,6 +222,9 @@ the exception. Open question for Greg below: what happens to a deleted user's sp
 | `web_searches` | billed per search ($0.01 on `anthropic/claude-sonnet-5`), and invisible to token arithmetic. `src/openrouter-stream.ts` already counts them |
 | `cost_source` | `provider` \| `computed` \| `unpriced`. Which kind of number `cost_nanos` is |
 | `is_byok` | OpenRouter reports it. Under somebody's own key `cost` legitimately reads zero while real money is spent, and a row that does not say which arrangement it was under cannot be read correctly later |
+| `service_tier` | Anthropic reports it. Batch is **half price**; a computed cost that ignores it is wrong by 2x |
+| `inference_geo` | Anthropic reports it. `"us"` is a documented **1.1x on every category** |
+| `thinking_tokens` | Inside `output_tokens`, not additional. Not a pricing input — the answer to "did it spend its whole budget thinking" |
 | `cost_computed_nanos` | our arithmetic, kept **alongside** the provider's figure — see below |
 | `price_version` | which row of the price table was used, so a wrong price is findable and fixable |
 | `job_id`, `step_name` | so "what did that ingest cost" is one query |
@@ -278,6 +281,56 @@ those seven are priced by arithmetic or not at all. The prices, as of 2026-08-27
 
 with cache write x1.25 (5m), x2.0 (1h) and cache read x0.1 against the input price.
 
+### Anthropic returns no cost anywhere — checked, not assumed
+
+Greg, 2026-08-27:
+
+> This billing stuff is tricky to get right. Can we rely on the responses from the API, and/or a
+> really reputable library?
+
+Fair challenge, and the first half has a definite answer. A live call to `claude-sonnet-5`,
+inspecting **the response body and every response header**:
+
+```
+headers:  anthropic-organization-id, anthropic-workspace-id, anthropic-ratelimit-*  (x12),
+          cf-ray, content-type, date, request-id, ...
+          → nothing mentioning cost, price, billing or charge. Only rate-limit counters.
+
+usage:    { input_tokens, cache_creation_input_tokens, cache_read_input_tokens,
+            cache_creation: { ephemeral_5m_input_tokens, ephemeral_1h_input_tokens },
+            output_tokens, output_tokens_details: { thinking_tokens },
+            service_tier: "standard", inference_geo: "global" }
+```
+
+No dollar figure exists to rely on. For the seven direct-SDK calls the arithmetic is unavoidable
+*unless we change where the calls go* — which is the real question, and it is below.
+
+**But the response does carry the things that change the price**, which is the part that makes the
+arithmetic defensible rather than a guess:
+
+- **`service_tier`** — batch is half price, priority tier is its own rate. A computed cost that
+  ignores it is wrong by 2x on any batched call.
+- **`inference_geo`** — `"us"` carries a documented **1.1x multiplier on every category**, input,
+  output, cache writes and reads alike.
+- **`output_tokens_details.thinking_tokens`** — thinking is billed as output and is already inside
+  `output_tokens`, so this is a breakdown rather than an addition. Recording it is what makes
+  "the model spent its whole budget thinking" answerable, which
+  [logging.md](../project/logging.md) already names as the question a failed chat turn turns on.
+
+None of the three were in this plan before the probe. All three are columns.
+
+Today all three are constant — nothing in this app sets `service_tier` or `inference_geo`, and the
+grep for Batch API use finds only this app's own request batching. So they are recorded because the
+*provider said them*, not because we vary them. That is the cheap kind of insurance, and one of the
+two is a live temptation rather than a hypothetical: **the Batch API is half price and the pipeline
+is exactly the non-latency-sensitive work it exists for** ([logging.md](../project/logging.md) notes
+nobody is watching those calls). The day somebody takes that offer, a table reading `service_tier`
+stays right on its own, and one that assumed "standard" doubles every pipeline cost silently.
+
+Also worth having: `anthropic-organization-id` and `anthropic-workspace-id` come back on every
+response, and the Cost API below groups by workspace. That is the join key for reconciliation, free
+on every call.
+
 ### The near-miss that made these prices effective-dated
 
 GPT Sol's review opened with a blocker: Sonnet 5 was about to go from $2/$10 to $3/$15 on
@@ -307,6 +360,36 @@ committed *before* the boundary, so the switch happens on time whether or not an
 That needs `call_started_at` on the row — the price is a property of when the call happened, not of
 when it was recorded — and a test that pins the boundary in UTC.
 
+### Anthropic will tell us the dollars — just not per call, and not with this key
+
+The Messages API returns no cost. Anthropic's **Admin Cost API** does. Both endpoints exist and were
+probed live on 2026-08-27:
+
+```
+GET /v1/organizations/cost_report              → 401 authentication_error, "invalid x-api-key"
+GET /v1/organizations/usage_report/messages    → 401 authentication_error, "invalid x-api-key"
+```
+
+A 401 with a structured error body rather than a 404 is the endpoints confirming they are there. The
+401 is because **`.env.local` holds `sk-ant-api…`, an ordinary key, and these need `sk-ant-admin…`**
+— a separate Admin API key created in the Console. So this route is open to us but **not switched
+on**, and that is a thing for Greg rather than a thing to build around. It is the first item in the
+questions below.
+
+Why it matters more than it sounds: it turns the arithmetic from something we assert into something
+we **check**. Per-call cost stays computed — the Cost API has no per-request dimension and cannot
+attribute to one of Greg's readers — but "our total for 2026-08-26" versus "Anthropic's own reported
+cost for 2026-08-26" is a daily reconciliation, and a price table that has gone stale, a
+`service_tier` we forgot to read, or a cache formula that silently flipped all show up as a gap the
+next morning.
+
+That is the honest answer to *can we rely on the responses*: **not for the dollars, but yes for a
+daily ground truth that stops our dollars drifting.** The report is the thing that would tell us,
+and `npm run cost` should print the two totals side by side rather than only ours.
+
+⟨Granularity, freshness, retention and whether the buckets line up with our timestamps are with the
+research pass — `docs/research/ai-cost-authoritative-sources.md`.⟩
+
 ### What the table deliberately does not cover
 
 Only `claude-sonnet-5` is reachable on both wires, so **it is the only model the reconciliation
@@ -315,27 +398,113 @@ OpenRouter-only, both carrying their own cost and neither priced here. That is b
 gap — but it does mean the price table's continuous test covers one row of three, which is worth
 knowing before trusting the drift check to catch everything.
 
-### A table in git, not a package — disagreeing with the research on this one
+### The option that would delete the arithmetic entirely
 
-[The research](../research/ai-cost-tracking-options.md) recommends
-[`@pydantic/genai-prices`](https://github.com/pydantic/genai-prices), and for a general-purpose app
-that would be right. I think it is wrong here, for three reasons that are specific to what this
-table is *for*:
+Worth stating plainly because it is the real answer to Greg's question, and the plan had not
+considered it: **if all twelve call sites went through OpenRouter, every call would carry a
+provider-reported `usage.cost` and there would be no price table and no cache arithmetic at all.**
+
+Two of the three things that would sink that idea are already measured here, and neither sinks it:
+
+- **Anthropic prompt caching works through OpenRouter.** The probe above is the evidence — a
+  `cache_control: {type: "ephemeral"}` breakpoint produced `cache_write_tokens: 18212` cold and
+  `cached_tokens: 18212` warm, priced at the 1.25x and 0.1x rates. This is not a thing that has to
+  be given up.
+- **OpenRouter took no per-token margin on either probe.** 18 prompt tokens billed at exactly
+  $0.000036 — Anthropic's list price to the digit — and `cost` equal to `upstream_inference_cost`
+  on both the chat and the embeddings call.
+
+What it would cost is Anthropic-native surface this app actually uses: the SDK's typed errors
+(which [`src/anthropic-call.ts`](../../src/anthropic-call.ts) is built on), `stop_reason: "refusal"`
+and `stop_details`, `thinking: {type: "adaptive"}` and `effort`, and `finalMessage()`. Plus a second
+hop in front of every pipeline stage, and a single vendor in front of both halves of the app rather
+than one.
+
+**Verdict: no — but not for the reason the research gave.**
+
+The research pass argued that prompt caching over OpenRouter depends on sticky routing via
+`session_id`, which this app does not send, so moving traffic there risks a silent cache-hit
+regression. That objection does not survive contact with the code.
+[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) has already been here:
+
+> Ordered, **not** `allow_fallbacks: false`. A cache lives on the upstream that wrote it, so naming
+> Anthropic first is what keeps repeat calls landing where the article already is — and OpenRouter's
+> own sticky routing hashes the first user message, which varies here, so the heuristic would miss
+> exactly the case this is for.
+
+`PROVIDER_ORDER` is the answer to that problem and is a *better* one than `session_id` for this
+workload, chosen deliberately and written down. My own probe agrees: a cold write and a warm read
+three seconds apart, no `session_id`, 18,212 tokens read from cache.
+
+The real reasons are the other two, and they are enough:
+
+- **Feature loss, all of it load-bearing.** The SDK's typed errors are what
+  [`src/anthropic-call.ts`](../../src/anthropic-call.ts) is built on, and its whole point is that an
+  upstream error body carrying the article must not reach a reader; `stop_reason: "refusal"` and
+  `stop_details` likewise. `effort` and adaptive thinking reach OpenRouter only through its
+  parameter-mapping layer — reachable (`reasoning`, `reasoning_effort` are in its supported
+  parameters for this model) but mapped rather than native, and a mapping that silently drops a
+  parameter is this project's least favourite failure shape.
+- **It buys nothing that is still a problem.** The two-formula cache arithmetic was the thing worth
+  avoiding, and it is already written, tested against a real bill, and green. Rerouting seven stages
+  through a second vendor to delete a solved problem is paying a real cost for a settled one.
+
+Recorded rather than dismissed, because it is the right question and the answer could change: if
+this app ever grows a third provider, the argument for one gateway that reports its own cost gets
+much stronger.
+
+One thing the option did surface that matters regardless — **OpenRouter's margin is a 5.5% fee on
+buying credits, not a per-token markup.** That is why the probes found `cost` equal to Anthropic's
+list price. It also means `usage.cost` is *credits consumed*, and the cash that left the bank is
+about 5.5% higher. Which is question 5 below, and no longer hypothetical.
+
+### A table in git, not a package — and the library that proves the point
+
+Greg's question was *"can we rely on … a really reputable library?"* The honest answer turned out to
+be sharper than "the field is young".
+
+The strongest candidate is [`@pydantic/genai-prices`](https://github.com/pydantic/genai-prices) —
+from the Pydantic team, actively maintained, pushed the day this was written, 359 stars, created
+June 2025. Its documented contract for Anthropic cache tokens is correct on paper.
+
+**And it has a field-reported bug of exactly the class this plan exists to prevent.**
+[pydantic-ai#4364](https://github.com/pydantic/pydantic-ai/issues/4364), mirrored in Langfuse#12306:
+genai-prices sums Anthropic's three input fields into one `input_tokens`, a caller emits that
+*alongside* the separate cache fields, and the consumer adds them again. From the issue itself:
+
+> 130213 + 128955 + 1253 = 260421. The real prompt was 130213 tokens.
+
+Roughly **2x**, and the reported consequences are the ones that matter here: cost estimates doubled,
+and **cache hit rate reading ~50% when it was ~99%.** That is not a peripheral bug. The cache-hit
+number is *the entire alarm system* this plan is built around —
+[prompt-caching.md](../project/prompt-caching.md): a cache that stops working returns the right
+answer and only costs more. A library that can make a healthy cache look half-broken would be
+disabling the smoke detector.
+
+It is **closed as not planned**, so it is a live property rather than a fixed one. And the trigger is
+precisely the situation this plan's schema creates: a second layer that also reads
+`cache_read_tokens` and `cache_write_tokens`, which ours must, because those are their own columns.
+
+So the decision stands, now on evidence rather than on taste. Three supporting reasons:
 
 1. **We call three models.** The whole table is nine numbers
-   ([models.ts](../../src/models.ts) is the closed list). A dependency that covers a hundred
-   providers is carrying ninety-seven we will never look up.
-2. **Its auto-update mode is a liability, not a feature.** It refetches prices from GitHub hourly.
-   For a billing number, a price that can change without anybody reviewing it is the *problem*, not
-   the solution — and its own README says the data "cannot be exactly correct".
+   ([models.ts](../../src/models.ts) is the closed list). A dependency covering a hundred providers
+   carries ninety-seven we will never look up.
+2. **Auto-update is a liability here.** It refetches prices from GitHub hourly. For a number
+   somebody bills against, a price that changes without review is the problem, not the solution —
+   and its own README says the data "cannot be exactly correct".
 3. **It does not meet the bar in
    [third-party-library-selection.md](../reusable/third-party-library-selection.md)** — *long-lived
-   community, lots of docs and discussion*. It is a 2026 package with 359 stars. That is a fine
-   young library and not a thing to hang an invoice on.
+   community, lots of docs and discussion*. Fourteen months old.
 
-So: a literal table in `src/pricing.ts`, with the date it was checked and the URL it was checked
-against, next to the numbers. Revisit if the model list ever stops being three long — the package is
-the right answer at ten or twenty, and this paragraph is the note saying so.
+`tokenlens` describes its own cost estimation as "fast, rough" and not billing-grade; LiteLLM's
+`model_prices_and_context_window.json` is raw data that still needs the same arithmetic written by
+hand. **Nothing in this space clears the bar**, and the reason is not immaturity — it is that the
+hard part was never the price table. It is the cache accounting, and that is where the one credible
+library is demonstrably wrong.
+
+A literal table in [`src/pricing.ts`](../../src/pricing.ts), with the date checked and the URL
+checked against, next to the numbers. Revisit if the model list stops being three long.
 
 ### The endpoint that gave us the OpenRouter half
 
@@ -670,7 +839,24 @@ cannot avoid writing.
 stop being invisible day to day.
 
 **Phase 5 — `npm run cost`.** Spend by day, stage, model, article and owner; the cache-saving
-figure; the unpriced count; the provider-vs-computed drift check.
+figure; the unpriced count; the aborted-spend line; the oldest surviving raw response and the
+pruner's last successful run.
+
+And **two reconciliations rather than one**, which between them are what stop the computed half
+drifting:
+
+```
+  OpenRouter calls   our crossCheck  vs  usage.cost           per call, continuous
+  Anthropic calls    our sum by day  vs  /v1/organizations/cost_report   per day, per model
+```
+
+The second is the one Greg's question earns. Group our Anthropic-SDK rows by **UTC day and model**
+and diff against Anthropic's own reported cost for the same bucket. Three caveats to build in rather
+than discover: the buckets are UTC and ours must be too; Anthropic has **no per-user dimension at
+all**, so this reconciles the total and never the attribution; and anything else on the same
+account — `evals/`, a one-off CLI run — lands in Anthropic's figure and not in ours, so those have
+to be either recorded too or explicitly subtracted. A diff that is always non-zero for a known
+reason is a check nobody reads.
 
 **Phase 6 — the article's own number**, on the metadata page: what it cost to prepare, and what
 questions about it have cost since.
@@ -774,6 +960,17 @@ the first migration checks the table is empty rather than assuming it.
 
 ## Questions for Greg
 
+0. **Can you get an Admin API key — and do you want to?** It is what turns the Anthropic half of the
+   cost from an assertion into something reconciled against Anthropic's own daily figure. Without
+   it, those seven stages' cost is our arithmetic and nothing checks it.
+
+   Two things to know before saying yes. It is a *separate, more powerful* credential than the one
+   in `.env.local`, and it would only ever be read by `npm run cost`, never by the app. And it may
+   not be one click: Anthropic's docs say **"The Admin API is unavailable for individual accounts"**
+   and require setting up an organization first. This project runs on an individual account
+   ([setup-dev.md](../project/setup-dev.md)), so the real question may be *"are you willing to
+   convert the account to an organization"* rather than *"will you make a key"*. Worth five minutes
+   in the Console to find out which, before anything is built on it.
 1. **A deleted user's spend history** — keep it or delete it? ~~Every other owned table cascades.~~
    **Wrong, and corrected by the review:** every owner FK in
    [`drizzle/0001_auth_fks_and_guards.sql`](../../drizzle/0001_auth_fks_and_guards.sql) is
@@ -788,12 +985,21 @@ the first migration checks the table is empty rather than assuming it.
    how-far-back-do-you-ever-look question, not a technical one.
 4. **Do the evals count?** `evals/` calls real models and spends real money, from the CLI. They
    would land under the dev owner. Worth having, or noise in the numbers?
-5. **What does "cost" mean, for the number you set a price against?** Three different figures, and
-   they are not the same: the *list price* of the inference, the *credits* OpenRouter deducted, or
-   the *cash* that left the bank — which includes the fee on buying credits. For estimating what a
-   reader costs you, credits is probably right. For working out margin, cash is. Worth picking one
-   now and naming the column after it, because a column called `cost` will be read as whichever the
-   reader assumed.
+5. **What does "cost" mean, for the number you set a price against?** No longer hypothetical:
+   **OpenRouter's margin is a 5.5% fee on buying credits, not a per-token markup** — which is why
+   the probes found `usage.cost` exactly equal to Anthropic's list price. So `usage.cost` is
+   *credits consumed*, and the cash that left your bank is about 5.5% more. Anthropic's own calls
+   have no such gap. Three candidate meanings, and they differ by real money:
+
+   ```
+     list price of the inference   →  what the model would cost anywhere
+     credits deducted             →  usage.cost, and what the drift check compares against
+     cash out of the bank         →  credits x 1.055 on the OpenRouter half, x1 on the Anthropic half
+   ```
+
+   For "what does a reader cost me", credits is close enough. For setting a price with a margin in
+   it, cash is the only honest one. Pick one and name the column after it — a column called `cost`
+   gets read as whichever the reader assumed.
 6. **UTC or your calendar month?** "What did August cost" needs a timezone, and a call at 00:30 BST
    on 1 September is a July call in UTC. Only matters at the edges, and only ever matters if a bill
    is drawn from it.
