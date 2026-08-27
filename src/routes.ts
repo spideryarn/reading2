@@ -95,8 +95,6 @@ import { commentStore } from "./store/index.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
-import { similarBlocks } from "./similar.js";
-import { projectArticle } from "./projection.js";
 import { readRaw } from "./fetch.js";
 import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
@@ -2483,22 +2481,6 @@ async function serveApi(
      throw away. Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(url);
-  /* Its own endpoint, and unlike every artefact route above it this one is not
-     a read: it embeds the article's blocks the first time it is asked, then
-     serves the answer out of memory (src/similar.ts). It is here rather than on
-     the article payload because only one of the six diagram pictures wants it,
-     and only when the reader presses that toggle — charging every reader of
-     every article for a model call almost none of them will look at is exactly
-     what the `tweets` note above refuses to do. */
-  const similar = /^\/api\/similar\/([\w.%-]+)$/.exec(path);
-  /* The other half of the same purchase, and a second endpoint rather than a
-     second field on the first: `similar` answers "which passages are about the
-     same thing", this one answers "where does every passage sit relative to the
-     others" (src/projection.ts). Different pictures want different ones, they
-     are asked for at different moments, and the vectors underneath are bought
-     once and shared (src/article-vectors.ts) — so a reader who presses Force
-     and then Drift pays for one article, not two. */
-  const projection = /^\/api\/projection\/([\w.%-]+)$/.exec(path);
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(url);
   const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(url);
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
@@ -2670,74 +2652,6 @@ async function serveApi(
         const at = slugPart(ideas, 1);
         const found = await loadIdeas(at);
         send(res, 200, await withProfileChanged<IdeasResponse>(at, found, found.ideas));
-      }
-      return true;
-    }
-    /**
-     * **POST, not GET, and the method is the load-bearing part.**
-     *
-     * Every other artefact route in this file is a GET because it *reads*
-     * something a pipeline step already wrote. This one is different: the first
-     * call embeds the article, which spends money at an external provider. A
-     * GET that does that is wrong in a way that is easy to miss — GET is
-     * supposed to be safe, so a link prefetcher, a proxy retry, a crawler or a
-     * double-tap on Back can all pay for it again, none of them having asked
-     * anybody. GPT Sol's finding, 2026-08-27.
-     *
-     * `useIdeas` makes the same split more visibly: it GETs the ideas and POSTs
-     * a *job* to write them. This is the same shape with the write inline,
-     * because embedding an article takes a second or two rather than the half a
-     * minute that makes something a job.
-     */
-    if (similar && req.method === "POST") {
-      {
-        const at = slugPart(similar, 1);
-        /* The whole article, because this needs the prose. It is the same read
-           every other artefact route makes and the store caches nothing, so on
-           a warm similarity cache this load is the entire cost of the request. */
-        const loaded = await loadArticle(at);
-        try {
-          send(res, 200, await similarBlocks(at, loaded.blocks));
-        } catch (err) {
-          /* **The provider's own words do not go to the browser.** The catch-all
-             below writes a thrown message straight into the 500 body, and what
-             `embedBatch` throws on a bad response is the upstream body verbatim
-             — which can carry account identifiers, model routing and whatever
-             else OpenRouter felt like saying. The real thing goes in the log,
-             where whoever runs the server can read it; the reader gets a
-             sentence. Same split docs/project/copy.md draws for every other
-             provider failure. */
-          log("model").error(
-            { slug: at, ...errorFields(err) },
-            "the embedding provider failed",
-          );
-          throw httpError(502, "Could not reach the embedding model. [emb1]");
-        }
-      }
-      return true;
-    }
-    /**
-     * **POST for the same reason `similar` is a POST**: the first call for an
-     * article spends money, and a GET is something a browser, a proxy or a
-     * prefetcher may repeat without asking anybody.
-     *
-     * The arithmetic afterwards is ours rather than the provider's — principal
-     * components and k-means over vectors already in hand — so a failure here
-     * is either the embedding call or a bug, and only the first of those is
-     * worth a sentence about reaching a model.
-     */
-    if (projection && req.method === "POST") {
-      {
-        const at = slugPart(projection, 1);
-        const loaded = await loadArticle(at);
-        try {
-          send(res, 200, await projectArticle(at, loaded.blocks));
-        } catch (err) {
-          // The provider's own words stay out of the browser — see `similar`
-          // above, which is the same split for the same reason.
-          log("model").error({ slug: at, ...errorFields(err) }, "the embedding provider failed");
-          throw httpError(502, "Could not reach the embedding model. [emb2]");
-        }
       }
       return true;
     }
