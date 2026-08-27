@@ -102,8 +102,12 @@ creating it changes nothing about the plan except that its step 4 can now fetch 
 of from a Dropbox path.
 
 Read the plan's [sequencing trap](../plans/deploy-and-repo-move.md#the-sequencing-trap) before
-starting any of it: the moment this codebase lands at the root of `spideryarn/reading`, the Vercel
-project serving spideryarn.com tries to build it as a Next.js app.
+starting any of it: the moment this codebase lands at the root of `spideryarn/reading`, the old
+Vercel project tries to build it as a Next.js app.
+
+It used to say *the project serving spideryarn.com*, and that stopped being true on 2026-08-27 when
+[the domain moved](deployment.md#the-domain) to `spideryarn-reading2`. The trap is still real — a
+push would still turn that project red — but it now costs the old app rather than the live site.
 
 ## See also
 

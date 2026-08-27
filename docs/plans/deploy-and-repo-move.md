@@ -403,6 +403,12 @@ project tries to build it — as a Next.js app.** It will fail. A failed build i
 (production keeps serving the last good deployment), but "we pushed and production went red" is a
 bad ten minutes to have by accident.
 
+**Since 2026-08-27 that is a smaller trap than this section was written for**, because
+`spideryarn-reading` no longer serves `spideryarn.com` — the domain
+[moved](../project/deployment.md#the-domain), and the old project now answers only on
+`spideryarn-reading.vercel.app`. A red build there costs the old app's few remaining users, not the
+live site. Still do one of the two things below; it is just no longer the thing to be frightened of.
+
 So, **before** pushing the swap, do one of these to `spideryarn-reading`:
 
 - **Disconnect it from git** (recommended). Existing deployments keep serving; it becomes a frozen
