@@ -31,7 +31,8 @@ listed here; the names under each are files in `docs/project/`.
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
   two) · `table-of-contents.md` · `ingest-queue.md` (paste a URL, get an article) ·
-  `prompt-caching.md` · `database.md`
+  `ai-gateway.md` (every paid call goes through OpenRouter) · `prompt-caching.md` ·
+  `database.md`
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
   sees: the spine, the prose, and the band the modes take turns in.
   <br>↳ `web-client.md` (where the client code is) · `granularity-zoom.md` ·
