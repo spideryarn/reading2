@@ -68,7 +68,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await rm(path.join(JOBS_DIR, `${LEGACY}.json`), { force: true });
   await rm(path.join(JOBS_DIR, `${KEYED}.json`), { force: true });
-  await rm(path.join(JOBS_DIR, "spya-fsload3.json"), { force: true });
+  for (const id of ["spya-fsload3", "spya-fsload4", "spya-fsload5"]) {
+    await rm(path.join(JOBS_DIR, `${id}.json`), { force: true });
+  }
   await reloadForTests();
 });
 
@@ -96,16 +98,53 @@ describe("reading the job directory back", () => {
   });
 
   it("writes the key back out beside the job, not inside it", async () => {
-    /* `workKey` must not be on `Job` — `publicJob` would have to strip it, and
-       it is derived from the request rather than from the record. So it rides
-       as a sibling key in the same document, which is what makes it land in the
-       same atomic rename. */
-    const on = JSON.parse(await readFile(path.join(JOBS_DIR, `${KEYED}.json`), "utf8")) as {
-      workKey?: string;
-      id: string;
-    };
-    expect(on.workKey).toBe("k-abc");
-    const job = await fsJobStore.get(KEYED, environmentOwnerId());
+    /**
+     * **Enqueued through the store rather than written by hand**, and that is
+     * the whole point of this test rather than a detail of it.
+     *
+     * The first version read the fixture file back and asserted its `workKey`
+     * — a file this suite had written itself, with the key already in it. It
+     * passed with `writeOnce` reverted to serialising the bare `Job`, because
+     * nothing in it ever asked the *store* to write anything. GPT Sol caught
+     * it; it is the same shape as the bug it is testing for, which is that a
+     * key can be held in memory and never reach the disk.
+     *
+     * `workKey` must not be on `Job` — `publicJob` would have to strip it, and
+     * it is derived from the request rather than from the record — so it rides
+     * as a sibling key in the same document, landing in one atomic rename.
+     */
+    const id = "spya-fsload4";
+    await fsJobStore.enqueueOrGet(
+      {
+        ...record(id),
+        ownerId: environmentOwnerId(),
+        slug: `test-fsload-written-${id}`,
+        status: "queued",
+      } as Job,
+      "k-written",
+    );
+    await fsJobStore.forget(id, environmentOwnerId()).catch(() => undefined);
+
+    const written = await fsJobStore.enqueueOrGet(
+      {
+        ...record("spya-fsload5"),
+        ownerId: environmentOwnerId(),
+        slug: `test-fsload-written`,
+        status: "queued",
+      } as Job,
+      "k-written",
+    );
+    expect(written.created).toBe(true);
+
+    const on = JSON.parse(
+      await readFile(path.join(JOBS_DIR, `${written.job.id}.json`), "utf8"),
+    ) as { workKey?: string; id: string };
+    expect(on.workKey).toBe("k-written");
+
+    // And it is not on the record the caller is handed.
+    const job = await fsJobStore.get(written.job.id, environmentOwnerId());
     expect(job && "workKey" in job).toBe(false);
+
+    await fsJobStore.forget(written.job.id, environmentOwnerId()).catch(() => undefined);
   });
 });

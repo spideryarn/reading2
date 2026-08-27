@@ -331,6 +331,9 @@ export const fsJobStore: JobStore = {
   },
 
   async finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
+    /* A Stop arriving during the *last* step does not un-finish the job, where
+       one arriving mid-job does — see the Postgres adapter for why the two
+       read the same flag and answer differently on purpose. */
     const job = fenced(id, attempt);
     job.status = ending.status;
     job.steps = ending.steps;

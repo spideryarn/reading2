@@ -40,7 +40,13 @@ import {
 } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
-import { fsJobStore, pauseForTests, sweepStopped } from "../src/store/jobs-fs.js";
+import {
+  expireLeaseForTests,
+  fsJobStore,
+  pauseForTests,
+  sweepStopped,
+} from "../src/store/jobs-fs.js";
+import { mintAttempt } from "../src/store/jobs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
@@ -742,6 +748,88 @@ describe("running a job", () => {
    * A URL or an upload is *asking for* an article and may be moved. Anything
    * else is *naming* one, and the honest answer is 409.
    */
+  /**
+   * **The token `advanceJob` actually hands the store.**
+   *
+   * `jobs.attempt_id` is a **uuid** column, and this passed `mintId()` — a
+   * `spya-` id — so every advance against Postgres died with `22P02` on the
+   * claim, the first statement it runs. Nothing caught it: the filesystem
+   * adapter takes any string, and the parity suite minted its own tokens.
+   *
+   * Which means a test of `mintAttempt`'s *shape* proves nothing either — the
+   * question is what the caller passes. So this reads the value out of the
+   * store as it arrives. GPT Sol pointed out that the first attempt at this
+   * guard had the same hole as the bug.
+   */
+  it("hands the store a token the uuid column will take", async () => {
+    const slug = "test-advance-token";
+    const job = await enqueue({ slug, steps: ["fetch"] });
+    await settle(job.id);
+    await pause(job, 0);
+
+    const seen: string[] = [];
+    const claim = vi.spyOn(fsJobStore, "claim");
+    try {
+      claim.mockImplementation(async (id, owner, attempt, lease) => {
+        seen.push(attempt);
+        claim.mockRestore();
+        return fsJobStore.claim(id, owner, attempt, lease);
+      });
+      await advanceJob(job.id);
+      claim.mockRestore();
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0], "advanceJob's attempt token must be a uuid — jobs.attempt_id is one").toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+    } finally {
+      /* **Cleared even when the assertion fails**, and this is not politeness.
+         A `queued` record left in `data/_jobs/` is picked up by the next run's
+         `enqueue`, which hands it back instead of making a new one — so the
+         next failure is a three-second timeout in a *different* test and says
+         nothing about the fault. It cost half an hour once. */
+      claim.mockRestore();
+      await settle(job.id).catch(() => undefined);
+      await forgetJob(job.id).catch(() => undefined);
+    }
+  });
+
+  /**
+   * **The sweep, through `advanceJob` rather than through the store.**
+   *
+   * `tests/store-jobs-parity.test.ts` proves `failExpired` frees the slot, and
+   * GPT Sol pointed out that it proves nothing about the *wiring*: delete the
+   * `store.failExpired()` line from `advanceJob` and that test stays green,
+   * because it calls the sweep itself. Which is the whole shape of the original
+   * bug — the function existed and nothing called it — so the test has to be
+   * the one that goes through the caller.
+   */
+  it("frees a job whose claimant stopped answering, from the advance itself", async () => {
+    const slug = "test-advance-sweeps";
+    const job = await enqueue({ slug, steps: ["fetch"] });
+    await settle(job.id);
+    await pause(job, 0);
+
+    /* A claim nobody will ever release — an instance that was killed mid-step.
+       Its lease is already in the past, which is the state `advanceJob` has to
+       notice without anybody sweeping on its behalf. */
+    const orphan = mintAttempt();
+    expect((await fsJobStore.claim(job.id, DEV_OWNER_ID, orphan, 60_000)).kind).toBe("claimed");
+    expireLeaseForTests(job.id);
+
+    try {
+      const advanced = await advanceJob(job.id);
+      // Failed rather than taken over, and it says so in the reader's words.
+      expect(advanced?.done).toBe(true);
+      const after = await getJob(job.id);
+      expect(after?.status).toBe("error");
+      expect(after?.failureKind).toBe("retry");
+    } finally {
+      // See the note in the test above: a record left behind breaks the next run.
+      await forgetJob(job.id).catch(() => undefined);
+    }
+  });
+
   it("refuses rather than renames when a late step lands on a busy article", async () => {
     const slug = "test-enqueue-busy-article";
     /* A job holding the slug, doing different work from the one below. It never

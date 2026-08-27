@@ -278,6 +278,22 @@ export const pgJobStore: JobStore = {
 
   async finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
     const db = getDb();
+    /**
+     * **A Stop that arrives during the *last* step does not un-finish the job,
+     * and that asymmetry with `releaseStep` is deliberate.**
+     *
+     * GPT Sol flagged that `releaseStep` settles a cancellation and this does
+     * not. It is a real difference and it is the right one. `releaseStep` runs
+     * when there is work left: the reader asked for it to stop, and it stops.
+     * This runs when there is none — the last step succeeded, the artefacts are
+     * written and the article is on the shelf. Calling that `cancelled` would
+     * be a lie about a thing the reader can see, and it would put a Retry
+     * button on a job with nothing left to do.
+     *
+     * So the flag is cleared and the ending stands. Written down here because
+     * the two functions reading the same column and answering differently is
+     * exactly what a later reader would take for a bug.
+     */
     const moved = await db
       .update(jobs)
       .set({

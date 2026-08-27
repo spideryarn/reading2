@@ -662,15 +662,48 @@ export async function openOrBeginJobDraft(opts: {
   requireSlug(slug);
 
   return getDb().transaction(async (tx) => {
-    /* Fenced, and read inside the same transaction that may mint. Reading the
-       pointer through an unfenced select would let a claimant whose lease has
-       lapsed reopen a draft it no longer owns and write a step into it. */
+    /**
+     * **Locked, not merely selected, and locked before the article.**
+     *
+     * Fencing on the attempt is not enough on its own, which GPT Sol found in
+     * the first version of this: two calls carrying the same live token both
+     * read `draft_revision_id = null`, the *article* lock serialises them, and
+     * the second one then mints R2 holding its stale null — leaving the job
+     * pointing at R2 and R1 orphaned, which is the very bug this function
+     * exists to prevent, one level in.
+     *
+     * `for update` on the job row makes the read-decide-write one critical
+     * section. And it is taken **first**, before `lockArticle`, so that every
+     * caller takes the two locks in the same order — job then article — which
+     * is what stops two of them deadlocking against each other.
+     *
+     * It also closes the second race in that finding: an unlocked read could
+     * see a live attempt and then have `failExpired` fail the job while this
+     * transaction waited for the article lock, after which the reopen branch
+     * returned a draft belonging to a job that was already over. `failExpired`
+     * cannot touch a row this transaction holds.
+     */
     const [row] = await tx
-      .select({ draftRevisionId: jobs.draftRevisionId })
+      .select({ draftRevisionId: jobs.draftRevisionId, slug: jobs.slug })
       .from(jobs)
       .where(and(eq(jobs.id, job.id), eq(jobs.attemptId, job.attemptId), eq(jobs.status, "running")))
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (!row) throw new NotTheLiveAttempt(job.id);
+
+    /**
+     * **A job may only open a draft for its own article.**
+     *
+     * The other four unusable-pointer cases fall back to minting because none
+     * is anybody's fault. This one is: a live token with somebody else's slug
+     * means a caller has mixed two jobs up, and minting would repoint a
+     * perfectly good job at an article it has nothing to do with — which is
+     * the same class of fault as `enqueue` renaming a slug out from under a
+     * request. Refuse, loudly. GPT Sol, 2026-08-27.
+     */
+    if (row.slug !== slug) {
+      throw new NotTheLiveAttempt(job.id);
+    }
 
     if (row.draftRevisionId) {
       const article = await lockArticle(tx, slug);

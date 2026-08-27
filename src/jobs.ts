@@ -939,7 +939,20 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          queued `{steps:["arc"]}` swallow a refresh that arrived a second later
          — the caller gets a job id, watches it succeed, and the refresh never
          happened. */
-      if (sameWork) return job;
+      if (sameWork) {
+        /* **And give it a pump**, because the job we are handing back may have
+           nobody driving it. That is not a rare state: a job left `queued` by a
+           dev-server restart is exactly what `sweepStopped` produces, and
+           asking for it again is exactly what a reader does next. Without this
+           they get a job id back and watch a card that never moves.
+
+           Two pumps for one job is harmless — the second is told `busy`, backs
+           off, and takes the next step when the first releases — which is the
+           same arrangement as a pump plus an open browser tab, and the whole
+           reason the claim exists. */
+        pump(job.id, owner);
+        return job;
+      }
 
       /**
        * The slug is taken by **different** work, and what to do about that

@@ -22,7 +22,7 @@
  * live attempt.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs } from "../src/db/schema.js";
@@ -62,17 +62,28 @@ const STEPS: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "
 /**
  * A claimed job, the way `advanceJob` leaves one while a step runs.
  *
- * Retires whatever this suite left running first: `jobs_only_one_running` is a
- * *global* partial unique index, so a second `running` row is a `23505` however
- * unrelated the two jobs are. That is the index doing its job, and it means a
- * test that wants a running job has to be the only one.
+ * **Retires only what this file made**, which the first version did not: it
+ * marked *every* `running` row done, so running beside the parity suite — or
+ * against a local database with a genuine ingest in flight — killed that job
+ * and took its claimant's fence with it. A test that can destroy the data it is
+ * run against is worse than no test. GPT Sol, 2026-08-27.
+ *
+ * The retirement is needed at all because `jobs_only_one_running` is a *global*
+ * partial unique index: a second `running` row is a `23505` however unrelated
+ * the two jobs are. That is the index doing its job, and it means a file that
+ * wants a running job has to clean up after its own previous one.
  */
+const made: string[] = [];
+
 async function claimedJob(slug: string): Promise<{ id: string; attemptId: string }> {
-  await getDb()
-    .update(jobs)
-    .set({ status: "done", attemptId: null, leaseExpiresAt: null })
-    .where(eq(jobs.status, "running"));
+  if (made.length > 0) {
+    await getDb()
+      .update(jobs)
+      .set({ status: "done", attemptId: null, leaseExpiresAt: null, finishedAt: new Date() })
+      .where(and(inArray(jobs.id, made), eq(jobs.status, "running")));
+  }
   const id = mintId();
+  made.push(id);
   const attemptId = mintAttempt();
   await getDb()
     .insert(jobs)
@@ -91,6 +102,8 @@ async function claimedJob(slug: string): Promise<{ id: string; attemptId: string
 
 async function cleanUp(slug: string): Promise<void> {
   const db = getDb();
+  // By id where we can, so a slug this file never made is never touched.
+  if (made.length > 0) await db.delete(jobs).where(inArray(jobs.id, made));
   await db.delete(jobs).where(eq(jobs.slug, slug));
   const [article] = await db.select().from(articles).where(eq(articles.slug, slug)).limit(1);
   if (article) {
