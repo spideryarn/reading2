@@ -423,14 +423,31 @@ export function judgeClientBuild(
 /* Logs                                                                */
 /* ------------------------------------------------------------------ */
 
-/** One line as `vercel logs --json` emits it. */
+/**
+ * One line as `vercel logs --json` emits it.
+ *
+ * **The status field is `responseStatusCode`.** The first version of this read
+ * `statusCode`, which is not a key the CLI emits — so the "a 5xx is loud"
+ * reading matched nothing, ever, and the summary printed every request's status
+ * as `—`. It went green over a deployment because it had nothing to be red
+ * about. Found by reading the keys of a real line rather than by reasoning about
+ * them, which is the only way this kind of mistake is ever found:
+ * docs/reusable/silent-success.md.
+ *
+ * `statusCode` is kept as a fallback rather than deleted, because a CLI that
+ * renames a field is exactly the event this pin exists to survive, and reading
+ * both costs nothing.
+ */
 export interface LogLine {
   deploymentId?: string;
   /** Vercel's own classification, which is **not** our pino level — see below. */
   level?: string;
   message?: string;
+  responseStatusCode?: number;
+  /** Not emitted by vercel@59; read anyway, in case it comes back. */
   statusCode?: number;
   requestPath?: string;
+  requestMethod?: string;
 }
 
 export interface LogVerdict {
@@ -458,7 +475,7 @@ export function judgeLogs(lines: readonly LogLine[]): LogVerdict {
   const loud: LogLine[] = [];
 
   for (const line of lines) {
-    const status = line.statusCode;
+    const status = line.responseStatusCode ?? line.statusCode;
     byStatus.set(String(status ?? "—"), (byStatus.get(String(status ?? "—")) ?? 0) + 1);
 
     const vercelSaysBad = line.level === "error" || line.level === "fatal";

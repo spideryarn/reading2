@@ -151,8 +151,74 @@ project. Deferred by Greg, not forgotten.
 
 ## Deploying
 
-There are now **two** ways in, and they build different code. That is the whole
-thing to understand about this section.
+```
+npm run deploy
+```
+
+**That is the whole of it**, since 2026-08-27. It runs the gates against the
+commit you are about to push, applies any pending migrations to the remote,
+pushes, waits for Vercel, checks nine things about what came out, and reads that
+deployment's logs. The plan, the nine measurements behind it and GPT Sol's review
+are in [deploy-pipeline.md](../plans/deploy-pipeline.md);
+[`scripts/deploy.ts`](../../scripts/deploy.ts) is the file and its header is the
+short version.
+
+| | |
+|---|---|
+| `npm run deploy` | the whole thing |
+| `-- --dry-run` | every local gate, nothing external. Nothing pushed, no migration applied |
+| `-- --verify-only` | check what is live right now, deploy nothing |
+| `-- --force-gate=test` | named, never blanket, and printed in the summary as `DEPLOYED WITH … FORCED` |
+| `-- --host <url>` | verify a host other than `www.spideryarn.com` |
+
+Three things about it are worth knowing before you read the rest of this section,
+because each one is a mistake this page already records:
+
+- **The gates run in a `git worktree` of the exact commit**, not in your working
+  tree, which is the only check that can catch the failure below —
+  [committed code importing a file still on somebody's disk](#the-two-do-not-agree-and-git-is-the-one-telling-the-truth).
+  It costs about two seconds.
+- **It pushes by name**, `git push origin <sha>:refs/heads/main`, so the commit
+  that was gated is the commit that ships. Several agents commit into this tree,
+  and a plain `git push origin main` would gate one commit and ship another.
+- **Every post-deploy check is anchored to the commit**, not to liveness, because
+  nearly every check anybody would write passes over a perfectly healthy
+  deployment three commits old. Both artefacts now carry a
+  [build stamp](#the-build-stamp).
+
+### The build stamp
+
+`dist/build.json` for the client and a `build` block on `/api/health` for the
+function, both from [`scripts/build-stamp.ts`](../../scripts/build-stamp.ts).
+Live, 2026-08-27:
+
+```json
+"build": { "commit": "718c1bf2…", "builtAt": "2026-08-27T17:34:06.662Z",
+           "source": "VERCEL_GIT_COMMIT_SHA", "deploymentId": "dpl_G6pVxpaFN1AXj…" }
+```
+
+This is what [the env block section](#the-env-block-was-a-report-not-a-check)
+said was "the real answer and is not built". Note that it is **beside** the
+existing `commit` field rather than replacing it: that one is
+`process.env.VERCEL_GIT_COMMIT_SHA` read when the request arrives, which says
+what Vercel believes it deployed rather than what compiled. Keeping both means
+the day they disagree is a day you hear about.
+
+Two artefacts rather than one, because the failure worth catching is them
+disagreeing: an older client bundle in front of a newer function is a page that
+loads perfectly and calls an API that has moved. And a **deployment id** as well
+as a commit, because a commit can be deployed twice and every commit-based check
+passes over the wrong one of the two — it is also what makes an edge-cached
+response detectable, since a cached copy carries the id of whichever deployment
+made it. `VERCEL_DEPLOYMENT_ID` is available at build time; verified in
+production rather than assumed.
+
+`"unknown"` never matches, including itself, which is the load-bearing part.
+
+### There are still two ways in, and they build different code
+
+That is the whole thing to understand about the rest of this section.
+`npm run deploy` drives the first of them.
 
 ### From git — a push to `main`
 

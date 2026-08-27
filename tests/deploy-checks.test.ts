@@ -426,15 +426,36 @@ describe("judgeLogs", () => {
     const { loud } = judgeLogs([
       {
         level: "info",
-        statusCode: 200,
+        responseStatusCode: 200,
         message: JSON.stringify({ level: "error", msg: "GET /api/library 500" }),
       },
     ]);
     expect(loud).toHaveLength(1);
   });
 
-  it("finds a 5xx even when nothing wrote a log line about it", () => {
-    expect(judgeLogs([{ level: "info", statusCode: 502, message: "" }]).loud).toHaveLength(1);
+  /**
+   * **The field is `responseStatusCode`.** The first version read `statusCode`,
+   * which `vercel logs --json` does not emit — so this reading matched nothing,
+   * ever, and every request's status printed as `—` while the check reported
+   * itself clean. Found by listing the keys of a real log line after a real
+   * deploy, which is the only way this kind of mistake is found.
+   */
+  it("finds a 5xx under the key the CLI actually emits", () => {
+    expect(judgeLogs([{ level: "info", responseStatusCode: 502, message: "" }]).loud).toHaveLength(1);
+  });
+
+  it("still reads the older key, in case it comes back", () => {
+    expect(judgeLogs([{ level: "info", statusCode: 500, message: "" }]).loud).toHaveLength(1);
+  });
+
+  it("counts statuses by the real key, so the summary is not a row of dashes", () => {
+    const { byStatus } = judgeLogs([
+      { level: "info", responseStatusCode: 200, message: "" },
+      { level: "info", responseStatusCode: 401, message: "" },
+    ]);
+    expect(byStatus.get("200")).toBe(1);
+    expect(byStatus.get("401")).toBe(1);
+    expect(byStatus.get("—")).toBeUndefined();
   });
 
   it("finds a line Vercel itself calls an error", () => {
@@ -443,15 +464,19 @@ describe("judgeLogs", () => {
 
   it("stays quiet over ordinary traffic, including our own 401s", () => {
     const { loud, byStatus } = judgeLogs([
-      { level: "info", statusCode: 200, message: JSON.stringify({ level: "info", msg: "GET / 200" }) },
-      { level: "info", statusCode: 401, message: JSON.stringify({ level: "warn", msg: "GET /api/library 401" }) },
+      { level: "info", responseStatusCode: 200, message: JSON.stringify({ level: "info", msg: "GET / 200" }) },
+      {
+        level: "info",
+        responseStatusCode: 401,
+        message: JSON.stringify({ level: "warn", msg: "GET /api/library 401" }),
+      },
     ]);
     expect(loud).toEqual([]);
     expect(byStatus.get("401")).toBe(1);
   });
 
   it("is not upset by a message that is not JSON", () => {
-    expect(judgeLogs([{ level: "info", statusCode: 200, message: "plain text" }]).loud).toEqual([]);
+    expect(judgeLogs([{ level: "info", responseStatusCode: 200, message: "plain text" }]).loud).toEqual([]);
   });
 });
 

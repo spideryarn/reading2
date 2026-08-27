@@ -35,6 +35,9 @@ is the answer.
 - [What this deliberately does not do](#what-this-deliberately-does-not-do)
 - [The debt this uncovered](#the-debt-this-uncovered)
 - [Order of work](#order-of-work)
+- [What the review changed](#what-the-review-changed)
+- [What building it found](#what-building-it-found)
+- [What the first real deploy did](#what-the-first-real-deploy-did)
 
 ---
 
@@ -77,8 +80,10 @@ failure text must say so — otherwise the gate's first act is to accuse an inno
 **5. The test suite is not hermetic.** ⚠️ In a clean worktree of HEAD, 26 test files fail: the
 client ones cannot even be collected without `VITE_SUPABASE_URL`, and the pipeline ones `ENOENT` on
 `data/`, which is gitignored. Symlink `.env.local` and `data/` in and the same commit runs in 31
-seconds with 5 failures. **The suite cannot be reproduced by anyone who is not Greg, on this
-laptop, with its accumulated `data/`.** That is a real problem and it is bigger than deploying —
+seconds with 5 failures. (The script **copies** `data/` rather than linking it — tests create and
+delete directories under it, and 25MB is an APFS clone at 0.07s, so there is nothing to trade.)
+**The suite cannot be reproduced by anyone who is not Greg, on this laptop, with its accumulated
+`data/`.** That is a real problem and it is bigger than deploying —
 see [§ The debt this uncovered](#the-debt-this-uncovered).
 
 **6. `main` is red right now, and it is genuinely red.** Checked in a worktree of the exact commit,
@@ -122,7 +127,7 @@ to say it out loud rather than compare the wrong two numbers.
 
 Each of these had a real alternative and would have produced different code.
 
-### 1. Push, verify, roll back — not staged-then-promote
+### 1. Push, verify, roll back rather than staged-then-promote
 
 Vercel can land a production build without aliasing it (`--skip-domain`, or turning off auto-assign
 of production domains project-wide), let us smoke-test its own URL, and only then `vercel promote`.
@@ -434,7 +439,7 @@ broken state first.** A check nobody has seen fail is not evidence.
   localhost, correctly, because it spends the service-role key. Doing this properly means a
   dedicated, narrowly-scoped smoke-test account with a stored credential. Worth it later; it is not
   a line of code.
-- **No pre-promotion canary**, per [decision 1](#1-push-verify-roll-back--not-staged-then-promote).
+- **No pre-promotion canary**, per [decision 1](#1-push-verify-roll-back-rather-than-staged-then-promote).
   The two Vercel settings it needs are written down so the choice can be revisited in an afternoon.
 - **No CI.** See [§ The shape](#the-shape).
 - **No log drain.** `vercel@latest logs` covers the "what did my deploy do" question. Durable,
@@ -547,3 +552,58 @@ test — and the shell script had the same bug, and has the same fix. Two copies
 one copy and one liability.
 
 **The suite is not hermetic, and that is bigger than deploying.** Recorded below.
+
+---
+
+## What the first real deploy did
+
+**2026-08-27, commit `718c1bf2`, deployment `dpl_G6pVxpaFN1AXj4NvS7w1fkPqgvAQ`.** Nine checks green,
+including the two that could not exist before this work:
+
+```
+──  Migrations
+ ·    answering: postgres as postgres at 2a05:d01c:… — PostgreSQL 17.6
+ ok   the applied history matches this commit
+ ok   nothing pending — the remote is in step with this commit
+──  Push          ok  pushed 718c1bf2 to origin/main
+──  Waiting       ok  live: https://spideryarn-reading2-1d7fhjgd3-… (dpl_G6pVxpa…)
+──  Verifying https://www.spideryarn.com
+ ok   GET /api/health                    ok   GET /build.json — the page's own stamp
+ ok   POST /api/health — a request body survives the platform
+ ok   a three-segment API path is refused by our gate, not by Vercel
+ ok   GET /api/library refused           ok   POST /api/jobs refused
+ ok   GET / is the app                   ok   1 served asset(s) … carry no secret
+ ok   GET /robots.txt is a real file with a rule in it
+──  Logs          ok  the log contains the request this script made
+                  ok  nothing at error level, on any of the three readings of it
+```
+
+It was **forced past the typecheck and test gates**, which is the thing to be honest about: 13 type
+errors and 6 failing test files, all of them other agents' in-flight work, none of them able to reach
+production — every type error is under `tests/`, and Vite's build never runs `tsc`. The banner says
+so, which is what the banner is for. It is a debt entry, not a workflow.
+
+Three things the run settled that had been assumptions:
+
+- **`/build.json` is not eaten by the SPA catch-all.** Vercel gives a real file precedence over a
+  rewrite, as `robots.txt` already did. Sol said so; production confirmed it.
+- **`VERCEL_DEPLOYMENT_ID` is available at build time.** Both artefacts carry the same one.
+- **The migration credential recipe works unattended** — `postgres` over the session pooler,
+  assembled from `.env.prod`, `inet_server_addr()` printed before anything was applied.
+
+And two bugs it found in itself, both the same shape and both now tested:
+
+- **The first attempt died on a pooler timeout** — `(EAUTHTIMEOUT) timeout while waiting for
+  message`, on a connection that worked a minute either side — and printed twenty lines of `pg`
+  internals and no verdict. The question at that moment is not what threw; it is whether anything
+  was pushed and whether the schema moved. There is now one retry, and nothing can end the run
+  without a summary.
+- **The log status field is `responseStatusCode`, not `statusCode`.** So the "a 5xx is loud" reading
+  matched nothing, ever, and printed every status as `—` while reporting itself clean. Found by
+  listing the keys of a real log line after a real deploy, which is the only way that kind of
+  mistake is ever found.
+
+The **lock** also caught itself out, before the deploy: a run piped into `head` took SIGPIPE, its
+`finally` never ran, and the lock outlived it — so every later run refused on behalf of a process
+that had been dead for minutes. It is now released on `exit` too, and a lock whose holder is gone is
+taken over rather than obeyed.
