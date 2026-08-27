@@ -104,7 +104,7 @@ this* is true of one article and nothing else.
 ```
   ┌─ / (Home) ──────────┐          ┌─ /profile ─────────────────────────────┐
   │  Spideryarn         │          │  ABOUT YOU                             │
-  │            👤 You ──┼─────────►│  ┌──────────────────────────────┐ ┌──┐ │
+  │        👤 Profile ──┼─────────►│  ┌──────────────────────────────┐ ┌──┐ │
   │  ┌────────┐┌───────┐│          │  │ Cognitive scientist, twenty  │ │🎤│ │
   │  │ card   ││ card  ││          │  │ years. Rusty on transformer  │ └──┘ │
   │  └────────┘└───────┘│          │  │ internals.                   │      │
