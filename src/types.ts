@@ -17,7 +17,6 @@
  * the drift would show up as a Retry button under a failure that cannot succeed.
  */
 import type { FailureKind } from "./messages.js";
-import type { OwnerId } from "./owner.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -1366,6 +1365,27 @@ export interface JobUpload {
   /** What the reader called the file, cleaned. Shown, never used to build a key. */
   filename: string;
 }
+
+/**
+ * A `auth.users(id)`, distinguishable by the type system from the other uuids
+ * flying around.
+ *
+ * **Defined here rather than in src/owner.ts**, where it lived until
+ * 2026-08-27, and the move is not tidying. `Job` gained an `ownerId`, this file
+ * is shared with the browser, and `src/owner.ts` imports `node:async_hooks` —
+ * so a shared module importing it drags a Node built-in towards the bundle.
+ * `tests/client-imports.test.ts` refuses that, deliberately and by path rather
+ * than by whether the import is erasable, because a shared module reaching into
+ * `src/` can drag anything with it. `owner.ts` re-exports this name, so nothing
+ * that imports it from there had to change.
+ *
+ * `ArticleId`, `RevisionId` and `OwnerId` are all `uuid` in the database and
+ * all `string` in TypeScript, so nothing but a brand stops one being passed
+ * where another is wanted — and the compiler is the only thing that would ever
+ * notice, because a wrong-but-well-formed uuid produces "no rows" rather than
+ * an error. That reads as "not found" and sends you looking in the wrong place.
+ */
+export type OwnerId = string & { readonly __brand: "OwnerId" };
 
 export interface Job {
   id: string;

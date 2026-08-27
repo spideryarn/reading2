@@ -69,17 +69,22 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import type { OwnerId } from "./types.js";
+
 /**
- * A `auth.users(id)`, distinguishable by the type system from the other uuids
- * flying around.
+ * A `auth.users(id)`, re-exported.
  *
- * `ArticleId`, `RevisionId` and `OwnerId` are all `uuid` in the database and
- * all `string` in TypeScript, so nothing but a brand stops one being passed
- * where another is wanted — and the compiler is the only thing that would ever
- * notice, because a wrong-but-well-formed uuid produces "no rows" rather than
- * an error. That reads as "not found" and sends you looking in the wrong place.
+ * **Defined in src/types.ts**, since 2026-08-27, and re-exported here so that
+ * every file already importing it from `owner.ts` goes on working — this is
+ * where it reads as belonging, and it is the name people reach for.
+ *
+ * It had to move because `Job` gained an `ownerId` and `src/types.ts` is shared
+ * with the browser, while this file imports `node:async_hooks`. A pure type has
+ * no business dragging a Node built-in towards the client bundle, and
+ * `tests/client-imports.test.ts` says so by path rather than by whether the
+ * import happens to be erasable.
  */
-export type OwnerId = string & { readonly __brand: "OwnerId" };
+export type { OwnerId } from "./types.js";
 
 /**
  * The fixed local development owner, created by `npm run db:seed-owner`.
