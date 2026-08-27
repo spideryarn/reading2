@@ -1,0 +1,316 @@
+/**
+ * **Keep the audio, so a failed dictation leaves something behind.**
+ *
+ * Greg asked for this: *"if there's an error, store the audio as a file and
+ * show a button to reveal it in the OS file explorer so the user can decide
+ * what to do with it"*.
+ *
+ * ## The half that cannot be built, said plainly
+ *
+ * **A web page cannot reveal a file in the OS file explorer.** There is no API
+ * for it and there is not going to be one — it is a sandbox boundary, not a
+ * gap. So what this produces is a `Blob` and the caller offers it as a
+ * *download*. Chrome's own downloads UI then carries a **Show in Folder** item,
+ * so the reveal still happens; it is taken by the browser at the reader's
+ * request rather than by us, one click further along. That is the nearest true
+ * thing, and the button says *Save the recording* rather than promising the
+ * other one.
+ *
+ * ## The container is the whole feature
+ *
+ * A file the reader's machine will not open fails the point of this while
+ * passing every check we could write. Measured in Chrome 151, 2026-08-27:
+ *
+ * | requested | what you get |
+ * |---|---|
+ * | `audio/mp4;codecs=mp4a.40.2` | **AAC-LC in MP4** — `ftypisom`, opens on a double-click |
+ * | `audio/mp4` | **Opus in MP4**, which macOS cannot play |
+ * | `audio/webm;codecs=opus` | fine, but nothing on a Mac opens it by default |
+ *
+ * So AAC-in-MP4 is asked for first, and **bare `audio/mp4` is deliberately not
+ * in the list at all** — it reports supported, records happily, and hands over
+ * something that looks openable and is not. That is the
+ * [silent-success](../../docs/reusable/silent-success.md) pattern with a file
+ * extension on it.
+ *
+ * ## Nothing is offered unless it is really evidence
+ *
+ * A reader handed a file is being told *this is what we heard*. So `stop()`
+ * returns null — and no button appears — unless the recorder started, never
+ * errored, finished handing over its data, produced bytes, and ran long enough
+ * to contain anything. GPT Sol's plan review, 2026-08-27, item 6: an
+ * accidental double-press must not produce a quarter-second of nothing wearing
+ * the word "recording".
+ *
+ * ## The order that matters
+ *
+ * **The recorder is stopped before the track is**, and the caller waits for
+ * this promise before releasing it. Killing the track under a live recorder
+ * loses the final `dataavailable`, which is the tail of the file — the part a
+ * reader is most likely to be looking for. GPT Sol's plan review, item 1. The
+ * wait is bounded, because a recorder that never fires `stop` must not be able
+ * to strand the microphone open.
+ *
+ * ## What it costs
+ *
+ * ~5.6 KB/s at 32 kbps (measured: 7 chunks, 13,971 bytes in 2.5s). Both a
+ * five-minute cap and a byte cap, because `audioBitsPerSecond` is a hint an
+ * encoder may exceed and a bound derived from it is arithmetic rather than a
+ * guarantee (GPT Sol, item 10). It lives in memory as `Blob` chunks and in
+ * **no other place** — never uploaded, never written to disk by us, dropped the
+ * moment a dictation produces text, and discardable by hand.
+ *
+ * Three consumers read the one track at once — the recogniser, the meter's
+ * `AnalyserNode`, and this. Verified rather than assumed: one 2.5-second run
+ * produced `start audiostart soundstart speechstart` from the recogniser,
+ * `rms 0.027` from the analyser, and 13,971 bytes here.
+ */
+
+/** What a finished recording is. Never handed over empty, short, or broken. */
+export interface MicRecording {
+  blob: Blob;
+  /** What the recorder actually produced, which may not be what we asked for. */
+  mimeType: string;
+  /** The file extension that matches it — `m4a`, `webm`. No leading dot. */
+  ext: string;
+  /** How long it ran, in ms. For the label on the button. */
+  ms: number;
+  /** It hit a cap and stopped early, so this is the beginning and not the whole. */
+  capped: boolean;
+}
+
+/** A recording in progress. Exactly one of `stop` / `cancel` is called, once. */
+export interface MicTape {
+  /**
+   * Stop, and hand back what was recorded once the recorder has finished with
+   * it. Null when there is nothing worth offering.
+   *
+   * **The caller must await this before stopping the track** — see the header.
+   */
+  stop(): Promise<MicRecording | null>;
+  /** Stop and throw it away. For the ordinary case where dictation worked. */
+  cancel(): void;
+}
+
+/**
+ * In order of preference. See the header for why bare `audio/mp4` is absent —
+ * it is not an oversight and putting it back breaks the feature silently.
+ */
+const PREFERRED = ["audio/mp4;codecs=mp4a.40.2", "audio/webm;codecs=opus", "audio/webm"];
+
+/** Speech, not music. 32 kbps of AAC is comfortably enough to hear what was said. */
+const BITRATE = 32_000;
+/** A chunk a second, so a stop mid-second still has the second before it. */
+const TIMESLICE_MS = 1000;
+/**
+ * The caps. Recording stops; **dictation carries on** — running out of tape is
+ * not a reason to take the microphone away from somebody mid-sentence, and the
+ * saved file then says it is only the beginning.
+ */
+const MAX_MS = 5 * 60_000;
+/** Belt to the cap's braces: a bound on what is actually held, not on a bitrate hint. */
+const MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * Shorter than this and there is nothing in it worth calling evidence.
+ *
+ * A press immediately followed by a second press produces no confirmed text and
+ * would otherwise offer the reader a fraction of a second of room tone as
+ * though it explained something. GPT Sol's plan review, item 5.
+ */
+const MIN_MS = 2000;
+/** How long to wait for a recorder to finish before releasing the track anyway. */
+const FLUSH_TIMEOUT_MS = 3000;
+
+/** The best container this browser will give us, or undefined to let it choose. */
+export function pickMimeType(
+  /* `isTypeSupported` is checked for existence, not merely `MediaRecorder`.
+     They arrived separately — Safari shipped the recorder before the probe —
+     and calling a missing one throws where returning `undefined` would have
+     been perfectly fine: the recorder picks its own container and we read back
+     whatever it produced. Found by a fake that did not have it. */
+  supported: (type: string) => boolean = (type) =>
+    typeof MediaRecorder !== "undefined" &&
+    typeof MediaRecorder.isTypeSupported === "function" &&
+    MediaRecorder.isTypeSupported(type),
+): string | undefined {
+  for (const type of PREFERRED) if (supported(type)) return type;
+  return undefined;
+}
+
+/**
+ * The file extension for a mime type, so the saved file opens in the right
+ * thing rather than arriving as an anonymous blob. Taken from what the recorder
+ * says it *produced*, never from what we asked it for.
+ */
+export function extFor(mimeType: string): string {
+  const base = mimeType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (base === "audio/mp4") return "m4a";
+  if (base === "audio/webm") return "webm";
+  if (base === "audio/ogg") return "ogg";
+  if (base === "audio/wav" || base === "audio/wave") return "wav";
+  const sub = base.split("/")[1];
+  return sub && /^[a-z0-9]+$/.test(sub) ? sub : "bin";
+}
+
+/**
+ * A filename with the time in it, so two saved recordings do not collide and so
+ * the reader can tell which press it was.
+ *
+ * Local time rather than UTC, and punctuation a filesystem will accept: this
+ * name is read by a person looking at a downloads folder, and `2026-08-27
+ * 14-32-05` is the form they can match against their own memory of when they
+ * pressed the button.
+ */
+export function recordingFilename(at: Date, ext: string): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())} ${p(
+    at.getHours(),
+  )}-${p(at.getMinutes())}-${p(at.getSeconds())}`;
+  return `spideryarn dictation ${stamp}.${ext}`;
+}
+
+/**
+ * `m:ss`, for the running timer and for the length on the save button.
+ *
+ * The same function for both on purpose: they are two views of one duration,
+ * and the moment they are formatted separately is the moment they disagree by a
+ * second and somebody has to work out which is lying. Minutes are not padded —
+ * `0:07`, not `00:07` — because a stopwatch reads more like a stopwatch that
+ * way, and hours are simply carried into the minutes (`61:00`) rather than
+ * growing a third field for a case dictation will never reach.
+ */
+export function formatDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+/**
+ * Start recording a track. Null where there is no `MediaRecorder`, or where it
+ * refuses to start.
+ *
+ * **Never throws, and never stops the track.** The track belongs to
+ * [`useDictation`](./useDictation.ts); this is one more reader of it. A
+ * recording that cannot start must not be a reason dictation does not.
+ */
+export function recordTrack(track: MediaStreamTrack): MicTape | null {
+  if (typeof MediaRecorder === "undefined") return null;
+  const wanted = pickMimeType();
+  let rec: MediaRecorder;
+  try {
+    rec = new MediaRecorder(
+      new MediaStream([track]),
+      wanted ? { mimeType: wanted, audioBitsPerSecond: BITRATE } : { audioBitsPerSecond: BITRATE },
+    );
+  } catch {
+    return null;
+  }
+
+  const chunks: Blob[] = [];
+  let bytes = 0;
+  let cancelled = false;
+  let errored = false;
+  let capped = false;
+  /** The recorder never finished handing over its data. Not a complete file. */
+  let timedOut = false;
+  const startedAt = Date.now();
+  let endedAt: number | null = null;
+
+  const halted = () => {
+    try {
+      if (rec.state !== "inactive") rec.stop();
+    } catch {
+      /* Already inactive. */
+    }
+  };
+
+  rec.ondataavailable = (e) => {
+    if (cancelled || e.data.size === 0) return;
+    /* **Checked before the chunk is kept, not after.** The first version stored
+       it and then noticed, which bounds nothing: a delayed `dataavailable` can
+       be any size at all, so the "cap" was a promise about a number nobody had
+       looked at yet. GPT Sol's code review, 2026-08-27, item 4. Refusing the
+       chunk that would overflow costs the last second of a five-minute
+       recording, and the button says *Save the first 4:59* rather than
+       claiming the whole of it. */
+    if (bytes + e.data.size > MAX_BYTES) {
+      capped = true;
+      halted();
+      return;
+    }
+    chunks.push(e.data);
+    bytes += e.data.size;
+  };
+  /* One promise for "the recorder has finished handing us data", resolved by
+     whichever of the two events arrives. `onerror` resolves it too, because a
+     recorder that has failed is never going to fire `onstop` and a `stop()`
+     awaiting it would hold the microphone open for ever. */
+  const done = new Promise<void>((resolve) => {
+    rec.onstop = () => {
+      endedAt = Date.now();
+      resolve();
+    };
+    rec.onerror = () => {
+      /* **Errored means no file.** A recorder that failed part way through has
+         produced something we cannot describe honestly, and offering it as "the
+         recording" would be a claim about audio we do not have. */
+      errored = true;
+      endedAt = Date.now();
+      resolve();
+    };
+  });
+
+  try {
+    rec.start(TIMESLICE_MS);
+  } catch {
+    return null;
+  }
+
+  const cap = window.setTimeout(() => {
+    capped = true;
+    halted();
+  }, MAX_MS);
+
+  const halt = async () => {
+    window.clearTimeout(cap);
+    halted();
+    /* Bounded. The caller stops the track the moment this resolves, and a
+       recorder that never fires `stop` must not be able to leave the browser's
+       recording indicator lit on a page nobody is dictating into.
+       **But which of the two won matters.** If the timeout did, the recorder
+       never finished and the chunks in hand are missing their last piece —
+       offering them would be handing the reader a partial file described as
+       what we captured. So the wait reports its winner and a timed-out flush
+       yields nothing. GPT Sol's code review, item 3. */
+    const finished = await Promise.race([
+      done.then(() => true),
+      new Promise<boolean>((resolve) =>
+        window.setTimeout(() => resolve(false), FLUSH_TIMEOUT_MS),
+      ),
+    ]);
+    if (!finished) timedOut = true;
+  };
+
+  return {
+    async stop() {
+      await halt();
+      if (cancelled || errored || timedOut) return null;
+      const mimeType = rec.mimeType || wanted || "audio/webm";
+      const blob = new Blob(chunks, { type: mimeType });
+      // Dropped either way: the Blob owns the data now, and holding the chunks
+      // as well would double the memory for as long as the page is open.
+      chunks.length = 0;
+      const ms = (endedAt ?? Date.now()) - startedAt;
+      /* Empty, or too short to contain anything. Neither is evidence, and
+         neither may be handed to a reader as if it were. */
+      if (blob.size === 0 || ms < MIN_MS) return null;
+      return { blob, mimeType, ext: extFor(mimeType), ms, capped };
+    },
+    cancel() {
+      cancelled = true;
+      chunks.length = 0;
+      void halt();
+    },
+  };
+}

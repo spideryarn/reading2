@@ -6892,3 +6892,15 @@ tr:hover .block-chat,
   stroke-linecap: round;
 }
 .diag-trail .diag-arrowhead { fill: rgb(var(--diag-chain) / 0.8); }
+
+/* A microphone was chosen and could not be opened, so something else is in use.
+   Warm rather than red: it is a fact worth knowing, not a failure — dictation is
+   working, just not through the device the reader picked.
+   docs/plans/microphone-device-and-recording.md. */
+.prof-mic-warn {
+  margin: 0.25rem 0 0;
+  color: var(--highlight-ink, var(--highlight));
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}

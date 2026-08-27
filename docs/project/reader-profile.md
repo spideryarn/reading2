@@ -350,6 +350,72 @@ most time: **`requestAnimationFrame` does not run in a hidden tab**, so the mete
 when driven from browser automation that is not frontmost, with every other part of the audio graph
 checking out perfectly.
 
+## And then it was still broken, and the microphone was not
+
+Greg pressed it again a few hours later: *"I just tried and it still doesn't seem to be working, and
+doesn't show any indication of input volume."* Nothing was broken this time either. What
+`getUserMedia({ audio: true })` handed the page was:
+
+```
+track = "Microsoft Teams Audio Device (Virtual)"   readyState=live   muted=false
+```
+
+A conferencing loopback. Every sample it produced was **exactly `0.0`** — not a quiet room, which
+measures −70 to −51 dBFS, but digital silence. Measured against the built-in microphone in the same
+minute, on the same page: `0.044` peak, −27 dBFS. The recogniser transcribed nothing because there
+was nothing to transcribe; the meter drew a flat line because the line was flat. Both instruments
+were correct and neither was any use, **because nothing on the page said which microphone had
+produced that zero.**
+
+That is the same failure the meter itself was built to end, one layer further down. An observation
+without the thing observed is half an instrument. So:
+
+- **The strip names the device**, at the moment it is diagnostic — on the quiet line, not all the
+  time. *"No sound detected yet · Microsoft Teams Audio Device (Virtual) · Change"*: two facts side
+  by side rather than one sentence joining them, because *"no sound **from** X"* turns a
+  ten-second threshold into a verdict about a device, which is exactly the accusation the section
+  above exists to refuse.
+- **The reader can pick a different one.** [`mic-devices.ts`](../../src/web/mic-devices.ts), stored
+  in `localStorage`, sent as `{ deviceId: { exact } }` — `exact` rather than `ideal`, because
+  `ideal` silently substitutes another device when the named one is gone, which is this whole bug
+  wearing a constraint. We deliberately do **not** guess: no preferring `'default'`, no skipping
+  labels matching `/virtual|teams|zoom/`. Both would override a decision the reader made in their
+  own browser settings.
+
+### The button says what pressing it does, and for how long
+
+Two smaller things Greg asked for in the same breath. The armed button wore `MicOff`, which is the
+icon for *muted* — so the one moment the microphone was live it showed the glyph for dead. It is now
+a filled **square** in both armed phases, on the rule that the icon says what the *press* does; the
+phase is carried by colour, the pulse, and the strip's own words. And there is an `m:ss` timer,
+whose zero is the first `audiostart` rather than the press, because the 1.1 seconds before the
+device opens are not seconds of anything.
+
+### What we heard, when nothing came back
+
+Greg also asked for the audio to be kept on failure, with *"a button to reveal it in the OS file
+explorer"*. **A web page cannot reveal a file in the OS file explorer** — no API, sandbox boundary,
+not a gap. The nearest true thing is a download, after which Chrome's own downloads UI carries a
+*Show in Folder*, so the reveal happens one click along and at the reader's request. The button
+promises only what it does: *Save 0:14*.
+
+The trigger is **not** "if there's an error", which is what was asked for and would have been silent
+through the entire failure that prompted it — a silent device produces `no-speech`, which is
+suppressed, and Chrome restarts happily. It is **"the dictation ended having transcribed nothing"**,
+which covers the silence, the `network` error and the failed Safari restart alike. A recording of
+Greg's session would have been fourteen seconds of digital silence, which is the proof.
+
+The rules that keep it honest, all in [`mic-recording.ts`](../../src/web/mic-recording.ts): nothing
+is offered unless the recorder started, never errored, finished, produced bytes, and ran at least
+two seconds; the recorder is drained *before* the track is released, or the tail of the file goes
+missing; it is dropped when the dictation produced text, on unmount, on the next press, and by hand;
+it is never uploaded anywhere. And the container is AAC-in-MP4 — because bare `audio/mp4` reports
+supported, records happily, and produces **Opus in MP4**, which macOS cannot play. A file the
+reader's machine will not open fails the whole point while passing every check.
+
+The measurements, both reviews and the two bugs the tests found after the reviews are in
+[microphone-device-and-recording.md](../plans/microphone-device-and-recording.md).
+
 ## Where the pieces are
 
 | | |
@@ -368,6 +434,8 @@ checking out perfectly.
 | [`src/web/audio-level.ts`](../../src/web/audio-level.ts) | pure: RMS, the decibel mapping, the measured floor, the smoothing |
 | [`src/web/dictation-errors.ts`](../../src/web/dictation-errors.ts) | pure: every error code to a sentence, totally |
 | [`src/web/MicLevel.tsx`](../../src/web/MicLevel.tsx) | the five bars, and the frame loop that never re-renders |
+| [`src/web/mic-devices.ts`](../../src/web/mic-devices.ts) | which microphone: the list, the remembered choice, and why the constraint is `exact` |
+| [`src/web/mic-recording.ts`](../../src/web/mic-recording.ts) | keeping the audio of a dictation that produced nothing, and the container that opens on a Mac |
 
 ## What is still open
 
@@ -397,6 +465,8 @@ checking out perfectly.
   [summaries.md](summaries.md) · [comments.md](comments.md) · [prompt-caching.md](prompt-caching.md)
 - [microphone-level-meter.md](../plans/microphone-level-meter.md) — the microphone's diagnosis and
   rebuild, and the two GPT Sol reviews behind it
+- [microphone-device-and-recording.md](../plans/microphone-device-and-recording.md) — the device that
+  emitted digital silence, the stop glyph, the timer, and the audio kept when nothing came back
 - [browser-testing.md](browser-testing.md) — why a hidden tab makes the level meter read zero
 - [library.md](library.md) — the shelf record `purpose` joins
 - [silent-success.md](../reusable/silent-success.md) — a profile that silently stops reaching a
