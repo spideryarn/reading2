@@ -44,9 +44,10 @@
  * about. What it buys is worth being honest about: the edges are a *hint* about
  * shared subject matter, not a claim about argument structure.
  */
-import type { Block, BlockId, NodeId } from "../types.js";
+import type { Block, BlockId, NodeId, SimilarPair } from "../types.js";
+
 import type { SummaryNode } from "./tree.js";
-import { MAX_DRAWN_DEPTH, walk } from "./diagram.js";
+import { type LinkKind, MAX_DRAWN_DEPTH, walk } from "./diagram.js";
 
 /** One node of the graph: a part or a section, with what it is made of. */
 export interface GraphNode {
@@ -69,25 +70,54 @@ export interface GraphNode {
 }
 
 /**
- * What an edge means. Three kinds, and they are not interchangeable — a layout
- * chooses which to obey, and says so.
+ * What an edge means. Five kinds, and they are not interchangeable — a layout
+ * chooses which to obey and which to draw, and says so.
+ *
+ * The union itself is declared in [diagram.ts](./diagram.ts) as `LinkKind`,
+ * because a drawn link carries it and that file may not import this one. See
+ * the comment there.
+ *
+ * They are not five versions of one claim. Ordered by how much they know:
+ *
+ *  - `parent` and `sequence` are **facts about the tree** — free, exact, and
+ *    saying nothing a contents page could not.
+ *  - `anchor` is a **fact about the document**: the author wrote a link from
+ *    this passage to that one. It is the only edge here that somebody meant.
+ *  - `vocabulary` is **arithmetic over the words** — checkable, cheap, and a
+ *    hint rather than a claim.
+ *  - `semantic` is **a model's opinion**, and the only one that costs money or
+ *    can be wrong in a way no amount of reading the code would reveal.
+ *
+ * A picture that renders all five identically would be flattening that ladder,
+ * which is why the stylesheet gives each its own weight and dash.
  */
-export type EdgeKind =
-  /** Containment: a part to one of its sections. */
-  | "parent"
-  /** Reading order: this section is followed by that one. */
-  | "sequence"
-  /** Shared subject matter, from term overlap. The one a tree cannot hold. */
-  | "vocabulary";
+export type EdgeKind = LinkKind;
 
 export interface GraphEdge {
   source: NodeId;
   target: NodeId;
   kind: EdgeKind;
-  /** 0–1. For `vocabulary`, how much the two sections' distinctive terms agree. */
+  /** 0–1. For `vocabulary` and `semantic`, how alike the two ends are. */
   weight: number;
   /** `vocabulary` only: the terms they share, best first. For the hover card. */
   shared?: string[];
+  /**
+   * `anchor` only: the author's own link text, e.g. *"how we think about
+   * corrigibility"*.
+   *
+   * Shown rather than paraphrased. It is the writer's word for the
+   * relationship, and nothing computed here is going to improve on it.
+   */
+  label?: string;
+  /**
+   * `semantic` only: the two blocks whose embeddings actually earned the edge.
+   *
+   * An edge between two *sections* rests on one pair of *passages*, and without
+   * this the reader is shown a line and asked to take it on trust. Same rule as
+   * `shared` above — a line you cannot interrogate looks exactly as
+   * authoritative as one that is right.
+   */
+  passages?: [BlockId, BlockId];
 }
 
 export interface ArticleGraph {
@@ -273,6 +303,17 @@ export function buildGraph(
   root: SummaryNode,
   blocks: readonly Block[],
   collapsed: ReadonlySet<NodeId> = new Set(),
+  /**
+   * The embedding model's answer, if it has arrived — `POST /api/similar/:slug`
+   * (src/similar.ts).
+   *
+   * Optional, and the picture is complete without it. The three cheap kinds of
+   * edge are free and instant; this one costs a model call, so it arrives late
+   * and is folded in on a second build rather than being waited for. A diagram
+   * that showed a spinner while it was already able to draw four fifths of
+   * itself would be lying about what was missing.
+   */
+  similar: readonly SimilarPair[] = [],
 ): ArticleGraph {
   const prefix = wordsBefore(blocks);
 
@@ -382,24 +423,168 @@ export function buildGraph(
   const edges: GraphEdge[] = [];
   const byId = new Map(nodes.map((n) => [n.id, n]));
 
-  // Containment and reading order, straight off the tree.
+  // Containment, straight off the tree.
   const visit = (s: SummaryNode) => {
     if (collapsed.has(s.node.id)) return;
-    let prev: SummaryNode | null = null;
     for (const c of s.children) {
       if (!byId.has(c.node.id)) continue;
       edges.push({ source: s.node.id, target: c.node.id, kind: "parent", weight: 1 });
-      if (prev) {
-        edges.push({ source: prev.node.id, target: c.node.id, kind: "sequence", weight: 1 });
-      }
-      prev = c;
       visit(c);
     }
   };
   visit(root);
 
-  /* Vocabulary, between the deepest drawn nodes only. Between a part and its own
-     section it would be near 1 by construction and would say nothing. */
+  /* **Reading order, as one chain through the article.**
+   *
+   * Greg, 2026-08-27: *"Add thick links with an arrow on one end to show the
+   * sequence, i.e. between each consecutive pair."*
+   *
+   * It used to be an edge between consecutive **siblings**, which meant a link
+   * between 1.1 and 1.2 and between part 1 and part 2, and never one between
+   * 1.4 and 2.1. So the article's actual reading order was the one relation
+   * missing, and it was missing at every part boundary — which is precisely
+   * where a reader wants to be told what follows what, because it is the only
+   * place the answer is not obvious.
+   *
+   * The chain runs through the **deepest drawn** nodes, which is what makes it
+   * survive collapse: a part with drawn children is not in the chain (its
+   * children are, and the chain passes through them), and a part with none —
+   * because it is a depth-1 leaf, or because the reader closed it — is itself a
+   * link in the chain. Closing a part shortens the chain rather than breaking
+   * it.
+   *
+   * Sorted by `startRow` rather than trusted from `walk`, and the tie-break is
+   * the end row so a zero-length node sits before the section it opens. `walk`
+   * is a pre-order traversal and does already return reading order; sorting is
+   * one line and makes that a property of this function rather than an
+   * assumption about another one.
+   */
+  const chain = leaves
+    .filter((n) => n.depth > 0)
+    .slice()
+    .sort((a, b) => a.startRow - b.startRow || a.endRow - b.endRow);
+  /** Every node pair the chain already joins, canonicalised. See `semanticEdges`. */
+  const consecutive = new Set<string>();
+  for (let i = 1; i < chain.length; i++) {
+    const from = chain[i - 1];
+    const to = chain[i];
+    if (!from || !to) continue;
+    // Source is always the earlier one, because the arrowhead goes on the
+    // target and an arrow pointing backwards up the article would be a lie.
+    edges.push({ source: from.id, target: to.id, kind: "sequence", weight: 1 });
+    consecutive.add(pairKey(from.id, to.id));
+  }
+
+  for (const e of anchorEdges(blocks, nodes)) edges.push(e);
+  for (const e of semanticEdges(blocks, nodes, similar, consecutive)) edges.push(e);
+
+  for (const e of vocabularyEdges(leaves, vectors)) edges.push(e);
+
+  return {
+    nodes,
+    edges,
+    byId,
+    totalWords: prefix[prefix.length - 1] ?? 0,
+    wordsBefore: prefix,
+  };
+}
+
+/** An anchor edge under construction, carrying how far apart its ends are. */
+type AnchorPair = GraphEdge & { distance: number };
+
+/**
+ * Every internal link in the article, aggregated into one entry per node pair.
+ *
+ * Split out of `anchorEdges` so that the scanning and the capping are two
+ * things rather than one forty-line function: the first is about HTML, the
+ * second is about how many lines a picture can carry.
+ */
+function collectAnchorLinks(
+  doc: Document,
+  nodes: readonly GraphNode[],
+  rows: ReadonlyMap<string, number>,
+  pairs: Map<string, AnchorPair>,
+): void {
+  for (const a of doc.querySelectorAll("a[href]")) {
+    const href = a.getAttribute("href") ?? "";
+    /* `#` alone is a real thing in the wild and means "the top of this page",
+       which is not a block. Same refusal internal-links.ts makes. */
+    if (href.length < 2 || !href.startsWith("#")) continue;
+    const row = rowOfElement(a);
+    if (row === null) continue;
+
+    const raw = href.slice(1);
+    const targetRow = rows.get(decodeFragment(raw)) ?? rows.get(raw);
+    /* A fragment nothing in this document answers to. Drawing a line to the
+       nearest thing would be inventing a destination, which is worse than the
+       dead link — internal-links.ts refuses the same case for the same reason,
+       and reading a missing lookup as row 0 would put a confident line on the
+       first section of the article. */
+    if (targetRow === undefined) continue;
+    const from = nodeAtRow(nodes, row);
+    const to = nodeAtRow(nodes, targetRow);
+    if (!from || !to || from.id === to.id) continue;
+
+    const key = pairKey(from.id, to.id);
+    const existing = pairs.get(key);
+    if (existing) {
+      existing.weight += 1;
+      continue;
+    }
+    /* The author's own words for the relationship. `textContent`, so entities
+       arrive as the characters they stand for — a tag strip over the raw HTML
+       showed a reader the literal string `A &amp; B`. Not truncated here: the
+       card decides how much of it fits, because this file does not know how
+       wide the card is. */
+    const label = (a.textContent ?? "").replace(/\s+/g, " ").trim();
+    pairs.set(key, {
+      source: from.id,
+      target: to.id,
+      kind: "anchor",
+      weight: 1,
+      ...(label ? { label } : {}),
+      distance: Math.abs(targetRow - row),
+    });
+  }
+}
+
+/**
+ * The most anchor edges to keep, and the most semantic ones.
+ *
+ * Two different worries behind one shape of constant.
+ *
+ * `MAX_ANCHOR_EDGES` is about **footnotes**. Nothing in this corpus has them
+ * today (see the table in docs/plans/force-diagram-links.md — five internal
+ * links across seven articles, all of them in the constitution), but a paper
+ * with forty back-links from its endnotes to their markers would draw forty
+ * lines converging on one bubble and call it structure. The cap is what stops
+ * the honest case being buried by the pathological one.
+ *
+ * `MAX_SEMANTIC_EDGES` is about **the question being asked**. Greg wanted to
+ * see what embeddings do to the shape of the picture, and a hairball answers
+ * nothing — the same reasoning as `MAX_EDGES_PER_NODE` above, which is the
+ * constant doing most of the work in the vocabulary half.
+ */
+const MAX_ANCHOR_EDGES = 12;
+/** …and no one section may account for more than this many of them. */
+const MAX_ANCHOR_PER_NODE = 3;
+const MAX_SEMANTIC_EDGES = 10;
+
+/**
+ * **Shared distinctive words**, between the deepest drawn nodes only.
+ *
+ * Between a part and its own section the score would be near 1 by construction
+ * and would say nothing, which is why parts are not candidates.
+ *
+ * Its own function since 2026-08-27, so that it sits beside `anchorEdges` and
+ * `semanticEdges` and the three read alike. Before that it was inline in
+ * `buildGraph`, which by the time two more kinds of edge had been added was
+ * doing five separate jobs in one scope.
+ */
+function vocabularyEdges(
+  leaves: readonly GraphNode[],
+  vectors: ReadonlyMap<NodeId, Map<string, number>>,
+): GraphEdge[] {
   const candidates: GraphEdge[] = [];
   for (let i = 0; i < leaves.length; i++) {
     for (let j = i + 1; j < leaves.length; j++) {
@@ -431,6 +616,7 @@ export function buildGraph(
      edge. Sorted by weight, with the ids as the tie-break so the picture does
      not reshuffle between two runs on identical input. */
   candidates.sort((x, y) => y.weight - x.weight || `${x.source}${x.target}`.localeCompare(`${y.source}${y.target}`));
+  const out: GraphEdge[] = [];
   const kept = new Set<string>();
   const degree = new Map<NodeId, number>();
   for (const e of candidates) {
@@ -441,16 +627,268 @@ export function buildGraph(
     kept.add(key);
     degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
     degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
-    edges.push(e);
+    out.push(e);
   }
 
-  return {
-    nodes,
-    edges,
-    byId,
-    totalWords: prefix[prefix.length - 1] ?? 0,
-    wordsBefore: prefix,
+  return out;
+}
+
+/** One key per unordered pair of nodes, so A–B and B–A are one thing. */
+function pairKey(a: NodeId, b: NodeId): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+/** Which drawn node contains this row — the deepest one, since they nest. */
+function nodeAtRow(nodes: readonly GraphNode[], row: number): GraphNode | null {
+  let best: GraphNode | null = null;
+  for (const n of nodes) {
+    if (row < n.startRow || row > n.endRow) continue;
+    if (!best || n.depth > best.depth) best = n;
+  }
+  return best;
+}
+
+/**
+ * The article's blocks, parsed once into one inert document, each wrapped in a
+ * marker that says which row it came from.
+ *
+ * **`DOMParser`, not `innerHTML` on a detached element.** A parsed document is
+ * inert — no scripts, and no image loads — where assigning `innerHTML` starts
+ * fetching every `<img src>` in the article. Building a diagram must not
+ * download the pictures.
+ *
+ * Returns null where there is no DOM at all. That is a degradation rather than
+ * a second implementation — the anchor edges are simply absent — and it is
+ * worth knowing how convincingly it lies.
+ *
+ * Running the graph over the real constitution in a plain Node script
+ * immediately after this rewrite reported **0 anchor edges where the regex had
+ * found 5**, and everything else in the output was identical. It read exactly
+ * like the rewrite having broken the feature; it was `DOMParser` being absent
+ * from Node. Six of seven articles in this corpus legitimately have no
+ * cross-references at all, so "none" is the *expected* answer nearly
+ * everywhere, which is what makes the wrong "none" so hard to see.
+ *
+ * This file is client code and only ever runs in a browser, where `DOMParser`
+ * always exists. Anything that runs it elsewhere — a test, a script, a future
+ * prerender — has to supply one, or it is measuring the fallback and calling it
+ * a result.
+ */
+function parseBlocks(blocks: readonly Block[]): Document | null {
+  if (typeof DOMParser === "undefined") return null;
+  const html = blocks
+    .map((b, row) => `<div data-diag-row="${row}">${b.html}</div>`)
+    .join("");
+  try {
+    return new DOMParser().parseFromString(html, "text/html");
+  } catch {
+    return null;
+  }
+}
+
+/** Which row a parsed element came from, via its wrapper. */
+function rowOfElement(el: Element): number | null {
+  const wrapper = el.closest("[data-diag-row]");
+  const raw = wrapper?.getAttribute("data-diag-row");
+  const row = raw === null || raw === undefined ? Number.NaN : Number(raw);
+  return Number.isInteger(row) ? row : null;
+}
+
+/**
+ * Every fragment this document answers to, mapped to the row that answers.
+ *
+ * Three sources, in the order the HTML spec resolves a fragment and the order
+ * stage 3 renames them in (src/blocks.ts § WAS_ID): a block's own id, an `id=`
+ * on anything inside a block, and an `<a name=>`. **First occurrence wins** —
+ * duplicate ids are invalid HTML and common in the wild, and `querySelector`
+ * would return the first, so this returns the first too. Agreeing with the
+ * browser matters here: [internal-links.ts](./internal-links.ts) resolves the
+ * same click through the real DOM, and a picture that draws a line to a
+ * different place from where the click lands would be worse than no line.
+ *
+ * ## This was a regex, and the argument for that was wrong
+ *
+ * The first version scanned `block.html` with `matchAll`, reasoning that this
+ * is not arbitrary web HTML — it is jsdom's own serialisation, written by stage
+ * 3, so it is well-formed and double-quoted. That is true and it is not
+ * enough. GPT Sol produced the counterexample: **`<a title="1 > 0"
+ * href="#target">` is valid serialised HTML**, because the serialiser escapes
+ * `&`, `<` and `"` inside an attribute value but has no reason to escape `>`.
+ * A `[^>]*` pattern stops at that `>` and finds no link at all. And the tag
+ * strip on the link text returned `A &amp; B` to be shown to a reader as those
+ * literal characters.
+ *
+ * Both failures are silent — one loses an edge, the other prints mojibake — and
+ * both are things a parser gets right for free. **One inert parse for the whole
+ * article** is the cost, inside a memo that already walks every block.
+ *
+ * **One thing that is true of no implementation**: an id can be gone entirely.
+ * DOMPurify deletes clobber-prone ids, which is why stage 3 stamps its own
+ * before sanitisation (src/blocks.ts, and docs/project/block-ids.md § the one
+ * class of id DOMPurify deletes). A link whose target was removed that way
+ * resolves to nothing here — correctly, since it resolves to nothing in the
+ * reading view either.
+ */
+function fragmentRows(doc: Document | null, blocks: readonly Block[]): Map<string, number> {
+  const rows = new Map<string, number>();
+  const put = (key: string | null | undefined, row: number) => {
+    if (key && !rows.has(key)) rows.set(key, row);
   };
+  for (const [row, b] of blocks.entries()) put(b.id, row);
+  if (!doc) return rows;
+
+  /* **Two passes, and the order between them is the rule rather than a
+     detail.** Every `id` in the document beats every `<a name>`, wherever each
+     sits — the order the HTML spec resolves a fragment in, and the order stage
+     3 renames them in. Interleaved, a `name` in block 2 would beat an `id` in
+     block 40, which is neither of those orders and is a divergence from what a
+     click actually does. */
+  for (const el of doc.querySelectorAll("[id]")) {
+    const row = rowOfElement(el);
+    if (row !== null) put(el.getAttribute("id"), row);
+  }
+  for (const el of doc.querySelectorAll("a[name]")) {
+    const row = rowOfElement(el);
+    if (row !== null) put(el.getAttribute("name"), row);
+  }
+  return rows;
+}
+
+/** `decodeURIComponent` throws on a lone `%`; a malformed fragment is just text. */
+function decodeFragment(fragment: string): string {
+  try {
+    return decodeURIComponent(fragment);
+  } catch {
+    return fragment;
+  }
+}
+
+/**
+ * **The article's own cross-references** — the one kind of edge in this picture
+ * that somebody meant.
+ *
+ * Greg, 2026-08-27: *"Add thin links if there's an anchor link between
+ * sections."*
+ *
+ * A published page links to itself, and by the time the HTML reaches here stage
+ * 3 has already repointed every such href at our block id (`retargetAnchors` in
+ * src/blocks.ts). So this is a scan and a lookup: no model, no network, nothing
+ * to be wrong about except the lookup itself.
+ *
+ * Everything else in this file is a *guess* about relatedness — good arithmetic
+ * over the words, or a model's opinion. This is a fact about the document, and
+ * it gets its own colour and the author's own link text for that reason.
+ *
+ * Rare, and that is the correct output rather than a failure: measured across
+ * the whole corpus on 2026-08-27, six of seven articles have **no** internal
+ * links at all and the constitution has five. All five are long-range, which is
+ * what makes them worth drawing — they span distances no other line here can
+ * cross truthfully.
+ */
+function anchorEdges(blocks: readonly Block[], nodes: readonly GraphNode[]): GraphEdge[] {
+  const doc = parseBlocks(blocks);
+  const rows = fragmentRows(doc, blocks);
+  /** One entry per pair of nodes, however many links join them. */
+  const pairs = new Map<string, AnchorPair>();
+
+  if (doc) collectAnchorLinks(doc, nodes, rows, pairs);
+
+  const ranked = [...pairs.values()].sort(
+    (a, b) =>
+      b.weight - a.weight ||
+      b.distance - a.distance ||
+      `${a.source}${a.target}`.localeCompare(`${b.source}${b.target}`),
+  );
+
+  /* **A degree cap as well as a total, which is not belt and braces.** A total
+     of twelve is still twelve lines converging on one bubble if the article has
+     an endnotes section that every prose section links into — the picture would
+     be a star, and the star would be *true* and would tell the reader nothing
+     they did not know about a bibliography. The degree cap is what makes the
+     total spread out. Same division of labour as `MAX_EDGES_PER_NODE` and
+     `EDGE_FLOOR` above, where the cap does more work than the threshold. GPT
+     Sol's finding, 2026-08-27. */
+  const degree = new Map<NodeId, number>();
+  const out: GraphEdge[] = [];
+  for (const { distance: _distance, ...e } of ranked) {
+    if (out.length >= MAX_ANCHOR_EDGES) break;
+    if ((degree.get(e.source) ?? 0) >= MAX_ANCHOR_PER_NODE) continue;
+    if ((degree.get(e.target) ?? 0) >= MAX_ANCHOR_PER_NODE) continue;
+    degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+    degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+    out.push(e);
+  }
+  return out;
+}
+
+/**
+ * **What the embedding model thinks is alike**, folded into the graph.
+ *
+ * The pairs arrive from `GET /api/similar/:slug` as *block* pairs, because that
+ * is the unit that was embedded — Greg asked for "an embedding for each block".
+ * The picture draws *sections*, so each pair is mapped to the two drawn nodes
+ * containing its blocks and pairs landing inside one node are dropped: a
+ * section being about itself is not a finding.
+ *
+ * **One edge per node pair, and it remembers which two passages earned it.**
+ * Several block pairs can point at the same two sections; the best-scoring one
+ * wins and its block ids ride along on the edge, so the card can name the
+ * passages rather than asking the reader to trust a dotted line. Same rule as
+ * `shared` on a vocabulary edge, and for the same reason.
+ */
+function semanticEdges(
+  blocks: readonly Block[],
+  nodes: readonly GraphNode[],
+  similar: readonly SimilarPair[],
+  /**
+   * The node pairs the reading-order chain already joins.
+   *
+   * **The server's `|i − j| ≤ 1` guard is not enough, and this is where the
+   * rest of that job has to be done.** That guard is about *blocks*; the
+   * picture draws *sections*. Two paragraphs six rows apart can sit in
+   * consecutive sections, sail past the block-adjacency test, and come out as a
+   * dotted line drawn along exactly the thick arrow that is already there —
+   * a finding that is not a finding, spending one of ten slots to restate the
+   * thing the picture says loudest. And the set changes under collapse, which
+   * only this side knows about. GPT Sol's finding, 2026-08-27.
+   */
+  consecutive: ReadonlySet<string>,
+): GraphEdge[] {
+  if (similar.length === 0) return [];
+  const rowOf = new Map<BlockId, number>();
+  for (const [row, b] of blocks.entries()) if (!rowOf.has(b.id)) rowOf.set(b.id, row);
+
+  const pairs = new Map<string, GraphEdge>();
+  for (const p of similar) {
+    const ra = rowOf.get(p.a);
+    const rb = rowOf.get(p.b);
+    // A block the article no longer has: the similarity answer is cached
+    // against a source hash, so this should not happen — and if it does, the
+    // honest response is to drop the pair rather than to guess at a row.
+    if (ra === undefined || rb === undefined) continue;
+    const from = nodeAtRow(nodes, ra);
+    const to = nodeAtRow(nodes, rb);
+    if (!from || !to || from.id === to.id) continue;
+
+    const key = pairKey(from.id, to.id);
+    // Already drawn, thick, with an arrow on it. See the parameter's note.
+    if (consecutive.has(key)) continue;
+    const existing = pairs.get(key);
+    if (existing && existing.weight >= p.score) continue;
+    pairs.set(key, {
+      source: from.id,
+      target: to.id,
+      kind: "semantic",
+      weight: p.score,
+      passages: [p.a, p.b],
+    });
+  }
+
+  return [...pairs.values()]
+    .sort(
+      (a, b) => b.weight - a.weight || `${a.source}${a.target}`.localeCompare(`${b.source}${b.target}`),
+    )
+    .slice(0, MAX_SEMANTIC_EDGES);
 }
 
 /** Whether any node in the list claims this one as its container. */
