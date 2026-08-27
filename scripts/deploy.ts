@@ -194,6 +194,25 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.Pro
 const tail = (s: string, n = 25) => s.trimEnd().split("\n").slice(-n).join("\n");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Try once more after a pause, for the things that fail for a second.
+ *
+ * Used only for the shared Supabase pooler, which refused a connection with
+ * `(EAUTHTIMEOUT) timeout while waiting for message` on the first real run of
+ * this script — a connection that had worked a minute earlier and worked again
+ * a minute later. Deliberately one retry and not a loop: the point is to survive
+ * a blip, not to sit patiently through a real outage while somebody waits.
+ */
+async function withOneRetry<T>(attempt: () => Promise<T>): Promise<T> {
+  try {
+    return await attempt();
+  } catch (err) {
+    info(`retrying after: ${(err as Error).message}`);
+    await sleep(3000);
+    return attempt();
+  }
+}
+
 function envFile(file: string): Record<string, string> {
   if (!existsSync(file)) return {};
   const out: Record<string, string> = {};
@@ -632,8 +651,16 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
 
   const pool = new Pool({ connectionString: url, max: 1, ssl: ssl.ssl });
   try {
-    const who = await pool.query(
-      "select current_database() db, current_user usr, inet_server_addr()::text addr, version() v",
+    /**
+     * **One retry, because the shared pooler times out.** Measured on the first
+     * real run: `(EAUTHTIMEOUT) timeout while waiting for message`, from
+     * Supavisor rather than from us, on a connection that worked a minute
+     * earlier and a minute later. A transient refusal from a shared pooler is
+     * not a reason to abandon a deploy, and it is not a reason to *continue*
+     * one either — hence a retry rather than a shrug.
+     */
+    const who = await withOneRetry(() =>
+      pool.query("select current_database() db, current_user usr, inet_server_addr()::text addr, version() v"),
     );
     const r = who.rows[0] as { db: string; usr: string; addr: string; v: string };
     info(`answering: ${r.db} as ${r.usr} at ${r.addr} — ${r.v.slice(0, 24)}`);
@@ -693,8 +720,17 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
     }
 
     return { url, pending: state.pending, appliedBefore };
+  } catch (err) {
+    /* A throw here would take the whole run down with a raw stack and no
+       verdict — which is what happened on the first real run. The deploy has
+       not started; saying so is more useful than a `pg` error object. */
+    record("reach the remote database", [
+      (err as Error).message,
+      "Nothing has been pushed and no migration has been applied.",
+    ]);
+    return null;
   } finally {
-    await pool.end();
+    await pool.end().catch(() => {});
   }
 }
 
@@ -1188,4 +1224,21 @@ function summarise(previous: string | null): void {
   process.exitCode = 1;
 }
 
-await main();
+/**
+ * **Nothing gets to end this run with a stack trace.**
+ *
+ * A deploy script that dies mid-way has to say where it got to, because the
+ * question a human has at that moment is not what threw — it is whether
+ * anything was pushed and whether the schema moved. `summarise` answers both,
+ * and an unhandled rejection answers neither. Learned on the first real run,
+ * from a pooler timeout that printed twenty lines of `pg` internals and no
+ * verdict.
+ */
+try {
+  await main();
+} catch (err) {
+  say();
+  bad((err as Error).message);
+  failures.push("the deploy script itself");
+  summarise(null);
+}
