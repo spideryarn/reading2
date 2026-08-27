@@ -227,9 +227,21 @@ for now)."*
 **Changing a row is not the whole of moving a job**, and the file carries the list: the completion
 ceilings were sized for a model that does not spend a reasoning allocation out of them, the
 web-search cap is one only Anthropic honours, and a truncated answer is stored here as a finished
-one. The six pipeline stages cannot move by that table at all — they reach the model through the
+one. The seven pipeline stages cannot move by that table at all — they reach the model through the
 Anthropic SDK, and setting one of them to `quick` makes the app refuse to start rather than pretend
 it worked.
+
+**And the one on that list that has no guard at all: the provider pin.** All three request-path
+calls send `provider: { order: ["anthropic"] }` ([`PROVIDER_ORDER`](../../src/openrouter-stream.ts)),
+which exists so repeat calls land on the upstream holding the prompt cache. It is an ordered
+*preference*, not `allow_fallbacks: false`, and that is the right call — an Anthropic outage should
+cost a reader a cache miss, not the feature. But it means that pointing a request-path task at an
+OpenAI model leaves an Anthropic preference on a request no Anthropic upstream can serve, and
+OpenRouter simply falls through to the real provider and answers. **Nothing raises, nothing logs,
+and the answer is correct** — you would only ever find it in the bill. The pin has to become a
+function of the model id before any request-path row goes to `quick`; today it is a constant, and
+this paragraph is the only thing standing between the two. See
+[silent-success.md](../reusable/silent-success.md), which is the shape of it.
 
 Four things that file will tell you and this one will not: why the two spellings are not derived
 from each other, why the quick tier has no Anthropic-SDK spelling *and cannot have one*, why the
@@ -237,7 +249,9 @@ provider pin and the cache breakpoint have to move with the model, and why editi
 model marks stored tweet threads stale.
 
 Per-call overrides, for a one-off comparison run. These take a model id, not a tier, and they
-bypass the table entirely:
+bypass the tier table entirely — but **not** the reporting: `resolveModel` reads them, so `/profile`
+shows the model you actually set and marks the row *set in the environment*. Remember that
+`.env.local` beats the shell, so these go in the file rather than in front of the command.
 
 | Variable | Overrides |
 |---|---|
