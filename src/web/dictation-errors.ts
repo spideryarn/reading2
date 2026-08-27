@@ -58,7 +58,7 @@ export type DictationVerdict =
 
 const MESSAGES: Record<string, string> = {
   "not-allowed":
-    "Your browser blocked the microphone. Allow it for this site and try again.",
+    "Your browser blocked the microphone. Allow it for this site and try again. [mic-blocked]",
   /* Not the same sentence as `not-allowed`, though the old code used one string
      for both. Per the spec this means the *recognition service* was refused,
      which is a different thing from the microphone permission and has a
@@ -66,16 +66,16 @@ const MESSAGES: Record<string, string> = {
      service is what was refused is the wrong-blame mistake copy.md exists to
      stop. GPT Sol's review, 2026-08-27, item 10. */
   "service-not-allowed":
-    "Your browser would not allow speech recognition on this page. You can still type.",
+    "Your browser would not allow speech recognition on this page. You can still type. [mic-no-service]",
   /* Deliberately does not lead with "try again". Retrying is exactly what
      somebody does with a connection error, and it cannot work until the
      connection does. */
   network:
-    "Speech recognition needs an internet connection, and the connection failed. Check you are online, then press the microphone again.",
+    "Speech recognition needs an internet connection, and the connection failed. Check you are online, then press the microphone again. [mic-offline]",
   "audio-capture":
-    "No microphone was available. Check the input device your computer is set to use.",
+    "No microphone was available. Check the input device your computer is set to use. [mic-none]",
   "language-not-supported":
-    "Speech recognition does not support this page's language. You can still type.",
+    "Speech recognition does not support this page's language. You can still type. [mic-language]",
   "phrases-not-supported":
     "Speech recognition does not support this page's language. You can still type.",
   "bad-grammar":
@@ -90,7 +90,7 @@ const MESSAGES: Record<string, string> = {
  * explained rather than mysterious, and it says the box still works, so nobody
  * concludes they have lost the ability to fill it in.
  */
-const GENERAL = "The microphone stopped unexpectedly. Press it again, or type instead.";
+const GENERAL = "The microphone stopped unexpectedly. Press it again, or type instead. [mic-stopped]";
 
 /**
  * @param code the `error` property of a `SpeechRecognition` error event.

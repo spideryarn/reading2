@@ -153,13 +153,38 @@ const ATTEMPTS: Attempt[] = [
 /** A chunk a second, so a stop mid-second still has the second before it. */
 const TIMESLICE_MS = 1000;
 /**
- * The caps. Recording stops; **dictation carries on** — running out of tape is
- * not a reason to take the microphone away from somebody mid-sentence, and the
- * saved file then says it is only the beginning.
+ * The caps, and **what happens when one is hit changed on 2026-08-27.**
+ *
+ * It used to be: recording stops, dictation carries on, and the saved file says
+ * it is only the beginning. That was right while the recording was an optional
+ * souvenir of a failed dictation. It is wrong now that the recording is *the
+ * source of the transcript* — a dictation that ran past the cap would be
+ * transcribed from its first few minutes and the result would replace the whole
+ * of what the reader said, with nothing anywhere reporting a loss. GPT Sol's
+ * plan review, item 2.
+ *
+ * So `onCapped` is now told, and [`useDictation`](./useDictation.ts) ends the
+ * dictation when it fires. Running out of tape does take the microphone away
+ * mid-sentence, which is unfriendly — and it is the friendlier of the two,
+ * because the alternative is silently keeping the wrong half.
  */
 const MAX_MS = 5 * 60_000;
-/** Belt to the cap's braces: a bound on what is actually held, not on a bitrate hint. */
-const MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * Belt to the cap's braces: a bound on what is actually held, not on a bitrate
+ * hint — and now also the bound that keeps a request inside Vercel's 4.5 MB.
+ *
+ * It was 8 MB, sized when nothing was uploaded. Base64 inflates by a third, so
+ * 8 MB of audio is 10.7 MB of body and Vercel refuses it **before any of our
+ * code runs** — no `readBody`, no auth, no copy, no log line. `MAX_AUDIO_BASE64`
+ * in [src/transcribe.ts](../transcribe.ts) is 3 MB of base64, so this is the
+ * raw-byte figure that fits inside it with room for the JSON around it.
+ *
+ * Deliberately the *lower* of the two guards: at the measured AAC rate of
+ * ~14 KB/s this bites at about two and a half minutes, well before `MAX_MS`.
+ * That is the point — the cap that fires should be the one whose consequences
+ * are understood, not whichever the encoder's bitrate happens to reach first.
+ */
+const MAX_BYTES = 2_100_000;
 /**
  * Shorter than this and there is nothing in it worth calling evidence.
  *
@@ -260,7 +285,7 @@ export function formatDuration(ms: number): string {
  * [`useDictation`](./useDictation.ts); this is one more reader of it. A
  * recording that cannot start must not be a reason dictation does not.
  */
-export function recordTrack(track: MediaStreamTrack): MicTape | null {
+export function recordTrack(track: MediaStreamTrack, onCapped?: () => void): MicTape | null {
   if (typeof MediaRecorder === "undefined") return null;
   /* An empty list is a browser that claims none of our containers. Ask for
      nothing and read back what it chose — which is the same fallback the
@@ -330,6 +355,7 @@ export function recordTrack(track: MediaStreamTrack): MicTape | null {
       if (bytes + e.data.size > MAX_BYTES) {
         capped = true;
         halted();
+        onCapped?.();
         return;
       }
       chunks.push(e.data);
@@ -390,6 +416,7 @@ export function recordTrack(track: MediaStreamTrack): MicTape | null {
   const cap = window.setTimeout(() => {
     capped = true;
     halted();
+    onCapped?.();
   }, MAX_MS);
 
   const halt = async () => {

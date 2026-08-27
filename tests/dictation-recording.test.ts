@@ -22,7 +22,18 @@
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetMicrophoneLock } from "../src/web/mic-lock.js";
 import { useDictation } from "../src/web/useDictation.js";
+
+/* See the same note in tests/dictation-phases.test.ts: the auth header cannot
+   be minted here, so `apiFetch` is replaced with a bare `fetch` and everything
+   else in the upload path is real. */
+vi.mock("../src/web/lib/api.js", async () => {
+  const real = await vi.importActual<typeof import("../src/web/lib/api.js")>(
+    "../src/web/lib/api.js",
+  );
+  return { ...real, apiFetch: (url: string, init?: RequestInit) => fetch(url, init) };
+});
 
 /* ------------------------------------------------------------- the fakes -- */
 
@@ -123,7 +134,26 @@ function fakeTrack(label: string) {
   return t as unknown as MediaStreamTrack & { readyState: string };
 }
 
+/**
+ * The second pass, faked.
+ *
+ * Every dictation now uploads, so a fixture without this reaches a real `fetch`
+ * in jsdom and the failure surfaces as "no recording was kept" — which is the
+ * assertion half this file is about, and would have been wrong for a reason
+ * that had nothing to do with recording.
+ */
+let transcribeFails = false;
+let transcriptReply = "the server's version";
+
 function install() {
+  vi.stubGlobal("fetch", async (url: string) => {
+    if (!String(url).includes("/api/transcribe")) throw new Error(`unexpected fetch: ${url}`);
+    if (transcribeFails) return new Response("{}", { status: 502 });
+    return new Response(JSON.stringify({ text: transcriptReply, ms: 1 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
   vi.stubGlobal("SpeechRecognition", FakeRecognition);
   vi.stubGlobal("webkitSpeechRecognition", FakeRecognition);
   vi.stubGlobal(
@@ -176,21 +206,35 @@ function latest(): FakeRecognition {
   return r;
 }
 
+/**
+ * Let the microphone claim, the capture and any pending release all land.
+ *
+ * The timers matter as much as the microtasks: since 2026-08-27 a new session
+ * **waits for the previous one's track to be stopped** before asking for a
+ * device (mic-lock.ts), and that release comes after the tape's deferred
+ * `onstop`. Microtasks alone leave the second session queued for ever, which
+ * looks exactly like a capture that failed.
+ */
 async function settle() {
   await act(async () => {
-    for (let i = 0; i < 6; i++) await Promise.resolve();
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
   });
 }
 
 function drive() {
   const text: string[] = [];
   const ends: number[] = [];
+  const transcripts: string[] = [];
   let state: ReturnType<typeof useDictation> | null = null;
   function Probe(): ReactNode {
-    state = useDictation(
-      (t) => text.push(t),
-      () => ends.push(1),
-    );
+    state = useDictation({
+      onText: (t) => text.push(t),
+      onTranscript: (t) => transcripts.push(t),
+      onEnd: () => ends.push(1),
+      context: { kind: "profile" },
+    });
     return null;
   }
   const host = document.createElement("div");
@@ -203,6 +247,7 @@ function drive() {
   return {
     text,
     ends,
+    transcripts,
     get: () => {
       if (!state) throw new Error("the hook never rendered");
       return state;
@@ -228,6 +273,9 @@ function saidFinal(r: FakeRecognition, transcript: string) {
 }
 
 beforeEach(() => {
+  /* The claim is page-wide and module-level, so a test that leaves it held
+     would hang the next one at `getUserMedia`. */
+  resetMicrophoneLock();
   built = [];
   recorders = [];
   gumWith = [];
@@ -236,6 +284,8 @@ beforeEach(() => {
   nextLabel = "MacBook Pro Microphone (Built-in)";
   vi.stubGlobal("requestAnimationFrame", () => 1);
   vi.stubGlobal("cancelAnimationFrame", () => {});
+  transcribeFails = false;
+  transcriptReply = "the server's version";
   const store = new Map<string, string>();
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => store.get(k) ?? null,
@@ -383,15 +433,22 @@ describe("which microphone it opens", () => {
    * that no second `getUserMedia` happened, which is a much weaker claim than
    * the one the comments were making.
    */
-  it("starts recognition anyway after a refusal, and says the choice was not honoured", async () => {
+  it("refuses the whole dictation when the microphone is refused", async () => {
+    /* **The reverse of what this test used to assert**, and deliberately. It
+       used to check that a refused `getUserMedia` fell through to the recogniser
+       opening its own device, on the rule that a meter which cannot get samples
+       must never stop dictation. Since 2026-08-27 the track is not for the
+       meter, it is for the recording — and without a recording there is no
+       transcript, so there is nothing to fall through to. A refusal is now a
+       dictation that cannot happen, and the reader is told. */
     const h = drive();
     act(() => h.get().chooseDevice("abc123"));
     await settle();
     gumPlan = ["denied"];
     act(() => h.get().toggle());
     await settle();
-    expect(latest().started).toEqual([null]);
-    expect(h.get().deviceUnavailable).toBe(true);
+    expect(h.get().armed).toBe(false);
+    expect(h.get().error).toMatch(/microphone could not be started/i);
     h.unmount();
   });
 
@@ -452,6 +509,13 @@ describe("the audio it keeps", () => {
   });
 
   it("offers the audio back when the dictation transcribed nothing", async () => {
+    /* **Nothing came back, and no error happened** — which is exactly the shape
+       of the failure this feature was built for. A silent microphone yields
+       `no-speech`, which is suppressed because it fires on every ordinary
+       pause, so an error-only trigger would have been silent through the whole
+       thing. Here the model returns a successful, empty transcript and the
+       recogniser produced nothing either, and the audio is offered. */
+    transcriptReply = "";
     const h = drive();
     await pressAndOpen(h);
     recorders[0]?.emit(4096);
@@ -506,6 +570,8 @@ describe("the audio it keeps", () => {
   });
 
   it("throws the last one away when a new dictation starts", async () => {
+    // Nothing came back, which is the state that leaves a recording to throw away.
+    transcriptReply = "";
     const h = drive();
     await pressAndOpen(h);
     recorders[0]?.emit(4096);
@@ -551,6 +617,8 @@ describe("the audio it keeps", () => {
   });
 
   it("can be thrown away by hand", async () => {
+    // Nothing came back, which is the state that leaves a recording to throw away.
+    transcriptReply = "";
     const h = drive();
     await pressAndOpen(h);
     recorders[0]?.emit(4096);

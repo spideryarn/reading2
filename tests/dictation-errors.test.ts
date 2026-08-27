@@ -89,9 +89,24 @@ describe("verdictFor", () => {
     }
   });
 
-  it("gives every message a full stop, because these are sentences and not codes", () => {
+  /* The sentence still ends in a full stop; the bracketed code comes after it,
+     which is the shape docs/project/copy.md specifies — last, so a reader who
+     does not want it can stop at the full stop. */
+  it("is a sentence with a full stop, then a code in brackets", () => {
     for (const code of ["not-allowed", "service-not-allowed", "network", "audio-capture", "wat"]) {
-      expect(messageFor(code).trim().endsWith(".")).toBe(true);
+      expect(messageFor(code).trim()).toMatch(/\.\s\[mic-[a-z-]+\]$/);
+    }
+  });
+
+  /* **Every one of them carries a code**, so a reader can quote four characters
+     instead of paraphrasing a sentence, and so a test about a failure can match
+     the code rather than pinning the prose permanently. Added 2026-08-27 with
+     the two-pass rewrite: these had been the one family of reader-facing
+     messages in the app without them. docs/project/copy.md § The bracketed
+     code. */
+  it("gives every message a code, including the one for an unknown error", () => {
+    for (const code of ["not-allowed", "network", "audio-capture", "language-not-supported", "wat", ""]) {
+      expect(messageFor(code)).toMatch(/\[mic-[a-z-]+\]/);
     }
   });
 });

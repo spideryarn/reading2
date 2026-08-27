@@ -29,10 +29,15 @@
  *
  * ## What is deliberately absent
  *
- * **Markdown.** The answers are plain paragraphs by instruction (the FORMAT
- * section of the prompt in src/converse.ts), and rendering arbitrary model
- * output as HTML is the one thing docs/project/security.md is about. Blank
- * lines split paragraphs; nothing else is interpreted.
+ * **Markdown, nearly all of it.** The answers are plain paragraphs by
+ * instruction (the FORMAT section of the prompt in src/converse.ts), and
+ * rendering arbitrary model output as HTML is the one thing
+ * docs/project/security.md is about. Blank lines split paragraphs. Three other
+ * things are interpreted and no more: `**bold**`, this article's block ids, and
+ * — since 2026-08-27 — a link to the web, which is the only one of the three
+ * that reaches an attribute rather than a text node. Every one of them is a
+ * *string* handed to React, never HTML. Cited.tsx has each rule and
+ * docs/plans/chat-web-links.md has the reasoning for the last.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -44,6 +49,7 @@ import {
   FileText,
   Globe,
   Library,
+  Link2,
   LoaderCircle,
   MessageSquarePlus,
   Pencil,
@@ -55,12 +61,22 @@ import {
   X,
 } from "lucide-react";
 import { worthRetrying } from "../messages.js";
-import type { BlockId, ChatMessage, ChatThread, ToolRun } from "../types.js";
+import type {
+  BlockId,
+  ChatMessage,
+  ChatThread,
+  ReviewStance,
+  ThreadKind,
+  ToolRun,
+} from "../types.js";
 import { CitedText } from "./Cited.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { useDictationField } from "./useDictationField.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { TooltipGroup } from "./Tooltip.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
+import { useSlow } from "./useSlow.js";
 import { UseProfile } from "./WrittenForYou.js";
 import { useHasProfile } from "./useProfile.js";
 import { useRenderCount } from "./perf.js";
@@ -72,8 +88,42 @@ interface Props {
   onThread(id: string | null): void;
   /** The article, so the profile controls can ask about *this* one. */
   slug: string;
+  /**
+   * Whether the conversations have been asked for and answered.
+   *
+   * It means "we have asked", not "it worked" — see `useChat`. One thing here
+   * needs it, and it is not display: **nothing may be minted before the first
+   * fetch lands.** That request replaces the whole list when it arrives
+   * (useChat.ts § refresh), so a conversation started before it is taken with
+   * it, and the answer streaming into that conversation then patches a row that
+   * is not there. The list looks the same either way, which is the point: this
+   * is the panel's only way to tell "no conversations" from "not asked yet".
+   */
+  loaded: boolean;
+  /**
+   * Did that fetch fail? `ChatApi.loadFailed`.
+   *
+   * `loaded` means *we have asked*, and on its own it turned the spinner below
+   * straight into "Nothing asked yet." the moment a failing request gave up —
+   * the same wrong claim the spinner was added to stop. GPT Sol, 2026-08-27.
+   */
+  loadFailed: boolean;
   onSend(question: string, useProfile: boolean): void;
   onNew(): void;
+  /**
+   * The first question of a conversation that does not exist yet — the box
+   * under the list.
+   *
+   * A separate call from `onSend`, and the separation is the safety. `onSend`
+   * means *send to the open conversation*, and ChatBand resolves that against
+   * `?thread=` — which is not always null while the list is on screen, because
+   * the panel decides between list and conversation with `threads.find`, and a
+   * `?thread=` can name a conversation that has been discarded, or one the
+   * fetch has not brought yet. Wiring the list's box to `onSend` appended the
+   * reader's question to a stored conversation under a placeholder promising a
+   * new one; GPT-5.6 found it, 2026-08-27. This one always mints.
+   */
+  onSendNew(question: string, useProfile: boolean): void;
   /**
    * Forget a conversation nobody ever said anything in.
    *
@@ -119,6 +169,32 @@ interface Props {
   focusNonce: number;
   /** A transport failure. Model failures live on the message that failed. */
   error: string | null;
+  /**
+   * Which mode this panel is being shown in — chat, or review.
+   *
+   * **One panel with a kind, not two panels.** Everything under here is the
+   * same in both: the transcript, the scroll-follow, the citation chips, the
+   * tool strip, the retry and the editor, the recovery of a lost stream. What
+   * differs is the empty state, the composer's size, and one `<select>`. A
+   * second component would have been a second copy of all of the first list in
+   * order to vary the second — which is the duplication GPT Sol's review of
+   * docs/plans/review-mode.md (finding 9) said not to build.
+   *
+   * The list of conversations is **shared**: Greg's call, 2026-08-27. Both
+   * modes show every thread for this article, and a review carries a tag.
+   */
+  kind: ThreadKind;
+  /**
+   * The stance the next review answer will be asked for, and how to change it.
+   *
+   * Above the composer because the composer is keyed by thread id and remounts;
+   * seeded by the band from the last answer in the open conversation, so a
+   * reader who picked Socratic yesterday finds it still on Socratic. Unused in
+   * chat mode. See docs/plans/review-mode.md § Where the stance picker's value
+   * lives.
+   */
+  stance: ReviewStance;
+  onStance(next: ReviewStance): void;
 }
 
 /**
@@ -196,11 +272,14 @@ export const SUGGESTIONS: { label: string; ask: string }[] = [
 
 export function ChatPanel({
   slug,
+  loaded,
+  loadFailed,
   threads,
   threadId,
   onThread,
   onSend,
   onNew,
+  onSendNew,
   onDiscard,
   onRename,
   onDelete,
@@ -212,8 +291,12 @@ export function ChatPanel({
   blocks,
   focusNonce,
   error,
+  kind,
+  stance,
+  onStance,
 }: Props) {
   useRenderCount("ChatPanel");
+  const review = kind === "review";
   const open = threads.find((t) => t.id === threadId) ?? null;
 
   /**
@@ -260,6 +343,20 @@ export function ChatPanel({
   const focused = useRef(0);
 
   /**
+   * The same two things again, for the box under the thread list.
+   *
+   * Separate from `drafts` and `focused` above rather than sharing them, and
+   * each for its own reason. The draft belongs to no conversation — that is the
+   * whole point of the box — so there is no id to key it by; a question typed
+   * there and abandoned for a row in the list is still there when you come
+   * back. And the nonce counter has to be a *different* counter, because
+   * spending the panel's one here would leave the real composer unfocused the
+   * next time a new conversation was started.
+   */
+  const listDraft = useRef("");
+  const listFocused = useRef(0);
+
+  /**
    * Leave the open conversation, discarding it if it never became one.
    *
    * Greg, 2026-08-26: *"If I start a new conversation and then close it, it
@@ -285,9 +382,12 @@ export function ChatPanel({
     /* `mode-band` is the slot — fixed between the spine and the prose, and
        shared with the glossary. `chat` is a hook for anything only this panel
        wants; see § mode band in styles.css. */
-    <aside className="mode-band chat" aria-label="Chat about this article">
+    <aside
+      className={`mode-band chat${review ? " review" : ""}`}
+      aria-label={review ? "Review what you took from this article" : "Chat about this article"}
+    >
       <div className="chat-head">
-        <h2>{open ? open.title : "Chat"}</h2>
+        <h2>{open ? open.title : review ? "Review" : "Chat"}</h2>
         {open ? (
           <>
             {/* The same delete the list offers, where the reader actually is.
@@ -301,7 +401,12 @@ export function ChatPanel({
             </button>
           </>
         ) : (
-          <button type="button" className="chat-icon" title="Start a new conversation" onClick={onNew}>
+          <button
+            type="button"
+            className="chat-icon"
+            title={review ? "Start a new review" : "Start a new conversation"}
+            onClick={onNew}
+          >
             <MessageSquarePlus size={14} />
           </button>
         )}
@@ -328,15 +433,122 @@ export function ChatPanel({
           focused={focused}
           draft={drafts.current.get(open.id) ?? ""}
           onDraft={(text) => drafts.current.set(open.id, text)}
+          /* The OPEN conversation's kind, not the mode's. The list is shared,
+             so a reader in review mode can open a chat — and when they do, the
+             transcript in front of them is a chat and its composer must be
+             chat's. Reading the mode here instead would put a stance picker
+             under a conversation whose answers ignore it. */
+          kind={open.kind}
+          stance={stance}
+          onStance={onStance}
         />
+      ) : threads.length === 0 && !loaded ? (
+        /* **Not the empty list, which is a claim we cannot make yet.** On a
+           slow connection the first fetch takes seconds, and for all of them
+           the panel used to say "Nothing asked yet." to a reader who knew
+           perfectly well that they had asked things — then replaced it with the
+           conversations when the request landed. Greg, 2026-08-27: *"it
+           initially told me there were no chats (even though I knew there
+           were)! … Better to show a loading spinner when loading, rather than
+           default to the empty/initial state (which is wrong and worrying)."*
+
+           `threads.length === 0` as well as `!loaded`, because a list can have
+           something in it before the fetch lands — press `+`, type a draft,
+           close it, and `leave` keeps that conversation. Showing a spinner over
+           the reader's own conversation would be its own lie.
+
+           Behind `useSlow`, so a fetch that finishes in 40ms draws nothing at
+           all. A spinner that flashes and vanishes reads as breakage, and
+           empty-until-slow is what App.tsx does for the article itself —
+           useSlow.ts, and docs/project/web-client.md § Empty is not the same as
+           not asked yet. */
+        <ChatListLoading />
+      ) : threads.length === 0 && loadFailed ? (
+        /* And the state one beat later. `loaded` means "we have asked", so a
+           request that gave up used to drop out of the spinner and into
+           "Nothing asked yet." — the identical false claim, arrived at from the
+           other side. GPT Sol found it reviewing the fix above, 2026-08-27.
+
+           The transport error is printed above this by `chat-error`, so this
+           line does not repeat it; what it does is refuse to make the claim.
+           See `loadFailed` in Props. */
+        <div className="chat-empty">
+          <p>Couldn't fetch your conversations. They are still there — reload to try again.</p>
+        </div>
       ) : (
-        <ThreadList
-          threads={threads}
-          onOpen={onThread}
-          onNew={onNew}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
+        <>
+          <ThreadList
+            threads={threads}
+            onOpen={onThread}
+            onNew={onNew}
+            onRename={onRename}
+            onDelete={onDelete}
+            review={review}
+          />
+          {/* The list's own composer. Typing here and pressing Enter starts a
+              conversation and sends the question into it in one go, which is
+              what the reader was going to do with the + button and then the box
+              anyway. Greg, 2026-08-27: *"add a text input box at the bottom
+              that (when a message is input) automatically starts a new chat, to
+              save the user a click."*
+
+              **`onSendNew`, not `onSend`, and the guard is about the fetch
+              rather than about the URL.** Two reviews on 2026-08-27 went at
+              this, and both findings were the same shape: *the list being on
+              screen does not mean what it looks like it means.* The panel
+              decides between list and conversation with `threads.find`, so the
+              list is also what a reader sees while the first fetch is in
+              flight, and `?thread=` can still name a conversation — one from a
+              bookmark that has not arrived, or one that was closed and
+              discarded. `onSend` resolves against exactly that id, so the box
+              wired to it would have appended the question to a stored
+              conversation under a placeholder promising a new one.
+              `onSendNew` mints whatever the URL says, which is the only thing
+              this box ever means.
+
+              That leaves the other half, which is not about the URL at all:
+              **nothing may be minted before the first fetch lands.** `refresh`
+              on arrival replaces the whole list with the server's snapshot
+              (useChat.ts § refresh, `only === undefined`), taking a
+              just-minted conversation with it — and every later frame of the
+              answer then patches a row that is not there, so the reader's
+              question disappears off the screen while its request carries on.
+              Hence `loaded`, and hence *both* of `loaded` and `threads.length`:
+              a non-empty list is not proof the fetch landed, because pressing
+              `+` before it does and closing the conversation with a draft in it
+              leaves a thread behind (see `leave` above) — GPT-5.6 again, on the
+              third pass, against its own suggested guard. `threads.length`
+              stays because an empty list is the state the `+` and the empty
+              panel's own button are for.
+
+              What this does **not** close is the race itself, which is
+              `refresh`'s rather than this box's: pressing `+` fast enough gets
+              into it without the box, and `loaded` is set by whichever refresh
+              answers first rather than by the last one in flight — so under
+              StrictMode's double mount, in development, the box can come on
+              while a second snapshot is still on its way. docs/plans/chat-mode.md
+              § What is left undone says where that fix belongs.
+
+              `focusNonce={0}` on purpose: this box must never take the caret.
+              The nonce is for a reader who has just *asked* for somewhere to
+              type, and arriving at a list is not that — a focused textarea
+              turns the article's ↑/↓ into caret movement, and nothing on screen
+              would say why. See `focusNonce` in Props. */}
+          {loaded && threads.length > 0 && (
+            <Composer
+              slug={slug}
+              onSend={onSendNew}
+              busy={false}
+              focusNonce={0}
+              focused={listFocused}
+              draft={listDraft.current}
+              onDraft={(text) => {
+                listDraft.current = text;
+              }}
+              placeholder="Ask something new…"
+            />
+          )}
+        </>
       )}
     </aside>
   );
@@ -384,6 +596,32 @@ function ArmedDelete({ onDelete }: { onDelete(): void }) {
 const DISARM_MS = 4000;
 
 /**
+ * What the panel shows instead of an empty list while the first fetch is out.
+ *
+ * Nothing for the first `SLOW_AFTER_MS`, then a spinner and a sentence naming
+ * what is being waited for — the rule in useSlow.ts, and the same shape
+ * CommentDialog and JobProgress use. It says "your conversations" rather than
+ * "Loading…" because the reader is waiting for a specific thing and the
+ * sentence is free.
+ *
+ * Deliberately renders the empty `div` rather than `null` in the fast case, so
+ * the panel does not change height when the spinner appears.
+ */
+function ChatListLoading() {
+  const slow = useSlow(true);
+  return (
+    <div className="chat-loading">
+      {slow && (
+        <>
+          <LoaderCircle className="cmt-spinner" size={13} />
+          <span>Fetching your conversations…</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * Every conversation about this article, most recently used first.
  *
  * By `updatedAt`, not `createdAt`: coming back to an article you were arguing
@@ -410,12 +648,15 @@ function ThreadList({
   onNew,
   onRename,
   onDelete,
+  review,
 }: {
   threads: ChatThread[];
   onOpen(id: string): void;
   onNew(): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
+  /** Which mode the reader pressed to get here — it only changes the wording. */
+  review: boolean;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   /* Read once here and passed to every row, so two rows a minute apart in the
@@ -426,13 +667,14 @@ function ThreadList({
   if (sorted.length === 0) {
     return (
       <div className="chat-empty">
-        <p>Nothing asked yet.</p>
+        <p>{review ? "Nothing reviewed yet." : "Nothing asked yet."}</p>
         <p className="chat-empty-hint">
-          Ask about anything in the article and the answer will point back at the paragraphs it came
-          from — press one to go there.
+          {review
+            ? "Say what you took from this article and I'll point at the places it comes apart from the piece — and at the paragraphs worth another look."
+            : "Ask about anything in the article and the answer will point back at the paragraphs it came from — press one to go there."}
         </p>
         <button type="button" className="chat-new" onClick={onNew}>
-          <MessageSquarePlus size={14} /> New conversation
+          <MessageSquarePlus size={14} /> {review ? "New review" : "New conversation"}
         </button>
       </div>
     );
@@ -471,6 +713,14 @@ function ThreadList({
                   <span className="chat-thread-title">{t.title}</span>
                   {last && <span className="chat-thread-last">{last}</span>}
                   <span className="chat-thread-meta">
+                    {/* The list is shared between the two modes (Greg's call,
+                        2026-08-27), so the row has to say which it is — "times
+                        I explained myself" and "questions I asked" are not the
+                        same thing to go looking for, and the titles alone do
+                        not tell them apart. Only reviews are tagged: chat is
+                        the older and commoner kind, and tagging both would put
+                        a label on every row to distinguish a minority. */}
+                    {t.kind === "review" && <span className="chat-thread-kind">review</span>}
                     <span className="chat-thread-count">{turns(t)}</span>
                     {/* Recency, because the question a list of conversations
                         answers is "which was I in?". The exact time is in the
@@ -606,6 +856,9 @@ export function Conversation({
   focused,
   draft,
   onDraft,
+  kind,
+  stance,
+  onStance,
 }: {
   /** The article, so the composer's profile control can ask about *this* one. */
   slug: string;
@@ -624,6 +877,17 @@ export function Conversation({
   /** Whatever was left in the box last time this conversation was open. */
   draft: string;
   onDraft(text: string): void;
+  /**
+   * **This conversation's** kind — see the call site in `ChatPanel`.
+   *
+   * Required rather than defaulted, so that a new caller has to decide which it
+   * is rather than silently getting a chat. The stance below is optional
+   * because a chat has none, and `ChatDialog` — which is always a chat —
+   * therefore passes nothing.
+   */
+  kind: ThreadKind;
+  stance?: ReviewStance;
+  onStance?: ((next: ReviewStance) => void) | undefined;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const last = thread.messages.at(-1);
@@ -717,7 +981,8 @@ export function Conversation({
           setAway(!atBottom);
         }}
       >
-        {thread.messages.length === 0 && <Suggestions onAsk={(q) => onSend(q, true)} />}
+        {thread.messages.length === 0 &&
+          (kind === "review" ? <ReviewInvitation /> : <Suggestions onAsk={(q) => onSend(q, true)} />)}
         {thread.messages.map((m, i) => (
           <Turn
             key={m.id}
@@ -791,8 +1056,43 @@ export function Conversation({
         focused={focused}
         draft={draft}
         onDraft={onDraft}
+        kind={kind}
+        {...(stance ? { stance } : {})}
+        {...(onStance ? { onStance } : {})}
       />
     </>
+  );
+}
+
+/**
+ * The opening state of a **review**, which is not a list of suggestions and
+ * must not become one.
+ *
+ * Chat's `Suggestions` are complete questions that send on click, and that
+ * shape cannot be borrowed here: the content has to come from the reader. A
+ * button reading "the argument in one sentence" would be putting words in their
+ * mouth, which is the one thing this mode must not do — the whole point is to
+ * find out what THEY took from it.
+ *
+ * So the nudges are prose. They are there because "say what you took from it"
+ * is a genuinely hard instruction to obey from a standing start, and naming
+ * three ways in is the cheapest help that does not contaminate the answer.
+ */
+function ReviewInvitation() {
+  return (
+    <div className="chat-suggest">
+      <p className="chat-empty-hint">
+        Say what you took from this article, in your own words. I'll point at the places it comes
+        apart from the piece — and at the paragraphs worth another look.
+      </p>
+      <p className="chat-empty-hint">
+        It doesn't need to be tidy. Talking is usually easier than typing, and rambling is fine.
+      </p>
+      <p className="chat-empty-hint">
+        Stuck for a way in? Try the argument in one sentence, the part you're least sure of, or what
+        you'd tell someone about it.
+      </p>
+    </div>
   );
 }
 
@@ -1118,6 +1418,8 @@ function ToolIcon({ name }: { name: string }) {
       return <Library size={12} aria-hidden />;
     case "read_library_passage":
       return <BookOpen size={12} aria-hidden />;
+    case "article_links":
+      return <Link2 size={12} aria-hidden />;
     case "article_glossary":
       return <FileText size={12} aria-hidden />;
     default:
@@ -1320,20 +1622,31 @@ function Answer({
   blocks: Map<string, string>;
   live: boolean;
 }) {
+  const paras = text.split(/\n{2,}/);
   return (
     /* One group for the whole answer, so moving along a row of citations shows
        each card immediately instead of waiting out the open delay again. Same
        reason the dock's placeholder buttons share one — Tooltip.tsx. */
     <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={500}>
-      {text.split(/\n{2,}/).map((para, p) => (
+      {paras.map((para, p) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: paragraphs of one immutable string
         <p key={p}>
-          {/* The chips, the hover cards and the bold runs all live in
-              Cited.tsx, shared with the summary panel. Two copies of what a
-              citation looks like would drift, and a chip that means something
-              slightly different depending on which band it is in is worse than
-              either version. */}
-          <CitedText text={para} blocks={blocks} onJump={onJump} live={live} />
+          {/* The chips, the hover cards, the web links and the bold runs all
+              live in Cited.tsx, shared with the summary panel. Two copies of
+              what a citation looks like would drift, and a chip that means
+              something slightly different depending on which band it is in is
+              worse than either version. */}
+          <CitedText
+            text={para}
+            blocks={blocks}
+            onJump={onJump}
+            live={live}
+            /* Only the **last** paragraph of an answer still arriving can end
+               mid-address, and a bare URL cut in half is a link that goes
+               somewhere wrong for the second before the rest lands. Everything
+               above it is finished text. citations.ts § splitLinks. */
+            partial={live && p === paras.length - 1}
+          />
         </p>
       ))}
     </TooltipGroup>
@@ -1358,6 +1671,10 @@ export function Composer({
   focused,
   draft,
   onDraft,
+  placeholder,
+  kind = "chat",
+  stance = "balanced",
+  onStance,
 }: {
   slug: string;
   onSend(question: string, useProfile: boolean): void;
@@ -1368,11 +1685,36 @@ export function Composer({
   focused: { current: number };
   draft: string;
   onDraft(text: string): void;
+  /**
+   * What the empty box says, when "Ask about this article…" would be a lie
+   * about where the question is going — the box under the thread list starts a
+   * conversation rather than continuing one.
+   */
+  placeholder?: string;
+  /**
+   * Chat or review. **Everything that makes this box work is shared** — the
+   * draft, the focus nonce, the auto-resize, Enter to send, the Escape ladder,
+   * the key-propagation stop that keeps the article's ↑/↓ out of the caret, the
+   * `readOnly` gate while a transcript is arriving, the dictation button and
+   * strip. Those are the parts that are subtle and the parts where a second
+   * copy would drift; a review box that reimplemented the Escape ladder would
+   * be a bug nobody found for a month.
+   *
+   * What the kind changes is layout and one control: a box six rows tall
+   * instead of one, and a stance `<select>`. Greg, 2026-08-27: *"the input box
+   * should be much larger for Review mode, and probably emphasise the
+   * microphone UI, because talking will be much less annoying than typing."*
+   */
+  kind?: ThreadKind;
+  /** The stance the next review answer will be asked for. Ignored in chat. */
+  stance?: ReviewStance;
+  onStance?: ((next: ReviewStance) => void) | undefined;
 }) {
   /* Seeded from the draft and owned here from then on. The panel keeps the map
      because it outlives this component; this keeps the value because typing
      into it must not repaint the transcript above. */
   const [value, setValue] = useState(draft);
+  const review = kind === "review";
   const box = useRef<HTMLTextAreaElement>(null);
   const hasProfile = useHasProfile(slug);
   /* Per turn, and it stays where the reader left it for the rest of the
@@ -1407,10 +1749,41 @@ export function Composer({
     const el = box.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-  }, [value]);
+    /* Twice chat's ceiling for a review. A chat question is a sentence; a
+       spoken review is a paragraph or three, and a box that stops growing at
+       160px turns the reader's own words into a four-line scrolling window they
+       cannot read back before sending. `rows` below sets the floor; this sets
+       the roof. */
+    el.style.height = `${Math.min(el.scrollHeight, review ? 360 : 160)}px`;
+  }, [value, review]);
+
+  /**
+   * **Dictation, in the box where it is worth most.**
+   *
+   * `{ kind: "article", slug }` is what tells the server to prime the
+   * transcriber with this article's glossary — which is exactly the vocabulary
+   * a reader asking about this article is about to use. Measured on 2026-08-27:
+   * with the terms in the prompt the model got this app's own jargon right
+   * every run; without them it made the same mistakes as every dedicated
+   * speech-to-text model. docs/plans/dictation-two-pass.md.
+   */
+  const dictate = useDictationField({
+    value,
+    onChange: (next) => {
+      setValue(next);
+      onDraft(next);
+    },
+    box,
+    context: { kind: "article", slug },
+  });
 
   const submit = () => {
+    /* **Not while a transcript is on its way.** `readOnly` stops typing and
+       nothing else — Enter still fires, and sending here would post the
+       recogniser's rough guess a moment before the good words arrived, which is
+       the one outcome the two-pass design must not produce. GPT Sol's plan
+       review, item 3. */
+    if (dictate.readOnly) return;
     const question = value.trim();
     if (question === "" || busy) return;
     onSend(question, withProfile);
@@ -1429,9 +1802,19 @@ export function Composer({
       <textarea
         ref={box}
         className="chat-input"
-        rows={1}
+        /* Six rows rather than one, so the box LOOKS like somewhere to put a
+           paragraph before a word is in it. The height then follows the content
+           exactly as chat's does. */
+        rows={review ? 6 : 1}
         value={value}
-        placeholder={busy ? "Waiting for the answer…" : "Ask about this article…"}
+        readOnly={dictate.readOnly}
+        placeholder={
+          busy
+            ? "Waiting for the answer…"
+            : review
+              ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
+              : (placeholder ?? "Ask about this article…")
+        }
         onChange={(e) => {
           setValue(e.target.value);
           // The panel keeps the draft so it survives this component; see
@@ -1488,9 +1871,61 @@ export function Composer({
           <Square size={12} fill="currentColor" />
         </button>
       ) : (
-        <button type="submit" className="chat-send" disabled={busy || value.trim() === ""} title="Send (Enter)">
+        <button
+          type="submit"
+          className="chat-send"
+          disabled={busy || dictate.readOnly || value.trim() === ""}
+          title="Send (Enter)"
+        >
           {busy ? <LoaderCircle className="cmt-spinner" size={14} /> : <SendHorizontal size={14} />}
         </button>
+      )}
+      {dictate.dictation.supported &&
+        (review ? (
+          /* **Labelled, and first in the row.** Greg asked for the microphone to
+             be emphasised here because talking a paragraph is so much less
+             annoying than typing one — and an unlabelled icon among three other
+             unlabelled icons is not an invitation to talk, it is a control you
+             have to already know about. The button itself is the SAME component
+             chat uses (`DictationButton`, over `useDictationField`), so the four
+             phases, the disabled-while-transcribing rule and the article's own
+             glossary priming all come along unchanged. Only the label is new. */
+          <span className="chat-talk">
+            <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={busy} />
+            <span className="chat-talk-label" aria-hidden="true">
+              {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
+            </span>
+          </span>
+        ) : (
+          <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={busy} />
+        ))}
+      {review && onStance && (
+        /* **A native `<select>`, not a custom radiogroup**, and that is a
+           keyboard decision rather than a lazy one. The dock already owns a
+           roving-tabindex radiogroup for the modes; a second one *inside* the
+           composer would sit where arrow keys are already the caret's, and the
+           article's own ↑/↓ navigation is a third claimant. A select has all of
+           this for free and announces itself correctly. GPT Sol's review of
+           docs/plans/review-mode.md.
+
+           Its own `onKeyDown` stop, for the same reason the textarea has one:
+           this form sits inside the reading view, whose keynav listens on the
+           window. */
+        <label className="chat-stance">
+          <span className="chat-stance-label">Reply</span>
+          <select
+            value={stance}
+            disabled={busy}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => onStance(e.target.value as ReviewStance)}
+            title="How much the answer should say"
+          >
+            <option value="balanced">Balanced</option>
+            <option value="respond">Respond</option>
+            <option value="socratic">Socratic</option>
+            <option value="signposts">Signposts</option>
+          </select>
+        </label>
       )}
       {/* Composer-only, and absent for a reader with no profile. Chat has no
           rewrite, so there is nothing here for a label to describe and nothing
@@ -1502,6 +1937,7 @@ export function Composer({
         hasProfile={hasProfile}
         disabled={busy}
       />
+      <DictationStrip dictation={dictate.dictation} />
     </form>
   );
 }

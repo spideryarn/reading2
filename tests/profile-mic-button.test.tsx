@@ -16,12 +16,15 @@
  * layer down. Found by GPT Sol reviewing
  * docs/research/microphone-library-options.md, which has the reasoning.
  *
- * That description slot now carries something worth saying instead: dictation
- * does not reliably work, and the reader is told so before they lean on it.
- * Greg asked for that on 2026-08-27 having failed to get it working — so these
- * tests also pin that the warning is reachable from the button rather than
- * merely present somewhere on the page, which is the difference between a
- * caveat and a decoration.
+ * That description slot carries something worth saying instead. For one day it
+ * was an *"unreliable"* sticker; since 2026-08-27 it is the microphone's one
+ * promise — **your voice is sent to be transcribed, and is not stored** — which
+ * is a fact about how the control works rather than a warning about whether it
+ * does. The sticker went with the bug it was about; the sentence replacing it
+ * is the privacy reversal that dictation's second pass required, and it is
+ * tested here for the same reason the sticker was: it has to be reachable
+ * *from the button*, which is the difference between a promise and a
+ * decoration. docs/plans/dictation-two-pass.md.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -30,13 +33,15 @@ import type { UseDictation } from "../src/web/useDictation.js";
 
 /* The button is the whole subject, so the hook behind it is a fixture: one
    mutable object the test poses in each state and re-renders from. */
-const state: { armed: boolean } = { armed: false };
+const state: { armed: boolean; transcribing: boolean } = { armed: false, transcribing: false };
 
 vi.mock("../src/web/useDictation.js", () => ({
   useDictation: (): UseDictation => ({
     supported: true,
-    phase: state.armed ? "listening" : "idle",
+    phase: state.transcribing ? "transcribing" : state.armed ? "listening" : "idle",
     armed: state.armed,
+    transcribing: state.transcribing,
+    liveText: true,
     interim: "",
     level: { current: 0 },
     meter: "none",
@@ -80,6 +85,7 @@ function render(): HTMLButtonElement {
 
 beforeEach(() => {
   state.armed = false;
+  state.transcribing = false;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -104,51 +110,67 @@ describe("the microphone button", () => {
     expect(render().hasAttribute("aria-pressed")).toBe(false);
   });
 
-  /* The description slot is finite: it now carries the caveat, so it must not
-     also carry a `title` that merely repeats the name. */
-  it("spends its accessible description on the warning, not on its own name", () => {
+  /* The description slot is finite: it carries the promise, so it must not also
+     carry a `title` that merely repeats the name. */
+  it("spends its accessible description on the promise, not on its own name", () => {
     const button = render();
     expect(button.hasAttribute("title")).toBe(false);
     const describedBy = button.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     const described = host.querySelector(`#${describedBy}`);
-    expect(described?.textContent).toContain("often transcribes nothing");
+    expect(described?.textContent).toContain("sent to be transcribed");
+  });
+
+  /* The microphone is already off by then, so a press could only mean "start
+     again" — and starting again a moment before the words arrive throws away
+     the dictation the reader just gave. */
+  it("cannot be pressed while the words are being transcribed", () => {
+    state.transcribing = true;
+    const button = render();
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("aria-label")).toBe("Turning your words into text");
   });
 });
 
-describe("the under-construction warning", () => {
-  it("is on the page before the button is ever pressed", () => {
+describe("what the reader is told before they press it", () => {
+  it("says the voice is sent to be transcribed, and not stored", () => {
     render();
-    const mark = host.querySelector(".prof-mic-wip");
-    expect(mark?.textContent).toContain("unreliable");
+    const words = host.querySelector(".prof-mic-note .sr-only")?.textContent ?? "";
+    expect(words).toContain("sent to be transcribed");
+    expect(words).toContain("isn't stored");
   });
 
-  /* Somebody arriving by keyboard should meet the caveat on the way to the
-     control, not after it. */
+  /* **It belongs to the button, not to this box**, which is the fix for a
+     project doc that claimed a sentence sat beside every microphone while chat
+     and the comment dialog had none. Asserted through `aria-describedby` rather
+     than by looking for the class, because being *reachable from the control*
+     is the whole property — a sentence on the page that the button does not
+     point at is decoration. GPT Sol's code review, item 10. */
+  it("is what the button points its description at", () => {
+    const button = render();
+    const describedBy = button.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    const described = host.querySelector(`#${describedBy}`);
+    expect(described?.textContent).toContain("sent to be transcribed");
+  });
+
+  /* Somebody arriving by keyboard should meet it on the way to the control,
+     not after it. */
   it("comes before the button in reading order", () => {
     const button = render();
-    const mark = host.querySelector(".prof-mic-wip");
-    if (!mark) throw new Error("no warning marker");
+    const mark = host.querySelector(".prof-mic-note");
+    if (!mark) throw new Error("no microphone note");
     // Node.DOCUMENT_POSITION_FOLLOWING: the button follows the marker.
     expect(mark.compareDocumentPosition(button) & 4).toBeTruthy();
   });
 
-  it("says what to do instead, and that the typed text is safe", () => {
-    render();
-    const words = host.querySelector(".prof-mic-wip .sr-only")?.textContent ?? "";
-    expect(words).toContain("type instead");
-    expect(words).toContain("safe");
-  });
-
-  /* Repeated while it is running, since the marker is easy to skim past and
-     that minute is when it matters — but not read twice, because the button's
-     description already carried it. */
-  it("says it again while dictation is running, silently", () => {
-    expect(host.querySelector(".prof-mic-wip-note")).toBeNull();
+  /* **The sticker is gone, and this is what stops it coming back.** It was true
+     for one day in August and outlived the bug; a word like that left on a
+     control people are being asked to rely on is worse than no label at all. */
+  it("no longer calls dictation unreliable", () => {
     state.armed = true;
     render();
-    const note = host.querySelector(".prof-mic-wip-note");
-    expect(note?.textContent).toContain("often transcribes nothing");
-    expect(note?.getAttribute("aria-hidden")).toBe("true");
+    expect(host.textContent).not.toMatch(/unreliable/i);
+    expect(host.querySelector(".prof-mic-wip")).toBeNull();
   });
 });

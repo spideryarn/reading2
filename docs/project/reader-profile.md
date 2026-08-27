@@ -276,11 +276,36 @@ is a "mark everything current" button, which is its own small design problem.
 
 ## The microphone, and what it took to make it believable
 
-There is a microphone on both boxes. Why it is the browser's own Web Speech API rather than an
-OpenRouter call — free, no server, live text while you talk, and Safari can run it on-device — is
-argued out in [reader-profile.md § The microphone](../plans/reader-profile.md#the-microphone). This
-section is about the part that was wrong for a day, because the lesson generalises well past
-dictation.
+There is a microphone on both boxes — and, since 2026-08-27, on the chat composer and the comment
+follow-up box too.
+
+**It transcribes twice, and the second pass is the one that counts.** The browser's own recogniser
+gives live words while you talk; when you stop, the recording of the same track goes to a model and
+what comes back replaces them. The reason is not a better ear, it is a **vocabulary**: measured that
+day, every dedicated speech-to-text model on OpenRouter mangled this app's own words — `Spideryarn`
+as *Spiderion*, the block id `spya-k3m9qt` as *"Spire k three m nine q t"* — and a chat model handed
+the article's glossary got them right every run. **How it works now is [dictation.md](dictation.md)** — it stopped being a
+property of this page the moment the button went into chat and the comment box too. The argument,
+the numbers and the nine things GPT Sol found wrong with it are in
+[dictation-two-pass.md](../plans/dictation-two-pass.md). What stays here is the day of debugging
+that got the microphone itself believable, because that is what this page was the scene of.
+
+Two consequences worth having in mind before reading the rest of this section, because both reverse
+something it used to say:
+
+- **The audio now leaves the machine.** *"Free, no server, and no audio of the reader's voice
+  crossing anything of ours"* was the argument for the browser's recogniser, and it is over — Greg's
+  call, with the trade put to him in those words. What is true now: the recording is held in memory
+  for one request, base64'd into one OpenRouter call routed only through zero-data-retention
+  providers, never written to disk by us and never logged. One sentence beside the button says so,
+  as the button's own `aria-describedby`.
+- **Safari and Firefox no longer get live words, and Firefox gets dictation at all.** WebKit allows
+  one microphone source at a time, so on Safari the choice is live text *or* a recording. We take the
+  recording, because the transcript is the half that gets saved. Firefox, which had no button at
+  all, now has all of it except the live text.
+
+The rest of this section is about the part that was wrong for a day before any of that, because the
+lesson generalises well past dictation.
 
 **Greg pressed it and reported that "nothing seemed to happen".** Nothing was broken. Measured in
 Chrome: the microphone does not open until **1.1 seconds** after the button is pressed, and no
@@ -437,8 +462,14 @@ The measurements, both reviews and the two bugs the tests found after the review
 | [`tests/profile.test.ts`](../../tests/profile.test.ts) | the pure rules, including the staleness table exhaustively |
 | [`tests/profile-prompts.test.ts`](../../tests/profile-prompts.test.ts) | the batch prompts — which `article-prompt.test.ts` never covered |
 | [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) | that the cached prefix is untouched by any profile |
-| [`src/web/ProfileBox.tsx`](../../src/web/ProfileBox.tsx) | the textarea, its microphone and the listening strip — shared by `/profile` and the metadata page |
-| [`src/web/useDictation.ts`](../../src/web/useDictation.ts) | the recogniser: three phases, the shared track, the Safari restart |
+| [`src/web/ProfileBox.tsx`](../../src/web/ProfileBox.tsx) | the textarea, the hint and the counter — shared by `/profile` and the metadata page. The microphone moved out of it on 2026-08-27 |
+| [`src/web/useDictation.ts`](../../src/web/useDictation.ts) | the microphone: four phases, the one owned track, the recorder, the upload |
+| [`src/web/useDictationField.ts`](../../src/web/useDictationField.ts) | wiring it to a text box: the caret, the span the words occupy, the box closed while the transcript is on its way |
+| [`src/web/DictationStrip.tsx`](../../src/web/DictationStrip.tsx) | the button and the strip, so every box that adopts a microphone gets the same one |
+| [`src/web/mic-lock.ts`](../../src/web/mic-lock.ts) | one microphone per **page**, however many boxes have a button |
+| [`src/web/dictation-upload.ts`](../../src/web/dictation-upload.ts) | the client half of `POST /api/transcribe` |
+| [`src/transcribe.ts`](../../src/transcribe.ts) | the server half: the vocabulary, the model call, and why it is a chat model |
+| [`src/dictation-limits.ts`](../../src/dictation-limits.ts) | how big a dictation may be and what containers we can send — shared by both ends |
 | [`src/web/useAudioLevel.ts`](../../src/web/useAudioLevel.ts) | the analyser and the frame loop, and everything that must not be mistaken for silence |
 | [`src/web/audio-level.ts`](../../src/web/audio-level.ts) | pure: RMS, the decibel mapping, the measured floor, the smoothing |
 | [`src/web/dictation-errors.ts`](../../src/web/dictation-errors.ts) | pure: every error code to a sentence, totally |
@@ -468,42 +499,45 @@ The measurements, both reviews and the two bugs the tests found after the review
 - **Not multi-user.** One reader, one profile, which is what [auth.md](auth.md) says this app is —
   though the Postgres half is keyed by `owner_id` from the start.
 
-## It says it does not work
+## The sticker came off
 
-Greg, 2026-08-27, after the encoder bug had been chased down, reproduced, and the library
-question settled — and the microphone still would not do the job:
+Greg, 2026-08-27, after the encoder bug had been chased down and the microphone still would not
+do the job:
 
 > I still couldn't get it to work properly, but don't have time to work on it. For now, add
 > a warning message and/or under-construction icon next to or whenever someone uses the
 > microphone button to warn users.
 
-So there is a small `Construction` mark and the word *unreliable* beside the button, and the
-same sentence again under the strip while a dictation is running. The words exist **once**
-in [`ProfileBox.tsx`](../../src/web/ProfileBox.tsx) and are used in three places, because
-three copies of a warning are three warnings that drift apart.
+So for a day there was a `Construction` mark and the word *unreliable* beside the button. Later
+the same day:
 
-Three things about how it is worded and placed, none of them incidental:
+> We've marked the microphone in /profile as unreliable. It seems better now.
 
-- **It says what to do instead.** "If no words appear, type instead." A warning that only
-  reports a defect leaves the reader deciding whether to keep pressing the button.
-- **It says the typed text is safe.** The fear a broken dictation actually produces is not
-  *did it hear me* but *has it eaten what I already wrote* — so that sentence answers the
-  question the reader has rather than the one the feature has. [copy.md](copy.md).
-- **It is the button's `aria-describedby`, and it comes before the button in the DOM.** So
-  focusing the control reads the name and then the caveat, and somebody arriving by keyboard
-  meets the warning on the way to the button rather than after it. That description slot
-  used to hold a `title` that merely repeated the name — with an `aria-label` present an
-  unused `title` becomes the description anyway, so the slot was already spoken for and
-  saying the name twice was the worse use of it.
+It was. The bug the sticker was about — an AAC encoder that refuses one channel at 48 kHz and
+32 kbps while every probe available says it will accept it — had been found and worked around;
+what was left was a transcript that got this app's own words wrong, which is a different
+complaint and now has a different fix. The mark is gone, and
+[`tests/profile-mic-button.test.tsx`](../../tests/profile-mic-button.test.tsx) asserts the word
+is nowhere on the page, so it cannot drift back.
 
-The mark is **not** an error state and deliberately does not look like one: warm rather than
-red, small, and permanent. Dictation still works some of the time, and a control wearing a
-red alert is one people stop trying.
+**What took its place is a promise rather than a warning**, and it keeps three of the four things
+that made the sticker good:
 
-What is actually wrong is written up in
-[microphone-library-options.md](../research/microphone-library-options.md) — an AAC encoder
-that refuses one channel at 48 kHz and 32 kbps while every probe available says it will
-accept it. The mark comes off when that stops being true, not when the docs improve.
+- It sits in the same slot — the button's `aria-describedby`, before the button in the DOM, so
+  focusing the control reads the name and then the sentence, and somebody arriving by keyboard
+  meets it on the way to the button rather than after it.
+- It exists **once** in the source and is used wherever it is needed, because two copies of a
+  promise are two promises that drift.
+- It is not an error state and does not look like one.
+
+What it drops is the fourth: it no longer says *"type instead, whatever is in the box is safe"*,
+because that sentence was reassurance about a defect and the defect is fixed. What it says now is
+what a reader needs to know before pressing a button that was free and is not any more: **your
+voice is sent to be transcribed, and it isn't stored.**
+
+A word like *unreliable*, left on a control after it stops being true, is worse than no label at
+all — it teaches people not to use something that works, and it teaches whoever reads the code
+next that nobody is checking. That is why the removal has a test and not just a commit.
 
 ## See also
 

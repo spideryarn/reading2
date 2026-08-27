@@ -78,6 +78,8 @@ of compression, down the page for position and across for detail. Read that firs
   about this tab goes first* — and why assigning `document.title` announces nothing.
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
+- **[dictation.md](dictation.md)** — talking into a text box: why it transcribes twice, the one
+  microphone a page is allowed, and the three lines that give any box a button.
 - **[copy.md](copy.md)** — the words a reader sees when something fails, why they all live in one
   file, and the bracketed code at the end of every message.
 

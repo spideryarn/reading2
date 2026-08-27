@@ -114,12 +114,28 @@ copy should be freely rewritable without turning a test suite red, and a test
 that pins a sentence quietly makes the sentence permanent. If you are writing a
 test about a failure, match `/\[ai-stalled\]/`.
 
-**The prefix says which thing failed.** `ai-` is a model call. `db-` is this
-app's own database, and there are two of them: `[db-busy]` for a connection that
+**The prefix says which thing failed.** `ai-` is a model call. `mic-` is
+dictation — the microphone, the recorder, or the transcription round trip; see
+[dictation.md](dictation.md). `db-` is this app's own database, and there are two
+of them: `[db-busy]` for a connection that
 dropped or a deadlock that lost, `[db-failed]` for a database that answered "no"
 and will answer "no" again. A reader quoting four characters, and whoever they
 quote them to, can tell those apart without looking anything up — which was the
 argument for not folding a failed write in with `[ai-unexpected]`.
+
+**The `mic-` family is the exception to the paragraph after next**, and worth
+knowing about before you go looking for it in `src/messages.ts`: it is not there.
+Those sentences live beside the code that raises them —
+[`dictation-errors.ts`](../../src/web/dictation-errors.ts) for what the browser's
+recogniser reports, [`useDictation.ts`](../../src/web/useDictation.ts) and
+[`dictation-upload.ts`](../../src/web/dictation-upload.ts) for the rest — because
+`src/messages.ts` is about **failures a model call can return**, and most of
+these are not that. A blocked microphone permission, a headset unplugged mid
+sentence and a recorder that hit its cap have nothing to do with a model and
+nothing to say to `worthRetrying`. What they take from this section is the part
+that is about the reader: a code, last, in brackets, so somebody can quote four
+characters. Added 2026-08-27 with the two-pass rewrite, when they were the one
+family of reader-facing messages in the app without one.
 
 The `db-` pair also marks the **second widening of `src/messages.ts`**, after
 `UNEXPECTED_FAILURE`: these sentences exist because a failed Drizzle query puts

@@ -420,19 +420,33 @@ describe("recording a track", () => {
      delayed `dataavailable` can be any size. The chunk that would overflow is
      refused, so the blob is genuinely never bigger than the cap. */
   it("bounds what it actually holds, refusing the chunk that would overflow", async () => {
-    const MAX = 8 * 1024 * 1024;
-    const tape = recordTrack(track);
+    /* **The cap moved down on 2026-08-27, and the reason is not the browser.**
+       It was 8 MB, sized when the recording was a souvenir nothing uploaded.
+       The recording is now the source of the transcript, so it crosses the
+       wire — base64'd, which inflates it by a third — and Vercel refuses a
+       request body over 4.5 MB *before any of our code runs*. See
+       src/dictation-limits.ts. */
+    const MAX = 2_100_000;
+    const capped: number[] = [];
+    const tape = recordTrack(track, () => capped.push(1));
     /* The clock moves first: the cap stops the recorder inside `emit`, and
        `endedAt` is stamped there — so a test that advanced afterwards would be
        measuring a zero-length recording and getting `null` for the right
        reason and the wrong one. */
     vi.setSystemTime(new Date("2026-08-27T14:32:20"));
-    latest().emit(4 * 1024 * 1024);
-    latest().emit(5 * 1024 * 1024);
+    latest().emit(2_000_000);
+    latest().emit(1_000_000);
     expect(latest().state).toBe("inactive");
+    /* **And the caller is now told.** It used to stop recording and let
+       dictation carry on, which was right for a souvenir and wrong for a
+       source: the words after the cap would be transcribed from audio that
+       does not contain them, and the result would replace the whole of what
+       was said with nothing anywhere reporting a loss. GPT Sol's plan review,
+       item 2. */
+    expect(capped).toHaveLength(1);
     const out = await tape?.stop();
     expect(out?.capped).toBe(true);
-    expect(out?.blob.size).toBe(4 * 1024 * 1024);
+    expect(out?.blob.size).toBe(2_000_000);
     expect(out?.blob.size).toBeLessThanOrEqual(MAX);
   });
 

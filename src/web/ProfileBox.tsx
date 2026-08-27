@@ -6,7 +6,13 @@
  * because a microphone written twice is a microphone that behaves two ways.
  * docs/project/reader-profile.md.
  *
- * ## What this component is careful about
+ * **The microphone is no longer written here.** It moved out on 2026-08-27 into
+ * [`useDictationField`](./useDictationField.ts) and
+ * [`DictationStrip`](./DictationStrip.tsx), because Greg asked for it in lots
+ * of places and the argument that made this component shared in the first place
+ * applies one level up. What is left here is a box with a hint and a counter.
+ *
+ * ## What this component is still careful about
  *
  * **Saving on blur, and the counter turning red before the server refuses.**
  * The cap is enforced server-side and *refused rather than truncated* — a
@@ -24,13 +30,9 @@
  * **Dictated text goes in at the caret, not at the end.** A reader who clicks
  * into the middle of a sentence and starts talking means it there.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Construction, Download, Mic, Square, TriangleAlert, X } from "lucide-react";
-import { MicLevel } from "./MicLevel.js";
-import { type MicDevice, listInputs } from "./mic-devices.js";
-import { type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
-import { useDictation } from "./useDictation.js";
-import { useNow } from "./useNow.js";
+import { useRef } from "react";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { useDictationField } from "./useDictationField.js";
 
 export function ProfileBox({
   id,
@@ -59,118 +61,25 @@ export function ProfileBox({
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
 
-  /* Inserted at the caret and the caret moved past it, so a second phrase lands
-     after the first rather than at the same spot. Reading `value` from the prop
-     rather than the DOM: React owns this input, and the two can disagree for a
-     frame. */
-  /* The caret to insert at, kept here rather than read off the DOM each time.
-     Two final phrases can arrive between renders — the recogniser does not wait
-     for React — and reading `value` and `selectionStart` fresh each time meant
-     the second overwrote the first. So the position is advanced by us, and the
-     text is read from a ref that is updated the moment we change it rather than
-     when the prop comes back round. GPT Sol's review, 2026-08-26. */
-  const live = useRef(value);
-  live.current = value;
-  const caret = useRef<number | null>(null);
+  /* **The whole of the microphone, in one call.** The caret, the span the
+     dictation occupies, closing the box while the transcript is on its way, and
+     committing on *every* way of stopping rather than only the stop button —
+     all of it is [`useDictationField`](./useDictationField.ts) now.
 
-  /* Committing on **every** way of stopping, not only on the stop button.
-     Clicking the microphone takes the focus out of the box, so the blur has
-     already saved the *pre-dictation* text; if dictation then ends any other
-     way — a `network` error, a failed Safari restart — the confirmed words sat
-     in the box unsaved while the reader believed they had been taken. The old
-     code committed inside the stop handler alone, which covered exactly one of
-     those paths. GPT Sol's review, 2026-08-27, item 12. */
-  const commit = useRef(onCommit);
-  commit.current = onCommit;
-  const finished = useCallback(() => {
-    caret.current = null;
-    commit.current();
-  }, []);
-
-  const dictation = useDictation((text) => {
-    const el = box.current;
-    const current = live.current;
-    const at = caret.current ?? el?.selectionStart ?? current.length;
-    const to = caret.current ?? el?.selectionEnd ?? current.length;
-    /* A space between phrases, unless we are at the very start or there is
-       already whitespace there. The recogniser hands back "the evidence" with
-       no leading space, and three phrases in a row would otherwise read
-       "the evidencenot the historyplease". */
-    const needsSpace = at > 0 && !/\s$/.test(current.slice(0, at));
-    const insert = `${needsSpace ? " " : ""}${text}`;
-    const next = current.slice(0, at) + insert + current.slice(to);
-    live.current = next;
-    caret.current = at + insert.length;
-    onChange(next);
-    requestAnimationFrame(() => {
-      const pos = caret.current;
-      if (pos !== null) el?.setSelectionRange(pos, pos);
-    });
-  }, finished);
+     `context` is `profile`, which is what tells the server to prime the model
+     with the reader's own existing profile text. Their field's jargon, in their
+     own spelling, is the best guess available at what they are about to say
+     more of. src/transcribe.ts. */
+  const dictate = useDictationField({
+    value,
+    onChange,
+    onCommit,
+    box,
+    context: { kind: "profile" },
+  });
+  const dictation = dictate.dictation;
 
   const over = value.length > max;
-
-  /* The device list is fetched when the picker is opened rather than kept in
-     sync all the time: `enumerateDevices` returns **blank labels until
-     microphone permission has been granted**, so a list gathered eagerly is a
-     column of empty rows. By the time this control is reachable there is a live
-     track, so the names are there. src/web/mic-devices.ts. */
-  const [picking, setPicking] = useState(false);
-  const [devices, setDevices] = useState<MicDevice[]>([]);
-  useEffect(() => {
-    if (!picking) return;
-    let live = true;
-    const refresh = () => {
-      void listInputs().then((ds) => {
-        if (live) setDevices(ds);
-      });
-    };
-    refresh();
-    // Plugging a headset in while the list is open should add it, rather than
-    // making the reader close and reopen to find out. GPT Sol's review, item 7.
-    navigator.mediaDevices?.addEventListener?.("devicechange", refresh);
-    return () => {
-      live = false;
-      navigator.mediaDevices?.removeEventListener?.("devicechange", refresh);
-    };
-  }, [picking]);
-
-  /* **Dictation does not reliably work, and the reader is told before they
-     rely on it.** Greg, 2026-08-27, after the encoder bug was chased down and
-     the microphone still would not do the job: *"I still couldn't get it to
-     work properly, but don't have time to work on it. For now, add a warning
-     message and/or under-construction icon."*
-
-     The words live here once and are used three times — beside the button, as
-     the button's accessible description, and under the strip while it is
-     running — because three copies of a warning are three warnings that drift.
-
-     It says what to do next rather than only what is wrong, and it says the
-     typed text is safe, because the fear a broken dictation actually creates is
-     that it has eaten what was already in the box. docs/project/copy.md. */
-  const wipId = `${id}-mic-wip`;
-  const WIP =
-    "Dictation is still being worked on and often transcribes nothing. " +
-    "If no words appear, type instead — whatever is already in the box is safe.";
-
-  /* What the strip says, in one place, because it is also what the live region
-     says and the two must not be allowed to drift apart. */
-  const listeningWords =
-    dictation.phase === "opening"
-      ? "Opening the microphone…"
-      : dictation.quiet
-        ? /* **Still not a diagnosis.** `quiet` means nothing crossed −55 dBFS
-             for ten seconds, which a thinking reader in a quiet room produces
-             too — so the sentence reports the threshold and then names the
-             device as a separate fact, rather than becoming "no sound *from*
-             X", which reads as a verdict on X. GPT Sol's review, item 8. */
-          "No sound detected yet"
-        : dictation.meter === "detected"
-          ? /* On the binary path the bars say *whether* there is sound rather
-               than how much, so the words say so too rather than letting the
-               picture imply a measurement nobody took. */
-            "Listening for sound"
-          : "Listening";
 
   return (
     <div className="prof-box">
@@ -178,98 +87,13 @@ export function ProfileBox({
         <label className="prof-box-label" htmlFor={id}>
           {label}
         </label>
-        {/* One conditional over both, rather than the same test written twice:
-            the caveat and the control appear and disappear together, and there
-            is no state in which one of them is right on its own. */}
+        {/* The button carries its own promise — see `DICTATION_PROMISE` in
+            DictationStrip.tsx. It used to be written here, which is why chat
+            and the comment dialog grew microphones with no notice at all. */}
         {dictation.supported && (
-          <>
-            {/* Before the button in the DOM, so somebody arriving by keyboard
-                meets the warning on the way to the control rather than after
-                it. */}
-            <span id={wipId} className="prof-mic-wip" title={WIP}>
-              <Construction size={12} aria-hidden="true" />
-              <span className="prof-mic-wip-word" aria-hidden="true">
-                unreliable
-              </span>
-              <span className="sr-only">{WIP}</span>
-            </span>
-            <button
-              type="button"
-              /* Three phases, two of which are armed. `.on` — the orange — is
-                 only worn once `audiostart` has fired and the microphone is
-                 genuinely open; `.opening` is the second before that, and it
-                 looks different on purpose. The old code went orange on the line
-                 after `start()`, a measured 1.1 seconds before the microphone
-                 could hear anything, which meant the button's one piece of
-                 feedback was wrong exactly when the reader was watching it.
-                 docs/plans/microphone-level-meter.md. */
-              className={`prof-mic${dictation.phase === "listening" ? " on" : ""}${
-                dictation.phase === "opening" ? " opening" : ""
-              }`}
-              /* **An action button, not a toggle.** The name says what the
-                 press will do, and there is no `aria-pressed` — which is the
-                 same model the glyph already uses (a filled square meaning
-                 "stop"), so the icon, the tooltip and the announced name all say
-                 one thing. The APG allows either this or a fixed name carrying
-                 state in `aria-pressed`; what it does not allow is both at once,
-                 which is what was here before. Mixing them a second time via
-                 `title` is just as bad — with an `aria-label` present, an
-                 otherwise-unused `title` becomes the accessible *description*,
-                 so the two must agree rather than merely not collide.
-                 docs/research/microphone-library-options.md. */
-              aria-label={dictation.armed ? "Stop dictating" : "Dictate"}
-              /* The warning is the button's *description*, so focusing it reads
-                 the name and then the caveat. This replaces a `title` that
-                 duplicated the name — with an `aria-label` present an unused
-                 `title` becomes the description anyway, so the slot was already
-                 spoken for and saying the name twice was the worse use of it. */
-              aria-describedby={wipId}
-              disabled={disabled}
-              onClick={() => {
-                if (dictation.armed) {
-                  /* The commit now happens in `onEnd` rather than here, so that
-                     every way of stopping saves and not just this one. */
-                  dictation.toggle();
-                  return;
-                }
-                // Where the reader had the caret when they pressed it. Read now,
-                // because the button is about to take the focus.
-                caret.current = box.current?.selectionStart ?? value.length;
-                dictation.toggle();
-              }}
-            >
-              {/* **A filled square, not `MicOff`.**
-                  `MicOff` is the icon for *muted*, so the one moment the
-                  microphone was live it wore the glyph for dead — and it said
-                  nothing about what pressing it would do. The rule is that the
-                  icon says what the press does, which is "stop" from the moment
-                  the button is armed, including through the `opening` second.
-                  The phase is carried by the colour, the pulse and the strip's
-                  own words; it does not need the glyph as well.
-                  docs/plans/microphone-device-and-recording.md. */}
-              {dictation.armed ? (
-                <Square size={11} fill="currentColor" strokeWidth={0} />
-              ) : (
-                <Mic size={14} />
-              )}
-            </button>
-          </>
+          <DictationButton dictation={dictation} toggle={dictate.toggle} disabled={disabled} />
         )}
       </div>
-
-      {/* **One live region, mounted for the life of the box.**
-       *
-        A `role="status"` that appears and disappears with the strip is a live
-        region created *already containing* its message, which several screen
-        readers do not announce at all — the announcement is of a change, and
-        there was no change, there was a new element. So the region is always
-        here, empty when there is nothing to say, and every visible copy of
-        these words below is `aria-hidden` so nothing is read twice.
-        `aria-atomic` because "No sound detected yet" is one sentence rather
-        than an accumulation. GPT Sol's review, 2026-08-27, item 9. */}
-      <p className="sr-only" role="status" aria-atomic="true">
-        {dictation.error ?? (dictation.armed ? listeningWords : "")}
-      </p>
 
       <textarea
         id={id}
@@ -279,6 +103,12 @@ export function ProfileBox({
         placeholder={placeholder}
         value={value}
         disabled={disabled}
+        /* **Closed while the transcript is on its way**, so there is no such
+           thing as an edit racing the words that are about to replace what is
+           in the box. `readOnly` rather than `disabled`, which would take the
+           focus away and drop the caret we are about to insert at.
+           See useDictationField. */
+        readOnly={dictate.readOnly}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onCommit}
         onKeyDown={(e) => {
@@ -292,118 +122,7 @@ export function ProfileBox({
         }}
       />
 
-      {/* **The strip, and it is rendered whenever the microphone is armed** —
-          not only when there is interim text to put in it, which is what the
-          old code did. That conditional was most of the bug: for the several
-          seconds between pressing the button and the first transcript coming
-          back, the layout was byte-for-byte what it had been before the press,
-          so the reader looking at the box — which is where the words are
-          supposed to appear — saw nothing happen at all.
-
-          **`aria-hidden` goes on the repeated parts, never on the strip
-          itself.** It was on the whole `<p>` for a draft, which also hid the
-          timer inside it — and the timer's `role="timer"` exists exactly so
-          that it *is* exposed while not being announced. Hiding an ancestor
-          takes a descendant out of the accessibility tree whatever its role.
-          GPT Sol's code review, 2026-08-27, item 6. */}
-      {dictation.armed && (
-        <p className="prof-listening">
-          <MicLevel level={dictation.level} detected={dictation.meter === "detected"} />
-          {/* The live region above is already saying this. */}
-          <span className="prof-listening-what" aria-hidden="true">
-            {listeningWords}
-          </span>
-          {dictation.startedAt !== null && <Elapsed since={dictation.startedAt} />}
-          {/* **The device's name, at the moment it is diagnostic and not
-              before.** Nothing on this page said which microphone had produced
-              the zero, so a meter reading nothing and a meter pointed at a dead
-              conferencing loopback were the same picture. It is not shown while
-              sound is arriving, where it is noise and the bars have already
-              answered the question. */}
-          {dictation.quiet && dictation.deviceLabel && (
-            <>
-              <span className="prof-mic-device" title={dictation.deviceLabel}>
-                {dictation.deviceLabel}
-              </span>
-              <button
-              type="button"
-                className="prof-mic-change"
-                onClick={() => setPicking((p) => !p)}
-              >
-                Change
-              </button>
-            </>
-          )}
-          {/* Outside the live region and hidden from it: the recogniser revises
-              this several times a second, and a screen reader re-reading each
-              guess is unusable. The confirmed text lands in the textarea. */}
-          {dictation.interim && (
-            <span className="prof-interim" aria-hidden="true">
-              {dictation.interim}…
-            </span>
-          )}
-        </p>
-      )}
-
-      {/* A microphone was chosen and could not be opened, so something else is
-          being used. Said rather than left to be noticed — transcribing from a
-          device the reader did not pick, silently, is the failure this whole
-          round is about. */}
-      {dictation.armed && dictation.deviceUnavailable && (
-        <p className="prof-mic-warn">
-          The microphone you chose isn't available. Using another one.
-        </p>
-      )}
-
-      {/* The picker. Only reachable while a track is open, which is also the
-          only state in which we know the device names — and only on the path
-          where we own the track at all, since choosing a device the recogniser
-          opens for itself is not something the API allows us to do. */}
-      {picking && dictation.armed && dictation.deviceLabel && (
-        <p className="prof-mic-picker">
-          <label htmlFor={`${id}-mic`}>Microphone</label>
-          <select
-            id={`${id}-mic`}
-            value={dictation.deviceId ?? ""}
-            onChange={(e) => {
-              dictation.chooseDevice(e.target.value || null);
-              setPicking(false);
-            }}
-          >
-            <option value="">The browser's default</option>
-            {devices.map((d) => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label}
-              </option>
-            ))}
-            {/* A remembered device that is no longer in the list would
-                otherwise be a `<select>` whose value matches no option — which
-                renders as blank, or as whatever happens to be first, and either
-                way tells the reader something untrue about what is selected.
-                The preference is deliberately kept rather than cleared (see
-                the plan), so it has to be visible and it has to say what it is.
-                GPT Sol's code review, item 7. */}
-            {dictation.deviceId && !devices.some((d) => d.deviceId === dictation.deviceId) && (
-              <option value={dictation.deviceId}>Your usual microphone (not available now)</option>
-            )}
-          </select>
-          <span className="prof-mic-picker-note">Restarts dictation on the one you choose.</span>
-        </p>
-      )}
-
-      {/* Said again while it is actually running, because the marker beside the
-          button is easy to have skimmed past, and this is the minute in which
-          it matters. `aria-hidden`: the button's description already carried
-          these words to anybody using a screen reader. */}
-      {dictation.armed && (
-        <p className="prof-mic-wip-note" aria-hidden="true">
-          <Construction size={12} /> {WIP}
-        </p>
-      )}
-
-      {dictation.recording && (
-        <SaveRecording recording={dictation.recording} onDiscard={dictation.clearRecording} />
-      )}
+      <DictationStrip dictation={dictation} />
 
       <div className="prof-box-foot">
         <p className="prof-box-hint">{hint}</p>
@@ -411,95 +130,6 @@ export function ProfileBox({
           {value.length} / {max}
         </span>
       </div>
-
-      {/* `aria-hidden`, because the live region at the top of the box is
-          already carrying this sentence. Two copies in the accessibility tree
-          is the error read twice. */}
-      {dictation.error && (
-        <p className="prof-box-error" aria-hidden="true">
-          <TriangleAlert size={12} /> {dictation.error}
-        </p>
-      )}
     </div>
-  );
-}
-
-/**
- * How long the microphone has been open, `m:ss`.
- *
- * **`role="timer"`, not `aria-hidden`.** The elapsed time is worth having if
- * you go looking for it, and `timer` is exposed but implicitly `aria-live:
- * off`, so it is not announced — which matters because the alternative is a
- * screen reader saying "zero one, zero two, zero three" for as long as somebody
- * dictates. GPT Sol's review, 2026-08-27, item 9.
- *
- * The clock is `useNow`, which stops in a hidden tab and re-reads on return, so
- * a reader who switches away and comes back sees the true elapsed time rather
- * than a number that stopped counting while the microphone did not.
- */
-function Elapsed({ since }: { since: number }) {
-  const now = useNow(1000);
-  return (
-    <span className="prof-elapsed" role="timer">
-      {formatDuration(Math.max(0, now - since))}
-    </span>
-  );
-}
-
-/**
- * The audio of a dictation that produced nothing, offered back.
- *
- * **It is a download, and the copy does not promise more than that.** Greg
- * asked to "reveal it in the OS file explorer"; no web page can do that, so
- * this hands over a file and the browser's own downloads UI carries the *Show
- * in Folder* step. See [mic-recording.ts](./mic-recording.ts).
- *
- * The object URL is created on the click and revoked a minute later rather than
- * held for the life of the row — the same shape as
- * [SourceLink](./SourceLink.tsx), and for the same reason: a URL that exists
- * only around the moment it is used cannot be leaked by a component that
- * unmounts at the wrong time.
- */
-function SaveRecording({
-  recording,
-  onDiscard,
-}: {
-  recording: MicRecording;
-  onDiscard(): void;
-}) {
-  const save = () => {
-    const url = URL.createObjectURL(recording.blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = recordingFilename(new Date(), recording.ext);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  };
-
-  return (
-    <p className="prof-recording">
-      <span className="prof-recording-what">
-        Nothing was transcribed. The audio is still here if you want it.
-      </span>
-      <button type="button" className="prof-recording-save" onClick={save}>
-        <Download size={12} />{" "}
-        {/* Says which it is when it is only part of it, because "the recording"
-            would be a claim about the whole of a session that ran past the cap. */}
-        {recording.capped ? "Save the first" : "Save"} {formatDuration(recording.ms)}
-      </button>
-      {/* Deleting it is the reader's to do, rather than something that happens
-          to them eventually. GPT Sol's review, item 6. */}
-      <button
-        type="button"
-        className="prof-recording-drop"
-        onClick={onDiscard}
-        aria-label="Discard the recording"
-        title="Discard the recording"
-      >
-        <X size={12} />
-      </button>
-    </p>
   );
 }

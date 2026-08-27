@@ -16,11 +16,14 @@
  * can be in flight at once, and the panel is how you get back to the ones you
  * are not looking at. Reading order, not ask order — see comment-nav.ts.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
 import type { ClientComment } from "./useComments.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { Tooltip } from "./Tooltip.js";
+import { parseRoute } from "./router.js";
+import { useDictationField } from "./useDictationField.js";
 
 interface Props {
   comment: ClientComment;
@@ -66,6 +69,26 @@ export function CommentDialog({
   onRetry,
 }: Props) {
   const [followUp, setFollowUp] = useState("");
+  const followUpBox = useRef<HTMLInputElement>(null);
+  /* The other box in this app with an article in scope, and therefore the other
+     one whose transcription gets the glossary as its vocabulary — the reader is
+     asking about a passage they have just read, and the words in it are the
+     words they are about to say. docs/plans/dictation-two-pass.md.
+
+     **The slug comes from the address rather than from a prop**, which is one
+     fewer thing for `App.tsx` to thread through and is exactly as true: this
+     dialog only ever exists over an article, and the address is what says which
+     one. `parseRoute` is the same function the router uses, so there is no
+     second parser to disagree with it. Read on every render because it is a
+     string comparison, and because a reader who navigates while the dialog is
+     open should not have a stale slug in the next request. */
+  const route = parseRoute(location.pathname);
+  const dictate = useDictationField({
+    value: followUp,
+    onChange: setFollowUp,
+    box: followUpBox,
+    context: route.kind === "read" ? { kind: "article", slug: route.slug } : { kind: "profile" },
+  });
 
   /**
    * Is text arriving right now?
@@ -256,6 +279,10 @@ export function CommentDialog({
           className="cmt-followup"
           onSubmit={(e) => {
             e.preventDefault();
+            /* Not while a transcript is on its way: `readOnly` stops typing and
+               not Enter, and sending here would hand chat the rough guess a
+               moment before the good words landed. GPT Sol's plan review. */
+            if (dictate.readOnly) return;
             const q = followUp.trim();
             if (!q) return;
             setFollowUp("");
@@ -264,7 +291,9 @@ export function CommentDialog({
         >
           <input
             type="text"
+            ref={followUpBox}
             value={followUp}
+            readOnly={dictate.readOnly}
             onChange={(e) => setFollowUp(e.target.value)}
             /* Escape closes the dialog from a window listener, which would eat
                a half-typed question without warning. Stopped here so the first
@@ -278,9 +307,17 @@ export function CommentDialog({
             placeholder="Ask a follow-up…"
             aria-label="Ask a follow-up question about this passage"
           />
-          <button type="submit" className="linky" disabled={!followUp.trim()}>
+          {dictate.dictation.supported && (
+            <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} />
+          )}
+          <button
+            type="submit"
+            className="linky"
+            disabled={dictate.readOnly || !followUp.trim()}
+          >
             Ask in chat
           </button>
+          <DictationStrip dictation={dictate.dictation} />
         </form>
       )}
 

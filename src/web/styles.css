@@ -1388,6 +1388,22 @@ mark.term[data-term-open] {
   background: var(--highlight-wash);
   border-bottom-color: var(--highlight);
 }
+/* The words a finger has opened a card against — useHoverCard.ts § TAP_ATTR.
+   On a touch screen the first tap reveals and the second one goes to the
+   glossary, so there has to be something saying *which* words are armed for
+   that second tap; two underlined phrases in one line are otherwise
+   indistinguishable once the card is up. The card's arrow points at them, and
+   an arrow is a poor answer at a line's end where `shift` has moved it.
+
+   Deliberately the same weight as `[data-term-open]` and deliberately not the
+   same attribute: that one means "the entry pressed in the glossary panel", and
+   one name for two states would make a tapped word look selected in a mode the
+   reader is not in. `:hover` cannot do this job either — iOS makes it sticky,
+   so it would survive the card being dismissed. */
+mark.term[data-hover-tap] {
+  background: var(--highlight-wash);
+  border-bottom-color: var(--highlight);
+}
 /* A comment and a term over the same words are ONE <mark> carrying both
    classes (annotate.ts § MarkKind), so this is not a hypothetical pairing. The
    comment wins the border, because it is the one you can click and the dotted
@@ -2602,6 +2618,16 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.85rem;
 }
 
+/* The wait that stands where `.dock-empty` would. A flex row so the spinner
+   sits on the sentence's baseline, and a min-height so the drawer does not jump
+   when the spinner appears after useSlow's 600ms — QuestionsLoading in Dock.tsx. */
+.dock-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.2rem;
+}
+
 /* The questions list. Two columns where there is room, because these are short
    and a single column down a wide drawer wastes the shape of it. */
 .dock-questions {
@@ -3247,6 +3273,23 @@ td.text.has-hit[data-hues="8"] {
 .cite .block-ref:hover {
   border-color: var(--highlight);
   color: var(--highlight-ink);
+}
+
+/* A link the model wrote into its own prose, drawn like one of the article's
+   own — same colour, same underline offset (see `.prose a`). That match is the
+   point rather than laziness: both are "an address somebody else chose, which
+   you can hover to find out about", and the hover card that opens over them is
+   literally the same panel (ProseHoverCard.tsx). A second visual language for
+   the same gesture would be a second thing to learn.
+
+   `break-word` for the reason the prose has it: a bare URL is one unbroken
+   token, and this column is 22rem at its widest. Cited.tsx,
+   docs/plans/chat-web-links.md. */
+.cited-link {
+  color: var(--highlight-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  overflow-wrap: break-word;
 }
 
 /* ---- what the model did before it answered ----
@@ -5188,8 +5231,7 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.7rem;
   cursor: pointer;
 }
-.summ-more:not(:disabled):hover { color: var(--ink); border-color: var(--highlight); }
-.summ-more:disabled { cursor: default; }
+.summ-more:hover { color: var(--ink); border-color: var(--highlight); }
 
 /* ---- the offer at the bottom, and the things that go wrong ---- */
 .summ-foot {
@@ -7114,7 +7156,15 @@ tr:hover .block-chat,
    not stored — is carried as the button's accessible description and as its
    `title`, and takes no room on screen: it is a fact about how the control
    works, not a warning about whether it does. docs/plans/dictation-two-pass.md. */
+/* **Nothing at all, on purpose.** It carries the sentence for screen readers
+   and takes no space, because it now sits inside every microphone button
+   wherever one appears — including the chat composer, which is a flex row where
+   a `margin-left: auto` on this would have shoved the send button across the
+   page. The profile box's own layout puts the gap on the button instead. */
 .prof-mic-note {
+  display: contents;
+}
+.prof-box-head .prof-mic {
   margin-left: auto;
 }
 

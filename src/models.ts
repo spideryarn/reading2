@@ -310,6 +310,39 @@ export type Task =
   | "search";
 
 /**
+ * **The three model calls that are not a `Task`** — and the type exists so that
+ * "not on a tier" cannot go on meaning "not counted".
+ *
+ * `Task` is a judgment about how much reasoning a job needs, which is why
+ * transcribing a PDF, turning a paragraph into a vector and turning a reader's
+ * voice into words are all excluded from it; the comment on `Task` argues that
+ * at length and it is still right. But **the bill does not care about tiers.**
+ * Every one of these three spends real money, and a spend record keyed on `Task`
+ * would have had nowhere to put them — which is exactly how they would have
+ * stayed missing from a total that looked complete.
+ *
+ * `NON_TASK_MODELS` below is typed against this rather than against `string`, so
+ * the inventory the profile page shows and the jobs the meter can name are the
+ * same three by construction.
+ */
+export type NonTaskAiJob = "pdf" | "embeddings" | "dictation";
+
+/**
+ * **Every model call this app pays for**, whether or not it is a tier decision.
+ *
+ * The unit of the cost record — see [`src/ai-spend.ts`](ai-spend.ts). Adding a
+ * member here without giving it a wire in `AI_JOB_WIRE` and a routing policy in
+ * `AI_JOB_PROVIDER` is a compile error, which is the whole reason those are
+ * exhaustive records rather than lists.
+ *
+ * **`AiJob`, not `Job`.** `Job` is already taken, by the ingest queue's row in
+ * [`src/types.ts`](types.ts) — a different, central thing, and two types with
+ * one name in one codebase is a bug waiting for whoever imports the wrong one.
+ * Caught by a GPT Sol review before it was written.
+ */
+export type AiJob = Task | NonTaskAiJob;
+
+/**
  * **Which tier each task is on — and the file's actual decision, rather than its
  * constants, which are only the vocabulary for it.**
  *
@@ -398,8 +431,14 @@ export const GATEWAY: Provider = "openrouter";
  * `thinking: {type: "adaptive"}` does not exist on the other one — OpenRouter's
  * `reasoning.effort` takes `max|xhigh|high|medium|low|minimal|none` and answers
  * `adaptive` with a 400. All seven send it.
+ *
+ * `"embeddings"` is the third, and it is a wire rather than a flavour of `"chat"`
+ * because it is a different endpoint (`/v1/embeddings`) with a different request
+ * and a different response. Folding it into `"chat"` would have made the one
+ * field that says *what this request looks like* say something untrue about the
+ * only call in the app that does not carry messages at all.
  */
-export type Wire = "messages" | "chat";
+export type Wire = "messages" | "chat" | "embeddings";
 
 /**
  * **Which wire each task is on** — and the reason this is a `Record` rather
@@ -433,6 +472,22 @@ export const TASK_WIRE: Record<Task, Wire> = {
 export function wireFor(task: Task): Wire {
   return TASK_WIRE[task];
 }
+
+/**
+ * **Which protocol each paying job speaks** — `TASK_WIRE` plus the three that
+ * are not tasks.
+ *
+ * Spread rather than retyped, so the ten rows have one home and cannot drift
+ * from it. `Record<AiJob, Wire>` again, for the reason `TASK_WIRE` gives: a job
+ * nobody assigned fails to compile rather than quietly getting a default and
+ * then being reported however the default implies.
+ */
+export const AI_JOB_WIRE: Record<AiJob, Wire> = {
+  ...TASK_WIRE,
+  pdf: "chat",
+  dictation: "chat",
+  embeddings: "embeddings",
+};
 
 const ALL_TASKS = Object.keys(TASK_WIRE) as Task[];
 
@@ -513,10 +568,16 @@ export function resolveModel(task: Task): ResolvedModel {
   const wire = TASK_WIRE[task];
   const envVar = MODEL_ENV_VAR[task];
   const override = envVar ? process.env[envVar] : undefined;
-  if (override) return { id: override, provider: GATEWAY, wire, source: "override" };
+  if (override)
+    return { id: override, provider: GATEWAY, wire, source: "override" };
   /* One spelling now, for every task on either wire: OpenRouter's. The Skin
      wants `anthropic/claude-sonnet-5` exactly as chat/completions does. */
-  return { id: openRouterIdForTier(TASK_TIER[task]), provider: GATEWAY, wire, source: "default" };
+  return {
+    id: openRouterIdForTier(TASK_TIER[task]),
+    provider: GATEWAY,
+    wire,
+    source: "default",
+  };
 }
 
 /**
@@ -583,7 +644,11 @@ export const DISPLAY_NAME: Record<string, string> = {
  * the code that ran it, and copying the string here to avoid one import is
  * exactly the two-copies-of-one-fact problem this whole change is about.
  */
-export const NON_TASK_MODELS: readonly { job: string; id: string; provider: Provider }[] = [
+export const NON_TASK_MODELS: readonly {
+  job: NonTaskAiJob;
+  id: string;
+  provider: Provider;
+}[] = [
   { job: "pdf", id: PDF_READER_MODEL, provider: "openrouter" },
   { job: "embeddings", id: EMBEDDING_MODEL, provider: "openrouter" },
   { job: "dictation", id: DICTATION_MODEL, provider: "openrouter" },
@@ -739,5 +804,8 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
 
 /** One stage's effort, with the whole-run environment override applied. */
 export function effortFor(stage: ArticleStage): Effort {
-  return (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? STAGE_EFFORT[stage];
+  return (
+    (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ??
+    STAGE_EFFORT[stage]
+  );
 }
