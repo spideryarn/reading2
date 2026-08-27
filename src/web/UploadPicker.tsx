@@ -21,7 +21,7 @@
  * still has one place and one address, and the thing without an address (the
  * transfer) is over before the navigation happens.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileText, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type ChosenFile, formatBytes, uploadProblem } from "../uploads.js";
@@ -60,12 +60,37 @@ export function UploadPicker() {
      same handler, and a stale render value would drift the count. */
   const depth = useRef(0);
 
-  function take(files: FileList | null) {
-    if (!files || files.length === 0) return;
+  /**
+   * Accept a file, and say whether it was accepted.
+   *
+   * The return value is what lets a **drop** go straight on to `send()`. It has
+   * to be a return value rather than a look at `chosen` afterwards, because
+   * `setChosen` does not change `chosen` until the next render — the caller is
+   * still in the same tick and would read the previous file, or `null`.
+   * `file.current` is written here synchronously for the same reason, and that
+   * is the handle `send()` actually reads.
+   */
+  function take(files: FileList | null): boolean {
+    if (!files || files.length === 0) return false;
+    /* **A transfer already in flight owns this control until it is done.**
+       `take` used to overwrite `file.current` and `chosen` unconditionally, and
+       `send` only checked the lock afterwards — so a second drop during an
+       upload replaced the name and the size on screen, its own `send` returned
+       at the lock, and the *first* file went on uploading underneath the second
+       one's name and then navigated to the first one's article. Nothing was
+       lost twice and no second grant was minted; the display simply described a
+       file that was not moving. Found by GPT Sol's review, 2026-08-27.
+
+       Refusing here rather than in `send` covers the file picker as well as the
+       drop, which had the same hole from the other direction. */
+    if (sending.current) {
+      setProblem("That upload is still going. Wait for it, or stop it first.");
+      return false;
+    }
     if (files.length > 1) {
       setChosen(null);
       setProblem("One at a time, please — drop a single PDF.");
-      return;
+      return false;
     }
     // Named separately because `File` is a `ChosenFile` and nothing more is
     // wanted here; the bytes stay where they are until there is somewhere to
@@ -76,6 +101,7 @@ export function UploadPicker() {
     setProblem(wrong);
     setChosen(wrong ? null : picked);
     file.current = wrong ? null : chose;
+    return !wrong;
   }
 
   /**
@@ -119,6 +145,21 @@ export function UploadPicker() {
     }
   }
 
+  /**
+   * **Stop the transfer if the reader leaves.**
+   *
+   * `send` navigates on success, and without this the navigation could happen
+   * to somebody who is no longer here: leave the shelf mid-upload, and minutes
+   * later the finished request pulls you onto the ingest page of a file you had
+   * already walked away from. The X button aborted, and nothing else did.
+   *
+   * Aborting rather than merely ignoring the result, because the bytes are
+   * still going: a reader who left is not a reader who wants to keep paying for
+   * a 50 MB PUT. `send` treats an abort as the reader's own doing and reports
+   * nothing, which is exactly right here.
+   */
+  useEffect(() => () => abort.current?.abort(), []);
+
   /** Whether this drag is carrying files at all, rather than selected text. */
   function hasFiles(event: React.DragEvent): boolean {
     return Array.from(event.dataTransfer.types).includes("Files");
@@ -152,11 +193,33 @@ export function UploadPicker() {
           depth.current = Math.max(0, depth.current - 1);
           if (depth.current === 0) setDragging(false);
         }}
+        /**
+         * **A drop uploads it. Dropping is the commit gesture.**
+         *
+         * It used to only *choose* the file, leaving a "Send it" button to
+         * press — and on 2026-08-27 Greg dropped a PDF on this box and reported
+         * that "nothing seems to have happened". Nothing had gone wrong: the
+         * filename row appeared and the upload was waiting for a second
+         * gesture that the box had not asked for. A control captioned *drop a
+         * PDF here*, that catches the file and then waits, is indistinguishable
+         * from one that swallowed it.
+         *
+         * So the two entry points now differ on purpose. Dropping a file on a
+         * target that names itself is unambiguous, and there is nothing to
+         * confirm. The **button** still chooses-then-sends, because the file
+         * dialog is a place people browse — the first PDF you click is often
+         * not the one you meant, and the row with its size and its X is the
+         * only chance to notice before 50 MB goes.
+         *
+         * `take` returning false is a refusal it has already explained (not a
+         * PDF, too large, more than one), so there is nothing to send and the
+         * reason is already on screen.
+         */
         onDrop={(e) => {
           e.preventDefault();
           depth.current = 0;
           setDragging(false);
-          take(e.dataTransfer.files);
+          if (take(e.dataTransfer.files)) void send();
         }}
         /* No fill of its own when it is idle. It used to be `bg-background`,
            which on this page is *darker* than the card it sits in — so a

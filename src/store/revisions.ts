@@ -57,6 +57,7 @@
 import { log } from "../log.js";
 import type { StepName } from "../types.js";
 import type { ArtifactStore } from "./artifacts.js";
+import { guardDbStore } from "./db-errors.js";
 import { STORE } from "./live.js";
 import {
   beginRevision,
@@ -255,5 +256,22 @@ export const NO_DRAFTS: RevisionLifecycle = {
  * its artefact store directly. Routing it through index.ts would also close an
  * import cycle: index.ts imports fs.ts, which imports src/chat.ts.
  */
+/**
+ * **Guarded, and `NO_DRAFTS` deliberately is not.**
+ *
+ * The third of the three Postgres stores that were selected outside
+ * src/store/index.ts and so never met `guardDbStore` — src/store/pg-jobs.ts and
+ * src/store/pg-uploads.ts are the other two, and the homepage rendered one of
+ * them in red on 2026-08-27. This one had not leaked yet only because nothing
+ * calls it in production; that is a fact about the wiring, not a property of the
+ * code, and the day it is wired is not the day anybody will re-read this.
+ *
+ * `NO_DRAFTS` stays bare because it touches no database and has nothing to
+ * scrub. Wrapping it would cost a layer and buy an implication that is false.
+ *
+ * `PublishRefused` crosses intact without being named on any allowlist: it
+ * carries `status = 409`, which is this codebase's mark for a failure somebody
+ * chose and worded, and db-errors.ts passes those through.
+ */
 export const revisionLifecycle: RevisionLifecycle =
-  STORE === "postgres" ? pgLifecycle : NO_DRAFTS;
+  STORE === "postgres" ? guardDbStore("revisions", pgLifecycle) : NO_DRAFTS;

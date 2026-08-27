@@ -26,6 +26,7 @@ import {
   type SettleFields,
   type UploadRecord,
   type UploadStore,
+  IllegalTransition,
   grantIsOver,
   isUploadId,
 } from "./uploads.js";
@@ -101,7 +102,7 @@ export const fsUploadStore: UploadStore = {
     const existing = await read(id);
     if (!existing) return null;
     if (!canTransition(existing.status, to)) {
-      throw new Error(`An upload cannot go from ${existing.status} to ${to}.`);
+      throw new IllegalTransition(existing.status, to);
     }
     const next: UploadRecord = { ...existing, ...fields, status: to };
     await put(next);

@@ -24,6 +24,7 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
+import { guardDbStore } from "./db-errors.js";
 import { uploads } from "../db/schema.js";
 import {
   type RejectReason,
@@ -36,6 +37,7 @@ import {
   type SettleFields,
   type UploadRecord,
   type UploadStore,
+  IllegalTransition,
   isUploadId,
 } from "./uploads.js";
 
@@ -80,7 +82,12 @@ function sourcesFor(to: UploadStatus): UploadStatus[] {
   return UPLOAD_STATUSES.filter((from) => canTransition(from, to));
 }
 
-export const pgUploadStore: UploadStore = {
+/**
+ * The store itself, **not exported** — see `pgUploadStore` at the foot of the
+ * file. Private for the reason src/store/pg-jobs.ts gives about its own twin:
+ * an unguarded spelling on offer is one somebody imports.
+ */
+const rawPgUploadStore: UploadStore = {
   async read(id: string, owner?: string): Promise<UploadRecord | null> {
     if (!isUploadId(id)) return null;
     const db = getDb();
@@ -176,7 +183,7 @@ export const pgUploadStore: UploadStore = {
        just `return null`. */
     const existing = await this.read(id);
     if (!existing) return null;
-    throw new Error(`An upload cannot go from ${existing.status} to ${to}.`);
+    throw new IllegalTransition(existing.status, to);
   },
 
   async reject(id: string, reason: RejectReason): Promise<boolean> {
@@ -214,3 +221,20 @@ export const pgUploadStore: UploadStore = {
     await db.delete(uploads).where(eq(uploads.id, id));
   },
 };
+
+/**
+ * The upload store, with nothing a database said able to leave it.
+ *
+ * The same fix as src/store/pg-jobs.ts and found by the same review, and the
+ * payload here is worse than the jobs one that was actually seen: `mint` binds
+ * the **filename off the reader's own disk**, which is the one value in this
+ * table that came from outside and the one most likely to say something about
+ * its owner. A failed insert would have put it in `Error.message`, and from
+ * there into the response, the log and — via the record's own `reason` column —
+ * back into the next query's bound parameters.
+ *
+ * Selected in src/upload-records.ts rather than src/store/index.ts for the
+ * import-cycle reason that file states; guarding at the export is what makes
+ * the two facts compatible.
+ */
+export const pgUploadStore: UploadStore = guardDbStore("uploads", rawPgUploadStore);

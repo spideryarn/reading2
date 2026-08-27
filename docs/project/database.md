@@ -163,6 +163,13 @@ Three rules that outrank convenience, all learned the expensive way:
 - **A skipped test protects nothing, and a *silently* skipped one is worse.** The parity suite's
   database probe timed out at 2s under load and opted the whole suite out inside a run that still
   reported a green 1103 passed.
+- **A guard belongs on the thing, not on the place.** `guardDbStore` was applied at every selection
+  in `src/store/index.ts` and at none of the three outside it, so on 2026-08-27 the shelf rendered a
+  failed `select … from "spideryarn"."jobs"` — its columns, its `where` and the owner's uuid — in red
+  on the homepage. Every Postgres store is now wrapped **at its export**, so there is no unguarded
+  spelling left to import, and [`tests/store-guarded.test.ts`](../../tests/store-guarded.test.ts)
+  asks the objects rather than the source. See
+  [the postmortem](../postmortems/unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
 
 Everything below is still planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —
 is in [postgres-migration.md](../plans/postgres-migration.md). The parts worth knowing before you
@@ -199,12 +206,46 @@ touch anything storage-shaped:
 ## Connecting to the remote
 
 **The remote is up and has the data**, as of 2026-08-27: project `alschkahzfagtppxspfq`,
-eu-west-2, Postgres 17.6, 14 migrations, 14 tables, both roles, the owner account, and five
+eu-west-2, Postgres 17.6, **18 migrations, 15 tables**, both roles, the owner account, and five
 articles — 635 blocks, 24 comments, 56 chat messages. `listArticles` and `loadArticle` have been
 served from it through the **transaction** pooler, which is the path production uses. See
 [§ Roles](#roles) for how it was bootstrapped and [§ What is not done](#what-is-not-done-yet) for
-what is still missing. Nothing in the *deployed* app points at it yet; `SPIDERYARN_STORE` and
-`DATABASE_URL` are recorded in `.env.prod`, which is read by nothing.
+what is still missing.
+
+**And the deployed app now does point at it**, which is how the next paragraph came to be written.
+
+### The four migrations that were not there, and the command that said they were
+
+Later on 2026-08-27, `spideryarn.com` rendered a failed
+`select … from "spideryarn"."jobs"` on the homepage, in red, column list and all. The remote had
+**14** of the 18 migrations: `jobs` was missing `profile`, `failure_kind`, `upload_id`,
+`upload_filename` and `work_key`, and `spideryarn.uploads` did not exist, so uploading a PDF could
+not work either.
+
+They were missing because **the documented way of applying them applied them to the laptop.**
+`loadEnvLocal()` lets `.env.local` beat the shell — [`src/env.ts`](../../src/env.ts) explains why,
+and for the app it is right — so `DATABASE_URL=<remote> npm run db:migrate` had its URL replaced by
+`127.0.0.1:54362` *before* the remote check ran. `isLocalDatabaseUrl` agreed, the
+`DB_MIGRATE_ALLOW_REMOTE` guard was satisfied, the dev database moved forward, and it printed
+`✓ migrations applied`. A [silent success](../reusable/silent-success.md) of the purest kind: the
+check shared its assumption with the code.
+
+[`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) now reads the shell's `DATABASE_URL` **before**
+`loadEnvLocal()` and prefers it — the target of a migration is an argument, not configuration, and
+this is the one place the shell means it — and prints a password-stripped `Target:` line whatever
+happens. Read that line. It is the whole guard:
+
+```
+Target: postgresql://postgres.alschkahzfagtppxspfq@aws-0-eu-west-2.pooler.supabase.com:5432/postgres
+Applying migrations from drizzle …
+✓ migrations applied
+```
+
+**Verify afterwards as the app role, not as `postgres`.** They are different roles over different
+poolers and only one of them is what Vercel uses; a migration that succeeds for `postgres` and a
+table the app cannot see look identical from the migrator's side. The check that settles it is
+running the query that failed. The full story is in
+[the postmortem](../postmortems/unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
 
 The facts below are the ones that turn a five-minute job into an afternoon, and each fails in a way
 that misdirects you.
@@ -410,6 +451,13 @@ create table spideryarn.zz_canary (id int);
 select has_table_privilege('spideryarn_app','spideryarn.zz_canary','select');  -- must be true
 drop table spideryarn.zz_canary;
 ```
+
+**Run, and true, on 2026-08-27** — in a transaction that was rolled back, and for all four verbs
+rather than only `select`, immediately before applying `drizzle/0014`, which creates the first new
+table since the rule was written. This is the check worth keeping: a migration that creates a table
+the app cannot see reports success and then fails on every request that touches it, which reads like
+a broken feature rather than a missing grant. `pg_default_acl` showed
+`spideryarn_app=arwd/postgres` for role `postgres` in schema `spideryarn`, and the canary agreed.
 
 ### Step two and a half: the extensions the schema needs
 

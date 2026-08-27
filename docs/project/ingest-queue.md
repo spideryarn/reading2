@@ -161,7 +161,28 @@ SHA-256 against the browser's. Downloading once and doing the last two over that
 tidiness — reading the object twice is the one sequence content addressing does not cover, because
 the grant is still live and the second read may not be the bytes the first one verified.
 
-Two smaller things in the picker that are easy to get wrong and are worth not rediscovering:
+**A drop uploads it; the button does not.** The two entry points differ on purpose, and the
+difference was reported as a bug before it was a decision. Greg, 2026-08-27:
+
+> I tried dragging and dropping a PDF onto the Add zone in the home page, and nothing seems to have
+> happened.
+
+Nothing had gone wrong. The drop took the file, showed its name and its size, and waited for a
+"Send it" press — and a control captioned *Or drop a PDF here* that catches a file and then waits is
+indistinguishable from one that swallowed it. So a drop now sends immediately. It is an unambiguous
+commit gesture aimed at a target that names itself, and there is nothing left to confirm; the X on
+the progress row is still there to stop it.
+
+The **button** still chooses-then-sends, because a file dialog is a place people browse. The first
+PDF you click is often not the one you meant, and the row with its size is the only chance to notice
+before 50 MB goes.
+
+The mechanical part is that `take()` returns a boolean rather than the caller reading `chosen`
+afterwards: `setChosen` does not change `chosen` until the next render, so a drop handler asking
+"did that work?" in its own tick reads the *previous* file, or `null`. `file.current` is written
+synchronously for the same reason, and it is what `send()` actually reads.
+
+Three smaller things in the picker that are easy to get wrong and are worth not rediscovering:
 
 - **The drag highlight counts, it does not toggle.** `dragleave` fires every time the pointer
   crosses into a child element, so a boolean cleared on leave makes the zone flicker as you move
@@ -169,6 +190,9 @@ Two smaller things in the picker that are easy to get wrong and are worth not re
 - **`dragover` must call `preventDefault`.** Its default action is *"this is not a drop target"*,
   and without cancelling it the browser opens the PDF in the tab instead — which looks exactly
   like a drop handler that never ran.
+- **Only the dashed box is a drop target**, not the card around it or the URL field. A PDF let go an
+  inch too high does nothing at all, and that is worth knowing before diagnosing a drop that
+  "didn't work".
 
 ## The add page
 

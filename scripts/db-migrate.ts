@@ -36,9 +36,32 @@ import { Pool } from "pg";
 import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 
+/**
+ * **The shell's `DATABASE_URL`, read before `.env.local` can bury it.**
+ *
+ * `loadEnvLocal()` deliberately lets the *file* beat the shell — src/env.ts
+ * explains why, and for the app it is right: a stale export in somebody's
+ * profile should not quietly reconfigure the server. But this script is not the
+ * app. Its target is an **argument**, not configuration, and the documented
+ * recipe in .env.prod is
+ *
+ *     DATABASE_URL=<remote> DB_MIGRATE_ALLOW_REMOTE=yes npm run db:migrate
+ *
+ * which, until 2026-08-27, did not do that. `.env.local` overrode it, the
+ * remote check below saw `127.0.0.1`, the guard was satisfied, and the migrator
+ * applied the migrations **to the laptop** and printed `\u2713 migrations applied`.
+ * The remote stayed four migrations behind while the command that was supposed
+ * to move it reported success — docs/reusable/silent-success.md, and the whole
+ * failure it describes: the check shared an assumption with the code.
+ *
+ * Read here rather than fixed in src/env.ts because the precedence rule there
+ * is right for every other caller. This is the one place the shell means it.
+ */
+const fromShell = process.env.DATABASE_URL;
+
 loadEnvLocal();
 
-const url = process.env.DATABASE_URL;
+const url = fromShell ?? process.env.DATABASE_URL;
 if (!url) {
   console.error(
     "DATABASE_URL is not set.\n" +
@@ -49,13 +72,59 @@ if (!url) {
 }
 
 /**
+ * A connection string with the password removed, or nothing at all.
+ *
+ * **Parsed, not pattern-matched, and it took two goes.** The first version was
+ * `url.replace(/:\/\/([^:@\/]*)(:[^@]*)?@/, "://$1@")`, which stops at the first
+ * literal `@` — and `pg` accepts one inside a password. Given
+ * `postgres://u:p@ss@host/db` it printed `postgres://u@ss@host/db`, putting half
+ * the password on the terminal of a line whose entire job is to be safe to read
+ * out. It also ignored `?password=` in the query string, which `pg` also
+ * accepts. Both found by GPT Sol's review of this change, 2026-08-27, and both
+ * verified against `pg-connection-string` rather than argued about.
+ *
+ * WHATWG `URL` splits on the **last** `@` in the authority, which is the same
+ * rule `pg` follows, so it gets `p@ss` right where a regex cannot.
+ *
+ * **Fails closed.** An unparsable URL returns `undefined` and the caller prints
+ * a placeholder rather than the string. A redactor that falls back to showing
+ * the original is not a redactor.
+ */
+function withoutPassword(connection: string): string | undefined {
+  try {
+    const parsed = new URL(connection);
+    parsed.password = "";
+    /* `pg` reads the password from the query string too, so stripping only the
+       userinfo half leaves it in plain sight. */
+    parsed.searchParams.delete("password");
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * **Say out loud which database is about to change.**
+ *
+ * One line, and it is the line that would have made the accident above visible
+ * the moment it happened rather than a day later on somebody's homepage. The
+ * host, the port and the user are what distinguish "the laptop" from
+ * "production", and none of them is a secret.
+ */
+const target = withoutPassword(url);
+console.log(`Target: ${target ?? "(a DATABASE_URL that is not a parsable URL)"}`);
+
+/**
  * Refuse to run against anything that is not obviously local unless told twice.
  * There is no remote project yet, so today this only ever fires by accident —
  * which is exactly when you want it to.
  */
 const isLocal = isLocalDatabaseUrl(url);
 if (!isLocal && process.env.DB_MIGRATE_ALLOW_REMOTE !== "yes") {
-  const shown = url.replace(/:\/\/[^@]*@/, "://***@");
+  /* Was `url.replace(/:\/\/[^@]*@/, "://***@")`, which had the same first-`@`
+     weakness as the `Target:` line above and printed the tail of a password
+     containing one. One redactor, used by both. */
+  const shown = withoutPassword(url) ?? "(unparsable)";
   console.error(
     `DATABASE_URL does not look local: ${shown}\n` +
       "  Set DB_MIGRATE_ALLOW_REMOTE=yes if you really mean it.",

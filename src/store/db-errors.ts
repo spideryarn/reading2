@@ -49,7 +49,7 @@
  * is: **an allowlist of what may pass through unchanged**, and everything else
  * is translated.
  *
- * Two things pass:
+ * Four things pass:
  *
  * 1. **An error carrying a numeric `status`.** That is this codebase's mark for
  *    "I chose this failure and I chose its wording" — a 404 for a slug with no
@@ -60,6 +60,26 @@
  *    the guard throws one yet — the Postgres chat store is not wired into
  *    src/store/index.ts — and it is handled here anyway, because the day it is
  *    wired is not the day anybody will remember this paragraph.
+ * 3. **`StaleAttemptError`.** The same shape, found the same way — GPT Sol's
+ *    review, 2026-08-27, of the change that put `pgJobStore` behind this guard.
+ *    `advanceJob` in src/jobs.ts asks `err instanceof StaleAttemptError` to
+ *    answer *busy, ask again* when the claim moved to another instance mid-step.
+ *    Scrubbing it would turn an ordinary lost race into a 500 on the reader's
+ *    ingest card, and it would do it only under `postgres` and only under
+ *    contention — the hardest possible thing to reproduce.
+ * 4. **`IllegalTransition`.** Found by tests/store-uploads-parity.test.ts the
+ *    moment `pgUploadStore` went behind this guard: the two upload adapters
+ *    stopped agreeing about what an illegal state change says, because only one
+ *    of them has a database and so only one of them came through here. It is a
+ *    caller's bug either way, and the whole point of it is to name the
+ *    transition that was asked for.
+ *
+ * What the four have in common is the test to apply to a fifth: the type is
+ * **closed** and its message is built from values *we* chose. `StaleAttemptError`
+ * interpolates a job id, which is a uuid we minted, and `IllegalTransition` two
+ * members of a five-literal union. The moment a candidate's
+ * message can contain a URL, a title, a quote or a model's answer, it does not
+ * belong on this list however well-behaved its class is.
  *
  * The cost is real and is worth saying out loud: a plain bug in a Postgres store
  * (a `TypeError`, say) now reaches the log without its message. **The stack
@@ -90,6 +110,8 @@
 import { ChatConflict } from "../chat.js";
 import { log } from "../log.js";
 import { STORAGE_BUSY, STORAGE_FAILED } from "../messages.js";
+import { StaleAttemptError } from "./jobs.js";
+import { IllegalTransition } from "./uploads.js";
 
 const logger = log("store");
 
@@ -227,6 +249,8 @@ function framesOf(err: unknown): string | undefined {
 /** May this error go out as it is? See the header — it is an allowlist. */
 function mayPassThrough(err: unknown): boolean {
   if (err instanceof ChatConflict) return true;
+  if (err instanceof StaleAttemptError) return true;
+  if (err instanceof IllegalTransition) return true;
   return typeof (err as { status?: unknown }).status === "number";
 }
 
@@ -281,6 +305,27 @@ function scrubDbError(where: string, err: unknown): unknown {
 }
 
 /**
+ * The mark a guarded store carries, and the question a test can ask of it.
+ *
+ * **Why a brand rather than a grep.** The rule this file is about — every
+ * Postgres store is wrapped — was kept by three call sites and broken by three
+ * others, and the three that broke it looked exactly like ordinary code. A
+ * source scan can say "this file mentions `guardDbStore`"; only the object
+ * itself can say "I am wrapped". `tests/store-guarded.test.ts` asks the objects.
+ *
+ * Non-enumerable and a symbol, so nothing that walks a store's properties — the
+ * wrapper below included — can see it or copy it by accident.
+ */
+const GUARDED = Symbol.for("spideryarn.guardedDbStore");
+
+/** Whether this object came out of `guardDbStore`, and under what name. */
+export function isGuardedStore(store: unknown): string | undefined {
+  if (store === null || typeof store !== "object") return undefined;
+  const mark = (store as Record<symbol, unknown>)[GUARDED];
+  return typeof mark === "string" ? mark : undefined;
+}
+
+/**
  * A store whose methods cannot leak, whatever they throw.
  *
  * Wrapping the object rather than each method is the point. A guard you have to
@@ -296,6 +341,11 @@ function scrubDbError(where: string, err: unknown): unknown {
  */
 export function guardDbStore<T extends object>(what: string, store: T): T {
   const guarded: Record<string, unknown> = {};
+  /* The mark `isGuardedStore` reads. Non-enumerable so that it is invisible to
+     `Object.entries` — including this function's own loop, so wrapping a
+     wrapped store stays harmless — and to anything that copies or serialises a
+     store. A symbol rather than a string key for the same reason. */
+  Object.defineProperty(guarded, GUARDED, { value: what, enumerable: false });
   let wrapped = 0;
   for (const [key, value] of Object.entries(store)) {
     if (typeof value !== "function") {

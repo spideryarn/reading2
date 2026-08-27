@@ -35,7 +35,7 @@
 import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { violatesConstraint } from "./db-errors.js";
+import { guardDbStore, violatesConstraint } from "./db-errors.js";
 import { jobs } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
@@ -130,7 +130,17 @@ workKey: string,
   return { job: toJob(held), created: false, sameWork: held.workKey === workKey };
 }
 
-export const pgJobStore: JobStore = {
+/**
+ * The store itself, **not exported** — see `pgJobStore` at the foot of this file.
+ *
+ * Private so that there is no unguarded spelling of it for anybody to import by
+ * accident. src/store/db-errors.ts argues at length that a guard you have to
+ * remember to apply is a guard that will be missing somewhere, and on
+ * 2026-08-27 this file proved it: `src/jobs.ts` selected the raw store, a failed
+ * `list()` put Drizzle's whole query **and its bound parameters** into
+ * `Error.message`, and the homepage rendered it in red under the Add box.
+ */
+const rawPgJobStore: JobStore = {
   async list(owner: OwnerId): Promise<Job[]> {
     const db = getDb();
     const rows = await db
@@ -445,3 +455,31 @@ export const pgJobStore: JobStore = {
 function fence(id: string, attempt: string) {
   return and(eq(jobs.id, id), eq(jobs.attemptId, attempt), eq(jobs.status, "running"));
 }
+
+/**
+ * The job store, with nothing a database said able to leave it.
+ *
+ * Wrapped **here** rather than at the selection in src/jobs.ts, which is where
+ * it was missing. A selection site is a place to forget; an export is not, and
+ * every consumer of this module now gets the guarded object whether or not they
+ * have read any of this.
+ *
+ * Why this file cannot ask src/store/index.ts to do it, the way the reader's
+ * stores do: index.ts imports fs.ts, which imports src/pipeline.ts, which
+ * imports src/jobs.ts, which imports this. `npm run check` gates on cycles, so
+ * that is a red build rather than a note — the reason src/jobs.ts selected its
+ * own store in the first place. Guarding at the export satisfies both.
+ *
+ * **`claim` is unaffected, and that ordering is the point.** It catches its own
+ * `23505` and asks `violatesConstraint` about the constraint *name* inside the
+ * method, so the classification happens before the promise ever reaches this
+ * wrapper. Had it been written to let the error escape and be classified by the
+ * caller, this line would have silently turned every `jobs_only_one_running`
+ * into a 500. GPT Sol checked that ordering, 2026-08-27; it is worth re-checking
+ * before moving any error handling out of a store method.
+ *
+ * `StaleAttemptError` crosses this boundary intact, by name, on the allowlist in
+ * db-errors.ts — src/jobs.ts answers *busy* on `instanceof` and a scrubbed copy
+ * would have become a 500 under contention only.
+ */
+export const pgJobStore: JobStore = guardDbStore("jobs", rawPgJobStore);

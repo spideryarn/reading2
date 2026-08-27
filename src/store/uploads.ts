@@ -75,6 +75,41 @@ export interface UploadRecord {
 }
 
 /** Why a claim did not happen. Each one is a different sentence to the reader. */
+/**
+ * **A caller asked for a state change the machine does not have.**
+ *
+ * A class rather than a bare `Error`, and it is worth saying why, because both
+ * adapters threw one of these happily for a day. `guardDbStore` in
+ * db-errors.ts replaces every error leaving a Postgres store with one of two
+ * fixed sentences — deliberately an allowlist, so that a store which one day
+ * throws `new Error(\`bad row \${JSON.stringify(row)}\`)` cannot leak by
+ * default. The moment `pgUploadStore` went behind that guard, the Postgres
+ * adapter stopped saying *pending to verified* and started saying *this app
+ * asked its database for something it would not do*, while the filesystem
+ * adapter — which has no guard, having no database — went on saying the first.
+ * Two stores answering differently is the one thing
+ * tests/store-uploads-parity.test.ts exists to prevent, and it caught it.
+ *
+ * Naming the type fixes both halves at once: it crosses the guard intact, and
+ * it crosses it identically from both adapters.
+ *
+ * **Safe to let out because its message is closed.** Both values interpolated
+ * are `UploadStatus`, which is a union of five literals in src/source.ts.
+ * Nothing here can carry a filename, a URL or a word of anybody's article —
+ * that is the test db-errors.ts asks of everything on its allowlist, and the
+ * only reason this qualifies. Keep it that way: do not add the record's
+ * `reason` or `slug` to this message.
+ */
+export class IllegalTransition extends Error {
+  constructor(
+    readonly from: UploadStatus,
+    readonly to: UploadStatus,
+  ) {
+    super(`An upload cannot go from ${from} to ${to}.`);
+    this.name = "IllegalTransition";
+  }
+}
+
 export type ClaimFailure = "unknown" | "expired" | "taken";
 
 export type ClaimResult =
