@@ -626,6 +626,8 @@ grew exactly that on 2026-08-26 — Delete archives, and the Undo strip is the c
 ([library.md](../project/library.md)) — so the row now says what is actually still missing, which is
 the strip rather than the endpoint.
 
+It was built a day later. See below.
+
 ### The one still worth taking: an editable title
 
 § What was looked at and left there dismissed the editable title along with the privacy toggle,
@@ -640,6 +642,120 @@ Not built here, and the reason is that it is not a small addition wearing a smal
 and deliberately does not fetch, so taking it means either a second request or a new field on
 `ArticleMetadata` — and then a decision about whether the `<h1>` becomes editable in place, which is
 a design question rather than a plumbing one. Worth doing; worth doing on purpose.
+
+## A fourth pass, 2026-08-27: Delete this article, and Put back
+
+> Add "Delete this article" functionality, both to Metadata and Homepage. Ideally it would Archive,
+> i.e. soft-delete, so it can be undone.
+>
+> — Greg, 2026-08-27
+
+**The homepage half already existed** and needed nothing: Delete is on every card and on every table
+row (both through `Actions` in [`ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx), so the two views
+cannot disagree), it archives rather than erases, the Undo strip is the confirmation, and **Show
+deleted** at the foot of the shelf is the way back once the strip has gone. All of that landed on
+2026-08-26 and is written up in [library.md](../project/library.md#delete-means-archive-and-undo-is-the-confirmation).
+So this pass is the metadata page's half, and the placeholder above is what it replaces.
+
+### The reason the placeholder gave was right, and it is now answered
+
+The dimmed row did not say the endpoint was missing — `PATCH /api/library/:slug` has taken
+`{ archived }` since the day before. It said the *confirmation* was missing: the shelf's is a
+nine-second strip, and **"a page you can navigate away from is a bad place to put the only chance to
+change your mind"**.
+
+Two things answer that, and the second is the interesting one.
+
+1. The strip stopped being the only chance the same week, when **Show deleted** went in.
+2. **This control does not use a strip at all.** An archived article stays readable by direct link —
+   only the shelf filters — so a reader who deletes it from here is still looking at its page
+   afterwards. The honest thing for that page to show is the state it is now in and the way out of
+   it: `Deleted 3 minutes ago`, with **Put back** beside it, and no clock on either. *The undo here
+   never expires*, which is a stronger promise than the shelf's rather than a weaker one, and it is
+   affordable precisely because this page is about one article rather than thirty.
+
+No confirmation dialog, for a reason that is sharper here than on the shelf: a modal asking you to
+confirm something that is undone by a button in the same place, for ever, is a modal that teaches
+people to click through modals.
+
+### The one new field, and why it is on `ArticleMetadata` rather than fetched
+
+A Delete button that cannot tell whether the article is *already* deleted is a button offering to do
+a thing that has been done. So `ArticleMetadata` gained `archivedAt: string | null` — off the same
+shelf read that already answers `purpose` and `comments`, in both stores, so it is a field on a
+record in hand rather than a second request. Note it is `string | null` and not `LibraryEntry`'s
+optional `archivedAt?`: on a card the field's *absence* is how "on the shelf" is said, but here the
+question is always asked, so `null` is an answer rather than a gap.
+
+The alternative was fetching the `LibraryEntry` — which is what the deferred **editable title**
+(§ below) will need anyway. It was not taken here because a whole shelf entry to read one date is a
+worse trade than one field, and because that decision belongs to whoever builds the title editor,
+with the design question that comes with it.
+
+### Four states, and the ones to get right are the ones that are not a date
+
+`archivedAt` is `undefined` while the metadata request is in flight **and for ever if it fails**.
+Neither shows a button at all — not even a disabled one, because a greyed-out *Delete* still says
+the article is on the shelf, and the failed case must not say which way round things are: that is a
+claim about the reader's library drawn from a request that established nothing. Same rule `AboutYou`
+was rearranged around in the third pass, found by the same cross-model review; this time it was
+written that way first.
+
+The fourth state is a refusal rather than an ignorance, and Sol found it. An address with **no
+article of its own** gets the fixture: `loadArticle` falls through to `example/` for an unknown slug
+and `articleMetadata` deliberately follows it so the two pages describe the same thing. Its shelf
+state is therefore empty, `archivedAt` is `null`, and the section offered a Delete whose `PATCH`
+could only 404 — a button that can only fail, where pressing it is how you find out. The page
+already derives this for its `fixture` chip; the section now uses the same derivation and says there
+is nothing here to delete.
+
+### The sentence that was false, and the shape of error it belongs to
+
+The first version's error line said **"Nothing changed"**. It is the highest-severity thing the
+review found, and it is a
+[silent-success](../reusable/silent-success.md) in reverse — a loud failure over a write that
+succeeded.
+
+A failed request is not proof that nothing was written. `patchShelf` writes and *then* does a second
+fallible read to answer `purpose` ([routes.ts](../../src/routes.ts)); both stores persist and then
+rebuild the entry to return it; and a response can simply be lost on the way back. Every one of
+those fails *after* the archive has happened. A page that then says nothing changed, and offers
+Delete again, is telling the reader something it has no way to know — and the Delete they press next
+is the one that looks like it did nothing.
+
+So the catch asks rather than assumes: it re-reads `/api/metadata/<slug>` and shows whatever comes
+back, and the line says **"Couldn't confirm that"**. If the re-read fails too, the state goes to
+`undefined` — genuinely lost — and the button disappears with it. The error paragraph carries
+`role="alert"`, because it arrives unrequested and contradicts what the reader just pressed.
+
+### Two structural choices that look like style and are not
+
+**One `<button>` element serves both states**, rather than a Delete button and a Put back button
+behind a ternary. Press Delete with the keyboard and, with two elements, React unmounts the one you
+are standing on — focus falls to `<body>`, the next Tab starts from the top of the page and a screen
+reader loses its place, at the exact moment there is something worth hearing. Same element, changed
+label and handler: the node survives and focus stays on it. The conditional siblings around it are
+written `? … : null` at fixed positions for the same reason — React reconciles a fixed set of JSX
+children by position and a `null` holds its slot, so inserting the "Deleted" line without one would
+shift the button along by one and remount it after all.
+
+**The relative date is `timeAgo` on a `useNow` clock**, not this file's own `ago`. Two reasons, both
+Sol's. The clock, because this line is written the instant Delete is pressed: `ago` reads the time
+once during render, so "Deleted just now" would still say *just now* an hour later on a page nothing
+else re-renders. And `timeAgo`, because it returns `undefined` for a date it cannot parse rather
+than handing `NaN` to `Intl.RelativeTimeFormat`, which throws — taking the page down instead of
+printing a wrong time. `ago` itself was hardened the same way for its three other callers.
+
+There is deliberately **no `key`** on the component: `App.tsx` already mounts the whole page as
+`<Metadata key={slug}>`, so switching article remounts everything below it. An inner key was written
+first, as insurance against state crossing between articles, and removed as redundant when the
+review pointed at the outer one.
+
+The date shown is the store's, never a locally-invented `new Date()`. Archiving something already
+archived deliberately keeps the **original** date ([`src/shelf.ts`](../../src/shelf.ts),
+`coalesce(archived_at, now())` on the Postgres side), so a client that stamped its own would print a
+time the store disagrees with.
+
 
 ## See also
 

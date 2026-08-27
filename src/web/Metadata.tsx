@@ -81,6 +81,19 @@
  *    (docs/project/content-extraction.md), and how well that reading was
  *    checked is a fact about trust that nothing else on this page carries.
  *
+ * ## The fourth pass, 2026-08-27: Delete this article, and Put back
+ *
+ * Greg:
+ *
+ * > Add "Delete this article" functionality, both to Metadata and Homepage.
+ * > Ideally it would Archive, i.e. soft-delete, so it can be undone.
+ *
+ * The homepage half already existed and needed nothing — Delete on the card and
+ * on the table row, archive rather than erase, Undo strip, Show deleted
+ * (Library.tsx, ShelfEntry.tsx). This is the half that was still a dimmed
+ * placeholder here: `DeleteArticle`, below, which carries the reasoning,
+ * including why it has no strip and no dialog and why its undo never expires.
+ *
  * ## What it deliberately does not say
  *
  * **Whether anything is stale.** The first version of this page led with a red
@@ -106,6 +119,7 @@
  */
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useQueryState } from "nuqs";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import {
   ArrowLeft,
   Blocks,
@@ -131,17 +145,27 @@ import {
   Target,
   Trash2,
   TriangleAlert,
+  Undo2,
   Waypoints,
 } from "lucide-react";
-import type { Article, ArticleMetadata, Meta, StageState, StepName } from "../types.js";
+import type {
+  Article,
+  ArticleMetadata,
+  LibraryEntry,
+  Meta,
+  StageState,
+  StepName,
+} from "../types.js";
 import { MAX_PURPOSE_CHARS } from "../types.js";
 import { WPM } from "../reading-time.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
-import { carriedSearch, readHref } from "./router.js";
+import { LIBRARY_HREF, carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { timeAgo } from "./relative-time.js";
+import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { ProfileBox } from "./ProfileBox.js";
@@ -202,14 +226,6 @@ const SOON: { key: string; label: string; icon: ComponentType<{ size?: number }>
     blurb: "Regenerate the tree, or the arc, from the row above that says it is out of date.",
     learned:
       "The queue already accepts the request. What is missing is the sentence above it — nothing here can honestly tell you a stage is stale until the artefacts record what they were built from.",
-  },
-  {
-    key: "delete",
-    label: "Delete this article",
-    icon: Trash2,
-    blurb: "Remove the article and everything the pipeline wrote for it.",
-    learned:
-      "Theirs had this button, and the shelf now has half of it: Delete there archives, and the Undo strip beside it is the confirmation (Library.tsx). What is missing here is that strip — a page you can navigate away from is a bad place to put the only chance to change your mind, and a real delete would be taking the only copy of the block ids that every question is addressed by.",
   },
 ];
 
@@ -321,9 +337,28 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
    * this article's directory.
    */
   const [at] = useQueryState("at", atParam);
+
+  /* The tab: the article first, then which of its pages this is. See
+     src/web/page-title.ts. */
+  useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "metadata" }));
   const lastRead = at ? article.blocks.find((b) => b.id === at) : undefined;
 
   const backHref = readHref(slug, carriedSearch(location.search), "article");
+
+  /**
+   * This address has no article of its own and is being shown the fixture.
+   *
+   * `loadArticle` falls through to `example/` for an unknown slug and
+   * `articleMetadata` follows it, deliberately, so that the two pages describe
+   * the same thing (src/api.ts). Two places on this page need to know: the
+   * `fixture` chip below, which has said so since the page was built, and —
+   * since 2026-08-27 — Delete, which must not be offered. The shelf has no
+   * entry under this slug, so the PATCH behind it would 404; a button that can
+   * only fail is worse than no button, because pressing it is how you find out.
+   * Found by a cross-model review. One derivation, used twice, rather than the
+   * same three terms written out again.
+   */
+  const showingFixture = provenance?.dir === "example" && slug !== "example";
   const facts = [meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
 
   /**
@@ -410,7 +445,7 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
           {/* The fixture opens under any unknown slug, so a page describing it
               must say so — otherwise the numbers below look like this article's
               and are somebody else's. */}
-          {provenance && provenance.dir === "example" && slug !== "example" && (
+          {showingFixture && (
             <span
               className="tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight"
               title="No artefacts exist for this slug, so the reading view is showing the committed example fixture — see example/README.md"
@@ -686,6 +721,21 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
             </div>
           </TooltipGroup>
         </Section>
+
+        {/* ------------------------------------------------ 7. deleting it --
+            Last on the page, and last on purpose: a destructive control belongs
+            past everything somebody might have come here to read, not beside
+            it. Under "not built yet" rather than over it for the same reason —
+            that list is the least urgent thing here, and it is still not
+            something to scroll a Delete button past. */}
+        <Section label="Delete this article">
+          <DeleteArticle
+            slug={slug}
+            archivedAt={provenance?.archivedAt}
+            failed={Boolean(provenanceError)}
+            fixture={showingFixture}
+          />
+        </Section>
       </main>
 
       {/* No `drawer` prop, and that is the whole reason the Questions button on
@@ -853,6 +903,265 @@ function CameFrom({ meta }: { meta: Meta }) {
         </div>
       </TooltipGroup>
     </Section>
+  );
+}
+
+/**
+ * Delete, which archives — and Put back, which is the whole reason it may.
+ *
+ * ## Why the placeholder that stood here for two days was right, and what changed
+ *
+ * This was a dimmed `SOON` row until 2026-08-27, and its stated reason was not
+ * that the endpoint was missing — `PATCH /api/library/:slug` has taken
+ * `{ archived }` since 2026-08-26 — but that the shelf's confirmation is a
+ * nine-second Undo strip, and *"a page you can navigate away from is a bad
+ * place to put the only chance to change your mind"*.
+ *
+ * That reason has been answered twice over. The shelf grew a **Show deleted**
+ * disclosure the same week, so the strip stopped being the only way back
+ * ([Library.tsx](Library.tsx)); and this control does not use a strip at all.
+ * An archived article stays readable by direct link — only the shelf filters
+ * (docs/project/library.md) — so the reader who deletes it from here is still
+ * looking at its page afterwards, and the honest thing for that page to show is
+ * the state it is now in, with the way out of it, and no clock. **The undo here
+ * never expires.** That is a stronger promise than the shelf's, not a weaker
+ * one, and it is available precisely because this page is about one article.
+ *
+ * ## Three states, and the third is the one to get right
+ *
+ * `undefined` is *we have not been told yet* — the metadata request is in
+ * flight, or it failed. Neither may show a button at all, and the failed one
+ * must not say which way round things are: a page that shows Delete over an
+ * already-deleted article, or Put back over a live one, has made a claim about
+ * the reader's library out of a request that established nothing. The same rule
+ * `AboutYou` above is arranged around, found by the same review.
+ *
+ * There is a fourth state above those three, and it is a refusal rather than an
+ * ignorance: an address with **no article of its own**, which `loadArticle` and
+ * `articleMetadata` both answer with the fixture. Nothing to delete, and the
+ * PATCH would 404, so the section says so instead of offering a button whose
+ * only outcome is an error. `showingFixture` at the call site.
+ *
+ * Nothing here needs a `key`: App.tsx already mounts this whole page as
+ * `<Metadata key={slug}>`, so switching article remounts everything below it
+ * and none of this state can cross from one article to another. An inner key
+ * was written first and removed as redundant when a review pointed at the outer
+ * one.
+ */
+function DeleteArticle({
+  slug,
+  archivedAt,
+  failed,
+  fixture,
+}: {
+  slug: string;
+  /** From the server. `undefined` until it lands, and for ever if it does not. */
+  archivedAt: string | null | undefined;
+  failed: boolean;
+  /** This address has no article of its own — see `showingFixture` at the call site. */
+  fixture: boolean;
+}) {
+  /* What the reader has just done, if anything — `null` means they have not
+     touched it, and the server's answer stands. A sentinel object rather than
+     seeding a `useState` from the prop in an effect, because the prop arrives
+     late and a seeding effect would need to know whether a later `provenance`
+     is fresher than a click, which is a question with no good answer.
+
+     `at: undefined` inside it is the third answer: *we asked, and we no longer
+     know*. See the catch below. */
+  const [acted, setActed] = useState<{ at: string | null | undefined } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const now = useNow();
+
+  const at = acted ? acted.at : archivedAt;
+
+  /* One function for both directions, because they are one PATCH with one
+     boolean in it — exactly as `useShelf.undo` and `useShelf.restore` are
+     deliberately the same request on the shelf side. Two functions here would
+     be two places to get the field name wrong. */
+  async function set(archived: boolean): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      /* The server's own answer, not the boolean we sent. Both stores build
+         this entry through `describeArticle`, so the date on it is the date
+         that was stored — including the case that makes this worth doing:
+         archiving something already archived keeps the ORIGINAL date
+         (src/shelf.ts), and a locally-invented `new Date()` would print a
+         timestamp the store disagrees with. */
+      const { entry } = await readJson<{ entry: LibraryEntry }>(r);
+      setActed({ at: entry.archivedAt ?? null });
+    } catch (e) {
+      /* **A failed request is not proof that nothing was written**, and saying
+         so was this control's one dishonest sentence until a cross-model review
+         took it apart, 2026-08-27. The route writes and *then* reads again to
+         answer `purpose` (src/routes.ts § patchShelf), both stores persist and
+         then rebuild the entry to return it, and a response can simply be lost
+         on the way back. Every one of those fails after the archive has
+         happened. A page that then says "Nothing changed" and offers Delete
+         again is telling the reader something it has no way to know — and the
+         Delete they press next is the one that looks like it did nothing.
+
+         So: ask. The answer to "did that work" is a fresh read, not the
+         request's own exit code. If even the re-read fails we are honestly
+         lost, and `at: undefined` says so by taking the button away. */
+      setError((e as Error).message);
+      try {
+        const m = await readJson<ArticleMetadata>(
+          await apiFetch(`/api/metadata/${encodeURIComponent(slug)}`),
+        );
+        setActed({ at: m.archivedAt });
+      } catch {
+        setActed({ at: undefined });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* Not ignorance but a refusal, and it comes first because it is the one state
+     where the answer is known and the act is still impossible: nothing under
+     this address is ours to delete. */
+  if (fixture) {
+    return (
+      <div className={`${CARD} tw:p-4`}>
+        <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
+          This address has no article of its own — the reading view is showing the example fixture,
+          so there is nothing here to delete. The{" "}
+          <Link href={LIBRARY_HREF} className="tw:text-highlight">
+            library
+          </Link>{" "}
+          has the articles that do exist.
+        </p>
+      </div>
+    );
+  }
+
+  /* Rendered whenever `at` is unknown, which is three situations and not one:
+     the first request is in flight, it failed, or a write failed and the
+     re-read after it failed too. No button in any of them — a *disabled*
+     Delete would still be telling the reader the article is on the shelf, and
+     none of the three establishes that. */
+  if (at === undefined) {
+    const lost = failed || acted !== null;
+    return (
+      <div className={`${CARD} tw:p-4`}>
+        <p
+          className="tw:m-0 tw:text-sm tw:text-muted-foreground"
+          /* `alert` only when there is something to hear. "Checking…" is not
+             news; "we cannot tell you" arriving after a click is. */
+          {...(lost ? { role: "alert" as const } : {})}
+        >
+          {lost
+            ? "Couldn't check whether this one is deleted, so there is nothing safe to offer here. Reload the page."
+            : "Checking…"}
+        </p>
+        {error ? (
+          <p className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-destructive">
+            <TriangleAlert size={12} /> {error}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const deleted = at !== null;
+  const when = timeAgo(at ?? undefined, now);
+
+  /* **One `<button>` element in both states, not two behind a ternary.** The
+     reader presses Delete with the keyboard; if the two states were separate
+     elements React would unmount the one they are standing on and mount a
+     different one, and focus would fall to `<body>` — so the next Tab starts
+     from the top of the page and a screen reader loses its place, at the exact
+     moment there is something worth hearing. Same element, changed label,
+     changed handler: the DOM node survives and focus stays on it. The icons do
+     swap, but they are inside the button, so nothing focusable moves.
+
+     The conditional children below are `? … : null` at fixed positions for the
+     same reason: React reconciles a fixed set of JSX children by position, and
+     a `null` holds its slot — inserting the "Deleted" line without one would
+     shift the button along by one and remount it after all. */
+  return (
+    <div className={`${CARD} tw:p-4`}>
+      {deleted ? (
+        /* `status`, not `alert`, for the same reason the shelf's Undo strip is:
+           the reader did this on purpose, so it is a confirmation rather than an
+           emergency.
+
+           `timeAgo` on a `useNow` clock rather than this file's own `ago`, and
+           both halves of that matter. The clock, because this line is written
+           the instant the reader presses Delete: `ago` reads `Date.now()` once
+           during render, so "Deleted just now" would still say "just now" an
+           hour later, on a page nothing else re-renders. And `timeAgo`, because
+           it hands back `undefined` for a date it cannot parse instead of
+           feeding `NaN` to `Intl.RelativeTimeFormat`, which throws. Both found
+           by a cross-model review, 2026-08-27. */
+        <p role="status" className="tw:m-0 tw:mb-3 tw:text-sm tw:text-foreground">
+          {when ? `Deleted ${when}.` : "Deleted."}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => void set(!deleted)}
+        disabled={busy}
+        className={`tw:inline-flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:disabled:opacity-50 tw:focus-visible:outline-none ${
+          deleted
+            ? "tw:text-highlight tw:hover:bg-highlight/10 tw:focus-visible:bg-highlight/10"
+            : /* Quiet at rest and destructive on hover, which is the shelf's own
+                 Delete (ShelfEntry.tsx `IconButton destructive`) — one convention
+                 for the one act, and the heading above already carries the weight. */
+              "tw:text-muted-foreground tw:hover:bg-destructive/10 tw:hover:text-destructive tw:focus-visible:bg-destructive/10 tw:focus-visible:text-destructive"
+        }`}
+      >
+        {deleted ? <Undo2 size={14} /> : <Trash2 size={14} />}
+        {busy ? (deleted ? "Putting back…" : "Deleting…") : deleted ? "Put back" : "Delete"}
+      </button>
+
+      {/* What it actually does, said before it is done rather than in a confirm
+          dialog after. There is no dialog on purpose: the act is reversible from
+          this same spot for ever, and a modal asking you to confirm something
+          undoable trains people to click through modals. */}
+      <p className="tw:mt-3 tw:mb-0 tw:text-sm tw:text-muted-foreground">
+        {deleted ? (
+          <>
+            It is off the library and out of library search. It is not erased, and this offer does
+            not expire.
+          </>
+        ) : (
+          <>
+            It comes off the library and out of library search. Nothing is erased — the article, its
+            block ids and every question you have asked about it stay exactly where they are, this
+            page and the reading view keep working, and Put back is here and under{" "}
+            <em className="tw:not-italic tw:text-foreground">Show deleted</em> on the{" "}
+            <Link href={LIBRARY_HREF} className="tw:text-highlight">
+              library
+            </Link>
+            .
+          </>
+        )}
+      </p>
+
+      {/* `alert`, because it arrives without the reader looking for it and it
+          contradicts what they just pressed — the one thing on this page that
+          has to interrupt. And it says *couldn't confirm*, never "nothing
+          changed": the state above it has been re-read from the server, so what
+          is shown is true, but whether the write landed is genuinely unknown. */}
+      {error ? (
+        <p
+          role="alert"
+          className="tw:mt-3 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-destructive"
+        >
+          <TriangleAlert size={12} /> Couldn't confirm that — {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1215,6 +1524,11 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 function ago(when: Date): string {
   const fmt = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
   const elapsed = when.getTime() - Date.now();
+  /* `Intl.RelativeTimeFormat.format` throws a RangeError on a non-finite
+     number, so an unparseable date anywhere upstream would take the whole page
+     down rather than print a wrong time. Same rule `timeAgo` in
+     relative-time.ts keeps, arrived at the same way — a review, 2026-08-27. */
+  if (!Number.isFinite(elapsed)) return "at an unknown time";
   for (const [unit, ms] of UNITS) {
     if (Math.abs(elapsed) >= ms) return fmt.format(Math.round(elapsed / ms), unit);
   }

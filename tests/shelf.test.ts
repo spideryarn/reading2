@@ -15,7 +15,7 @@
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { listArticles } from "../src/api.js";
+import { articleMetadata, listArticles } from "../src/api.js";
 import { loadShelf, patchShelf, recordOpen, setArchived, setTitle } from "../src/shelf.js";
 import { MAX_PURPOSE_CHARS } from "../src/profile.js";
 
@@ -43,6 +43,23 @@ describe("shelf state", () => {
 
     const back = await setArchived(SLUG, false);
     expect(back.archivedAt).toBeUndefined();
+  });
+
+  it("tells the metadata page whether this one is deleted", async () => {
+    /* The page has its own Delete button (src/web/Metadata.tsx), and a Delete
+       button that cannot tell whether the article is already deleted is a
+       button offering to do a thing that has been done. `null` and not
+       `undefined` on the way out: on `ArticleMetadata` the question is always
+       asked, so an answer is always given — see the field's own docstring for
+       why that differs from `LibraryEntry`. */
+    await makeArticle();
+    expect((await articleMetadata(SLUG)).archivedAt).toBe(null);
+
+    const archived = await setArchived(SLUG, true);
+    expect((await articleMetadata(SLUG)).archivedAt).toBe(archived.archivedAt);
+
+    await setArchived(SLUG, false);
+    expect((await articleMetadata(SLUG)).archivedAt).toBe(null);
   });
 
   it("keeps the original date when archiving something already archived", async () => {

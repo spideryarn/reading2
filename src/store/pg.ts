@@ -49,6 +49,7 @@ import {
 } from "../ideas.js";
 import { isSlug } from "../ingest.js";
 import { CAPABLE_MODEL } from "../models.js";
+import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import { hashBlocks } from "../source-hash.js";
@@ -107,6 +108,37 @@ export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
   };
 }
 
+/**
+ * **The one way to name an article: by slug AND by owner.**
+ *
+ * `articles.slug` is globally unique, so `eq(articles.slug, slug)` on its own
+ * finds *anybody's* article — which was fine for exactly as long as there was
+ * one person. Since the gate started admitting real Supabase accounts
+ * (src/auth.ts, 2026-08-27) it is the difference between a private shelf and a
+ * shared one, and the failure is silent in the worst way: the query works, a
+ * real article comes back, and it is somebody else's.
+ *
+ * A predicate rather than twelve hand-written `and(...)`s, for two reasons.
+ * There were five near-identical `articleIdFor` helpers across the pg modules
+ * and no way to tell by looking whether all five had been done. And
+ * tests/owner-isolation.test.ts can now assert that **no file under src/store/
+ * writes `eq(articles.slug, …)` outside this one** — so the thirteenth site,
+ * written months from now by somebody who never read this comment, fails a test
+ * instead of leaking a library.
+ *
+ * The 404 that follows a miss is the right answer as well as the convenient
+ * one: "there is no such article" is all a stranger should learn about a slug
+ * they do not own. A 403 would confirm it exists.
+ */
+export function ownedSlug(slug: string) {
+  return and(eq(articles.slug, slug), eq(articles.ownerId, currentOwnerId()));
+}
+
+/** Every article this reader owns — the `where` for a list rather than a lookup. */
+export function ownedByReader() {
+  return eq(articles.ownerId, currentOwnerId());
+}
+
 /** One article's current published revision, or undefined. */
 async function currentRevision(slug: string) {
   const db = getDb();
@@ -114,7 +146,7 @@ async function currentRevision(slug: string) {
     .select({ article: articles, revision: articleRevisions })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .where(eq(articles.slug, slug))
+    .where(ownedSlug(slug))
     .limit(1);
   return rows[0];
 }
@@ -370,6 +402,10 @@ export const pgArticleReader: Pick<
          after its walk rather than skipping during it. */
       .where(
         and(
+          /* **Yours, not everyone's.** Without this the shelf is the union of
+             every account's, which is what it was until 2026-08-27 — see
+             `ownedSlug` above for why that is worse than it sounds. */
+          ownedByReader(),
           opts.archived ? isNotNull(articles.archivedAt) : isNull(articles.archivedAt),
           /* `_`-prefixed slugs are not articles, exactly as in src/api.ts:
              `data/_jobs/` is the ingest queue's directory, and the filesystem
@@ -590,6 +626,9 @@ export const pgArticleReader: Pick<
       comments: commentRows.length,
       profile,
       purpose: shelfFrom(found.article).purpose ?? null,
+      /* Off the same `shelfFrom` as `purpose`, so the two stores answer this
+         from the same derivation rather than from two readings of one column. */
+      archivedAt: shelfFrom(found.article).archivedAt ?? null,
     };
   },
 

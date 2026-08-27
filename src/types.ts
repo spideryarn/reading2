@@ -858,6 +858,99 @@ export interface Meta {
 }
 
 /** What GET /api/article/:slug returns — everything needed for every zoom level. */
+/**
+ * One pair of passages an embedding model thinks are about the same thing.
+ *
+ * The wire shape of `GET /api/similar/:slug`. Here rather than in
+ * src/similar.ts because the browser reads it too, and a client importing a
+ * module that pulls in pino and reads `process.env` is a bundle waiting to
+ * break — every other response shape in this app lives here for the same reason.
+ */
+export interface SimilarPair {
+  a: BlockId;
+  b: BlockId;
+  /** Cosine, 0–1. */
+  score: number;
+}
+
+export interface SimilarResponse {
+  model: string;
+  /** How many blocks were embedded — not how many the article has. */
+  blocks: number;
+  pairs: SimilarPair[];
+}
+
+/**
+ * Where one passage sits on the plane the embeddings describe.
+ *
+ * The wire shape of `POST /api/projection/:slug` (src/projection.ts), drawn by
+ * the Drift and Trail pictures — docs/plans/embedding-scatter-diagrams.md.
+ *
+ * **There is no row number here on purpose.** The block id is the identity of a
+ * passage everywhere else in this app (docs/project/block-ids.md), and a row
+ * index sent beside it would be a second answer to the same question that can
+ * disagree with the first after a re-ingest. The client looks the row up in the
+ * blocks it already holds, and a point whose id it does not recognise is
+ * dropped rather than drawn somewhere plausible.
+ */
+export interface ProjectionPoint {
+  id: BlockId;
+  /** The first principal component. Cosine-scale, both signs, not normalised. */
+  x: number;
+  /** The second. Orthogonal to the first, and always the smaller of the two. */
+  y: number;
+  /** Which topic k-means put it in, 0-based, ordered by where the topic starts. */
+  c: number;
+  /**
+   * How central it is to its own topic, 1 (the most typical passage in the
+   * article) down to 0.
+   *
+   * Sent as typicality rather than as the cosine distance it is computed from,
+   * so that the direction is obvious from the name. A picture that drew the
+   * *least* typical paragraphs at the centre of a lane would be wrong in a way
+   * nothing would report.
+   */
+  typicality: number;
+}
+
+/**
+ * Why a block did not get a vector, counted by reason.
+ *
+ * **Split rather than totalled**, because the three mean completely different
+ * things to whoever reads the picture: "too short to embed" is a property of
+ * the article, and "we stopped after 1,500" is a property of our wallet. One
+ * number rendered as "too short" would say the second in the words of the
+ * first. GPT Sol's finding, 2026-08-27.
+ */
+export interface SkipCounts {
+  /** Images, rules, repeated pull-quotes — things the ToC writes no gist about. */
+  nonProse: number;
+  /** Under the minimum length. On a real article this is most of them. */
+  tooShort: number;
+  /** Past the per-article ceiling — the spending cap, not a fact about the text. */
+  capped: number;
+}
+
+export interface ProjectionResponse {
+  model: string;
+  /** How many blocks were embedded. Short ones and non-prose are skipped. */
+  blocks: number;
+  /** How many were not, and why — the reason the dots do not tile the article. */
+  skipped: SkipCounts;
+  /**
+   * The fraction of the article's variation each of the two axes holds, 0–1.
+   *
+   * **Shown to the reader, not kept for us.** Two components out of 1024 throw
+   * away most of what the model saw, and a scatter plot that does not say so is
+   * the [silent-success](../docs/reusable/silent-success.md) shape with a
+   * picture on it.
+   */
+  variance: [number, number];
+  /** How many topics were asked for. Capped by the width of the band, not the data. */
+  k: number;
+  points: ProjectionPoint[];
+}
+
 export interface Article {
   meta: Meta;
   blocks: Block[];
@@ -1113,6 +1206,22 @@ export interface ArticleMetadata {
    */
   profile: string | null;
   purpose: string | null;
+  /**
+   * ISO, or `null` for an article that is on the shelf.
+   *
+   * Here because this page has a Delete button, and a Delete button that cannot
+   * tell whether the article is *already* deleted is a button offering to do a
+   * thing that has been done. Both stores read this article's shelf state
+   * already, for `purpose` above — so this is a field off a record in hand
+   * rather than a second read.
+   *
+   * `string | null` rather than `LibraryEntry`'s optional `archivedAt?`, and the
+   * difference is deliberate: on a shelf entry the field's *absence* is how "on
+   * the shelf" is said, and it is only ever set on entries from the archived
+   * listing. Here there is one article and the question is always asked, so
+   * `null` is an answer rather than a gap. Same shape as `purpose`.
+   */
+  archivedAt: string | null;
 }
 
 /** A source the model consulted, from OpenRouter's `annotations`. See src/explain.ts. */

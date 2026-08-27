@@ -152,6 +152,28 @@ working is a worse surprise than a card that is out of sight. The library *searc
 an archived article is out of the index entirely, because a hit that opens an article you deleted
 reads as a ghost.
 
+#### The same act on the article's own page, where the undo never expires
+
+Since 2026-08-27 the [metadata page](../plans/metadata-page.md) has the third Delete — same
+`PATCH /api/library/<slug>` with `{ archived }`, so there is one archive and not two that could
+drift, and the button had been a dimmed placeholder there for exactly two days.
+
+What is different is the confirmation, and the difference falls out of the paragraph above. A card
+vanishing off the shelf needs a strip to catch it, because the reader is looking at a list the
+article has just left. Delete on `/read/<slug>/metadata` leaves the reader looking at the article's
+*own* page, which keeps working — so instead of a strip with a clock on it, the section simply says
+`Deleted 3 minutes ago` with **Put back** beside it, for as long as it is true. That is the stronger
+promise of the two, and it is affordable only because this page is about one article. The state
+comes from `ArticleMetadata.archivedAt`, off the same shelf read that already answers `purpose`, so
+it costs no extra request. Both stores answer it, and there is a test per store —
+[`tests/shelf.test.ts`](../../tests/shelf.test.ts) and
+[`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) — because one store answering
+and the other not is the divergence a parity test cannot see: both answers typecheck.
+
+There is no confirmation dialog there either, and the reason is sharper than on the shelf: a modal
+asking you to confirm something that is undone by a button in the same place, for ever, teaches
+people to click through modals.
+
 ### A renamed title is an override, not an edit
 
 Stage 2 rewrites `meta.json` on every run (see [below](#metajson-and-the-articles-identity)). A

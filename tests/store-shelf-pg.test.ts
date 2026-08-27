@@ -430,6 +430,23 @@ when("the Postgres shelf and library search", () => {
       await pgShelfStore.patch(SLUG, { archived: false });
     });
 
+    it("tells the metadata page whether this one is deleted", async () => {
+      /* The filesystem half of this is in tests/shelf.test.ts, and the pair is
+         the point: `ArticleMetadata.archivedAt` is what the metadata page's
+         Delete button reads, and a store that forgot to answer it would show
+         Delete over an already-deleted article — a claim about the reader's
+         library that nothing established. One store answering and the other
+         not is exactly the divergence a parity test cannot see, because both
+         answers typecheck. */
+      expect((await pgArticleReader.articleMetadata(SLUG)).archivedAt).toBe(null);
+
+      const archived = await pgShelfStore.patch(SLUG, { archived: true });
+      expect((await pgArticleReader.articleMetadata(SLUG)).archivedAt).toBe(archived.archivedAt);
+
+      await pgShelfStore.patch(SLUG, { archived: false });
+      expect((await pgArticleReader.articleMetadata(SLUG)).archivedAt).toBe(null);
+    });
+
     it("moves the article between the two halves of the shelf", async () => {
       const on = await pgArticleReader.listArticles();
       expect(on.some((a) => a.slug === SLUG)).toBe(true);

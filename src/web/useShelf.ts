@@ -76,6 +76,26 @@ export function useShelf(): Shelf {
   const [archived, setArchived] = useState<LibraryEntry[] | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Slugs with an archive already in flight.
+   *
+   * The card is removed only after the server answers (see `archive`), so for
+   * those few milliseconds the Delete button is still on screen and still
+   * clickable. Two clicks used to mean two requests, and the second one's
+   * *reply* is the problem rather than the second write: archiving twice is
+   * idempotent and keeps the original date, but a reader who presses Delete,
+   * Delete, Undo can have the late second reply land after the undo and run
+   * `setArticles(list => list.filter(...))` over a list the article has just
+   * been restored to. The shelf then shows it gone while the server has it
+   * back — and the Undo strip that would fix it has been re-armed for an
+   * article that is no longer archived. Found by a cross-model review,
+   * 2026-08-27.
+   *
+   * A ref rather than state: nothing renders differently, and re-rendering the
+   * whole shelf to record that a request is in flight would rebuild the table's
+   * column model for it (see the memo at the bottom of this file).
+   */
+  const archiving = useRef<Set<string>>(new Set());
 
   const reload = useCallback(() => {
     return apiFetch("/api/library")
@@ -127,6 +147,11 @@ export function useShelf(): Shelf {
          failed archive would leave the reader looking at a shelf the article is
          missing from, believing it gone. The request is a few milliseconds
          locally, and honesty is worth more than those. */
+      // The second click of a double-click is dropped here rather than sent and
+      // then reconciled: there is nothing a second archive can achieve that the
+      // first has not, so the cheapest correct handling is not to make it.
+      if (archiving.current.has(slug)) return;
+      archiving.current.add(slug);
       try {
         const entry = await patch(slug, { archived: true });
         setArticles((list) => list?.filter((a) => a.slug !== slug) ?? null);
@@ -139,6 +164,8 @@ export function useShelf(): Shelf {
         undoTimer.current = setTimeout(() => setUndoable(null), UNDO_MS);
       } catch (e) {
         setActionError((e as Error).message);
+      } finally {
+        archiving.current.delete(slug);
       }
     },
     [patch],

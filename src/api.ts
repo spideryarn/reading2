@@ -681,6 +681,8 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
     comments,
     profile,
     purpose: shelf.purpose ?? null,
+    // The same `shelf` read that answers `purpose`. See ArticleMetadata.
+    archivedAt: shelf.archivedAt ?? null,
   };
 }
 
