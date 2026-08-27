@@ -98,7 +98,7 @@ import { isStorableColour } from "./searches.js";
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
 import { fsLocations } from "./store/artifacts-fs.js";
-import { commentStore } from "./store/index.js";
+import { adminStore, commentStore } from "./store/index.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -109,6 +109,7 @@ import { readRaw } from "./fetch.js";
 import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
+import { describeAdminMiss, isAdmin } from "./admin.js";
 import { requireUser, type Verifier } from "./auth.js";
 import { UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
@@ -126,6 +127,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
+import { captureFailure } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
 import {
@@ -138,6 +140,12 @@ import {
   effortFor,
   resolveModel,
 } from "./models.js";
+import {
+  MAX_AUDIO_BASE64,
+  isAudioFormat,
+  parseWhere,
+  transcribe,
+} from "./transcribe.js";
 import type {
   Block,
   ChatAnchor,
@@ -149,15 +157,35 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  ReviewStance,
+  ThreadKind,
   SummariesResponse,
   ThreadResponse,
   ThreadSummary,
   SearchHit,
   SearchRun,
 } from "./types.js";
+/* A value, not a type — the one list the stance is validated against, shared
+   with the client's picker so a fifth stance cannot be accepted here and
+   missing from the menu. src/types.ts § REVIEW_STANCES. */
+import { REVIEW_STANCES } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
 const MAX_BODY_BYTES = 64 * 1024;
+
+/**
+ * The one route that carries more than that, and the reason it is a **parameter
+ * on `readBody` rather than a raised constant**.
+ *
+ * A dictation is a few hundred kilobytes of base64 audio, which is four figures
+ * past what any other body here needs. Raising `MAX_BODY_BYTES` to fit it would
+ * raise it for the forty-odd routes that need nothing of the kind — and the
+ * limit exists precisely so that no single request can wedge the server, so
+ * widening it everywhere to admit one caller is giving away the thing it was
+ * for. `src/transcribe.ts` owns the number; this is it plus room for the JSON
+ * wrapper and the slug around it.
+ */
+const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -221,12 +249,12 @@ function httpError(status: number, message: string): Error {
   return Object.assign(new Error(message), { status });
 }
 
-async function readBody(req: IncomingMessage): Promise<unknown> {
+async function readBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw httpError(413, "Request body too large");
+    if (size > limit) throw httpError(413, "Request body too large");
     chunks.push(chunk as Buffer);
   }
   if (chunks.length === 0) return {};
@@ -538,6 +566,12 @@ async function answer(slug: string, body: unknown, res: ServerResponse): Promise
       frame("done", { ...comment, ...patch });
     }
   } catch (err) {
+    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+       function owns the response and the outer catch never sees the error — so
+       a failure inside a stream is invisible to the seam in `serveApi`, and a
+       stream is exactly where a model call fails. Same reasoning at the two
+       other streams below. */
+    captureFailure(err, { route: "explain", slug });
     /* The partial answer is kept, exactly as chat keeps one. Half an
        explanation and a reason beats a spinner that turns into nothing, and the
        reader has already read the half. */
@@ -558,6 +592,10 @@ async function answer(slug: string, body: unknown, res: ServerResponse): Promise
         { ...errorFields(storeErr), slug, id: comment.id },
         `could not record a failed explanation for ${slug}`,
       );
+      /* The secondary failure, and worth its own issue rather than a footnote
+         on the first: one of these means a model call failed, two mean the
+         store is broken too, and only the second is an emergency. */
+      captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
     }
     frame("done", { ...comment, ...patch });
   } finally {
@@ -884,9 +922,22 @@ function sweepChat(slug: string): Promise<ChatThread[]> {
  *    error on it rather than discarded. See the note in `sweepChat`.
  */
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { threadId, question, at, retry, edit, expectedTailId, useProfile, anchor } = (body ??
-    {}) as Record<string, unknown>;
+  const { threadId, question, at, retry, edit, expectedTailId, useProfile, anchor, kind, stance } =
+    (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
+  /* **Validated, never coerced.** An unknown value is a 400 rather than a
+     silent fall back to the default: a client that sends `stance: "socratik"`
+     and gets a 200 has no way to learn that every answer it receives was
+     `balanced`, and neither has the reader. Same reasoning as the `kind` check
+     below, and the same reason `REVIEW_STANCES` is one exported list rather
+     than a set of string literals written out again here. */
+  if (stance !== undefined && !REVIEW_STANCES.includes(stance as ReviewStance)) {
+    throw httpError(400, `stance must be one of: ${REVIEW_STANCES.join(", ")}`);
+  }
+  if (kind !== undefined && kind !== "chat" && kind !== "review") {
+    throw httpError(400, "kind must be 'chat' or 'review'");
+  }
+  const wantedKind = kind as ThreadKind | undefined;
   /* Absent means yes, as it does everywhere the profile is offered. Per turn
      rather than per thread, because the composer's checkbox is per turn — a
      reader may reasonably want one answer written plainly in the middle of a
@@ -905,11 +956,35 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   const wantsRetry = typeof retry === "string";
   const wantsEdit = typeof edit === "string";
   if (wantsRetry && wantsEdit) throw httpError(400, "Send retry or edit, not both");
+  /* **Neither a retry nor an edit may name a kind or a stance**, and both are
+     refused rather than ignored — the rule the anchor check below already
+     follows, for the same reason.
+
+     Their thread already has a kind, and the answer they are replacing already
+     has a stance: `withRetry` carries it over from the row it blanks, and
+     `withEdit` from the answer being replaced. A stance in one of these bodies
+     could only mean "answer this stored question differently from how it was
+     asked", which is a thing a reader might want and is not what a button
+     labelled "have another go" does. If it arrives it will be an explicit
+     control with its own name. GPT Sol's review of docs/plans/review-mode.md,
+     finding 4. */
+  if ((wantsRetry || wantsEdit) && (kind !== undefined || stance !== undefined)) {
+    throw httpError(400, "A retry or an edit takes its kind and stance from the conversation");
+  }
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
-  if (typeof question === "string" && question.length > MAX_QUESTION_CHARS) {
-    throw httpError(413, `A question may be at most ${MAX_QUESTION_CHARS} characters`);
+  /* Two limits, chosen by what the box actually is — see `MAX_REVIEW_CHARS`.
+     Note this reads the REQUEST's kind, which is the one case where that is
+     right: the cap is on the bytes in this body, and they are already here. */
+  const cap = wantedKind === "review" ? MAX_REVIEW_CHARS : MAX_QUESTION_CHARS;
+  if (typeof question === "string" && question.length > cap) {
+    throw httpError(
+      413,
+      wantedKind === "review"
+        ? `A review may be at most ${MAX_REVIEW_CHARS} characters`
+        : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
+    );
   }
   /* **An anchor belongs to a turn that creates a thread, and to no other.**
      `withRetry` and `withEdit` do not go through `withTurn` at all, so an
@@ -918,6 +993,16 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      chose. Refused rather than ignored. */
   if (anchor !== undefined && (wantsRetry || wantsEdit)) {
     throw httpError(400, "An anchor can only be sent with a new question");
+  }
+  /* **A review is about the whole piece, so it has nothing to anchor to.**
+     There is no gesture that starts one from a selection — the paragraph and
+     selection buttons both open a chat — so an anchor arriving with
+     `kind: "review"` is a client that has confused the two. Refused rather than
+     dropped, and worth more than tidiness: an unanchored review draws no mark
+     in the prose, which is what lets the reading view go on treating every mark
+     it draws as a chat. */
+  if (wantedKind === "review" && anchor !== undefined) {
+    throw httpError(400, "A review is about the whole article and cannot be anchored");
   }
   const wanted = parseAnchor(anchor);
   // Loaded before anything is written, so a bad slug is still an ordinary JSON
@@ -980,6 +1065,27 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         throw httpError(409, "That conversation is already about a different passage");
       }
     }
+    /* **A thread is one kind for life**, and this is the same shape as the
+       anchor check above it: read under `inTurnOrder` so the thread cannot be
+       created between the look and the write, and an *identical* kind passes so
+       that a retried send is harmless rather than a 409 nobody can act on.
+
+       Reached only on an ordinary send — a retry or an edit was refused a
+       `kind` far above, before anything was read. That ordering is the point:
+       both of those call `settleThread`, which stops a live answer in this
+       thread, and a request rejected *after* that has aborted the answer
+       another tab's reader was watching and told them they stopped it. That
+       exact bug has been fixed here once already (docs/plans/chat-mode.md).
+
+       `withTurn` refuses it again inside the store's transaction, because
+       `inTurnOrder` is per-process and this one is not. Here for the status
+       code and the sentence; there for the guarantee. */
+    if (wantedKind) {
+      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
+      if (existing && existing.kind !== wantedKind) {
+        throw httpError(409, "That conversation is already a different kind");
+      }
+    }
     return wantsRetry
       ? await chatStore.retry(slug, threadId, retry as string)
       : wantsEdit
@@ -997,6 +1103,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             threadId,
             question: (question as string).trim(),
             ...(wanted ? { anchor: wanted } : {}),
+            ...(wantedKind ? { kind: wantedKind } : {}),
+            /* Onto the **pending** reply row, inside the same write as the
+               question — see `ChatMessage.stance`. Only meaningful on a review;
+               `withTurn` writes whatever it is given and the check constraint
+               refuses one on a user row. */
+            ...(stance ? { stance: stance as ReviewStance } : {}),
           });
   });
   const { thread, reply, user } = begun;
@@ -1127,6 +1239,23 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conclusion held; the reason had rotted. Found by a GPT Sol review,
          2026-08-26.) */
       profile: wantsProfile ? await resolveProfile(slug) : null,
+      /* **From the THREAD the store just wrote, never from the request body.**
+         Those two agree only when the request was right, and the request comes
+         from a tab that may be several navigations out of date. A retry and an
+         edit send no kind at all, so for two of the three ways into this
+         function the body has nothing to offer anyway — and for the third,
+         `withTurn` has already refused a kind that contradicts the thread. The
+         thread is the only thing here that is authoritative about what this
+         conversation is. GPT Sol's review of docs/plans/review-mode.md,
+         finding 5. */
+      kind: thread.kind,
+      /* And the stance from the reply row, for the same reason one step down:
+         `withTurn` wrote the request's, `withRetry` carried over the replaced
+         answer's, `withEdit` took it from the answer it is replacing. Reading
+         it back off the row means all three paths are asked the same question —
+         "what does this pending answer say it is?" — instead of the route
+         re-deriving it three ways. */
+      ...(reply.stance ? { stance: reply.stance } : {}),
       signal: stop.signal,
     })) {
       if (event.type === "delta") {
@@ -1177,6 +1306,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        unhandled rejection for Vite's middleware to trip over. So a failure to
        *record* the failure is swallowed, having been logged where it happened.
        Found by a GPT-5.6 review, 2026-08-26. */
+    captureFailure(err, { route: "chat", slug, threadId: thread.id });
     const message = (err as Error).message;
     try {
       // The partial answer is kept, not dropped — see the header note.
@@ -1202,6 +1332,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         { ...errorFields(storeErr), slug, threadId: thread.id, messageId: reply.id },
         "could not record a failed chat answer",
       );
+      captureFailure(storeErr, { route: "chat", slug, phase: "record-failure" });
     }
     frame("error", { error: message, text });
   } finally {
@@ -1369,6 +1500,13 @@ function summarise(thread: ChatThread): ThreadSummary {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     ...(thread.anchor ? { anchor: thread.anchor } : {}),
+    /* The reading view draws no marks for a review — a review thread cannot be
+       anchored — but it still needs this. `?thread=` opens the floating
+       `ChatDialog` in every mode but the two conversation modes, and that
+       dialog is chat's UI asking with chat's prompt; a pasted
+       `?mode=toc&thread=<a review>` would continue a review as a chat. The
+       overlay is gated on this. src/web/App.tsx § overlay. */
+    kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,
     ...(last ? { lastLine: last } : {}),
   };
@@ -1376,6 +1514,23 @@ function summarise(thread: ChatThread): ThreadSummary {
 
 /** Long enough for a paragraph of context, short enough that nothing runs away. */
 const MAX_QUESTION_CHARS = 4000;
+
+/**
+ * How long a **review** may be — its own limit, and not the question's.
+ *
+ * A chat question is a sentence somebody typed; a review is a paragraph or two
+ * somebody *said*, and speech runs three or four times longer than the same
+ * thought typed. 4,000 characters is a considered cap on the first and an
+ * accident applied to the second: a reader who talks for four minutes hits it,
+ * having already paid for the transcription, and gets a 413 for a box that
+ * invited them to ramble.
+ *
+ * This is the same mistake `MAX_QUOTE_CHARS` below had to be rescued from —
+ * one limit shared by two things that are only superficially the same shape.
+ * Roughly fifteen minutes of continuous speech, because the cost of a long one
+ * is tokens rather than risk.
+ */
+const MAX_REVIEW_CHARS = 20_000;
 
 /**
  * How long a selection may be, in characters.
@@ -1629,6 +1784,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     }
     patch = { status: "done", hits, model };
   } catch (err) {
+    captureFailure(err, { route: "search", slug, id: run.id });
     patch = { status: "error", error: (err as Error).message };
   } finally {
     searching.delete(key);
@@ -1653,6 +1809,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
       { ...errorFields(storeErr), slug, id: run.id },
       `could not record a search result for ${slug}`,
     );
+    captureFailure(storeErr, { route: "search", slug, phase: "record-result" });
   } finally {
     res.end();
   }
@@ -2261,7 +2418,8 @@ function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
  * `task === "explain" || task === "chat" || task === "search"` on the next
  * line, a second copy of something src/models.ts already knows — and the copy
  * that decides what this page *claims*, which is the worst one to let drift.
- * `providerFor` and `modelFor` own it now.
+ * `wireFor` and `modelFor` own it now (`providerFor` until 2026-08-27, when
+ * the provider stopped being a thing that varies — src/models.ts).
  */
 function modelsInUse(): { tasks: ModelReport[] } {
   const tasks = (Object.keys(TASK_TIER) as (keyof typeof TASK_TIER)[]).map((task) => {
@@ -2376,6 +2534,102 @@ async function patchReader(body: unknown): Promise<{ profile: string | null }> {
 }
 
 /**
+ * **A dictation, turned into text.** `POST /api/transcribe`.
+ *
+ * The reader has already stopped talking and is watching a spinner sit on top
+ * of their own text box, so everything here is about being quick and about
+ * failing in a way they can act on. src/transcribe.ts does the model call and
+ * assembles the vocabulary; this is the boundary.
+ *
+ * Three checks, and each of them refuses rather than repairs:
+ *
+ *  - **The body has its own, larger cap.** Read with `MAX_AUDIO_BODY_BYTES`,
+ *    which is the only place in this file that is not `MAX_BODY_BYTES` — see
+ *    the note on the constant for why that is a parameter and not a raise.
+ *  - **`format` is checked against a closed set**, because it is handed
+ *    straight into OpenRouter's request and an unchecked one is a field the
+ *    caller controls in somebody else's call.
+ *  - **`context` is parsed rather than trusted**, and an article slug goes
+ *    through the same `isSlug` every other route uses.
+ *
+ * **The client's disconnect aborts the model call.** A reader who navigates
+ * away mid-transcription is a reader who will never see the answer, and
+ * finishing the call for them is spending money on nobody.
+ *
+ * `res.on("close")`, **not** `req.on("close")` — the same trap `sse` documents
+ * two hundred lines up, and the first draft of this function walked straight
+ * into it (GPT Sol's plan review, item 7). Node's request `close` means "the
+ * request has been completed, **or** the connection was terminated", and
+ * `readBody` above consumes the request stream to its end — so "completed" is
+ * already true before the model is called, and on any Node that takes the first
+ * reading, every transcription would abort itself immediately.
+ */
+async function transcribeDictation(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<{ text: string; ms: number }> {
+  const body = await readBody(req, MAX_AUDIO_BODY_BYTES);
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw httpError(400, "Expected a JSON object");
+  }
+  const sent = body as Record<string, unknown>;
+  /* **An exact shape, refused rather than ignored.** A body with a key we do
+     not know is a client and a server that disagree about this request, and the
+     cheap failure is now rather than whenever somebody notices the field they
+     added has never done anything. GPT Sol's code review, item 9. */
+  for (const key of Object.keys(sent)) {
+    if (key !== "audio" && key !== "format" && key !== "context") {
+      throw httpError(400, `Unexpected field: ${key}`);
+    }
+  }
+
+  const audio = sent.audio;
+  if (typeof audio !== "string" || audio === "") throw httpError(400, "audio must be base64");
+  /* **Checked here rather than left for the provider to reject.** An audio
+     field that is not base64 at all is a bug in a caller, and finding that out
+     from a 400 that arrived via OpenRouter — after a megabyte went over the
+     wire and somebody's key was used — is finding it out in the wrong place.
+     Anchored and length-checked, so a string with a newline or a stray quote in
+     it fails here. */
+  /* Canonical base64, and the padding rule is the part worth spelling out:
+     `AB==` is the right length and the right alphabet and is still not valid,
+     because two padding characters only follow a group of two. A decoder that
+     accepts it produces bytes nobody encoded. */
+  if (!/^[A-Za-z0-9+/]*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/.test(audio)) {
+    throw httpError(400, "audio is not valid base64");
+  }
+  if (audio.length > MAX_AUDIO_BASE64) {
+    /* The number is in the message because the fix depends on it, and the fix
+       is "record less" — which a reader can only act on if they know what the
+       limit is. docs/project/copy.md. */
+    throw httpError(
+      413,
+      /* **Raw audio, not the encoded figure.** The limit is on base64, which is
+         a third larger than the file it encodes — so quoting it as "MB of
+         audio" overstated what a reader may record by exactly that third, and
+         the number in an error message is the one thing in it somebody acts on.
+         GPT Sol's code review, item 9. */
+      `That recording is too long. The limit is about ${
+        Math.round(((MAX_AUDIO_BASE64 * 3) / 4 / 1024 / 1024) * 10) / 10
+      } MB of audio. [mic-too-long]`,
+    );
+  }
+  if (!isAudioFormat(sent.format)) throw httpError(400, "format is not one we can transcribe");
+  const where = parseWhere(sent.context);
+  if (!where) throw httpError(400, "context must say where the dictation is going");
+
+  const gone = new AbortController();
+  const drop = () => gone.abort();
+  res.on("close", drop);
+  try {
+    const result = await transcribe(audio, sent.format, where, gone.signal);
+    return { text: result.text, ms: result.ms };
+  } finally {
+    res.off("close", drop);
+  }
+}
+
+/**
  * The reader's steer for a step that takes one, checked at the boundary.
  *
  * Three things, and the third is the one that matters. It must be a string;
@@ -2423,6 +2677,25 @@ function readGuidance(value: unknown): string | undefined {
  * reading history already (src/log.ts, on why `url` is not redacted) without
  * putting the reading itself in it.
  */
+/**
+ * Did this failure *name its own status* — i.e. did this file choose it?
+ *
+ * The rule `logRequest` has always used to decide whether a stack is worth
+ * keeping in the log line, given a name because it now has a second reader.
+ *
+ * **It is deliberately not the rule for what reaches Sentry**, and the first
+ * version of this change got that wrong. The two questions are different: *is a
+ * stack useful here?* and *should somebody be told about this?* An error that
+ * named its own `status: 500` — `src/owner.ts` raises one for a broken
+ * authentication-order invariant — is a genuine fault wearing the mark of a
+ * chosen failure, and reusing this predicate made it invisible. In the other
+ * direction `ChatConflict` and a missing file both name no status at all, and
+ * both are answered 409 and 404 by design. GPT Sol's review, 2026-08-27.
+ */
+function chosenByUs(err: unknown): boolean {
+  return typeof (err as { status?: number }).status === "number";
+}
+
 function logRequest(
   method: string,
   path: string,
@@ -2451,7 +2724,7 @@ function logRequest(
    * credentials and a query string into `reason` at warn — cleanly defeating
    * the query strip in `handleApi`, forty lines from the code that did it.
    * `tests/jobs.test.ts` pins that one. See docs/project/logging.md. */
-  const expected = err !== undefined && typeof (err as { status?: number }).status === "number";
+  const expected = err !== undefined && chosenByUs(err);
   const fields = {
     method,
     path,
@@ -2522,6 +2795,24 @@ async function serveApi(
      string (`?archived=1`). It stays an EXACT match on the path — a stray
      `/api/library/anything` must still 404 rather than quietly serve the whole
      shelf, which is what this line has always been for. */
+  /* **The admin namespace, and it is two comparisons rather than one.**
+     `startsWith("/api/admin/")` alone would leave a future endpoint at exactly
+     `/api/admin` — no trailing slash — outside the gate, which would make the
+     claim that nothing under here can be added ungated quietly false. The bare
+     path is in the namespace too. GPT Sol, 2026-08-27.
+
+     On `path`, not `url`: `url` carries the query string, and a check that
+     reads it is a check a `?` can be hidden behind. `serveApi` has already
+     refused anything not beginning `/api/`, so there is no other spelling to
+     get past.
+
+     `/api/administer` is deliberately **not** in here — the prefix ends at a
+     slash — and neither is `/api/adminx`. The namespace is a path segment. */
+  const adminNamespace = path === "/api/admin" || path.startsWith("/api/admin/");
+  /* The only route in it today. Exact on `path` like the shelf's, so a stray
+     `/api/admin/users/anything` is a 404 rather than a quiet match — and behind
+     the namespace check either way. docs/project/admin.md. */
+  const adminUsers = path === "/api/admin/users";
   const library = path === "/api/library";
   /* Before the `:slug` pattern below, and it has to be: `search` is a valid
      slug shape, so the two patterns overlap and the specific one must win.
@@ -2537,6 +2828,13 @@ async function serveApi(
   // Static as far as a request is concerned — a read of two constants. No slug
   // and no store behind it.
   const modelsRoute = path === "/api/models";
+  /* **The only route that carries audio**, and the only one whose body is
+     measured in megabytes rather than kilobytes. No slug in the path even
+     though most dictations are about an article: what the article decides here
+     is the *vocabulary*, which is a property of the request rather than of the
+     resource, and a `/api/transcribe/:slug` would have made a slug mandatory
+     for the profile boxes, which have none. src/transcribe.ts. */
+  const transcribeRoute = path === "/api/transcribe";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(url);
   // Its own endpoint rather than a field on the article payload: that one is
   // ~150KB and is fetched on every page, and stat-ing every file for it would
@@ -2644,6 +2942,48 @@ async function serveApi(
        extra parameters. */
     setRequestOwner(user.id);
 
+    /* **The second gate, and it guards a prefix rather than a route.**
+       Everything under `/api/admin/` is refused to everybody but the one
+       address in src/admin.ts. Written here, above the route table, rather than
+       inside the one admin handler — so an admin route added later is behind
+       this check whether or not whoever adds it remembers, which is the only
+       version of this that stays true.
+
+       Matched on `path`, not on `url`, for the same reason the shelf's route is:
+       `url` carries the query string, and a check that reads it is a check that
+       a `?` can be hidden behind. `path` is `url` up to the first `?`, and
+       `serveApi` has already refused anything not starting with `/api/`, so
+       there is no second spelling of this prefix to get past.
+
+       **403, not 404.** The usual rule here is that a thing you may not see
+       does not exist (docs/project/auth.md § Whose data is it), and it is the
+       right rule for another reader's article — a 404 refuses to confirm it is
+       there. It buys nothing at all here: the admin page's code is in the
+       JavaScript bundle every signed-in reader downloads, so its existence is
+       not a secret and pretending otherwise would only make a real refusal
+       unreadable in a log. */
+    if (adminNamespace && !isAdmin(user.id)) {
+      /* One case is worth a line, and only one: the administrator's own address
+         on an id we do not know. Fixed prose, nothing interpolated — see
+         src/admin.ts, and logging.md on why a message is the one place
+         redaction cannot reach. */
+      const notable = describeAdminMiss(user.id, user.email);
+      if (notable) log("auth").warn({ route: "admin" }, notable);
+      throw httpError(403, "That page is for the site's administrator. [admin-only]");
+    }
+
+    if (adminUsers && req.method === "GET") {
+      /* **Said on the response as well as meant by the client.** The offline
+         cache in src/web/lib/api.ts keeps to an allowlist that this route is
+         not on, so nothing of ours would store it — but a page listing other
+         people's accounts should not depend on our own cache's good manners for
+         that, and an intermediary has no way to know the policy unless the
+         response states it. GPT Sol, 2026-08-27. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
+      return true;
+    }
+
     if (library && req.method === "GET") {
       /* `=== "1"`, not truthiness. `?archived=0` is a thing somebody will write
          meaning "no", and a loose check would hand them the archive. */
@@ -2664,6 +3004,10 @@ async function serveApi(
     }
     if (modelsRoute && req.method === "GET") {
       send(res, 200, modelsInUse());
+      return true;
+    }
+    if (transcribeRoute && req.method === "POST") {
+      send(res, 200, await transcribeDictation(req, res));
       return true;
     }
     if (readerRoute && req.method === "GET") {
@@ -3106,6 +3450,21 @@ async function serveApi(
     // mapped to a status, handed to the client and forgotten, so a production
     // 500 left nothing behind to read.
     failure = err;
+    /* **The rule is the status we answered with, not who chose it.** If this
+       request logged at `error` level it goes to Sentry, and `logRequest` uses
+       exactly the same threshold two lines down — so the two can never drift
+       into disagreeing about what a fault is.
+
+       What that buys, case by case: a `TypeError` mapped to 500 is reported; so
+       is `src/owner.ts`'s deliberate `status: 500` invariant failure, and so is
+       an authored 502 from a provider. A 404 for a slug with no article, a 400
+       for a bad body, and `ChatConflict`'s 409 are answers rather than faults
+       and are not reported. An error tracker full of mistyped URLs is an error
+       tracker nobody reads.
+
+       src/monitoring.ts decides what may be *said* about the error. This line
+       only decides whether to say anything. */
+    if (status >= 500) captureFailure(err, { method, path, status });
     send(res, status, { error: (err as Error).message });
     return true;
   } finally {

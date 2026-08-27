@@ -17,6 +17,7 @@ import { createComment, loadComments } from "../src/comments.js";
 import { loadShelf } from "../src/shelf.js";
 import { beginRun, deleteRun, loadRuns } from "../src/searches.js";
 import { mintId } from "../src/ids.js";
+import { originalUrl } from "../src/vercel.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const SLUG = "test-routes-fixture";
@@ -673,6 +674,7 @@ describe("POST /api/search/:slug is a stream too", () => {
     const bytes = new TextEncoder().encode(text);
     return {
       ok: true,
+      headers: new Headers(),
       body: new ReadableStream<Uint8Array>({
         pull(c) {
           c.enqueue(bytes);
@@ -756,6 +758,7 @@ describe("POST /api/search/:slug is a stream too", () => {
     let pulls = 0;
     fetchMock.mockResolvedValue({
       ok: true,
+      headers: new Headers(),
       body: new ReadableStream<Uint8Array>({
         async pull(c) {
           pulls++;
@@ -912,5 +915,121 @@ describe("the gate", () => {
     const r = await call("GET", "/api/library");
     expect(r.status).toBe(200);
     expect(r.body).toHaveProperty("articles");
+  });
+});
+
+/**
+ * The second gate: `/api/admin/` is the administrator's, and nobody else's.
+ *
+ * `tests/helpers/authed.ts` signs every other test in this file in as
+ * `greg@gregdetre.com`, who *is* the administrator — so the interesting case
+ * needs a verifier of its own. See src/admin.ts and docs/project/admin.md.
+ */
+describe("the admin gate", () => {
+  /** Somebody else entirely, signed in perfectly properly. */
+  const asSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
+    ok: true,
+    headers: new Headers(),
+    claims: {
+      /* Its own uuid, shared with nothing. Neither this file nor
+         tests/admin.test.ts puts one in the database — both are about a
+         refusal, which happens before any store is touched — but
+         tests/fixture-ids.test.ts cannot tell that from a file that does, and a
+         guard with an exception in it is a guard nobody trusts. */
+      sub: "7c25b0d8-41ea-4f39-a6b2-5e8d3011c9f4",
+      email: "someone@example.test",
+      role: "authenticated",
+      is_anonymous: false,
+    },
+  });
+
+  it("refuses a signed-in reader who is not the administrator", async () => {
+    const r = await call("GET", "/api/admin/users", undefined, asSomebodyElse);
+    expect(r.status).toBe(403);
+    /* Not an empty list. A page that says "no users" and a page that refused to
+       answer look identical, and only one of them is true. */
+    expect(r.body).not.toHaveProperty("users");
+  });
+
+  it("refuses them on any path under the prefix, not just the one that exists", async () => {
+    /* The check guards the prefix rather than the route, so an admin endpoint
+       added later is behind it whether or not whoever adds it remembers. A 403
+       here rather than a 404 is what proves the order. */
+    const r = await call("GET", "/api/admin/anything-at-all", undefined, asSomebodyElse);
+    expect(r.status).toBe(403);
+  });
+
+  it("is not fooled by a query string", async () => {
+    /* Matched on the path, not on `url` — a check that read the query string
+       would be a check a `?` could be hidden behind. */
+    const r = await call("GET", "/api/admin/users?by=email", undefined, asSomebodyElse);
+    expect(r.status).toBe(403);
+  });
+
+  it("refuses them at the bare namespace too, with no trailing slash", async () => {
+    /* `startsWith("/api/admin/")` alone would leave a future endpoint at
+       exactly `/api/admin` outside the gate, which makes the whole claim —
+       nothing under here can be added ungated — false. GPT Sol, 2026-08-27. */
+    const r = await call("GET", "/api/admin", undefined, asSomebodyElse);
+    expect(r.status).toBe(403);
+  });
+
+  it("does not swallow a route that merely starts with the same letters", async () => {
+    /* The namespace is a path segment, not a prefix of a string. `/api/adminx`
+       is somebody else's route, and if one is ever added it must not silently
+       become the administrator's. A 404 is the right answer here, and it is the
+       one that proves the check stopped at the slash. */
+    const r = await call("GET", "/api/administer", undefined, asSomebodyElse);
+    expect(r.status).toBe(404);
+  });
+
+  /* Otherwise a gate that refuses everybody passes every test above, and the
+     suite is green while the page is dead.
+
+     Under the filesystem store — which is what `npm test` runs with — the route
+     answers **501**: "there are no user accounts on the filesystem store". That
+     is the store refusing *after* the gate let the request through, so it is
+     exactly the evidence wanted, and it is asserted exactly rather than as "not
+     403". A 200 here would mean the suite had quietly acquired a database and
+     this case had stopped testing what it says. */
+  it("lets the administrator reach the route, where the store refuses instead", async () => {
+    const r = await call("GET", "/api/admin/users");
+    expect(r.status).toBe(501);
+    expect(r.body.error).toMatch(/Postgres/);
+  });
+
+  it("is still the same path after production's rewrite", async () => {
+    /* **The one decoding step the other cases cannot see.** On Vercel every
+       `/api/*` request is rewritten to one function as
+       `/api/index?__spy_path=<the path, encoded once>`, and `originalUrl` puts
+       it back before `handleApi` sees anything (src/vercel.ts). So the address
+       the gate matches on in production is the *output* of that function, and
+       nothing in this file exercises it.
+
+       Composed rather than assumed: the rewritten form is restored, the result
+       is asserted, and then that exact string is handed to `handleApi`. GPT
+       Sol asked for this in its review of the plan, 2026-08-27. */
+    for (const encoded of ["admin/users", "admin%2Fusers", "admin"]) {
+      const restored = originalUrl(`/api/index?__spy_path=${encoded}`);
+      expect(restored, encoded).toMatch(/^\/api\/admin/);
+      const r = await call("GET", restored ?? "", undefined, asSomebodyElse);
+      expect(r.status, encoded).toBe(403);
+    }
+  });
+
+  it("says nothing about users in any of its three refusals", async () => {
+    /* Every refusal must be words rather than an empty list. A page that says
+       "no accounts" and a page that could not answer look identical, and only
+       one of them is true. Three ways in, three refusals: nobody signed in, the
+       wrong person signed in, and the right person against a store that has no
+       accounts to list. */
+    const anonymous = await call("GET", "/api/admin/users", undefined, undefined, {});
+    const stranger = await call("GET", "/api/admin/users", undefined, asSomebodyElse);
+    const administrator = await call("GET", "/api/admin/users");
+    expect([anonymous.status, stranger.status, administrator.status]).toEqual([401, 403, 501]);
+    for (const r of [anonymous, stranger, administrator]) {
+      expect(r.body).not.toHaveProperty("users");
+      expect(r.body.error).toBeTruthy();
+    }
   });
 });
