@@ -40,6 +40,7 @@ import path from "node:path";
 import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import { slugFromUrl } from "./ingest.js";
+import { storeRawSource } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
  * What comes back
@@ -130,6 +131,22 @@ export interface RawManifest {
    * do not know.
    */
   sha256: string | null;
+  /**
+   * SHA-256 of the bytes **we stored**, which is the key of the object in the
+   * `sources` bucket — `canonicalKey(storedSha256, kind)`.
+   *
+   * Not the same question as `sha256` above, and the two names are deliberately
+   * not near-identical: that one is what the server sent, this is what is on
+   * disk and in the bucket. For a PDF they are equal. For HTML they are equal
+   * only when the page was already UTF-8, because `writeRaw` stores the decoded
+   * string — src/fetch.ts's own comment has said "raw.html is therefore not
+   * raw" for longer than this field has existed.
+   *
+   * Optional, because every manifest written before 2026-08-27 has no object
+   * behind it. Absent means *we have not put this document in the bucket*,
+   * which is a fact rather than a gap. docs/plans/raw-bytes-in-storage.md.
+   */
+  storedSha256?: string;
   fetchedAt: string;
   /** Present only on a backfilled manifest, saying so in a sentence. */
   backfilled?: string;
@@ -143,11 +160,32 @@ export async function writeRaw(dir: string, doc: FetchedDocument): Promise<RawMa
      stage wants text, and the encoding sniff above is the only place that knows
      how to decode it. The manifest records the encoding so that stays visible;
      `raw.html` is therefore not raw, which src/db/schema.ts says out loud. */
-  await writeFile(
-    path.join(dir, file),
-    doc.kind === "pdf" ? doc.bytes : (doc.text ?? ""),
-    doc.kind === "pdf" ? undefined : "utf8",
-  );
+  /* One value written to two places, rather than the same expression twice.
+     The file and the object have to be the same bytes or the hash below is
+     about something nobody has. */
+  const storedBytes =
+    doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text ?? "");
+  await writeFile(path.join(dir, file), storedBytes);
+  /* **The object goes to the blob store too, keyed by the hash of what we
+     actually stored.**
+     
+     Not `manifest.sha256`, which hashes the bytes off the *network* — and for
+     HTML those are not the bytes above, because this function writes the
+     decoded string. Two different questions, and conflating them puts bytes
+     under a name that does not describe them, which is the one thing content
+     addressing must never do. docs/plans/raw-bytes-in-storage.md § The backfill
+     can put the wrong bytes under a hash is the same mistake found the other
+     way round. For a PDF, and for a page that was already UTF-8, the two hashes
+     are equal.
+
+     Here rather than at the two call sites, so `npm run fetch` and the pipeline
+     cannot drift again — they already did once, and this function is the fix
+     for that. Idempotent and outside any transaction, which is safe because the
+     key is the contents: writing twice is a no-op, and an object nothing
+     references is one we keep on purpose. `storeRawSource` verifies a dedup hit
+     rather than trusting it. */
+  const stored = await storeRawSource(storedBytes, doc.kind);
+
   const manifest: RawManifest = {
     kind: doc.kind,
     file,
@@ -157,6 +195,7 @@ export async function writeRaw(dir: string, doc: FetchedDocument): Promise<RawMa
     encoding: doc.encoding,
     bytes: doc.bytes.byteLength,
     sha256: createHash("sha256").update(doc.bytes).digest("hex"),
+    storedSha256: stored.sha256,
     fetchedAt: doc.fetchedAt,
   };
   await writeFile(path.join(dir, "raw.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");

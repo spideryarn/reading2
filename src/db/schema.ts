@@ -265,6 +265,35 @@ export const articleRevisions = spideryarn.table(
     rawSha256: text("raw_sha256"),
 
     /**
+     * **Which object in the `sources` bucket this revision's document is.**
+     *
+     * Two columns rather than one because a key needs the media kind as well as
+     * the digest — `canonicalKey(sha, kind)` in src/source.ts — and there is no
+     * way to recover the kind from `raw_content_type`, which is *the server's
+     * claim*: src/fetch.ts is blunt that a PDF served as `application/octet-stream`
+     * is still a PDF and a challenge page served as `application/pdf` is still
+     * HTML.
+     *
+     * **Both or neither**, enforced by `article_revisions_raw_source_both`
+     * below, because two nullable columns forming one pointer is a half-pointer
+     * waiting to happen — one set and the other null names an object that
+     * cannot be addressed, and nothing would say so.
+     *
+     * Null is a real answer and means **we do not hold the source document**:
+     * an article imported before we kept them. It is told apart from *we tried
+     * and failed* by `revision_step_runs` — a revision with a successful `fetch`
+     * run in its lineage must carry this reference, which `publishRevision`
+     * enforces. See docs/plans/raw-bytes-in-storage.md.
+     *
+     * Note this is **not** `raw_sha256` above. That one is the hash of what the
+     * network sent; this is the hash of what we stored, and for HTML in any
+     * encoding but UTF-8 those differ, because `writeRaw` stores the decoded
+     * string.
+     */
+    rawSourceSha256: text("raw_source_sha256"),
+    rawSourceKind: text("raw_source_kind"),
+
+    /**
      * **How this revision was extracted, when the answer is not "Readability".**
      *
      * All six are null for a web page and that is the common case — they exist
@@ -391,6 +420,27 @@ export const articleRevisions = spideryarn.table(
     check("article_revisions_status", sql`${t.status} in ('draft','published','failed')`),
     /** Lets children key on (article_id, revision_id) and inherit the article. */
     unique("article_revisions_article_id_id").on(t.articleId, t.id),
+    /**
+     * The half-pointer guard. `(a is null) = (b is null)` rather than two
+     * separate rules, so it reads as the one fact it is — and it is the same
+     * shape as `jobs_upload_both_or_neither`, which exists for the same reason
+     * one field of a pair going missing produces a value the TypeScript type
+     * cannot express.
+     */
+    check(
+      "article_revisions_raw_source_both",
+      sql`(${t.rawSourceSha256} is null) = (${t.rawSourceKind} is null)`,
+    ),
+    /**
+     * No `onDelete`, because nothing ever deletes a `raw_sources` row — see
+     * that table on why there is no lifecycle. If that ever changes, this is
+     * the line that has to be revisited first.
+     */
+    foreignKey({
+      name: "article_revisions_raw_source_fk",
+      columns: [t.rawSourceSha256, t.rawSourceKind],
+      foreignColumns: [rawSources.sha256, rawSources.kind],
+    }),
   ],
 );
 
@@ -948,6 +998,67 @@ export const revisionStepRuns = spideryarn.table(
       "revision_step_runs_status",
       sql`${t.status} in ('running','done','error')`,
     ),
+  ],
+);
+
+/* --------------------------------------------------------- raw sources -- */
+
+/**
+ * **What is in the `sources` bucket, as far as we know.**
+ *
+ * One row per distinct raw document, named by the hash of the bytes we actually
+ * stored — which is not always the hash of the bytes we were *sent*, and that
+ * distinction is the whole reason this table exists rather than a column.
+ * `article_revisions.raw_sha256` stays what the network gave us;
+ * `raw_sources.sha256` is what is at the key. For a PDF and for a UTF-8 page
+ * they are equal. For anything else they are not, because `writeRaw` stores the
+ * decoded string (src/fetch.ts says so in its own comment).
+ *
+ * ## No lifecycle, on purpose
+ *
+ * Two cross-family reviews argued for a state machine here — `uploading`, a
+ * lease, `retire_after`, a `deleting` tombstone — and every part of it existed
+ * to make deletion safe. Greg's answer to "how long may an object outlive its
+ * last reference" was *"maybe keep them indefinitely (at least for now)"*, and
+ * that removes the question rather than answering it: an object nothing
+ * references is a **kept** object, not a leak, so there is no sweeper to race
+ * and nothing to recover from. docs/plans/raw-bytes-in-storage.md.
+ *
+ * What survived is verification, which was never about deletion:
+ * `storeRawSource` (src/store/blobs.ts) reads back and hashes a dedup hit
+ * rather than believing it, so `verified_at` is `not null` here — a row exists
+ * only once the bytes at that key have been shown to be those bytes.
+ *
+ * **Rows are never deleted**, so there is no `on delete` anywhere pointing at
+ * this table, and `article_revisions` may reference it freely.
+ */
+export const rawSources = spideryarn.table(
+  "raw_sources",
+  {
+    sha256: text("sha256").notNull(),
+    kind: text("kind").notNull(),
+    /**
+     * `integer`, not `bigint` — the same trap `uploads.bytes` documents: node-pg
+     * hands back `int8` as a *string*, so arithmetic on it silently
+     * concatenates. Objects are capped at 50 MiB, four hundred times under the
+     * `int4` ceiling.
+     */
+    bytes: integer("bytes").notNull(),
+    contentType: text("content_type").notNull(),
+    /** When the bytes at this key were last shown to hash to it. Never null. */
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sha256, t.kind] }),
+    /**
+     * The format check that `canonicalKey` already enforces in TypeScript
+     * (src/source.ts, `SHA256_RE`). Here too, because the column is half of a
+     * key that gets rendered into an object name: a row that is not a digest
+     * would name an object that cannot exist, and would do it silently.
+     */
+    check("raw_sources_sha256_format", sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
+    check("raw_sources_kind", sql`${t.kind} in ('pdf','html')`),
   ],
 );
 

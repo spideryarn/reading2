@@ -471,4 +471,148 @@ describe("the schema keeps the promises the plan makes", () => {
       expect(rows[0].anon_can_read).toBe(false);
     });
   });
+
+  describe("the reference to a raw source document", () => {
+    /**
+     * Four constraints, and each one is here because the failure it prevents is
+     * silent rather than loud. A revision's raw source is addressed by
+     * `canonicalKey(sha, kind)` (src/source.ts), which is rendered into an
+     * object name — so a row that is not a digest, or is half a pointer, names
+     * an object that cannot exist, and nothing downstream would say so. It
+     * would read as "this article has no source document", which is a thing
+     * that legitimately happens. docs/plans/raw-bytes-in-storage.md.
+     */
+    const SHA = "a".repeat(64);
+
+    dbIt("refuses a hash that is not one", async () => {
+      await inRollback(async (c) => {
+        await expectViolation(c, /raw_sources_sha256_format/, () =>
+          c.query(
+            "insert into spideryarn.raw_sources values ($1,'pdf',1,'application/pdf',now())",
+            ["not-a-digest"],
+          ),
+        );
+        /* Upper case is the interesting near-miss: a perfectly good SHA-256,
+           written the other way, which would render a key that misses. */
+        await expectViolation(c, /raw_sources_sha256_format/, () =>
+          c.query(
+            "insert into spideryarn.raw_sources values ($1,'pdf',1,'application/pdf',now())",
+            ["A".repeat(64)],
+          ),
+        );
+      });
+    });
+
+    dbIt("refuses a kind that names no decoder", async () => {
+      await inRollback(async (c) => {
+        await expectViolation(c, /raw_sources_kind/, () =>
+          c.query("insert into spideryarn.raw_sources values ($1,'docx',1,'x',now())", [SHA]),
+        );
+      });
+    });
+
+    dbIt("refuses half a pointer", async () => {
+      await inRollback(async (c) => {
+        await seed(c);
+        await c.query(
+          "insert into spideryarn.article_revisions (id, article_id, status) values ($1,$2,'draft')",
+          [REV_1, ART_1],
+        );
+        /* Either half alone. Both directions, because a CHECK written as one
+           implication rather than an equality would pass one of them. */
+        await expectViolation(c, /article_revisions_raw_source_both/, () =>
+          c.query("update spideryarn.article_revisions set raw_source_sha256 = $1 where id = $2", [
+            SHA,
+            REV_1,
+          ]),
+        );
+        await expectViolation(c, /article_revisions_raw_source_both/, () =>
+          c.query("update spideryarn.article_revisions set raw_source_kind = 'pdf' where id = $1", [
+            REV_1,
+          ]),
+        );
+      });
+    });
+
+    dbIt("refuses a pointer to an object it has no record of", async () => {
+      await inRollback(async (c) => {
+        await seed(c);
+        await c.query(
+          "insert into spideryarn.article_revisions (id, article_id, status) values ($1,$2,'draft')",
+          [REV_1, ART_1],
+        );
+        await expectViolation(c, /article_revisions_raw_source_fk/, () =>
+          c.query(
+            "update spideryarn.article_revisions set raw_source_sha256 = $1, raw_source_kind = 'pdf' where id = $2",
+            [SHA, REV_1],
+          ),
+        );
+      });
+    });
+
+    dbIt("accepts a whole pointer to a registered object", async () => {
+      /* The other half, and it is not decoration: four rejections and no
+         acceptance is indistinguishable from a constraint that refuses
+         everything, which would fail closed and look like rigour. */
+      await inRollback(async (c) => {
+        await seed(c);
+        await c.query(
+          "insert into spideryarn.article_revisions (id, article_id, status) values ($1,$2,'draft')",
+          [REV_1, ART_1],
+        );
+        await c.query(
+          "insert into spideryarn.raw_sources values ($1,'pdf',1,'application/pdf',now())",
+          [SHA],
+        );
+        await c.query(
+          "update spideryarn.article_revisions set raw_source_sha256 = $1, raw_source_kind = 'pdf' where id = $2",
+          [SHA, REV_1],
+        );
+        const back = await c.query(
+          "select raw_source_sha256 from spideryarn.article_revisions where id = $1",
+          [REV_1],
+        );
+        expect(back.rows[0].raw_source_sha256).toBe(SHA);
+      });
+    });
+
+    dbIt("lets two revisions share one source document", async () => {
+      /* Dedup is the point of naming an object after its contents: two readers
+         with the same paper get one object. Nothing may stop the second
+         reference. */
+      await inRollback(async (c) => {
+        await seed(c);
+        await c.query(
+          `insert into spideryarn.article_revisions (id, article_id, status)
+           values ($1,$2,'draft'), ($3,$4,'draft')`,
+          [REV_1, ART_1, "bbbbbbbb-0000-0000-0000-000000000002", ART_2],
+        );
+        await c.query(
+          "insert into spideryarn.raw_sources values ($1,'pdf',1,'application/pdf',now())",
+          [SHA],
+        );
+        /* **`where id = any(...)`, and the first version had no `where` at
+           all.** It set the reference on every revision in the database — 12 of
+           them on this laptop, from the real corpus — and only the surrounding
+           rollback made that harmless. The count then came back 12 and the test
+           failed, which is the good luck rather than the design: a test that
+           asserted "at least 2" would have passed while writing over
+           everything. Scope every write in a test to rows the test made. */
+        const MINE = [REV_1, "bbbbbbbb-0000-0000-0000-000000000002"];
+        await c.query(
+          `update spideryarn.article_revisions
+             set raw_source_sha256 = $1, raw_source_kind = 'pdf'
+           where id = any($2::uuid[])`,
+          [SHA, MINE],
+        );
+        const n = await c.query(
+          `select count(*)::int as n from spideryarn.article_revisions
+           where raw_source_sha256 = $1 and id = any($2::uuid[])`,
+          [SHA, MINE],
+        );
+        expect(n.rows[0].n).toBe(2);
+      });
+    });
+  });
+
 });

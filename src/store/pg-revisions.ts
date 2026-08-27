@@ -170,6 +170,22 @@ export const REVISION_COLUMN_POLICY: Record<
   rawContentType: "carry",
   rawEncoding: "carry",
   rawSha256: "carry",
+  /**
+   * The reference to the object in the `sources` bucket — carried, beside the
+   * hash and the bytes it belongs with.
+   *
+   * **Carrying is what makes the publication rule work rather than a hole in
+   * it.** `beginDraftIn` copies `revision_step_runs` forward too, so a
+   * re-extraction job inherits the previous revision's successful `fetch` run;
+   * if the reference did not travel with it, that job would publish a revision
+   * claiming a fetch it has no source for. They move together, and the article
+   * keeps the document it was made from until something actually re-fetches it.
+   *
+   * Both halves, and the `article_revisions_raw_source_both` CHECK means the
+   * database refuses a copy that takes only one. docs/plans/raw-bytes-in-storage.md.
+   */
+  rawSourceSha256: "carry",
+  rawSourceKind: "carry",
 
   // Stage 2 again: how a PDF was read. All null for a web page.
   source: "carry",

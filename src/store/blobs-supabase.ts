@@ -24,9 +24,26 @@ import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.
  *
  * `sources`, not `pdfs`: it holds the document an article was made from, which
  * is what `GET /api/source/:slug` already names, and PDFs are only the first
- * kind. Private, with a 50 MiB object cap and a PDF-only MIME allowlist that
- * the server enforces on upload — a second line under our own checks, not a
- * replacement for them, since a bucket cannot tell a PDF from a file named one.
+ * kind. Private, with a 50 MiB object cap.
+ *
+ * **The MIME allowlist is not a second line under our own checks, and this
+ * comment said it was.** Measured against the running container on 2026-08-27:
+ * with the bucket declaring `{application/pdf}`, a service-role
+ * `putIfAbsent` stored objects typed `text/html`, `image/png` and
+ * `application/x-nonsense` without complaint. All four succeeded. The service
+ * key bypasses it exactly as it bypasses RLS.
+ *
+ * So for anything *this server* writes, our own validation — `looksLikePdf` and
+ * the SHA-256 comparison in `acquireUpload` — is the only line, not the second.
+ * The allowlist is still declared, and is still worth declaring, because the
+ * path it plausibly does govern is the one that matters most: a browser PUTing
+ * to a signed grant, which is untrusted input arriving without us in the middle.
+ * **That half is untested** — it needs a browser and a real grant — so it is
+ * written here as a belief rather than as a measurement.
+ *
+ * [silent-success](docs/reusable/silent-success.md): the natural check is to
+ * read `supabase/config.toml`, which agrees with the code and says nothing
+ * about whether anybody enforces it.
  */
 const BUCKET = "sources";
 

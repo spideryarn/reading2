@@ -347,8 +347,23 @@ invariant is for.
 
 ## What changes
 
-1. **`fetch` puts its bytes in the blob store**, at `canonicalKey(sha256, kind)` — the same call the
-   PDF path already makes — and registers them in `raw_sources`.
+1. **`fetch` puts its bytes in the blob store — done, 2026-08-27** — at
+   `canonicalKey(storedSha256, kind)`, in `writeRaw` itself rather than at its two call sites, so the
+   CLI and the pipeline cannot drift again.
+
+   **`storedSha256`, a new optional field on `RawManifest`, and not `sha256`.** That one hashes the
+   bytes off the network; this hashes what we actually wrote, and for HTML those differ whenever the
+   page was not already UTF-8, because `writeRaw` stores the decoded string. Two names that cannot be
+   mistaken for each other, which is the third review's worry about the two hash *columns* answered
+   in the one place where both values exist at once. Absent on every manifest written before today,
+   meaning *we have not put this document in the bucket* — a fact, not a gap.
+
+   **Registering the row is deliberately not here.** Pipeline steps do not write to Postgres at all
+   today — `src/jobs.ts` runs them against the filesystem, and `article_revisions` rows come only from
+   `db:import`. So the object write, which needs no database, lands now; the `raw_sources` row and the
+   revision's reference land where a revision row is actually written, which is `db:import` until the
+   live-write pipeline arrives with [transactional-stage-runner.md](transactional-stage-runner.md).
+   Splitting it that way is what makes each step independently committable and green.
 
    > **One writer first, which landed 2026-08-27.** `npm run fetch` did not use `writeRaw`: it wrote
    > `doc.bytes` by hand and no manifest, so the CLI and the pipeline produced *different files at
@@ -358,8 +373,26 @@ invariant is for.
    > would hash differently and become **two objects**, which is the one thing content addressing is
    > supposed to make impossible. `writeRaw` had simply never been adopted by the CLI (it arrived in
    > `b6e41b4` and `main()` was left alone). There is one writer now.
-2. **`supabase/config.toml` adds `text/html`** to the `sources` bucket's MIME allowlist. Note the
-   bucket must also be provisioned on the *remote* project, which config.toml does not do.
+2. **`supabase/config.toml` adds `text/html`** to the `sources` bucket's MIME allowlist — **done,
+   2026-08-27**, and the measurement that came with it is the more useful half.
+
+   > **The allowlist does not stop our own uploads, and the code said it did.** With the bucket
+   > declaring `{application/pdf}`, a service-role `putIfAbsent` stored `text/html`, `image/png` and
+   > `application/x-nonsense` without complaint — all four succeeded. `blobs-supabase.ts` described it
+   > as *"a second line under our own checks"*; for anything this server writes there is no second
+   > line, and `looksLikePdf` plus the SHA comparison in `acquireUpload` are the only one. The
+   > allowlist is still declared, because the path it plausibly *does* govern is a browser PUTing to
+   > a signed grant — untrusted input, arriving without us in the middle — but that half needs a
+   > browser to test and is written down as a belief rather than a measurement.
+   >
+   > Found only because a check ran against the live container after the config change and the
+   > container had not been restarted: HTML uploaded fine while `storage.buckets` still said PDF-only.
+   > The natural check — reading `config.toml` — agrees with the code and says nothing.
+   > [silent-success](../reusable/silent-success.md).
+
+   The bucket must also be provisioned on the *remote* project, which config.toml does not do:
+   `supabase seed buckets --project-ref <ref>`, and [deployment.md](../project/deployment.md)'s
+   "fails by appearing to work" warning applies to it again.
 3. **`raw_bytes` stops being written**; the reference becomes the `raw_sources` pair. The column is
    dropped later, not now.
 4. **`db:import` and `db:export` are rewritten** — export becomes a Storage read, which makes

@@ -162,7 +162,15 @@ file_size_limit = "50MiB"
 [storage.buckets.sources]
 public = false
 file_size_limit = "50MiB"
-allowed_mime_types = ["application/pdf"]
+# `text/html` since 2026-08-27: stage 1 now stores fetched web pages here too,
+# not only uploaded PDFs. See docs/plans/raw-bytes-in-storage.md.
+#
+# Measured, and worth knowing before relying on it: this list does NOT stop a
+# service-role upload. With the bucket set to PDF-only, our own server stored
+# text/html, image/png and application/x-nonsense objects without complaint.
+# It is a guard on the browser's signed-grant path, not on ours — src/store/
+# blobs-supabase.ts has the numbers.
+allowed_mime_types = ["application/pdf", "text/html"]
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
