@@ -298,6 +298,14 @@ is the fault `orderSteps` exists to prevent, one level up. Flagged in §8 rather
 
 ## 4. The upload record
 
+> **Built, 2026-08-27.** The table and its two migrations, then
+> [`src/store/uploads.ts`](../../src/store/uploads.ts) with a filesystem adapter (today's code,
+> moved) and [`pg-uploads.ts`](../../src/store/pg-uploads.ts), with `src/upload-records.ts` reduced
+> to the seam. `tests/store-uploads-parity.test.ts` runs the same two-simultaneous-claims race
+> against both, and was watched red against a read-then-write implementation of the Postgres claim
+> before it was believed. **This does not switch uploading on in production** — see § The dependency.
+
+
 The state machine is already storage-agnostic on purpose — `canTransition`, `grantExpired` and
 `sweepable` live in [`src/source.ts`](../../src/source.ts) and know nothing about files. So this is a
 change of adapter, and the exported names in `src/upload-records.ts` do not move.

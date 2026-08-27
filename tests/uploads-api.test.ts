@@ -18,12 +18,25 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleApi, parseJobRequest } from "../src/routes.js";
 import { freeUploadSlug } from "../src/jobs.js";
 import { slugFromFilename } from "../src/ingest.js";
-import { forgetUpload, listUploads, recordsSurviveTheRequest } from "../src/upload-records.js";
+import { forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
-const before = new Set((await listUploads()).map((u) => u.id));
+/**
+ * **The ids this file minted, and only those.**
+ *
+ * It used to snapshot every upload at module load and delete anything new in
+ * `afterEach` — which reads as tidy and is not, because vitest runs test files
+ * in parallel against one store. "New since I started" swept up records
+ * `tests/upload-acquire.test.ts` had just created and was about to read, and
+ * that file then failed with `No record of upload …` while passing perfectly on
+ * its own. The same trap `tests/fixture-ids.test.ts` exists for, one layer over.
+ *
+ * Collected from the responses rather than by diffing the store, so it is a
+ * list of things this file actually caused.
+ */
+const minted: string[] = [];
 afterEach(async () => {
-  for (const u of await listUploads()) if (!before.has(u.id)) await forgetUpload(u.id);
+  for (const id of minted.splice(0)) await forgetUpload(id);
 });
 
 async function call(
@@ -68,6 +81,9 @@ async function call(
     /* Some routes stream; none of the ones here do, and an unparseable body is
        itself worth seeing in the failure message rather than swallowing. */
   }
+  /* Anything that came back with an id is an upload this file caused, and is
+     this file's to clean up. Nothing else is. */
+  if (typeof parsed.uploadId === "string") minted.push(parsed.uploadId);
   return { status: res.statusCode, body: parsed };
 }
 
@@ -130,7 +146,10 @@ describe("whether this installation can take an upload at all", () => {
       });
       expect(status).toBe(503);
       expect(String(body.error)).toMatch(/isn't set up to take a file/);
-      expect(await listUploads()).toHaveLength(before.size);
+      /* **Nothing was minted**, asserted about this request rather than about
+         the size of the whole store — which another test file running beside
+         this one can change between the call and the count. */
+      expect(minted).toHaveLength(0);
     } finally {
       if (was === undefined) delete process.env.VERCEL;
       else process.env.VERCEL = was;
@@ -188,7 +207,7 @@ describe("POST /api/uploads", () => {
     });
     expect(status).toBe(413);
     expect(String(body.error)).toMatch(/limit is/i);
-    expect(await listUploads()).toHaveLength(before.size);
+    expect(minted).toHaveLength(0);
   });
 
   it("refuses a file that is not a PDF by name or type", async () => {

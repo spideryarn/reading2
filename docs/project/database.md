@@ -21,7 +21,7 @@ data/writes/
 data/_jobs/
   spya-*.json   one file per ingest job
 data/_uploads/
-  <uuid>.json   one file per upload attempt   (see below)
+  <uuid>.json   one file per upload attempt   (files store only — see below)
 ```
 
 **And, since 2026-08-27, one thing that is deliberately not a file here at all.** An uploaded PDF's
@@ -39,10 +39,29 @@ holding a key and a checksum, which is
 and the seam is what makes that a follow-on rather than a rewrite.
 
 `data/_uploads/` is **queue state, not article state** — created, claimed and finished inside one
-ingest, and meaningless once the article exists. It is on the filesystem because `data/_jobs/` is,
-and it moves when that moves ([job-queue-rethink.md](../plans/job-queue-rethink.md)). The rules it
-obeys are in [`src/source.ts`](../../src/source.ts) and touch no storage, which is what makes that
-move a change of adapter.
+ingest, and meaningless once the article exists. It was on the filesystem because `data/_jobs/` is,
+and it said it would move when that moved.
+
+**It moved first, on 2026-08-27**, and the reason it did not wait is that it had a harder deadline
+than the queue: minting a grant and queueing the job are **two HTTP requests**, and on a serverless
+host they may not run on the same machine, so a record on a function's local disk is one the second
+request cannot find. There is now a `spideryarn.uploads` table and two adapters behind
+[`src/store/uploads.ts`](../../src/store/uploads.ts) — `SPIDERYARN_STORE` picks one, exactly as it
+does for everything else. The rules the record obeys never moved at all: `canTransition`,
+`grantExpired` and `sweepable` are in [`src/source.ts`](../../src/source.ts) and touch no storage,
+which is what made this a change of adapter rather than of rules.
+
+**The one place the two adapters are genuinely different code** is the claim, and it is worth
+knowing which way round it goes. Finalising has to be *exactly once*, and read-then-write has a gap
+in it however short — so the filesystem needs a create-only marker file beside the record
+(`open(…, "wx")`, atomic at the kernel, working across processes rather than only across the awaits
+in one). Postgres needs one conditional `UPDATE` and `rowCount`. The database makes the filesystem
+adapter's cleverest piece of machinery disappear. `tests/store-uploads-parity.test.ts` runs the same
+two-simultaneous-claims race against both.
+
+**And the queue has not moved**, so this is not yet a deployable upload — see
+[durable-queue-and-uploads.md](../plans/durable-queue-and-uploads.md), whose first line is about why
+a durable record for one part of an ingest does not make the ingest durable.
 
 **Reads** all go through [`src/api.ts`](../../src/api.ts) — `loadArticle`, `loadTweets`,
 `loadGlossary`, `articleMetadata`, `listArticles`. (`deleteGlossary` is the one *write* that goes
