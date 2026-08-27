@@ -104,6 +104,15 @@ numbers.
 
 ### 2. Anthropic and OpenRouter disagree about what "input tokens" means
 
+> **Still true, and no longer a vendor problem — it is a *wire* problem.** Since 2026-08-27 both
+> shapes come from OpenRouter: the Messages wire returns Anthropic's additive counters, the chat wire
+> returns the inclusive ones. Everything below still holds, and the two readers are still needed;
+> what changed is that choosing a vendor no longer chooses a shape, and that a call now carries
+> `usage.cost` alongside whichever shape it used — so this arithmetic is the *check* rather than the
+> answer. See [ai-gateway.md](../project/ai-gateway.md) and
+> [prompt-caching.md § The two usage shapes are a wire difference now](../project/prompt-caching.md).
+
+
 This is the one that will silently produce a wrong bill, so it goes near the top.
 
 On **OpenRouter**, `prompt_tokens` *includes* the cached tokens. The fresh tokens are what is left
@@ -359,6 +368,15 @@ committed *before* the boundary, so the switch happens on time whether or not an
 
 That needs `call_started_at` on the row — the price is a property of when the call happened, not of
 when it was recorded — and a test that pins the boundary in UTC.
+
+### ~~Anthropic will tell us the dollars — just not per call, and not with this key~~
+
+> **Overtaken, 2026-08-27. Kept because the reasoning is still the reasoning; only the vendor
+> moved.** This section argued for reconciling our computed Anthropic totals against Anthropic's own
+> Admin Cost API, and made getting an Admin key [question 0](#questions-for-greg). Both are gone: no
+> call goes to Anthropic any more, and OpenRouter's `GET /api/v1/generation?id=…` answers the same
+> question **per call** rather than per UTC-day-and-model, on a key we already hold. What survives
+> is the argument for having *any* independent check at all, which is phase 5.
 
 ### Anthropic will tell us the dollars — just not per call, and not with this key
 
@@ -931,30 +949,43 @@ the twelve wirings are not finished until both are done.
 
 ## What gets built, and in what order
 
-> **Status, 2026-08-27, end of day.** The plan below was written for **two** transports and is now
-> partly overtaken: Greg approved routing everything through OpenRouter, and that is built. What
-> exists is the transport migration and the metering underneath the cost table, not the table
-> itself:
+> **Status, 2026-08-27, end of day.** This plan was written for **two** transports and is now half
+> overtaken. Greg approved routing everything through OpenRouter, and that is built and committed
+> (`fd93e27`). What follows is what is true rather than what this document originally proposed.
 >
-> - ✅ **All seven pipeline stages moved onto OpenRouter's Anthropic-compatible endpoint** via a new
->   shared gateway, [`src/messages-stream.ts`](../../src/messages-stream.ts). Same SDK, same
+> **Built:**
+>
+> - **All seven pipeline stages moved onto OpenRouter's Anthropic-compatible endpoint** via a shared
+>   gateway, [`src/messages-stream.ts`](../../src/messages-stream.ts). Same SDK, same
 >   `messages.stream`, same adaptive thinking and `cache_control` — a `baseURL` and a model spelling.
 >   Written up in [ai-gateway.md](../project/ai-gateway.md).
-> - ✅ **Every call now reports what it cost**, taken off the raw `message_delta` because
->   `finalMessage()` drops it. `provider` is pinned with `require_parameters: true`.
-> - ✅ **An ambient spend collector**, [`src/ai-spend.ts`](../../src/ai-spend.ts), on the
+> - **Those seven calls report what they cost**, taken off the raw `message_delta` because
+>   `finalMessage()` drops it. The provider is pinned with `require_parameters: true`.
+> - **An ambient spend collector**, [`src/ai-spend.ts`](../../src/ai-spend.ts), on the
 >   `AsyncLocalStorage` pattern [`src/owner.ts`](../../src/owner.ts) already uses — because a step is
->   not a call, which is the fact §1 below is entirely about.
-> - ✅ **A total on every step's log line** — `aiCalls`, `aiCost`, and `aiUnpriced` when some call
->   reported nothing. On the failure and cancel lines too.
-> - ❌ **No database row, no `npm run cost`, no per-article number, no spend page.** Phases 2–7.
+>   not a call, which is what [§1](#1-a-step-is-not-a-call) is entirely about.
+> - **A total on every step's log line** — `aiCalls`, `aiCost`, and `aiUnpriced` when a call reported
+>   nothing. On the failure and cancel lines too.
 >
-> **What the migration deletes from the phases below**: the Anthropic price table stops being the
-> source of truth and becomes the *check* on one, the Admin Cost API reconciliation goes entirely
-> (question 0 is withdrawn — OpenRouter's `x-generation-id` gives a settled per-call figure instead),
-> and the two-formula additive/subtractive split becomes a difference between *wires* rather than
-> between *vendors*. The schema, the owner attribution and the storage decisions are untouched: none
-> of them was ever about where the number came from.
+> **Not built, and the first bullet is the one that matters:**
+>
+> - ❌ **The other five call sites are not metered at all.** `explain`, `chat`, `search`,
+>   `embeddings` and `pdf-read` go down the chat wire through
+>   [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts), which does not call `recordSpend`.
+>   **An earlier version of this status block said "every call now reports what it cost". That was
+>   wrong** — it is seven of twelve, and the missing five are precisely the reader-facing ones, which
+>   is where Greg's *"spend limit per user"* actually bites. A pipeline stage is spending Greg's
+>   money on Greg's article; a chat turn is spending it on somebody else's question.
+> - ❌ No database row, no `npm run cost`, no per-article number, no spend page.
+>
+> **What the migration deletes from the phases below**: the price table stops being the source of
+> truth and becomes the *check* on one; the Anthropic Admin Cost API reconciliation goes entirely
+> (question 0 is withdrawn — `x-generation-id` plus `GET /api/v1/generation` gives a settled
+> per-call figure on a key we already hold); and the additive/subtractive split of
+> [§2](#2-anthropic-and-openrouter-disagree-about-what-input-tokens-means) becomes a difference
+> between *wires* rather than between *vendors* — still real, still needing two readers, but no
+> longer a vendor problem. The schema, the owner attribution and the storage decisions are
+> untouched: none of them was ever about where the number came from.
 
 Greg asked for all four of the things I offered, so all four are here. Ordered so that each phase is
 useful on its own and nothing later is needed to make something earlier true.
@@ -972,49 +1003,84 @@ Greg's yes rather than more research.
 
 **Phase 1 — the price table and the two formulas.** ✅ **Built, 2026-08-27** —
 [`src/pricing.ts`](../../src/pricing.ts) and [`tests/pricing.test.ts`](../../tests/pricing.test.ts),
-20 tests. Pure functions, no IO. The two OpenRouter fixtures are the measured probe responses
+25 tests. Pure functions, no IO. The two OpenRouter fixtures are the measured probe responses
 together with the cost OpenRouter reported, so the assertion is against a bill rather than against
 our own arithmetic; breaking the subtraction turns four of them red, which was checked rather than
-assumed. Still to do here: the effective-date rows, and absorbing the constants in
-[`evals/prompt-caching.ts`](../../evals/prompt-caching.ts), whose comment *"there is nowhere in the
-app that knows prices"* has stopped being true.
+assumed.
 
-**Phase 2 — the gateways.** `src/ai/anthropic.ts` and `src/ai/openrouter.ts`: timing, `call_id`,
-status, usage extraction, raw capture, and the record-from-`finally`. Plus the migration and the
-cost-store adapter. Proven against **one call of each transport** — an Anthropic stream, an
-OpenRouter SSE stream, an OpenRouter JSON call, embeddings — rather than one stage, because those
-four are the shapes that can differ.
+**Its job changed the same day.** It is no longer where a cost comes from — every call now carries
+OpenRouter's own figure — it is the independent number to diff against that one. That is a better
+job for it: a table nobody reads goes stale in silence, where a table used as a check announces its
+own staleness the first time a rate moves. Still to do: the effective-date rows, and absorbing the
+constants in [`evals/prompt-caching.ts`](../../evals/prompt-caching.ts), whose comment *"there is
+nowhere in the app that knows prices"* has stopped being true.
 
-**Phase 3 — move the remaining call sites behind the gateways**, and add the import rule as a test:
-nothing outside `src/ai/` may import `@anthropic-ai/sdk` or name an OpenRouter URL. That is the
-check the grep-for-a-recorder test could not be, because it fails on something a new call site
-cannot avoid writing.
+**Phase 2 — the gateway.** ✅ **Built, 2026-08-27**, and it is one rather than the two this plan
+proposed, because there is one vendor now. [`src/messages-stream.ts`](../../src/messages-stream.ts)
+does timing, the generation id, the outcome, usage extraction and the record — from a memoised
+`finalMessage()` rather than the `finally` this plan sketched, which turned out to matter: the SDK's
+own `finalMessage()` may be awaited twice, and the first version appended a second row when it was.
 
-**Phase 4 — a total at the end of every run.** The cheapest of the four and the one that makes cost
-stop being invisible day to day.
+Proven against a real call of each shape that can differ, per this plan's own instruction — plus one
+it did not think of, a live `arc` run end to end against the API (`upstream: Anthropic`, `$0.0206`,
+nothing unpriced). **The chat wire is not behind a gateway and is not metered**; that is now the
+substance of phase 3.
+
+**Phase 3 — the other five call sites.** ❌ **Not started, and this is the next piece of work.**
+`explain`, `chat`, `search`, `embeddings` and `pdf-read` reach OpenRouter through
+[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) and record nothing. Two things are
+needed and they are not the same size:
+
+- The **metering** — those responses already carry `usage.cost`, so this is reading a field that is
+  already on the wire, plus a `recordSpend` at each of the five. `src/embeddings.ts` already reads
+  `cost_details.upstream_inference_cost`; that call is nearly free of new work.
+- The **collector**, which is the real question. `collectSpend` is opened per *step* by
+  `src/jobs.ts`. A reader's chat turn is not a step: it is a request, so the scope belongs in
+  `handleApi` in [`src/routes.ts`](../../src/routes.ts) beside `runInRequest`, which is where the
+  owner already comes from ([§3](#3-the-owner-is-already-in-scope-everywhere-and-that-is-lucky)).
+  That is a small change in a busy file and should be its own commit.
+
+The **import rule** that was to arrive with this phase is ✅ **already built**, ahead of it and in a
+different form:
+[`tests/messages-stream.test.ts`](../../tests/messages-stream.test.ts) scans `src/` and fails if any
+file other than the gateway constructs an `Anthropic` client, opens a message stream, or awaits the
+unmetered `stream.finalMessage()`. Comment lines are stripped first, so the several files whose
+*comments* warn about that call do not read as violations. A GPT Sol review asked for it: the
+behavioural tests cannot catch a call site that was never written to run.
+
+**Phase 4 — a total at the end of every run.** 🟡 **Half built.** Each *step* logs its own cost
+(`aiCalls`, `aiCostNanos`, `aiCost`, `aiUnpriced`) on success, failure and cancel —
+[logging.md § What a step cost, in money](../project/logging.md). What does not exist is the *job*
+total: one line at the end saying what the whole ingest cost. Cheap, and worth doing once phase 3
+lands so it is not a total that quietly omits the reader-facing half.
 
 **Phase 5 — `npm run cost`.** Spend by day, stage, model, article and owner; the cache-saving
 figure; the unpriced count; the aborted-spend line; the oldest surviving raw response and the
-pruner's last successful run.
+pruner's last successful run. And it must print `unscopedCalls()` when it is not zero, or it is a
+total that silently omits rows.
 
-And **two reconciliations rather than one**, which between them are what stop the computed half
-drifting:
+**One reconciliation, not the two this plan proposed.** The Anthropic Admin Cost API half is gone
+with the vendor, and what replaces it is strictly better — per call rather than per UTC-day-and-model,
+on a credential we already have:
 
 ```
-  OpenRouter calls   our crossCheck  vs  usage.cost           per call, continuous
-  Anthropic calls    our sum by day  vs  /v1/organizations/cost_report   per day, per model
+  every call    our stored costNanos  vs  GET /api/v1/generation?id=<x-generation-id>
 ```
 
-The second is the one Greg's question earns. Group our Anthropic-SDK rows by **UTC day and model**
-and diff against Anthropic's own reported cost for the same bucket. Three caveats to build in rather
-than discover: the buckets are UTC and ours must be too; Anthropic has **no per-user dimension at
-all**, so this reconciles the total and never the attribution; and anything else on the same
-account — `evals/`, a one-off CLI run — lands in Anthropic's figure and not in ours, so those have
-to be either recorded too or explicitly subtracted. A diff that is always non-zero for a known
-reason is a check nobody reads.
+`total_cost` there matched the inline `usage.cost` exactly in a live probe. Two cautions to build in
+rather than discover: that endpoint's **token** counts are OpenRouter's normalised ones rather than
+native, so take the cost from it and the tokens from the response; and `upstream_inference_cost`
+reads `0` there while being populated on the sync response, which is where the BYOK caveat genuinely
+applies. The generation id is already stored on every `SpendRecord`.
+
+What the old second reconciliation was *for* has not gone away, though, and is now cheaper: the
+account-level check is `GET /api/v1/key`, which reports `limit`, `usage` and `limit_remaining` for
+the whole key. Our sum of rows against OpenRouter's own running total, with anything on the same key
+that we did not record — `evals/`, a one-off CLI run — as the expected difference. A diff that is
+always non-zero for a known reason is a check nobody reads, so that difference has to be nameable.
 
 **Phase 6 — the article's own number**, on the metadata page: what it cost to prepare, and what
-questions about it have cost since.
+questions about it have cost since. The second half needs phase 3.
 
 **Phase 7 — the spend page in the app.**
 
@@ -1049,7 +1115,83 @@ platform would be sitting on top of the work, not replacing it.
 Worth revisiting the day the want is dashboards, alerting or evals rather than a number. `ai_calls`
 would become one of their ingestion sources, so none of this is wasted.
 
-## What the GPT Sol review changed
+## What the second Sol review changed — the one that read the code
+
+The plan-stage review is the section below. This one read what was built, and it is the one worth
+weighting: a plan review cannot find a field taken off the wrong event or a test that was never red.
+Full text in
+[ai-cost-tracking-code-review-sol.md](ai-cost-tracking-code-review-sol.md). Verdict: *"not ready to
+land"*, with two blockers, and both were real.
+
+**Blocker 1 — the tests covered the pieces and never drove the thing.** Nothing exercised
+`streamMessage`, so the entire recording lifecycle could be deleted — both `record()` calls, the
+provider injection, every stage reverting to the unmetered `call.stream.finalMessage()` — with all
+eleven tests still green. Worse, the gateway's own docstring claimed `unscopedCalls()` was the
+backstop for that, **and that was false**: bypassing the wrapper calls no recorder at all, so it
+increments nothing. The two failures look identical from outside and only one is counted. Fixed with
+lifecycle tests against a stubbed transport plus the source scan in phase 3 above, and all four
+named mutations were checked red rather than assumed to fail.
+
+**Blocker 2 — the change failed the typecheck gate while vitest stayed green.**
+`tests/ai-spend.test.ts` had a `let` assigned inside a callback, which TypeScript narrows to `never`.
+Vitest transpiles without typechecking, so seventeen tests passed against a file that
+`npm run typecheck` refused. The cause was mine and worth writing down: I had been checking with
+`tsc --noEmit -p tsconfig.json` and grepping the output, and **that config does not cover `tests/`**
+— three tsconfigs, [typechecking.md](../project/typechecking.md), and `npm run typecheck` is the
+gate.
+
+Four more, each folded in:
+
+- **`finalMessage()` is memoised.** The SDK's is idempotent, so awaiting it twice is legal, and the
+  first version appended a second spend row when a caller did. Double-counting is worse than
+  undercounting: it is wrong in the direction that looks like the answer.
+- **Abort is read off `stream.aborted`, not the external signal.** The signal answers a different
+  question and got two cases backwards — `stream.abort()` with no signal read as an error, and a
+  provider failure racing a later signal abort read as a cancel.
+- **`isByok` is recorded.** Under BYOK OpenRouter's own cost is legitimately `0` while the upstream
+  bills elsewhere, so without this field a BYOK call is indistinguishable from a free one: `unpriced`
+  stays `0` and a total reads as correct while missing real money. Caught before the shape became a
+  column, which was the point of asking.
+- **The gateway derives the model from the task.** Each stage used to pass its own, so a stage could
+  be switched back to the unprefixed `CAPABLE_MODEL` — a 404 on every call — with
+  `tests/models.test.ts` still green, because it only ever asked `modelFor()` what it *would* return,
+  never what was sent. The outgoing bodies are now asserted.
+
+**And the one it could not close, which is still open.** OpenRouter's Messages reference contradicts
+itself about refusals, showing `stop_details.type: "refusal"` beside `stop_reason: "end_turn"`. It
+cannot be probed: triggering a genuine refusal means composing a request harmful enough to trip a
+safety classifier. So `wasRefused` in [`src/messages-stream.ts`](../../src/messages-stream.ts)
+accepts **either**, which is right whichever way the documentation gets fixed and costs one clause.
+The privacy rule forbidding `stop_details` anywhere in `src/` now has exactly one exception, and a
+test pins how small it is — one read, of `.type`, never stringified, never logged, boolean out.
+
+Sol also noted that the behavioural half of
+[`tests/stop-details.test.ts`](../../tests/stop-details.test.ts) runs six stages and **omits
+`ideas`**, so deleting that stage's refusal branch would pass today. Not yet fixed; it needs the
+child harness to run a seventh stage.
+
+### Two things that broke because an explanation went stale, not because code did
+
+Both found after the migration landed, both the same shape, and worth naming as a pattern rather
+than as two bugs.
+
+[`src/vercel-health.ts`](../../src/vercel-health.ts) said `ANTHROPIC_API_KEY` breaks *"the pipeline
+cannot run"* and `OPENROUTER_API_KEY` breaks only the reader-facing calls. True when written, false
+from the moment the pipeline moved. Left alone it would have warned a production deployment about a
+key nothing reads and — worse — told somebody staring at a dead ingest queue that the missing
+OpenRouter key only cost them explain, chat and search. That file's own header already warned that a
+wrong consequence is worse than none, and it had been wrong once before for the same reason.
+
+And the guard in [`src/models.ts`](../../src/models.ts) that refuses to start when a pipeline stage
+is set to the quick tier: it still fired at exactly the right moment, giving a reason — *"only
+reachable through OpenRouter"* — that is now true of every model in the app and therefore
+distinguishes nothing.
+
+**A `breaks` clause and a guard's error message are both claims about *other* code.** They go stale
+the moment that code moves, nothing in the file can notice, and the code around them keeps working
+perfectly — which is why neither showed up in any test. Only reading them did.
+
+## What the first Sol review changed — the one that read the plan
 
 Full review in
 [ai-cost-tracking-review-sol.md](ai-cost-tracking-review-sol.md); its verdict was *"do not build
@@ -1115,6 +1257,11 @@ the first migration checks the table is empty rather than assuming it.
 
 ## Questions for Greg
 
+**Nothing here blocks the next piece of work.** Phase 3 — metering the five reader-facing calls — is
+decided by your own stated goal (*"so we can define a spend limit per user"*) and needs no answer
+from you. These are the definitions that have to be settled before the shape hardens into a database
+column, which is phase 3's successor rather than phase 3.
+
 0. ~~**Can you get an Admin API key — and do you want to?**~~ **Withdrawn — this question died on
    2026-08-27.** It existed because the Anthropic half of the cost was our own arithmetic with
    nothing checking it, and the only check available was Anthropic's Admin Cost API, which needs a
@@ -1123,13 +1270,19 @@ the first migration checks the table is empty rather than assuming it.
    is both stronger and cheaper than the per-UTC-day-and-model reconciliation that question was for.
    See [the Skin section above](#the-option-that-deletes-the-arithmetic-entirely-and-it-works).
 
-   **Replaced by the real question: do we route everything through OpenRouter?** Everything below
-   still needs answering either way, but this one comes first because it changes what gets built.
-   The fidelity objections are gone — measured, not argued. What is left is a judgement only you can
-   make: **today an outage takes down half the app; afterwards it takes down all of it.** An
-   OpenRouter outage would stop ingest *and* chat *and* explain *and* search. Against that, one
-   vendor, one bill, provider-reported cost on every call, failover to a second upstream during an
-   Anthropic outage, and a large piece of this plan deleted.
+   ~~**Replaced by the real question: do we route everything through OpenRouter?**~~
+   **Answered, 2026-08-27, and built.** The fidelity objections were gone — measured, not argued —
+   and what was left was a judgement only Greg could make: today an outage takes down half the app,
+   afterwards it takes down all of it. His answer:
+
+   > I'm fine with gating everything through OpenRouter. Their reliability is good, and this gives
+   > us simplicity/consistency/flexibility.
+   >
+   > — Greg, 2026-08-27
+
+   So the single-vendor risk is accepted rather than overlooked, and it is written down here as the
+   thing that was traded away. [ai-gateway.md § What it cost](../project/ai-gateway.md) is where a
+   future reader will find it stated plainly.
 
 1. **A deleted user's spend history** — keep it or delete it? ~~Every other owned table cascades.~~
    **Wrong, and corrected by the review:** every owner FK in
