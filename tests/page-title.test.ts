@@ -130,7 +130,7 @@ describe("the pages either side of an article", () => {
   });
 
   it("gives every other route a name of its own", () => {
-    expect(pageTitle({ kind: "profile" })).toBe(`Your profile${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "profile" })).toBe(`Profile${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "design" })).toBe(`Design reference${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "login" })).toBe(`Sign in${SEP}${APP_NAME}`);
     expect(pageTitle({ kind: "callback" })).toBe(`Signing you in${SEP}${APP_NAME}`);

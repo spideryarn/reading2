@@ -179,11 +179,13 @@ function segments(spec: TitleSpec): string[] {
     case "add":
       return [spec.source ? `Adding ${clamp(host(spec.source))}` : "Adding an article", APP_NAME];
 
-    /* "You" is what the page calls itself and what the shelf's link to it
-       says — docs/project/reader-profile.md. It is a strange word on its own
-       in a window switcher, so this is the one label that gains a noun. */
+    /* "Profile" is what the page calls itself and what the shelf's link to it
+       says — docs/project/reader-profile.md. It was "You" until 2026-08-27,
+       and the title had to add a noun because a window switcher showing "You"
+       says nothing; the page's own name now carries that, so the title is the
+       name and nothing else. */
     case "profile":
-      return ["Your profile", APP_NAME];
+      return ["Profile", APP_NAME];
 
     case "design":
       return ["Design reference", APP_NAME];

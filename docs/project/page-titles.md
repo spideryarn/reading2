@@ -66,7 +66,7 @@ you are looking at it.
 | `/read/<slug>/tweets` | `<article> · Tweets · Spideryarn` | — |
 | `/add/<url>` | `Adding <host> · Spideryarn` | `Adding nytimes.com · Spideryarn` |
 | `/add/upload/<id>` | `Adding <filename> · Spideryarn` | `Adding the-paper.pdf · Spideryarn` |
-| `/profile` | `Your profile · Spideryarn` | — |
+| `/profile` | `Profile · Spideryarn` | — |
 | `/design` | `Design reference · Spideryarn` | — |
 | `/login` | `Sign in · Spideryarn` | — |
 | `/auth/callback` | `Signing you in · Spideryarn` | — |

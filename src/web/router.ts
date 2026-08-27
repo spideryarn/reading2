@@ -91,7 +91,7 @@ export type Route =
   /** The design reference — every primitive on one page. See DesignPage.tsx. */
   | { kind: "design" }
   /**
-   * You, rather than an article — `/profile`. See ProfilePage.tsx and
+   * Profile, rather than an article — `/profile`. See ProfilePage.tsx and
    * docs/project/reader-profile.md.
    *
    * Not under `/read/`, and that is the whole reason it is a route of its own

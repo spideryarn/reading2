@@ -147,7 +147,7 @@ export function ProfilePage() {
         Back to the shelf
       </Link>
 
-      <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">You</h1>
+      <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">Profile</h1>
       <p className="tw:mt-2 tw:mb-0 tw:text-sm tw:text-muted-foreground">
         What the model knows about who it is writing for.
       </p>

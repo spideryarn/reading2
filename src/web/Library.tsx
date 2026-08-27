@@ -274,7 +274,7 @@ export function Library() {
               title="What the model knows about who it is writing for"
             >
               <User size={13} />
-              You
+              Profile
             </Link>
             <Link
               href={DESIGN_HREF}
