@@ -138,9 +138,47 @@ async function users(): Promise<AdminUser[]> {
       die(`Unexpected answer from the admin API: ${text.slice(0, 400)}`);
     }
     all.push(...body.users);
-    if (body.users.length < 200) return all;
+    if (body.users.length < 200) return await withIdentities(all);
   }
   die("More than 10,000 users, which cannot be right for this project. Refusing to guess.");
+}
+
+/**
+ * Fill in each user's identities, one request each.
+ *
+ * **The list endpoint does not return them**, and the first version of this
+ * script read `identities` straight off it. That field comes back `null` for
+ * every row, so the providers column printed `—` for everybody — including an
+ * account Google had made ninety seconds earlier. It was not saying "no
+ * provider"; it was saying nothing at all, in the shape of an answer.
+ *
+ * Measured rather than reasoned about, once it looked wrong:
+ *
+ *     GET /admin/users        -> identities: null
+ *     GET /admin/users/{id}   -> identities: ["google"]
+ *
+ * The verdict this script printed was right anyway, off the second row and the
+ * mismatched email — which is the part worth being uncomfortable about. A check
+ * whose stated evidence is empty and whose conclusion is correct is the exact
+ * thing docs/reusable/silent-success.md is about, and it was in the check
+ * written to catch that pattern.
+ *
+ * N requests rather than reading `app_metadata.providers` off the list, which
+ * is free and nearly always agrees: `auth.identities` is the table the linking
+ * actually happens in, and this script exists to answer a question about
+ * linking. The projects here have single-figure user counts.
+ */
+async function withIdentities(users: AdminUser[]): Promise<AdminUser[]> {
+  const filled: AdminUser[] = [];
+  for (const u of users) {
+    const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${u.id}`, {
+      headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}` },
+    });
+    if (!res.ok) die(`Auth admin API said ${res.status} reading user ${u.id}.`);
+    const one = (await res.json()) as AdminUser;
+    filled.push({ ...u, identities: one.identities ?? [] });
+  }
+  return filled;
 }
 
 async function articleCounts(): Promise<Map<string, number>> {

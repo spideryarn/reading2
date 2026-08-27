@@ -397,12 +397,34 @@ SPIDERYARN_OWNER_ID = 001bb7a0-…   (mode: before)
   001bb7a0-…  greg@gregdetre.com  confirmed=true  providers=—  ← SPIDERYARN_OWNER_ID  5 article(s)
 ```
 
-**`providers=—` is the interesting part**, and it is not what "the email is confirmed, so it will
-link" assumed. That account has *no identities at all* — it was created through the admin API with
-no password and no provider, which is a state a normal sign-up never produces. Linking is still the
-expected outcome (GoTrue matches on the confirmed email before it creates a user), but the
-before-reading has moved this from *probably fine* to *probably fine, and here is the exact shape
-nobody has tested*. Which is what the script was for.
+**`providers=—` looked like the interesting part, and it was a bug in this script.** The admin
+*list* endpoint returns `identities: null` for every row — only the single-user endpoint fills them
+in — so that column was never saying "no provider", it was saying nothing at all, in the shape of an
+answer. Measured once it looked wrong:
+
+```
+GET /admin/users        -> identities: null
+GET /admin/users/{id}   -> identities: ["google"]
+```
+
+Fixed, and worth being uncomfortable about: the script's *verdict* was right throughout, off a
+second row and a mismatched email rather than off the evidence it was printing. A check whose stated
+evidence is empty and whose conclusion is correct is precisely
+[silent-success](../reusable/silent-success.md) — in the check written to catch it.
+
+**What the fixed reading says is the answer to the question this whole section asked:**
+
+```
+aa8b0dd2-…  greg@rehearsable.ai  confirmed=true  providers=google
+001bb7a0-…  greg@gregdetre.com   confirmed=true  providers=email, google  ← owner  5 article(s)
+```
+
+**Linking works.** `001bb7a0` was created through the admin API on 2026-08-26 with an email and
+nothing else; a Google sign-in on that address attached a `google` identity to *that* row rather
+than minting a new user, so the uuid every article hangs off is unchanged and the shelf is intact.
+The worried-about case — a second account with an empty shelf — did happen, but only because a
+*different* address (`greg@rehearsable.ai`, a test) was used. Two different emails are two people,
+correctly.
 
 If it does go wrong, nothing is lost — the rows are still on the original uuid, and the repair is an
 `update … set owner_id` per table. Knowing before is much cheaper than diagnosing after.
