@@ -32,6 +32,8 @@ import {
 class FakeRecorder {
   static instances: FakeRecorder[] = [];
   static failToConstruct = false;
+  /** Make the next N constructions throw, then behave. For the ladder tests. */
+  static constructFailures = 0;
   static failToStart = false;
   /** What this browser claims. Empty by default, so most tests get the "ask for nothing" path. */
   static supported = new Set<string>();
@@ -48,6 +50,10 @@ class FakeRecorder {
 
   constructor(_stream: unknown, opts?: { mimeType?: string; audioBitsPerSecond?: number }) {
     if (FakeRecorder.failToConstruct) throw new Error("nope");
+    if (FakeRecorder.constructFailures > 0) {
+      FakeRecorder.constructFailures -= 1;
+      throw new Error("nope");
+    }
     this.opts = opts ?? {};
     this.mimeType = opts?.mimeType ?? "audio/webm";
     FakeRecorder.instances.push(this);
@@ -69,6 +75,23 @@ class FakeRecorder {
   fail() {
     this.onerror?.();
   }
+  /**
+   * **The failure the specification actually describes**, which is three events
+   * and not one: `error`, then a terminal `dataavailable` carrying whatever was
+   * collected, then `stop`.
+   * https://www.w3.org/TR/mediastream-recording/#error-handling
+   *
+   * `fail()` above models only the first of them, which is what Chrome happened
+   * to do for the AAC bug (its terminal blob was empty) — and a fake that only
+   * reproduces the lucky case certifies the wrong event model. GPT Sol's
+   * review of the library decision, 2026-08-27, blocker 3.
+   */
+  failPerSpec(trailingBytes: number) {
+    this.onerror?.();
+    this.ondataavailable?.({ data: new Blob([new Uint8Array(trailingBytes)]) });
+    this.state = "inactive";
+    this.onstop?.();
+  }
 }
 
 function latest(): FakeRecorder {
@@ -82,6 +105,7 @@ const track = { readyState: "live", stop: () => {} } as unknown as MediaStreamTr
 beforeEach(() => {
   FakeRecorder.instances = [];
   FakeRecorder.failToConstruct = false;
+  FakeRecorder.constructFailures = 0;
   FakeRecorder.failToStart = false;
   FakeRecorder.supported = new Set();
   vi.stubGlobal("MediaStream", class {});
@@ -228,6 +252,83 @@ describe("when the encoder refuses the combination it said it supported", () => 
     latest().fail();
     expect(FakeRecorder.instances).toHaveLength(1);
     expect(await tape?.stop()).toBeNull();
+  });
+
+  /**
+   * **A failed attempt's last chunk must not land in its replacement's file.**
+   *
+   * The specification fires `error` *before* the terminal `dataavailable`, so
+   * at the moment we decide to retry, the failed recorder has not yet handed
+   * over what it collected. The retry starts, and then the old recorder's
+   * final blob arrives — into the shared `chunks` array now belonging to a
+   * different container. AAC bytes at the front of a WebM file: a blob that is
+   * the right size, has a plausible type, and does not play.
+   *
+   * It survived a browser only because Chrome's AAC failure hands over an
+   * *empty* terminal blob, so the size check swallowed it. An encoder that
+   * errors at 307ms with a timeslice of 1000ms can perfectly well have frames
+   * in hand. GPT Sol's review, blocker 3.
+   */
+  it("ignores the failed attempt's terminal chunk, which arrives after the retry", async () => {
+    allSupported();
+    const tape = recordTrack(track);
+    const first = latest();
+
+    vi.setSystemTime(new Date("2026-08-27T14:32:06"));
+    first.failPerSpec(2048);
+
+    const second = latest();
+    expect(second).not.toBe(first);
+    expect(second.mimeType).toBe("audio/webm;codecs=opus");
+
+    second.emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:16"));
+    const out = await tape?.stop();
+    // 4096, not 6144: the 2048 belonged to a container this file is not in.
+    expect(out?.blob.size).toBe(4096);
+    expect(out?.ext).toBe("webm");
+  });
+
+  /* The same late chunk seen from the other side. It also moves `bytes` off
+     zero, which is the flag that decides whether a *further* failure is a bad
+     guess worth retrying or a real one worth reporting — so one stray blob
+     silently converts the next retry into a giving-up. */
+  it("still retries after a failure whose terminal chunk was not empty", async () => {
+    allSupported();
+    const tape = recordTrack(track);
+
+    latest().failPerSpec(2048);
+    expect(FakeRecorder.instances).toHaveLength(2);
+    latest().failPerSpec(2048);
+    expect(FakeRecorder.instances).toHaveLength(3);
+
+    latest().emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:16"));
+    const out = await tape?.stop();
+    expect(out?.blob.size).toBe(4096);
+    expect(out?.ext).toBe("webm");
+  });
+
+  /* The ladder has to keep walking. An attempt that fails to *construct* is
+     not the end of the list, but the retry path only ever called `begin()`
+     once — so one unbuildable container in the middle stopped the search
+     while the one below it would have worked. GPT Sol's review, blocker 3,
+     second half. */
+  it("walks past a container that will not even construct, on the retry path", async () => {
+    allSupported();
+    const tape = recordTrack(track);
+    expect(FakeRecorder.instances).toHaveLength(1);
+
+    // The next construction throws; the one after it succeeds.
+    FakeRecorder.constructFailures = 1;
+    latest().fail();
+
+    // Two more constructions were attempted, and the survivor is the third
+    // container. A single `begin()` would have stopped at the unbuildable one.
+    expect(latest().mimeType).toBe("audio/webm");
+    latest().emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:16"));
+    expect((await tape?.stop())?.ext).toBe("webm");
   });
 
   it("gives up honestly when every container refuses", async () => {

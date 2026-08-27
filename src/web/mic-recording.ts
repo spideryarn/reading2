@@ -291,7 +291,20 @@ export function recordTrack(track: MediaStreamTrack): MicTape | null {
       return false;
     }
     next.ondataavailable = (e) => {
-      if (cancelled || e.data.size === 0) return;
+      /* **`rec !== next` first, and this is the load-bearing line.** The
+         specification's failure sequence is `error`, *then* a terminal
+         `dataavailable` carrying what was collected, *then* `stop` — so by the
+         time a replacement recorder is running, the one it replaced still has a
+         blob to hand over. Without this guard that blob lands in the shared
+         `chunks` array, and the reader is offered a file with one container's
+         bytes at the front of another's: right size, plausible type, does not
+         play. It also moves `bytes` off zero, which silently converts the next
+         retry into a giving-up.
+         https://www.w3.org/TR/mediastream-recording/#error-handling
+         GPT Sol's review of the library decision, 2026-08-27, blocker 3. It
+         hid behind Chrome, whose AAC failure hands over an *empty* terminal
+         blob — so the size check below happened to swallow it. */
+      if (rec !== next || cancelled || e.data.size === 0) return;
       /* **Checked before the chunk is kept, not after.** The first version
          stored it and then noticed, which bounds nothing: a delayed
          `dataavailable` can be any size, so the "cap" was a promise about a
@@ -318,23 +331,35 @@ export function recordTrack(track: MediaStreamTrack): MicTape | null {
          collected, though, means the container was fine and something else went
          wrong later; that is a real failure and the evidence contract says we
          offer nothing. */
-      if (bytes === 0 && at + 1 < attempts.length) {
-        at += 1;
-        // The clock restarts with the recorder, so `ms` describes the file we
-        // actually have rather than including the failed attempt.
-        startedAt = Date.now();
+      if (bytes === 0) {
         chunks.length = 0;
-        if (begin()) return;
+        /* **A loop, not one more go.** An attempt that will not even construct
+           is not the end of the ladder, and a single `begin()` here stopped the
+           search at it — leaving the container below it, which would have
+           worked, never tried. The opening walk down the list already does this;
+           the retry path did not. GPT Sol's review, blocker 3. */
+        while (at + 1 < attempts.length) {
+          at += 1;
+          // The clock restarts with the recorder, so `ms` describes the file we
+          // actually have rather than including the failed attempt.
+          startedAt = Date.now();
+          if (begin()) return;
+        }
       }
       errored = true;
       finished();
     };
+    /* Claimed *before* `start`, so that the guard in `ondataavailable` above
+       tells the truth from the recorder's first breath rather than from the
+       line after it, and put back if it will not start. */
+    const previous = rec;
+    rec = next;
     try {
       next.start(TIMESLICE_MS);
     } catch {
+      rec = previous;
       return false;
     }
-    rec = next;
     return true;
   };
 

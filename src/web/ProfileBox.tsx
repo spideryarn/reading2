@@ -174,10 +174,18 @@ export function ProfileBox({
             className={`prof-mic${dictation.phase === "listening" ? " on" : ""}${
               dictation.phase === "opening" ? " opening" : ""
             }`}
-            /* Two names, because the button does two things and a reader using
-               a screen reader gets no colour to tell them which. */
+            /* **An action button, not a toggle.** The name says what the
+               press will do, and there is no `aria-pressed` — which is the
+               same model the glyph already uses (a filled square meaning
+               "stop"), so the icon, the tooltip and the announced name all say
+               one thing. The APG allows either this or a fixed name carrying
+               state in `aria-pressed`; what it does not allow is both at once,
+               which is what was here before. Mixing them a second time via
+               `title` is just as bad — with an `aria-label` present, an
+               otherwise-unused `title` becomes the accessible *description*,
+               so the two must agree rather than merely not collide.
+               docs/research/microphone-library-options.md. */
             aria-label={dictation.armed ? "Stop dictating" : "Dictate"}
-            aria-pressed={dictation.armed}
             title={dictation.armed ? "Stop dictating" : "Dictate"}
             disabled={disabled}
             onClick={() => {
