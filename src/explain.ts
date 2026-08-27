@@ -53,7 +53,7 @@
  */
 import type { Block, Citation, Meta } from "./types.js";
 import { loadEnvLocal } from "./env.js";
-import { modelForOpenRouter } from "./models.js";
+import { modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import {
 
@@ -81,12 +81,19 @@ import {
 } from "./article-prompt.js";
 
 /**
- * Overridable with `SPIDERYARN_EXPLAIN_MODEL`. The default is whichever tier
- * src/models.ts puts the `explain` task on — this call used to name its own
- * model, which is how it came to be a version behind the rest of the app
- * without anyone noticing.
+ * What this call sends: whichever tier src/models.ts puts `explain` on, or
+ * `SPIDERYARN_EXPLAIN_MODEL` if that is set.
+ *
+ * This call used to name its own model, which is how it came to be a version
+ * behind the rest of the app without anyone noticing — and then it read the
+ * override itself, right here, which is how `/api/models` came to report a
+ * model the process was not using. `modelFor` answers both halves now.
+ *
+ * A function rather than a constant, so the environment is read per call
+ * exactly as the default parameter below used to read it. A module-load
+ * constant would be captured before some callers have run `loadEnvLocal()`.
  */
-export const DEFAULT_MODEL = modelForOpenRouter("explain");
+export const defaultModel = (): string => modelFor("explain");
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -440,7 +447,7 @@ export async function* explainStream({
   quote,
   deep = false,
   profile = null,
-  model = process.env.SPIDERYARN_EXPLAIN_MODEL || DEFAULT_MODEL,
+  model = defaultModel(),
   signal,
   timeoutMs = EXPLAIN_TIMEOUT_MS,
   stallMs = EXPLAIN_STALL_MS,

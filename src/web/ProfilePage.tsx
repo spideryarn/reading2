@@ -61,14 +61,52 @@ const CARD = "tw:rounded-lg tw:border tw:border-border tw:bg-card";
  */
 const RECENT = 8;
 
+/**
+ * One row of `GET /api/models`.
+ *
+ * `model` and `id` are two spellings of the same thing and both are here on
+ * purpose. Until 2026-08-27 there was only `id`, printed straight into the row,
+ * so this table showed seven jobs on `claude-sonnet-5` and three on
+ * `anthropic/claude-sonnet-5` — one model, two names, and a reader with no way
+ * to tell whether that was a difference or a prefix. `model` is the name; `id`
+ * is the exact string sent, kept because "what did it actually send" is a fair
+ * question and the answer should be a hover away rather than a grep. See
+ * src/models.ts § the third spelling.
+ */
+type ModelRow = {
+  task: string;
+  model: string;
+  id: string;
+  provider: string;
+  /** `"override"` when an environment variable, not the code, chose this model. */
+  source: "default" | "override";
+  effort?: string;
+};
+
+/**
+ * The wire, as a person would write it.
+ *
+ * This is the half that makes the table make sense rather than merely look
+ * tidy: seven jobs and three jobs run on the same model and get to it two
+ * different ways, and hiding the prefix without saying so would have replaced a
+ * confusing table with a quietly incomplete one. The name answers *which
+ * model*; this answers *and how*.
+ *
+ * Falls back to the server's own string for anything unlisted, on the same
+ * reasoning as `displayName` in src/models.ts — an unknown value should show
+ * itself, not be swallowed.
+ */
+const PROVIDER_LABEL: Record<string, string> = {
+  anthropic: "Anthropic",
+  openrouter: "OpenRouter",
+};
+
 export function ProfilePage() {
   useDocumentTitle(pageTitle({ kind: "profile" }));
 
   const profile = useProfile();
   const [shelf, setShelf] = useState<LibraryEntry[] | null>(null);
-  const [models, setModels] = useState<{ task: string; model: string; effort?: string }[] | null>(
-    null,
-  );
+  const [models, setModels] = useState<ModelRow[] | "error" | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -77,9 +115,12 @@ export function ProfilePage() {
       .then((body) => live && setShelf(body.articles))
       .catch(() => live && setShelf([]));
     apiFetch("/api/models")
-      .then((r) => readJson<{ tasks: { task: string; model: string; effort?: string }[] }>(r))
+      .then((r) => readJson<{ tasks: ModelRow[] }>(r))
       .then((body) => live && setModels(body.tasks))
-      .catch(() => live && setModels([]));
+      /* `[]` would render an empty card that looks exactly like a server with
+         nothing configured, which is the one answer this section must never
+         give by accident. `"error"` is a third state on purpose. */
+      .catch(() => live && setModels("error"));
     return () => {
       live = false;
     };
@@ -198,6 +239,10 @@ export function ProfilePage() {
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           {models === null ? (
             <p className="tw:m-0 tw:px-4 tw:py-3 tw:text-sm tw:text-muted-foreground">Loading…</p>
+          ) : models === "error" ? (
+            <p className="tw:m-0 tw:px-4 tw:py-3 tw:text-sm tw:text-muted-foreground">
+              Couldn't reach the server to ask what it is running.
+            </p>
           ) : (
             models.map((m) => (
               <div
@@ -205,17 +250,34 @@ export function ProfilePage() {
                 className="tw:flex tw:items-baseline tw:justify-between tw:gap-4 tw:px-4 tw:py-2 tw:text-sm"
               >
                 <span className="tw:text-muted-foreground">{m.task}</span>
-                <span className="tw:font-mono tw:text-xs tw:text-foreground">
+                {/* The name, then the two things that qualify it, both faint.
+                    `title` carries the exact string sent, because the name on
+                    screen is deliberately not that string — src/models.ts § the
+                    third spelling. */}
+                <span
+                  className="tw:font-mono tw:text-xs tw:text-foreground"
+                  title={`${m.id} · via ${PROVIDER_LABEL[m.provider] ?? m.provider}`}
+                >
                   {m.model}
                   {m.effort && <span className="tw:text-ink-faint"> · {m.effort}</span>}
+                  <span className="tw:text-ink-faint">
+                    {" · "}
+                    {PROVIDER_LABEL[m.provider] ?? m.provider}
+                    {/* An override is a one-off comparison somebody is running,
+                        not this app's configuration, and the difference matters
+                        to anyone reading the table to find out what the app
+                        does. */}
+                    {m.source === "override" && " · set in the environment"}
+                  </span>
                 </span>
               </div>
             ))
           )}
         </div>
         <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint">
-          Which model writes what. Nothing here is a setting — it is what the server is configured
-          with, shown so that "why is the glossary slower than the summaries" has an answer.
+          Which model writes what, and which way we reach it. Nothing here is a setting — it is what
+          the server is configured with, shown so that "why is the glossary slower than the
+          summaries" has an answer.
         </p>
       </Section>
     </main>

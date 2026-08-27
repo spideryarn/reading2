@@ -13,7 +13,8 @@
  *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
  *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
- *   GET    /api/models           which model writes what — { tasks: [{ task, model, effort? }] }
+ *   GET    /api/models           which model writes what
+ *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
  *   GET    /api/reader           `?slug=` → { profile: string | null, hasProfile: boolean }
  *   PATCH  /api/reader           { profile: string | null } → the same shape
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
@@ -121,7 +122,16 @@ import {
 import { errorFields, log, since } from "./log.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
-import { CAPABLE_MODEL, STAGE_EFFORT, TASK_TIER, modelForOpenRouter } from "./models.js";
+import {
+  type ArticleStage,
+  NON_TASK_MODELS,
+  type Provider,
+  STAGE_EFFORT,
+  TASK_TIER,
+  displayName,
+  effortFor,
+  resolveModel,
+} from "./models.js";
 import type {
   Block,
   ChatAnchor,
@@ -2218,30 +2228,83 @@ function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
  * cheaper than that argument.
  *
  * Names, never keys. `TASK_TIER` and `STAGE_EFFORT` hold model ids and effort
- * levels, which are facts about how this server is configured and not secrets —
- * but note what is deliberately absent: no environment variable names, no
- * provider ordering, and nothing read from `process.env` at all. What a reader
- * gets is what the code says, not what the machine is set to.
+ * levels, which are facts about how this server is configured and not secrets.
+ * What is still deliberately absent: no environment **variable names**, no keys
+ * and no provider ordering. `source` says an override happened; it does not say
+ * which switch to flick.
+ *
+ * **Four fields where there used to be one, since 2026-08-27.** This returned
+ * the raw wire id as `model`, and the page printed it — so seven rows said
+ * `claude-sonnet-5` and three said `anthropic/claude-sonnet-5`, which is one
+ * model wearing two names on a page whose whole job is to say which model
+ * writes what. `model` is now the human name (`displayName`), `id` is the wire
+ * id it was sent as, `provider` says which wire, and `source` says whether the
+ * environment overrode the code. The client shows the name and puts the rest in
+ * a title attribute; nothing is hidden, but nothing that is an addressing
+ * detail gets to look like a difference in models.
+ *
+ * **And the paragraph above used to end by boasting that this route reads
+ * nothing from `process.env` at all.** It was true and it was the bug: the
+ * three request-path calls each read a `SPIDERYARN_*_MODEL` override, so with
+ * one set this page named a model the server was not using while telling the
+ * reader it showed "what the server is configured with". `resolveModel` and
+ * `effortFor` are what it consults now, which are the same functions the calls
+ * themselves consult. Found by a GPT-5.6-sol review, 2026-08-27.
+ *
+ * **The request-path list is no longer duplicated here.** It used to be
+ * `task === "explain" || task === "chat" || task === "search"` on the next
+ * line, a second copy of something src/models.ts already knows — and the copy
+ * that decides what this page *claims*, which is the worst one to let drift.
+ * `providerFor` and `modelFor` own it now.
  */
-function modelsInUse(): {
-  tasks: { task: string; model: string; effort?: string }[];
-} {
+function modelsInUse(): { tasks: ModelReport[] } {
   const tasks = (Object.keys(TASK_TIER) as (keyof typeof TASK_TIER)[]).map((task) => {
-    /* The pipeline stages talk to the Anthropic SDK directly and so use
-       `CAPABLE_MODEL`; only the three request-path tasks go through
-       `modelFor`'s OpenRouter spelling. Showing the wrong one of those two
-       would be a page that quietly lies about what ran — src/models.ts § the
-       two spellings. */
-    const requestPath = task === "explain" || task === "chat" || task === "search";
-    const stage = task in STAGE_EFFORT ? STAGE_EFFORT[task as keyof typeof STAGE_EFFORT] : undefined;
+    /* `effortFor`, not `STAGE_EFFORT`, for the same reason `resolveModel` reads
+       the environment: `SPIDERYARN_PIPELINE_EFFORT` moves all four stages at
+       once and is exactly what somebody running a comparison has set. Reading
+       the raw table would have printed `high` beside a stage running at
+       `medium`. */
+    const effort = task in STAGE_EFFORT ? effortFor(task as ArticleStage) : undefined;
+    const { id, provider, source } = resolveModel(task);
     return {
       task,
-      model: requestPath ? modelForOpenRouter(task) : CAPABLE_MODEL,
-      ...(stage ? { effort: stage } : {}),
+      model: displayName(id),
+      id,
+      provider,
+      source,
+      ...(effort ? { effort } : {}),
     };
   });
-  return { tasks };
+  /* **The two rows that are not `Task`s.** The PDF transcriber and the
+     embedding model are on neither tier — deliberately, src/models.ts says why
+     — so they are in no table this loop can read, and the page listed ten
+     Claude rows while both of the app's calls to a model from somebody else
+     went unmentioned. A page titled "what's running" that omits them is not
+     wrong about any row; it is wrong about the set. They are also the rows that
+     make the names on screen legibly different *models* rather than different
+     spellings of one. */
+  const others = NON_TASK_MODELS.map((m) => ({
+    task: m.job,
+    model: displayName(m.id),
+    id: m.id,
+    provider: m.provider,
+    source: "default" as const,
+  }));
+  return { tasks: [...tasks, ...others] };
 }
+
+/** One row of `GET /api/models` — see `modelsInUse`. */
+type ModelReport = {
+  task: string;
+  /** What to show a person: one name per model, no provider prefix. */
+  model: string;
+  /** The exact string sent on the wire. */
+  id: string;
+  provider: Provider;
+  /** `"override"` when an environment variable, rather than the code, put that id there. */
+  source: "default" | "override";
+  effort?: string;
+};
 
 /**
  * Who is reading this article, as one string, resolved from the store.

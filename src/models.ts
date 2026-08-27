@@ -47,10 +47,28 @@
  * the worst place to discover a string-munging bug. Two literals cost one extra
  * line and cannot be wrong in a way that only shows up in production.
  *
+ * ## And a third spelling, which is the one a person reads
+ *
+ * The two above are addresses. Neither is the model's *name*, and on 2026-08-27
+ * `/profile` proved the difference by printing ten rows of raw wire id: seven
+ * saying `claude-sonnet-5` and three saying `anthropic/claude-sonnet-5`, every
+ * string correct and the page as a whole misleading, because a reader counting
+ * names counts two models. So there is now a `DISPLAY_NAME` table and a
+ * `displayName()` beside it — a table rather than a `split("/")`, for the same
+ * reason the paragraph above gives, and the reason is not hypothetical: the
+ * previous pair would have stripped to `claude-sonnet-4.5` against Anthropic's
+ * `claude-sonnet-4-5` and gone on disagreeing while looking mended.
+ *
+ * The rule that falls out of it: **a wire id is what we send, a display name is
+ * what we show, and nothing outside this file should be choosing between the
+ * two.** `modelFor(task)` gives the first, `displayName(id)` the second, and
+ * `providerFor(task)` says which wire a task is on — which is what stopped
+ * src/routes.ts keeping its own copy of the request-path list.
+ *
  * ## Why the quick tier has no Anthropic-SDK spelling
  *
  * Not an omission. GPT-5.6 Luna cannot be reached through `messages.create` at
- * all, so the six pipeline stages — which talk to Anthropic directly — cannot
+ * all, so the seven pipeline stages — which talk to Anthropic directly — cannot
  * change tier by editing a table. Moving one of them to the quick tier means
  * moving it onto OpenRouter first, which is a rewrite of the call and not a
  * config change. The three request-path calls are already on OpenRouter, so for
@@ -58,7 +76,7 @@
  *
  * `TASK_TIER` therefore says something slightly different for the two groups: a
  * pipeline row records a decision, a request-path row also enacts it. A row that
- * only records one is a row that can quietly be wrong, so the six of them are
+ * only records one is a row that can quietly be wrong, so the seven of them are
  * enforced at load instead — see the check under the table.
  *
  * ## What this is not, yet
@@ -92,7 +110,7 @@
  * only costs more; see docs/project/prompt-caching.md.
  *
  * **The completion ceilings, and this is the one that would bite first.**
- * explain sends `max_tokens: 1500`, chat 2,000, search 4,000, and those were
+ * explain sends `max_tokens: 1500`, chat 4,000, search 4,000, and those were
  * sized for a model whose thinking is not billed against them the same way.
  * Luna reasons by default and OpenRouter documents a 1,024-token floor for that
  * allocation, so explain could be left with a few hundred tokens of visible
@@ -125,7 +143,7 @@
  * the table.
  *
  * **What does not move: `STAGE_EFFORT`.** Its values are the Anthropic effort
- * ladder for the three article-reading stages, all of which are on the capable
+ * ladder for the four article-reading stages, all of which are on the capable
  * tier and staying there.
  *
  * ## Two ways this is quietly not what you think
@@ -140,10 +158,20 @@
  * pure configuration. Renaming the constant, as 2026-08-26 did, changes no
  * stored string and marks nothing stale.
  *
- * **The environment still wins.** Each call site keeps its own
- * `SPIDERYARN_*_MODEL` override, so a one-off comparison run does not need a
- * code change. This file is the default, not the authority.
+ * **The environment still wins, and this file now knows which variable.** A
+ * `SPIDERYARN_*_MODEL` override is still the way to run a one-off comparison
+ * without a code change — but the override used to be read at the three call
+ * sites and nowhere else, so `/api/models` could report a model the process was
+ * not using while promising the reader it showed "what the server is configured
+ * with". `MODEL_ENV_VAR` and `resolveModel` below are the one place that
+ * question is answered now, for the callers and the report alike.
  */
+
+/* The one import in this file, and it is here so that the display-name table
+   can claim to hold every model this app sends without repeating anybody's
+   literal. src/embeddings.ts owns that decision; this file only needs the
+   string. */
+import { EMBEDDING_MODEL } from "./embeddings.js";
 
 /**
  * **The capable tier, in the Anthropic SDK's spelling** — the pipeline stages
@@ -212,7 +240,15 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
 /** The two tiers a task can be on. */
 export type Tier = "capable" | "quick";
 
-/** Every job in this app that calls a model. */
+/**
+ * **Every job in this app that calls a model *and is on a tier*.**
+ *
+ * That qualifier is load-bearing and used not to be here. The PDF transcriber
+ * and the embedding model are model calls this app makes and are deliberately
+ * on neither tier — a tier is a judgment about how much reasoning a job needs,
+ * and neither of those is that kind of job. They are in `NON_TASK_MODELS`
+ * below, so that "not a tier decision" stops meaning "invisible".
+ */
 export type Task =
   | "toc"
   | "labels"
@@ -235,7 +271,7 @@ export type Task =
  * per task, it is a trade to be checked.
  *
  * **Flipping a row is not the whole of switching a task** — read the header's
- * list of what has to move with the model first. For the six pipeline tasks it
+ * list of what has to move with the model first. For the seven pipeline tasks it
  * is not even the start of one, and the check below the table says so out loud
  * rather than letting the edit look like it worked.
  *
@@ -269,28 +305,227 @@ export const TASK_TIER: Record<Task, Tier> = {
 };
 
 /**
- * The OpenRouter model id for a task, from its tier.
+ * **The OpenRouter model id for a tier.** Private, and it is private on purpose.
  *
- * Only the three request-path tasks (`explain`, `chat`, `search`) go through
- * this; the pipeline stages use `CAPABLE_MODEL` directly, because the Anthropic
- * SDK is the only thing they talk to. Asking for a pipeline task here is not an
- * error — the answer is a real model id — but it is not how any stage runs.
+ * It used to be `modelForOpenRouter(task)` and exported, which put two
+ * task-shaped functions in this file's public surface — one that knows which
+ * wire a task is on and one that does not — and the one that does not would
+ * cheerfully answer for `labels`, a stage that has never spoken to OpenRouter.
+ * A caller reaching for the wrong one of a similarly-named pair gets a real
+ * model id and a wrong answer, which is the shape of bug this whole file is
+ * organised against. So the task-level question has exactly one public answer
+ * now (`modelFor`), and this one takes a tier, which is the thing it actually
+ * depends on.
  */
-export function modelForOpenRouter(task: Task): string {
-  return TASK_TIER[task] === "quick" ? QUICK_MODEL_OPENROUTER : CAPABLE_MODEL_OPENROUTER;
+function openRouterIdForTier(tier: Tier): string {
+  return tier === "quick" ? QUICK_MODEL_OPENROUTER : CAPABLE_MODEL_OPENROUTER;
 }
 
+/** Which wire a task's model call goes down. */
+export type Provider = "anthropic" | "openrouter";
+
+/**
+ * **Which wire each task is on** — and the reason this is a `Record` rather
+ * than the two lists it replaced.
+ *
+ * A list plus "everything else is Anthropic" makes an unassigned task *work*:
+ * it gets the pipeline answer, sends nothing different, and is reported with
+ * the Anthropic spelling however it really ran. A `Record<Task, Provider>` can
+ * only be wrong by not compiling. `tests/models.test.ts` still checks the
+ * derived lists, but the guarantee that matters is this type.
+ *
+ * This fact used to have a second copy — `task === "explain" || task === "chat"
+ * || task === "search"` inside `modelsInUse` in src/routes.ts — and it was the
+ * copy that decided what the profile page *claimed*, while this file decided
+ * what ran. Two copies of that pair disagree silently.
+ */
+export const TASK_PROVIDER: Record<Task, Provider> = {
+  toc: "anthropic",
+  labels: "anthropic",
+  arc: "anthropic",
+  tweets: "anthropic",
+  glossary: "anthropic",
+  summarise: "anthropic",
+  ideas: "anthropic",
+  explain: "openrouter",
+  chat: "openrouter",
+  search: "openrouter",
+};
+
+/** Which wire this task's model call goes down. */
+export function providerFor(task: Task): Provider {
+  return TASK_PROVIDER[task];
+}
+
+const ALL_TASKS = Object.keys(TASK_PROVIDER) as Task[];
+
 /** The seven tasks that reach a model through the Anthropic SDK rather than OpenRouter. */
-const PIPELINE_TASKS: readonly Task[] = [
-  "toc", "labels", "arc", "tweets", "glossary", "summarise", "ideas",
+export const PIPELINE_TASKS: readonly Task[] = ALL_TASKS.filter(
+  (t) => TASK_PROVIDER[t] === "anthropic",
+);
+
+/** The three that reach it through OpenRouter — the calls a reader waits on. */
+export const REQUEST_PATH_TASKS: readonly Task[] = ALL_TASKS.filter(
+  (t) => TASK_PROVIDER[t] === "openrouter",
+);
+
+/**
+ * **The environment variable that overrides each task's model, or `null` for
+ * the tasks that have none.**
+ *
+ * `null` rather than a missing key, so adding a `Task` is a compile error here
+ * too — "this one has no override" should be a decision somebody made rather
+ * than a line nobody wrote.
+ *
+ * The seven pipeline stages have none because none of them reads one: they hand
+ * `CAPABLE_MODEL` straight to `messages.create`. `SPIDERYARN_PIPELINE_EFFORT`
+ * is not the counterexample — that overrides effort, not the model, and
+ * `effortFor` is where it lives.
+ */
+export const MODEL_ENV_VAR: Record<Task, string | null> = {
+  toc: null,
+  labels: null,
+  arc: null,
+  tweets: null,
+  glossary: null,
+  summarise: null,
+  ideas: null,
+  explain: "SPIDERYARN_EXPLAIN_MODEL",
+  chat: "SPIDERYARN_CHAT_MODEL",
+  search: "SPIDERYARN_SEARCH_MODEL",
+};
+
+/** What a task will really send, and whether anything overrode the code to say so. */
+export type ResolvedModel = {
+  /** The wire id, in the spelling this task's own provider wants. */
+  id: string;
+  /** Which wire it goes down. */
+  provider: Provider;
+  /** `"override"` when an environment variable put this id here. */
+  source: "default" | "override";
+};
+
+/**
+ * **What a task will actually send** — the one resolver, used both by the three
+ * calls that send it and by the route that reports it.
+ *
+ * **It reads the environment, and an earlier version of this function
+ * deliberately did not.** That was wrong, and a GPT-5.6-sol review of this
+ * change said so on 2026-08-27. The reasoning had been that `/profile` should
+ * show what the *code* says rather than what a machine is set to — but the page
+ * says, in its own words, that it shows "what the server is configured with",
+ * and with `SPIDERYARN_CHAT_MODEL` set it would have named a model chat was not
+ * using. A page whose whole purpose is to answer *which model writes what* must
+ * not have a second answer it cannot see. Overrides exist precisely so somebody
+ * can run a comparison; the moment one is set is the moment the question gets
+ * interesting.
+ *
+ * `source` is how it stays honest without lying in the other direction: the
+ * page can say a row came from the environment rather than from this file, so
+ * a reader is never told a one-off experiment is the app's configuration.
+ *
+ * Read at call time, not at module load, exactly like the code it replaced —
+ * the three call sites had `process.env.SPIDERYARN_*_MODEL || DEFAULT_MODEL` as
+ * a default parameter, which is evaluated per call. That matters here: several
+ * modules call `loadEnvLocal()` inside a function rather than at import, so an
+ * id captured at module load can be captured before `.env.local` has been read.
+ */
+export function resolveModel(task: Task): ResolvedModel {
+  const provider = TASK_PROVIDER[task];
+  const envVar = MODEL_ENV_VAR[task];
+  const override = envVar ? process.env[envVar] : undefined;
+  if (override) return { id: override, provider, source: "override" };
+  const id = provider === "openrouter" ? openRouterIdForTier(TASK_TIER[task]) : CAPABLE_MODEL;
+  return { id, provider, source: "default" };
+}
+
+/**
+ * **The model id a task actually sends** — the whole of it, environment
+ * included. This is the only task-level model question with a public answer.
+ */
+export function modelFor(task: Task): string {
+  return resolveModel(task).id;
+}
+
+/**
+ * **One human-readable name per model, whichever wire it went down.**
+ *
+ * The bug this exists for, 2026-08-27: `/profile` listed ten jobs and printed
+ * each one's raw wire id, so seven rows said `claude-sonnet-5` and three said
+ * `anthropic/claude-sonnet-5`. Every one of those strings was correct. The page
+ * was still wrong, because a reader looking at ten rows reads two names as two
+ * models, and the question the page exists to answer — *which model writes
+ * what* — got a different answer depending on which transport the code happened
+ * to use. The provider prefix is an addressing detail; it is not part of the
+ * model's name.
+ *
+ * **Literals, not `id.split("/").pop()`**, and for the same reason the header
+ * gives for not deriving one wire spelling from the other. Stripping the prefix
+ * works for exactly the current pair and would have failed for the pair before
+ * it: `anthropic/claude-sonnet-4.5` strips to `claude-sonnet-4.5`, which is not
+ * what the Anthropic SDK calls that model (`claude-sonnet-4-5`) — so the two
+ * rows would have gone on disagreeing while looking like they had been fixed.
+ * A table cannot be wrong that way; it can only be incomplete, and
+ * `displayName` says so out loud when it is.
+ *
+ * **Every id this app can send belongs here**, tier or no tier — which is why
+ * `PDF_READER_MODEL` and `EMBEDDING_MODEL` are in it. That sentence was here
+ * before either of them was, and was therefore false; a GPT-5.6-sol review
+ * caught it on 2026-08-27. An inventory that quietly means "the ones that were
+ * easy to enumerate" is worse than no inventory, because the next person trusts
+ * it. `tests/models.test.ts` checks the claim rather than repeating it.
+ */
+export const DISPLAY_NAME: Record<string, string> = {
+  "claude-sonnet-5": "claude-sonnet-5",
+  "anthropic/claude-sonnet-5": "claude-sonnet-5",
+  "openai/gpt-5.6-luna": "gpt-5.6-luna",
+  "voyageai/voyage-4": "voyage-4",
+};
+
+/**
+ * **The model calls this app makes that are not a `Task`**, in the shape the
+ * profile page wants them.
+ *
+ * Two of them, and neither belongs on a tier — a tier is a judgment about how
+ * much *reasoning* a job needs, and one of these transcribes a PDF while the
+ * other turns a paragraph into a vector. `PDF_READER_MODEL` and
+ * `EMBEDDING_MODEL` say why, each where it lives.
+ *
+ * They are here anyway, because "not a tier decision" and "not worth telling
+ * the reader about" are different claims, and a page called *what's running*
+ * was making the second one by accident: it listed ten Claude jobs and omitted
+ * both of the app's calls to a model from somebody else. Sharing an inventory
+ * does not merge the decisions.
+ *
+ * `EMBEDDING_MODEL` is imported rather than repeated. It lives in
+ * src/embeddings.ts because it was chosen by a measurement that belongs beside
+ * the code that ran it, and copying the string here to avoid one import is
+ * exactly the two-copies-of-one-fact problem this whole change is about.
+ */
+export const NON_TASK_MODELS: readonly { job: string; id: string; provider: Provider }[] = [
+  { job: "pdf", id: PDF_READER_MODEL, provider: "openrouter" },
+  { job: "embeddings", id: EMBEDDING_MODEL, provider: "openrouter" },
 ];
 
+/**
+ * A model id as a person should read it — the id itself if we have no better
+ * name for it.
+ *
+ * The fallback is the raw id rather than `"unknown"` on purpose: an unlisted
+ * model is a table somebody forgot to extend, and the honest thing then is the
+ * string that was really sent. Ugly on screen, which is the point — it is the
+ * only way anyone finds out.
+ */
+export function displayName(modelId: string): string {
+  return DISPLAY_NAME[modelId] ?? modelId;
+}
+
 /*
- * **Six of those rows would otherwise be a lie, and this is what stops them.**
+ * **Seven of those rows would otherwise be a lie, and this is what stops them.**
  *
  * A pipeline stage imports `CAPABLE_MODEL` and hands it to `messages.create`. It
  * never reads `TASK_TIER`. So writing `arc: "quick"` in a table that presents
- * all nine jobs identically would change nothing at all: no error, no warning,
+ * all ten jobs identically would change nothing at all: no error, no warning,
  * arc still on Sonnet, and a config file confidently saying otherwise. That is
  * docs/reusable/silent-success.md with the config file playing the part of the
  * check — the file you would go and read to confirm it worked is the file that

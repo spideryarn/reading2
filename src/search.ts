@@ -67,7 +67,7 @@
 import type { Block, Meta, SearchHit } from "./types.js";
 import { loadEnvLocal } from "./env.js";
 import { findQuote } from "./quote-match.js";
-import { modelForOpenRouter } from "./models.js";
+import { modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import {
   PROVIDER_ORDER,
@@ -95,8 +95,12 @@ import {
   underCacheFloor,
 } from "./article-prompt.js";
 
-/** Overridable with `SPIDERYARN_SEARCH_MODEL`; the default is the tier src/models.ts puts `search` on. */
-export const DEFAULT_MODEL = modelForOpenRouter("search");
+/**
+ * What this call sends: the tier src/models.ts puts `search` on, or
+ * `SPIDERYARN_SEARCH_MODEL` if that is set — see `resolveModel` there for why
+ * the override is read in that file rather than here.
+ */
+export const defaultModel = (): string => modelFor("search");
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -540,7 +544,7 @@ export async function* findPassagesStream({
   meta,
   blocks,
   criterion,
-  model = process.env.SPIDERYARN_SEARCH_MODEL || DEFAULT_MODEL,
+  model = defaultModel(),
   signal,
   timeoutMs = SEARCH_TIMEOUT_MS,
   stallMs = SEARCH_STALL_MS,

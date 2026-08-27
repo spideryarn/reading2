@@ -81,7 +81,7 @@ import {
   TOOL_CALL_LOST,
   saidNothing,
 } from "./messages.js";
-import { modelForOpenRouter } from "./models.js";
+import { modelFor } from "./models.js";
 import {
   CHAT_TOOLS,
   type ToolContext,
@@ -100,8 +100,12 @@ import {
   underCacheFloor,
 } from "./article-prompt.js";
 
-/** Overridable with `SPIDERYARN_CHAT_MODEL`; the default is the tier src/models.ts puts `chat` on. */
-export const DEFAULT_MODEL = modelForOpenRouter("chat");
+/**
+ * What this call sends: the tier src/models.ts puts `chat` on, or
+ * `SPIDERYARN_CHAT_MODEL` if that is set — see `resolveModel` there for why the
+ * override is read in that file rather than here.
+ */
+export const defaultModel = (): string => modelFor("chat");
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -663,7 +667,7 @@ export async function* converse({
   slug,
   profile = null,
   useTools = true,
-  model = process.env.SPIDERYARN_CHAT_MODEL || DEFAULT_MODEL,
+  model = defaultModel(),
   signal,
   timeoutMs = CHAT_TIMEOUT_MS,
   stallMs = CHAT_STALL_MS,

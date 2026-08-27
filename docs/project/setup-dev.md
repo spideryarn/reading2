@@ -80,9 +80,10 @@ the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
 ([chat-mode.md](../plans/chat-mode.md)). Without it the reading view works normally, selecting a
 passage returns an error into the dialog, and a chat message returns one into the thread.
 
-A variable already in the environment wins over the file, so
-`SPIDERYARN_CHAT_MODEL=anthropic/claude-opus-5 npm run dev` does what it looks like it does.
-The pipeline stages use the Anthropic SDK and want `ANTHROPIC_API_KEY` instead.
+**`.env.local` wins over the shell**, so `SPIDERYARN_CHAT_MODEL=… npm run dev` does *not* do what
+it looks like it does — put the line in the file instead. This paragraph said the opposite until
+2026-08-27, having been left behind by the reversal two sections down, which is where the reasoning
+is. The pipeline stages use the Anthropic SDK and want `ANTHROPIC_API_KEY` instead.
 
 `CODEX_API_KEY` is the odd one out: nothing in the app reads it. It is for
 [`scripts/run-codex.ts`](../../scripts/run-codex.ts), which dispatches a GPT/Codex subagent for
@@ -148,6 +149,65 @@ drifted a version behind.
 | **capable** | Claude Sonnet 5 — `claude-sonnet-5`, or `anthropic/claude-sonnet-5` | the Anthropic SDK *and* OpenRouter, one spelling each |
 | **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter only |
 | **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter only, and not a *tier* — see below |
+| **PDF reader** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter only, and not a *tier* either — `PDF_READER_MODEL` |
+
+### Three spellings, and only one of them is a name
+
+A model id is an address, and this app sends two different addresses for the same model — one for
+the Anthropic SDK, one for OpenRouter. **Neither of them is what the model is called.** The
+distinction cost nothing until something displayed one: on 2026-08-27 `/profile` listed all ten jobs
+with their raw wire ids, so seven rows read `claude-sonnet-5` and three read
+`anthropic/claude-sonnet-5`. Every string was the right thing to send, and the page was still wrong,
+because the question it exists to answer is *which model writes what* and it came back in two
+spellings depending on a transport detail the reader cannot see.
+
+So `src/models.ts` now separates the three jobs that one string was doing, and **nothing outside
+that file gets to choose between them**:
+
+| Ask for | With | You get |
+|---|---|---|
+| what a task actually sends | `resolveModel(task)` | `{ id, provider, source }` — the wire id in its own provider's spelling, and whether the environment chose it |
+| just the id | `modelFor(task)` | the same `id` |
+| which wire it goes down | `providerFor(task)` | `"anthropic"` or `"openrouter"` |
+| what to show a person | `displayName(id)` | one name per model, no provider prefix |
+
+**There is exactly one public task-level model function**, and that is deliberate. There used to be
+two — `modelFor` and `modelForOpenRouter` — one of which knew which wire a task was on and one of
+which did not, and the one that did not would cheerfully answer for `labels`, a stage that has never
+spoken to OpenRouter. Reaching for the wrong one of a similarly-named pair gets you a real model id
+and a wrong answer. The tier→OpenRouter-id helper is now private and takes a tier.
+
+**`resolveModel` reads `SPIDERYARN_*_MODEL`, and an earlier version of it deliberately did not.**
+That was wrong. The three request-path calls each read their own override, so `/api/models` could
+report the default while the call sent something else — on a page that says, in its own words, that
+it shows *what the server is configured with*. One resolver serves the callers and the report now,
+and `source` tells the page to add "set in the environment" rather than passing an experiment off as
+the app's configuration. The same applies to effort: the route calls `effortFor`, not raw
+`STAGE_EFFORT`, so `SPIDERYARN_PIPELINE_EFFORT` shows up too.
+
+Which task is on which wire is a `Record<Task, Provider>` (`TASK_PROVIDER`), not a list plus a
+default — so an unassigned task fails to compile rather than quietly getting the pipeline answer.
+`PIPELINE_TASKS` and `REQUEST_PATH_TASKS` are derived from it.
+
+Two things worth knowing about `displayName`. It is a **table of literals**, not
+`id.split("/").pop()` — the same rule the file applies to wire spellings, and not a hypothetical
+one: the previous model pair would have stripped to `claude-sonnet-4.5` against Anthropic's
+`claude-sonnet-4-5`, so the two rows would have gone on disagreeing while looking mended. And an id
+it does not know **falls back to the raw string**, which is ugly on screen on purpose — an unlisted
+model is a table somebody forgot to extend, and that is the only way anyone finds out.
+
+That request-path list used to have a second copy inside `modelsInUse` in
+[`src/routes.ts`](../../src/routes.ts) — the copy deciding what the page *claimed*, while this file
+decided what ran. [`tests/models.test.ts`](../../tests/models.test.ts) is the rest of the guard.
+
+`/profile` shows the name, the effort where there is one, and the provider, with the exact wire id
+on hover — and two extra rows for the **PDF transcriber and the embedding model**, both on no tier
+and therefore in no table the route can loop over, so a page called *what's running* was listing ten
+Claude jobs and quietly omitting both of the app's calls to a model from somebody else. They are in
+`NON_TASK_MODELS`; sharing an inventory does not merge the decisions, and neither of them is going
+on a tier.
+
+Most of the above beyond the first fix came from a GPT-5.6-sol review, 2026-08-27.
 
 **The embedding model is not one of the two tiers**, and is listed above only so there is one place
 that names every model this app calls. A tier is a choice about how much reasoning a task needs;
