@@ -48,6 +48,7 @@ import {
   revisionBlocks,
 } from "../src/db/schema.js";
 import { currentOwnerId } from "../src/owner.js";
+import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import { pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
 
@@ -157,18 +158,6 @@ when("the Postgres shelf and library search", () => {
         status: "published",
         title,
         fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
-        /* **The library's scalars, which a published revision always has.**
-           `publishRevision` and the importer both write them in the transaction
-           that publishes; a fixture without them was describing a row no writer
-           produces, and since 2026-08-28 the shelf reads them — so it was also
-           sending this suite down `listArticles`' recompute-and-warn fallback,
-           silently, on every run. `block_count` matters most: a published
-           revision with zero blocks is dropped from the shelf. */
-        wordCount: 12,
-        blockCount: 4,
-        partCount: 1,
-        sectionCount: 0,
-        rootGist: "A test article about nothing.",
         // A tree, because listArticles skips a revision without one.
         tree: {
           version: "1",
@@ -281,6 +270,43 @@ when("the Postgres shelf and library search", () => {
       html: `<p>${faintText}</p>`,
       gistable: true,
     });
+
+    /**
+     * **The library's scalars, derived rather than typed in.**
+     *
+     * A published revision always has them: `publishRevision` and the importer
+     * both write them, from the blocks and tree they are publishing, in the
+     * same transaction. A fixture without them describes a row no writer
+     * produces — and since 2026-08-28 the shelf *reads* them, so this suite was
+     * silently sending `listArticles` down its recompute-and-warn fallback on
+     * every run.
+     *
+     * The first attempt at fixing that wrote five plausible numbers by hand,
+     * and they were wrong: the article is 157 words, not 12.
+     * tests/store-shelf-reads.test.ts's invariant audit went red and named this
+     * fixture, which is exactly the job that audit exists for. So they come
+     * from `deriveLibraryScalars` over the rows that were just written.
+     */
+    for (const revisionId of [REVISION_ID, OLD_REVISION_ID, OTHER_REVISION_ID]) {
+      const blocks = await db
+        .select({ words: revisionBlocks.words })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.revisionId, revisionId));
+      const [revision] = await db
+        .select({ tree: articleRevisions.tree, excerpt: articleRevisions.excerpt })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, revisionId));
+      await db
+        .update(articleRevisions)
+        .set(
+          deriveLibraryScalars({
+            blocks,
+            tree: (revision?.tree ?? null) as Parameters<typeof deriveLibraryScalars>[0]["tree"],
+            excerpt: revision?.excerpt,
+          }),
+        )
+        .where(eq(articleRevisions.id, revisionId));
+    }
   });
 
   afterAll(async () => {

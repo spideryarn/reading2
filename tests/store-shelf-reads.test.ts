@@ -756,7 +756,13 @@ when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => 
    * about eight real articles, one of which genuinely has no stored title.
    */
   it("agree about every article on the shelf", async () => {
-    const entries = await pgArticleReader.listArticles({ archived: false });
+    const all = await pgArticleReader.listArticles({ archived: false });
+    /* **Real articles only.** Another suite's fixture can be renamed, archived
+       or torn down *while this runs* — vitest runs these files concurrently
+       against one database — so comparing two reads taken a moment apart
+       against a moving row is not a test of anything. It cost a run to a
+       fixture whose `title_override` was set between the two reads. */
+    const entries = all.filter((e) => !e.slug.startsWith("test-"));
     expect(entries.length).toBeGreaterThan(0);
 
     const disagreements: { slug: string; sql: string; ts: string | null }[] = [];
@@ -769,18 +775,13 @@ when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => 
       try {
         article = await pgArticleReader.loadArticle(entry.slug);
       } catch (err) {
-        /* **Only another suite's fixture, and only a 404.** The first version
-           caught everything, which meant that if the TypeScript title path
-           started failing for the one article that exercises the fallback, that
-           row was skipped and the test passed on the strength of the titled
-           ones — swallowing exactly the failure it exists to expose. GPT Sol's
-           fifth finding on the built code.
-
-           `test-` is the prefix every hand-built fixture in this suite uses; a
-           real article in `data/` never has it. Anything else, or any error
-           that is not a 404, is rethrown. */
-        const notFound = (err as { status?: number }).status === 404;
-        if (entry.slug.startsWith("test-") && notFound) continue;
+        /* **Rethrown.** The first version caught everything, which meant that if
+           the TypeScript title path started failing for the one article that
+           exercises the fallback, that row was skipped and the test passed on
+           the strength of the titled ones — swallowing exactly the failure it
+           exists to expose. GPT Sol's fifth finding on the built code. Foreign
+           fixtures, the only rows that can disappear mid-run, are filtered out
+           above rather than caught here. */
         throw err;
       }
       compared++;
@@ -863,11 +864,15 @@ when("every published revision's stored scalars", { timeout: 60_000 }, () => {
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId));
 
-    /* This file's own fixtures are excluded by name: one of them has its scalars
-       deliberately nulled, and another has them deliberately wrong for the
-       blockless case. Every other suite's fixtures are fair game — a published
-       revision is a published revision. */
-    const real = current.filter((r) => !r.slug.startsWith("test-shelf-reads-"));
+    /* **Real articles only**, and both halves of that are deliberate. This
+       file's own fixtures are excluded because one has its scalars nulled on
+       purpose and another has them deliberately wrong for the blockless case.
+       Every *other* suite's are excluded because their columns are somebody
+       else's to keep honest, and a red here for their fixture is a red in the
+       wrong file — it happened, correctly, and the fix belonged in
+       tests/store-shelf-pg.test.ts. What is left is `data/`, which is where the
+       writers under test actually write. */
+    const real = current.filter((r) => !r.slug.startsWith("test-"));
     expect(real.length).toBeGreaterThan(0);
 
     const wrong: { slug: string; stored: unknown; actual: unknown }[] = [];
