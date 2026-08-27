@@ -87,6 +87,21 @@ export async function copyArtefacts(
   for (const step of STEP_ORDER) {
     const parts = await readParts(from, slug, step);
     if (Object.keys(parts).length === 0) continue;
+    /* **All of a step's products, or none of it.** Copying one of `extract`'s
+       two outputs and then calling `finishStep` would record a step as having
+       completed while half of what it declares is missing — and an unstamped
+       step's run row is exactly what `articleMetadata` trusts. `has` requires
+       all-of-them for the same reason; a partial source is a broken fixture,
+       and a loud refusal beats a copy that looks like it worked.
+       GPT Sol, 2026-08-27; docs/plans/c1-c2-code-review-sol.md finding 5. */
+    const wanted = STEPS[step].produces;
+    if (Object.keys(parts).length !== wanted.length) {
+      const missing = wanted.filter((kind) => !(kind in parts));
+      throw new Error(
+        `cannot copy "${slug}": the source has some but not all of ${step}'s products — ` +
+          `missing ${missing.join(" and ")}. Finishing the step would claim it ran.`,
+      );
+    }
     /* **`beginStep` … `write` … `finishStep`, not `write` alone**, because a
        written artefact and a *completed step* are two different facts and only
        one of them is a file.

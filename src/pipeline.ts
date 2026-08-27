@@ -1067,40 +1067,39 @@ export const STEPS: Record<StepName, PipelineStep> = {
     ],
     produces: ["tree", "labels", "blocks"],
     /**
-     * **Stage 3's blocks, not stage 4's copy of them** — the one step where
-     * `inputHashFor` is the wrong helper, and the reason is worth the lines.
+     * **No `stamp`, and it is not an oversight — one was written and withdrawn
+     * on 2026-08-27.** Read this before adding one.
      *
-     * Every other stamped step consumes `data/<slug>/blocks.json`, so that is
-     * what `inputHashFor` reads. Stage 4's *input* is stage 3's output, and its
-     * copy of those blocks is one of its own products. Hashing the copy would
-     * be this step comparing its output against itself: it agrees by
-     * construction and can never report anything. So the question this asks is
-     * *was the tree built from the blocks stage 3 currently has*, which is
-     * exactly the thing that was unanswerable until 2026-08-27.
+     * Stage 4 cannot currently tell that stage 3 has run again: `stepIsDone`
+     * asks only whether its three artefacts exist. The obvious fix is a stamp
+     * hashing stage 3's blocks, and it works — `59e8e3a` had it, with tests.
      *
-     * **Only `inputHash`.** `labels.json` also carries a `version` and a
-     * `generator`, and comparing those would make every existing tree stale the
-     * next time the labels prompt moved — a real decision to take deliberately,
-     * not one to slip in beside a bug fix. `sameStamp` compares only the keys
-     * the expected stamp actually has.
+     * It was reverted because **`toc` re-running silently drops artefacts that
+     * are still marked current.** `arc` and `summary` are joined to the tree by
+     * exact block-**range** pair (`buildArcColumn` and the summary column in
+     * src/web/tree.ts), and an entry whose range matches no node is dropped
+     * from the reading view without a word. A rebuilt tree may legitimately
+     * choose different boundaries, so:
      *
-     * `null` is *we cannot tell*, which answers not-current: nothing records
-     * what such a tree was built from, and the alternative is serving a stale
-     * one for ever. Measured cost on this laptop when it landed: of nine
-     * articles, six unaffected, two already failing `has`, and one whose
-     * `labels.json` predates `sourceHash` and re-runs.
+     * - `arc` has no stamp at all, so it stays "done" and simply loses entries.
+     * - `summary` hashes only the blocks, so where the blocks did *not* change —
+     *   a tree we cannot date, rather than one we know is stale — it also stays
+     *   current and loses entries.
      *
-     * Landed ahead of the Postgres artefact store on purpose. Without a stamp,
-     * that adapter would have to answer "is the toc current" with a rule
-     * private to storage — a third independently written copy beside
-     * `publishRevision` and `articleMetadata`, which is precisely the shape of
-     * docs/postmortems/toc-status-never-checked.md.
+     * The tree's own comment in src/web/tree.ts has said as much all along:
+     * *"ids are positional and a re-run of `npm run toc` renumbers them"*.
+     *
+     * **So a stamp here needs consumer invalidation first**, which does not
+     * exist: `cascadeForce` is computed once from explicit force flags when the
+     * job is created (src/jobs.ts), and cannot hear a step deciding at run time
+     * that it is stale. Landing that is part of the transactional runner, not
+     * of a stamp.
+     *
+     * Consequence for the Postgres artefact store: with no stamp to compare, its
+     * `has` cannot answer "is the toc current" the way the other steps do, and
+     * must carry an explicit, documented `toc` case rather than pretending to
+     * parity. docs/plans/delete-the-importer.md § The build order for C.
      */
-    stamp: async (ctx, store) => {
-      const produced = await store.read(ctx.slug, "blocks", "blocks");
-      if (!produced?.blocks) return null;
-      return { inputHash: hashBlocks(produced.blocks) };
-    },
     async run(ctx) {
       const run = await generateToc({
         blocksPath: blocksPathFor(ctx),

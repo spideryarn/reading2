@@ -447,24 +447,32 @@ fields, and `NO_INPUT_HASH` must never be handed back as though it were a real r
 Seven commits, each green on its own, ordered so that the thing most likely to be wrong is proved
 earliest and nothing depends on an unproven piece.
 
-**C1. `toc` gets a real stamp — done, `59e8e3a`.** The piece that stops the adapter needing a
-freshness rule private to storage. `STEPS.toc` now stamps `{ inputHash }` over the **stage-3**
-`blocks` artefact rather than `toc`'s own copy of it, because stage 4 hashing the copy it made itself
-agrees by construction and can never report anything.
+**C1. `toc` gets a real stamp — built, then withdrawn.** `59e8e3a` added it; the review of the built
+code took it out again, and the reason is the most useful thing this landing produced.
 
-Only `inputHash`: `labels.json` also carries a `version` and a `generator`, and comparing those would
-make every existing tree stale the next time the labels prompt moved — a decision to take
-deliberately, not beside a bug fix.
+The stamp worked. What it exposed is that **`toc` re-running silently drops artefacts that are still
+marked current.** `arc` and `summary` are joined to the tree by exact block-**range** pair
+(`buildArcColumn` and the summary column in [`src/web/tree.ts`](../../src/web/tree.ts)), and an entry
+matching no node is dropped from the reading view without a word. A rebuilt tree may legitimately
+choose different boundaries. So `arc`, which has no stamp at all, stays "done" and loses entries; and
+`summary`, which hashes only the blocks, does the same wherever the blocks did not change.
 
-*Watched red:* four tests, two of which fail with the stamp removed. Cost measured before landing —
-of nine articles, six unaffected, two already failing `has`, and `constitution` (whose `labels.json`
-predates `sourceHash`) newly not-current, which is the right answer.
+**I got this wrong twice and the second time is the instructive one.** Sol's third round said C1
+would orphan consumers; I checked, found that consumers key on block ranges rather than tree node
+ids, and narrowed the finding to "arc has no stamp". That was half the check. Keying by range
+prevents an entry attaching to the *wrong* node; it does nothing about the entry matching *no* node.
+`src/web/tree.ts` has said so in a comment all along — *"ids are positional and a re-run of `npm run
+toc` renumbers them"* — and I read that comment while confirming the half I got right.
 
-*One thing it does not do, and `arc` is why.* Re-running `toc` does not invalidate anything
-downstream. That turns out to be safe — summaries and the rest key on **block-id ranges**, not tree
-nodes, and `toc` rewrites the blocks copy the stamped consumers read — but `arc` declares no stamp at
-all and so never re-runs on staleness, whatever changes. Pre-existing, not opened by C1, and now
-written down; § What the second review changed.
+A stamp here needs consumer invalidation first, and there is none: `cascadeForce` is computed once
+from explicit force flags when the job is created, and cannot hear a step deciding at run time that
+it is stale. That is a change to `src/jobs.ts` and belongs with D.
+
+*What survives:* a long comment on `STEPS.toc` saying why there is no stamp and what has to land
+first, so the next person to notice the gap finds the reasoning instead of repeating it. And a
+consequence for C4: with no stamp to compare, the adapter's `has` cannot answer "is the toc current"
+the way it does for other steps, and must carry an **explicit, documented** `toc` case rather than
+pretending to parity.
 
 **C2. `beginStep` and `finishStep` as fenced statements.** Two new functions in
 `src/store/pg-revisions.ts` beside `recordStepRun` rather than inside it — `recordStepRun` stays for

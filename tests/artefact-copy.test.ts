@@ -194,6 +194,36 @@ describe("copying an article that has only been fetched", () => {
     await rm(to, { recursive: true, force: true });
   });
 
+  it("refuses a source holding half a step, rather than finishing it", async () => {
+    /* `extract` declares two products. A source with one of them is a broken
+       fixture, and copying it would call `finishStep` on a step that never
+       completed — which `articleMetadata` reads as done for any unstamped step.
+       Loud beats plausible. */
+    const half = await mkdtemp(path.join(tmpdir(), "spideryarn-half-"));
+    const halfTo = await mkdtemp(path.join(tmpdir(), "spideryarn-half-to-"));
+    try {
+      await mkdir(path.join(half, "data", SLUG), { recursive: true });
+      await mkdir(path.join(half, "output"), { recursive: true });
+      // `extract` produces extractedHtml *and* meta; give it only the HTML.
+      await writeFile(path.join(half, "output", `${SLUG}.html`), "<p>half a step</p>", "utf8");
+
+      const locate = (root: string) => () => ({
+        dir: path.join(root, "data", SLUG),
+        htmlFile: path.join(root, "output", `${SLUG}.html`),
+      });
+      await expect(
+        copyArtefacts(
+          createFsArtifactStore(locate(half)),
+          createFsArtifactStore(locate(halfTo)),
+          SLUG,
+        ),
+      ).rejects.toThrow(/some but not all of extract/);
+    } finally {
+      await rm(half, { recursive: true, force: true });
+      await rm(halfTo, { recursive: true, force: true });
+    }
+  });
+
   it("copies the one step it has", () => {
     expect(sparse).toEqual(["fetch"]);
   });

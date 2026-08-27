@@ -78,7 +78,7 @@ import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
-import { REVISION_COLUMNS, ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
+import { REVISION_PROJECTIONS, ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
 
 const logger = log("store");
@@ -779,6 +779,39 @@ export async function openOrBeginJobDraft(opts: {
  * stand in the way of it, and does not pretend to have done it.
  */
 /**
+ * This job is running, holds this token, and owns this draft — or throw.
+ *
+ * Locked `for update`, so the answer cannot go stale between the check and
+ * whatever the caller does next inside the same transaction. Shared by
+ * `beginStepRun` and `finishStepRun` rather than written twice, which is the
+ * lesson of docs/postmortems/toc-status-never-checked.md: two inline copies of
+ * "is this row good" drift, and nothing says so.
+ *
+ * It takes the **job** lock and never the article lock. See the note on
+ * `beginStepRun` about the two orders that already exist in this file.
+ */
+async function requireLiveJobOwnsDraft(
+  tx: Tx,
+  job: { id: string; attemptId: string },
+  revisionId: string,
+): Promise<void> {
+  const [live] = await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.id, job.id),
+        eq(jobs.attemptId, job.attemptId),
+        eq(jobs.status, "running"),
+        eq(jobs.draftRevisionId, revisionId),
+      ),
+    )
+    .for("update")
+    .limit(1);
+  if (!live) throw new NotTheLiveAttempt(job.id);
+}
+
+/**
  * This step has started, and here is the claim that says who is running it.
  *
  * The Postgres half of `ArtifactStore.beginStep`, and the first thing that ever
@@ -791,8 +824,17 @@ export async function openOrBeginJobDraft(opts: {
  * current and still belong to a job pointed at a different revision, and
  * writing a step run into somebody else's draft is a fault nothing downstream
  * could untangle. The row is locked `for update` so the check cannot go stale
- * between here and the write, and the lock order — job before article — is the
- * one `openOrBeginJobDraft` already establishes and must not be deviated from.
+ * between here and the write.
+ *
+ * **This function takes the job lock and never the article lock**, which is what
+ * keeps it out of the deadlock that the two locks otherwise invite. Do not add
+ * an article lock here without reading the next paragraph.
+ *
+ * `openOrBeginJobDraft` takes job-then-article; `publishRevision` and
+ * `failRevision` take article-then-job. That inversion is real and predates
+ * this function — `openOrBeginJobDraft`'s claim that "every caller takes the two
+ * in one order" is not true of the file it sits in. GPT Sol, 2026-08-27;
+ * docs/plans/c1-c2-code-review-sol.md finding 2.
  *
  * **`NO_INPUT_HASH`, deliberately**, because a step that has not run yet has not
  * been *made from* anything. The real hash arrives with `finishStepRun`. Writing
@@ -809,20 +851,7 @@ export async function beginStepRun(
   tx: Tx,
 ): Promise<void> {
   const { revisionId, stepName, job } = opts;
-  const [live] = await tx
-    .select({ id: jobs.id })
-    .from(jobs)
-    .where(
-      and(
-        eq(jobs.id, job.id),
-        eq(jobs.attemptId, job.attemptId),
-        eq(jobs.status, "running"),
-        eq(jobs.draftRevisionId, revisionId),
-      ),
-    )
-    .for("update")
-    .limit(1);
-  if (!live) throw new NotTheLiveAttempt(job.id);
+  await requireLiveJobOwnsDraft(tx, job, revisionId);
 
   const values = {
     revisionId,
@@ -840,6 +869,20 @@ export async function beginStepRun(
     .onConflictDoUpdate({
       target: [revisionStepRuns.revisionId, revisionStepRuns.stepName],
       set: values,
+      /* **A token may not reopen a run it has already ended.**
+         
+         Without this, two callers holding the same live capability — a retry
+         that raced, a duplicated request — could turn `done/A` back into
+         `running/A`, clear `finishedAt`, and replace the recorded hash with
+         `unstamped`. The step would then look like one still in flight, and
+         whatever it had already produced would be reported unfinished.
+
+         A *different* attempt reopening the row is legitimate and stays
+         allowed: that is what a re-run is, and the job lock taken above
+         serialises it, so an attempt that gets this far is the live one.
+
+         GPT Sol, 2026-08-27; docs/plans/c1-c2-code-review-sol.md finding 4. */
+      setWhere: sql`${revisionStepRuns.status} = 'running' or ${revisionStepRuns.attemptId} is distinct from ${job.attemptId}::uuid`,
     });
 }
 
@@ -872,7 +915,7 @@ export async function finishStepRun(
   opts: {
     revisionId: string;
     stepName: StepName;
-    attemptId: string;
+    job: { id: string; attemptId: string };
     status: "done" | "error";
     inputHash?: string;
     implementationVersion?: string;
@@ -881,7 +924,21 @@ export async function finishStepRun(
   },
   tx: Tx,
 ): Promise<void> {
-  const { revisionId, stepName, attemptId } = opts;
+  const { revisionId, stepName, job } = opts;
+  const attemptId = job.attemptId;
+
+  /* **The job's own fence, before the row's.** The step row only knows which
+     token wrote it; it cannot know whether that token is still the live claim.
+     `failExpired` clears a lapsed job's token and marks it errored without
+     touching its step runs, so a swept worker that keeps going finds its row
+     still `running/A`, matches on both of the conditions below, and commits
+     `done` for a job that has already failed.
+
+     Found in review of the built code, which is why this repo weights that
+     above a plan review: the two row conditions look complete on their own.
+     GPT Sol, 2026-08-27; docs/plans/c1-c2-code-review-sol.md finding 1. */
+  await requireLiveJobOwnsDraft(tx, job, revisionId);
+
   const result = await tx
     .update(revisionStepRuns)
     .set({
@@ -1088,12 +1145,14 @@ export async function publishRevision(opts: PublishRevisionOptions): Promise<{
     const article = await lockArticle(tx, slug);
     if (!article) throw new PublishRefused(slug, ["there is no such article"]);
 
-    /* `REVISION_COLUMNS`, not `select()`. The bare form takes `raw_bytes` too —
+    /* A named projection, not `select()`. The bare form takes `raw_bytes` too —
        up to 32 MiB of source document, pulled across the wire so that four
-       fields can be checked and the tree read. Nothing below touches the bytes.
-       See src/store/pg.ts for the measurement. */
+       fields can be checked and the tree read. This used to share one selector
+       with every other revision read; since 2026-08-27 each read names its own
+       columns, and `publish` wants four. See `REVISION_COLUMN_POLICY` in
+       src/store/pg.ts, and docs/plans/glossary-read-latency.md. */
     const found = await tx
-      .select(REVISION_COLUMNS)
+      .select(REVISION_PROJECTIONS.publish)
       .from(articleRevisions)
       .where(eq(articleRevisions.id, revisionId))
       .limit(1);

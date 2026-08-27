@@ -115,7 +115,11 @@ const JOB_STEPS: JobStep[] = [{ name: "toc", label: "Building the table of conte
 let revisionId = "";
 
 /** A step run in exactly the state a case needs, with no happy path in between. */
-async function stepRow(status: "running" | "done" | "error", attemptId: string | null): Promise<void> {
+async function stepRow(
+  tx: Tx,
+  status: "running" | "done" | "error",
+  attemptId: string | null,
+): Promise<void> {
   const values = {
     revisionId,
     stepName: "toc" as const,
@@ -126,7 +130,7 @@ async function stepRow(status: "running" | "done" | "error", attemptId: string |
     finishedAt: status === "running" ? null : new Date(),
     attemptId,
   };
-  await getDb()
+  await tx
     .insert(revisionStepRuns)
     .values(values)
     .onConflictDoUpdate({
@@ -135,17 +139,29 @@ async function stepRow(status: "running" | "done" | "error", attemptId: string |
     });
 }
 
-const theRow = async () => {
-  const rows = await getDb()
+const theRow = async (tx: Tx) => {
+  const rows = await tx
     .select()
     .from(revisionStepRuns)
     .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "toc")));
   return rows[0];
 };
 
-/** `finishStepRun` opens no transaction of its own, so the caller supplies one. */
-const finish = (attemptId: string, status: "done" | "error" = "done") =>
-  getDb().transaction((tx) => finishStepRun({ revisionId, stepName: "toc", attemptId, status }, tx));
+const finish = (tx: Tx, job: { id: string; attemptId: string }, status: "done" | "error" = "done") =>
+  finishStepRun({ revisionId, stepName: "toc", job, status }, tx);
+
+/** Nothing this file made survives it. */
+async function cleanUp(): Promise<void> {
+  const db = getDb();
+  await db.delete(jobs).where(eq(jobs.slug, SLUG));
+  const [article] = await db.select().from(articles).where(eq(articles.slug, SLUG)).limit(1);
+  if (article) {
+    await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, article.id));
+    await db.delete(articleRevisions).where(eq(articleRevisions.articleId, article.id));
+    await db.delete(articles).where(eq(articles.id, article.id));
+  }
+  await closeDb();
+}
 
 when("who may finish a step", () => {
   beforeAll(async () => {
@@ -153,61 +169,90 @@ when("who may finish a step", () => {
     revisionId = begun.revisionId;
   }, 60_000);
 
-  afterAll(async () => {
-    const db = getDb();
-    await db.delete(jobs).where(eq(jobs.slug, SLUG));
-    const [article] = await db.select().from(articles).where(eq(articles.slug, SLUG)).limit(1);
-    if (article) {
-      await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, article.id));
-      await db.delete(articleRevisions).where(eq(articleRevisions.articleId, article.id));
-      await db.delete(articles).where(eq(articles.id, article.id));
-    }
-    await closeDb();
-  });
+  afterAll(cleanUp);
 
   it("refuses another attempt's token, on a step that is still running", async () => {
-    /* The attempt fence **alone**: the row is `running`, so the status
-       condition is satisfied and cannot be what refuses this. */
-    const mine = mintAttempt();
-    await stepRow("running", mine);
-
-    await expect(finish(mintAttempt())).rejects.toThrow(StepRunNotHeld);
-    expect((await theRow())?.status, "the row must be untouched").toBe("running");
+    /* The attempt fence **alone**: the row is `running` and the job is live, so
+       neither of the other two conditions can be what refuses this. */
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await stepRow(tx, "running", mintAttempt());
+      await expect(finish(tx, job)).rejects.toThrow(StepRunNotHeld);
+      expect((await theRow(tx))?.status, "the row must be untouched").toBe("running");
+    });
   });
 
   it("refuses a step that has already ended, even to the attempt that holds it", async () => {
-    /* The status fence **alone**: the token matches, so the attempt condition
-       is satisfied and cannot be what refuses this. Finishing twice is not
-       idempotent — the second call would overwrite the first's stamp. */
-    const mine = mintAttempt();
-    await stepRow("done", mine);
-
-    await expect(finish(mine)).rejects.toThrow(StepRunNotHeld);
+    /* The status fence **alone**: the token matches and the job is live.
+       Finishing twice is not idempotent — the second call would overwrite the
+       first's stamp and timestamps with a later run's. */
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await stepRow(tx, "done", job.attemptId);
+      await expect(finish(tx, job)).rejects.toThrow(StepRunNotHeld);
+    });
   });
 
   it("refuses a row that carries no token at all", async () => {
     /* The importer and every CLI run write rows with a null `attempt_id`, and
        `attempt_id = $token` is never true of NULL. So this falls out of the
-       fence rather than being special-cased — which is the rule src/db/schema.ts
-       states for the column: a run that cannot prove who wrote it cannot prove
-       it was not somebody stale. */
-    await stepRow("running", null);
+       fence rather than being special-cased — which is the rule
+       src/db/schema.ts states for the column: a run that cannot prove who wrote
+       it cannot prove it was not somebody stale. */
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await stepRow(tx, "running", null);
+      await expect(finish(tx, job)).rejects.toThrow(StepRunNotHeld);
+    });
+  });
 
-    await expect(finish(mintAttempt())).rejects.toThrow(StepRunNotHeld);
+  it("refuses a claimant whose job has been swept, however good its row looks", async () => {
+    /* The **job** fence, which the row conditions cannot supply. `failExpired`
+       clears a lapsed job's token and marks it errored without touching its
+       step runs, so a swept worker that keeps going finds its own row still
+       `running/A` — both row conditions satisfied — and would otherwise commit
+       `done` for a job that has already failed.
+
+       Found by GPT Sol reviewing the built code rather than the plan, which is
+       exactly the distinction this repo draws between the two. */
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await stepRow(tx, "running", job.attemptId);
+      // What the sweep does: the token goes, the step run is left alone.
+      await tx
+        .update(jobs)
+        .set({ status: "error", attemptId: null })
+        .where(eq(jobs.id, job.id));
+
+      await expect(finish(tx, job)).rejects.toThrow(NotTheLiveAttempt);
+      expect((await theRow(tx))?.status, "the row must be untouched").toBe("running");
+    });
+  });
+
+  it("refuses a live job that holds the token but owns a different draft", async () => {
+    await withClaimedJob(null, async (tx, job) => {
+      await stepRow(tx, "running", job.attemptId);
+      await expect(finish(tx, job)).rejects.toThrow(NotTheLiveAttempt);
+    });
   });
 
   it("lets the holder finish, and records the ending", async () => {
-    /* The control. Two refusal tests also pass against a `finishStepRun` that
-       refuses everything, and this is what notices. */
-    const mine = mintAttempt();
-    await stepRow("running", mine);
+    /* The control. Every refusal test above also passes against a
+       `finishStepRun` that refuses everything, and this is what notices. */
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await stepRow(tx, "running", job.attemptId);
 
-    await finish(mine);
+      await finish(tx, job);
 
-    const row = await theRow();
-    expect(row?.status).toBe("done");
-    expect(row?.finishedAt).not.toBeNull();
-    expect(row?.attemptId, "the token stays, as the record of who ran it").toBe(mine);
+      const row = await theRow(tx);
+      expect(row?.status).toBe("done");
+      expect(row?.finishedAt).not.toBeNull();
+      expect(row?.attemptId, "the token stays, as the record of who ran it").toBe(job.attemptId);
+    });
+  });
+
+  it("records an error ending too, and only the holder may", async () => {
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await stepRow(tx, "running", job.attemptId);
+      await finish(tx, job, "error");
+      expect((await theRow(tx))?.status).toBe("error");
+    });
   });
 });
 
@@ -330,6 +375,39 @@ when("who may begin a step", () => {
       await expect(
         beginStepRun({ revisionId, stepName: "toc", job: { id: job.id, attemptId: mintAttempt() } }, tx),
       ).rejects.toThrow(NotTheLiveAttempt);
+    });
+  });
+
+  it("will not let one token reopen a run it has already ended", async () => {
+    /* Two callers holding the same live capability — a retry that raced, a
+       duplicated request — must not turn `done/A` back into `running/A`, clear
+       `finishedAt`, and replace the recorded hash with `unstamped`. The step
+       would then look like one still in flight, and whatever it had already
+       produced would be reported unfinished.
+
+       A *different* attempt reopening the row is legitimate: that is what a
+       re-run is. Only the same token is refused, which is why the assertion
+       below is about the row surviving rather than about a throw — the upsert
+       simply declines to write. GPT Sol, finding 4. */
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await beginStepRun({ revisionId, stepName: "toc", job }, tx);
+      await finish(tx, job);
+      expect((await theRow(tx))?.status).toBe("done");
+
+      await beginStepRun({ revisionId, stepName: "toc", job }, tx);
+
+      const row = await theRow(tx);
+      expect(row?.status, "the ended run must stay ended").toBe("done");
+      expect(row?.finishedAt, "and must keep its ending").not.toBeNull();
+    });
+  });
+
+  it("refuses a job that is no longer running", async () => {
+    await withClaimedJob(revisionId, async (tx, job) => {
+      await tx.update(jobs).set({ status: "error" }).where(eq(jobs.id, job.id));
+      await expect(beginStepRun({ revisionId, stepName: "toc", job }, tx)).rejects.toThrow(
+        NotTheLiveAttempt,
+      );
     });
   });
 
