@@ -175,6 +175,13 @@ export type Component =
      Nothing in this component may carry a token, a `sub` or an email address;
      redaction below matches key paths and never text. */
   | "auth"
+  /* src/vercel-health.ts — GET /api/health, which is not a route in
+     src/routes.ts because it reports on the DEPLOYMENT rather than on the
+     application. Its lines are the other half of a deliberate bargain: that
+     endpoint is public, so a driver's error reaches the caller truncated to 200
+     characters and the whole of it comes here. Nothing else in the file logs —
+     everything it has to say, it says in the response. */
+  | "health"
   | "model"; // src/explain.ts, src/converse.ts, src/search.ts — a reader waiting
 
 /**

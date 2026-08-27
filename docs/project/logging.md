@@ -142,7 +142,7 @@ its assertions. `LOG_LEVEL` overrides all of it, which is how you debug a failin
 
 ## What gets logged, and where
 
-Five components, as a closed TypeScript union rather than free-form strings — a typo in a component
+Seven components, as a closed TypeScript union rather than free-form strings — a typo in a component
 name is invisible, because the line is still written and just never matches the filter built around
 the name you meant.
 
@@ -152,6 +152,8 @@ the name you meant.
 | `jobs` | [`src/jobs.ts`](../../src/jobs.ts) | the queue: enqueued, each step's transition, the outcome — and **what the step cost in money**, on every one of those three. See [ingest-queue.md](ingest-queue.md) |
 | `pipeline` | [`src/pipeline.ts`](../../src/pipeline.ts) | **what a step cost in tokens** — model, tokens in and out, `ms`. Its `model` is the stamp name (`claude-sonnet-5`), not the wire id the request carried; [setup-dev.md](setup-dev.md) says why those differ |
 | `store` | [`src/api.ts`](../../src/api.ts), [`src/comments.ts`](../../src/comments.ts) | the silent fallbacks, chiefly the fixture one |
+| `auth` | [`src/auth.ts`](../../src/auth.ts) | **only ever our side failing.** A refused token is not logged here — that is an ordinary 401 and the `http` line already says so. Nothing in this component may carry a token, a `sub` or an email address |
+| `health` | [`src/vercel-health.ts`](../../src/vercel-health.ts) | the two errors `GET /api/health` catches — the store check and the schema check. The endpoint is public, so the caller gets the driver's message truncated to 200 characters and the whole of it comes here. Trimming the response is only safe while the untrimmed copy is somewhere |
 | `model` | [`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts), [`src/search.ts`](../../src/search.ts) | the model calls with a reader waiting on them — explaining a selection, chat, and semantic search |
 
 ### The one that answers an open question

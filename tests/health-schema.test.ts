@@ -19,6 +19,27 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * The error lines the handler wrote. See the longer note in tests/health.test.ts
+ * for why this is a mock and not a spy on stdout: src/log.ts is silent under
+ * test and writes to fd 1 directly, so nothing observable from here would be.
+ */
+const logged = vi.fn();
+
+vi.mock("../src/log.js", async (importActual) => {
+  const actual = await importActual<typeof import("../src/log.js")>();
+  const silent = {
+    debug() {},
+    info() {},
+    warn() {},
+    error: logged,
+    child() {
+      return silent;
+    },
+  };
+  return { ...actual, log: () => silent };
+});
+
 /** Rows as `information_schema` would give them for one healthy table. */
 function row(column: string, extra: Record<string, unknown> = {}) {
   return {
@@ -109,6 +130,7 @@ async function callHealth(opts: {
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
+  logged.mockClear();
 });
 
 afterEach(() => {
@@ -153,6 +175,11 @@ describe("the schema block", () => {
     expect(body.schema.error).toContain("permission denied");
     expect(body.schema.missing).toBeUndefined();
     expect(status).toBe(503);
+    /* And the operator gets the whole of it. The caller's copy is truncated to
+       200 characters, which is only safe while the untruncated one is somewhere
+       — the same bargain the store check makes in tests/health.test.ts. */
+    const errors = logged.mock.calls.map(([fields]) => (fields as { err?: Error })?.err?.message ?? "");
+    expect(errors.join(" ")).toContain("permission denied for schema spideryarn");
   });
 
   it("truncates the error rather than handing a stranger the whole driver message", async () => {

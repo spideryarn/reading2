@@ -187,14 +187,26 @@ covers the wiring — missing column, failed query, filesystem store, coalescing
 was checked by deleting the integration and watching **6 of its 7 go red**, then restoring the file
 and confirming it byte-for-byte with `diff`.
 
-### One finding not taken
+### The finding that was deferred, and then taken
 
 Sol flagged `console.error` in a request path as a breach of
-[logging.md](../project/logging.md), which it is. Not changed: this block matches the store check
-directly above it, and that one's `console.error` is *pinned by a test* in
-`tests/health.test.ts` asserting an operator still gets the full text. Moving one leaves the file
-speaking two conventions; moving both means rewriting that test, which is a decision about the whole
-module rather than about this block. Worth doing — separately.
+[logging.md](../project/logging.md), which it is. It was left alone at first because the block
+matched the store check directly above it, and *that* one's `console.error` was pinned by a test in
+`tests/health.test.ts` asserting an operator still gets the full text — so moving one would leave the
+file speaking two conventions, and moving both meant rewriting somebody else's test.
+
+Both moved, separately, the same day. `log` gained a `health` component, and each site now logs the
+**error object** rather than a `message` plucked out of it — which is the part that matters beyond
+tidiness: `safeError` can only apply its allowlist to something it is handed whole, and a string
+assembled at the call site sails past redaction (logging.md rule 3). The caller still gets 200
+characters and nothing more.
+
+The test that pinned `console.error` now pins the logger instead, and it is a **mock rather than a
+spy on stdout** for a reason worth writing down: `src/log.ts` is `silent` under `NODE_ENV=test`, and
+its destination is a SonicBoom writing to fd 1 with `fs.writeSync` — so a `process.stdout.write` spy
+observes nothing whatever the handler does, and would have gone green on the day the logging was
+deleted. Checked by deleting both log calls and watching both tests go red, then restoring the file
+and confirming it byte-for-byte with `diff`.
 
 ## Still to do — the part that actually prevents a bad deploy
 
