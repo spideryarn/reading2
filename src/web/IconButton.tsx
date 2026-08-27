@@ -7,7 +7,7 @@
  * `ShelfEntry` uses `TitleEditor`, so importing it from there would have made a
  * cycle — which `npm run check` gates on (docs/project/static-analysis.md).
  */
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 export function IconButton({
   label,
@@ -15,15 +15,26 @@ export function IconButton({
   children,
   disabled,
   destructive,
+  ref,
 }: {
   label: string;
   onClick: () => void;
   children: ReactNode;
   disabled?: boolean;
   destructive?: boolean;
+  /**
+   * For callers that have to put focus back on this button.
+   *
+   * A plain prop rather than `forwardRef`: React 19 passes `ref` through like
+   * any other prop, and `forwardRef` is deprecated. TitleEditor.tsx is the one
+   * caller — an editor that replaces its own trigger has to give focus back
+   * when it closes, or the reader is dropped on `<body>`.
+   */
+  ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       disabled={disabled}

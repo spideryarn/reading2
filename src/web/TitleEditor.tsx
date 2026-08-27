@@ -22,7 +22,7 @@
  *
  * See docs/project/library.md § What you can do to a card.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Pencil, TriangleAlert } from "lucide-react";
 import type { LibraryEntry } from "../types.js";
 import { IconButton } from "./IconButton.js";
@@ -59,6 +59,11 @@ export function TitleEditor({
 }) {
   const [value, setValue] = useState(title);
   const ref = useRef<HTMLInputElement>(null);
+  /* The hint below is not decoration: it is the only place that says an empty
+     field restores the extracted title, and an unlabelled line under an input
+     is read by a screen reader either much later or not at all. GPT Sol,
+     2026-08-27. */
+  const hintId = useId();
 
   // Focus and select, so the common case — replacing the site's title wholesale
   // — is one keystroke rather than a drag.
@@ -82,6 +87,7 @@ export function TitleEditor({
         ref={ref}
         value={value}
         aria-label="Title"
+        aria-describedby={hintId}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Escape") onDone(undefined);
@@ -93,7 +99,7 @@ export function TitleEditor({
           className ?? "tw:font-prose tw:text-xl tw:leading-snug"
         }`}
       />
-      <span className="tw:mt-1 tw:block tw:font-sans tw:text-xs tw:text-muted-foreground">
+      <span id={hintId} className="tw:mt-1 tw:block tw:font-sans tw:text-xs tw:text-muted-foreground">
         Enter to save · Escape to cancel ·{" "}
         {/* Named only when it IS the extractor's title. Once the reader has
             renamed the article, `title` is their own — so naming it here
@@ -152,7 +158,7 @@ export interface ArticleRename {
  */
 export function useArticleRename(
   slug: string,
-  onRenamed: (title: string) => void,
+  onRenamed: (slug: string, title: string) => void,
 ): ArticleRename {
   const [editing, setEditing] = useState(false);
   /* Starts unknown and stays unknown until a write answers it — see
@@ -161,6 +167,16 @@ export function useArticleRename(
      from then on. */
   const [overridden, setOverridden] = useState<boolean | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Which write is the current one.
+   *
+   * Two renames can be in flight at once — submit, reopen the editor, submit
+   * again — and nothing makes the first response arrive before the second. The
+   * older answer would then be applied last and the reader would watch their
+   * newer title turn back into their older one, with both writes having
+   * succeeded. A counter is enough: only the latest request may report.
+   */
+  const seq = useRef(0);
 
   const begin = useCallback(() => {
     setError(null);
@@ -176,6 +192,7 @@ export function useArticleRename(
       // Cancelled, or Enter on an untouched field. Nothing to write.
       if (title === undefined) return;
       setError(null);
+      const mine = ++seq.current;
       apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -183,10 +200,21 @@ export function useArticleRename(
       })
         .then((r) => readJson<{ entry: LibraryEntry }>(r))
         .then(({ entry }) => {
+          if (seq.current !== mine) return;
           setOverridden(Boolean(entry.titleOverridden));
-          onRenamed(entry.title);
+          /* **The slug goes back with the title.** This resolves after the
+             component that owns it may have gone: the reader renames one
+             article, navigates, and the answer lands with a page about a
+             different article on screen. The caller holds the current address
+             and this one does not, so it says which article it is talking
+             about rather than assuming it is still the one being looked at.
+             GPT Sol, 2026-08-27. */
+          onRenamed(slug, entry.title);
         })
-        .catch((e: Error) => setError(e.message));
+        .catch((e: Error) => {
+          if (seq.current !== mine) return;
+          setError(e.message);
+        });
     },
     [slug, onRenamed],
   );
@@ -236,6 +264,32 @@ export function EditableTitle({
   /** The heading. Give it `tw:min-w-0 tw:flex-1` so a long title wraps rather than shoving the pencil off. */
   children: ReactNode;
 }) {
+  /**
+   * Put focus back on the pencil when the editor closes — but only if it would
+   * otherwise land nowhere.
+   *
+   * The two elements swap: pressing the pencil removes it and mounts the input,
+   * and Enter or Escape removes the input. React unmounts the element the
+   * reader is standing on, so focus falls to `<body>` and the next Tab starts
+   * again from the top of the document. That is the whole bug, and it is
+   * invisible to anybody using a mouse.
+   *
+   * **The `activeElement` test is the part that matters.** This editor commits
+   * on blur, so a reader who clicks a link is also closing it — and grabbing
+   * focus back then would yank them off whatever they had just clicked. If
+   * focus has already gone somewhere real, leave it there; only rescue the case
+   * where it went to the body.
+   */
+  const pencil = useRef<HTMLButtonElement>(null);
+  const was = useRef(rename.editing);
+  useEffect(() => {
+    const closed = was.current && !rename.editing;
+    was.current = rename.editing;
+    if (!closed) return;
+    const at = document.activeElement;
+    if (at === null || at === document.body) pencil.current?.focus();
+  }, [rename.editing]);
+
   return (
     <>
       {rename.editing ? (
@@ -250,7 +304,7 @@ export function EditableTitle({
           {children}
           {offer && (
             <span className="tw:mt-1 tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:hover-none:opacity-100">
-              <IconButton label="Edit title" onClick={rename.begin}>
+              <IconButton ref={pencil} label="Edit title" onClick={rename.begin}>
                 <Pencil size={14} />
               </IconButton>
             </span>

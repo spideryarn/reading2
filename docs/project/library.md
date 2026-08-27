@@ -222,7 +222,38 @@ anything.
 
 The metadata page withholds the pencil on the fixture, for the same reason its Delete button is
 withheld there: an address with no article of its own has no shelf row, so the PATCH would 404, and
-pressing the button is how you would find out.
+pressing the button is how you would find out. It withholds it **until the metadata request lands**,
+too — `provenance` is null both before the answer arrives and after it fails, so "not the fixture"
+and "not yet told" were the same value, and the pencil appeared for a moment on every address.
+
+### What a cross-family review found, and it was the slug
+
+Three of the six findings were real and one of them was the only bug here that could damage
+something. Worth writing down because none of them is visible from a browser:
+
+- **The masthead renamed `meta.slug`, not the address.** They are usually the same. They come apart
+  on exactly the addresses that matter: an unknown slug is answered with the committed fixture,
+  *meta.json and all*, so `/read/anything` gets a `meta.slug` of `noema-mythology-of-conscious-ai`.
+  Renaming through it PATCHed the real Noema article's shelf row while appearing to rename the thing
+  on screen, and reverted on reload. The route slug is also the one `loadShelf` used to pick the
+  title being drawn, so it was never the right one to send.
+- **A rename can resolve after the reader has gone.** The pages that start one unmount with the
+  article; `ArticlePage` does not. So the answer now carries the slug it is about, and the layered
+  title is stored as a `{ slug, title }` pair — the same shape, and the same reason, as `loaded`.
+- **Two writes in flight would land in arrival order.** Submit, reopen, submit again: the older
+  answer applied last turns the newer title back into the older one, with both writes having
+  succeeded. A sequence counter in the hook; only the latest may report.
+
+Two more were about the keyboard rather than about data. Focus falls to `<body>` whenever an editor
+replaces its own trigger, so the pencil is focused again when the editor closes — *unless focus has
+already gone somewhere real*, because this editor commits on blur and a reader who clicked a link
+must not be yanked back. And the hint under the input is the only place that says an empty field
+restores the extracted title, so it is wired to the input with `aria-describedby`.
+
+One finding is real and deliberately not fixed: **navigating away mid-edit loses what you typed**,
+because saving hangs off the input's blur and an unmount does not fire one. That is the shelf
+editor's behaviour too and always has been; committing on unmount would double-submit on the Escape
+path, which is a worse trade for the same keystroke.
 
 ### Shelf state: a fourth kind of reader state
 

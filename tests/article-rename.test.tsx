@@ -92,12 +92,17 @@ function patched(title: string, overridden: boolean): Response {
 
 let host: HTMLDivElement;
 let root: Root;
-let renamed: ReturnType<typeof vi.fn<(title: string) => void>>;
+let renamed: ReturnType<typeof vi.fn<(slug: string, title: string) => void>>;
 
-function mount(title = "The Barn Owl") {
-  renamed = vi.fn<(title: string) => void>();
+/**
+ * `slug` defaults to the article's own, and is passed separately on purpose:
+ * the two come apart on any address with no article of its own, which is the
+ * bug the third test below is about.
+ */
+function mount(title = "The Barn Owl", slug = SLUG) {
+  renamed = vi.fn<(slug: string, title: string) => void>();
   act(() => {
-    root.render(<Masthead article={article(title)} onRenamed={renamed} />);
+    root.render(<Masthead article={article(title)} slug={slug} onRenamed={renamed} />);
   });
 }
 
@@ -169,8 +174,10 @@ describe("renaming from the masthead", () => {
 
     await act(async () => {});
     // NOT "Owls, revisited": the store's answer is what the rest of the app
-    // must show, and a clear is the case where the two differ entirely.
-    expect(renamed).toHaveBeenCalledWith("Saved By The Server");
+    // must show, and a clear is the case where the two differ entirely. And the
+    // slug goes with it, because this resolves after the page that asked may
+    // have gone.
+    expect(renamed).toHaveBeenCalledWith(SLUG, "Saved By The Server");
   });
 
   it("clears the override with null rather than with an empty string", async () => {
@@ -184,7 +191,80 @@ describe("renaming from the masthead", () => {
       title: null,
     });
     await act(async () => {});
-    expect(renamed).toHaveBeenCalledWith("What The Site Called It");
+    expect(renamed).toHaveBeenCalledWith(SLUG, "What The Site Called It");
+  });
+
+  it("renames the address, not whatever meta.json happens to say", async () => {
+    /* **The bug this file exists for.** An address with no article of its own
+       is answered with the committed fixture — meta.json and all — so
+       `/read/anything` gets a `meta.slug` of `noema-mythology-of-conscious-ai`
+       (src/api.ts § loadArticle, example/meta.json). Renaming through that
+       PATCHed the *real* Noema article's shelf row while appearing to rename
+       the thing on screen, and reverted on reload. GPT Sol, 2026-08-27. */
+    renamed = vi.fn<(slug: string, title: string) => void>();
+    act(() => {
+      root.render(
+        <Masthead
+          article={{
+            ...article("The Mythology Of Conscious AI"),
+            meta: { ...article("The Mythology Of Conscious AI").meta, slug: "somebody-elses-slug" },
+          }}
+          slug="the-address-in-the-bar"
+          onRenamed={renamed}
+        />,
+      );
+    });
+    act(() => pencil().click());
+    type("Mine now");
+    submit();
+
+    expect((apiFetch.mock.calls[0] as [string, RequestInit])[0]).toBe(
+      "/api/library/the-address-in-the-bar",
+    );
+    await act(async () => {});
+    expect(renamed).toHaveBeenCalledWith("the-address-in-the-bar", "Saved By The Server");
+  });
+
+  it("lets the newer of two overlapping writes win", async () => {
+    /* Submit, reopen, submit again — and nothing makes the first answer arrive
+       before the second. Applied in arrival order, the reader watches their
+       newer title turn back into their older one with both writes having
+       succeeded. GPT Sol, 2026-08-27. */
+    const answers: Array<(r: Response) => void> = [];
+    apiFetch.mockImplementation(
+      () => new Promise<Response>((resolve) => answers.push(resolve)),
+    );
+    mount("The Barn Owl");
+
+    act(() => pencil().click());
+    type("First");
+    submit();
+    act(() => pencil().click());
+    type("Second");
+    submit();
+    expect(answers).toHaveLength(2);
+
+    // The second answer lands, then the first — the order that breaks it.
+    await act(async () => {
+      answers[1]?.(patched("Second", true));
+    });
+    await act(async () => {
+      answers[0]?.(patched("First", true));
+    });
+
+    expect(renamed).toHaveBeenCalledTimes(1);
+    expect(renamed).toHaveBeenCalledWith(SLUG, "Second");
+  });
+
+  it("puts focus back on the pencil rather than on the body", () => {
+    mount("The Barn Owl");
+    act(() => pencil().click());
+    act(() => {
+      input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    // React unmounts the element the reader is standing on, so without the
+    // rescue in EditableTitle the next Tab starts from the top of the document.
+    expect(document.activeElement).toBe(pencil());
   });
 
   it("sends nothing when the reader escapes", () => {
@@ -224,9 +304,9 @@ describe("renaming from the masthead", () => {
 
     expect(renamed).not.toHaveBeenCalled();
     expect(find("h1").textContent).toBe("The Barn Owl");
-    const alert = find('[role="alert"]');
-    expect(alert.textContent).toContain("Couldn't rename it");
-    expect(alert.textContent).toContain("No such article");
+    // The server's own sentence, not ours: the prose around it is not pinned
+    // here, per docs/project/copy.md.
+    expect(find('[role="alert"]').textContent).toContain("No such article");
   });
 });
 
@@ -260,7 +340,7 @@ describe("renaming from the metadata page", () => {
   async function page(dir: string) {
     apiFetch.mockResolvedValue(provenance(dir));
     await act(async () => {
-      root.render(<Metadata slug={SLUG} article={article("The Barn Owl")} onRenamed={vi.fn<(title: string) => void>()} />);
+      root.render(<Metadata slug={SLUG} article={article("The Barn Owl")} onRenamed={vi.fn<(slug: string, title: string) => void>()} />);
     });
   }
 
@@ -269,6 +349,31 @@ describe("renaming from the metadata page", () => {
     expect(find("h1").textContent).toBe("The Barn Owl");
     act(() => pencil().click());
     expect(input().value).toBe("The Barn Owl");
+  });
+
+  it("withholds it until it knows which address this is", async () => {
+    /* `provenance` is null both before the request lands and after it fails,
+       and `showingFixture` is therefore false in a state that is really "not
+       yet told". The first version drew the pencil for that moment on every
+       address, including the ones where pressing it PATCHes a row that does not
+       exist. GPT Sol, 2026-08-27. */
+    let answer: ((r: Response) => void) | null = null;
+    apiFetch.mockImplementation(() => new Promise<Response>((r) => (answer = r)));
+    await act(async () => {
+      root.render(
+        <Metadata
+          slug={SLUG}
+          article={article("The Barn Owl")}
+          onRenamed={vi.fn<(slug: string, title: string) => void>()}
+        />,
+      );
+    });
+    expect(host.querySelector('button[aria-label="Edit title"]')).toBeNull();
+
+    await act(async () => {
+      (answer as unknown as (r: Response) => void)(provenance(SLUG));
+    });
+    expect(host.querySelector('button[aria-label="Edit title"]')).not.toBeNull();
   });
 
   it("withholds it when the address has no article of its own", async () => {

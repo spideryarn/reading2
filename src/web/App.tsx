@@ -274,12 +274,26 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
    * Cleared with the payload when the slug changes, in the fetch effect — one
    * article's title must not survive into another's.
    */
-  const [renamed, setRenamed] = useState<string | null>(null);
+  const [renamed, setRenamed] = useState<{ slug: string; title: string } | null>(null);
   const fetched = loaded?.slug === slug ? loaded.article : null;
+  /* The slug beside the title, exactly as `loaded` carries one and for the same
+     reason: the PATCH behind a rename resolves after the reader may have moved
+     on, and the components that started it unmount with the article while this
+     one does not. Keeping the pair makes one article's title impossible to draw
+     over another's rather than merely unlikely. GPT Sol, 2026-08-27. */
+  const title = renamed?.slug === slug ? renamed.title : null;
   const article = useMemo(
     () =>
-      fetched && renamed ? { ...fetched, meta: { ...fetched.meta, title: renamed } } : fetched,
-    [fetched, renamed],
+      /* `!== null`, not truthiness: clearing an override restores the
+         extractor's title, and `Meta.title` may be the empty string. Read as
+         truthy that would silently fall through to `fetched`, which is still
+         carrying the override that was just cleared. */
+      fetched && title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched,
+    [fetched, title],
+  );
+  const renameTo = useCallback(
+    (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),
+    [],
   );
 
   useEffect(() => {
@@ -370,9 +384,9 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
   // view: switching view is meant to keep the fetch, which is the whole reason
   // it happens up here.
   if (view === "metadata")
-    return <Metadata key={slug} slug={slug} article={article} onRenamed={setRenamed} />;
+    return <Metadata key={slug} slug={slug} article={article} onRenamed={renameTo} />;
   if (view === "tweets") return <Tweets key={slug} slug={slug} article={article} />;
-  return <Reader key={slug} slug={slug} article={article} onRenamed={setRenamed} />;
+  return <Reader key={slug} slug={slug} article={article} onRenamed={renameTo} />;
 }
 
 /** The window width, as state, because the whole layout is computed from it. */
@@ -500,7 +514,7 @@ function Reader({
   slug: string;
   article: Article;
   /** Passed straight through to the masthead’s pencil — see Masthead.tsx. */
-  onRenamed: (title: string) => void;
+  onRenamed: (slug: string, title: string) => void;
 }) {
   useRenderCount("Reader");
   const geometry = useMemo(
@@ -1048,7 +1062,7 @@ function Reader({
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead article={article} onRenamed={onRenamed} />
+      <Masthead article={article} slug={slug} onRenamed={onRenamed} />
       <div className="controls">
         {/* The granularity controls belong to the table-of-contents mode, so
             they go with it. Leaving them on screen in another mode would offer

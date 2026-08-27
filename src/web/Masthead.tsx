@@ -57,6 +57,21 @@ import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 interface Props {
   article: Article;
   /**
+   * **The address, not `meta.slug`.**
+   *
+   * They are usually the same and once in a while they are not, which is the
+   * whole reason this prop exists: an address with no article of its own is
+   * answered with the committed fixture, meta.json and all, so `/read/anything`
+   * hands this component a `meta.slug` of `noema-mythology-of-conscious-ai`
+   * (src/api.ts § loadArticle, example/meta.json). Renaming through that would
+   * have PATCHed the real Noema article's shelf row while appearing to rename
+   * the thing on screen. GPT Sol, 2026-08-27.
+   *
+   * The route slug is also what `loadShelf` used to pick the title being drawn
+   * here in the first place, so it is the only slug this heading is about.
+   */
+  slug: string;
+  /**
    * The article has been renamed — take this title.
    *
    * Owned by `ArticlePage` in App.tsx, which holds the payload this masthead is
@@ -64,16 +79,16 @@ interface Props {
    * the same article at once. A masthead that kept the new title to itself
    * would disagree with the metadata page one click away.
    */
-  onRenamed: (title: string) => void;
+  onRenamed: (slug: string, title: string) => void;
 }
 
-export function Masthead({ article, onRenamed }: Props) {
+export function Masthead({ article, slug, onRenamed }: Props) {
   const { meta, tree } = article;
   /* The same rename the shelf offers, from the page you are actually reading —
      Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
      rather than here, and why this site cannot say whether the title on screen
      is the reader's own. */
-  const rename = useArticleRename(meta.slug, onRenamed);
+  const rename = useArticleRename(slug, onRenamed);
   // The counts live in stats.ts now, because the drawer's About panel needs the
   // same arithmetic and two copies of it would drift.
   const stats = useMemo(() => articleStats(article), [article]);

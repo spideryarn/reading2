@@ -274,7 +274,7 @@ export function Metadata({
    * the browser tab and the reading view one click away all change together —
    * the same reason the masthead's pencil reports upwards too.
    */
-  onRenamed: (title: string) => void;
+  onRenamed: (slug: string, title: string) => void;
 }) {
   const { meta, tree, arc } = article;
   const stats = useMemo(() => articleStats(article), [article]);
@@ -448,7 +448,14 @@ export function Metadata({
         <EditableTitle
           rename={rename}
           title={meta.title}
-          offer={!showingFixture}
+          /* **Only once we know.** `provenance` is null both before the request
+             lands and after it fails, and `showingFixture` is therefore false in
+             a state that is really "not yet told" — so the first version drew
+             the pencil for a moment on every address, including the ones where
+             pressing it PATCHes a row that does not exist. Withheld until the
+             answer is in, which is the same standard Delete holds itself to a
+             few sections down. GPT Sol, 2026-08-27. */
+          offer={provenance !== null && !showingFixture}
           inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
         >
           <h1 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
