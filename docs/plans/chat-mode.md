@@ -683,10 +683,101 @@ on its own once that has landed, and it would carry a real bug with it: **a rena
 cut is displayed and sent whole**, while both stores apply `titleFrom`, so it stays long until the
 next reload and then changes under the reader.
 
+### The box under the list, which saves the click
+
+Greg, 2026-08-27:
+
+> When I open Chat mode, it shows a list of previous chats, with a small button to start a new chat
+> in the top-right of the panel. Since that's frequently what the user will want to do, let's add a
+> text input box at the bottom that (when a message is input) automatically starts a new chat, to
+> save the user a click.
+
+So the list now ends in a composer, and typing a question into it and pressing Enter mints a
+conversation and sends the question into it in one go. The `+` in the header stays — it is the way
+to get an empty conversation with the suggestions in it, which is a different thing to want.
+
+It is the same [`Composer`](../../src/web/ChatPanel.tsx) the conversation uses, third use of it after
+[`ChatDialog`](../../src/web/ChatDialog.tsx), with a placeholder saying where the question is going:
+*"Ask something new…"* rather than *"Ask about this article…"*, because the box beneath a list of
+conversations has to say which one it is talking to.
+
+Two things make it safe, and each was written by a review finding the state it had missed. Both
+findings are the same shape: **the list being on screen does not mean what it looks like it means.**
+The panel picks between list and conversation with `threads.find`, so the list is also what a reader
+sees while the first fetch is in flight, and `?thread=` can still name a conversation — one from a
+bookmark that has not arrived, or one that was closed and discarded.
+
+- **The question goes down `onSendNew`, which always mints.** The ordinary `onSend` means *send to
+  the open conversation*, and `ChatBand` resolves that against `?thread=`. The first version used it,
+  on the reasoning that `?thread=` is null whenever the list is showing — which is exactly the thing
+  that is not true. A reader opening a stored `?thread=` from a bookmark, or from the floating
+  dialog's *"open in full chat"*, would have had their question **appended to that conversation**,
+  under a placeholder promising a new one, past the `busy` guard, and possibly on top of an answer
+  still arriving.
+- **The box is offered only once the fetch has landed on a list with something in it** —
+  `loaded && threads.length > 0`. Minting before the fetch lands is no better than joining: `refresh`
+  on arrival replaces the whole list with the server's snapshot
+  ([useChat.ts](../../src/web/useChat.ts) § refresh, `only === undefined`), taking the just-minted
+  conversation with it; every later frame of the answer then patches a row that is not there, so
+  **the reader's question disappears off the screen while its request carries on**. Both halves are
+  needed, and the second review's own suggested guard — a non-empty list — is what the third review
+  broke: press `+` before the fetch lands, type a draft, close the conversation, and `leave` above
+  keeps that thread *because* there is a draft in it. A list, still loading. `threads.length` stays
+  because an empty list is what the `+` and the empty panel's own button are for.
+
+The second detail: **it is passed `focusNonce={0}` and a focus counter of its own.** The composer
+takes the caret when the nonce rises, and that is right when a reader has just *asked* for somewhere
+to type — arriving at a list is not that, and a focused textarea turns the article's ↑/↓ into caret
+movement with nothing on screen saying why. A separate counter, because spending the panel's one
+here would leave the real composer unfocused the next time a conversation was started. `onSendNew`
+*does* raise it, so the caret carries into the conversation that opens, in the composer that has just
+replaced the one the reader typed into.
+
+Its draft is kept in a ref of its own rather than in the panel's `drafts` map, which is keyed by
+thread id: this box belongs to no conversation, so there is no id to key it by, and a question typed
+there and abandoned — for a row in the list, or for the loading state, which takes the box away
+entirely — is still there on the way back.
+
+[tests/chat-list-composer.test.tsx](../../tests/chat-list-composer.test.tsx) renders the panel and
+drives the box: it sends down the call that mints and never the one that joins, empties itself,
+ignores whitespace, never takes the caret, keeps a half-typed question across both ways of losing the
+box, is **absent in the three states above**, and is **there under a `?thread=` this panel has
+nothing for** — which is the state the first version got wrong and the one the fix has to keep
+working. Every one was watched failing first, against the wiring swapped back to `onSend` and against
+each half of the guard removed in turn.
+
+### What is left undone
+
+**The wipe-on-arrival race is `refresh`'s, not the composer's.** Any conversation minted before the
+initial fetch lands is replaced by the snapshot, and that is reachable today by pressing `+` fast
+enough — the composer only made it easy to reach, and the guard above only keeps *this* box out of
+it. There is a second way in that the guard does not cover either: **`loaded` is set by whichever
+refresh answers first, not by the last one still in flight.** Under `StrictMode` the mount effect
+runs twice ([main.tsx](../../src/web/main.tsx)), so in development the first response can turn the
+box on while the second is still on its way to replace everything under it. GPT-5.6's fourth pass
+found that one.
+
+The fix belongs in `useChat`: an initial `refresh` that merges rather than replaces, or that declines
+to overwrite a thread this client has already put on the screen, and a generation guard so a stale
+response cannot land at all. It wants its own piece of work and its own failing test, because it is
+the sort of thing that looks fine every time you try it by hand.
+
+**And one thing the tests cannot say.** They mock `onSendNew`, so they pin the *panel's* half of the
+contract — which call the question goes down, and when the box is offered at all. The other half,
+that `send(null, …)` mints rather than joins, is already exercised all through
+[use-chat-recovery.test.ts](../../tests/use-chat-recovery.test.ts). What is left untested is the one
+line between them, `ChatBand`'s `onSendNew`, because testing it means rendering `ChatBand` with a
+fake fetch and nothing in this repo does that yet. A narrow gap, but it is the classic one: both
+sides green, the value that crosses between them never exercised.
+
 ## What is still open
 
-- **Three of the review's fixes have no regression test**, because this repo has no way to render a
-  React component in a test — no `@testing-library/react`, no jsdom render anywhere. The clipboard
+- **Three of the review's fixes have no regression test**, because this repo had no way to render a
+  React component in a test — no `@testing-library/react`, no jsdom render anywhere. *That part is
+  out of date since 2026-08-27:* `createRoot` under `@vitest-environment jsdom` works, and
+  [tests/chat-list-composer.test.tsx](../../tests/chat-list-composer.test.tsx) renders this very
+  panel. The three fixes below still have no test; they are now merely untested rather than
+  untestable. The clipboard
   guard, the edit box surviving a `busy` flip, and `stick`/`away` agreeing are all verified by hand
   and by eye and by nothing else. Adding a component test runner is a dependency decision with a
   procedure attached ([third-party-library-selection.md](../reusable/third-party-library-selection.md))
