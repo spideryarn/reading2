@@ -70,7 +70,7 @@ import { currentOwnerId } from "../owner.js";
 import type { ChatAnchor, Citation, ChatMessage, ChatThread, ToolRun } from "../types.js";
 import type { ChatStore, SweepOptions } from "./contracts.js";
 import { CHAT_SWEPT, requireTail } from "./fs.js";
-import { notFound, requireSlug } from "./pg.js";
+import { notFound, ownedSlug, requireSlug } from "./pg.js";
 
 const logger = log("store");
 
@@ -99,7 +99,7 @@ async function articleIdFor(slug: string, db: Db | Tx = getDb()): Promise<string
   const rows = await db
     .select({ id: articles.id })
     .from(articles)
-    .where(eq(articles.slug, slug))
+    .where(ownedSlug(slug))
     .limit(1);
   const found = rows[0];
   if (!found) throw notFound(slug);

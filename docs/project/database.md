@@ -114,7 +114,7 @@ npm run db:export -- --out /tmp/rollback   # and back out again
 | [`src/store/index.ts`](../../src/store/index.ts) | which store is in use. **No fallback lives here**, by design |
 | [`src/store/pg.ts`](../../src/store/pg.ts) · [`pg-comments.ts`](../../src/store/pg-comments.ts) | the Postgres reader and comment store |
 | [`src/store/import.ts`](../../src/store/import.ts) · [`export.ts`](../../src/store/export.ts) | the importer, and the exporter that is the rollback |
-| [`src/owner.ts`](../../src/owner.ts) | who owns a row — the one file the beta gate has to change |
+| [`src/owner.ts`](../../src/owner.ts) | who owns a row — the request-scoped owner, and the environment's when there is no request |
 | [`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) | both stores must answer identically, compared as the **API-shaped** result |
 | [`tests/store-artefact-manifest.test.ts`](../../tests/store-artefact-manifest.test.ts) | a new artefact beside an article turns up as a red test rather than as archaeology |
 
@@ -138,9 +138,16 @@ touch anything storage-shaped:
   rows would have broken a documented behaviour. See [block-ids.md](block-ids.md).
 - **The tree stays JSONB; the blocks become rows.**
 - **`owner_id uuid not null references auth.users(id)`, from day one** — populated with the session
-  user, so no query above the adapter changes when a second person is let in. This is the line that
-  decided [the auth choice](auth.md). `not null` on purpose: a row with no owner is not a state this
-  system has.
+  user. This is the line that decided [the auth choice](auth.md). `not null` on purpose: a row with
+  no owner is not a state this system has.
+
+  It said "so no query above the adapter changes when a second person is let in", and **that was
+  wrong in the way that matters**. Having the column is not having the `where`. Nothing filtered on
+  it until 2026-08-27, and because `articles.slug` is globally unique the second person did not get
+  an empty library — they got the first one's. Every path from a slug to an article now goes through
+  `ownedSlug()` in [`src/store/pg.ts`](../../src/store/pg.ts), which is the only sanctioned spelling
+  and the thing a test greps for; [auth.md § Whose data is it](auth.md#whose-data-is-it) has the
+  design and [`src/owner.ts`](../../src/owner.ts) has where the id comes from.
 - **Drizzle for data, Supabase for Auth alone** — over `pg`, through Supabase's transaction-mode
   pooler. Greg reversed the original `supabase-js` choice once he decided the API layer, not RLS, is
   the security boundary: without RLS, PostgREST contributes only its restrictions, and every

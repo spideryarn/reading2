@@ -1061,6 +1061,89 @@ one retry so no loop, replayable bodies, and the success body untouched so `useC
 
 ---
 
+## The blocker, and what Greg decided
+
+GPT Sol's review of the built code led with one finding and would not be talked out of it:
+
+> **Blocker — authentication does not provide authorization or ownership.** `requireUser()` returns
+> an identity, but `routes.ts` discards it… any person who can create a Supabase account can see and
+> change the same library, profile, chats, searches and reader state, and can run paid model
+> operations. **This is more serious than the plan's description of a shared wallet.**
+
+That last sentence is the whole of it. The risk Greg had accepted twice — *"I'm not worried about the
+risk without the allowlist"* — was about **money**: somebody spending `ANTHROPIC_API_KEY`. Nobody had
+said out loud that `articles.slug` is globally unique, so a stranger who signed in did not get an
+empty shelf to fill with their own reading. They got Greg's, with Delete on every card.
+
+Sol offered two fixes, and on 2026-08-27 Greg was shown both and chose the second:
+
+> - reinstate the one-email allowlist as the small beta-safe fix; or
+> - carry the returned user identity through request-scoped stores and constrain every read and write
+>   by that owner.
+
+### What was built
+
+The design and the reasoning live in [auth.md § Whose data is it](../project/auth.md#whose-data-is-it)
+rather than here, because it is now how the thing works rather than a plan for it. In brief:
+
+| | |
+|---|---|
+| `src/owner.ts` | an `AsyncLocalStorage` box; `currentOwnerId()` reads it inside a request and the environment outside one |
+| `src/routes.ts` | `handleApi` opens the scope, `serveApi` is the old body, and `setRequestOwner(user.id)` is the one line that joins the gate to the store |
+| `src/store/pg.ts` | `ownedSlug()` and `ownedByReader()` — the only sanctioned way to name an article |
+| eight store modules | five near-identical `articleIdFor` helpers, `pgShelfStore`'s three writes, `lockArticle`, and the library search, all through the predicate |
+| `src/store/index.ts` | refuses to boot on the filesystem store in production, because it has no owner column |
+| `tests/owner-isolation.test.ts` | 19 tests in four parts — the scope, a static guard, the queries against real Postgres, and the HTTP seam |
+
+**Three decisions worth keeping.**
+
+*An AsyncLocalStorage rather than an argument.* Eleven call sites, four or five frames below a route
+handler, and the CLI shares most of them and has no request — so every threaded parameter would have
+had to be optional, which is the shape that lets a caller forget it.
+
+*`run()` and never `enterWith`.* With HTTP keep-alive several requests share a calling async context.
+`enterWith` mutates it, so request two could read request one's owner before its own gate ran. That
+is the worst bug this could have, and it would never appear in testing, where connections are not
+reused.
+
+*The session user beats `SPIDERYARN_OWNER_ID`.* The environment used to win outright and
+[deployment.md](../project/deployment.md) tells you to set that variable on Vercel. With the old
+precedence, deploying exactly as documented would have handed every signed-in stranger Greg's owner
+id — every query would have matched, and the isolation would have been dead code that looked like it
+was working. That is [silent-success](../reusable/silent-success.md) with a deploy guide pointing at
+it, and it has a test of its own.
+
+### Every one of these tests was watched failing
+
+A check that has only ever been green is not evidence, so each of these was seen to fail. The readings, taken by breaking the code
+and putting it back byte-identical:
+
+| broken on purpose | what went red |
+|---|---|
+| `ownedSlug()` reverted to `eq(articles.slug, slug)` | 6 of the 8 Postgres tests; the two that stayed green are on independent filters |
+| `ownedSlug` put back into `pg-shelf.ts` | the static guard, naming `pg-shelf.ts` |
+| `setRequestOwner(user.id)` removed | both HTTP tests — and **nothing else**, which is why they exist |
+| every `AuthApiError` classified as unavailable again | the 4xx test in `auth-verify.test.ts` |
+| `if (initError)` in `AuthCallback` disabled | the existing-session-plus-failed-exchange test |
+| `SETTLE_MS` raised to ten hours | the blank-page test in `use-session.test.ts` |
+| the `onCallback` guard deleted, and a fifth rewrite added | the `main.tsx` structural test, both times |
+
+The first HTTP test also **failed for real on its first run**, before any of that: person B was handed
+person A's profile, because the suite had not forced `SPIDERYARN_STORE=postgres` and the filesystem
+store has no owner column. That is the hole `src/store/index.ts` now refuses to boot into.
+
+### What this does not close
+
+- **Anyone with a Google account can still sign in** and spend the model budget. That is the risk
+  Greg actually accepted, and a spend limit is its control. `isAllowed()` is one line if it turns out
+  to be needed sooner.
+- **The ingest queue is on disk** and carries no owner. It does not work on Vercel at all, which is
+  the only reason that is not urgent.
+- **No RLS.** The filtering is in the queries, so a query written without the predicate is the whole
+  exposure — which is what the static guard is for, and it is a grep rather than a proof.
+- **`articles.slug` stays globally unique.** Two people ingesting the same URL is still an open
+  question rather than a thing that works.
+
 ## See also
 
 - [auth-supabase.md](auth-supabase.md) — the decisions, and everything this plan builds on

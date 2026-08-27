@@ -39,6 +39,7 @@ import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import type { Comment } from "../types.js";
 import type { CommentStore } from "./contracts.js";
+import { ownedSlug } from "./pg.js";
 
 const logger = log("store");
 
@@ -48,7 +49,7 @@ async function articleIdFor(slug: string): Promise<string> {
   const rows = await db
     .select({ id: articles.id })
     .from(articles)
-    .where(eq(articles.slug, slug))
+    .where(ownedSlug(slug))
     .limit(1);
   const found = rows[0];
   if (!found) {

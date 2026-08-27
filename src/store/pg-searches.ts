@@ -60,7 +60,7 @@ import { MAX_RUNS, withRun } from "../searches.js";
 import { hashBlocks } from "../source-hash.js";
 import type { SearchHit, SearchRun } from "../types.js";
 import type { SearchStore, SweepOptions } from "./contracts.js";
-import { notFound, requireSlug } from "./pg.js";
+import { notFound, ownedSlug, requireSlug } from "./pg.js";
 
 const logger = log("store");
 
@@ -92,7 +92,7 @@ async function articleIdFor(slug: string, db: Db | Tx = getDb()): Promise<string
   const rows = await db
     .select({ id: articles.id })
     .from(articles)
-    .where(eq(articles.slug, slug))
+    .where(ownedSlug(slug))
     .limit(1);
   const found = rows[0];
   if (!found) throw notFound(slug);

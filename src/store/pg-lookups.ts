@@ -36,7 +36,7 @@ import type { LookupsByTerm } from "../glossary-lookups.js";
 import { currentOwnerId } from "../owner.js";
 import type { Citation, GlossaryLookup } from "../types.js";
 import type { GlossaryLookupStore } from "./contracts.js";
-import { notFound, requireSlug } from "./pg.js";
+import { notFound, ownedSlug, requireSlug } from "./pg.js";
 
 /** The article's uuid, or a tagged 404 — the same shape src/api.ts throws. */
 async function articleIdFor(slug: string): Promise<string> {
@@ -44,7 +44,7 @@ async function articleIdFor(slug: string): Promise<string> {
   const rows = await getDb()
     .select({ id: articles.id })
     .from(articles)
-    .where(eq(articles.slug, slug))
+    .where(ownedSlug(slug))
     .limit(1);
   const found = rows[0];
   if (!found) throw notFound(slug);

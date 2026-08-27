@@ -830,10 +830,31 @@ doc that did not say so would be wrong. What it buys somebody is the ingest pipe
 `ANTHROPIC_API_KEY` at two model calls per article; **the control that is actually missing is a
 spend limit**, and an allowlist of one never limited what Greg could spend either.
 
-**And it does not yet say whose data is whose.** `currentOwnerId()` is process-wide and the reads
-do not filter by owner, so every admitted person sees the same shelf, profile and chats. That was
-not part of the decision above, which was made about money, and it is
-[open for Greg](../plans/auth-ui-and-production.md#the-gate-says-who-you-are-nothing-yet-asks-whose-shelf-this-is).
+**And until 2026-08-27 it did not say whose data is whose.** `currentOwnerId()` was process-wide and
+the reads did not filter by owner, so every admitted person saw the same shelf, profile and chats.
+That was not part of the decision above, which was made about *money* — and it is a much larger
+consequence than an open wallet, because `articles.slug` is globally unique, so a second account did
+not get an empty library, it got Greg's. GPT Sol led its review of the built auth code with it and
+offered two fixes: bring the allowlist back, or carry the identity through to the queries. Greg chose
+the second.
+
+**So the gate now says who you are and the store now asks.** `setRequestOwner(user.id)` in
+[`src/routes.ts`](../../src/routes.ts) puts the verified `sub` into a request-scoped
+`AsyncLocalStorage`, and every path from a slug to an article carries
+`and(eq(articles.ownerId, currentOwnerId()))` through one predicate, `ownedSlug()` in
+[`src/store/pg.ts`](../../src/store/pg.ts). Comments, chat threads, searches and glossary lookups are
+reached only through an `articleId` that came from one of those paths, so the filter is transitive.
+A slug you do not own answers 404 rather than 403 — "there is no such article" is all a stranger
+should learn about it. The reasoning, and the four ways this fails silently, are in
+[auth.md § Whose data is it](auth.md#whose-data-is-it);
+[`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) is the evidence, including a
+static guard so that the next `eq(articles.slug, …)` written anywhere under `src/store/` fails a test
+rather than leaking a library.
+
+**What that does *not* close**: anybody with a Google account can still sign in and spend the model
+budget, which is the risk Greg accepted twice and which a spend limit is the real control for. The
+ingest queue is still on disk and carries no owner. And there is still no RLS — the filtering is in
+the queries, not in the database, so a query written without the predicate is the whole exposure.
 
 **An article may not address our own API.** The sanitiser keeps relative URLs by design — the block
 splitter needs figures — so a published page could carry `<img src="/api/health">` or

@@ -15,21 +15,29 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getSession = vi.fn();
 const refreshSession = vi.fn();
 
+/**
+ * The module subscribes at import time to keep a token for `leavingFetch`.
+ * Captured rather than ignored, so the tests below can *be* the SDK and fire
+ * a sign-in or a sign-out — which is the only way to reach that cache.
+ */
+let announce: (event: string, session: { access_token: string } | null) => void = () => {};
+
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
     auth: {
       getSession,
       refreshSession,
-      /* `apiFetch`'s module subscribes at import time to keep a token for
-         `leavingFetch`. It must not be the thing that breaks these tests. */
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      onAuthStateChange: (fn: typeof announce) => {
+        announce = fn;
+        return { data: { subscription: { unsubscribe() {} } } };
+      },
     },
   },
   callbackUrl: () => "https://spideryarn.test/auth/callback",
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { apiFetch } = await import("../src/web/lib/api.js");
+const { apiFetch, leavingFetch } = await import("../src/web/lib/api.js");
 
 /** The last `fetch` we were handed, so a test can look at what went out. */
 function stubFetch(...responses: Response[]) {
@@ -210,5 +218,93 @@ describe("leavingFetch", () => {
     expect(calls).toHaveLength(0);
     expect(complaint).toHaveBeenCalled();
     complaint.mockRestore();
+  });
+});
+
+/**
+ * **`leavingFetch` — the save that has to survive the page going away.**
+ *
+ * GPT Sol's review of the built code, 2026-08-27, item 10:
+ *
+ * > `api-fetch.test.ts` does not exercise `leavingFetch`, token-cache
+ * > invalidation, cross-tab sign-out or keepalive-size behavior.
+ *
+ * Every one of those fails silently by construction. This function is
+ * deliberately unawaited and swallows its own errors, because on `pagehide`
+ * there is nobody left to tell — so a bug in it looks exactly like a reader
+ * closing the tab a moment too early, and the only evidence is a sentence they
+ * typed that is not there tomorrow.
+ */
+describe("leavingFetch", () => {
+  beforeEach(() => {
+    announce("SIGNED_IN", { access_token: "TOKEN-CACHED" });
+  });
+
+  it("sends the cached token without awaiting anything", () => {
+    const calls = stubFetch(ok());
+    leavingFetch("/api/reader", { method: "PATCH", body: "{}" });
+    expect(calls.length).toBe(1);
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-CACHED");
+    /* The whole point: `getSession()` is an await, and a page being torn down
+       can be killed inside it. If this ever starts consulting it, a best-effort
+       save becomes one that usually never leaves. */
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it("marks the request as able to outlive the document", () => {
+    const calls = stubFetch(ok());
+    leavingFetch("/api/reader", { method: "PATCH", body: "{}" });
+    expect(calls[0]![1].keepalive).toBe(true);
+  });
+
+  /**
+   * **A signed-out cache must not go on sending a signed-in token.**
+   *
+   * Same-tab sign-out fires this event, and so does a cross-tab one wherever
+   * the SDK's BroadcastChannel works. Without it, the last thing a shared
+   * computer does on the way out is PATCH the previous reader's profile.
+   */
+  it("stops sending a token once the reader signs out", () => {
+    announce("SIGNED_OUT", null);
+    const calls = stubFetch(ok());
+    leavingFetch("/api/reader", { method: "PATCH", body: "{}" });
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBeNull();
+  });
+
+  /** And it picks up a refreshed one, rather than pinning the first it saw. */
+  it("follows the token as it is refreshed", () => {
+    announce("TOKEN_REFRESHED", { access_token: "TOKEN-NEWER" });
+    const calls = stubFetch(ok());
+    leavingFetch("/api/reader", { method: "PATCH", body: "{}" });
+    expect(new Headers(calls[0]![1].headers).get("Authorization")).toBe("Bearer TOKEN-NEWER");
+  });
+
+  /**
+   * Browsers cap the total body of in-flight `keepalive` requests at about
+   * 64KiB and reject anything over it. The one caller today is nowhere near —
+   * but this function is generic and silent, so a future caller sending
+   * something large would fail completely without a trace.
+   */
+  it("says so rather than failing silently over the keepalive budget", () => {
+    const calls = stubFetch(ok());
+    const shout = vi.spyOn(console, "error").mockImplementation(() => {});
+    leavingFetch("/api/reader", { method: "PATCH", body: "x".repeat(70 * 1024) });
+    expect(calls.length).toBe(0);
+    expect(shout).toHaveBeenCalled();
+    shout.mockRestore();
+  });
+
+  /** A body that fits still goes, or the cap above proves nothing. */
+  it("sends one that fits", () => {
+    const calls = stubFetch(ok());
+    leavingFetch("/api/reader", { method: "PATCH", body: "x".repeat(1500) });
+    expect(calls.length).toBe(1);
+  });
+
+  /** Same rule as `apiFetch`: this attaches a credential, so it goes nowhere else. */
+  it("refuses to send a token anywhere but our own API", () => {
+    const calls = stubFetch(ok());
+    leavingFetch("https://evil.test/collect", { method: "POST", body: "{}" });
+    expect(calls.length).toBe(0);
   });
 });

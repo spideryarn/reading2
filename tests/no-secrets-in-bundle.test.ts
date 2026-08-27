@@ -28,6 +28,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const DIST = path.join(ROOT, "dist");
 
 /** A three-part JWT. Deliberately loose: the point is to decode candidates, not to validate. */
 const JWT = /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
@@ -76,18 +77,52 @@ describe("no secret reaches the browser", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("finds none in a built bundle, when there is one", () => {
-    const dist = path.join(ROOT, "dist");
-    if (!existsSync(dist)) {
-      /* Skipped, and **said out loud**. A check that silently passes because it
-         had nothing to look at is the thing this whole file is about. */
-      console.warn("[no-secrets] dist/ not built — bundle not checked here. Run `npm run build`.");
-      return;
-    }
+  /**
+   * **Genuinely skipped, not quietly passed.**
+   *
+   * The first version returned early with a `console.warn` when `dist/` was
+   * missing, which vitest reports as a green tick — a check that had nothing to
+   * look at, reporting success, in the one file whose entire subject is checks
+   * that report success while doing nothing. `skipIf` makes the run say
+   * "skipped". GPT Sol, 2026-08-27.
+   */
+  it.skipIf(!existsSync(DIST))("finds none in a built bundle, when there is one", () => {
+    const dist = DIST;
     const offenders = filesIn(dist)
       .filter((f) => /\.(js|mjs|css|html|map)$/.test(f))
       .flatMap((f) => secretsIn(readFileSync(f, "utf8")).map((what) => `${path.relative(ROOT, f)}: ${what}`));
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * **And it must be a bundle of THIS source.**
+   *
+   * A `dist/` from three weeks ago passes the test above without objecting, and
+   * the green tick then means "no secret reached a bundle nobody is shipping".
+   * That is not nothing, but it is not what anybody reads it as.
+   *
+   * Only a warning when the build is stale, deliberately: `npm test` must not
+   * start demanding a build, or people will stop running one of them. What it
+   * must not do is stay silent. The real check on what production is actually
+   * serving is `scripts/check-production-gate.sh`, which downloads the served
+   * JavaScript — this can only ever be a local proxy for it.
+   */
+  it.skipIf(!existsSync(DIST))("says so if that bundle is older than the source", () => {
+    const newest = (dir: string) =>
+      filesIn(dir).reduce((max, f) => Math.max(max, statSync(f).mtimeMs), 0);
+    const built = newest(DIST);
+    const source = newest(path.join(ROOT, "src"));
+    if (source > built) {
+      const days = Math.round((source - built) / 86_400_000);
+      console.warn(
+        `[no-secrets] dist/ is older than src/ by ~${days} day(s). The bundle checked ` +
+          "above is not built from the current source. Run `npm run build`.",
+      );
+    }
+    /* The assertion is that we could tell — not that it is fresh. A test that
+       failed on a stale build would fail for everybody who has not built today,
+       and would be turned off within a week. */
+    expect(Number.isFinite(built) && built > 0).toBe(true);
   });
 
   /* The detector, proved against the thing it is looking for. Both of these are

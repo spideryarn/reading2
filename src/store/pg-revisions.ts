@@ -78,7 +78,7 @@ import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
-import { requireSlug } from "./pg.js";
+import { ownedSlug, requireSlug } from "./pg.js";
 
 const logger = log("store");
 
@@ -333,7 +333,7 @@ async function lockArticle(
   const rows = await tx
     .select()
     .from(articles)
-    .where(eq(articles.slug, slug))
+    .where(ownedSlug(slug))
     .limit(1)
     .for("update");
   return rows[0];

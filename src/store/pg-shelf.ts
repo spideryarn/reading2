@@ -26,7 +26,7 @@ import { articles, articleRevisions, revisionBlocks } from "../db/schema.js";
 import { MAX_TITLE_CHARS } from "../shelf.js";
 import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
-import { notFound, requireSlug, shelfFrom } from "./pg.js";
+import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
 import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import type { LibraryEntry, LibraryHit, ShelfState } from "../types.js";
 import { pgArticleReader } from "./pg.js";
@@ -46,7 +46,7 @@ export const pgShelfStore: ShelfStore = {
   async read(slug: string): Promise<ShelfState> {
     requireSlug(slug);
     const db = getDb();
-    const [row] = await db.select().from(articles).where(eq(articles.slug, slug)).limit(1);
+    const [row] = await db.select().from(articles).where(ownedSlug(slug)).limit(1);
     if (!row) throw notFound(slug);
     return shelfFrom(row);
   },
@@ -95,7 +95,7 @@ export const pgShelfStore: ShelfStore = {
     // nothing after it, which is a syntax error rather than a no-op.
     if (Object.keys(set).length === 0) return entryFor(slug, false);
 
-    const [row] = await db().update(articles).set(set).where(eq(articles.slug, slug)).returning();
+    const [row] = await db().update(articles).set(set).where(ownedSlug(slug)).returning();
     if (!row) throw notFound(slug);
     return entryFor(slug, !!row.archivedAt);
   },
@@ -111,7 +111,7 @@ export const pgShelfStore: ShelfStore = {
     const [row] = await db()
       .update(articles)
       .set({ opens: sql`${articles.opens} + 1`, lastOpenedAt: sql`now()` })
-      .where(eq(articles.slug, slug))
+      .where(ownedSlug(slug))
       .returning({ slug: articles.slug });
     if (!row) throw notFound(slug);
   },
@@ -201,6 +201,11 @@ export const pgLibrarySearch: LibrarySearch = {
       )
       .where(
         and(
+          /* **Your library, not the union of everybody's.** This one is reached
+             by chat's `search_library` tool as well as by the reader's own box,
+             so without it a model answering your question could quote a
+             stranger's article back at you. src/store/pg.ts § `ownedSlug`. */
+          ownedByReader(),
           // Archived articles are out of the index, not filtered from the
           // results: a hit that opens an article you deleted reads as a ghost.
           isNull(articles.archivedAt),

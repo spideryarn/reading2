@@ -44,6 +44,7 @@ import {
   searchRuns,
 } from "../db/schema.js";
 import { blocksArtefact } from "../blocks.js";
+import { ownedByReader, ownedSlug } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
 
@@ -124,7 +125,7 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
     .select({ article: articles, revision: articleRevisions })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .where(eq(articles.slug, slug))
+    .where(ownedSlug(slug))
     .limit(1);
 
   const found = rows[0];
@@ -388,6 +389,10 @@ export async function exportableSlugs(): Promise<string[]> {
   const rows = await db
     .select({ slug: articles.slug })
     .from(articles)
-    .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId));
+    .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    /* Export what you own. This runs from the CLI, where `currentOwnerId()`
+       reads the environment — so it is `SPIDERYARN_OWNER_ID` that decides whose
+       library `npm run db:export` writes out, and that is the intended knob. */
+    .where(ownedByReader());
   return rows.map((r) => r.slug);
 }

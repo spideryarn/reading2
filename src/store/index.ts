@@ -111,6 +111,28 @@ if (STORE === "postgres") {
   // info, not debug: which store is serving reads is the first thing anybody
   // investigating a wrong answer needs to know, and it is one line per boot.
   log("store").info({ store: STORE }, "serving article reads from Postgres");
+} else if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+  /**
+   * **The filesystem store cannot be the live one where strangers can sign in.**
+   *
+   * It has no owner column and no owner filter — it is one directory per slug
+   * under `data/`, and there is nowhere for a second reader's articles to go.
+   * Postgres got `owner_id` filtering on 2026-08-27 (src/store/pg.ts §
+   * `ownedSlug`); the filesystem side deliberately did not, because it is the
+   * local development store and its replacement is the whole point of
+   * docs/plans/postgres-migration.md.
+   *
+   * So this is a boot-time refusal rather than a per-request one. On Vercel it
+   * would have failed anyway — there is no writable disk — but it would have
+   * failed as ENOENT on the first read, which reads as a missing article rather
+   * than as a store that must never have been selected. Loud, at the moment the
+   * configuration is wrong, and before anybody's data is involved.
+   */
+  throw new Error(
+    `SPIDERYARN_STORE is "${STORE}" in production. The filesystem store has no ` +
+      "owner column, so every signed-in reader would share one library. " +
+      "Set SPIDERYARN_STORE=postgres. See src/store/index.ts.",
+  );
 }
 
 /**
