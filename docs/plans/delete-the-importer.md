@@ -25,10 +25,67 @@ with eleven findings. Ten are folded in below and every one of them was checked 
 before it was accepted. Two of them killed things I had just written down as answers, which is the
 useful kind of review.
 
-> **Where it stands, 2026-08-27.** This document is the sequence, not any of the work. **One thing in
-> it is built**: the ToC status hole, which was a live bug rather than a new rule — `e18ac5f`, and
-> § The publication gate, as a truth table. Everything else is B2's remnant, B3, C, D, the demolition
-> and E, in that order and none of them started.
+---
+
+## Where it stands, 2026-08-27
+
+Five commits, and none of them is the adapter yet. Two were live bugs found on the way, which is the
+pattern worth noticing: **every one of these came out of reading code near something else**, not out
+of the work item that was planned.
+
+| | what | why it is here |
+|---|---|---|
+| `e18ac5f` | **The ToC status hole.** `publishRevision` compared the `toc` run's `input_hash` and never read its `status`, so a table of contents that ran and *failed* published. A step records its hash when it **starts**, so the hash agreed precisely in the failing case. | A live bug, found by Sol reviewing this document. Fixed first and alone, because the source-reference gate is a second guard of the same shape and would have inherited it. |
+| `fd30c5d` | **A schema comment claiming a guard.** `src/db/schema.ts` said the raw-source rule was one *"which `publishRevision` enforces"*. It never has — and nothing writes those columns yet, so the claim was **vacuous**, not merely wrong. My comment, from last week. | The second such comment in one day. See § What this has taught us. |
+| `2a2cf7f` | The [postmortem](../postmortems/toc-status-never-checked.md) for the first one, which found the part I had not. | |
+| `5d8ed19` | **The importer's replacement, and a latent bug it exposed.** `tests/helpers/artefacts.ts` copies an article between two `ArtifactStore`s; calling `ArtifactStore.write` for the first time failed, because `writeAtomic` never created its directory. | § The replacement, and § What this has taught us. |
+| `9e28f8c` | **The adapter's shape, settled** by a second Sol round that returned NO-SHIP on two of my three answers. § The adapter's shape, settled. | |
+
+**Not started:** B2's remnant (`raw_filename`, and the adapter refusing a manifest with no
+`storedSha256`), B3, C, D, the demolition, E — in that order.
+
+**Nothing is at risk from the re-ingest.** All three eval PDFs are tracked in git and both upload
+fixtures are the same file as `evals/pdf/easy`. § What it does not delete has the table.
+
+## What this has taught us, so far
+
+Written down because four of these are the same shape, and the fifth is the one that keeps this
+project honest.
+
+**1. A check that shares an assumption with the code proves nothing — including a check on a check.**
+Three times in two days:
+
+- The first version of `tests/artefact-copy.test.ts` compared `readParts(source)` against
+  `readParts(destination)` — **the function under test on both sides of the equals**. Deleting a kind
+  deleted it from both readings, and all thirteen assertions stayed green. The fix is a written-out
+  list of expected files, which cannot agree with a bug in the code it checks.
+- Measuring lint complexity by copying the file to a scratch directory reported *nothing* — for the
+  known-bad version too. The check was blind, and only running it against the state I knew was broken
+  showed that.
+- The habit that catches all of them costs a minute and is now used on every fix here: disable the
+  one line, run the single test by name, restore. Every fix in this document has been through it.
+
+**2. A comment is where a rule goes to look enforced.** Two in one day, in two files, both asserting
+a guard nothing implemented, neither catchable by any test — one of them because the columns it
+constrained had no writer, so there was no case it could have been false about. The
+[postmortem](../postmortems/toc-status-never-checked.md) has the general form: when *"is this row
+good"* is answered by an inline expression at each call site rather than one function both sites
+call, two answers can exist and nothing will say so.
+
+**3. The method with no caller is the one that does not work.** `ArtifactStore.write` had none, and
+failed on its first call because it never created its directory — every stage `mkdir`s for itself,
+and landing D deletes exactly those. `beginStep`, twenty lines further down, has always done it. The
+asymmetry *is* the bug: the method with a caller learned, the method without one did not.
+
+**4. A fixture that has everything gives a skip-case nothing to run on.** `data/writes` has been
+through every stage, so *"a step with nothing is skipped"* had no case at all and passed against code
+that did the opposite. Any test about absence needs a fixture that is actually missing something.
+
+**5. Measure the library rather than reason about it.** I wrote down as a trap that
+`recordStepRun`'s upsert would clobber `attempt_id`. Sol said otherwise; a rolled-back transaction
+against the local database settled it in two minutes — the token survived while status and hash
+updated. Reading `set: values` and inferring was not evidence, and it had already reached a committed
+document.
 
 ---
 
@@ -326,6 +383,68 @@ already answers.
 `ideas.profileHash` lives only in the JSON artefact, and `null` there is a real recorded value
 meaning *written deliberately without a profile*. So the stamp is row fields plus artefact-embedded
 fields, and `NO_INPUT_HASH` must never be handed back as though it were a real recorded hash.
+
+#### The build order for C, commit by commit
+
+Seven commits, each green on its own, ordered so that the thing most likely to be wrong is proved
+earliest and nothing depends on an unproven piece.
+
+**C1. `toc` gets a real stamp.** Before the adapter, not after, and it is the piece that stops the
+adapter needing a private freshness rule — § the shape, above. `toc` declares no `stamp` today, so
+one goes on `STEPS.toc` in `src/pipeline.ts` hashing the **stage-3** `blocks` artefact rather than
+`toc`'s own copy. Landing it first means the filesystem adapter gets the benefit immediately, and the
+change is checkable against a store that already works.
+
+*Red first:* re-run stage 3 so its blocks diverge from `data/<slug>/blocks.json`, and prove
+`stepIsDone("toc")` answers no. That case is undetectable today.
+
+**C2. `beginStep` and `finishStep` as fenced statements.** Two new functions in
+`src/store/pg-revisions.ts` beside `recordStepRun` rather than inside it — `recordStepRun` stays for
+the importer and for CLI runs, which have no attempt and never will. `beginStep` proves `jobs.id`,
+`jobs.attempt_id`, `status = 'running'` and `draft_revision_id` all match the bound reference before
+installing the attempt; `finishStep` is `UPDATE … WHERE revision_id = ? AND step_name = ? AND
+attempt_id = ? AND status = 'running'` requiring exactly one row.
+
+*Red first:* the mistake this work has made four times is testing a fence from the happy path. Build
+the state that needs it — a step-run that has ended and still carries its token — and watch
+`finishStep` refuse another attempt's token, with the `attempt_id` condition deleted.
+
+**C3. The kind ↔ storage map, and the read half.** `src/store/artifacts-pg.ts` with `read` and
+`stampFor` only, over a `JobDraftRef` and a mandatory `Db | Tx`. Read-only is a real milestone: it
+can be checked against articles the *importer* put there, which is the last time that is possible and
+worth using.
+
+`stampFor` merges the run row with the artefact's own fields, preserving `profileHash: null` as the
+real value it is.
+
+**C4. `has`.** Separately from C3 because its definition is the one Sol rewrote: every requested value
+reconstructs and passes the same shallow shape checks the filesystem decoder applies, **and** a
+`revision_step_runs` row exists with `status = 'done'`. No comparison against today's expected stamp.
+
+*Red first:* carry a revision forward so the block rows are present and belong to the *previous*
+generation, and prove `has(slug, "toc", ["blocks"])` answers no with the step-run check removed.
+
+**C5. `write`.** The whole atomic set in one statement per destination: the revision row's columns,
+then blocks as identities-upsert → unconditional delete → insert-if-any. Delete-all on empty is the
+decision, and it gets its own test.
+
+*Red first:* start with carried blocks, write `{ blocks: [] }`, assert zero rows — then force the
+job fence to fail and assert the delete rolled back.
+
+**C6. `raw`, and the one column.** `raw_filename` on `article_revisions`, the `raw_sources` row, and
+the revision's reference pair. This is the first thing that ever writes them. The adapter **refuses**
+a manifest with no `storedSha256` rather than writing a null reference beside a done `fetch`.
+
+One migration, generated in one sitting with `src/db/schema.ts` otherwise clean, the diff read line
+by line, and `tests/db-schema.test.ts` updated in the same commit.
+
+**C7. The three replacement suites.** `store-roundtrip` and `store-parity` swap `importArticle` for
+`copyArtefacts`; `chat-anchor` gets the standalone block-identity test in § The block identity test.
+Green here is the gate on deleting the importer, and nothing before this commit removes anything.
+
+**What is deliberately *not* in C:** the coordinator that opens the transaction and calls
+`write` + `finishStep` + the job transition together. That is D's, and putting it here would mean
+building the atomic boundary before there is a stage returning products to put inside it.
 
 ### The metadata page — **not the blocker I said it was**
 
