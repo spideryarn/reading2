@@ -52,7 +52,18 @@
  * to put a strip.
  */
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, GitBranch, Network, Share2, Signal, Spline, Waypoints } from "lucide-react";
+import {
+  ChartScatter,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  Network,
+  Route,
+  Share2,
+  Signal,
+  Spline,
+  Waypoints,
+} from "lucide-react";
 import type { Block, BlockId, NodeId } from "../types.js";
 import {
   DIAGRAMS,
@@ -60,13 +71,24 @@ import {
   LINE_STEP,
   type DiagramLayout,
   type DiagramNode,
+  type LinkKind,
   nodeAt,
 } from "./diagram.js";
 import { layoutDiagram } from "./diagrams.js";
-import { buildGraph, wordsBefore } from "./graph.js";
+import { type ArticleGraph, buildGraph, wordsBefore } from "./graph.js";
+import { useSimilar } from "./useSimilar.js";
+import { type UseProjection, useProjection } from "./useProjection.js";
+import { HEAT_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
 import type { SummaryNode } from "./tree.js";
+import { useRenderCount } from "./perf.js";
 
 interface Props {
+  /**
+   * Which article. Used for exactly one thing — asking the server for the
+   * embedding model's view of it (`useSimilar`), which only the Force picture
+   * wants. Everything else this panel draws comes from `root` and `blocks`.
+   */
+  slug: string;
   /** The tree, numbered and joined to block ranges. Null if the tree is unusable. */
   root: SummaryNode | null;
   kind: DiagramKind;
@@ -84,6 +106,12 @@ interface Props {
    * same array `Reader` already holds, so this costs a reference.
    */
   blocks: readonly Block[];
+  /** What sideways means on Drift. `?dx=` — see params.ts § diagramAxisParam. */
+  axis: ScatterAxis;
+  onAxis(axis: ScatterAxis): void;
+  /** What a dot's colour means on both scatters. `?dhue=`. */
+  hue: ScatterHue;
+  onHue(hue: ScatterHue): void;
 }
 
 /** What each picture is called where the reader meets it, and what it promises. */
@@ -124,10 +152,135 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Signal; blurb: 
     icon: GitBranch,
     blurb: "The tidy dendrogram d3-hierarchy draws — every section at the same depth, evenly spaced",
   },
+  /* The last two draw neither the tree nor the graph: one dot per PARAGRAPH,
+     placed by what the paragraph is about (src/web/scatter.ts). They are the
+     only two pictures here whose axes came out of a model. */
+  drift: {
+    label: "Drift",
+    icon: ChartScatter,
+    blurb:
+      "One dot per paragraph: down the page is still the article, sideways is what it is talking about — so a subject the piece returns to is a second cluster far below the first",
+  },
+  trail: {
+    label: "Trail",
+    icon: Route,
+    blurb:
+      "The same dots with both axes spent on meaning, joined in reading order — so you can see whether the piece travels through its subject or circles back over it",
+  },
 };
 
 /** The three that need the graph rather than the tree. */
 const NEEDS_GRAPH = new Set<DiagramKind>(["arc", "force", "cluster"]);
+
+/**
+ * The two that need the server's projection of the article, and are a **flat
+ * list of paragraphs** rather than a tree.
+ *
+ * That second half is not a detail. The rest of this panel is a `role="tree"`
+ * of `treeitem`s with levels, sibling counts and Left/Right meaning close and
+ * open — a contract these two cannot honour, because 276 paragraphs are not a
+ * hierarchy and there is nothing to open. So they get a listbox, Left/Right
+ * mean the same as Up/Down, and no node claims a level. GPT Sol's finding,
+ * 2026-08-27: inheriting the tree contract would have been a role describing a
+ * widget the code does not implement, which is the same mistake this panel
+ * already made once with one tab stop per node.
+ */
+const NEEDS_POINTS = new Set<DiagramKind>(["drift", "trail"]);
+
+/**
+ * One row of the footer card's evidence list.
+ *
+ * `kind` is here because the three kinds of relationship do not have the same
+ * *sort* of evidence, and rendering them the same way would flatten the ladder
+ * graph.ts § EdgeKind sets out. A vocabulary edge shows the words that earned
+ * it, an anchor edge shows the author's own link text, and a semantic edge
+ * shows a number — because a number is honestly all it has.
+ */
+interface Related {
+  kind: LinkKind;
+  number: string;
+  title: string;
+  shared: string[];
+  /** `anchor` only: the author's link text. */
+  label?: string;
+  /** `semantic` only: the cosine. */
+  score?: number;
+  /**
+   * `semantic` only: the opening of one of the two passages that earned the
+   * line.
+   *
+   * **The whole point of the round before this one was that evidence computed
+   * and not shown is worse than none** — the vocabulary edges' shared terms
+   * were in the data from the start and nothing displayed them, which made the
+   * curves look more authoritative than they were. The passage ids were then
+   * added to a semantic edge, documented as "so the card can name them", and
+   * the card threw them away. Same mistake, one round later; GPT Sol found it
+   * both times.
+   */
+  quote?: string;
+}
+
+/**
+ * What the footer card says about the node it is describing: which other
+ * sections it is joined to, and **what earned each line**.
+ *
+ * A function rather than an inline memo so it can be tested. That is not a
+ * stylistic preference — the two findings this feature has had from GPT Sol,
+ * one per round, were both *evidence computed and then not shown*: the
+ * vocabulary edges' shared terms first, then the semantic edges' passage ids.
+ * Both were live in code nothing could reach without rendering React, and both
+ * survived a full test suite. The third time should be caught here.
+ */
+export function relatedFor(
+  graph: ArticleGraph | null,
+  shown: NodeId | null,
+  blocks: readonly Block[],
+): Related[] {
+    if (!graph || !shown) return [];
+    /* All three *earned* kinds, not just vocabulary. `parent` and `sequence`
+       are already told by the picture — containment by the lines to the parent
+       bubble, reading order by the vertical axis — so listing them here would
+       be repeating what the reader can see. These three are the ones whose
+       evidence is off-screen. */
+    const kinds = new Set(["vocabulary", "anchor", "semantic"]);
+    return graph.edges
+      .filter((e) => kinds.has(e.kind) && (e.source === shown || e.target === shown))
+      /* The author's own cross-reference first, whatever its weight — it is the
+         only one of the three that is a fact rather than a measure, and a
+         measured 0.4 outranking it would be the ladder in graph.ts § EdgeKind
+         drawn upside down. */
+      .sort((a, b) => rank(a.kind) - rank(b.kind) || b.weight - a.weight)
+      .slice(0, 4)
+      .map((e) => {
+        const other = graph.byId.get(e.source === shown ? e.target : e.source);
+        /* The passage at the *other* end — the one the reader is not standing
+           in — since the card is already telling them about the section they
+           are on. */
+        const at = e.passages?.[e.source === shown ? 1 : 0];
+        const text = at ? blocks.find((b) => b.id === at)?.text : undefined;
+        return {
+          kind: e.kind,
+          number: other?.number ?? "",
+          title: other?.title ?? "",
+          shared: e.shared ?? [],
+          ...(e.label ? { label: e.label } : {}),
+          ...(e.kind === "semantic" ? { score: e.weight } : {}),
+          ...(text ? { quote: text.slice(0, 90) } : {}),
+        };
+      });
+}
+
+/**
+ * Sort order for the card's evidence list — the fact before the two measures.
+ *
+ * **The primary key, because `weight` is not comparable across kinds.** An
+ * anchor's weight is a count of links; a vocabulary or semantic weight is a
+ * cosine. Sorting the three by weight alone happens to give the same answer
+ * today only because a count starts at 1 and a cosine cannot reach it.
+ */
+function rank(kind: LinkKind): number {
+  return kind === "anchor" ? 0 : kind === "vocabulary" ? 1 : 2;
+}
 
 /**
  * Eight categorical hues, one per part, reused round the article.
@@ -141,7 +294,8 @@ const NEEDS_GRAPH = new Set<DiagramKind>(["arc", "force", "cluster"]);
  */
 const PART_HUES = 8;
 
-export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Props) {
+export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, axis, onAxis, hue, onHue }: Props) {
+  useRenderCount("DiagramPanel");
   /* Which nodes the reader has closed. Deliberately NOT in the URL: `?cols=`
      and `?rung=` are about how much of the article you are looking at, and a
      link carrying them tells the recipient something. A set of node ids tells
@@ -249,14 +403,63 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
      keeps `DiagramBand` from fetching anything: a reader who never leaves
      `strata` should not pay for the other three. */
   const wantsGraph = NEEDS_GRAPH.has(kind);
+  /* **Only Force, and only Force.** This is the one thing the panel asks the
+     server for, it costs a model call the first time, and it is the only fetch
+     in the reading view a reader can start without pressing something that says
+     what it will do. So the gate is narrow on purpose: not "a graph picture" —
+     `force`, which is the picture Greg asked to put the dotted lines on. See
+     useSimilar.ts. */
+  const similar = useSimilar(slug, kind === "force");
   const graph = useMemo(
-    () => (root && wantsGraph ? buildGraph(root, blocks, collapsed) : null),
+    () => (root && wantsGraph ? buildGraph(root, blocks, collapsed, similar.pairs) : null),
     // `wantsGraph`, NOT `kind`: stepping between Arc, Force and Cluster does not
     // change the graph, and keying on `kind` rebuilt the whole term index on
     // every one of those presses. On a 150-section article that is 100ms of
     // main thread for a result byte-identical to the one just thrown away.
     // GPT Sol's finding, 2026-08-27.
-    [root, wantsGraph, blocks, collapsed],
+    //
+    // `similar.pairs` is a *stable* array — the hook hands back the same one
+    // until a new answer lands — so this rebuilds exactly twice per article:
+    // once immediately without the embeddings, once when they arrive.
+    [root, wantsGraph, blocks, collapsed, similar.pairs],
+  );
+
+  /* **The two scatters, and only those two.** Same narrow gate as `similar`
+     above and for the same reason: this costs a model call the first time, and
+     pressing a toggle is not a purchase decision. The server shares the vectors
+     between the two endpoints, so a reader who has already opened Force pays
+     only for the arithmetic here. See useProjection.ts. */
+  const wantsPoints = NEEDS_POINTS.has(kind);
+  const projection = useProjection(slug, wantsPoints);
+
+  /* The picture's second data source, assembled only when a picture wants it.
+     `axis` and `hue` are in here because they change where a dot goes and which
+     palette slot it takes — both are geometry, decided by the layout. */
+  const scatter = useMemo(
+    () =>
+      wantsPoints
+        ? { blocks, input: { points: projection.points, k: projection.k, axis, hue } }
+        : null,
+    [wantsPoints, blocks, projection.points, projection.k, axis, hue],
+  );
+
+  /* **What is actually drawn**, which is not the same as which toggle is
+     pressed: until the projection lands, `layoutDiagram` falls back to `strata`
+     (see diagrams.ts). Deriving the role, the palette and the strip from the
+     *picture on screen* rather than from `kind` is what stops the panel telling
+     a screen reader it is showing a list of paragraphs while it is showing a
+     column of sections. */
+  const drawingPoints = wantsPoints && projection.points.length > 0;
+  const flat = drawingPoints;
+  const ramp = drawingPoints && hue === "progress";
+
+  /* The three most distinctive words in each topic, for the lane legend.
+     Computed here rather than on the server: it reuses `terms()`, which is the
+     app's one idea of what a distinctive word is, and it costs one pass over
+     text the browser is already holding. */
+  const lanes = useMemo(
+    () => (wantsPoints && projection.k > 0 ? laneTerms(projection.points, blocks, projection.k) : []),
+    [wantsPoints, projection.points, projection.k, blocks],
   );
 
   /* `strata` is to scale in WORDS. Computed here rather than taken from `graph`,
@@ -274,8 +477,9 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
       // performance win, it is a you-are-here line that never moves.
       { width: box.w, height: box.h, collapsed, atRow, wordsBefore: words },
       graph,
+      scatter,
     );
-  }, [root, kind, box, collapsed, words, graph, atRow]);
+  }, [root, kind, box, collapsed, words, graph, scatter, atRow]);
 
   /* The node the reader is standing in — the deepest one drawn, which is the
      same rule the summary panel's follow mark uses. Computed from the LAID OUT
@@ -317,17 +521,13 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
    * evidence from the start and nothing displayed it; GPT Sol's finding,
    * 2026-08-27. The words are the difference between a claim and a showing.
    */
-  const related = useMemo(() => {
-    if (!graph || !shown) return [];
-    return graph.edges
-      .filter((e) => e.kind === "vocabulary" && (e.source === shown || e.target === shown))
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, 3)
-      .map((e) => {
-        const other = graph.byId.get(e.source === shown ? e.target : e.source);
-        return { number: other?.number ?? "", title: other?.title ?? "", shared: e.shared ?? [] };
-      });
-  }, [graph, shown]);
+  const related = useMemo(() => relatedFor(graph, shown, blocks), [graph, shown, blocks]);
+
+  /** How many dotted lines the picture ended up with. See the status strip. */
+  const drawnSemantic = useMemo(
+    () => (graph?.edges ?? []).filter((e) => e.kind === "semantic").length,
+    [graph],
+  );
 
   const toggle = (id: NodeId) =>
     setCollapsed((prev) => {
@@ -375,11 +575,18 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
         return;
       case "ArrowRight":
         e.preventDefault();
-        if (node.hasChildren && node.collapsed) toggle(node.id);
+        // On a flat list of paragraphs there is nothing to open, so sideways is
+        // the same step as down — which is what a listbox promises.
+        if (flat) step(1);
+        else if (node.hasChildren && node.collapsed) toggle(node.id);
         else if (node.hasChildren) step(1); // preorder: the next node IS the first child
         return;
       case "ArrowLeft": {
         e.preventDefault();
+        if (flat) {
+          step(-1);
+          return;
+        }
         if (node.hasChildren && !node.collapsed) {
           toggle(node.id);
           return;
@@ -452,6 +659,115 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
         })}
       </div>
 
+      {/* The two things a scatter lets the reader change, and neither is a
+          different picture — which is why they are a second row of quieter
+          chips rather than more of the row above, and why they are `replace` in
+          the URL where `?diagram=` is `push` (params.ts).
+
+          *Sideways* is hidden on Trail rather than disabled: Trail spends both
+          axes on components, so the control has nothing to do there, and a
+          control that is visibly present and inert is worse than one that is
+          not there. */}
+      {wantsPoints && (
+        <div className="diag-opts">
+          {kind === "drift" && (
+            <Choice
+              label="Sideways"
+              value={axis}
+              onChange={onAxis}
+              options={[
+                { value: "lanes", label: "Lanes", blurb: "One column per topic the model found" },
+                {
+                  value: "spread",
+                  label: "Spread",
+                  blurb: "One sliding scale — the single biggest axis of variation in the article",
+                },
+              ]}
+            />
+          )}
+          <Choice
+            label="Colour"
+            value={hue}
+            onChange={onHue}
+            options={[
+              { value: "section", label: "Section", blurb: "The same eight hues the other pictures use" },
+              {
+                value: "progress",
+                label: "Progress",
+                blurb: "Dark at the start of the article, bright at the end",
+              },
+              { value: "topic", label: "Topic", blurb: "The model's own grouping" },
+            ]}
+          />
+        </div>
+      )}
+
+      {/* **The legend, and it is not decoration.** A lane a reader cannot name
+          is a lane they have to take on trust, and the words are what make it
+          arguable with — the same rule the vocabulary edges follow, and the
+          most important thing docs/project/diagram.md records about them. */}
+      {drawingPoints && axis === "lanes" && kind === "drift" && lanes.length > 0 && (
+        <ul className="diag-lanes" aria-label="What each column is about">
+          {lanes.map((words, i) => (
+            <li
+              // The lane index IS the identity here — lane 3 is lane 3 whatever
+              // words it happens to hold this time.
+              // biome-ignore lint/suspicious/noArrayIndexKey: see above
+              key={i}
+              className="diag-lane"
+              style={hue === "topic" ? slotStyle(i) : undefined}
+              title={words.length > 0 ? words.join(" · ") : "No distinctive words in this column"}
+            >
+              {words[0] ?? "—"}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* **Beside the picture, never over it.** The Force picture is complete
+          the moment it is drawn — four of its five kinds of line are free — and
+          the embeddings only add the fifth. A spinner across a diagram that is
+          already four fifths there would say the wrong thing about what is
+          missing, so the one line of status lives here, in the chrome.
+
+          The error branch is not decoration either: without it a failed request
+          would leave a picture that quietly draws four kinds where five were
+          promised, and nothing on screen would be wrong. */}
+      {/* What the two scatters have to say out loud, and the reason it is not
+          in a tooltip. Two components out of 1,024 throw away most of what the
+          model saw, so a scatter plot that does not say so is the
+          silent-success shape with a picture on it — and the number alone is
+          worse than useless to a reader who does not know what "variance"
+          means. So it is one sentence in ordinary words, and it says the thing
+          a percentage cannot: **the projection can only ever pull dots
+          together, never push them apart.** GPT Sol's finding, 2026-08-27. */}
+      {wantsPoints && projection.status !== "idle" && (
+        <p className="diag-note" role="status">
+          {projection.status === "loading" && "Reading the article paragraph by paragraph…"}
+          {projection.status === "ready" && kept(projection)}
+          {projection.status === "error" &&
+            "Could not reach the embedding model, so there is nothing to place these dots by. The picture below is Strata instead. [emb2]"}
+        </p>
+      )}
+
+      {kind === "force" && similar.status !== "idle" && (
+        <p className="diag-note" role="status">
+          {similar.status === "loading" && "Reading the article for related passages…"}
+          {/* **Counted from the lines actually drawn, not from the pairs that
+              came back.** Those are different numbers: the client drops pairs
+              whose passages sit in one section, and pairs whose sections the
+              reading-order chain already joins. Reporting the pairs would say
+              "28 passages embedded" over a picture with no dotted lines on it —
+              true about the request, and wrong about the page. */}
+          {similar.status === "ready" &&
+            (drawnSemantic > 0
+              ? `${drawnSemantic} dotted ${drawnSemantic === 1 ? "link" : "links"} from ${similar.blocks} passages · ${similar.model}`
+              : `${similar.blocks} passages embedded, and nothing came back that the picture does not already say`)}
+          {similar.status === "error" &&
+            "Could not reach the embedding model, so there are no dotted lines. The rest of the picture is unaffected."}
+        </p>
+      )}
+
       <div className="diag-scroll" ref={scroller}>
         {root === null ? (
           <p className="diag-quiet">
@@ -474,9 +790,23 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
                alternative is a <foreignObject> per node, which buys real HTML at
                the price of a layout box per node in a picture that can hold a
                hundred of them. */
-            // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: SVG has no tree element
-            role="tree"
-            aria-label={`${KIND_UI[kind].label} view of the article's structure`}
+            /* **A listbox where the picture is a flat list of paragraphs, a
+               tree where it is a tree.** The six tree and graph pictures draw
+               nested sections and honour the whole tree contract; the two
+               scatters draw 276 paragraphs with no nesting and nothing to open,
+               so claiming `tree` there would describe a widget this code does
+               not implement. GPT Sol's finding, 2026-08-27. */
+            /* No `biome-ignore` here any more, and that is a consequence of the
+               role being a variable: the rule that needed suppressing fires on a
+               *literal* role, so a computed one is invisible to it. Left as a
+               note rather than a stale suppression, which Biome flags in its own
+               right. */
+            role={flat ? "listbox" : "tree"}
+            aria-label={
+              flat
+                ? `${KIND_UI[kind].label} view — one dot per paragraph, placed by what it is about`
+                : `${KIND_UI[kind].label} view of the article's structure`
+            }
             onPointerLeave={() => setHover(null)}
             onFocus={() => setHasFocus(true)}
             // `focusout` bubbles where `blur` does not, so React's onBlur here
@@ -486,13 +816,55 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHasFocus(false);
             }}
           >
+            {/* The arrowhead, defined once and referenced by every sequence
+                line. `orient="auto"` turns it to face along the line;
+                `markerUnits="strokeWidth"` scales it with the chain so a
+                thicker line does not grow a proportionally smaller head.
+
+                **Its fill is in the stylesheet, not here, and not
+                `context-stroke`.** That keyword would make the head take the
+                colour of the path using it, which is the tidy answer and is
+                supported everywhere this app runs — but a `fill` presentation
+                attribute the browser cannot parse falls back to *black*, and a
+                black arrowhead on a near-black page is an arrow that is simply
+                not there. One token shared with `.diag-link-sequence` cannot
+                fail that way. See styles.css § diagram mode. */}
+            <defs>
+              <marker
+                id="diag-arrow"
+                viewBox="0 0 6 6"
+                /* The tip, in the marker's own coordinates. This point is
+                   placed exactly on the path's last point, which is what makes
+                   `HEAD_GAP` in diagram-d3.ts mean what it says. */
+                refX="6"
+                refY="3"
+                /* **`userSpaceOnUse`, not the default.** The default is
+                   `strokeWidth`, which scales the head with the line — so the
+                   geometry `arrowPath` computes — "the tip lands HEAD_GAP px outside the
+                   target circle" — would only be true at stroke-width 1, and
+                   changing the sequence line's weight in the stylesheet would
+                   silently move every arrowhead. Fixed units keep the
+                   arithmetic and the CSS independent of each other. */
+                markerUnits="userSpaceOnUse"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto"
+              >
+                <path className="diag-arrowhead" d="M 0 0.6 L 6 3 L 0 5.4 z" />
+              </marker>
+            </defs>
             {layout.links.map((l) => (
               <path
                 key={l.id}
-                className={`diag-link diag-d${l.depth}`}
-                style={hue(l.part)}
+                /* `kind` where the picture has kinds, `depth` where it does not.
+                   Both classes are emitted rather than one, because the three
+                   tree pictures' stylesheets are written against `diag-d*` and
+                   this must not change what they draw. */
+                className={`diag-link diag-d${l.depth}${l.kind ? ` diag-link-${l.kind}` : ""}`}
+                style={slotStyle(l.part)}
                 d={l.d}
                 fill="none"
+                {...(l.arrow ? { markerEnd: "url(#diag-arrow)" } : {})}
               />
             ))}
             {layout.nodes.map((n, i) => (
@@ -500,6 +872,8 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
                 key={n.id}
                 node={n}
                 kind={kind}
+                flat={flat}
+                ramp={ramp}
                 here={n.id === here}
                 focused={n.id === picked}
                 tabstop={n.id === rovingId}
@@ -532,12 +906,90 @@ export function DiagramPanel({ root, kind, onKind, atRow, onJump, blocks }: Prop
 
       <DetailCard
         node={card}
+        ramp={ramp}
         live={shown === here && hover === null}
         onJump={onJump}
         related={related}
       />
     </aside>
   );
+}
+
+/**
+ * One row of the second control strip — a radiogroup of small chips.
+ *
+ * The same one-tab-stop-plus-arrows shape as the kind switcher above it and as
+ * `Dock.tsx`, written once here because there are now two of them. It is a
+ * `<button role="radio">` rather than a real `<input type="radio">` for the
+ * reason the kind switcher already gives: a real radio cannot carry this
+ * styling without hiding the input and faking every state it had.
+ */
+function Choice<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange(next: T): void;
+  options: { value: T; label: string; blurb: string }[];
+}) {
+  return (
+    <div className="diag-opt" role="radiogroup" aria-label={label}>
+      <span className="diag-opt-label">{label}</span>
+      {options.map((o, i) => (
+        /* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — see the kind switcher above */
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={o.value === value}
+          tabIndex={o.value === value ? 0 : -1}
+          className={`diag-opt-btn${o.value === value ? " on" : ""}`}
+          title={o.blurb}
+          onClick={() => onChange(o.value)}
+          onKeyDown={(e) => {
+            const d =
+              e.key === "ArrowRight" || e.key === "ArrowDown"
+                ? 1
+                : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                  ? -1
+                  : 0;
+            if (d === 0) return;
+            e.preventDefault();
+            // Wraps, as the radio pattern specifies.
+            const next = options[(i + d + options.length) % options.length];
+            if (next) onChange(next.value);
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * What the strip says once the projection has landed, in ordinary words.
+ *
+ * Three things, and the third is the one a percentage cannot say on its own:
+ * how many paragraphs are drawn, how many are not, and that **squashing 1,024
+ * dimensions into two can only ever pull dots together — never push them
+ * apart.** So two dots far apart really are far apart, and two dots on top of
+ * one another may differ entirely in something this threw away.
+ *
+ * The two components are reported as **one** figure rather than two. Their
+ * individual sizes move around when the top two are close, while the plane they
+ * span does not, so quoting them separately would be quoting the least stable
+ * half of the answer. GPT Sol's finding, 2026-08-27.
+ */
+function kept(p: UseProjection): string {
+  const held = Math.round((p.variance[0] + p.variance[1]) * 100);
+  const short = p.skipped.tooShort + p.skipped.nonProse;
+  const missing = short > 0 ? `, ${short} too short or not prose to place` : "";
+  const capped = p.skipped.capped > 0 ? `, ${p.skipped.capped} past the limit` : "";
+  return `${p.blocks} paragraphs${missing}${capped}. This flat view keeps about ${held}% of the differences the model found, so dots far apart really are far apart — dots close together may still differ in what was left out.`;
 }
 
 /**
@@ -577,7 +1029,9 @@ export function siblingRuns(nodes: readonly DiagramNode[]): { size: number; pos:
 }
 
 /**
- * A part's hue, as the `--cat-rgb` triplet the rest of the app already speaks.
+ * A palette *slot*, as the `--cat-rgb` triplet the rest of the app already
+ * speaks. Its companion `rampStyle` below is the same idea over the sequential
+ * ramp, for the one thing that is ordered rather than categorical.
  *
  * The indirection is deliberate and is SearchPanel's: a component picks a
  * *slot*, and the stylesheet owns what that slot looks like. So the eight hues
@@ -587,9 +1041,33 @@ export function siblingRuns(nodes: readonly DiagramNode[]): { size: number; pos:
  * The root, which is `part === -1`, gets the neutral rather than a ninth hue:
  * it is not one of the parts, it is all of them.
  */
-function hue(part: number): React.CSSProperties {
+function slotStyle(part: number): React.CSSProperties {
   const slot = part < 0 ? "7" : String(part % PART_HUES);
   return { "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties;
+}
+
+/**
+ * A step of the **sequential** ramp, for the one thing in this panel that is
+ * ordered rather than categorical: how far through the article a paragraph is.
+ *
+ * Viridis rather than the heat ramp, and that is the repo's own rule rather
+ * than a preference — docs/project/colour-scales.md says inferno is the
+ * blackbody ramp and belongs to quantities with *temperature* in them, and that
+ * viridis is wanted "the moment something needs a sequential ramp with no
+ * temperature in it". Reading position is exactly that. GPT Sol pointed out
+ * that the first draft reached for inferno out of what was already there.
+ *
+ * It also happens to be the ramp with no unusable end on a near-black page: the
+ * darkest viridis stop is comfortably above `--page`, where `--heat-0` and
+ * `--heat-1` are not, so there is no "start at step 2" caveat to get wrong.
+ *
+ * `scatter.ts` decides the step; this file only says which ramp the number
+ * indexes into. Same split as `slotStyle` — a component picks a slot, the
+ * stylesheet owns what it looks like.
+ */
+function rampStyle(step: number): React.CSSProperties {
+  const at = Math.max(0, Math.min(HEAT_STEPS + 1, step));
+  return { "--cat-rgb": `var(--vir-${at}-rgb)` } as React.CSSProperties;
 }
 
 /**
@@ -609,6 +1087,8 @@ function hue(part: number): React.CSSProperties {
 function NodeShape({
   node,
   kind,
+  flat,
+  ramp,
   here,
   focused,
   tabstop,
@@ -622,6 +1102,10 @@ function NodeShape({
 }: {
   node: DiagramNode;
   kind: DiagramKind;
+  /** A flat list of paragraphs rather than a tree — see `NEEDS_POINTS`. */
+  flat: boolean;
+  /** Colour by the sequential ramp rather than by the categorical wheel. */
+  ramp: boolean;
   here: boolean;
   focused: boolean;
   /** The one node in the picture that Tab reaches. See `roving` in the panel. */
@@ -648,19 +1132,28 @@ function NodeShape({
     .join(" ");
 
   return (
+    /* biome-ignore lint/a11y/useAriaPropsSupportedByRole: `aria-setsize` and `aria-posinset` are supported by BOTH roles this can take — `treeitem` and `option` — but the role is computed, so the rule cannot see which one and assumes neither */
+    /* biome-ignore lint/a11y/noStaticElementInteractions: same cause — this element HAS an interactive role, computed rather than literal; SVG has no <button> and a <foreignObject> per node would cost a layout box in a picture that holds hundreds */
     <g
       className={cls}
-      style={hue(node.part)}
-      role="treeitem"
+      style={ramp ? rampStyle(node.part) : slotStyle(node.part)}
+      role={flat ? "option" : "treeitem"}
       // The DOM is flat — every node is a sibling — so the nesting has to be
       // stated rather than inferred from the markup. `aria-level` is 1-based
-      // where our depth is 0-based.
-      aria-level={node.depth + 1}
+      // where our depth is 0-based, and an option has no level to state.
+      {...(!flat && { "aria-level": node.depth + 1 })}
+      {...(flat && { "aria-selected": focused || here })}
       aria-setsize={setSize}
       aria-posinset={posInSet}
       data-diag-id={node.id}
       tabIndex={tabstop ? 0 : -1}
-      aria-label={`${label}, ${node.blocks} paragraph${node.blocks === 1 ? "" : "s"}`}
+      /* **`node.label` where the picture spends position on something colour is
+         also carrying.** A scatter dot's topic and its place in the article are
+         in its position and its hue and nowhere else, and colour-scales.md is
+         emphatic that colour is never allowed to be the only carrier. The six
+         other pictures have nothing extra to say and fall through to the
+         default. */
+      aria-label={node.label ?? `${label}, ${node.blocks} paragraph${node.blocks === 1 ? "" : "s"}`}
       {...(node.hasChildren && { "aria-expanded": !node.collapsed })}
       onPointerEnter={() => onHover(node.id)}
       onFocus={() => onRove(node.id)}
@@ -781,17 +1274,39 @@ function NodeShape({
  * — an unlabelled card that changed on its own as you scrolled would read as a
  * stale hover rather than as a position.
  */
+/**
+ * What to write beside a related section, given what kind of line joins them.
+ *
+ * Each kind says the thing it actually knows, and no kind borrows another's
+ * voice. The anchor row is in quotation marks because the words are the
+ * author's; the semantic row carries a bare number because a cosine is not a
+ * sentence and dressing it as one ("closely related") would be putting our
+ * confidence on a model's arithmetic.
+ */
+function evidence(r: Related): string {
+  if (r.kind === "anchor") return r.label ? `“${r.label}”` : "linked by the author";
+  if (r.kind === "semantic") {
+    /* The passage first, the number second. A cosine on its own asks the reader
+       to trust it; a line of the actual prose lets them judge it, which is the
+       only thing that makes a dotted line worth drawing. */
+    return r.quote ? `“${r.quote}…” · ${(r.score ?? 0).toFixed(2)}` : `similar meaning · ${(r.score ?? 0).toFixed(2)}`;
+  }
+  return r.shared.slice(0, 4).join(" · ");
+}
+
 function DetailCard({
   node,
+  ramp,
   live,
   onJump,
   related,
 }: {
   node: DiagramNode | null;
+  ramp: boolean;
   live: boolean;
   onJump(id: BlockId): void;
-  /** The graph pictures only: what this section shares words with, and which words. */
-  related: { number: string; title: string; shared: string[] }[];
+  /** The graph pictures only: what this section is joined to, and what earned each line. */
+  related: Related[];
 }) {
   if (!node) {
     return (
@@ -801,7 +1316,7 @@ function DetailCard({
     );
   }
   return (
-    <div className="diag-card" style={hue(node.part)}>
+    <div className="diag-card" style={ramp ? rampStyle(node.part) : slotStyle(node.part)}>
       <div className="diag-card-head">
         {live && <span className="diag-card-live">you are here</span>}
         <button
@@ -829,9 +1344,11 @@ function DetailCard({
       {related.length > 0 && (
         <ul className="diag-card-links">
           {related.map((r) => (
-            <li key={`${r.number}-${r.title}`}>
-              <span className="diag-card-linknum">{r.number}</span>
-              <span className="diag-card-linkterms">{r.shared.slice(0, 4).join(" · ")}</span>
+            <li key={`${r.kind}-${r.number}-${r.title}`} className={`diag-card-link-${r.kind}`}>
+              <span className="diag-card-linknum" title={r.title}>
+                {r.number}
+              </span>
+              <span className="diag-card-linkterms">{evidence(r)}</span>
             </li>
           ))}
         </ul>
