@@ -343,6 +343,17 @@ async function readOne(
  * into an honest not-done.
  */
 async function writeAtomic(file: string, body: string): Promise<void> {
+  /* **The directory, first.** `write` had no production caller until landing D
+     of docs/plans/transactional-stage-runner.md, and every stage `mkdir`s for
+     itself before its own `writeFile` — src/fetch.ts and src/extract.ts both do.
+     So the one method that has to own this is the one that never had to prove
+     it could, and writing the first artefact of a new article through the seam
+     failed with ENOENT on the temp file.
+
+     `beginStep` has always done it, twenty lines down. That asymmetry is the
+     whole bug: the method with a caller learned, the method without one did
+     not. Found by tests/artefact-copy.test.ts, 2026-08-27. */
+  await mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, body, "utf-8");
   await rename(tmp, file);
