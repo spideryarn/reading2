@@ -332,6 +332,47 @@ was checked that way.
   make the reader's voice cross a wire on the one path where they have least reason to expect it.
 - Guessing which device the reader "really" meant.
 
+## What the browser pass could and could not reach
+
+A Sonnet subagent drove Chrome 151 against `/profile`. Three things confirmed, and then a wall
+worth writing down, because the next person will otherwise spend the same hour on it.
+
+**Confirmed in a real browser:** the idle button is Lucide's `mic` glyph; on arming it becomes
+`lucide-square` with a filled `<rect>`; and `.prof-listening` appears the instant the button arms,
+carrying `Listening 0:00`, rather than waiting for text.
+
+**Unreachable from automation, and structurally so.** `document.visibilityState` read `hidden` for
+the entire session — screenshots did not stick it visible, and it was `hidden` again on the very
+next call every time. That is already known to freeze the meter bars
+([browser-testing.md](../project/browser-testing.md)), but it is worse than that:
+
+- **`quiet` is computed inside the same `requestAnimationFrame` tick as the bars**
+  ([useAudioLevel.ts](../../src/web/useAudioLevel.ts)), so in a hidden tab it can never become
+  true. The quiet line, the device name, the *Change* control and the picker all hang off `quiet`,
+  so **items 5, 6 and 7 cannot happen in an automated tab at all** — they are not slow or flaky,
+  they are unreachable.
+- **The timer never advanced**, because [useNow.ts](../../src/web/useNow.ts) explicitly stops its
+  interval while hidden and catches up on return. The element, its format and its `role="timer"`
+  are all right; it is frozen for a documented reason rather than a new bug. That it *ticks* is
+  still unproven by anything but a test.
+
+**And one genuinely open question.** Several clean arm→stop cycles of 3s and 4.2s produced no
+`.prof-recording` and no error. A 3s arm is only ~1.9s of recording once the 1.1-second opening gap
+is subtracted, so that one is `MIN_MS` working as designed — but the 4.2s one should have offered a
+file. One earlier stop did produce *"The microphone was disconnected. Press it again to start
+over."*, which means the silent virtual device sometimes **ends its own track**. The suspicion, not
+yet tested: a recorder whose track ends underneath it may go inactive without firing `stop`, in
+which case `halt()` times out, `timedOut` is set, and `MicTape.stop` correctly returns null — so the
+guard that stops us handing over a half-finished file also suppresses the recording in one of the
+cases a reader would most want it. Worth a browser session with `MediaRecorder` instrumented before
+anything is changed; the fix is not obvious and guessing at it would make the evidence contract
+worse.
+
+The extension then disconnected mid-run, so the tab was left without its cleanup: **the mic may
+still be armed on that page, and the profile textarea has not been re-read since**. Its last
+confirmed value was correct, and nothing in the run had a mechanism to change it — the device
+transcribes nothing — but that is an argument, not a reading.
+
 ## What is still unverified
 
 - **Safari and iPadOS**, entirely. There is no `start(audioTrack)` there, so no track, so no meter

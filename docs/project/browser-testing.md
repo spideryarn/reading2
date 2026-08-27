@@ -190,6 +190,17 @@ sometimes you get the black rectangle described just below. Neither reading tell
 fine. Check `document.visibilityState` before believing a negative result, and before believing a
 positive one.
 
+**And what freezes is not only the animation.** Anything *computed inside* a rAF loop is gone too,
+which is easy to miss when the loop's obvious job is drawing. The microphone's `quiet` flag — ten
+seconds below the activity threshold — is worked out in the same tick that moves the level bars
+([useAudioLevel.ts](../../src/web/useAudioLevel.ts)), so in a hidden tab it can never become true,
+and everything hanging off it (the device name, the *Change* control, the microphone picker) is not
+slow or flaky but **unreachable**. A subagent spent an hour on 2026-08-27 waiting past a ten-second
+threshold twice before reading the source. The same goes for anything gated on `visibilityState`
+directly: [useNow.ts](../../src/web/useNow.ts) stops its interval while hidden, so the dictation
+timer sits at `0:00` for a perfectly good reason. **Before reporting that a delayed state never
+arrived, find out what schedules it.**
+
 What still works in a hidden tab, and is therefore what to test there: anything driven by a direct
 call rather than by the rendering step — a fresh page load, a reload, `history.back()`, and clicking a
 control. That is enough to cover URL→page restore, the legacy-hash rewrite, and the history
