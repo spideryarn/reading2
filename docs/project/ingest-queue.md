@@ -97,6 +97,21 @@ document under their own filename in about a second. It also takes the *upload's
 Retry keeps the article it already started rather than stepping aside from itself and paying for
 the transcription twice.
 
+### `/add/upload/<id>` has to survive a reload, and for a day it did not
+
+The address is most of why the ingest lives on a page of its own — you can reload it, bookmark it,
+send it. It could not be reloaded. `canonicalAddHref`, which main.tsx runs on every load to rewrite
+an `/add/` path into the encoded spelling `addHref` mints, did not know about upload addresses: it
+read `/add/upload/<uuid>` as the *URL* `upload/<uuid>`, percent-encoded the slash, and left the
+reader on `/add/upload%2F<uuid>` being told *"That isn't a web address we can fetch"*.
+
+**Every unit test passed while that was true**, and they were not bad tests — the rewrite is
+something `main.tsx` does on load, not something `parseRoute` decides, so nothing that asked
+`parseRoute` could see it. It took pressing reload in a browser
+([browser-testing.md](browser-testing.md)). The guard is now `parseRoute` itself rather than a
+second copy of the pattern, because two places knowing what an upload address looks like is how
+they come to disagree.
+
 ### The slug comes from the filename, and that is the ugly part
 
 `source.pdf` becomes the slug `source`; `paper.pdf` becomes `paper`, then `paper-2`. The reader
@@ -731,6 +746,54 @@ named step tells you what is slow and what is about to fail. A counter tells you
 The two model steps also report as they stream — how much has arrived, not what it says, because the
 JSON is unparseable until it is complete. That is a deliberately low bar: the question a reader
 watching a two-minute step is actually asking is whether anything is still happening.
+
+## The box only shows this sitting
+
+> The "Add an article" shows this long history of imports. Perhaps just show the most recent, or the
+> ones since the page was opened, with the rest hidden by default, and a button to expand them. Or
+> move them to a separate History page. Use your judgment.
+>
+> — Greg, 2026-08-27
+
+Three rules had each been right on its own and added up to the wrong thing. A **successful** job
+leaves the box eight seconds after it finishes (`KEEP_DONE_MS`), because the article it made is on
+the shelf directly below and that is the better place to look at it. A **failed** one never leaves
+at all, deliberately: the card is the only account of what went wrong, and clearing it on a timer
+would take that away while the reader was still reading it. And the server keeps **fifty finished
+jobs per reader**, [*preferring failures*](#the-failures-retry-is-not-offered-under) when it prunes,
+for the same reason.
+
+So the box meant to say *here is what is happening now* was, on any shelf more than a few weeks old,
+a column of every import that had ever gone wrong — sitting above the shelf, which is the actual
+point of the page.
+
+**The line is when the tab was opened**, and everything past it is folded behind one chevron:
+`n earlier imports`. That is `TAB_OPENED_AT` and `earlier` in
+[`AddArticle.tsx`](../../src/web/AddArticle.tsx).
+
+Three things about it are worth writing down.
+
+**Not a separate History page**, which was Greg's other suggestion. A page needs a route, a link
+somebody has to find, and a reason to visit — and the value of these records is nearly all in the
+first minute after something breaks, when you are already looking at the place it broke. A
+disclosure keeps them where they happened and costs one line.
+
+**The clock is module scope, not a mount.** Adding an article navigates to `/add/<url>` and coming
+home remounts the component, so a per-mount clock would fold the failure you caused thirty seconds
+ago into "earlier" before you had read it. This is client-side navigation inside one tab, so a
+module constant is exactly *since the page was opened*. A real reload resets it, and should — that
+is a new sitting.
+
+**The failures are counted on the collapsed line**, in the destructive colour, whether or not it is
+open. Everything under there is finished, so the only reason to look is that one of them went wrong;
+a disclosure that hides a failure without mentioning it is
+[silent-success](../reusable/silent-success.md) with the *reader* as the thing that fails quietly.
+Cancelled jobs are not counted — you stopped it, and you know you did.
+
+The rule that a test can hold on to is **when in doubt, show it**: `earlier` is a positive test, so
+anything still running, and anything whose `finishedAt` cannot be read, stays on screen.
+[`tests/add-article-history.test.ts`](../../tests/add-article-history.test.ts) pins that, because a
+job hidden by mistake is a failure the reader never learns about and nothing on the page looks wrong.
 
 ## When this becomes Postgres
 

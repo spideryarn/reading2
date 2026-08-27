@@ -385,6 +385,20 @@ export function addUrlFromQuery(search: string): string {
  * [`tests/router.test.ts`](../../tests/router.test.ts).
  */
 export function canonicalAddHref(pathname: string, search: string, hash: string): string | null {
+  /* **An upload address is already canonical, and rewriting it destroys it.**
+     `/add/upload/<uuid>` is not an address to fetch, but it lives under the
+     same prefix — so `addUrlFrom` read it as the URL `upload/<uuid>`, `addHref`
+     percent-encoded the slash, and the reader's reload landed on
+     `/add/upload%2F<uuid>`, which matches nothing and rendered "That isn't a
+     web address we can fetch". So the page the whole feature navigates to could
+     not be reloaded, which is most of the reason it has an address at all.
+
+     Found in a browser, 2026-08-27, and only findable there: every unit test
+     passes, because this rewrite is something main.tsx does on load rather than
+     anything `parseRoute` decides. The guard is `parseRoute` itself rather than
+     a second copy of the pattern — two places knowing what an upload address
+     looks like is how they come to disagree. */
+  if (parseRoute(pathname).kind === "add-upload") return null;
   /* **The path is asked first, and the order is the whole of this line's
      content.** With `?add=` consulted first, `/add/https://x.test/article?add=2`
      canonicalised to `/add/2`: the target URL's *own* `add` parameter was read

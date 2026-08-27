@@ -1115,6 +1115,39 @@ leaving staging objects is right under the measured grant-replay behaviour; and 
 invariant holds** — neither the upload request nor the job request accepts an object path, and
 minting derives `staging/<server-generated UUID>` which acquisition derives again.
 
+### The browser pass, and the bug only it could find
+
+**2026-08-27.** Two Sonnet subagents stalled before reaching the app (both traps are now in
+[browser-testing.md](../project/browser-testing.md)), so the pass was driven directly, without
+screenshots: a 6 MB file built in the page, put into the file input, and sent with one click.
+
+What was observed rather than assumed:
+
+| | |
+|---|---|
+| a **6 MB** file — over Vercel's 4.5 MB body limit — accepted and sent | in about a second, on localhost |
+| the `PUT` | `http://127.0.0.1:54361/storage/v1/…` — **Supabase, not our server** |
+| the headers it carried | **`content-type` and nothing else.** No `Authorization`, no `apikey` |
+| the first step's label | "Checking the file" |
+| the server's account of it | `upload six-megabyte-probe: 6144 KB verified`, then `step done: fetch` |
+| the refusal path (a 9-byte text file) | *"That isn't a PDF. Uploads are PDFs for now…"*, and no Send button |
+
+The file was synthetic — 6 MB starting `%PDF-` — so acquisition passed (magic and our hash both
+matched) and pdf.js then refused it: `Invalid PDF structure`, at the right stage, for no model
+spend. `evals/pdf/harder/source.pdf` at 11.5 MB is unreachable from a browser agent at all, because
+`file_upload` carries at most 10 MB over its own bridge.
+
+**And the bug.** Reloading `/add/upload/<id>` — the page the whole feature navigates to — landed on
+`/add/upload%2F<id>` and *"That isn't a web address we can fetch"*. `canonicalAddHref` rewrites
+every `/add/` path on load and did not know about upload addresses. Every unit test passed while
+that was true, because the rewrite is something `main.tsx` does rather than something `parseRoute`
+decides. Fixed, with a test that was checked against the broken state before being trusted; the
+reload now shows the job's real state, which also confirms the `noteSlug` recovery works.
+
+**One thing this did not verify:** the progress bar never visibly moved, because a 6 MB upload to
+localhost fires a single progress event at the full size. The bar exists for a real network and has
+not been watched on one.
+
 ### Still open, and named rather than quietly decided
 
 **An upload's slug comes from its filename.** `source.pdf` becomes `source`; `document.pdf` becomes

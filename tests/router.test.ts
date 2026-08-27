@@ -247,6 +247,29 @@ describe("the upload route", () => {
     expect(parseRoute(`/add/upload/${ID}`).kind).toBe("add-upload");
     expect(parseRoute("/add/https://example.com/upload/x").kind).toBe("add");
   });
+
+  /**
+   * **The reload bug, and it was live.**
+   *
+   * `canonicalAddHref` runs on every load in main.tsx and rewrites an `/add/`
+   * path to the encoded spelling `addHref` mints. It did not know about upload
+   * addresses, so it read `/add/upload/<uuid>` as the *URL* `upload/<uuid>`,
+   * percent-encoded the slash, and sent the reader to
+   * `/add/upload%2F<uuid>` — which matches no route and rendered "That isn't a
+   * web address we can fetch". The page the whole upload flow navigates to
+   * could not be reloaded, which is most of the reason it has an address.
+   *
+   * Every unit test passed while that was true, because the rewrite is
+   * something main.tsx does rather than something `parseRoute` decides. It took
+   * pressing reload in a real browser. See browser-testing.md.
+   */
+  it("is left alone by the canonicalising rewrite", () => {
+    expect(canonicalAddHref(`/add/upload/${ID}`, "", "")).toBeNull();
+    expect(canonicalAddHref(`/add/upload/${ID}/`, "", "")).toBeNull();
+    /* And an ordinary add address is still canonicalised — a guard that turned
+       the rewrite off for everything would pass the two lines above. */
+    expect(canonicalAddHref("/add/https://example.com/an-essay", "", "")).not.toBeNull();
+  });
 });
 
 describe("addUrlFrom", () => {
