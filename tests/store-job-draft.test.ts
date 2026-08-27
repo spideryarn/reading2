@@ -161,6 +161,145 @@ when("the draft a job owns", () => {
     expect(drafts).toHaveLength(1);
   });
 
+  /**
+   * **Two calls at once, carrying the same live token.**
+   *
+   * The sequential test above passed against a version of this function that
+   * only *fenced* on the attempt, and GPT Sol pointed out what that misses:
+   * both calls read `draft_revision_id = null`, the **article** lock serialises
+   * them, and the second then mints R2 holding its stale null — so the job ends
+   * up pointing at R2 with R1 orphaned. Which is the bug the function exists to
+   * prevent, one level in.
+   *
+   * `for update` on the job row is what closes it, taken *before* the article
+   * lock so every caller takes the two in the same order. An ordinary
+   * `/advance` cannot reach this — only one request can hold the claim — but a
+   * primitive whose contract says "one draft" has to mean it whoever calls.
+   */
+  /**
+   * **The job row is held while we wait for the article lock**, which is the
+   * window the race actually lives in — and two more obvious tests do not prove
+   * it, which is why this one looks like this.
+   *
+   * The race: two callers both read `draft_revision_id = null`, both then queue
+   * on `lockArticle`, the first mints R1 and commits, and the second — still
+   * holding its stale null — mints R2 and repoints the job. Fencing on the
+   * attempt does not help; both tokens are live.
+   *
+   * **What does not prove it.** Firing two calls with `Promise.all` and
+   * asserting one draft: passes with `for update` deleted, because the two
+   * transactions do not interleave at the point that matters. Holding the *job*
+   * row and showing the call blocks: also passes with it deleted, because
+   * `fenceJob`'s `UPDATE` at the end of the call blocks on that row regardless.
+   * Both were written, both were watched, and both were green against the
+   * broken code — [silent success](../docs/reusable/silent-success.md), twice in
+   * a row, on the same fix.
+   *
+   * **What does.** Hold the **article** row from somewhere else, so the call is
+   * stuck inside `lockArticle` and has not reached `fenceJob`. Then ask a third
+   * connection for the job row `for update nowait`. If the call took the lock,
+   * that is refused (`55P03`); if it did not, it succeeds — and that success is
+   * precisely the gap two callers slip through.
+   */
+  it("holds the job row while it waits for the article lock", async () => {
+    const job = await claimedJob(SLUG);
+    const db = getDb();
+    const [article] = await db.select().from(articles).where(eq(articles.slug, SLUG)).limit(1);
+    expect(article, "the earlier tests should have made this article").toBeTruthy();
+
+    let release!: () => void;
+    const holdUntil = new Promise<void>((r) => {
+      release = r;
+    });
+    // Somebody else holds the article. Our call will queue behind this.
+    const holder = db.transaction(async (tx) => {
+      await tx
+        .select({ id: articles.id })
+        .from(articles)
+        .where(eq(articles.id, (article as { id: string }).id))
+        .for("update");
+      await holdUntil;
+    });
+    await new Promise((r) => setTimeout(r, 100));
+
+    const call = openOrBeginJobDraft({ slug: SLUG, job });
+    await new Promise((r) => setTimeout(r, 300));
+
+    let jobRowWasFree = false;
+    try {
+      await db.transaction(async (tx) => {
+        await tx
+          .select({ id: jobs.id })
+          .from(jobs)
+          .where(eq(jobs.id, job.id))
+          .for("update", { noWait: true });
+        jobRowWasFree = true;
+      });
+    } catch {
+      // 55P03 lock_not_available — which is the answer we want.
+    }
+
+    release();
+    await holder;
+    await call;
+
+    expect(jobRowWasFree, "openOrBeginJobDraft left the job row unlocked").toBe(false);
+  });
+
+  it("mints one draft when two callers ask together", async () => {
+    const job = await claimedJob(SLUG);
+    /* **The delta, not the total.** Earlier tests in this file leave their own
+       drafts on this article, and asserting "one draft exists" would be
+       measuring those rather than this race — a test that fails for a true
+       reason it is not about is worse than no test. */
+    const draftsNow = async (articleId: string) =>
+      (
+        await getDb()
+          .select({ id: articleRevisions.id })
+          .from(articleRevisions)
+          .where(
+            and(eq(articleRevisions.articleId, articleId), eq(articleRevisions.status, "draft")),
+          )
+      ).length;
+
+    const [a, b] = await Promise.all([
+      openOrBeginJobDraft({ slug: SLUG, job }),
+      openOrBeginJobDraft({ slug: SLUG, job }),
+    ]);
+
+    expect(a.revisionId).toBe(b.revisionId);
+    // Exactly one of them did the minting; the other reopened.
+    expect([a.created, b.created].filter(Boolean)).toHaveLength(1);
+
+    // A third call adds nothing, which is the same fact from a settled state.
+    const before = await draftsNow(a.articleId);
+    const third = await openOrBeginJobDraft({ slug: SLUG, job });
+    expect(third.created).toBe(false);
+    expect(third.revisionId).toBe(a.revisionId);
+    expect(await draftsNow(a.articleId)).toBe(before);
+
+    // And the job points at the one that exists.
+    const [row] = await getDb()
+      .select({ draft: jobs.draftRevisionId })
+      .from(jobs)
+      .where(eq(jobs.id, job.id))
+      .limit(1);
+    expect(row?.draft).toBe(a.revisionId);
+  });
+
+  it("refuses a live token carrying somebody else's slug", async () => {
+    /* The one unusable-pointer case that is **not** recoverable. Null, swept and
+       non-draft all fall back to minting, because none is anybody's fault. A
+       live token with the wrong slug means a caller has mixed two jobs up, and
+       minting would repoint a perfectly good job at an article it has nothing
+       to do with — the same class of fault as `enqueue` renaming a slug out
+       from under a request. GPT Sol, 2026-08-27. */
+    const job = await claimedJob(SLUG);
+    await expect(openOrBeginJobDraft({ slug: OTHER_SLUG, job })).rejects.toBeInstanceOf(
+      NotTheLiveAttempt,
+    );
+  });
+
   it("refuses a claimant that no longer holds the job", async () => {
     /* Fenced on the live attempt, and read inside the transaction that may
        mint. An unfenced read would let a claimant whose lease has lapsed reopen
