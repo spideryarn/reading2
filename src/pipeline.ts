@@ -737,7 +737,7 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
      while the canonical object stays corrupt. Uploads were the one path still
      doing it the old way after the helper landed, which is the shape a shared
      helper is supposed to prevent. GPT Sol, 2026-08-27. */
-  const { outcome: promotion } = await storeRawSource(got, "pdf");
+  const { sha256: storedSha256, outcome: promotion } = await storeRawSource(got, "pdf");
 
   await mkdir(ctx.dir, { recursive: true });
   await writeFile(path.join(ctx.dir, "raw.pdf"), got);
@@ -757,6 +757,20 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
     encoding: null,
     bytes: got.byteLength,
     sha256,
+    /* **The two stored fields, which this path was writing to the bucket and
+       then leaving out of the manifest.** `storeRawSource` above returns the
+       digest it stored under and it was being discarded, so every uploaded
+       document reached the Postgres artefact store naming no object and was
+       refused outright (`NoStoredDocument`). Uploads were the one acquisition
+       path still doing this after `writeRaw` was fixed — the same shape as the
+       `putIfAbsent` bug two comments up, which is what a shared helper is meant
+       to prevent. GPT Sol, 2026-08-28.
+
+       For a PDF this equals `sha256` above, because the stored bytes *are* the
+       fetched bytes. It is taken from the helper's return anyway rather than
+       assumed, since that is the value the object is actually under. */
+    storedSha256,
+    storedBytes: got.byteLength,
     fetchedAt: new Date().toISOString(),
   };
   await writeFile(

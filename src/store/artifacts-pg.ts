@@ -54,15 +54,18 @@
  * 4. **An artefact of zero blocks reads as absent.** See `readBlocks`.
  */
 import { and, asc, eq } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
 import {
   articleRevisions,
   blockIdentities,
+  rawSources,
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
 import { sniffKind } from "../fetch.js";
+import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
 import { log } from "../log.js";
 import type { Block, Meta, StepName } from "../types.js";
@@ -341,20 +344,28 @@ function rawKindOf(row: RevisionRow, slug: string): DocumentKind | null {
 /**
  * `raw.json`, rebuilt from the columns — stage 1's manifest.
  *
- * **What cannot be rebuilt is absent rather than invented.** `origin`,
- * `uploadId` and `filename` live only in the manifest and have no column, so an
- * uploaded document reads back as a fetch. That is a real gap with a real cost
- * — `GET /api/source/:slug` and "can this be refreshed?" both want `origin` —
- * and it is C6's: `raw_filename` is where the reader's own name for an
- * uploaded file goes. An invented `origin: "url"` would
- * be a false statement every later reader would believe.
+ * **What cannot be rebuilt is absent rather than invented.** `origin` and
+ * `uploadId` have no column: `origin` is derivable (both URLs are null exactly
+ * when the document was uploaded) and is not yet wired up; `uploadId` is not
+ * durably recoverable at all, because publication clears `jobs.draft_revision_id`
+ * and a job can be deleted, so the revision keeps no link back. That is a
+ * promise this adapter does not make rather than one it fakes — an invented
+ * `origin: "url"` would be a false statement every later reader would believe.
  *
  * `contentType`, `encoding` and `sha256` are `T | null` in `RawManifest` rather
  * than optional, so they are written even when null: the difference between "we
  * know it was null" and "we never recorded it" is what that type exists to
  * express.
+ *
+ * **The stored size comes from `raw_sources`, not from here**, which is why
+ * this takes a second row. `raw_sources.bytes` describes the object at
+ * `storedSha256`, and it is the only place that number lives.
  */
-function readRaw(row: RevisionRow, slug: string): RawManifest | null {
+function readRaw(
+  row: RevisionRow,
+  slug: string,
+  source: { bytes: number } | null,
+): RawManifest | null {
   const kind = rawKindOf(row, slug);
   if (!kind) return null;
   const fetchedAt = row.fetchedAt ?? row.createdAt;
@@ -363,17 +374,35 @@ function readRaw(row: RevisionRow, slug: string): RawManifest | null {
     file: kind === "pdf" ? "raw.pdf" : "raw.html",
     ...(row.requestedUrl === null ? {} : { requestedUrl: row.requestedUrl }),
     ...(row.finalUrl === null ? {} : { url: row.finalUrl }),
+    ...(row.rawFilename === null ? {} : { filename: row.rawFilename }),
     contentType: row.rawContentType,
     encoding: row.rawEncoding,
-    /* The **stored** byte count is what `raw_sources.bytes` describes, and
-       there is no column for it yet — C6. `raw_bytes` is the closest honest
-       number today and is null for a revision whose document only ever went to
-       the bucket, so this reads 0 rather than inventing one. */
-    bytes: row.rawBytes?.byteLength ?? 0,
+    /* **`raw_byte_count`, not `raw_bytes.byteLength`.** This read `0` until
+       2026-08-28 — the column had just been added for exactly this number and
+       the reader was not changed to use it, so a manifest that went in saying
+       4096 came back saying 0. And a test asserted the 0. `raw_bytes` is
+       dropped at the end of this landing, so it is the fallback rather than the
+       answer: a revision written before the column exists still has it. */
+    bytes: row.rawByteCount ?? row.rawBytes?.byteLength ?? 0,
     sha256: row.rawSha256,
     ...(row.rawSourceSha256 === null ? {} : { storedSha256: row.rawSourceSha256 }),
+    ...(source === null ? {} : { storedBytes: source.bytes }),
     fetchedAt: fetchedAt.toISOString(),
   };
+}
+
+/** The `raw_sources` row this revision points at, if it points at one. */
+async function sourceRowFor(
+  exec: Executor,
+  row: RevisionRow,
+): Promise<{ bytes: number } | null> {
+  if (row.rawSourceSha256 === null || row.rawSourceKind === null) return null;
+  const [source] = await exec
+    .select({ bytes: rawSources.bytes })
+    .from(rawSources)
+    .where(and(eq(rawSources.sha256, row.rawSourceSha256), eq(rawSources.kind, row.rawSourceKind)))
+    .limit(1);
+  return source ?? null;
 }
 
 /**
@@ -460,7 +489,8 @@ export async function readArtefact<K extends ArtifactKind>(
     const row = await revisionRow(exec, ref.revisionId);
     if (!row) return null;
     if (site.at === "column") return row[site.column];
-    return site.of === "meta" ? readMeta(ref, row) : readRaw(row, slug);
+    if (site.of === "meta") return readMeta(ref, row);
+    return readRaw(row, slug, await sourceRowFor(exec, row));
   })();
 
   if (value === null || value === undefined) return null;
@@ -543,13 +573,21 @@ export async function hasArtefacts(
   kinds: readonly ArtifactKind[],
 ): Promise<boolean> {
   requireBound(ref, slug);
+  /* **Every pair validated first, before any early return.** `siteFor` throws
+     for a `(step, kind)` no step produces, and the file adapter throws for it
+     unconditionally — but reading the run row first made this one *state
+     dependent*: `has("arc", ["glossary"])` returned false while no arc run
+     existed and threw once one did. A check that changes its mind about whether
+     an argument is valid is worse than either answer. GPT Sol, 2026-08-28. */
+  for (const kind of kinds) siteFor(step, kind);
+
   /* Matching the file adapter: nothing requested is not "yes, all of nothing".
      A step whose `produces` is empty has not been shown to have run. */
   if (kinds.length === 0) return false;
 
-  /* The row first, because it is one small indexed read and the common case in
-     a re-run is that it says no — where reading the artefacts means pulling a
-     megabyte of blocks back to find out the same thing. */
+  /* The row before the artefacts, because it is one small indexed read and the
+     common case in a re-run is that it says no — where reading the artefacts
+     means pulling a megabyte of blocks back to find out the same thing. */
   const run = await runRowFor(ref, exec, step);
   if (run?.status !== "done") return false;
 
@@ -582,6 +620,27 @@ export async function stepInterrupted(
 }
 
 /* ----------------------------------------------------------- stampFor -- */
+
+/**
+ * Refused: the run row and the artefact do not agree about what made it.
+ *
+ * Its own type because the repair is specific and there is no safe default. The
+ * artefact is the *authority* on its own freshness — the file adapter reads it
+ * and nothing else — but a disagreement is a fact about the row, and resolving
+ * it silently in the artefact's favour is how a stale artefact gets served for
+ * ever. `writeArtefacts` refuses to create this state; this is what to do when
+ * a store already holds it, which the importer and every CLI run can produce.
+ */
+export class StampDisagrees extends Error {
+  readonly status = 409;
+  constructor(slug: string, step: StepName, fields: readonly string[]) {
+    super(
+      `the ${step} run row for "${slug}" and its artefact disagree about ${fields.join(", ")}, ` +
+        `so there is no usable stamp. Re-run the step, or fix the row.`,
+    );
+    this.name = "StampDisagrees";
+  }
+}
 
 /**
  * What the store recorded about this step's last run.
@@ -647,16 +706,19 @@ export async function stampForStep(
         fromRow[f] !== undefined && fromArtefact[f] !== undefined && fromRow[f] !== fromArtefact[f],
     );
     if (clashes.length > 0) {
-      /* The field names, never the values: an `inputHash` is a hash, but a
-         `promptVersion` and a `model` are ours to log and the rule is one rule.
-         `warn` because this does not resolve itself — the step will re-run on
-         every job until somebody looks. */
-      alog.warn(
-        { slug, step, clashes },
-        `the ${step} run row and its artefact disagree about ${clashes.join(" and ")} — ` +
-          `no usable stamp for ${slug}`,
-      );
-      return null;
+      /* **Thrown, not returned as `null`.** `null` already means "nothing was
+         recorded", and the two are not the same answer: every caller reads a
+         null stamp as *re-run this step*, which quietly resolves the clash in
+         favour of the artefact — the exact outcome this rule exists to forbid.
+         `copyArtefacts` makes it concrete: it turns a null stamp into `{}` and
+         copies the artefact anyway, so the destination ends up holding the
+         artefact's own stamp and no record that anything disagreed.
+         GPT Sol, 2026-08-28.
+
+         The field names go into the message and never the values: an
+         `inputHash` is a hash and harmless, but a `promptVersion` and a `model`
+         are ours to name and the rule is one rule. */
+      throw new StampDisagrees(slug, step, clashes);
     }
   }
 
@@ -670,19 +732,39 @@ export async function stampForStep(
 /* --------------------------------------------------------------- write -- */
 
 /**
- * Which columns of `article_revisions` each assembled artefact owns.
+ * The columns `meta` owns — **stage 2's own reading of the piece, and nothing
+ * else.**
+ *
+ * ## What is deliberately not here, and why it matters
+ *
+ * `meta.json` also carries `url`, `fetchedAt` and `rawSha256`, and all three
+ * are **stage 1's facts that stage 2 copied**. Writing them from here would let
+ * `extract` overwrite what `fetch` recorded, and each of the three would be
+ * wrong in its own way:
+ *
+ * - **`fetchedAt` would be the extraction time.** `src/extract.ts` writes
+ *   `new Date().toISOString()` into it — stage 2's clock, not stage 1's. The
+ *   shelf sorts on this column, so an article re-extracted today would jump to
+ *   the top of the library as though it had just arrived.
+ * - **`rawSha256` would be nulled out for every web page.** `Meta.rawSha256` is
+ *   a PDF field; an HTML `meta` has none, and `?? null` would clear the hash
+ *   `fetch` had just written.
+ * - **`finalUrl` is stage 1's answer** to where the redirects ended, and stage 2
+ *   only ever sees what it was handed.
+ *
+ * `readMeta` still reads all three back out of the columns, because that is
+ * what `meta.json` holds on disk and parity is the point. The rule is that one
+ * step *writes* each column and another may *report* it.
  *
  * Written out rather than derived, because these are the columns `write` is
- * allowed to set and nothing else may be inferred from a `Meta` — a stage that
- * grows a field must be made to decide where it goes.
+ * allowed to set: a stage that grows a field must be made to decide where it
+ * goes.
  */
 const META_COLUMNS = [
   "title",
   "byline",
   "siteName",
   "lang",
-  "finalUrl",
-  "fetchedAt",
   "excerpt",
   "note",
   "source",
@@ -691,10 +773,9 @@ const META_COLUMNS = [
   "unverified",
   "recall",
   "pagesChecked",
-  "rawSha256",
 ] as const;
 
-/** `meta.json` taken apart into the columns it came from — the inverse of `readMeta`. */
+/** `meta.json` taken apart into the columns it owns — the inverse of `readMeta`. */
 function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> {
   /* **Every column named, and `?? null` on every one of them.** A field the
      stage stopped producing has to *clear* its column, not leave last
@@ -705,8 +786,6 @@ function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> 
     byline: meta.byline ?? null,
     siteName: meta.siteName ?? null,
     lang: meta.lang ?? null,
-    finalUrl: meta.url ?? null,
-    fetchedAt: meta.fetchedAt ? new Date(meta.fetchedAt) : null,
     excerpt: meta.excerpt ?? null,
     note: meta.note ?? null,
     source: meta.source ?? null,
@@ -715,17 +794,183 @@ function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> 
     unverified: meta.unverified ?? null,
     recall: meta.recall ?? null,
     pagesChecked: meta.pagesChecked ?? null,
-    rawSha256: meta.rawSha256 ?? null,
   };
   /* The declared list and the object above must not drift; `META_COLUMNS` is
-     what `readMeta`'s inverse is checked against in the test. */
+     what the test checks the two halves against. */
   const written = Object.keys(columns);
   const missing = META_COLUMNS.filter((c) => !written.includes(c));
-  if (missing.length) throw new Error(`meta write is missing ${missing.join(", ")}`);
+  const extra = written.filter((c) => !(META_COLUMNS as readonly string[]).includes(c));
+  if (missing.length || extra.length) {
+    throw new Error(
+      `the meta write and META_COLUMNS disagree: missing ${missing.join(", ") || "none"}, ` +
+        `unexpected ${extra.join(", ") || "none"}`,
+    );
+  }
   return columns;
 }
 
 /**
+ * The columns `raw` owns — everything stage 1 learned, and the pointer to the
+ * document itself.
+ */
+const RAW_COLUMNS = [
+  "requestedUrl",
+  "finalUrl",
+  "fetchedAt",
+  "rawContentType",
+  "rawEncoding",
+  "rawSha256",
+  "rawByteCount",
+  "rawFilename",
+  "rawSourceSha256",
+  "rawSourceKind",
+] as const;
+
+/**
+ * Refused: this manifest names no object, so writing it would record a fetch
+ * with no document behind it.
+ *
+ * `storedSha256` is the key of the object in the `sources` bucket. A manifest
+ * without one is either older than the bucket or was rebuilt from columns by
+ * `db:export`, and in both cases **we do not hold the document**. Writing the
+ * rest of it would leave a `fetch` step reporting done beside a revision whose
+ * `raw_source_sha256` is null — and `article_revisions_raw_source_both` would
+ * not even complain, because null-and-null is a legal pair meaning "we do not
+ * have the source".
+ *
+ * `scripts/backfill-raw-manifests.ts` is the repair for an existing corpus: it
+ * stores the bytes that are already on disk and adds the two fields.
+ */
+export class NoStoredDocument extends Error {
+  readonly status = 422;
+  constructor(slug: string) {
+    super(
+      `the raw manifest for "${slug}" has no storedSha256, so it names no object in the ` +
+        `sources bucket. Refusing rather than recording a fetch with no document behind it — ` +
+        `run scripts/backfill-raw-manifests.ts if the bytes are still on disk.`,
+    );
+    this.name = "NoStoredDocument";
+  }
+}
+
+/**
+ * Refused: the `raw_sources` row disagrees with the manifest about the object.
+ *
+ * The row is **shared** — every revision that fetched the same document points
+ * at it — so a disagreement is not this revision's problem to resolve. Same
+ * digest and same kind must mean the same bytes, therefore the same count and
+ * the same canonical content type; if they differ, one of the two is describing
+ * something else and a person has to look.
+ */
+export class RawSourceDisagrees extends Error {
+  readonly status = 409;
+  constructor(sha256: string, kind: string, differences: string) {
+    super(
+      `the raw_sources row for ${kind} ${sha256.slice(0, 12)}… already says ${differences}. ` +
+        `Two things cannot hash to one name, so this needs a person rather than a winner.`,
+    );
+    this.name = "RawSourceDisagrees";
+  }
+}
+
+/**
+ * Record the document's row, and hand back the columns that point at it.
+ *
+ * Two writes, and the order is the foreign key's: `raw_sources` first, because
+ * `article_revisions_raw_source_fk` is a composite key onto `(sha256, kind)`
+ * and a reference to a row that is not there is refused by the database. That
+ * refusal is the design working — a half-pointer is the thing the schema exists
+ * to prevent.
+ *
+ * **The object itself is not written here.** `storeRawSource` put it in the
+ * bucket at fetch time, outside any transaction, keyed by its own contents —
+ * which is safe precisely because the name is the checksum, so writing twice is
+ * a no-op and an object nothing references is one we keep on purpose. What this
+ * writes is the *row*, inside the caller's transaction, so the reference and
+ * the artefacts land together or not at all.
+ *
+ * ## `verified_at` is not touched on conflict, and that is the whole point
+ *
+ * The column means *"when the bytes at this key were last shown to hash to
+ * it"*. **This function verifies nothing** — it is handed a `RawManifest`,
+ * which is a file, and a file is not proof that an object exists. An earlier
+ * version set `verified_at` to `now()` on every write, which meant that
+ * pointing a revision at a hash was enough to certify an object nobody had
+ * looked at. GPT Sol found it by noticing the tests invent hashes and never put
+ * an object behind them.
+ *
+ * So: on insert, `verified_at` is the manifest's own `fetchedAt`, which is when
+ * `storeRawSource` did the verifying — traceable, and never later than the
+ * truth. On conflict it is left alone, because nothing here has re-verified
+ * anything. The sweeper that re-verifies is the thing entitled to move it.
+ *
+ * And on conflict the two describable facts are **compared**, not ignored: same
+ * digest and kind must mean the same bytes.
+ */
+async function writeRawSource(
+  tx: Tx,
+  slug: string,
+  manifest: RawManifest,
+): Promise<Partial<typeof articleRevisions.$inferInsert>> {
+  const { storedSha256, kind } = manifest;
+  if (!storedSha256) throw new NoStoredDocument(slug);
+
+  /* `storedBytes` and `bytes` are two different numbers and only one of them
+     describes the object — see `RawManifest`. A manifest with a stored hash and
+     no stored size is one this adapter has never written, and guessing with the
+     network count would put a wrong size on a shared row. */
+  if (manifest.storedBytes === undefined) {
+    throw new NoStoredDocument(slug);
+  }
+
+  const [existing] = await tx
+    .select({ bytes: rawSources.bytes, contentType: rawSources.contentType })
+    .from(rawSources)
+    .where(and(eq(rawSources.sha256, storedSha256), eq(rawSources.kind, kind)))
+    .for("update")
+    .limit(1);
+
+  if (existing) {
+    const differences: string[] = [];
+    if (existing.bytes !== manifest.storedBytes) {
+      differences.push(`${existing.bytes} bytes and this says ${manifest.storedBytes}`);
+    }
+    if (existing.contentType !== CONTENT_TYPE[kind]) {
+      differences.push(`content type ${existing.contentType} and this kind is ${CONTENT_TYPE[kind]}`);
+    }
+    if (differences.length) {
+      throw new RawSourceDisagrees(storedSha256, kind, differences.join(", and "));
+    }
+  } else {
+    await tx.insert(rawSources).values({
+      sha256: storedSha256,
+      kind,
+      bytes: manifest.storedBytes,
+      contentType: CONTENT_TYPE[kind],
+      verifiedAt: new Date(manifest.fetchedAt),
+    });
+  }
+
+  const columns: Partial<typeof articleRevisions.$inferInsert> = {
+    requestedUrl: manifest.requestedUrl ?? null,
+    finalUrl: manifest.url ?? null,
+    fetchedAt: new Date(manifest.fetchedAt),
+    rawContentType: manifest.contentType,
+    rawEncoding: manifest.encoding,
+    rawSha256: manifest.sha256,
+    rawByteCount: manifest.bytes,
+    rawFilename: manifest.filename ?? null,
+    rawSourceSha256: storedSha256,
+    rawSourceKind: kind,
+  };
+  const written = Object.keys(columns);
+  const missing = RAW_COLUMNS.filter((c) => !written.includes(c));
+  if (missing.length) throw new Error(`raw write is missing ${missing.join(", ")}`);
+  return columns;
+}
+
+/**
+ * Replace this revision's blocks, wholesale./**
  * Replace this revision's blocks, wholesale.
  *
  * Three statements, and the order and the conditions are all load-bearing:
@@ -774,28 +1019,6 @@ async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): 
         note: b.note ?? null,
       })),
     );
-  }
-}
-
-/**
- * Refused: `raw` cannot be written yet, and saying so beats writing half of it.
- *
- * The manifest names a document, and putting the document somewhere is the
- * other half — the `raw_sources` row, the reference pair, and the byte count
- * that `raw_sources.bytes` needs and `RawManifest.bytes` is not. That is C6 of
- * docs/plans/delete-the-importer.md. Until it lands, a `write` that quietly
- * skipped this part would leave a `fetch` step reporting done beside a revision
- * that holds no document at all.
- */
-export class RawNotWritable extends Error {
-  readonly status = 501;
-  constructor(slug: string) {
-    super(
-      `cannot write the raw manifest for "${slug}" yet: the source reference and the stored ` +
-        `byte count land in C6 of docs/plans/delete-the-importer.md. Refusing rather than ` +
-        `recording a fetch with no document behind it.`,
-    );
-    this.name = "RawNotWritable";
   }
 }
 
@@ -861,6 +1084,15 @@ export async function writeArtefacts(
     assertStampAgrees(slug, step, kind, value, stamp);
   }
 
+  /* **The step-run row is locked here, before any artefact table is touched.**
+     It used to be taken at the end, with the stamp, and the transaction made
+     that *safe* — a late `StepRunNotHeld` rolls everything back. It was still
+     wrong: a call with no `beginStep` would replace every block row of an
+     article and insert a `raw_sources` row before discovering a protocol error
+     it could have discovered first, and any database error raised on the way
+     would mask the refusal that actually explains it. GPT Sol, 2026-08-28. */
+  await lockStepRun(ref, tx, step);
+
   /* One `UPDATE` for all the column-shaped parts, rather than one each: they
      are columns of the same row, and a step that writes two of them (`extract`)
      should not be able to land one and not the other. */
@@ -875,7 +1107,7 @@ export async function writeArtefacts(
     } else if (site.of === "meta") {
       columns = { ...columns, ...metaColumns(value as Meta) };
     } else {
-      throw new RawNotWritable(slug);
+      columns = { ...columns, ...(await writeRawSource(tx, slug, value as RawManifest)) };
     }
   }
   if (Object.keys(columns).length) {
@@ -889,29 +1121,51 @@ export async function writeArtefacts(
 }
 
 /**
- * Put the stamp on the running step-run row, fenced.
+ * Take the running step-run row for this attempt, or refuse.
+ *
+ * `SELECT … FOR UPDATE` on the primary key, held for the rest of the caller's
+ * transaction — so nothing can change the row's attempt or status between this
+ * and the update that follows, and the two statements are as safe as one.
+ *
+ * Zero rows is the fence working: held by another attempt, already ended, or
+ * never begun. A `write` with no preceding `beginStep` is the last of those,
+ * and it is a protocol error rather than something to tolerate — the artefacts
+ * would land with nothing recording that a run produced them.
+ */
+async function lockStepRun(ref: JobDraftRef, tx: Tx, step: StepName): Promise<void> {
+  const [row] = await tx
+    .select({ stepName: revisionStepRuns.stepName })
+    .from(revisionStepRuns)
+    .where(heldBy(ref, step))
+    .for("update")
+    .limit(1);
+  if (!row) throw new StepRunNotHeld(ref.revisionId, step);
+}
+
+/** This revision's row for this step, running under this attempt. Nothing else. */
+function heldBy(ref: JobDraftRef, step: StepName): SQL | undefined {
+  return and(
+    eq(revisionStepRuns.revisionId, ref.revisionId),
+    eq(revisionStepRuns.stepName, step),
+    eq(revisionStepRuns.attemptId, ref.attemptId),
+    eq(revisionStepRuns.status, "running"),
+  );
+}
+
+/**
+ * Put the stamp on the running step-run row.
  *
  * Only the fields the caller declared, because `undefined` in a `StepStamp`
  * means *this step does not record that* and writing a null over a real value
  * would be a different claim. `NO_INPUT_HASH` stays where `beginStepRun` put it
  * for a step that declares no input.
  *
- * **The lock comes first and the update second, and they are not one
- * statement.** Three of a step's four stamp fields are optional and three steps
- * declare none of them at all, so `fetch`, `extract` and `blocks` arrive here
- * with an empty stamp — and an `UPDATE` with nothing to set is an error rather
- * than a no-op. Folding the fence into the update would therefore have made the
- * fence *conditional on the step having a stamp*, which is exactly backwards:
- * the steps with no stamp are the ones whose completion nothing else can check.
- *
- * `for update` holds the row for the rest of the caller's transaction, so
- * nothing moves between the check and the write.
- *
- * A missing row is `StepRunNotHeld`, and zero rows is the fence working: held
- * by another attempt, already ended, or never begun. A `write` with no
- * preceding `beginStep` is the last of those, and it is a protocol error rather
- * than something to tolerate — the artefacts would land with nothing recording
- * that a run produced them.
+ * **The lock was taken at the top of `write`**, so this does not re-check
+ * whether the row is held — it holds it. Three steps declare no stamp at all,
+ * and an `UPDATE` with nothing to set is an error rather than a no-op, so
+ * folding the fence into this statement would have made the fence *conditional
+ * on the step having a stamp*: exactly backwards, since those are the steps
+ * whose completion nothing else can check.
  */
 async function recordStamp(
   ref: JobDraftRef,
@@ -919,21 +1173,6 @@ async function recordStamp(
   step: StepName,
   stamp: StepStamp,
 ): Promise<void> {
-  const held = and(
-    eq(revisionStepRuns.revisionId, ref.revisionId),
-    eq(revisionStepRuns.stepName, step),
-    eq(revisionStepRuns.attemptId, ref.attemptId),
-    eq(revisionStepRuns.status, "running"),
-  );
-
-  const [row] = await tx
-    .select({ stepName: revisionStepRuns.stepName })
-    .from(revisionStepRuns)
-    .where(held)
-    .for("update")
-    .limit(1);
-  if (!row) throw new StepRunNotHeld(ref.revisionId, step);
-
   const set = {
     ...(stamp.inputHash === undefined ? {} : { inputHash: stamp.inputHash }),
     ...(stamp.implementationVersion === undefined
@@ -944,7 +1183,7 @@ async function recordStamp(
   };
   if (Object.keys(set).length === 0) return;
 
-  const result = await tx.update(revisionStepRuns).set(set).where(held);
+  const result = await tx.update(revisionStepRuns).set(set).where(heldBy(ref, step));
   if (result.rowCount !== 1) throw new StepRunNotHeld(ref.revisionId, step);
 }
 

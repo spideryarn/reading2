@@ -47,12 +47,15 @@
  * `storeRawSource` is create-only and verifies a dedup hit rather than trusting
  * it.
  */
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, readdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { loadEnvLocal } from "../src/env.js";
+import { sniffKind } from "../src/fetch.js";
 import type { RawManifest } from "../src/fetch.js";
-import { storeRawSource } from "../src/store/blobs.js";
+import { blobStore, storeRawSource } from "../src/store/blobs.js";
+import { canonicalKey } from "../src/source.js";
 
 loadEnvLocal();
 
@@ -87,6 +90,67 @@ function withStored(
   };
 }
 
+/**
+ * Is this file actually a manifest, and does it describe itself consistently?
+ *
+ * **The cast used to be unchecked**, which let `{ kind: "html", file:
+ * "raw.pdf" }` through — and the object would then have gone into the bucket
+ * under an *HTML* canonical key while holding PDF bytes, which is the one thing
+ * content addressing must never do. GPT Sol, 2026-08-28.
+ *
+ * Three checks, and the third is the one that would have caught it: the kind,
+ * the filename the kind implies, and the bytes themselves. `sniffKind` is the
+ * authority on the last, for the reason src/fetch.ts gives — a PDF served as
+ * `application/octet-stream` is still a PDF.
+ */
+export function whyNotUsable(manifest: RawManifest, bytes: Buffer): string | null {
+  if (manifest.kind !== "html" && manifest.kind !== "pdf") {
+    return `kind is ${JSON.stringify(manifest.kind)}, which is not html or pdf`;
+  }
+  const expected = manifest.kind === "pdf" ? "raw.pdf" : "raw.html";
+  if (manifest.file !== expected) {
+    return `kind is ${manifest.kind} and file is "${manifest.file}", which do not match`;
+  }
+  const sniffed = sniffKind(manifest.contentType, bytes);
+  if (sniffed !== manifest.kind) {
+    return `kind says ${manifest.kind} and the bytes look like ${sniffed}`;
+  }
+  return null;
+}
+
+/**
+ * The object at this key, and whether it is still what its name says.
+ *
+ * **A manifest that already carries both fields is not proof the object is
+ * there.** Reporting "already done" over a deleted or corrupt object is exactly
+ * the reassurance this script exists to stop somebody relying on, and the cost
+ * of checking is one read of a document we already hold. GPT Sol, 2026-08-28.
+ */
+async function objectStillGood(manifest: RawManifest, bytes: Buffer): Promise<string | null> {
+  const key = canonicalKey(manifest.storedSha256 as string, manifest.kind);
+  const there = await blobStore().get(key, { maxBytes: bytes.byteLength + 1 });
+  if (!there) return `nothing is at ${key}`;
+  if (createHash("sha256").update(there).digest("hex") !== manifest.storedSha256) {
+    return `what is at ${key} does not hash to its own name`;
+  }
+  return null;
+}
+
+/**
+ * Replace `raw.json`, whole or not at all.
+ *
+ * `writeFile` in place was the first version, and a crash or a full disk part
+ * way through it destroys the only copy of a manifest whose provenance cannot
+ * be recovered. Same recipe as `writeAtomic` in src/store/artifacts-fs.ts: the
+ * rename is atomic within a directory, so a reader sees the old file or the
+ * whole new one. GPT Sol, 2026-08-28.
+ */
+async function replaceAtomically(file: string, body: string): Promise<void> {
+  const tmp = `${file}.${process.pid}.tmp`;
+  await writeFile(tmp, body, "utf8");
+  await rename(tmp, file);
+}
+
 async function backfillOne(slug: string, write: boolean): Promise<Outcome> {
   const dir = path.join(DATA, slug);
   const manifestFile = path.join(dir, "raw.json");
@@ -101,9 +165,6 @@ async function backfillOne(slug: string, write: boolean): Promise<Outcome> {
     throw err;
   }
 
-  if (manifest.storedSha256 && manifest.storedBytes !== undefined) {
-    return { slug, what: "already done" };
-  }
 
   /* **A rebuilt manifest is backfilled too, and the first version of this
      refused it.** `db:export` writes `backfilled` onto every manifest it
@@ -123,6 +184,10 @@ async function backfillOne(slug: string, write: boolean): Promise<Outcome> {
      article that reads back this way has lost its origin provenance and only a
      re-fetch will bring that back. */
 
+  if (typeof manifest.file !== "string" || manifest.file.length === 0) {
+    return { slug, what: "REFUSED", detail: "the manifest names no file" };
+  }
+
   let bytes: Buffer;
   try {
     bytes = await readFile(path.join(dir, manifest.file));
@@ -133,15 +198,40 @@ async function backfillOne(slug: string, write: boolean): Promise<Outcome> {
     throw err;
   }
 
+  const wrong = whyNotUsable(manifest, bytes);
+  if (wrong) return { slug, what: "REFUSED", detail: wrong };
+
+  /* **Hashed in the dry run too.** A report that says only the kind and the
+     size cannot tell you whether the manifest already there is right, which is
+     the question a dry run is for. */
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+
+  if (manifest.storedSha256 && manifest.storedBytes !== undefined) {
+    if (manifest.storedSha256 !== sha256 || manifest.storedBytes !== bytes.byteLength) {
+      return {
+        slug,
+        what: "REFUSED",
+        detail: "the manifest names an object that is not the file beside it",
+      };
+    }
+    const gone = await objectStillGood(manifest, bytes);
+    return gone
+      ? { slug, what: "REFUSED", detail: gone }
+      : { slug, what: "already done", detail: "and the object is still there" };
+  }
+
   if (!write) {
-    return { slug, what: "would store", detail: `${manifest.kind}, ${bytes.byteLength} bytes` };
+    return {
+      slug,
+      what: "would store",
+      detail: `${manifest.kind}, ${bytes.byteLength} bytes, ${sha256.slice(0, 12)}…`,
+    };
   }
 
   const stored = await storeRawSource(bytes, manifest.kind);
-  await writeFile(
+  await replaceAtomically(
     manifestFile,
     `${JSON.stringify(withStored(manifest, stored.sha256, bytes.byteLength), null, 2)}\n`,
-    "utf8",
   );
   /* Both numbers, because the interesting cases are the ones where they differ:
      any page that was not already UTF-8 is stored re-encoded, so the stored
@@ -188,4 +278,16 @@ async function main(): Promise<void> {
   if (refused.length) process.exitCode = 1;
 }
 
-void main();
+/**
+ * **Only when run as a command.** `tests/backfill-manifest.test.ts` imports
+ * `whyNotUsable` from this file, and a bare `void main()` at module scope means
+ * importing one pure function starts a run that reads `data/`, talks to the
+ * bucket and — with `--write` in `process.argv` — rewrites manifests. Under
+ * vitest it began and the process exited before it finished, so it left no
+ * output and looked like nothing had happened.
+ *
+ * Same guard as src/fetch.ts and src/blocks.ts use, and the same reasoning:
+ * importing a module must not also run it.
+ */
+const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+if (isMain) void main();

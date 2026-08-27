@@ -102,6 +102,19 @@ describe("acquiring an uploaded file", () => {
        read as an address to everything downstream and nothing would complain. */
     expect(manifest?.url).toBeUndefined();
     expect(manifest?.requestedUrl).toBeUndefined();
+    /* **The two fields that name the object in the bucket**, and this test was
+       green without them for a day. `storeRawSource` was called, its digest
+       discarded, and the manifest written without it — so every uploaded
+       document reached the Postgres artefact store naming no object and was
+       refused. "The same manifest a fetch writes" is the claim in this test's
+       own name, and it was not checking the part of the manifest that had just
+       become load-bearing. GPT Sol, 2026-08-28.
+
+       Equal to `sha256` for a PDF, because the stored bytes are the fetched
+       bytes; asserted against the bytes rather than against the other field, so
+       that a path which set them from each other would still fail. */
+    expect(manifest?.storedSha256).toBe(shaOf(bytes));
+    expect(manifest?.storedBytes).toBe(bytes.byteLength);
     expect(new Uint8Array(await readFile(path.join(dir, "raw.pdf")))).toEqual(bytes);
   });
 

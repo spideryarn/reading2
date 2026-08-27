@@ -39,6 +39,20 @@
  * | drop the title check | *says no meta at all when there is no title* |
  * | prefer sniffing over `raw_source_kind` | *takes the document kind from the source reference* |
  *
+ * ## It cannot run twice at once, and that is worth knowing before it confuses you
+ *
+ * The fixture is one article at a fixed slug, created in `beforeAll` and deleted
+ * in `afterAll`. Two copies of this file running against the same database tear
+ * each other's fixture down mid-test: measured, deliberately — two concurrent
+ * `vitest run` of this file gave 20 and 25 failures with 19 and 26 skipped,
+ * where each alone is green three times running. The skips are the giveaway,
+ * because they mean a `beforeAll` threw rather than an assertion failing.
+ *
+ * Vitest will not do that to itself — one file runs once per invocation — so
+ * this only happens when two runs overlap by hand, which is exactly how it was
+ * found. It is not the same problem as the shared `running` job slot
+ * (`withClaim` below); that one is between *different* suites and is retried.
+ *
  * Skips loudly when there is no database, for the reason tests/db-schema.test.ts
  * explains at length.
  */
@@ -58,7 +72,8 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { PATHS } from "../src/store/artifacts-fs.js";
 import {
-  RawNotWritable,
+  NoStoredDocument,
+  RawSourceDisagrees,
   STORAGE,
   WrongArticle,
   hasArtefacts,
@@ -66,6 +81,7 @@ import {
   siteFor,
   pgArtifactsIn,
   readOnlyPgArtifacts,
+  StampDisagrees,
   stampForStep,
   stepInterrupted,
   writeArtefacts,
@@ -76,9 +92,15 @@ import type { ArtifactKind } from "../src/store/artifacts.js";
 import { STEPS, STEP_ORDER } from "../src/pipeline.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
-import { NotTheLiveAttempt, StepRunNotHeld, beginStepRun } from "../src/store/pg-revisions.js";
+import {
+  NotTheLiveAttempt,
+  StepRunNotHeld,
+  beginStepRun,
+  publishRevision,
+} from "../src/store/pg-revisions.js";
 import { jobs } from "../src/db/schema.js";
 import type { Block, JobStep, Meta } from "../src/types.js";
+import type { RawManifest } from "../src/fetch.js";
 import type { Arc, Ideas, Tree } from "../src/types.js";
 import type { LabelsFile } from "../src/labels.js";
 
@@ -237,7 +259,14 @@ async function makeFixture(): Promise<void> {
       sha256: STORED_SHA,
       kind: "html",
       bytes: 29,
-      contentType: "text/html; charset=utf-8",
+      /* **The canonical type for the kind, not the server's claim.** The
+         revision's `raw_content_type` records what the origin said —
+         `text/html; charset=utf-8` below — and this records what the object in
+         the bucket is stored as, which `storeRawSource` sets from
+         `CONTENT_TYPE[kind]`. The first version of this fixture put the
+         server's claim here and `writeArtefacts` correctly refused it as a
+         disagreement, which is the check working on its author. */
+      contentType: "text/html",
       verifiedAt: FETCHED_AT,
     })
     .onConflictDoNothing();
@@ -263,6 +292,12 @@ async function makeFixture(): Promise<void> {
       rawContentType: "text/html; charset=utf-8",
       rawEncoding: "utf-8",
       rawSha256: NETWORK_SHA,
+      /* Deliberately not equal to the `raw_sources` row's 29 bytes below: this
+         is what the network sent and that is the size of what we stored, and
+         for a page that was not already UTF-8 they differ. A fixture where they
+         matched could not tell a reader that swapped them. */
+      rawByteCount: 31,
+      rawFilename: "The Reader's Own Name.html",
       rawSourceSha256: STORED_SHA,
       rawSourceKind: "html",
       extractedHtml: "<p>as Readability left it</p>",
@@ -492,20 +527,58 @@ when("reassembling meta and raw from their columns", () => {
     }
   });
 
-  it("takes the document kind from the source reference", async () => {
+  it("rebuilds the manifest from every column that holds a piece of it", async () => {
+    /* **A written-out literal, and it used to say `bytes: 0`.** `raw_byte_count`
+       and `raw_filename` had just been added for exactly these two fields and
+       `readRaw` was not changed to read them, so a manifest that went in saying
+       4096 bytes came back saying 0 — and this test asserted the 0, which is
+       how a fixture stops being an oracle and becomes a record of the bug.
+       GPT Sol, 2026-08-28.
+
+       `storedBytes` comes from the joined `raw_sources` row, because that is
+       the only place the object's size lives. */
     const raw = await readArtefact(ref, getDb(), SLUG, "fetch", "raw");
     expect(raw).toEqual({
       kind: "html",
       file: "raw.html",
       requestedUrl: "https://example.test/asked",
       url: "https://example.test/landed",
+      filename: "The Reader's Own Name.html",
       contentType: "text/html; charset=utf-8",
       encoding: "utf-8",
-      bytes: 0,
+      bytes: 31,
       sha256: NETWORK_SHA,
       storedSha256: STORED_SHA,
+      storedBytes: 29,
       fetchedAt: "2026-03-04T05:06:07.000Z",
     });
+  });
+
+  it("keeps the network byte count and the object's size apart", async () => {
+    /* The same distinction as the two hashes, one field along, and the one a
+       reader that took `raw_sources.bytes` for both would fail. */
+    const raw = await readArtefact(ref, getDb(), SLUG, "fetch", "raw");
+    expect(raw?.bytes, "what the network sent").toBe(31);
+    expect(raw?.storedBytes, "the object in the bucket").toBe(29);
+  });
+
+  it("falls back to the stored bytes column for a revision written before raw_byte_count", async () => {
+    /* `raw_bytes` is dropped at the end of this landing, so it is the fallback
+       rather than the answer — but a revision that predates the column still
+       has to read back with a size. */
+    const db = getDb();
+    await db
+      .update(articleRevisions)
+      .set({ rawByteCount: null, rawBytes: Buffer.from("<p>eleven</p>") })
+      .where(eq(articleRevisions.id, ref.revisionId));
+    try {
+      expect((await readArtefact(ref, getDb(), SLUG, "fetch", "raw"))?.bytes).toBe(13);
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ rawByteCount: 31, rawBytes: null })
+        .where(eq(articleRevisions.id, ref.revisionId));
+    }
   });
 
   it("keeps the network hash and the stored hash apart", async () => {
@@ -560,6 +633,9 @@ when("reassembling meta and raw from their columns", () => {
       expect(raw?.kind).toBe("pdf");
       expect(raw?.file).toBe("raw.pdf");
       expect(raw?.storedSha256).toBeUndefined();
+      /* No reference means no `raw_sources` row to join, so the object's size is
+         absent rather than guessed from the network count. */
+      expect(raw?.storedBytes).toBeUndefined();
     } finally {
       await db
         .update(articleRevisions)
@@ -674,13 +750,33 @@ when("what the store recorded about a run", () => {
     });
   });
 
-  it("refuses a stamp the row and the artefact disagree about", async () => {
-    /* My first version of this asserted that the artefact silently wins. GPT
-       Sol said no on 2026-08-28: the artefact is the *authority*, but a
-       disagreement is a fact about the row, and resolving it quietly is how a
-       stale artefact gets served for ever. No usable stamp, and a warning. */
-    await runRow("arc", { promptVersion: "arc/0", model: "a-model-from-last-week" });
-    expect(await stampForStep(ref, getDb(), SLUG, "arc")).toBeNull();
+  it("throws on a prompt version the row and the artefact disagree about", async () => {
+    /* **Thrown, not `null`.** My first version had the artefact silently win;
+       the second returned `null`, which is no better, because `null` already
+       means "nothing recorded" and every caller reads it as *re-run the step* —
+       `copyArtefacts` turns it into `{}` and copies the artefact anyway, so the
+       clash is resolved in the artefact's favour with nothing saying so. GPT
+       Sol, twice, 2026-08-28.
+
+       And the two fields are asserted **separately**: a single case that moved
+       both would stay green if either comparison disappeared. */
+    await runRow("arc", { promptVersion: "arc/0" });
+    await expect(stampForStep(ref, getDb(), SLUG, "arc")).rejects.toThrow(StampDisagrees);
+    await expect(stampForStep(ref, getDb(), SLUG, "arc")).rejects.toThrow(/promptVersion/);
+  });
+
+  it("throws on a model the row and the artefact disagree about", async () => {
+    await runRow("arc", { model: "a-model-from-last-week" });
+    await expect(stampForStep(ref, getDb(), SLUG, "arc")).rejects.toThrow(/model/);
+  });
+
+  it("says nothing about the field that agrees", async () => {
+    /* The message names what disagrees and nothing else — a refusal that listed
+       every field would send somebody to look at the two that are fine. */
+    await runRow("arc", { promptVersion: "arc/1", model: "a-model-from-last-week" });
+    await expect(stampForStep(ref, getDb(), SLUG, "arc")).rejects.toThrow(
+      /disagree about model,/,
+    );
   });
 
   it("does not let the row supply what the artefact has no room for", async () => {
@@ -775,6 +871,18 @@ when("whether a step has actually produced anything", () => {
     await expect(hasArtefacts(ref, getDb(), "elsewhere", "toc", ["tree"])).rejects.toThrow(
       WrongArticle,
     );
+  });
+
+  it("refuses a kind the step does not produce, whether or not it has run", async () => {
+    /* **The same answer in both states**, which it was not: reading the run row
+       first made the validity of an argument depend on the database, so
+       `has("arc", ["glossary"])` returned false while no arc run existed and
+       threw once one did. The file adapter throws unconditionally, and a check
+       that changes its mind about whether its argument is valid is worse than
+       either answer. GPT Sol, 2026-08-28. */
+    await expect(has("arc", ["glossary"])).rejects.toThrow(/arc does not produce glossary/);
+    await runRow("arc", "done");
+    await expect(has("arc", ["glossary"])).rejects.toThrow(/arc does not produce glossary/);
   });
 
   it("says no to a step whose artefacts are all there but which never ran", async () => {
@@ -961,10 +1069,14 @@ when("writing artefacts into a draft", () => {
     });
   });
 
-  it("takes meta apart into columns and puts it back together", async () => {
+  it("takes meta apart into the columns it owns and puts it back together", async () => {
     /* The round trip is the assertion: `metaColumns` and `readMeta` are
-       inverses, and a field one of them forgets is a field that silently stops
-       surviving an extraction. */
+       inverses over the columns `extract` owns, and a field one of them forgets
+       is a field that silently stops surviving an extraction.
+
+       The three stage-1 fields — `url`, `fetchedAt`, `rawSha256` — come back
+       from the columns `fetch` wrote, not from the meta handed in. See the next
+       test, which is the one that matters. */
     await withClaim(async (tx, claimed) => {
       await begun(tx, claimed, "extract");
       const meta: Meta = {
@@ -972,8 +1084,8 @@ when("writing artefacts into a draft", () => {
         title: "Rewritten",
         byline: "Somebody",
         lang: "fr",
-        url: "https://example.test/again",
-        fetchedAt: "2026-05-06T07:08:09.000Z",
+        excerpt: "Two other sentences.",
+        note: "a note",
         source: "pdf",
         method: "openai/gpt-5.6-luna/pdf-v1",
         pages: 17,
@@ -984,21 +1096,72 @@ when("writing artefacts into a draft", () => {
       /* `extract` writes two things and this writes one, which the store allows
          — `has` is what refuses the half-finished step, not `write`. */
       await writeArtefacts(claimed, tx, SLUG, "extract", { meta }, {});
-      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toEqual(meta);
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toEqual({
+        ...meta,
+        // The fixture's stage-1 columns, untouched.
+        url: "https://example.test/landed",
+        fetchedAt: "2026-03-04T05:06:07.000Z",
+        rawSha256: NETWORK_SHA,
+      });
     });
   });
 
-  it("clears a column for a field the new meta does not have", async () => {
+  it("does not let extract overwrite what fetch recorded", async () => {
+    /* **The reason `META_COLUMNS` is shorter than `meta.json`.** All three of
+       these are stage 1's facts that stage 2 copies, and each would be wrong in
+       its own way if `extract` wrote it:
+
+       - `src/extract.ts` sets `fetchedAt` to `new Date()` — *its* clock. The
+         shelf sorts on that column, so a re-extraction would send the article
+         to the top of the library as though it had just arrived.
+       - `Meta.rawSha256` is a PDF field, so an HTML meta has none and `?? null`
+         would clear the hash `fetch` wrote.
+       - `finalUrl` is where stage 1's redirects ended; stage 2 only sees what it
+         was handed.
+
+       Watched red by putting the three back into `metaColumns`. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      await writeArtefacts(
+        claimed,
+        tx,
+        SLUG,
+        "extract",
+        {
+          meta: {
+            slug: SLUG,
+            title: "Re-extracted today",
+            url: "https://example.test/somewhere-else",
+            fetchedAt: "2026-08-28T00:00:00.000Z",
+          },
+        },
+        {},
+      );
+      const [row] = await tx
+        .select({
+          finalUrl: articleRevisions.finalUrl,
+          fetchedAt: articleRevisions.fetchedAt,
+          rawSha256: articleRevisions.rawSha256,
+        })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(row?.finalUrl).toBe("https://example.test/landed");
+      expect(row?.fetchedAt?.toISOString()).toBe("2026-03-04T05:06:07.000Z");
+      expect(row?.rawSha256).toBe(NETWORK_SHA);
+    });
+  });
+
+  it("clears a column extract owns when the new meta does not have it", async () => {
     /* The fixture has a `siteName` and an `excerpt`; this meta has neither. An
        absent-key-means-leave-it write would leave last extraction's values
        sitting beside this one's, and the result would read perfectly. */
     await withClaim(async (tx, claimed) => {
       await begun(tx, claimed, "extract");
       await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { slug: SLUG, title: "Bare" } }, {});
-      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toEqual({
-        slug: SLUG,
-        title: "Bare",
-      });
+      const back = await readArtefact(claimed, tx, SLUG, "extract", "meta");
+      expect(back).not.toHaveProperty("siteName");
+      expect(back).not.toHaveProperty("excerpt");
+      expect(back).toMatchObject({ slug: SLUG, title: "Bare" });
     });
   });
 
@@ -1044,14 +1207,328 @@ when("writing artefacts into a draft", () => {
     });
   });
 
-  it("refuses to write the raw manifest, rather than writing half of it", async () => {
+  it("refuses a manifest that names no object in the bucket", async () => {
+    /* No `storedSha256` means **we do not hold the document**. Writing the rest
+       would leave a `fetch` reporting done beside a null reference — and
+       `article_revisions_raw_source_both` would not complain, because
+       null-and-null is a legal pair meaning exactly "we do not have the
+       source". The database cannot catch this one; the adapter has to. */
     await withClaim(async (tx, claimed) => {
       await begun(tx, claimed, "fetch");
-      const raw = await readArtefact(claimed, tx, SLUG, "fetch", "raw");
-      expect(raw).not.toBeNull();
+      const manifest: RawManifest = {
+        kind: "html",
+        file: "raw.html",
+        contentType: "text/html",
+        encoding: "utf-8",
+        bytes: 10,
+        sha256: NETWORK_SHA,
+        fetchedAt: "2026-08-28T00:00:00.000Z",
+      };
       await expect(
-        writeArtefacts(claimed, tx, SLUG, "fetch", { raw: raw ?? undefined }, {}),
-      ).rejects.toThrow(RawNotWritable);
+        writeArtefacts(claimed, tx, SLUG, "fetch", { raw: manifest }, {}),
+      ).rejects.toThrow(NoStoredDocument);
+    });
+  });
+
+  it("refuses a manifest with a stored hash and no stored size", async () => {
+    /* `raw_sources.bytes` describes the object, and `RawManifest.bytes` counts
+       what the network sent — two different numbers for any page that was not
+       already UTF-8, because `writeRaw` stores the decoded text. Guessing with
+       the network count would put a wrong size on a **shared** row that other
+       revisions point at. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      const manifest: RawManifest = {
+        kind: "html",
+        file: "raw.html",
+        contentType: "text/html",
+        encoding: "utf-8",
+        bytes: 10,
+        sha256: NETWORK_SHA,
+        storedSha256: "c3".repeat(32),
+        fetchedAt: "2026-08-28T00:00:00.000Z",
+      };
+      await expect(
+        writeArtefacts(claimed, tx, SLUG, "fetch", { raw: manifest }, {}),
+      ).rejects.toThrow(NoStoredDocument);
+    });
+  });
+
+  it("writes the source row and the reference pair together", async () => {
+    /* The first thing in this project ever to write either. The order is the
+       foreign key's: `raw_sources` before the reference, or
+       `article_revisions_raw_source_fk` refuses — which is the design working,
+       since a reference to a row that is not there is a half-pointer. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      const fresh = "d4".repeat(32);
+      const manifest: RawManifest = {
+        kind: "pdf",
+        file: "raw.pdf",
+        origin: "upload",
+        uploadId: "up_1",
+        filename: "The Reader's Own Name.pdf",
+        contentType: "application/pdf",
+        encoding: null,
+        bytes: 4096,
+        sha256: NETWORK_SHA,
+        storedSha256: fresh,
+        storedBytes: 4096,
+        fetchedAt: "2026-08-28T01:02:03.000Z",
+      };
+      await writeArtefacts(claimed, tx, SLUG, "fetch", { raw: manifest }, {});
+
+      const [source] = await tx
+        .select()
+        .from(rawSources)
+        .where(and(eq(rawSources.sha256, fresh), eq(rawSources.kind, "pdf")));
+      expect(source?.bytes, "the stored size, not the network size").toBe(4096);
+      expect(source?.contentType).toBe("application/pdf");
+
+      const [row] = await tx
+        .select({
+          sha: articleRevisions.rawSourceSha256,
+          kind: articleRevisions.rawSourceKind,
+          filename: articleRevisions.rawFilename,
+          count: articleRevisions.rawByteCount,
+        })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(row).toEqual({
+        sha: fresh,
+        kind: "pdf",
+        filename: "The Reader's Own Name.pdf",
+        count: 4096,
+      });
+    });
+  });
+
+  it("refuses a manifest that disagrees with the source row already there", async () => {
+    /* The `raw_sources` row is **shared** — every revision that fetched the same
+       document points at it — so two manifests claiming different sizes for one
+       digest is corruption, not a race to resolve. Two things cannot hash to
+       one name. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      const manifest: RawManifest = {
+        kind: "html",
+        file: "raw.html",
+        contentType: "text/html",
+        encoding: "utf-8",
+        bytes: 10,
+        sha256: NETWORK_SHA,
+        storedSha256: STORED_SHA,
+        // The fixture's row says 29.
+        storedBytes: 999,
+        fetchedAt: "2026-08-28T00:00:00.000Z",
+      };
+      await expect(
+        writeArtefacts(claimed, tx, SLUG, "fetch", { raw: manifest }, {}),
+      ).rejects.toThrow(RawSourceDisagrees);
+    });
+  });
+
+  it("refuses a manifest whose kind is stored under a different content type", async () => {
+    /* The other half of the shared-row comparison. Same digest, same kind, and
+       a row saying the object is a PDF — one of the two is describing something
+       else. */
+    const db = getDb();
+    await db
+      .update(rawSources)
+      .set({ contentType: "application/pdf" })
+      .where(and(eq(rawSources.sha256, STORED_SHA), eq(rawSources.kind, "html")));
+    try {
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "fetch");
+        await expect(
+          writeArtefacts(
+            claimed,
+            tx,
+            SLUG,
+            "fetch",
+            {
+              raw: {
+                kind: "html",
+                file: "raw.html",
+                contentType: "text/html; charset=utf-8",
+                encoding: "utf-8",
+                bytes: 31,
+                sha256: NETWORK_SHA,
+                storedSha256: STORED_SHA,
+                storedBytes: 29,
+                fetchedAt: "2026-08-28T00:00:00.000Z",
+              },
+            },
+            {},
+          ),
+        ).rejects.toThrow(/content type application\/pdf/);
+      });
+    } finally {
+      await db
+        .update(rawSources)
+        .set({ contentType: "text/html" })
+        .where(and(eq(rawSources.sha256, STORED_SHA), eq(rawSources.kind, "html")));
+    }
+  });
+
+  it("does not restamp a shared source row it has not verified", async () => {
+    /* `verified_at` means "when the bytes at this key were last shown to hash to
+       it", and this function is handed a *file*. Pointing a revision at a hash
+       is not looking at the object. So the existing row's timestamp is left
+       exactly where the thing that did verify put it. */
+    const db = getDb();
+    const [was] = await db
+      .select({ verifiedAt: rawSources.verifiedAt })
+      .from(rawSources)
+      .where(and(eq(rawSources.sha256, STORED_SHA), eq(rawSources.kind, "html")));
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      await writeArtefacts(
+        claimed,
+        tx,
+        SLUG,
+        "fetch",
+        {
+          raw: {
+            kind: "html",
+            file: "raw.html",
+            contentType: "text/html; charset=utf-8",
+            encoding: "utf-8",
+            bytes: 31,
+            sha256: NETWORK_SHA,
+            storedSha256: STORED_SHA,
+            storedBytes: 29,
+            fetchedAt: "2026-08-28T00:00:00.000Z",
+          },
+        },
+        {},
+      );
+      const [now] = await tx
+        .select({ verifiedAt: rawSources.verifiedAt })
+        .from(rawSources)
+        .where(and(eq(rawSources.sha256, STORED_SHA), eq(rawSources.kind, "html")));
+      expect(now?.verifiedAt?.toISOString()).toBe(was?.verifiedAt?.toISOString());
+    });
+  });
+
+  it("dates a new source row from when the object was actually stored", async () => {
+    /* Not `now()`. The manifest's `fetchedAt` is when `storeRawSource` did the
+       verifying, so it is traceable and never later than the truth — where
+       `now()` would certify an object this function has never looked at. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      const fresh = "f6".repeat(32);
+      await writeArtefacts(
+        claimed,
+        tx,
+        SLUG,
+        "fetch",
+        {
+          raw: {
+            kind: "pdf",
+            file: "raw.pdf",
+            contentType: "application/pdf",
+            encoding: null,
+            bytes: 8,
+            sha256: NETWORK_SHA,
+            storedSha256: fresh,
+            storedBytes: 8,
+            fetchedAt: "2025-01-02T03:04:05.000Z",
+          },
+        },
+        {},
+      );
+      const [row] = await tx
+        .select({ verifiedAt: rawSources.verifiedAt })
+        .from(rawSources)
+        .where(and(eq(rawSources.sha256, fresh), eq(rawSources.kind, "pdf")));
+      expect(row?.verifiedAt?.toISOString()).toBe("2025-01-02T03:04:05.000Z");
+    });
+  });
+
+  it("keeps the two byte counts apart, as it keeps the two hashes apart", async () => {
+    /* A page that was not UTF-8: the network sent 9000 bytes and we stored
+       10000 of decoded text. `raw_sources.bytes` must be the second and
+       `raw_byte_count` the first, and swapping them reads perfectly. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      const fresh = "e5".repeat(32);
+      await writeArtefacts(
+        claimed,
+        tx,
+        SLUG,
+        "fetch",
+        {
+          raw: {
+            kind: "html",
+            file: "raw.html",
+            url: "https://example.test/shift-jis",
+            contentType: "text/html; charset=shift_jis",
+            encoding: "shift_jis",
+            bytes: 9000,
+            sha256: NETWORK_SHA,
+            storedSha256: fresh,
+            storedBytes: 10000,
+            fetchedAt: "2026-08-28T01:02:03.000Z",
+          },
+        },
+        {},
+      );
+      const [source] = await tx
+        .select({ bytes: rawSources.bytes })
+        .from(rawSources)
+        .where(and(eq(rawSources.sha256, fresh), eq(rawSources.kind, "html")));
+      const [row] = await tx
+        .select({ count: articleRevisions.rawByteCount })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(source?.bytes, "the object's size").toBe(10000);
+      expect(row?.count, "what the network sent").toBe(9000);
+    });
+  });
+
+  it("does no work at all before refusing a write with no run", async () => {
+    /* **The order, not just the outcome.** The transaction made a late refusal
+       *safe* — everything rolls back — and it was still wrong: this would have
+       replaced every block row of the article and inserted a `raw_sources` row
+       before discovering a protocol error it could discover first, and any
+       database error raised on the way would mask the refusal that explains it.
+       Watched red by moving `lockStepRun` back to the end. */
+    await withClaim(async (tx, claimed) => {
+      const before = await tx
+        .select({ id: revisionBlocks.blockId })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.revisionId, claimed.revisionId));
+      await expect(
+        writeArtefacts(claimed, tx, SLUG, "blocks", { blocks: { blocks: [] } }, {}),
+      ).rejects.toThrow(StepRunNotHeld);
+      const after = await tx
+        .select({ id: revisionBlocks.blockId })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.revisionId, claimed.revisionId));
+      expect(after, "the delete must not have run").toHaveLength(before.length);
+      expect(before).not.toHaveLength(0);
+    });
+  });
+
+  it("leaves an article with no blocks not-done, from end to end", async () => {
+    /* The complete outcome rather than the row count: begin, write nothing,
+       finish — and then the three things that have to follow. A `blocks` step
+       that produced nothing has not produced its artefact, and everything
+       downstream has to agree about that. */
+    await withClaim(async (tx, claimed) => {
+      const store = pgArtifactsIn(claimed, tx);
+      const attempt = await store.beginStep(SLUG, "blocks");
+      await store.write(SLUG, "blocks", { blocks: { blocks: [] } }, {});
+      await store.finishStep(SLUG, "blocks", attempt);
+
+      expect(await store.read(SLUG, "blocks", "blocks"), "no artefact").toBeNull();
+      expect(await store.has(SLUG, "blocks", ["blocks"]), "not done").toBe(false);
+      /* And publication refuses independently, so the two guards do not depend
+         on each other. */
+      await expect(
+        publishRevision({ slug: SLUG, revisionId: claimed.revisionId }),
+      ).rejects.toThrow();
     });
   });
 
