@@ -475,6 +475,36 @@ roughly 900px**, and 700px is comfortably past the point where it stops meaning 
 
 *This section is derived from the stylesheet, not observed* — see the tooling caveat below.
 
+## A backgrounded tab is not slow, it is stopped — and the poll is how you tell
+
+**Measured 2026-08-27.** An agent clicked a button, the tab stopped answering every CDP call for
+two minutes (`Script injection timed out`, `the renderer may be frozen`), and the obvious reading
+was that the click handler was blocking the main thread. It was not, and the server log said so in
+one line: **the page's own `GET /api/jobs` poll had stopped six minutes before the click**, and the
+request that handler makes never arrived at all. The handler never ran.
+
+What actually happened is Chrome freezing or hard-throttling a tab that had been in the background
+— the same trap as [§ scroll events in a hidden tab](#scroll-then-read-the-address-bar), one step
+further along: not "some events do not fire" but "nothing runs". Two other tabs were open.
+
+So, two rules:
+
+- **Keep the tab you are driving in the foreground**, and do not open or switch to another between
+  starting something and it finishing. A tab you are not looking at may not be running.
+- **The app's own polling is a free liveness signal.** `useJobs` asks for `/api/jobs` every eight
+  seconds, so a gap in that cadence in the server log is a tab that stopped executing, timestamped.
+  Reach for it *before* diagnosing anything as slow code — it is the difference between a bug in
+  the page and a browser doing what browsers do.
+
+### `file_upload` cannot carry a file over 10 MB
+
+Its own words: *"total upload size would exceed 10 MB. file_upload sends file contents over the
+browser bridge in a single message."* That is the tool, not the page — the bytes never reach the
+input. It matters here because the file most worth testing an upload with is the big one, and
+`evals/pdf/harder/source.pdf` at 11.5 MB is out of reach this way. `much-harder/source.pdf` is
+6.1 MB, still comfortably over Vercel's 4.5 MB body limit, and so still proves what the big file
+was there to prove.
+
 ## A browser subagent stalls silently unless the parent does the handshake first
 
 **Measured 2026-08-27, at the cost of an hour.** Two Sonnet subagents were dispatched to check
