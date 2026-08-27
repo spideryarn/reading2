@@ -411,6 +411,54 @@ when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
     expect(hits.hits.map((h) => h.slug)).not.toContain(SLUG);
   });
 
+  /**
+   * **The reader's own PDF, which the first version of this work walked past.**
+   *
+   * `GET /api/source/:slug` was authenticated and not authorised: it took a
+   * slug, went straight to `data/<slug>/raw.pdf` and returned it, never asking
+   * the store whose article it was. Every other route was covered because every
+   * other route resolves a slug through `ownedSlug()`; this one did not resolve
+   * a slug at all. GPT Sol, 2026-08-27.
+   *
+   * The fixture has no PDF, so the honest reading of this test is narrow: it
+   * pins that the *ownership* check happens, and that it happens **before** the
+   * file is looked for. Both readers would get a 404 either way — what this
+   * asserts is that the outsider's 404 is refused rather than not-found, which
+   * is exactly the distinction that was missing.
+   */
+  it("does not hand a stranger the reader's original file", async () => {
+    const { pgShelfStore } = await import("../src/store/pg-shelf.js");
+    /* The check `sendSource` now performs, at the seam it performs it. As the
+       owner it resolves; as anybody else it is a 404 before a byte is read. */
+    await expect(
+      runInRequest(async () => {
+        setRequestOwner(OUTSIDER);
+        return pgShelfStore.read(SLUG);
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      runInRequest(async () => {
+        setRequestOwner(theEnvironmentsOwner);
+        return pgShelfStore.read(SLUG);
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  /** And the route really does ask, rather than the check merely existing. */
+  it("and the route asks before it touches the disk", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { fileURLToPath } = await import("node:url");
+    const source = await readFile(
+      fileURLToPath(new URL("../src/routes.ts", import.meta.url)),
+      "utf8",
+    );
+    const body = /async function sendSource\([\s\S]*?\n}/.exec(source)?.[0] ?? "";
+    expect(body).toContain("shelfStore.read(slug)");
+    /* Before `fsLocations`, not after. A check that runs after the file has been
+       read is not a check, and the order is the whole of it. */
+    expect(body.indexOf("shelfStore.read(slug)")).toBeLessThan(body.indexOf("fsLocations(slug)"));
+  });
+
   /** The reader profile is keyed on owner directly, rather than through a slug. */
   it("does not share a reader profile", async () => {
     const { pgReaderStore } = await import("../src/store/pg-reader.js");

@@ -162,6 +162,26 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * served from our origin — the one place a wrong content type becomes script.
  */
 async function sendSource(res: ServerResponse, slug: string): Promise<void> {
+  /* **Ask the store whose article this is, before reading a byte off disk.**
+   *
+     This route was authenticated and *not* authorised: it took a slug, went
+     straight to `data/<slug>/raw.pdf` and returned it, never once asking the
+     store whether the caller owns that article. So the whole of the ownership
+     work landed and Bob could still download Alice's private paper by naming
+     its slug — and until the jobs list was closed too, he could read the slugs
+     off it. GPT Sol found the pair, 2026-08-27.
+
+     `shelfStore.read` rather than a new query, because it is the same
+     owner-filtered lookup every other route already goes through, and it throws
+     the same 404. A second way of asking is a second thing to get wrong: this
+     one is right whenever `ownedSlug` is right, which is the property worth
+     having. The answer is discarded — it is asked as a question, not read.
+
+     Under `SPIDERYARN_STORE=files` this checks nothing, because that store has
+     no owner column. That is the same hole src/store/index.ts refuses to boot
+     into in production, and it is why it does. */
+  await shelfStore.read(slug);
+
   /* `fsLocations`, not a path built here — the store is the layer allowed to
      know where an article's files are, and a second copy of that knowledge is
      how one of them ends up pointing somewhere else. src/store/artifacts-fs.ts. */
@@ -2176,8 +2196,11 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
  *
  * `guidance` deliberately stays: the summary panel puts it back in the box.
  */
-function publicJob(job: Job): Omit<Job, "profile"> {
-  const { profile: _hidden, ...rest } = job;
+function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
+  /* `ownerId` goes too. The client never needs it — it can only ever be looking
+     at its own jobs now — and an `auth.users` uuid on the wire is one more
+     thing that has to not end up in a log, a bug report or a screenshot. */
+  const { profile: _hidden, ownerId: _whose, ...rest } = job;
   return rest;
 }
 

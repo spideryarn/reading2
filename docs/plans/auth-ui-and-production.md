@@ -1132,13 +1132,58 @@ The first HTTP test also **failed for real on its first run**, before any of tha
 person A's profile, because the suite had not forced `SPIDERYARN_STORE=postgres` and the filesystem
 store has no owner column. That is the hole `src/store/index.ts` now refuses to boot into.
 
+### What Sol found in the ownership work
+
+The built change went back for a second review the same day, and it came back
+**BLOCKER — the isolation claim is false**. The full text is in
+[ownership-code-review-sol.md](ownership-code-review-sol.md); it was right, and
+the reason is worth keeping.
+
+The claim I asked it to attack was this: *every path from a slug to an article
+carries an owner filter, and that is the whole of the isolation, because the other
+owned tables are reached only through an `articleId` that came from one of those
+paths.* That is true of the store. It is not true of the application, and the two
+live holes were both **outside the store** — which is precisely why a predicate
+inside it, and a static guard that greps for that predicate, saw neither:
+
+| | |
+|---|---|
+| `GET /api/source/:slug` | read `data/<slug>/raw.pdf` straight off disk, never resolving the slug at all |
+| the ingest queue | `Job` had no owner; list, get, cancel, retry, advance and delete all took an id and did not ask whose |
+
+And Sol chained them, which is the part I would not have thought of:
+
+> Combining findings 1 and 2 gives Bob a reliable sequence: list Alice's PDF job,
+> take its slug, then download its source.
+
+Both are fixed, along with two latent ones from the same review — that a p-queue
+callback does not inherit an owner (measured: with concurrency 1, Bob's whole task
+runs in Alice's context), and that `npm run db:import` could take another owner's
+article and everything anchored to it, reporting success at every step. Each has a
+test that was watched failing:
+
+| broken on purpose | what went red |
+|---|---|
+| `mine()` in jobs.ts returning `true` again | 7 of the 9 in `owner-jobs.test.ts` |
+| the `shelfStore.read` removed from `sendSource` | the ordering test in `owner-isolation.test.ts` |
+
+**The lesson I would keep** is about the shape of the guard rather than the bugs.
+A predicate plus a grep is a good way to make sure every query of a known kind is
+right, and it is no way at all to find the code that never makes that kind of
+query. `sendSource` and the jobs routes were invisible to it for the same reason
+they were broken: they never asked the store anything.
+
 ### What this does not close
 
 - **Anyone with a Google account can still sign in** and spend the model budget. That is the risk
   Greg actually accepted, and a spend limit is its control. `isAllowed()` is one line if it turns out
   to be needed sooner.
-- **The ingest queue is on disk** and carries no owner. It does not work on Vercel at all, which is
-  the only reason that is not urgent.
+- **`SPIDERYARN_STORE=files` has no isolation**, and unset still means `files`. Production refuses to
+  boot on it; every other host does not.
+- **Child rows are trusted to match their article.** The owner column on comments, chat, searches and
+  lookups is written and never read, and nothing in the database enforces the invariant.
+- **The ingest queue is on disk.** It carries an owner now, but `jobs.owner_id` in the schema is still
+  unused and the queue does not work on Vercel at all.
 - **No RLS.** The filtering is in the queries, so a query written without the predicate is the whole
   exposure — which is what the static guard is for, and it is a grep rather than a proof.
 - **`articles.slug` stays globally unique.** Two people ingesting the same URL is still an open

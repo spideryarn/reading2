@@ -154,14 +154,73 @@ it.
   would have failed anyway for want of a writable disk, but as an ENOENT on the first read, which
   reads as a missing article rather than as a store that should never have been selected.
 
+### The two things the first version of this walked straight past
+
+GPT Sol reviewed the ownership work the day it landed and came back **BLOCKER —
+the isolation claim is false**, with two live cross-reader reads. Both were
+outside the store, which is exactly why the predicate above did not catch them:
+
+- **`GET /api/source/:slug` read the reader's PDF straight off disk.** It was
+  authenticated and not authorised — it took a slug, opened `data/<slug>/raw.pdf`
+  and returned it, never once asking whose article that was. It now calls
+  `shelfStore.read(slug)` first, which is the same owner-filtered lookup
+  everything else uses, and it calls it *before* it touches the disk.
+- **The ingest queue was completely open.** `Job` had no owner and there is one
+  global map, so any signed-in stranger could list every reader's slugs, source
+  URLs, uploaded filenames, guidance text and errors — and cancel, retry, advance
+  or delete any of them by id. Disclosure, denial of service and somebody else's
+  model spend, from one endpoint.
+
+And Sol put them together, which is the part worth remembering:
+
+> Combining findings 1 and 2 gives Bob a reliable sequence: list Alice's PDF job,
+> take its slug, then download its source.
+
+Jobs now carry an `ownerId`, stamped at `enqueue` and filtered on every read and
+every mutation. The predicate is `mine()` in [`src/jobs.ts`](../../src/jobs.ts),
+and it asks **"is there a reader to answer to"** rather than "who is it": inside
+a request there is, and they see their own; outside one — the housekeeping sweep,
+the CLI, the pipeline — there is not, and it sees everything. A sweep that could
+only tidy its own jobs would leave every real user's finished job on disk for
+ever, and would do it silently.
+
+Two more things came out of the same review and are fixed:
+
+- **A queued callback does not inherit an owner.** An `AsyncLocalStorage` context
+  is captured when an async resource is made, and p-queue stores a plain
+  function — so with concurrency 1, Alice's job followed by Bob's runs *the whole
+  of Bob's* in Alice's context. Measured here, not guessed. Nothing in the
+  pipeline reads the owner yet, so it was a landmine rather than a bug; the owner
+  is now captured on the job and re-entered with `runAsOwner`.
+- **`npm run db:import` could take somebody else's article.** The article id is
+  derived from the slug, so importing a slug another owner holds resolved to
+  *their* row, updated it, deleted their comments, chat, searches and lookups by
+  `articleId`, and reinserted them under the importer's owner — every write
+  reporting success. It now reads the owner first and refuses by name.
+
 ### What is still shared, and what is still open
 
 - **`articles.slug` is globally unique**, deliberately, because it is the URL contract. Two people
   ingesting the same URL is a question the beta gate has to answer rather than a bug to fix in the
   store — see [ingest-queue.md](ingest-queue.md) for the two functions that decide whether two
   addresses are one article.
-- **The ingest queue is not in Postgres.** `data/_jobs/` is on disk and carries no owner, so jobs are
-  shared. It does not work on Vercel at all today, which is the only reason that is not urgent.
+- **The ingest queue is not in Postgres.** `data/_jobs/` is on disk. It carries an owner now and is
+  filtered by it, but `jobs.owner_id` in the schema is still unused and the queue does not work on
+  Vercel at all — there is no writable disk.
+- **`SPIDERYARN_STORE=files` has no isolation at all**, and unset still means `files`. The production
+  boot refusal in [`src/store/index.ts`](../../src/store/index.ts) is the whole of the mitigation, so
+  on any non-production host two signed-in readers share the complete library, profile, comments,
+  chat and searches. Authentication does not make that configuration multi-user-safe, and nothing
+  short of moving the filesystem store to per-owner directories would.
+- **Child rows are trusted to match their article.** Comments, chat threads, searches and lookups are
+  filtered by `articleId` alone — the owner column on them is written, never read — so the isolation
+  rests on the invariant that a child's owner equals its article's owner. Nothing in the database
+  enforces it; the importer was the one thing that could break it, and it now refuses to.
+- **`/api/health` runs before the gate**, outside a request, so `currentOwnerId()` falls back to the
+  environment owner and an unauthenticated caller learns that owner's article count. No content
+  leaks. Sol rated it low and so do I, but it is a real thing the endpoint says.
+- **Upload records written before they carried an owner** are accepted from any caller who knows the
+  UUID.
 - **No RLS.** The filtering is in the queries, not in the database. RLS is the belt to this pair of
   braces and is deferred — [§ RLS and realtime](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now).
 

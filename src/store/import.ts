@@ -350,6 +350,37 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
   const db = getDb();
   let revisionId = "";
   await db.transaction(async (tx) => {
+    /* **Refuse to import over somebody else's article.**
+     *
+       `articleId` is derived from the slug, so an import for a slug that is
+       already there resolves to the *existing* row whoever owns it — and the
+       upsert below then updates that row, deletes its comments, chat, searches
+       and lookups by `articleId`, and reinserts them stamped with this
+       importer's owner. One `npm run db:import` with the wrong
+       `SPIDERYARN_OWNER_ID` and another reader's article has quietly changed
+       hands, with every write reporting success.
+
+       GPT Sol found it reviewing the ownership work, 2026-08-27, and it is a
+       fair hit: the isolation added that day covered every path from a slug to
+       an article *through the store*, and this is the CLI going round the side.
+
+       A read-and-refuse rather than an owner-scoped upsert, deliberately. An
+       upsert that simply did not match would insert a second row and hit the
+       unique constraint on `slug`, which reads as a database error rather than
+       as the answer to a question nobody asked out loud. This says the thing. */
+    const [existing] = await tx
+      .select({ ownerId: articles.ownerId })
+      .from(articles)
+      .where(eq(articles.id, articleId))
+      .limit(1);
+    if (existing && existing.ownerId !== ownerId) {
+      throw new Error(
+        `${slug}: that slug already belongs to a different owner in Postgres. ` +
+          "Importing would take their article, and everything anchored to it. " +
+          "Check SPIDERYARN_OWNER_ID. See src/store/import.ts.",
+      );
+    }
+
     await tx
       .insert(articles)
       .values({

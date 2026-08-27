@@ -32,6 +32,13 @@ import { failureKindOf } from "./job-failure.js";
 import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import {
+  currentOwnerId,
+  environmentOwnerId,
+  type OwnerId,
+  requestOwner,
+  runAsOwner,
+} from "./owner.js";
+import {
   articleExists,
   assertProduced,
   contextPaths,
@@ -344,6 +351,13 @@ async function loadFromDisk(): Promise<void> {
       unreadable.push(file);
       continue;
     }
+    /* **A record written before jobs had owners belongs to the one owner there
+       was.** Not a guess: this field arrived on 2026-08-27 and until that
+       morning every job in this directory was queued by the single process-wide
+       owner, which is the one the environment still names. Stamping it here
+       rather than leaving it undefined keeps the invariant that a `Job` in
+       memory always has an owner, so nothing downstream has to ask. */
+    if (!job.ownerId) job.ownerId = environmentOwnerId();
     if (sweepStopped(job)) await persist(job);
     jobs.set(job.id, job);
   }
@@ -763,7 +777,11 @@ export interface Advanced {
 export async function advanceJob(id: string): Promise<Advanced | null> {
   await ready();
   const job = jobs.get(id);
-  if (!job) return null;
+  /* Somebody else's is `null`, as a missing one is. This is the route that runs
+     a pipeline step, so leaving it open was somebody else's model spend on
+     demand. See `mine` — and note it returns true outside a request, which is
+     what lets `runJob` below drive the very same function. */
+  if (!mine(job)) return null;
 
   // Already over. Safe to call for ever, which is what makes a client loop that
   // races its own poll harmless.
@@ -996,6 +1014,10 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
 
   const job: Job = {
     id: mintId(),
+    /* Read here rather than inside `runJob`, because by the time the queue gets
+       to it the request is long gone — and, worse, the context it runs in is
+       whoever's continuation drained the queue. src/owner.ts § `runAsOwner`. */
+    ownerId: currentOwnerId(),
     slug,
     ...(url ? { url } : {}),
     ...(request.upload ? { upload: request.upload } : {}),
@@ -1039,7 +1061,21 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
    * when the job has really stopped.
    */
   void queue
-    .add(() => runJob(job, controller))
+    /* **`runAsOwner`, because a queued callback does not inherit a context.**
+     *
+       An AsyncLocalStorage context is captured when an async resource is made,
+       and p-queue stores a plain function in an array — so the context this
+       runs in is whoever's continuation happened to drain the queue. Measured
+       rather than guessed: with concurrency 1, Alice's job then Bob's puts
+       *the whole of Bob's* in Alice's context, because it is invoked from
+       inside the completion of Alice's.
+
+       Nothing in `runJob` reads the owner today, so this is a landmine rather
+       than a live bug — and precisely the kind that goes off silently later,
+       writing one reader's article under another reader's name and reporting
+       success. Capturing it on the job and re-entering here costs one line.
+       GPT Sol, 2026-08-27; src/owner.ts § `runAsOwner`. */
+    .add(() => runAsOwner(job.ownerId, () => runJob(job, controller)))
     .catch(async (err: Error) => {
       // `runJob` handles its own step failures, so anything reaching here is a
       // bug in it — and must be visible rather than swallowed.
@@ -1289,9 +1325,23 @@ async function onShelfOrInFlight(candidate: string): Promise<string | undefined>
 const KEEP_FINISHED = 50;
 
 /** Drop the oldest finished jobs once there are too many. Successes go first. */
+/**
+ * **`KEEP_FINISHED` per reader, not `KEEP_FINISHED` in total.**
+ *
+ * Global was right while there was one reader and is wrong now: a busy reader
+ * would silently evict a quiet one's entire history, and the quiet one would
+ * open the page to find their last few ingests had never happened. Grouping
+ * costs three lines and the cap goes on meaning what it says.
+ */
 async function prune(): Promise<void> {
+  for (const owner of new Set([...jobs.values()].map((j) => j.ownerId))) {
+    await pruneOwner(owner);
+  }
+}
+
+async function pruneOwner(owner: OwnerId): Promise<void> {
   const finished = [...jobs.values()].filter(
-    (j) => j.status !== "queued" && j.status !== "running",
+    (j) => j.ownerId === owner && j.status !== "queued" && j.status !== "running",
   );
   if (finished.length <= KEEP_FINISHED) return;
   const doomed = finished
@@ -1302,20 +1352,54 @@ async function prune(): Promise<void> {
       return kind !== 0 ? kind : a.createdAt < b.createdAt ? -1 : 1;
     })
     .slice(0, finished.length - KEEP_FINISHED);
-  for (const job of doomed) await forgetJob(job.id).catch(() => {});
+  for (const job of doomed) await forgetJobUnchecked(job.id).catch(() => {});
 }
 
-/** Newest first, so the homepage shows what just happened at the top. */
+/**
+ * **Is this job the caller's business?**
+ *
+ * `true` outside a request, which is the load-bearing half. The housekeeping
+ * sweep, the CLI and the pipeline are not readers and have nobody to answer to
+ * — and a sweep that could only delete its own jobs would leave every real
+ * user's finished job in `data/_jobs/` for ever. Inside a request there IS a
+ * reader, and they get their own and nothing else.
+ *
+ * `requestOwner()` rather than `currentOwnerId()` for exactly that reason: the
+ * question here is "is there somebody to answer to", not "who". src/owner.ts.
+ */
+function mine(job: Job | undefined): job is Job {
+  if (!job) return false;
+  const asking = requestOwner();
+  return asking === null || job.ownerId === asking;
+}
+
+/**
+ * Newest first, so the homepage shows what just happened at the top.
+ *
+ * **Yours, inside a request.** Until 2026-08-27 this returned everybody's, and
+ * a job record is not a small disclosure: it carries the slug, the source URL,
+ * the uploaded filename, the reader's guidance text and the error message. It
+ * was also the index a stranger needed to start naming other people's slugs at
+ * the rest of the API. GPT Sol, 2026-08-27.
+ */
 export async function listJobs(): Promise<Job[]> {
   await ready();
-  return [...jobs.values()].sort((a, b) =>
-    a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
-  );
+  return [...jobs.values()]
+    .filter((job) => mine(job))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }
 
+/**
+ * **`null` for somebody else's job, exactly as for one that does not exist.**
+ *
+ * Every caller in src/routes.ts turns `null` into a 404, so answering this way
+ * gives the right status without a second decision — and 404 is the right
+ * status: "no such job" is all a stranger should learn about an id they guessed.
+ */
 export async function getJob(id: string): Promise<Job | null> {
   await ready();
-  return jobs.get(id) ?? null;
+  const job = jobs.get(id);
+  return mine(job) ? job : null;
 }
 
 /**
@@ -1334,7 +1418,8 @@ export async function getJob(id: string): Promise<Job | null> {
 export async function cancelJob(id: string): Promise<Job | null> {
   await ready();
   const job = jobs.get(id);
-  if (!job) return null;
+  // Somebody else's is `null`, exactly as a missing one is. See `mine`.
+  if (!mine(job)) return null;
   if (job.status === "done" || job.status === "error" || job.status === "cancelled") {
     return job;
   }
@@ -1366,7 +1451,9 @@ export async function cancelJob(id: string): Promise<Job | null> {
 export async function retryJob(id: string): Promise<Job | null> {
   await ready();
   const old = jobs.get(id);
-  if (!old) return null;
+  /* Somebody else's is `null`, as a missing one is — and this one spends money,
+     so it is the worst of the four to leave open. See `mine`. */
+  if (!mine(old)) return null;
 
   return await enqueue({
     slug: old.slug,
@@ -1408,6 +1495,24 @@ export function forceForRetry(steps: JobStep[]): StepName[] {
  * write queued behind the delete would do the same thing.
  */
 export async function forgetJob(id: string): Promise<boolean> {
+  await ready();
+  // `false` for somebody else's, as for a missing one. See `mine`.
+  if (!mine(jobs.get(id))) return false;
+  return forgetJobUnchecked(id);
+}
+
+/**
+ * Delete a job whoever it belongs to. **Never reachable from a route.**
+ *
+ * `prune` is the only caller, and it needs this because it runs *inside* a
+ * job's owner scope — `runJob` → `finishDone` → `prune` — so the checked
+ * version above would quietly refuse to tidy every other reader's finished
+ * jobs. Quietly is the problem: `prune` would go on picking the same doomed
+ * records every time, deleting nothing, and `data/_jobs/` would grow without
+ * limit while the housekeeping reported success.
+ * docs/reusable/silent-success.md.
+ */
+async function forgetJobUnchecked(id: string): Promise<boolean> {
   await ready();
   const job = jobs.get(id);
   if (!job) return false;

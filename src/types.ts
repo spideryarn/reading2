@@ -17,6 +17,7 @@
  * the drift would show up as a Retry button under a failure that cannot succeed.
  */
 import type { FailureKind } from "./messages.js";
+import type { OwnerId } from "./owner.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -1368,6 +1369,24 @@ export interface JobUpload {
 
 export interface Job {
   id: string;
+  /**
+   * **Who queued it.** An `auth.users(id)`, the same value every owned row
+   * carries — src/owner.ts.
+   *
+   * Added 2026-08-27, and late: jobs had no owner at all, so `GET /api/jobs`
+   * handed any signed-in stranger every reader's slugs, source URLs, uploaded
+   * filenames, guidance text and errors — and every one of cancel, retry,
+   * advance and delete took an id and did not ask whose it was. Disclosure,
+   * denial of service, and somebody else's model spend, from one list. GPT Sol,
+   * 2026-08-27.
+   *
+   * Required rather than optional, so that a job in memory always has one. The
+   * records written before this field existed are stamped as they are read off
+   * disk (src/jobs.ts § `loadFromDisk`) — and that is not a guess: at the time
+   * they were written there was exactly one owner, and it is the one the
+   * environment still names.
+   */
+  ownerId: OwnerId;
   slug: string;
   url?: string;
   /**

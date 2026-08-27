@@ -78,7 +78,7 @@ import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
-import { ownedSlug, requireSlug } from "./pg.js";
+import { ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
 
 const logger = log("store");
 
@@ -486,7 +486,28 @@ export async function beginRevision(opts: BeginRevisionOptions): Promise<BeginRe
         .onConflictDoNothing({ target: articles.slug })
         .returning();
       article = inserted[0] ?? (await lockArticle(tx, slug));
-      if (!article) throw new Error(`Could not create or lock the article row for "${slug}".`);
+      if (!article) {
+        /* **Two readings of "we could not get this row", and they want
+           different words.**
+         *
+           `lockArticle` is owner-filtered (src/store/pg.ts § `ownedSlug`), and
+           `articles.slug` is globally unique — so the ordinary way to get here
+           is not a race at all: somebody else already owns this slug. The
+           insert did nothing, the reread found nothing, and the generic message
+           sent whoever hit it looking for a locking bug.
+
+           Distinguished by asking, unfiltered, whether the row exists at all.
+           GPT Sol raised the confusion reviewing the ownership work, 2026-08-27;
+           what it does NOT do is let two readers keep the same URL, which is
+           still an open question rather than a thing that works. */
+        if (await slugIsTaken(slug, tx)) {
+          throw new PublishRefused(slug, [
+            `the slug "${slug}" already belongs to another reader — ` +
+              "slugs are unique across the whole install, which is a known limit",
+          ]);
+        }
+        throw new Error(`Could not create or lock the article row for "${slug}".`);
+      }
     }
 
     const revisionId = randomUUID();

@@ -152,6 +152,50 @@ export function inRequest(): boolean {
 }
 
 /**
+ * The signed-in owner if we are serving a request, and `null` if we are not.
+ *
+ * **The difference between "filter this" and "do not filter this".** A route
+ * handler must only ever see its own reader's jobs; the housekeeping sweep that
+ * deletes finished ones has to see everybody's, or a job belonging to a real
+ * user could never be tidied away by a process that is not that user.
+ *
+ * So the question is not "who is the owner" — `currentOwnerId()` answers that
+ * and throws outside a request — but "is there a reader to answer to". Inside a
+ * request there is; on a timer, in the CLI, in the pipeline, there is not.
+ * src/jobs.ts is the one caller.
+ */
+export function requestOwner(): OwnerId | null {
+  return scope.getStore()?.owner ?? null;
+}
+
+/**
+ * Run something as a named owner, in a scope of its own.
+ *
+ * For **work that outlives the request that asked for it**. An
+ * `AsyncLocalStorage` context is captured when an async resource is created,
+ * and a p-queue task is a plain callback stored in an array — so the context it
+ * runs in is whoever's continuation happened to drain the queue, not whoever
+ * enqueued it. Measured, because it is not what you would guess: with
+ * concurrency 1, Alice's job followed by Bob's gives
+ *
+ *     a-start: alice   a-end: alice
+ *     b-start: alice   b-end: alice
+ *
+ * — Bob's whole task in Alice's context, because it is invoked from inside the
+ * completion of Alice's. GPT Sol raised it against the built code, 2026-08-27;
+ * the numbers above are from running it here.
+ *
+ * Nothing in the pipeline reads `currentOwnerId()` today, so that is a landmine
+ * rather than a live bug. It becomes a live one the moment queued work reaches
+ * the Postgres store, and by then it would write one reader's article under
+ * another reader's name and report success. So the owner is captured on the job
+ * and re-entered here, rather than inherited.
+ */
+export function runAsOwner<T>(owner: OwnerId, fn: () => T): T {
+  return scope.run({ owner }, fn);
+}
+
+/**
  * The owner to stamp on rows written here, and to filter every read by.
  *
  * **Inside a request, the signed-in user — and the environment does not get a
@@ -181,6 +225,24 @@ export function currentOwnerId(): OwnerId {
     );
   }
 
+  return environmentOwnerId();
+}
+
+/**
+ * The owner this *process* was configured with, whoever is currently asking.
+ *
+ * Almost always the wrong function — `currentOwnerId()` is the one you want,
+ * and inside a request this deliberately ignores the reader. It exists for one
+ * job: stamping records that were written before they carried an owner.
+ *
+ * The case is `src/jobs.ts`, whose `data/_jobs/` files predate the field. That
+ * load is lazy, so it happens on whichever request first asks for the jobs
+ * list — and `currentOwnerId()` there would hand every legacy job to whoever
+ * happened to look at the page first. The right answer is fixed rather than
+ * whoever is asking: at the time those files were written there was exactly one
+ * owner, and it is this one.
+ */
+export function environmentOwnerId(): OwnerId {
   const fromEnv = process.env.SPIDERYARN_OWNER_ID;
   if (fromEnv) return asOwnerId(fromEnv);
 
