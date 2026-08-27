@@ -70,6 +70,26 @@ One thing it does **not** yet buy, and should: `fetchDocument` reports the URL i
 after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
 relative links resolve against the wrong origin.
 
+## What it gets wrong, and how we know
+
+**An accordion is closed, not absent — and Readability cannot tell.** It skips
+`aria-hidden="true"` nodes on purpose (`Readability.js:2701`, its visibility check), which is right
+for an off-screen menu and wrong for a collapsed section of the article. On
+[`data/constitution`](../../data/constitution) — Anthropic's Claude's Constitution — that loses
+**48,147 characters, 26% of the piece**, including whole named sections. Nothing throws. The article
+reaches the shelf looking complete, which is the shape
+[silent-success.md](../reusable/silent-success.md) is about.
+
+Nothing in this stage looks at its own output and asks whether it is any good. There is now an
+instrument that does — [`evals/extraction/inventory.mts`](../../evals/extraction/inventory.mts),
+which flattens the fetched page into blocks and says which survived — and it is an eval, run by
+hand, not a gate ([evals/README.md](../../evals/README.md)).
+
+The measurements, the four bugs the instrument shipped with, what a model pass would and would not
+buy, and the four-line deterministic fix that recovers 39,355 of those characters for nothing, are
+all in **[../plans/readability-repair-pass.md](../plans/readability-repair-pass.md)**. Nothing here
+has changed yet; the plan says what would have to be true first.
+
 ## Where this sits
 
 This is **stage 2** of the pipeline — see [architecture.md § Pipeline](architecture.md#pipeline).
