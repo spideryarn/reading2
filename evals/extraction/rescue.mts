@@ -136,7 +136,13 @@ async function main(): Promise<void> {
   }
   const results: unknown[] = [];
   for (const dir of dirs) {
-    const inv = await inventory(dir);
+    /* `--unhide` runs the free deterministic fix FIRST, so the model is measured
+       against the residual rather than against stock Readability. Measuring it
+       against stock counts the characters rung 0 already recovered as the
+       model's work, which is the difference between "a model helps" and "a model
+       helps once the free thing has run" — the only version of the question that
+       decides anything. */
+    const inv = await inventory(dir, { unhide: process.argv.includes("--unhide") });
     /* **The control, and it is the whole reason this flag exists.**
        Readability is *good* at dropping furniture, so on a healthy page the set
        it dropped is nearly all article prose — and a model that answers
@@ -226,12 +232,14 @@ async function main(): Promise<void> {
       droppedBlocks: candidates.length, droppedChars: inv.totals.droppedChars,
       restoreBlocks: known.length, restoreChars: recovered,
       furniture: answer.furniture.length, invented, unjudged: unjudged.length,
-      restoreEverythingBaseline: restoreEverything, daylight, withShort, usage, ms,
+      restoreEverythingBaseline: restoreEverything, daylight, withShort,
+      unhidden: process.argv.includes("--unhide"), usage, ms,
       article: known, furnitureIds: answer.furniture,
     });
   }
   const out = `evals/results/extraction-rescue-${MODEL.replace(/[^a-z0-9]+/gi, "-")}` +
-    `${process.argv.includes("--with-short") ? "-with-short" : ""}.json`;
+    `${process.argv.includes("--with-short") ? "-with-short" : ""}` +
+    `${process.argv.includes("--unhide") ? "-unhidden" : ""}.json`;
   await writeFile(out, `${JSON.stringify(results, null, 2)}\n`, "utf-8");
   console.log(`\nWritten to ${out}`);
 }

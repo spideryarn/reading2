@@ -160,11 +160,30 @@ extraction genuinely lacks.
 answers the "or perhaps just Luna" directly. With the caveat that agreement between two models given
 the same prompt and the same row format is weaker evidence than it looks.
 
-**And it overlaps almost entirely with the free fix.** Un-hiding recovers 39,355 characters on the
-Constitution for nothing; Luna restores 49,753 on the same page for a fifth of a cent and 22
-seconds. **They are mostly the same characters.** The honest question is not "does Luna help?" —
-it does — but "does Luna help *after* rung 0 has run?", and that is one experiment nobody has done
-yet.
+**And most of what it appeared to be worth was the free fix's work.** That was the obvious
+confound, so it was measured rather than left as a caveat: `--unhide` runs rung 0 first, so the
+model is scored against the residual instead of against stock Readability.
+
+| | blocks to judge | Luna restores | characters |
+|---|---:|---:|---:|
+| constitution, **against stock** | 157 | 135 | **49,753** |
+| constitution, **after un-hiding** | 59 | 37 | **10,502** |
+| noema, against stock | 29 | 2 | 254 |
+| noema, after un-hiding | 29 | 2 | 254 |
+
+**79% of the model's apparent value on that page belongs to four lines of free deterministic code.**
+Rung 0 alone takes the Constitution's loss from 48,147 characters to 9,129 and its ratio from 73.7%
+to 94.2%.
+
+The remaining 10,502 characters are real, and worth arguing about rather than dismissing: they are
+the piece's own opening block — *"Claude's constitution is a detailed description of Anthropic's
+intentions for Claude"* — and the author bio, which is exactly the kind of thing two careful people
+would classify differently. That is the honest size of the question Greg asked, and it is a lot
+smaller than the first number made it look.
+
+Measuring against stock would have reported the model as four times more useful than it is. Any arm
+added later gets the same treatment: **the denominator is whatever the cheaper rungs already
+achieved.**
 
 ## Designs 3 and 4, and the one that is still ruled out
 

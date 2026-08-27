@@ -403,8 +403,30 @@ export function compare(rawHtml: string, articleHtml: string, url: string): Comp
   };
 }
 
+/**
+ * Rung 0 of docs/plans/readability-repair-pass.md — **un-hide before parsing.**
+ *
+ * Readability skips `aria-hidden="true"` and `hidden` nodes in its visibility
+ * check (`Readability.js:2701`). That is right for an off-screen menu and wrong
+ * for a collapsed section of the article: an accordion is *closed*, not absent,
+ * and the reader would see the text by clicking. Readability cannot click.
+ *
+ * On data/constitution this recovers 39,355 characters and changes nothing on
+ * the two pages that were already clean — which is the whole evidence for it,
+ * and three pages is not enough to ship on. It is here as an ARM, so the model
+ * arm can be measured against a pre-cleaned page rather than against stock. The
+ * risk it carries is the obvious one and is unmeasured: some other site's hidden
+ * mobile nav, modal or screen-reader duplicate coming along for the ride.
+ */
+export function unhide(doc: Document): void {
+  for (const el of Array.from(doc.querySelectorAll('[aria-hidden="true"]'))) {
+    el.removeAttribute("aria-hidden");
+  }
+  for (const el of Array.from(doc.querySelectorAll("[hidden]"))) el.removeAttribute("hidden");
+}
+
 /** Readability over `<dir>/raw.html`, compared with the page it came from. */
-export async function inventory(dir: string): Promise<Inventory> {
+export async function inventory(dir: string, opts: { unhide?: boolean } = {}): Promise<Inventory> {
   const html = await readFile(path.join(dir, "raw.html"), "utf-8");
 
   let url = "https://example.invalid/";
@@ -417,9 +439,9 @@ export async function inventory(dir: string): Promise<Inventory> {
 
   /* Readability mutates the document it is handed, so this parse is its own and
      `compare` gets a fresh one. Sharing them destroys the "before". */
-  const article = new Readability(
-    new JSDOM(html, { url, virtualConsole: new VirtualConsole() }).window.document,
-  ).parse();
+  const doc = new JSDOM(html, { url, virtualConsole: new VirtualConsole() }).window.document;
+  if (opts.unhide) unhide(doc);
+  const article = new Readability(doc).parse();
 
   return {
     dir,
@@ -473,6 +495,7 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const dirs = args.filter((a) => !a.startsWith("--"));
   const showRows = args.includes("--rows");
+  const doUnhide = args.includes("--unhide");
   const jsonAt = args.indexOf("--json");
   if (!dirs.length) {
     console.error("Usage: npx tsx evals/extraction/inventory.mts <dir with raw.html>… [--rows] [--json <file>]");
@@ -481,7 +504,7 @@ async function main(): Promise<void> {
   const out: Inventory[] = [];
   for (const dir of dirs) {
     try {
-      const inv = await inventory(dir);
+      const inv = await inventory(dir, { unhide: doUnhide });
       out.push(inv);
       report(inv, showRows && dirs.length === 1);
     } catch (err) {
