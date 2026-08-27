@@ -29,13 +29,25 @@
  * rules them out. What a link *can* honestly say is docs/project/links.md.
  */
 import { useCallback, useMemo } from "react";
-import { BookA, CornerDownRight, ExternalLink, FileText, Globe } from "lucide-react";
+import {
+  BookA,
+  BookMarked,
+  BookOpen,
+  CornerDownRight,
+  ExternalLink,
+  FileText,
+  Globe,
+  LoaderCircle,
+} from "lucide-react";
 import { FloatingArrow, FloatingPortal } from "@floating-ui/react";
 import type { BlockId, GlossaryEntry } from "../types.js";
 import { hostOf } from "../urls.js";
 import { entryProse } from "./GlossaryPanel.js";
 import { useHoverCard } from "./useHoverCard.js";
-import { describeLink, type LinkPreview } from "./link-preview.js";
+import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
+import { useLinkFacts, type LinkFacts } from "./link-facts.js";
+import { Link } from "./Link.js";
+import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
 
 /** What the pointer found: a term, a link, or both over the same words. */
@@ -58,7 +70,13 @@ export function ProseHoverCard({
   onJump,
 }: {
   entries: GlossaryEntry[];
-  /** Where the article itself came from, so a link can say if it leaves. */
+  /**
+   * Where the article itself came from.
+   *
+   * Two jobs, and the second is why it is not just a display detail: a link can
+   * say whether it *leaves* this publication, and a link back to this very
+   * article can say so instead of offering to open the page you are on.
+   */
   sourceUrl: string | null;
   /** The rendered text of a block, for previewing an in-article anchor. */
   blockText: Map<BlockId, string>;
@@ -121,6 +139,12 @@ export function ProseHoverCard({
     focusable: true,
   });
 
+  /* Before the early return, because it is a hook. It is handed the *shown*
+     link rather than the hovered one on purpose: a card takes 320ms of rest to
+     open, so a pointer crossing the prose asks Wikipedia about nothing.
+     link-facts.ts § What Wikipedia is told has the caveat to that. */
+  const facts = useLinkFacts(shown?.data.link ?? null, sourceUrl);
+
   if (!shown) return null;
   const { termIds, link, anchor, href } = shown.data;
   const found = termIds
@@ -159,6 +183,7 @@ export function ProseHoverCard({
               link={link}
               anchor={anchor}
               href={href}
+              facts={facts}
               divided={found.length > 0}
               onJump={(id) => { close(); onJump(id); }}
             />
@@ -189,23 +214,38 @@ export function ProseHoverCard({
  *  - **An anchor into this article** — the one case where we can show the
  *    destination itself, because it is on this page. The target paragraph's
  *    own words, which is strictly better than any description of them.
- *  - **A link out** — the host, whether it leaves the publication, what the
- *    path says if it says anything, and whether it is a file rather than a
- *    page. All of it read off the href; see link-preview.ts for why those
- *    facts and not others.
+ *  - **A link out** — the host, whether it leaves the publication, any
+ *    scholarly id the path carries, and whether it is a file rather than a
+ *    page, all read off the href (link-preview.ts) — plus, when somebody can
+ *    tell us, a real title and first paragraph (link-facts.ts) — plus the full
+ *    address, so the reader can judge it themselves.
  *  - **Something else** — `mailto:`, or an href we could not parse. Said
  *    plainly rather than dressed up as a page.
+ *
+ * **The asynchronous half is additive, never load-bearing.** The card is drawn
+ * and complete from the href alone; a shelf match or a Wikipedia summary is a
+ * section that appears under it a moment later. Nothing above waits, and a
+ * lookup that fails or finds nothing leaves a card that was already worth
+ * reading. That is what lets those lookups be allowed to be slow.
+ *
+ * One thing above *does* change, and it is deliberate rather than a wobble: a
+ * real title replaces the path trail rather than sitting under it, so the guess
+ * we read off the address disappears the moment somebody can tell us the
+ * answer. Everything else only grows downwards.
  */
 function LinkCard({
   link,
   anchor,
   href,
+  facts,
   divided,
   onJump,
 }: {
   link: LinkPreview;
   anchor: { blockId: BlockId; text: string } | null;
   href: string | null;
+  /** What the two lookups found, and whether either is still outstanding. */
+  facts: LinkFacts;
   /** A rule above it, because a term card is sitting on top. */
   divided: boolean;
   onJump(id: BlockId): void;
@@ -247,46 +287,160 @@ function LinkCard({
       );
     }
 
-    return (
-      <>
-        <p className="prose-card-label">
-          <Globe size={9} />
-          {/* Null is "we cannot tell" — an uploaded PDF has no source host —
-              and it prints nothing rather than guessing one of the two. */}
-          {link.sameSite === true
-            ? "elsewhere on this site"
-            : link.sameSite === false
-              ? "leaves this site"
-              : "goes to"}
-        </p>
-        <p className="prose-card-host">
-          {link.host}
-          {link.file && <span className="prose-card-file">{link.file}</span>}
-        </p>
-        {link.trail.length > 0 && (
-          <p className="prose-card-text prose-card-trail">{link.trail.join(" › ")}</p>
-        )}
-        <p className="prose-card-foot">
-          {/* `noreferrer` as well as `noopener`: the article's own URL is a
-              reading history, and a link the article supplied should not be
-              handed ours as a referrer. Same rule the glossary's link follows. */}
-          <a
-            className="prose-card-link"
-            href={href ?? link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {link.file ? <FileText size={10} /> : <ExternalLink size={10} />}
-            open in a new tab
-          </a>
-        </p>
-      </>
-    );
+    return <ExternalBody link={link} facts={facts} href={href} />;
   };
 
   const content = body();
   if (!content) return null;
   return <div className={`prose-card-body${divided ? " divided" : ""}`}>{content}</div>;
+}
+
+/**
+ * A link out — the commonest case, and the only one with more than one source.
+ *
+ * Its own component rather than a branch of `LinkCard`, because it is the half
+ * that grew: the href facts, then the shelf match, then Wikipedia, then the
+ * address itself. Four sources in one arrow function tripped the complexity
+ * lint at 30, which was the honest signal that the branch had become a card.
+ *
+ * The order is the order a reader needs them in. Where it goes; what it is
+ * called, once anyone can say; what the address literally is, for the reader
+ * who wants to judge it rather than take our reading of it; and then the ways
+ * out.
+ */
+function ExternalBody({
+  link,
+  facts,
+  href,
+}: {
+  link: ExternalPreview;
+  facts: LinkFacts;
+  href: string | null;
+}) {
+  const { library, wiki, loading } = facts;
+  /* A real title supersedes the path trail rather than joining it. The trail is
+     a guess read off an address; a title is a title, and printing both would
+     show the reader our working next to the answer. */
+  const titled = library !== null || wiki !== null;
+
+  return (
+    <>
+      <p className="prose-card-label">
+        <Globe size={9} />
+        {/* Null is "we cannot tell" — an uploaded PDF has no source host —
+            and it prints nothing rather than guessing one of the two. */}
+        {link.sameSite === true
+          ? "elsewhere on this site"
+          : link.sameSite === false
+            ? "leaves this site"
+            : "goes to"}
+      </p>
+      <p className="prose-card-host">
+        {link.host}
+        {link.file && <span className="prose-card-file">{link.file}</span>}
+      </p>
+      {/* `arXiv 2212.13345`. The one thing the path carries that is worth
+          keeping even though it is not words — see `Citation`. */}
+      {link.citation && (
+        <p className="prose-card-cite">
+          <span className="prose-card-cite-label">{link.citation.label}</span>
+          {link.citation.id}
+        </p>
+      )}
+      {!titled && link.trail.length > 0 && (
+        <p className="prose-card-text prose-card-trail">{link.trail.join(" › ")}</p>
+      )}
+
+      {/* We already read this one. Stage 2 ran Readability over that page at
+          ingest, so the title, the first-sentence gist and the length are a
+          lookup rather than a fetch — the richest thing any source here can
+          produce, and the cheapest. link-facts.ts. */}
+      {library && (
+        <div className="prose-card-part prose-card-part-shelf">
+          <p className="prose-card-label">
+            <BookOpen size={9} />
+            {library.self ? "this is the piece you are reading" : "on your shelf"}
+          </p>
+          <p className="prose-card-title">{library.entry.title}</p>
+          {library.entry.gist && (
+            <p className="prose-card-text">{clip(library.entry.gist, 220)}</p>
+          )}
+          <p className="prose-card-meta">
+            {library.entry.words.toLocaleString()} words · ~{library.entry.minutes} min
+          </p>
+        </div>
+      )}
+
+      {/* Wikipedia's own summary, which is a real lead paragraph written by
+          people rather than a gist written by us — so it is quoted as theirs,
+          under a label saying whose it is. */}
+      {wiki && (
+        <div className="prose-card-part prose-card-part-wiki">
+          <p className="prose-card-label">
+            <BookMarked size={9} />
+            from wikipedia
+          </p>
+          <p className="prose-card-title">{wiki.title}</p>
+          {wiki.description && <p className="prose-card-meta">{wiki.description}</p>}
+          <p className="prose-card-text">{clip(wiki.extract, 260)}</p>
+        </div>
+      )}
+
+      {/* Only while something is genuinely outstanding, and only when there is
+          nothing yet to show — a spinner *under* an answer that has already
+          arrived reads as the answer being incomplete. The card is drawn and
+          useful before this resolves, which is the whole reason it can be
+          allowed to be slow. */}
+      {loading && !titled && (
+        <p className="prose-card-text prose-card-waiting">
+          <LoaderCircle className="cmt-spinner" size={11} />
+          looking it up…
+        </p>
+      )}
+
+      {/* The address itself. Everything above is us deciding what matters about
+          this URL, and a reader who wants to judge it for themselves — a paywall
+          they recognise, a tracking parameter, a host they do not trust — needs
+          the thing rather than our reading of it.
+
+          **Three lines is a cap on what is drawn, not a truncation**, and the
+          difference needed making real: the part a clamp hides is the *tail*,
+          which is exactly where a tracking payload lives, and a card that showed
+          the harmless half of a URL and cut the interesting half would be worse
+          than one that showed none of it. So the whole string is in the DOM,
+          selectable, and on `title`. Raised by a GPT Sol review, 2026-08-27. */}
+      <p className="prose-card-text prose-card-url" title={link.url}>
+        {link.url}
+      </p>
+
+      <p className="prose-card-foot">
+        {/* `noreferrer` as well as `noopener`: the article's own URL is a
+            reading history, and a link the article supplied should not be
+            handed ours as a referrer. Same rule the glossary's link follows. */}
+        <a
+          className="prose-card-link"
+          href={href ?? link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {link.file ? <FileText size={10} /> : <ExternalLink size={10} />}
+          open in a new tab
+        </a>
+        {/* Not offered for a link back to this article: "read it here" would
+            take the reader to the page they are already on, which is the one
+            button that can only disappoint. */}
+        {library && !library.self && (
+          /* `Link`, not a bare `<a>`: this one goes to a page of ours, and a
+             full reload to reach it would throw away the article the reader is
+             halfway through for no reason. Same component the shelf's cards use. */
+          <Link className="prose-card-open" href={readHref(library.entry.slug)}>
+            <BookOpen size={10} />
+            read it here
+          </Link>
+        )}
+      </p>
+    </>
+  );
 }
 
 /** Enough of a paragraph to recognise it, cut at a word. */

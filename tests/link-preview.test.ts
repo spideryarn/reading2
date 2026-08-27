@@ -133,6 +133,134 @@ describe("describeLink", () => {
     });
   });
 
+  /* --------------------------------------------------------- citations --
+     The answer to the trail rule's own complaint. The block above deletes
+     `SHATRA-2` and `10.1073/pnas.2306525120` for not reading as words, which
+     is right about the words and wrong about the value — a catalogue key is
+     exactly the thing you paste into a search box. Every URL below is one that
+     block drops, taken from the corpus, so the two rules are tested against
+     each other rather than in isolation. */
+  describe("the identifier a path is carrying", () => {
+    const CITED: [string, string, string][] = [
+      ["https://arxiv.org/abs/0706.3639", "arXiv", "0706.3639"],
+      // The version suffix stays: v1 and v3 are different papers to anyone who
+      // has read both, and dropping it would claim the reader is being sent to
+      // the latest.
+      ["https://arxiv.org/abs/2411.00986v1", "arXiv", "2411.00986v1"],
+      ["https://arxiv.org/pdf/2212.13345.pdf", "arXiv", "2212.13345"],
+      // Legacy ids, where the archive is *part of* the identifier. Taking the
+      // last path segment gave `0301234`, which names nothing.
+      ["https://arxiv.org/abs/math/0301234", "arXiv", "math/0301234"],
+      [
+        "https://arxiv.org/abs/cond-mat.stat-mech/0703470",
+        "arXiv",
+        "cond-mat.stat-mech/0703470",
+      ],
+      ["https://philpapers.org/rec/SHATRA-2", "PhilPapers", "SHATRA-2"],
+      ["https://philpapers.org/rec/NAGWII", "PhilPapers", "NAGWII"],
+      ["https://doi.org/10.1073/pnas.2306525120", "DOI", "10.1073/pnas.2306525120"],
+      // The five in this corpus that carry a DOI behind a publisher's own
+      // routing. Finding one mid-path is the whole reason the registrant rule
+      // (`10.` then 4–9 digits) is worth spelling out.
+      ["https://www.pnas.org/doi/10.1073/pnas.2306525120", "DOI", "10.1073/pnas.2306525120"],
+      ["https://www.science.org/doi/10.1126/science.aan8871", "DOI", "10.1126/science.aan8871"],
+      [
+        "https://link.springer.com/article/10.1007/s11229-022-03524-1",
+        "DOI",
+        "10.1007/s11229-022-03524-1",
+      ],
+      ["https://link.springer.com/book/10.1007/978-94-009-8947-4", "DOI", "10.1007/978-94-009-8947-4"],
+    ];
+    for (const [url, label, id] of CITED) {
+      it(`reads ${label} ${id} out of ${new URL(url).pathname}`, () => {
+        const out = describeLink(url, NOEMA);
+        expect(out.kind === "external" && out.citation).toEqual({ label, id });
+      });
+    }
+
+    const UNCITED = [
+      // A year is not a registrant: `10.` has to be followed by four to nine
+      // digits and then a slash, which is the DOI registry's own rule.
+      "https://example.com/10.5/x",
+      "https://example.com/2024/03/the-title-of-the-piece",
+      // A bare DOI prefix with nothing after it identifies nothing.
+      "https://doi.org/10.1073",
+      "https://www.sciencedirect.com/science/article/pii/S1364661313002118",
+      "https://philpapers.org/browse/philosophy-of-mind",
+      /* arXiv pages that are not a paper. The first version labelled these
+         "arXiv search" and "arXiv new" — not merely useless but confidently
+         wrong, since the reader has no way to tell an invented id from a real
+         one. Found by a GPT Sol review, 2026-08-27. */
+      "https://arxiv.org/search",
+      "https://arxiv.org/list/cs.AI/new",
+      "https://arxiv.org/abs/not-an-id",
+      "https://arxiv.org/abs/12.34",
+      "https://www.noemamag.com/the-mythology-of-conscious-ai/",
+    ];
+    for (const url of UNCITED) {
+      it(`claims no identifier for ${new URL(url).pathname}`, () => {
+        const out = describeLink(url, NOEMA);
+        expect(out.kind === "external" && out.citation).toBe(null);
+      });
+    }
+  });
+
+  /* --------------------------------------------------------- wikipedia --
+     Deciding *whether* a URL names a Wikipedia article is reading an href, so
+     it lives here rather than in the fetching code — link-facts.ts is handed a
+     title and never parses a URL a second time. */
+  describe("naming a wikipedia article", () => {
+    it("reads the language and the title, underscores and all", () => {
+      /* The underscores stay: the summary API wants the title in the form the
+         URL spells it, and turning them into spaces here would only mean
+         turning them back there. This is the one real Wikipedia link in the
+         corpus. */
+      const out = describeLink("https://en.wikipedia.org/wiki/Antikythera_mechanism", NOEMA);
+      expect(out.kind === "external" && out.wiki).toEqual({
+        lang: "en",
+        title: "Antikythera_mechanism",
+      });
+    });
+
+    it("decodes a percent-encoded title", () => {
+      const out = describeLink("https://fr.wikipedia.org/wiki/Ph%C3%A9nom%C3%A9nologie", NOEMA);
+      expect(out.kind === "external" && out.wiki).toEqual({
+        lang: "fr",
+        title: "Phénoménologie",
+      });
+    });
+
+    it("takes the mobile host too", () => {
+      const out = describeLink("https://en.m.wikipedia.org/wiki/Qualia", NOEMA);
+      expect(out.kind === "external" && out.wiki?.title).toBe("Qualia");
+    });
+
+    const NOT_AN_ARTICLE = [
+      // The namespaces. The summary endpoint answers oddly or not at all for
+      // these, and a colon is what they all have in common — at the cost of the
+      // handful of real titles containing one, which lose the extra section and
+      // keep the ordinary card.
+      "https://en.wikipedia.org/wiki/Special:Random",
+      "https://en.wikipedia.org/wiki/Talk:Consciousness",
+      "https://en.wikipedia.org/wiki/File:Antikythera.jpg",
+      // Not an article page at all.
+      "https://en.wikipedia.org/w/index.php",
+      "https://www.wikidata.org/wiki/Q42",
+      "https://en.wikipedia.org/wiki/Portal/Contents/Overviews",
+    ];
+    for (const url of NOT_AN_ARTICLE) {
+      it(`does not offer to look up ${url.replace(/^https:\/\//, "")}`, () => {
+        const out = describeLink(url, NOEMA);
+        expect(out.kind === "external" && out.wiki).toBe(null);
+      });
+    }
+
+    it("claims nothing for a host that merely mentions wikipedia", () => {
+      const out = describeLink("https://wikipedia.org.evil.test/wiki/Qualia", NOEMA);
+      expect(out.kind === "external" && out.wiki).toBe(null);
+    });
+  });
+
   it("hands a mailto: back as itself rather than pretending it is a page", () => {
     const out = describeLink("mailto:someone@example.com", NOEMA);
     expect(out.kind).toBe("other");

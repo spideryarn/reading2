@@ -3810,19 +3810,91 @@ td.text.has-hit[data-hues="8"] {
   letter-spacing: 0.04em;
 }
 /* What the path says, when it says anything. Faint: it is a hint read off an
-   address, not a title anybody wrote. */
+   address, not a title anybody wrote. Dropped entirely once a real title has
+   arrived — see LinkCard, `titled`. */
 .prose-card-trail {
   color: var(--ink-faint);
   font-size: 0.7rem;
   overflow-wrap: anywhere;
 }
-/* An href we could not describe — shown whole, because the only honest thing
-   left to do is let the reader look at it themselves. */
-.prose-card-url {
-  color: var(--ink-faint);
+/* `arXiv 2212.13345`. Monospace because it is an identifier meant to be copied
+   and compared character by character, which is the one job a proportional
+   face is bad at. */
+.prose-card-cite {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0 0 0.25rem;
+  color: var(--ink-soft);
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.68rem;
   overflow-wrap: anywhere;
+}
+.prose-card-cite-label {
+  flex: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* The two sections somebody else filled in. Both are indented behind a rule for
+   the reason the glossary's are: the card is now several claims from several
+   sources, and a reader who cannot see where one ends and the next begins has
+   lost the thing the labels exist to give them. `.prose-card-part` supplies the
+   spacing; these two supply the mark. */
+.prose-card-part-shelf { border-left: 2px solid var(--rule-strong); padding-left: 0.5rem; }
+.prose-card-part-wiki { border-left: 2px dotted var(--rule-strong); padding-left: 0.5rem; }
+/* A real title — the article's own name, not a guess read off a path. It gets
+   the weight the host has, because once there is one it IS the answer. */
+.prose-card-title {
+  margin: 0 0 0.15rem;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+/* Length, or Wikidata's one-liner. Facts about the piece rather than any of it. */
+.prose-card-meta {
+  margin: 0.15rem 0 0;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+}
+/* The wait, and only ever where there is nothing else yet. `.cmt-spinner` is
+   the house animation — see docs/project/icons.md. */
+.prose-card-waiting {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+.prose-card-waiting svg { flex: none; }
+/* The address itself. On an external card it sits above the foot, deliberately
+   quiet: it is there for the reader who wants to judge the URL rather than our
+   reading of it, not for the one skimming. Also the whole body of an href we
+   could not describe, where letting the reader look at it is all that is left. */
+.prose-card-url {
+  margin-top: 0.35rem;
+  color: var(--ink-faint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.64rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  /* Three lines is enough to recognise any URL and to read most of them whole;
+     past that it is a tracking payload pushing the card off the screen. A cap
+     on what is *drawn* rather than on what is there: the whole string is in the
+     DOM, selectable, and on the element's `title`. */
+  user-select: text;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
 }
 /* The one destination we can actually SHOW, because it is on this page. The
    author's own words, quoted — hence the rule down the side, which is the same
@@ -6120,16 +6192,90 @@ tr:hover .block-chat,
 .diag-arc .diag-node.on .diag-box { fill: var(--surface-raised); }
 .diag-arc .diag-node.here .diag-box { fill: transparent; stroke: var(--highlight); stroke-width: 1.5; }
 
-/* Force: the link is the relationship, and the three kinds are not the same
-   claim. Containment is solid, sequence is nearly invisible (it is already told
-   by the vertical axis), and vocabulary — the only one a tree could not hold —
-   is the one worth seeing. */
+/* Force: the link IS the relationship, and the five kinds are five different
+ * claims. Rendering them as five shades of grey would be a texture rather than
+ * a statement, so each gets a weight, a dash and a hue — and it is deliberately
+ * over-determined, because hue alone is not a channel everybody has.
+ *
+ * The three coloured kinds are Okabe–Ito's sky blue, vermilion and bluish
+ * green (styles/colourscales.css), which is the trio that set is built to keep
+ * apart. Even so, none of them relies on colour alone: the fact is thin and
+ * solid, the arithmetic is medium and solid, the model's opinion is dotted.
+ *
+ * Ordered here by how much the edge knows — src/web/graph.ts § EdgeKind. */
 .diag-force .diag-link { fill: none; }
-.diag-force .diag-link.diag-d0 { stroke: var(--rule); stroke-width: 0.75; opacity: 0.35; }
-.diag-force .diag-link.diag-d1 { stroke: rgb(var(--cat-rgb) / 0.5); stroke-width: 1.1; }
-.diag-force .diag-link.diag-d2 { stroke: rgb(var(--cat-0-rgb) / 0.5); stroke-width: 1.4; }
+
+/* Containment. Faintest of the five: it is the least surprising thing a
+   diagram of a document can tell you, and the bubbles' positions say it too. */
+.diag-force .diag-link-parent { stroke: var(--rule); stroke-width: 0.75; opacity: 0.35; }
+
+/* Reading order — the chain, with the arrowhead. Neutral rather than
+   categorical, because it is the one line that belongs to no part in
+   particular, and thick because Greg asked for the sequence to be the thing you
+   see first. `--diag-seq` is shared with the arrowhead's fill below: one token,
+   so the head cannot end up a different colour from its line. */
+.diag-force {
+  --diag-seq: rgb(var(--cat-7-rgb) / 0.5);
+}
+.diag-force .diag-link-sequence {
+  stroke: var(--diag-seq);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.diag-force .diag-arrowhead { fill: var(--diag-seq); }
+
+/* Shared distinctive words. Sky blue, medium — the measure the picture has
+   always had, unchanged so a reader who knew this picture still recognises it. */
+.diag-force .diag-link-vocabulary { stroke: rgb(var(--cat-0-rgb) / 0.5); stroke-width: 1.4; }
+
+/* Similar meaning, per the embedding model. **Dotted, and the dash is the
+   honest part**: it is the only line here that costs money, the only one that
+   can be confidently wrong, and the only one whose reasoning nobody can read.
+   A dotted line is the drawing convention for "inferred", and that is exactly
+   what this is. Bluish green, so it never reads as a variant of the blue
+   vocabulary edge it is there to be compared against. */
+.diag-force .diag-link-semantic {
+  stroke: rgb(var(--cat-2-rgb) / 0.7);
+  stroke-width: 1.2;
+  stroke-dasharray: 1 3.5;
+  stroke-linecap: round;
+}
+
+/* The author's own cross-reference. **Thin, and the brightest thing in the
+   picture** — which is not a contradiction. It is thin because Greg asked for
+   thin, and because there are usually fewer than five of them in a whole
+   article; it is bright because it is the only line here that somebody *meant*,
+   and a fact should not be quieter than the two guesses drawn beside it.
+   Vermilion, the one hue in this trio that reads as a mark rather than as
+   structure. */
+.diag-force .diag-link-anchor {
+  stroke: rgb(var(--cat-1-rgb) / 0.9);
+  stroke-width: 1.2;
+}
 .diag-force .diag-node .diag-box { stroke-width: 1; }
 .diag-force .diag-label { font-weight: 600; }
+
+
+/* The one line of chrome the Force picture grows: whether the embeddings have
+   arrived. Beside the picture rather than over it — see DiagramPanel.tsx. */
+.diag-note {
+  margin: 0;
+  padding: 0.15rem 0.75rem 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+
+/* The footer card's evidence rows, one per related section. The left rule is
+   the kind, repeating the picture's own colours so a row and the line it
+   explains are recognisably the same thing. */
+.diag-card-links li { border-left: 2px solid transparent; padding-left: 0.4rem; }
+.diag-card-link-anchor { border-left-color: rgb(var(--cat-1-rgb) / 0.9); }
+.diag-card-link-vocabulary { border-left-color: rgb(var(--cat-0-rgb) / 0.5); }
+.diag-card-link-semantic { border-left-color: rgb(var(--cat-2-rgb) / 0.7); }
+/* The author's own words, so they read as a quotation rather than as our copy. */
+.diag-card-link-anchor .diag-card-linkterms { font-style: italic; }
 
 .diag-cluster .diag-link { stroke: rgb(var(--cat-rgb) / 0.45); fill: none; }
 .diag-cluster .diag-node .diag-box { fill: transparent; stroke: none; }
@@ -6193,3 +6339,139 @@ tr:hover .block-chat,
   font-variant-numeric: tabular-nums;
 }
 .diag-card-linkterms { overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------------------------------------------------- § drift and trail ----
+ *
+ * The two pictures whose axes came out of a model: one dot per paragraph,
+ * placed by what the paragraph is *about* (src/web/scatter.ts,
+ * docs/plans/embedding-scatter-diagrams.md).
+ *
+ * **They reuse `.diag-dot` rather than growing a shape of their own.** A dot on
+ * a spine is what `arc` and `cluster` already draw, and the arrangement those
+ * two settled — `.diag-box` as an invisible square that catches the pointer,
+ * `.diag-dot` as the mark — is exactly what a 4px target needs. So there is no
+ * new geometry here, only new colours and one new fade.
+ */
+
+/* The second control strip: what sideways means, and what colour means. Quieter
+   than the kind chips above it, because these are ways of looking at one
+   picture rather than a different picture. */
+.diag-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+  padding: 0.3rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.diag-opt { display: inline-flex; align-items: center; gap: 0.2rem; }
+.diag-opt-label {
+  margin-right: 0.15rem;
+  color: var(--ink-faintest, var(--ink-faint));
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.diag-opt-btn {
+  padding: 0.1rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) * 0.5);
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+.diag-opt-btn:hover { color: var(--ink); }
+.diag-opt-btn.on { border-color: var(--rule-strong); color: var(--highlight-ink); }
+
+/* The lane legend — one chip per topic, carrying the most distinctive word in
+   it. Ordered left to right exactly as the lanes are, so the strip reads as a
+   key to the picture rather than as a list. */
+.diag-lanes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.25rem 0.7rem 0.35rem;
+  list-style: none;
+}
+.diag-lane {
+  padding: 0.05rem 0.3rem;
+  border-left: 2px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* A dot. Filled at its hue and ringed a little brighter, so a cluster reads as
+   a mass at low alpha while a single dot still has an edge. */
+.diag-drift .diag-node .diag-box,
+.diag-trail .diag-node .diag-box { fill: transparent; stroke: none; }
+.diag-drift .diag-dot,
+.diag-trail .diag-dot {
+  fill: rgb(var(--cat-rgb) / 0.55);
+  stroke: rgb(var(--cat-rgb) / 0.9);
+  stroke-width: 0.6;
+  /* A dot moves when the reader changes what colour means, not when they
+     scroll, so this transition cannot chase a scroll. */
+  transition: fill 120ms ease-out;
+}
+/* Pointed at, or focused. The halo is the invisible hit square becoming
+   visible — the reader's own confirmation that the thing under the pointer is
+   the thing the card is describing. */
+.diag-drift .diag-node:hover .diag-box,
+.diag-drift .diag-node.on .diag-box,
+.diag-trail .diag-node:hover .diag-box,
+.diag-trail .diag-node.on .diag-box {
+  fill: rgb(var(--cat-rgb) / 0.14);
+  rx: 3;
+}
+.diag-drift .diag-node:hover .diag-dot,
+.diag-drift .diag-node.on .diag-dot,
+.diag-trail .diag-node:hover .diag-dot,
+.diag-trail .diag-node.on .diag-dot { fill: rgb(var(--cat-rgb) / 0.95); }
+
+/* Where the reader is. A ring rather than a fill, for the reason the rest of
+   this panel gives: the fill already means something (which section, or how far
+   through) and a position marker must not change colour as you read. */
+.diag-drift .diag-node.here .diag-dot,
+.diag-trail .diag-node.here .diag-dot {
+  stroke: var(--highlight);
+  stroke-width: 2;
+  paint-order: stroke;
+}
+
+/* The chain, on Trail. **`depth` is not a depth here** — scatter.ts writes how
+   strongly to draw the segment into it, 0 to 8, because a link already has that
+   field and inventing a second one would mean touching every picture's
+   stylesheet. Two things are folded into the one number: the chain brightens as
+   the article goes on, and the sixteen segments around wherever the reader is
+   standing jump to the top step. The second is what makes the picture readable
+   while scrolling rather than only studiable. */
+.diag-trail {
+  --diag-chain: var(--cat-7-rgb);
+}
+.diag-trail .diag-link {
+  stroke: rgb(var(--diag-chain) / 0.5);
+  stroke-width: 0.75;
+  fill: none;
+}
+.diag-trail .diag-link.diag-d0 { opacity: 0.16; }
+.diag-trail .diag-link.diag-d1 { opacity: 0.2; }
+.diag-trail .diag-link.diag-d2 { opacity: 0.25; }
+.diag-trail .diag-link.diag-d3 { opacity: 0.3; }
+.diag-trail .diag-link.diag-d4 { opacity: 0.36; }
+.diag-trail .diag-link.diag-d5 { opacity: 0.42; }
+.diag-trail .diag-link.diag-d6 { opacity: 0.5; }
+/* The reader's own stretch. Brighter, thicker, and the only part of the chain
+   drawn as a line you are meant to follow rather than as texture. */
+.diag-trail .diag-link.diag-d8 {
+  opacity: 1;
+  stroke: rgb(var(--cat-4-rgb) / 0.95);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.diag-trail .diag-arrowhead { fill: rgb(var(--diag-chain) / 0.8); }

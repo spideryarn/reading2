@@ -574,6 +574,23 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
   const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
   const chatAnchors = useChatAnchors(slug);
 
+  /* Memoised, and this is a performance fix rather than tidiness. Both of these
+     build a fresh array and a fresh Map, so calling them inline in the JSX
+     handed `TableView` two new object identities on **every** Reader render —
+     including the ones caused by something with nothing to do with chat. That
+     invalidated `marksByBlock` inside TableView, which re-derived the marks and
+     could take the article-wide re-annotation with it: an O(article) job
+     charged to an unrelated state change.
+
+     Keyed on `summaries`, which is the only input either one reads, so the work
+     now happens when a conversation is added, renamed or deleted and at no
+     other time. Found by a GPT Sol review, 2026-08-27. */
+  const chats = useMemo(() => anchored(chatAnchors.summaries), [chatAnchors.summaries]);
+  const chatCounts = useMemo(
+    () => countByBlock(chatAnchors.summaries),
+    [chatAnchors.summaries],
+  );
+
   /**
    * What is in the floating slot, decided in one place.
    *
@@ -1094,8 +1111,8 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
         onJump={jumpTo}
         comments={comments}
         openComment={note}
-        chats={anchored(chatAnchors.summaries)}
-        chatCounts={countByBlock(chatAnchors.summaries)}
+        chats={chats}
+        chatCounts={chatCounts}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
         onOpenChat={(id) => {
           setChatDraft(null);
@@ -1231,7 +1248,6 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           be there in every mode too. */}
       <ProseHoverCard
         entries={terms}
-        slug={slug}
         sourceUrl={article.meta.url ?? null}
         blockText={blockText}
         onOpenTerm={openTermInGlossary}

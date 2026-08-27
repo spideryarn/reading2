@@ -53,13 +53,42 @@ terms; it is a real difference between the two, not a preference.
 1. **Read the href.** Zero network. Has to render instantly, and is the whole card for every link we
    choose not to fetch. What it can honestly say is in [links.md](../project/links.md). **Built.**
 2. **An article already in this library.** We have the title and the gist locally. Cheap and richer
-   than anything scraped. Blocked only on `normaliseUrl`/`urlKey` living in a module the client may
-   not import.
+   than anything scraped. **Built, 2026-08-27** — and the blocker this line recorded was not one:
+   `urlKey` does live in `src/ingest.ts`, but `ingest.js` has been on the client's import allowlist
+   since the Add box needed to show the slug the server would mint. Worth the note, because "blocked
+   on X" survives in a doc long after X stops being true.
 3. **Wikipedia.** `/api/rest_v1/page/summary/<title>` is free, returns title/description/extract, and
    sends `access-control-allow-origin: *` — verified by `curl` during the survey. Fixed known host,
-   so no SSRF surface at all. This is the API half of Wikipedia's own Page Previews.
+   so no SSRF surface at all. This is the API half of Wikipedia's own Page Previews. **Built,
+   2026-08-27.**
 4. **Our own server, fetching once and caching for everybody.** The general case, and the only piece
-   needing real engineering.
+   needing real engineering. **Still not built**, and the section below is why nothing else will do.
+
+### The client cannot do (4)'s job, and this is the measurement
+
+Greg's follow-up on 2026-08-27 was to fetch the destination and run Readability on it. From the
+reader's browser that is not possible for an ordinary host, and the numbers belong here rather than
+in a sentence of assertion — checked with an `Origin:` header set to the app's own:
+
+| Destination | `access-control-allow-origin` |
+|---|---|
+| `philpapers.org/rec/BUTAAT` | none — and the request is a **403 `cf-mitigated: challenge`** |
+| `arxiv.org`, `nature.com`, `plato.stanford.edu` | none (200 or 303 to a server) |
+| `en.wikipedia.org/wiki/<Article>` | none — **article pages are not covered** |
+| `en.wikipedia.org/api/rest_v1/page/summary/…` | **`*`** |
+
+Without that header a cross-origin `fetch` is rejected before the body is readable, and `no-cors`
+returns an opaque response with no status, headers or text in it. So Readability-in-the-browser is
+not a thing that was weighed and rejected; it is a thing the platform does not offer.
+
+The philpapers row is the more useful half of that table, and it is not a CORS row at all: **the
+corpus's commonest destination is behind a Cloudflare bot challenge**, returning 403 for any Origin
+and any user-agent including real browser strings. A bare `fetchDocument` will fail there, so
+whoever builds (4) should establish what they intend to do about it before designing around the
+happy path.
+
+Wikipedia's own article pages being uncovered is worth recording too, because "fetch the Wikipedia
+page and run Readability on it" is the obvious next idea after the summary API and it does not work.
 
 **Rejected: prefetching every link at ingest.** Dozens of links per article, a handful ever hovered.
 It multiplies job time for near-zero payoff, produces stale entries for links nobody visits, and
@@ -74,6 +103,14 @@ client fetch leaks the reader's IP, cookies and fingerprint to the destination o
 prefetch fetches once but wastes most of the fetches. Lazy-and-cached means the first hover of a URL
 by *anyone* causes one fetch from our server's IP, and every hover after that is a cache hit — so the
 destination sees "Spideryarn asked once", never "reader X hovered link Z at time T".
+
+**One exception was taken, knowingly**: the Wikipedia summary call in (3) *is* a client fetch, and
+the paragraph above is the argument against it. It was accepted for one host because Wikimedia
+publish that endpoint for exactly this and run the same thing themselves from every reader's browser
+(Page Previews), and because the four mitigations in
+[links.md § What Wikipedia is told](../project/links.md#what-wikipedia-is-told-and-what-it-is-not)
+remove most of what the sentence above is worried about — no cookies, no referrer, nothing sent
+until a card is actually open, once per title per session. It is not a precedent for a second host.
 
 That is the shape Slack and Discord use. The difference is only *when* "once" happens: at post time
 for them (one deliberately-posted link), at first hover for us (fifty citations, mostly never
