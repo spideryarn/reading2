@@ -484,13 +484,23 @@ this design needs most — a commit that cannot be atomic cannot fence, and ever
 (takeover, cancellation, resume, two tabs) reduces to whether the commit is atomic. B would buy a
 working Vercel ingest sooner and would put the fence back where it was before this review.
 
-Not a decision to take quietly, so it is a question rather than an assumption.
+> **Decided: A.** Greg, 2026-08-27, asked with both shapes drawn side by side and the costs of each
+> stated. So the eight stage modules move behind one transactional stage runner, and the slower route
+> is taken deliberately rather than by drift.
+
+**What that settles immediately**, and it is the reason the question was worth asking before writing
+another line: `runOneStep`'s shape. Under A it is claim → run → **one transaction** → release, which
+is what §2 already describes, so the wiring can be built now and the transaction grows to swallow the
+artefact writes when [step 11 half B stage 5](postgres-storage-implementation.md#what-happens-next-in-order)
+lands. Under B the same function would have gained a hydrate before the step and a push after it, in
+the very place claim and release sit — so building the wiring first and choosing afterwards would
+have meant writing that function twice.
 
 ---
 
 ## 8. Open
 
-1. **A or B**, above.
+1. ~~**A or B**~~ — **decided: A**, above.
 2. **The active-slug index refuses a second differently-shaped job** where today it queues behind.
    §3. Right call at concurrency 1, but it is a behaviour change and it is the reader who meets it.
 3. **Retention for uploads.** Jobs have `prune()`; uploads have nothing on either side of the move,

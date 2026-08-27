@@ -1,0 +1,404 @@
+/**
+ * The two job stores, asked the same questions — the record both invocations
+ * can see, and the fence that stops the wrong one writing.
+ *
+ * Most of what is worth testing here is **the refusals**, because every one of
+ * them is a thing that reads as success if it is got wrong:
+ *
+ *  - a stale claimant's write affecting zero rows and being reported as done;
+ *  - a claim on a job somebody else is running silently starting a second one;
+ *  - a claim held across requests, which turns the happy path into `busy`.
+ *
+ * Two of these were watched red against a deliberately weakened implementation
+ * before they were believed, and each says which weakening. A test that has
+ * never failed proves nothing — docs/reusable/silent-success.md.
+ *
+ * **The filesystem adapter is honest about being one process** and this file
+ * does not pretend otherwise: its single-running rule and its attempt tokens
+ * are variables in memory, so what it promises holds within one process and not
+ * across two. That is what the Postgres adapter is for, and running both
+ * through the same cases is how "the same rules, differently enforced" stays a
+ * claim somebody checked.
+ */
+import { afterEach, describe, expect, it } from "vitest";
+import { Pool } from "pg";
+import { eq, inArray } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { jobs } from "../src/db/schema.js";
+import { loadEnvLocal } from "../src/env.js";
+import { mintId } from "../src/ids.js";
+import { DEV_OWNER_ID } from "../src/owner.js";
+import type { JobStore } from "../src/store/jobs.js";
+import { StaleAttemptError } from "../src/store/jobs.js";
+import {
+  expireLeaseForTests,
+  fsJobStore,
+  reattachAttemptForTests,
+  resetForTests,
+} from "../src/store/jobs-fs.js";
+import { pgJobStore } from "../src/store/pg-jobs.js";
+import type { Job, JobStep, OwnerId } from "../src/types.js";
+
+loadEnvLocal();
+
+/** Probed at MODULE LOAD so the skip is a real vitest skip rather than a green tick. */
+let reachable = false;
+if (process.env.DATABASE_URL) {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 1,
+    connectionTimeoutMillis: 10_000,
+  });
+  try {
+    const probe = await pool.query("select to_regclass('spideryarn.jobs') is not null as ready");
+    reachable = probe.rows[0]?.ready === true;
+  } catch {
+    reachable = false;
+  }
+  await pool.end();
+}
+
+/**
+ * The dev owner, **imported rather than written out**, because `jobs_owner_fk`
+ * means it has to be a real `auth.users` row and there is exactly one of those.
+ * A literal here would be a second copy of a value the app already owns — and
+ * `tests/fixture-ids.test.ts` would rightly flag it as shared.
+ *
+ * The stranger is this file's own and never inserted: it exists only to prove
+ * that somebody else's job reads as one that is not there.
+ */
+const OWNER = DEV_OWNER_ID;
+const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
+
+const LEASE = 60_000;
+/** Prefixed so this file's rows can be found and removed without touching anybody else's. */
+const MINE = "test-store-jobs-";
+
+/**
+ * **Each store, plus the two states its own API cannot reach.**
+ *
+ * A lease that has passed, and a job that has ended while still carrying its
+ * token. Both are real — the second is one forgotten `attemptId: null` away in
+ * any transition somebody adds later — and neither can be produced through the
+ * contract, which is rather the point of a fence. Without an equivalent on both
+ * sides the two adapters would be tested to different depths and "parity" would
+ * be doing no work.
+ */
+interface Adapter {
+  name: string;
+  store: JobStore;
+  available: boolean;
+  expire(id: string): Promise<void>;
+  reattach(id: string, attempt: string): Promise<void>;
+  forgetAll(ids: string[]): Promise<void>;
+}
+
+const ADAPTERS: Adapter[] = [
+  {
+    name: "the filesystem store",
+    store: fsJobStore,
+    available: true,
+    async expire(id) {
+      expireLeaseForTests(id);
+    },
+    async reattach(id, attempt) {
+      reattachAttemptForTests(id, attempt);
+    },
+    async forgetAll() {
+      resetForTests();
+    },
+  },
+  {
+    name: "Postgres",
+    store: pgJobStore,
+    available: reachable,
+    /* Written straight to the column rather than by claiming with a tiny lease,
+       because a lease short enough to expire during a test is short enough to
+       expire between two of the assertions that follow. */
+    async expire(id) {
+      await getDb()
+        .update(jobs)
+        .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+        .where(eq(jobs.id, id));
+    },
+    async reattach(id, attempt) {
+      await getDb().update(jobs).set({ attemptId: attempt }).where(eq(jobs.id, id));
+    },
+    async forgetAll(ids) {
+      await getDb().delete(jobs).where(inArray(jobs.id, ids));
+    },
+  },
+];
+
+for (const adapter of ADAPTERS) {
+  const store = adapter.store;
+
+  describe.skipIf(!adapter.available)(adapter.name, () => {
+    const made: string[] = [];
+    afterEach(async () => {
+      const ids = made.splice(0);
+      if (ids.length > 0) await adapter.forgetAll(ids);
+    });
+
+    function aJob(over: Partial<Job> = {}): Job {
+      const id = mintId();
+      made.push(id);
+      return {
+        id,
+        ownerId: OWNER,
+        slug: `${MINE}${id}`,
+        steps: [{ name: "fetch", label: "Fetching the page", status: "pending" }] as JobStep[],
+        status: "queued",
+        createdAt: new Date().toISOString(),
+        ...over,
+      };
+    }
+
+    it("hands back what it was given, with nothing turned into null", async () => {
+      const job = aJob({
+        url: "https://example.test/a",
+        guidance: "shorter",
+        profile: "a linguist",
+      });
+      const { job: saved, created } = await store.enqueueOrGet(job, "k1");
+      expect(created).toBe(true);
+      expect(saved).toEqual(job);
+      /* `Job`'s optional fields mean "we do not have this" and are read with
+         `?.` and `!== undefined` all over. A null from the database is a
+         different value in some of those places and goes onto the wire in
+         others, where the client's own type says it cannot be. */
+      expect("title" in saved).toBe(false);
+      expect("upload" in saved).toBe(false);
+      expect("cancelling" in saved).toBe(false);
+    });
+
+    it("hands back the job already doing this work rather than paying twice", async () => {
+      const first = aJob();
+      await store.enqueueOrGet(first, "k1");
+
+      /* Two instances each scanning their own memory each find nothing and each
+         start paying for the same article. */
+      const again = { ...aJob(), slug: first.slug };
+      const { job, created, sameWork } = await store.enqueueOrGet(again, "k1");
+      expect(created).toBe(false);
+      expect(sameWork).toBe(true);
+      expect(job.id).toBe(first.id);
+    });
+
+    it("says when the slug is held by different work, so the caller can move along", async () => {
+      const first = aJob();
+      await store.enqueueOrGet(first, "k1");
+      const other = { ...aJob(), slug: first.slug };
+      const { created, sameWork } = await store.enqueueOrGet(other, "k2");
+      expect(created).toBe(false);
+      expect(sameWork).toBe(false);
+    });
+
+    it("reads somebody else's job as one that is not there", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      expect(await store.get(job.id, OWNER)).toBeDefined();
+      expect(await store.get(job.id, STRANGER)).toBeUndefined();
+      expect((await store.claim(job.id, STRANGER, crypto.randomUUID(), LEASE)).kind).toBe("gone");
+    });
+
+    it("lets one claimant in and turns the second away", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+
+      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("busy");
+    });
+
+    it("turns a claim away while another job holds the one running slot", async () => {
+      const a = aJob();
+      const b = aJob();
+      await store.enqueueOrGet(a, "k1");
+      await store.enqueueOrGet(b, "k2");
+
+      expect((await store.claim(a.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
+      /* In Postgres `jobs_only_one_running` raises 23505 rather than matching no
+         rows, so this escapes as a 500 unless the adapter catches that code by
+         name — and Drizzle wraps the driver error, so the obvious check compiles
+         and never matches. An index doing its job is not an exception. */
+      const blocked = await store.claim(b.id, OWNER, crypto.randomUUID(), LEASE);
+      expect(blocked.kind).toBe("busy");
+      expect(blocked.kind === "busy" && blocked.why).toMatch(/another job is running/);
+    });
+
+    it("will not claim a job the reader has stopped, or one already over", async () => {
+      const stopping = aJob();
+      await store.enqueueOrGet(stopping, "k1");
+      await store.requestCancel(stopping.id, OWNER);
+      // Otherwise the API key is spent on a job that has already been stopped —
+      // one of the three cancellation windows step 12 named.
+      expect((await store.claim(stopping.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe(
+        "stopping",
+      );
+
+      const over = aJob();
+      await store.enqueueOrGet(over, "k2");
+      const attempt = crypto.randomUUID();
+      expect((await store.claim(over.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      await store.finish(over.id, attempt, { status: "done", steps: over.steps });
+      expect((await store.claim(over.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("finished");
+    });
+
+    /**
+     * **The one that stops the endpoint deadlocking itself.**
+     *
+     * One claim covers one step. If it were held across requests, the next
+     * advance — a different request with a different token — would be told
+     * `busy` until the lease expired, and the happy path would break on step two
+     * with every symptom pointing at the client.
+     */
+    it("lets the claim go after a step, so the next request can have it", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = crypto.randomUUID();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+
+      const done: JobStep[] = [{ ...job.steps[0]!, status: "done" }];
+      const after = await store.releaseStep(job.id, attempt, done, { title: "A Paper" });
+      expect(after.status).toBe("queued");
+      expect(after.title).toBe("A Paper");
+      expect(after.steps[0]?.status).toBe("done");
+
+      // A different request, a different token, and it gets in.
+      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
+    });
+
+    /**
+     * **The fence's third condition, tested on the state that needs it.**
+     *
+     * The first version of this failed a job with `failExpired` and asserted the
+     * old token was refused — and it **passed with `status = 'running'` removed
+     * from the fence**, because `failExpired` clears the token too, so the second
+     * condition was doing all the work. A test that cannot fail proves nothing,
+     * and this one nearly shipped with a comment saying it had been watched red.
+     *
+     * So the dangerous state is built directly: a job that has ended and still
+     * carries its token. **The schema permits exactly that** —
+     * `jobs_running_is_fenced` constrains `running` rows only — so it is one
+     * forgotten `attemptId: null` away in any transition somebody adds later.
+     */
+    it("refuses a write onto a finished job that still carries its token", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = crypto.randomUUID();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+
+      // Its lease runs out and the sweep fails it. The claimant does not know.
+      await adapter.expire(job.id);
+      expect(await store.failExpired()).toBeGreaterThanOrEqual(1);
+      expect((await store.get(job.id, OWNER))?.status).toBe("error");
+
+      await adapter.reattach(job.id, attempt);
+
+      await expect(store.releaseStep(job.id, attempt, job.steps, {})).rejects.toBeInstanceOf(
+        StaleAttemptError,
+      );
+      await expect(
+        store.finish(job.id, attempt, { status: "done", steps: job.steps }),
+      ).rejects.toBeInstanceOf(StaleAttemptError);
+      // And the sweep's own account of it survived the refused writes.
+      expect((await store.get(job.id, OWNER))?.error).toMatch(/did not come back/);
+    });
+
+    it("refuses a write from a claimant whose job somebody else now holds", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const mine = crypto.randomUUID();
+      await store.claim(job.id, OWNER, mine, LEASE);
+      await store.releaseStep(job.id, mine, job.steps, {});
+      await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE);
+
+      // The first claimant comes back late. It cannot write, and it learns that
+      // rather than affecting zero rows and being told nothing.
+      await expect(store.releaseStep(job.id, mine, job.steps, {})).rejects.toBeInstanceOf(
+        StaleAttemptError,
+      );
+    });
+
+    it("fails a job whose lease ran out, and leaves a live one alone", async () => {
+      const dead = aJob();
+      await store.enqueueOrGet(dead, "k1");
+      await store.claim(dead.id, OWNER, crypto.randomUUID(), LEASE);
+      await adapter.expire(dead.id);
+      expect(await store.failExpired()).toBe(1);
+      const failed = await store.get(dead.id, OWNER);
+      expect(failed?.status).toBe("error");
+      /* `retry`, said rather than left to the absent-means-yes rule — both offer
+         the button, and only one of them says why. An interrupted job really is
+         worth another go, because `stepIsDone` derives what is finished from the
+         artefacts, so a retry resumes rather than starting again. */
+      expect(failed?.failureKind).toBe("retry");
+
+      // The running slot is free again, which is the other half of why this runs.
+      const alive = aJob();
+      await store.enqueueOrGet(alive, "k2");
+      await store.claim(alive.id, OWNER, crypto.randomUUID(), LEASE);
+      expect(await store.failExpired()).toBe(0);
+      expect((await store.get(alive.id, OWNER))?.status).toBe("running");
+    });
+
+    it("cancels a queued job outright, and only asks a running one", async () => {
+      const queued = aJob();
+      await store.enqueueOrGet(queued, "k1");
+      /* Nobody is inside a queued job, so there is no `cancelling` flag for
+         anyone to notice — p-queue's own callback used to clear it and Postgres
+         provides no such callback. It has to be terminal here or never. */
+      expect((await store.cancelIdle(queued.id, OWNER))?.status).toBe("cancelled");
+
+      const running = aJob();
+      await store.enqueueOrGet(running, "k2");
+      await store.claim(running.id, OWNER, crypto.randomUUID(), LEASE);
+      expect(await store.cancelIdle(running.id, OWNER)).toBeUndefined();
+      expect((await store.requestCancel(running.id, OWNER))?.cancelling).toBe(true);
+    });
+
+    it("refuses to forget a job that is still going", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      expect(await store.forget(job.id, OWNER)).toBe(false);
+      const attempt = crypto.randomUUID();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      await store.finish(job.id, attempt, { status: "done", steps: job.steps });
+      expect(await store.forget(job.id, OWNER)).toBe(true);
+      expect(await store.get(job.id, OWNER)).toBeUndefined();
+    });
+
+    it("keeps the newest finished jobs and drops successes before failures", async () => {
+      /* Retention is on the contract rather than left to a caller because a
+         store that grows without limit is not a detail: `list` reads all of
+         them, and it is what the homepage polls. */
+      const ended: Job[] = [];
+      for (let i = 0; i < 4; i++) {
+        const job = aJob({ createdAt: new Date(Date.now() - (4 - i) * 60_000).toISOString() });
+        await store.enqueueOrGet(job, `k${i}`);
+        const attempt = crypto.randomUUID();
+        await store.claim(job.id, OWNER, attempt, LEASE);
+        // The oldest one failed; the rest succeeded.
+        await store.finish(job.id, attempt, {
+          status: i === 0 ? "error" : "done",
+          steps: job.steps,
+          ...(i === 0 ? { error: "went wrong" } : {}),
+        });
+        ended.push(job);
+      }
+
+      expect(await store.trimFinished(OWNER, 2)).toBe(2);
+      const left = (await store.list(OWNER)).map((j) => j.id);
+      // The failure survives even though it is the oldest — a reader who loses a
+      // failure loses the only account of what went wrong.
+      expect(left).toContain(ended[0]!.id);
+      expect(left).toContain(ended[3]!.id);
+      expect(left).not.toContain(ended[1]!.id);
+    });
+  });
+}
+
+process.on("beforeExit", () => {
+  void closeDb();
+});

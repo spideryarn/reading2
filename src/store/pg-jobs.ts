@@ -339,19 +339,20 @@ export const pgJobStore: JobStore = {
 
   async trimFinished(owner: OwnerId, keep: number): Promise<number> {
     const db = getDb();
-    /* Successes before failures, so successes are what gets dropped; then
-       oldest first within each. The same order `pruneOwner` uses on the
-       filesystem, because a reader who loses a failure loses the only account
-       of what went wrong. */
+    /* **Ordered by what to KEEP, then everything past `keep` is deleted** —
+       which is the opposite way round from the filesystem adapter, where the
+       list is ordered by what to drop and sliced from the front. Getting that
+       inversion wrong is how the first version of this deleted the failures and
+       kept old successes, and the parity test is what caught it: a reader who
+       loses a failure loses the only account of what went wrong.
+       So: failures first (`status = 'done'` is false for them, and false sorts
+       first), then newest first within each group. `id` breaks the tie, because
+       `created_at` alone is not a total order. */
     const doomed = db
       .select({ id: jobs.id })
       .from(jobs)
       .where(and(eq(jobs.ownerId, owner), inArray(jobs.status, TERMINAL)))
-      .orderBy(
-        sql`(${jobs.status} <> 'done')`,
-        desc(jobs.createdAt),
-        desc(jobs.id),
-      )
+      .orderBy(sql`(${jobs.status} = 'done')`, desc(jobs.createdAt), desc(jobs.id))
       .offset(keep);
     const gone = await db
       .delete(jobs)
