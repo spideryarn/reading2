@@ -44,6 +44,8 @@ import {
   searchRuns,
 } from "../db/schema.js";
 import { blocksArtefact } from "../blocks.js";
+import type { DocumentKind, RawManifest } from "../fetch.js";
+import { looksLikePdf } from "../source.js";
 import { ownedByReader, ownedSlug } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
@@ -110,6 +112,96 @@ function compact<T extends object>(value: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, v]) => v !== null && v !== undefined),
   ) as Partial<T>;
+}
+
+/**
+ * Write the raw document and its manifest, and say which files were written.
+ *
+ * Its own function because `exportArticle` was already long and this pushed it
+ * past the complexity gate — but also because the two belong together: the
+ * manifest's `file` field must name the file written beside it, and a reader
+ * checking that promise should not have to hold the rest of an export in their
+ * head to do it.
+ */
+async function writeRawDocument(
+  dir: string,
+  revision: {
+    rawBytes: Buffer | null;
+    rawContentType: string | null;
+    rawEncoding: string | null;
+    rawSha256: string | null;
+    requestedUrl: string | null;
+    finalUrl: string | null;
+    fetchedAt: Date | null;
+    createdAt: Date;
+  },
+): Promise<string[]> {
+  if (!revision.rawBytes) return [];
+
+  /* **The bytes say which it is, because nothing else can.** This wrote
+     `raw.html` unconditionally until 2026-08-27, so every exported PDF landed
+     under a name claiming to be HTML — and the name is the only thing that
+     tells the next `db:import` which decoder to use, since `readRaw` falls
+     back to *"no manifest means assume HTML"*. A re-import then read a PDF as
+     a web page.
+
+     Sniffing rather than reading `raw_content_type` is deliberate and is the
+     rule stage 1 already follows: the stored content type is *the server's
+     claim*, and src/fetch.ts says why that is not good enough — "A PDF served
+     as `application/octet-stream` is still a PDF; a Cloudflare challenge page
+     served as `application/pdf` is still HTML." There is no `raw_kind`
+     column; docs/plans/raw-bytes-in-storage.md adds one, and until it does
+     the body is the honest authority. */
+  const kind: DocumentKind = looksLikePdf(revision.rawBytes) ? "pdf" : "html";
+  const file = kind === "pdf" ? "raw.pdf" : "raw.html";
+  await writeFile(path.join(dir, file), revision.rawBytes);
+
+  /* raw.json — stage 1's manifest, rebuilt from the columns. It was not
+     exported at all, which meant a round trip lost the content type, the
+     encoding, the hash and the two URLs, and left the file's own name as the
+     only surviving fact about it.
+
+     **Not `compact`ed**, unlike `meta.json` above: `contentType`, `encoding`
+     and `sha256` are `T | null` in `RawManifest` rather than optional, so a
+     null dropped here comes back as a *missing* key, and the difference
+     between "we know it was null" and "we never recorded it" is exactly what
+     that type exists to express (src/fetch.ts).
+
+     Two fields are genuinely unrecoverable and are therefore absent rather
+     than invented: `origin`/`uploadId`/`filename` live only in the manifest
+     and have no column, so an exported upload reads back as a fetch. That is
+     a real gap — docs/plans/raw-bytes-in-storage.md § a reference the
+     transaction owns is where it gets a home — and absent is the honest way
+     to carry it, since an invented `origin: "url"` would be a false statement
+     every later reader would believe.
+
+     **`backfilled` is always set, and that is not a hedge.** Every manifest
+     this writes is a *reconstruction from columns*, never a copy of the file
+     stage 1 wrote — which is what `backfilled` already means (src/fetch.ts),
+     and `src/store/import.ts` already acts on: `readRaw` returns null for a
+     backfilled manifest, so a re-import takes the `kind` and the filename and
+     declines to treat any of the provenance as a fact. That is exactly right
+     here. It also stops the export claiming a distinction the schema cannot
+     make: there is no column saying whether stage 1 wrote a manifest at all,
+     so `data/writes` (which has one) and `data/constitution` (which does not)
+     are indistinguishable by the time the bytes are in Postgres. */
+  const manifest: RawManifest = {
+    kind,
+    file,
+    ...(revision.requestedUrl === null ? {} : { requestedUrl: revision.requestedUrl }),
+    ...(revision.finalUrl === null ? {} : { url: revision.finalUrl }),
+    contentType: revision.rawContentType,
+    encoding: revision.rawEncoding,
+    bytes: revision.rawBytes.byteLength,
+    sha256: revision.rawSha256,
+    fetchedAt: (revision.fetchedAt ?? revision.createdAt).toISOString(),
+    backfilled:
+      "Rebuilt from the database by db:export. Provenance beyond the two URLs " +
+      "was not stored, so a re-import treats this manifest as absent — " +
+      "src/store/import.ts, readRaw.",
+  };
+  await writeJson(path.join(dir, "raw.json"), manifest);
+  return [file, "raw.json"];
 }
 
 /**
@@ -196,10 +288,8 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
   if (revision.ideas) await put("ideas.json", revision.ideas);
   if (revision.labels) await put("labels.json", revision.labels);
 
-  if (revision.rawBytes) {
-    await writeFile(path.join(dir, "raw.html"), revision.rawBytes);
-    written.push("raw.html");
-  }
+  written.push(...(await writeRawDocument(dir, revision)));
+
   if (revision.stampedHtml) {
     /* stage 3's artefact lives in `output/`, not in `data/` — see
        docs/plans/postgres-migration.md § Stage 3 recovers ids from output/.

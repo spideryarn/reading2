@@ -38,7 +38,15 @@ loadEnvLocal();
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-/** Every artefact a round trip should preserve. */
+/**
+ * Every **JSON** artefact a round trip should preserve.
+ *
+ * The raw document and its manifest are deliberately not here — they are bytes
+ * and a name, not a document to compare — and have two tests of their own
+ * below. Until 2026-08-27 they had neither, and this comment said "every
+ * artefact", which is how losing the whole source document came to be something
+ * this file would pass.
+ */
 const ARTEFACTS = [
   "meta.json",
   "blocks.json",
@@ -133,6 +141,25 @@ function canonical(artefact: string, value: unknown): unknown {
     ...value,
     [key]: [...list].sort((a, b) => rank(a).localeCompare(rank(b))),
   };
+}
+
+/**
+ * The raw document beside an article, whatever it is called, as bytes.
+ *
+ * Bytes rather than text on purpose: `raw.pdf` is not text, and a comparison
+ * that decoded first would pass on two files that differ.
+ */
+async function readRawIfPresent(
+  dir: string,
+): Promise<{ file: string; bytes: Buffer } | undefined> {
+  for (const file of ["raw.pdf", "raw.html"]) {
+    try {
+      return { file, bytes: await readFile(path.join(dir, file)) };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+  }
+  return undefined;
 }
 
 async function readJsonIfPresent(file: string): Promise<unknown | undefined> {
@@ -242,6 +269,87 @@ when("a round trip through Postgres", () => {
       expect(returned).toBeDefined();
       expect(sorted(canonical(artefact, returned))).toEqual(
         sorted(canonical(artefact, original)),
+      );
+    });
+
+    /**
+     * **The raw document, which `ARTEFACTS` above does not list** — and that
+     * list calls itself "every artefact a round trip should preserve", so the
+     * omission reads as a decision rather than as the gap it is. The
+     * consequence is the alarming part: **losing the entire source document
+     * passes this file today**, because nothing here ever looks at one. Found
+     * by GPT Sol reviewing docs/plans/raw-bytes-in-storage.md, 2026-08-27.
+     *
+     * It is not the loss that is happening, though. It is worse and quieter:
+     * `src/store/export.ts` writes `revision.rawBytes` to **`raw.html`
+     * unconditionally**, so a PDF article round-trips to a file named
+     * `raw.html` holding PDF bytes. The name is the only thing that says which
+     * decoder to use, and it now says the wrong one.
+     *
+     * Bytes, not JSON, so this cannot join `it.each(ARTEFACTS)`.
+     */
+    it("preserves the raw document under its own name", async () => {
+      const original = await readRawIfPresent(path.join(ROOT, "data", slug));
+      const returned = await readRawIfPresent(path.join(out, "data", slug));
+
+      if (original === undefined) {
+        expect(returned).toBeUndefined();
+        return;
+      }
+
+      expect(returned).toBeDefined();
+      /* The filename first, and separately, because it is the failure worth
+         reading in the output: `raw.pdf` becoming `raw.html` is a different
+         bug from the bytes changing, and asserting them together would report
+         either as "buffers differ". */
+      expect(returned?.file).toBe(original.file);
+      expect(returned?.bytes.equals(original.bytes)).toBe(true);
+    });
+
+    /**
+     * `raw.json` is stage 1's manifest — the kind, the two URLs, the content
+     * type, the encoding, the byte count and the hash (src/fetch.ts). Nothing
+     * else records any of it, so an export without it is a source document
+     * whose provenance is gone: `src/store/import.ts` falls back to *"no
+     * manifest means assume HTML"*, which is right for an article old enough to
+     * predate manifests and wrong for one we exported ten seconds ago.
+     *
+     * Its own test rather than a line in `ARTEFACTS`, because a manifest that
+     * comes back with a *different* `file` field than the file actually written
+     * is the interesting failure, and the list above only knows about equality.
+     */
+    it("preserves the raw manifest", async () => {
+      const original = (await readJsonIfPresent(
+        path.join(ROOT, "data", slug, "raw.json"),
+      )) as { file?: string } | undefined;
+      const returned = (await readJsonIfPresent(
+        path.join(out, "data", slug, "raw.json"),
+      )) as { file?: string } | undefined;
+
+      /* **Not "absent stays absent"**, which is the rule every JSON artefact
+         above follows and the one this cannot. Nothing in Postgres records
+         whether stage 1 wrote a manifest: `data/writes` has one and
+         `data/constitution` does not, and both arrive as the same all-null
+         columns. So an export that only wrote `raw.json` "when there was one"
+         would be guessing, and would drop a real manifest as readily as it
+         skipped an absent one.
+         What it writes instead is a reconstruction that says so — see the
+         `backfilled` assertion below — which is a shape this repo already has
+         and `readRaw` already handles. The absence this test does still hold
+         onto is the one that is knowable: no raw bytes, no manifest. */
+      if (original === undefined && returned === undefined) return;
+
+      expect(returned).toBeDefined();
+      /* The manifest must name the file that is actually there. A manifest
+         saying `raw.pdf` beside a `raw.html` is worse than no manifest, because
+         every reader downstream believes it. */
+      const beside = await readRawIfPresent(path.join(out, "data", slug));
+      expect(returned?.file).toBe(beside?.file);
+      /* Stamped, always. Without this the test above passes just as well for an
+         export that rebuilt a manifest and presented it as stage 1's own — and
+         a re-import would then take null provenance for measured fact. */
+      expect((returned as { backfilled?: string }).backfilled).toEqual(
+        expect.stringContaining("db:export"),
       );
     });
   });
