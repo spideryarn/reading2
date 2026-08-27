@@ -6605,7 +6605,24 @@ tr:hover .block-chat,
   stroke: rgb(var(--diag-chain) / 0.5);
   stroke-width: 0.75;
   fill: none;
+  /* **Segments add up rather than paint over each other**, so a corridor the
+     article travels repeatedly glows and a single transit stays a whisper.
+     This is the one move that turns 263 crossings from noise into a reading:
+     the hairball becomes a heat map of where the piece keeps going, and every
+     segment is still drawn, so nothing is hidden to achieve it. Fable's
+     suggestion, 2026-08-27, and much the best idea of that round.
+
+     `plus-lighter` rather than `screen`: it is the compositing operator that
+     genuinely sums, so two faint lines are twice as bright and four are four
+     times. On a near-black ground that is exactly the behaviour wanted; on a
+     light one it would do nothing, which is worth knowing before anybody moves
+     this picture. */
+  mix-blend-mode: plus-lighter;
 }
+/* The bright run is a line to follow rather than texture to accumulate, so it
+   comes out of the additive layer — otherwise it would blow out wherever it
+   crossed the chain, which is the one place the reader is looking. */
+.diag-trail .diag-link.diag-d8 { mix-blend-mode: normal; }
 .diag-trail .diag-link.diag-d0 { opacity: 0.16; }
 .diag-trail .diag-link.diag-d1 { opacity: 0.2; }
 .diag-trail .diag-link.diag-d2 { opacity: 0.25; }

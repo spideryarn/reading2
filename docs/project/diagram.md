@@ -532,7 +532,10 @@ A three-word heading embeds perfectly well and then sits at cosine 0.8 from
 every other three-word heading, because what they have in common is being short.
 
 **The strip says how many were left out**, because a picture that quietly drops
-a fifth of the article looks exactly like a picture of all of it. What *does*
+a fifth of the article looks exactly like a picture of all of it. One
+consequence to own rather than hide: **Trail's chain joins consecutive *dots*,
+not consecutive paragraphs**, so a segment can silently bridge a run of list
+items nobody drew. What *does*
 tile is each dot's row **range**: a dot answers for everything from itself to
 just before the next one, so the you-are-here mark never falls in a gap even
 though the dots do.
@@ -629,7 +632,32 @@ Trail itself has**, which is a different conclusion from either "keep it" or
 "cut it", and it is Greg's call which way it goes. The local bright run around
 the reader is the half of the chain that is worth keeping either way.
 
-Two things the pass found and fixed. The lane legend was a wrapping row, so with
+Five more things the pass and two design reviews found, all now changed:
+
+- **The bright run needs `?at=`, and before a reader has scrolled there is
+  none.** The browser agent diffed every segment's classes, found only the dim
+  steps, and reported the local run as missing; it is there the moment the
+  reader's position exists. Worth knowing rather than fixing — a "you are here"
+  before the reader is anywhere would be an invention.
+- **Arrowheads are gone from the global chain** and drawn on every segment of
+  the local run instead. Two design reviews and the browser pass reached that
+  independently: *direction along a path you cannot trace is not information*,
+  and thirty heads through 263 crossings are clutter.
+- **The chain composites additively** (`mix-blend-mode: plus-lighter`), so a
+  corridor the article travels repeatedly glows and a single transit stays a
+  whisper. It is the one move that turns the crossing count from noise into a
+  reading, and it hides nothing to do it. Fable's suggestion, and the best idea
+  of the round.
+- **Lanes were filling 72% of their own width**, so the gutters closed and a
+  histogram of the dots came out smeared across the whole band —
+  indistinguishable from `spread`, which is the mode lanes exist to differ from.
+  Half now.
+- **Two lanes both read "claudes"** on `constitution`. A proper idf is not
+  enough when two groups genuinely centre on the article's dominant noun, so a
+  later lane now steps down its own list rather than repeating an earlier one's
+  headline.
+
+Two more the pass found and fixed. The lane legend was a wrapping row, so with
 eight lanes it wrapped after five and chip 6 sat under chip 0 — a legend whose
 *order* was the only thing tying a word to a column, which looked perfectly tidy
 and required counting. It is a grid of `k` columns now, so chip *i* sits over

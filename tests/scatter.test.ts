@@ -338,12 +338,23 @@ describe("trail", () => {
     }
   });
 
-  it("puts an arrowhead on some segments and not on most of them", () => {
-    /* 359 arrowheads in a 320px box is a texture, not a direction. */
-    const out = layoutTrail(root, bs, opts(), input(pts));
-    const arrows = out.links.filter((l) => l.arrow).length;
-    expect(arrows).toBeGreaterThan(0);
-    expect(arrows).toBeLessThan(out.links.length / 3);
+  it("puts arrowheads only where the reader is, and none at all when nobody is reading", () => {
+    /* **Direction along a path you cannot trace is not information.** Thirty
+       heads scattered through 263 crossing segments are clutter — two design
+       reviews and a browser pass reached that independently, 2026-08-27. Inside
+       the bright local run the path really is traceable, so a head there says
+       something.
+
+       The no-reader case is the one that pins the rule: before `?at=` exists
+       there is no run, so there must be no heads. */
+    expect(layoutTrail(root, bs, opts(), input(pts)).links.some((l) => l.arrow)).toBe(false);
+
+    const out = layoutTrail(root, bs, opts({ atRow: 30 }), input(pts));
+    const arrows = out.links.filter((l) => l.arrow);
+    expect(arrows.length).toBeGreaterThan(0);
+    expect(arrows.length).toBeLessThan(out.links.length / 8);
+    // And every one of them is on a segment of the bright run.
+    for (const a of arrows) expect(a.depth).toBe(8);
   });
 
   it("never draws an arrow it has no room for", () => {

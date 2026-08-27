@@ -116,8 +116,7 @@ const ROW = 6;
  * their share — so the picture scrolled by thirty pixels, for nothing.
  */
 const TRAIL_MIN_H = 260;
-/** One arrowhead every this many segments, so the chain has a direction and not 359 heads. */
-const ARROW_EVERY = 8;
+
 /** How many steps of fade the chain gets, oldest to newest. Matches the CSS. */
 const CHAIN_STEPS = 9;
 /**
@@ -476,9 +475,16 @@ function laneX(kept: readonly Dot[], k: number, left: number, right: number): (d
   const scales = new Map<number, (v: number) => number>();
   for (let c = 0; c < lanes; c++) {
     const xs = kept.filter((d) => d.point.c === c).map((d) => d.point.x);
-    // 0.72 rather than 1: a dot that reached its lane's edge would touch its
-    // neighbour's, and two lanes that touch read as one.
-    scales.set(c, robustScale(xs, -half * 0.72, half * 0.72));
+    /* **0.5, not 0.72, and the difference is whether lanes look like lanes.**
+       At 0.72 each lane fills nearly all of its own width, so the gutters close
+       up and a browser histogram of the dots' x positions came out smeared
+       across the whole band — visually indistinguishable from `spread`, which
+       is the mode this one exists to be different from. Found in a browser
+       pass, 2026-08-27, by counting rather than by looking.
+
+       Half leaves a real gutter either side. The position inside a lane still
+       means what it means; it means it in less room. */
+    scales.set(c, robustScale(xs, -half * 0.5, half * 0.5));
   }
   return (d) => {
     const c = Math.min(lanes - 1, Math.max(0, d.point.c));
@@ -596,14 +602,21 @@ export function layoutTrail(
        arrow**. Direction is carried by the other heads and by the fade; a gap
        would be carried by nothing. */
     const head = b.r + HEAD_GAP;
-    const wanted = i % ARROW_EVERY === ARROW_EVERY - 1 || i === placed.length - 2;
+    const step = chainStep(i, placed.length, here);
+    /* **Every segment of the bright run gets a head, and nothing else gets
+       one.** Globally there are none, which is the change two design reviews
+       and a browser pass reached independently, 2026-08-27: thirty-odd heads
+       scattered through a hairball of 263 crossing segments are clutter, and
+       *direction along a path you cannot trace is not information*. Inside the
+       run the path genuinely is traceable, and there it is a dozen or so heads
+       on a line the eye can follow — so every one of them earns its ink. */
+    const wanted = step === CHAIN_STEPS - 1;
     const arrow = wanted && len > tail + head + MIN_ARROW_RUN;
     const stop = arrow ? head : b.r + 0.5;
     /* Two dots on top of one another — the article saying the same thing twice
        in a row, or two paragraphs the model cannot tell apart. There is no
        direction to draw and no room to draw it in. */
     if (len <= tail + stop) continue;
-    const step = chainStep(i, placed.length, here);
     links.push({
       id: `trail${i}-${a.d.block.id}`,
       d: `M ${round(a.cx + ux * tail)} ${round(a.cy + uy * tail)} L ${round(b.cx - ux * stop)} ${round(b.cy - uy * stop)}`,
@@ -703,30 +716,52 @@ export function laneTerms(
     for (const t of lane.keys()) lanesWith.set(t, (lanesWith.get(t) ?? 0) + 1);
   }
 
-  return counts.map((lane, c) => {
+  const scored = counts.map((lane, c) => {
     const total = Math.max(1, totals[c] ?? 1);
     /* Textbook idf, `log(k / df)`, so a term that appears in **every** lane
        scores exactly zero and drops out.
-       
+
        The first version used `log(1 + k/df)`, which never reaches zero — and on
        the constitution that left "claude" as the top word of four of the eight
        lanes, because the article's most common noun is common in all of them.
        A legend where half the chips say the same word is a legend that names
        nothing. Measured on the corpus rather than reasoned about. */
-    const scored = [...lane].map(([t, n]) => ({
-      t,
-      score: (n / total) * Math.log(k / (lanesWith.get(t) ?? 1)),
-    }));
-    scored.sort((a, b) => b.score - a.score || a.t.localeCompare(b.t));
-    const best = scored.slice(0, 3).filter((s) => s.score > 0);
+    const ranked = [...lane]
+      .map(([t, n]) => ({ t, score: (n / total) * Math.log(k / (lanesWith.get(t) ?? 1)) }))
+      .sort((a, b) => b.score - a.score || a.t.localeCompare(b.t));
+    const useful = ranked.filter((r) => r.score > 0);
     /* Every word in this lane is in every other lane too — a real outcome for a
        very short article with one subject. Fall back to raw frequency so the
        chip still says something, rather than showing an empty lane the reader
        cannot tell from a broken one. */
-    if (best.length > 0) return best.map((s) => s.t);
-    return [...lane]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 3)
-      .map(([t]) => t);
+    return useful.length > 0
+      ? useful
+      : [...lane].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => ({ t, score: 0 }));
+  });
+
+  /* **No two lanes may lead with the same word**, and this is the pass that
+     enforces it. Even with a proper idf, two lanes that genuinely both centre
+     on the article's dominant noun come back with the same top term — and on
+     `constitution` two of eight chips both read "claudes", which is a legend
+     that names nothing and looks like a bug in the labelling. Found in a
+     browser pass, 2026-08-27.
+     
+     Lanes are served left to right, so an earlier lane keeps the shared word
+     and a later one steps down its own list. That is arbitrary between the two,
+     and it is the only rule here that could be: what matters is that the reader
+     can tell the chips apart, and that the answer is the same on every run. */
+  const taken = new Set<string>();
+  return scored.map((ranked) => {
+    const out: string[] = [];
+    for (const { t } of ranked) {
+      if (out.length === 0 && taken.has(t)) continue;
+      if (out.length === 0) taken.add(t);
+      out.push(t);
+      if (out.length === 3) break;
+    }
+    // Every candidate was already some other lane's headline. Say the word
+    // anyway rather than an empty chip — a repeat is honest, a blank is not.
+    if (out.length === 0 && ranked[0]) out.push(ranked[0].t);
+    return out;
   });
 }

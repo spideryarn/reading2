@@ -1069,7 +1069,12 @@ function kept(p: UseProjection): string {
   const missing = short > 0 ? `, ${short} too short or not prose to place` : "";
   const capped = p.skipped.capped > 0 ? `, ${p.skipped.capped} past the limit` : "";
   const by = p.model ? ` Placed by ${p.model}.` : "";
-  return `${p.blocks} paragraphs${missing}${capped}. This flat view keeps about ${held}% of the differences the model found, so dots far apart really are far apart — dots close together may still differ in what was left out.${by}`;
+  /* **Three sentences, because it is three claims.** The first version ran them
+     together with a dash and a "so", which made the asymmetry — the only real
+     content here — the tail of a sentence about a percentage. Fable's rewrite,
+     2026-08-27, and it is better: how many dots, how flat the view is, and then
+     the two halves of what flatness costs, each given its own full stop. */
+  return `${p.blocks} paragraphs${missing}${capped}. This is a flattened view — it keeps about ${held}% of the differences the model saw. Far-apart dots really do differ. Close-together dots may not: their differences may be in what the flattening dropped.${by}`;
 }
 
 /**
