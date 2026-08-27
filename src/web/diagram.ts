@@ -120,7 +120,16 @@ import type { SummaryNode } from "./tree.js";
  * recommends cutting it on the grounds that the comparison is now done and
  * `tree` won. Recorded in docs/plans/diagram-mode.md rather than acted on.
  */
-export const DIAGRAMS = ["strata", "tree", "mindmap", "arc", "force", "cluster"] as const;
+export const DIAGRAMS = [
+  "strata",
+  "tree",
+  "mindmap",
+  "arc",
+  "force",
+  "cluster",
+  "drift",
+  "trail",
+] as const;
 export type DiagramKind = (typeof DIAGRAMS)[number];
 
 /**
@@ -180,14 +189,93 @@ export interface DiagramNode {
   dot?: { x: number; y: number; r: number };
   hasChildren: boolean;
   collapsed: boolean;
+  /**
+   * What a screen reader is told, when the title and the block count are not
+   * enough.
+   *
+   * The default label is `"<number> <title>, N paragraphs"`, which is the whole
+   * of what a section node is. A scatter dot is not: its position carries how
+   * far through the article it is and which topic the model put it in, and
+   * **colour is the only thing carrying either** — which is precisely what
+   * docs/project/colour-scales.md says colour must never be. So the pictures
+   * that spend position on something say it here instead.
+   */
+  label?: string;
 }
 
 /** A connector. `d` is an SVG path in the same coordinates as the nodes. */
+/**
+ * What a line between two nodes claims.
+ *
+ * The union lives here rather than in [graph.ts](./graph.ts), where it is
+ * *meant* — `GraphEdge.kind` is an alias for this — because a `DiagramLink`
+ * carries it and diagram.ts may not import graph.ts. graph.ts imports this
+ * file, and a type going the other way would be an import cycle, which
+ * `npm run check` gates on (docs/project/static-analysis.md).
+ *
+ * The three tree pictures leave `kind` unset: on a tree every line is
+ * containment, so naming it would be ceremony.
+ */
+export type LinkKind = (typeof LINK_KINDS)[number];
+
+/**
+ * Every kind, as a value — so a test can iterate them and a missing stylesheet
+ * rule is a failure rather than a line quietly drawn in the base grey.
+ * `LinkKind` above is derived from this, so the two cannot drift.
+ */
+export const LINK_KINDS = [
+  /** Containment: a part to one of its sections. */
+  "parent",
+  /** Reading order — the chain through the article. Drawn thick, with an arrow. */
+  "sequence",
+  /** The **author** linked these two passages. The one edge here that is a fact. */
+  "anchor",
+  /** Shared distinctive words, by tf-idf cosine. A hint about subject matter. */
+  "vocabulary",
+  /** Similar meaning, by embedding. Drawn dotted, because it is inferred. src/similar.ts. */
+  "semantic",
+] as const;
+
 export interface DiagramLink {
   id: string;
   d: string;
   part: number;
+  /**
+   * **A per-picture rendering band, and it means three different things.**
+   *
+   * On `tree` and `mindmap` it is the depth of the node the line hangs off. On
+   * `arc` it is the edge's *weight*, quantised into the three stroke widths the
+   * stylesheet has. On `force` it used to be the edge's *kind* — 0 for
+   * sequence, 1 for parent, 2 for vocabulary — which worked for exactly three
+   * kinds and stopped working at five.
+   *
+   * That third use is what `kind` below replaced. The other two are left alone
+   * because each picture's stylesheet is written against them, and the honest
+   * description of this field is that it is a channel a layout may use, not a
+   * fact about the graph. GPT Sol pointed out that Arc had already made it one;
+   * pretending otherwise here would be the kind of comment that is worse than
+   * none.
+   */
   depth: number;
+  /**
+   * What the line claims. **Required**, and that is the point of it.
+   *
+   * An optional discriminator would leave the exact trap this replaced: a sixth
+   * kind of Force edge could be added, forget to say what it is, and compile.
+   * Every layout therefore names the kind of every line it draws — and on the
+   * tree pictures that is not ceremony, because every line there really is
+   * containment and saying so costs one word.
+   */
+  kind: LinkKind;
+  /**
+   * Draw an arrowhead at the target end.
+   *
+   * A field rather than something the stylesheet derives from `kind`, because
+   * `marker-end` cannot be applied usefully by a class on its own: the marker
+   * has to be referenced by id, and the id belongs to the `<defs>` the panel
+   * writes.
+   */
+  arrow?: boolean;
 }
 
 export interface DiagramLayout {
@@ -275,6 +363,24 @@ const CHAR_W = 0.52;
  * `tests/diagram-css.test.ts` reads the stylesheet and asserts it agrees. That
  * makes a mismatch a red test rather than a rendering nobody questions.
  */
+/**
+ * The pictures that write **nothing at all** on a node.
+ *
+ * Drift and Trail are dots — 276 of them on a long article — and a label per
+ * dot would be a wall of overlapping text. Everything a label would have said
+ * is in the footer card and in each dot's `aria-label`.
+ *
+ * It is a named set rather than an implicit consequence of `lines` being empty,
+ * because `tests/diagram-css.test.ts` demands a stylesheet rule for every
+ * kind × depth in `LABEL_PX` and treats a missing one as a failure — which is
+ * exactly the right rule and the reason it exists. A kind that legitimately has
+ * no rule has to say so out loud, and the test then checks the *other*
+ * direction too: these two must have no label font-size anywhere, or the
+ * arithmetic and the stylesheet would be disagreeing again with nothing to
+ * catch it.
+ */
+export const UNLABELLED: ReadonlySet<DiagramKind> = new Set<DiagramKind>(["drift", "trail"]);
+
 export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
   strata: { 0: 11, 1: 10, 2: 11 },
   tree: { 0: 12, 1: 12, 2: 12 },
@@ -283,6 +389,12 @@ export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
   // Only a number goes inside a force bubble, and it is small.
   force: { 0: 10, 1: 10, 2: 10 },
   cluster: { 0: 11, 1: 11, 2: 11 },
+  /* Nothing is written on a scatter dot at all — `lines` is always empty
+     (src/web/scatter.ts). These entries exist because the record is keyed by
+     `DiagramKind` and a missing one would be a type error rather than a
+     picture; `tests/diagram-css.test.ts` skips a kind that never draws a label. */
+  drift: { 0: 11, 1: 11, 2: 11 },
+  trail: { 0: 11, 1: 11, 2: 11 },
 };
 
 /** The gist's size, on the one picture that draws one. Same contract as above. */
@@ -306,6 +418,9 @@ export const LINE_STEP: Record<DiagramKind, { title: number; gist: number }> = {
   arc: { title: 13, gist: 13 },
   force: { title: 12, gist: 12 },
   cluster: { title: 13, gist: 13 },
+  // The two scatters write nothing on a dot; everything is in the card.
+  drift: { title: 13, gist: 13 },
+  trail: { title: 13, gist: 13 },
 };
 
 /** How many characters fit in `px` at `fontPx`. At least one, so wrapping ends. */
@@ -642,6 +757,7 @@ export function layoutTree(root: SummaryNode, opts: DiagramOptions): DiagramLayo
         d: `M ${parent.x} ${parent.y + DOT_R} V ${dotY - r} Q ${parent.x} ${dotY} ${parent.x + r} ${dotY} H ${dotX - DOT_R}`,
         part: e.part,
         depth,
+        kind: "parent",
       });
     }
     anchors.set(n.node.id, { x: dotX, y: dotY });
@@ -763,6 +879,7 @@ export function layoutMindmap(root: SummaryNode, opts: DiagramOptions): DiagramL
       d: `M ${trunkX} ${Math.min(stemY, y - PART_GAP / 2)} C ${trunkX} ${stemY} ${mid} ${stemY} ${trunkEnd} ${stemY}`,
       part: i,
       depth: 1,
+      kind: "parent",
     });
 
     nodes.push({
@@ -842,6 +959,7 @@ export function layoutMindmap(root: SummaryNode, opts: DiagramOptions): DiagramL
         d: `M ${dotX} ${pillY + pillH} V ${ty - TWIG_H / 2}`,
         part: i,
         depth: 2,
+        kind: "parent",
       });
     }
 
@@ -861,6 +979,9 @@ export function layoutMindmap(root: SummaryNode, opts: DiagramOptions): DiagramL
     d: `M ${trunkX} ${rootBottom} V ${trunkBottom}`,
     part: -1,
     depth: 0,
+    /* The trunk is the root holding all its parts, which is containment drawn
+       as one stroke rather than as one per part. Same claim, fewer lines. */
+    kind: "parent",
   });
 
   return { width: opts.width, height: Math.max(opts.height, y + 8), nodes, links, axis: null, nowY: null };
