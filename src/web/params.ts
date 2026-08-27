@@ -26,6 +26,7 @@
 import { createParser, debounce } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
+import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
@@ -713,6 +714,58 @@ export const diagramParam = createParser<DiagramKind>({
 })
   .withDefault("strata")
   .withOptions({ history: "push" });
+
+/**
+ * What sideways means on the Drift picture.
+ *
+ * `spread` puts every paragraph on one sliding scale — the first principal
+ * component of its embedding, which is honest about *degree*: two dots at the
+ * same height and nearly the same x really are talking about nearly the same
+ * thing. `lanes` groups them into a handful of topics and gives each topic a
+ * column, which is legible at a glance and says nothing about how far apart two
+ * topics are.
+ *
+ * Both, because Greg asked for both: *"maybe add a toggle so we can choose
+ * between dimension reduction algorithms"* (2026-08-27). It is one of the two
+ * things this round is trying to find out.
+ *
+ * Trail ignores this — it spends both axes on components — and the control is
+ * hidden there rather than disabled, because a control that is visibly present
+ * and does nothing is worse than one that is not there.
+ *
+ * `replace`, unlike `?diagram=`: this is a way of looking at one picture rather
+ * than a different picture, and a reader flicking between the two to compare
+ * them should not have to press Back eight times.
+ */
+export const diagramAxisParam = createParser<ScatterAxis>({
+  parse: (v) => (v === "spread" || v === "lanes" ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault("lanes")
+  .withOptions({ history: "replace" });
+
+/**
+ * What a dot's colour means on the two scatter pictures.
+ *
+ * `section` is the default and matches the other six pictures — the same eight
+ * hues, meaning the same thing. `progress` is a sequential ramp from the start
+ * of the article to the end, and it is the one that matters on **Trail**, whose
+ * vertical axis is no longer position: without it nothing in that picture says
+ * which end of the piece a dot came from. `topic` colours by the model's own
+ * grouping, which is what makes a lane's membership visible when the lanes
+ * themselves are switched off.
+ *
+ * Greg's call, 2026-08-27, when the trade-off was put to him with the two
+ * palettes drawn out.
+ *
+ * `replace`, for the same reason as the axis above.
+ */
+export const diagramHueParam = createParser<ScatterHue>({
+  parse: (v) => (v === "section" || v === "progress" || v === "topic" ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault("section")
+  .withOptions({ history: "replace" });
 
 /**
  * How far down the tree the summary panel goes — their structure panel's depth

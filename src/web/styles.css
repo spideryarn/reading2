@@ -6363,7 +6363,8 @@ tr:hover .block-chat,
   padding: 0.3rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
-.diag-opt { display: inline-flex; align-items: center; gap: 0.2rem; }
+.diag-opt { display: inline-flex; align-items: center; gap: 0.25rem; }
+.diag-opt-set { display: inline-flex; align-items: center; gap: 0.15rem; }
 .diag-opt-label {
   margin-right: 0.15rem;
   color: var(--ink-faintest, var(--ink-faint));
@@ -6436,11 +6437,38 @@ tr:hover .block-chat,
 
 /* Where the reader is. A ring rather than a fill, for the reason the rest of
    this panel gives: the fill already means something (which section, or how far
-   through) and a position marker must not change colour as you read. */
+   through) and a position marker must not change colour as you read.
+
+   **On the dot, not on the box** — and that has to be said in a rule of its own
+   rather than left to the cascade. The panel's general `.diag-node.here
+   .diag-box` puts the ring on the hit target, which here is an invisible square
+   thirteen pixels across: a ring round a box the reader cannot see reads as a
+   stray rectangle floating beside the dot it is about. `stroke: none` above
+   happens to beat it on source order, and this is the rule that means it, so
+   that moving either block cannot silently bring the square back. */
+.diag-drift .diag-node.here .diag-box,
+.diag-trail .diag-node.here .diag-box { stroke: none; }
 .diag-drift .diag-node.here .diag-dot,
 .diag-trail .diag-node.here .diag-dot {
   stroke: var(--highlight);
   stroke-width: 2;
+  paint-order: stroke;
+}
+
+/* **The keyboard focus ring, and it is not decoration.** The panel's general
+   rule draws a dashed outline on `.diag-box`, which these two pictures have
+   just made transparent and strokeless — so without this, arrowing through 276
+   dots would move focus with nothing on screen following it. The picture is one
+   tab stop and the arrows move inside it; a focus ring that is invisible makes
+   that whole contract unusable, and it is invisible in exactly the way nothing
+   reports. So: the ring goes on the dot, dashed, as everywhere else. */
+.diag-drift .diag-node:focus-visible .diag-box,
+.diag-trail .diag-node:focus-visible .diag-box { stroke: none; }
+.diag-drift .diag-node:focus-visible .diag-dot,
+.diag-trail .diag-node:focus-visible .diag-dot {
+  stroke: var(--highlight);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
   paint-order: stroke;
 }
 

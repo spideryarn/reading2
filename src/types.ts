@@ -907,18 +907,20 @@ export interface ProjectionPoint {
   x: number;
   /** The second. Orthogonal to the first, and always the smaller of the two. */
   y: number;
-  /** Which topic k-means put it in, 0-based, ordered by where the topic starts. */
-  c: number;
   /**
-   * How central it is to its own topic, 1 (the most typical passage in the
-   * article) down to 0.
+   * Which topic k-means put it in, 0-based, ordered by where the topic starts.
    *
-   * Sent as typicality rather than as the cosine distance it is computed from,
-   * so that the direction is obvious from the name. A picture that drew the
-   * *least* typical paragraphs at the centre of a lane would be wrong in a way
-   * nothing would report.
+   * **There was a `typicality` beside this and it has gone.** It was how close
+   * the passage sat to its own topic's centre, and the Drift picture used it to
+   * lean a dot out of its lane — described, in a first draft, as leaning
+   * *towards the topic it was nearer to*. That is false: lanes are ordered by
+   * where the article gets to them, so the lane next door is the
+   * chronologically adjacent one and not the semantically nearest. GPT Sol's
+   * finding, 2026-08-27. A dot's place inside its lane is its first component
+   * now, which is one quantity meaning one thing — and a field nothing can
+   * honestly draw is a field that should not cross the wire.
    */
-  typicality: number;
+  c: number;
 }
 
 /**

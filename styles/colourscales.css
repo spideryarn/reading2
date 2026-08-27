@@ -153,6 +153,51 @@
     --heat-7: #fb9a06;
     --heat-8: #fcffa4;
 
+    /* ------------------------------------------------------------------
+       SEQUENTIAL, the other one — VIRIDIS, for a quantity with no
+       temperature in it.
+
+       This page used to say, under "What is not decided": *"No `viridis`.
+       Viridis is wanted the moment something needs a sequential ramp with no
+       temperature in it."* That moment arrived on 2026-08-27, with the Drift
+       and Trail pictures colouring a dot by **how far through the article** its
+       paragraph is (docs/project/diagram.md). Position in a document is not
+       hot; reaching for inferno there would have been reaching for what was
+       already in the file, which GPT Sol pointed out in review.
+
+       Same source and same property as inferno — Smith and van der Walt's
+       matplotlib set, designed with `viscm` against CAM02-UCS, monotonic in
+       lightness — so it survives greyscale, every dichromacy and a bad
+       projector for the same reason.
+
+       **And unlike inferno it has no unusable end on this page.** `--heat-0`
+       is darker than `--background` and `--heat-1` is above it by only 0.07,
+       which is why that ramp carries a "start at step 2" warning that is easy
+       to forget. Viridis starts at #440154, comfortably above the page, so all
+       nine steps can be drawn. `tests/colour-scales.test.ts` pins both the
+       monotonicity and that first stop.
+       ================================================================== */
+
+    --vir-0-rgb: 68 1 84;
+    --vir-1-rgb: 71 45 123;
+    --vir-2-rgb: 59 82 139;
+    --vir-3-rgb: 44 114 142;
+    --vir-4-rgb: 33 145 140;
+    --vir-5-rgb: 40 174 128;
+    --vir-6-rgb: 94 201 98;
+    --vir-7-rgb: 173 220 48;
+    --vir-8-rgb: 253 231 37;
+
+    --vir-0: rgb(var(--vir-0-rgb));  /* #440154 */
+    --vir-1: rgb(var(--vir-1-rgb));  /* #472d7b */
+    --vir-2: rgb(var(--vir-2-rgb));  /* #3b528b */
+    --vir-3: rgb(var(--vir-3-rgb));  /* #2c728e */
+    --vir-4: rgb(var(--vir-4-rgb));  /* #21918c */
+    --vir-5: rgb(var(--vir-5-rgb));  /* #28ae80 */
+    --vir-6: rgb(var(--vir-6-rgb));  /* #5ec962 */
+    --vir-7: rgb(var(--vir-7-rgb));  /* #addc30 */
+    --vir-8: rgb(var(--vir-8-rgb));  /* #fde725 */
+
     /* ==================================================================
        DIVERGING — nine steps with a middle that means "neither"
 

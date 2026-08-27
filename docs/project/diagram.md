@@ -640,11 +640,16 @@ never allowed to be the only carrier.
 ### What it costs
 
 One model call the first time either picture is opened for an article, about
-**$0.0015 and four seconds** on the longest article in the corpus, then cached.
-The vectors are shared with the Force picture's dotted lines
-([`src/article-vectors.ts`](../../src/article-vectors.ts)), so a reader who has
-already opened Force pays only for the arithmetic — which is a measured **290ms**
-of principal components and k-means, cached too.
+**$0.0015 and four seconds** on the longest article in the corpus, then cached —
+plus a measured **290ms** of principal components and k-means, cached too.
+
+**The vectors are meant to be shared with the Force picture's dotted lines** —
+that is what [`src/article-vectors.ts`](../../src/article-vectors.ts) is for —
+and today they are not. `similar.ts` still buys its own, because it was being
+written by somebody else in this tree on the same afternoon and reaching into a
+file mid-flight to save a fifth of a cent is how two people's work gets lost. So
+a reader who opens Force and then Drift on a cold article pays twice. Small,
+known, and the first thing to fix here; GPT Sol's finding on the built code.
 
 Like Force, this is a fetch a reader can start without pressing anything that
 says what it will do, so the gate is narrow: exactly these two pictures, never

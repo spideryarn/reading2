@@ -190,6 +190,56 @@ describe.each([
   });
 });
 
+describe("the other sequential ramp (--vir-*), for quantities with no heat in them", () => {
+  /* Written as `-rgb` triplets rather than hex, like the categorical set and
+     unlike `--heat-*`, because a component sets `--cat-rgb` to one of these
+     inline and the stylesheet paints it at an alpha (DiagramPanel.tsx §
+     rampStyle). So it is read the way the categorical block below reads its
+     own, rather than through `scale()`. */
+  const vir = [...css.matchAll(/--vir-(\d+)-rgb\s*:\s*(\d+) (\d+) (\d+);/g)]
+    .map((m) => ({
+      step: Number(m[1]),
+      hex: `#${[m[2], m[3], m[4]].map((v) => Number(v).toString(16).padStart(2, "0")).join("")}`,
+    }))
+    .sort((a, b) => a.step - b.step);
+
+  it("has nine stops", () => {
+    expect(vir).toHaveLength(9);
+  });
+
+  it("climbs in lightness at every single step", () => {
+    /* The one property that makes a sequential ramp work at all, and the reason
+       this is viridis rather than a hue rotation: lightness is the channel
+       greyscale and every dichromacy preserve, so a ramp that is monotonic in
+       it survives all of them without any of them being thought about. */
+    for (let i = 1; i < vir.length; i++) {
+      expect(
+        lightness(vir[i]!.hex),
+        `--vir-${i} (${vir[i]!.hex}) is not lighter than --vir-${i - 1}`,
+      ).toBeGreaterThan(lightness(vir[i - 1]!.hex));
+    }
+  });
+
+  it("climbs at a roughly even rate rather than bunching", () => {
+    const Ls = vir.map((v) => lightness(v.hex));
+    const steps = Ls.slice(1).map((v, i) => v - Ls[i]!);
+    expect(Math.max(...steps) / Math.min(...steps)).toBeLessThan(3);
+  });
+
+  it("has NO stop the page swallows, unlike the heat ramp", () => {
+    /* This is the reason it can be used without the "start at step 2" caveat
+       that `--heat-*` carries — and that caveat is exactly the kind of thing
+       that gets forgotten, so the difference is pinned rather than described.
+       Every stop is clear of `--page`, so a value near zero is drawn as a dark
+       value rather than as a hole. */
+    for (const { step, hex } of vir) {
+      expect(lightness(hex), `--vir-${step} (${hex}) is not clear of the page`).toBeGreaterThan(
+        PAGE_L + 0.05,
+      );
+    }
+  });
+});
+
 describe("the categorical palette (--cat-*)", () => {
   /* The slot-count and triplet-form checks live in tests/hit-colours.test.ts,
      beside the code that assigns the slots. What belongs here is the thing that

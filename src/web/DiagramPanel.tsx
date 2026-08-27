@@ -78,7 +78,7 @@ import { layoutDiagram } from "./diagrams.js";
 import { type ArticleGraph, buildGraph, wordsBefore } from "./graph.js";
 import { useSimilar } from "./useSimilar.js";
 import { type UseProjection, useProjection } from "./useProjection.js";
-import { HEAT_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
+import { RAMP_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
 import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
 
@@ -170,6 +170,34 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Signal; blurb: 
 };
 
 /** The three that need the graph rather than the tree. */
+/**
+ * The pictures that draw a you-are-here line, and therefore the only ones for
+ * which the reader's position is an input to layout.
+ *
+ * **This said `["strata"]` and that was wrong**, which is worth leaving in the
+ * file because of how the mistake was made: `atRow` was grepped for in
+ * diagram.ts and diagram-d3.ts, both of which really do ignore it everywhere
+ * but `layoutStrata`, and scatter.ts — where `drift` draws its position line
+ * (scatter.ts:430) and `trail` brightens the chain around the reader
+ * (scatter.ts:556) — was simply not one of the files looked at. A grep over the
+ * wrong set of files reads exactly like a grep that found everything.
+ *
+ * The failure it would have shipped is the quiet kind: two pictures whose
+ * you-are-here line silently stops following you. Nothing throws, nothing
+ * looks broken in a screenshot, and `tests/scatter.test.ts` — which does cover
+ * both behaviours — passes, because the layout functions were never the thing
+ * that changed. Caught by a GPT Sol review of the built code, 2026-08-27.
+ *
+ * `drift` and `trail` also fall back to `layoutStrata` while their projection
+ * is still loading (diagrams.ts:52-60), so they would have lost the line in the
+ * fallback too.
+ *
+ * A set rather than an equality test because the next picture to grow a `nowY`
+ * has to add itself here, and a `kind === "strata"` buried in a memo is not
+ * somewhere anybody would think to look.
+ */
+const NEEDS_AT_ROW = new Set<DiagramKind>(["strata", "drift", "trail"]);
+
 const NEEDS_GRAPH = new Set<DiagramKind>(["arc", "force", "cluster"]);
 
 /**
@@ -467,19 +495,30 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      an array we already hold, where the graph builds a whole term index. */
   const words = useMemo(() => wordsBefore(blocks), [blocks]);
 
+  /* `arc`, `force` and `cluster` return `nowY: null` and never read `atRow`, so
+     for those three it was a dependency nobody looked at — and `atRow` changes
+     every time the reader scrolls into a new section.
+
+     That made scrolling with Force open re-run the whole layout, which is a
+     300-tick d3 simulation measured at 39ms on a 60-section article and 113ms
+     at 150, to produce a picture identical to the one just discarded: a hitch
+     per section, all the way down a long article. Those three are also the
+     expensive layouts, so excluding exactly them is where the whole saving is.
+
+     `strata`, `drift` and `trail` keep it — see `NEEDS_AT_ROW` above, and note
+     that the first version of this left two of them out. GPT Sol's finding,
+     2026-08-27. */
+  const followsReader = NEEDS_AT_ROW.has(kind) ? atRow : null;
   const layout: DiagramLayout | null = useMemo(() => {
     if (!root || box === null || box.w === 0) return null;
     return layoutDiagram(
       kind,
       root,
-      // `atRow` is in here because the layout converts it — see
-      // `DiagramLayout.nowY`. Leaving it out of the deps below is not a
-      // performance win, it is a you-are-here line that never moves.
-      { width: box.w, height: box.h, collapsed, atRow, wordsBefore: words },
+      { width: box.w, height: box.h, collapsed, atRow: followsReader, wordsBefore: words },
       graph,
       scatter,
     );
-  }, [root, kind, box, collapsed, words, graph, scatter, atRow]);
+  }, [root, kind, box, collapsed, words, graph, scatter, followsReader]);
 
   /* The node the reader is standing in — the deepest one drawn, which is the
      same rule the summary panel's follow mark uses. Computed from the LAID OUT
@@ -745,8 +784,13 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         <p className="diag-note" role="status">
           {projection.status === "loading" && "Reading the article paragraph by paragraph…"}
           {projection.status === "ready" && kept(projection)}
+          {/* **The server's own words, not a guess at them.** The route now
+              tells a provider outage apart from a bug of ours and says which;
+              a fixed sentence here would have reported an authentication
+              failure, a network drop and a broken deploy as the embedding model
+              being down. GPT Sol's finding, 2026-08-27. */}
           {projection.status === "error" &&
-            "Could not reach the embedding model, so there is nothing to place these dots by. The picture below is Strata instead. [emb2]"}
+            `${projection.error ?? "Could not place these paragraphs, and the reason did not come back."} The picture below is Strata instead.`}
         </p>
       )}
 
@@ -936,9 +980,14 @@ function Choice<T extends string>({
   options: { value: T; label: string; blurb: string }[];
 }) {
   return (
-    <div className="diag-opt" role="radiogroup" aria-label={label}>
+    /* The caption sits OUTSIDE the radiogroup. A `<span>` among the radios is a
+       child of a role that does not want one, and it would also make the
+       group's children off-by-one from its options — which is exactly the sort
+       of index the focus move below has to get right. */
+    <div className="diag-opt">
       <span className="diag-opt-label">{label}</span>
-      {options.map((o, i) => (
+      <div className="diag-opt-set" role="radiogroup" aria-label={label}>
+        {options.map((o, i) => (
         /* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — see the kind switcher above */
         <button
           key={o.value}
@@ -959,13 +1008,24 @@ function Choice<T extends string>({
             if (d === 0) return;
             e.preventDefault();
             // Wraps, as the radio pattern specifies.
-            const next = options[(i + d + options.length) % options.length];
-            if (next) onChange(next.value);
+            const at = (i + d + options.length) % options.length;
+            const next = options[at];
+            if (!next) return;
+            onChange(next.value);
+            /* **And focus follows.** The newly-checked radio is the new tab
+               stop, so leaving focus behind means the next arrow press runs the
+               *old* button's handler and steps from the same place — you can
+               reach the neighbour and never anything past it. Tab then also
+               lands back inside the group instead of leaving it. The kind
+               switcher above already does this; this one did not until GPT Sol
+               read it, and the failure is one press away from looking fine. */
+            (e.currentTarget.parentElement?.children[at] as HTMLElement | undefined)?.focus();
           }}
-        >
-          {o.label}
-        </button>
-      ))}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -985,11 +1045,20 @@ function Choice<T extends string>({
  * half of the answer. GPT Sol's finding, 2026-08-27.
  */
 function kept(p: UseProjection): string {
+  /* **Nothing to draw is its own sentence.** An article of one long paragraph,
+     or one that is all headings, comes back ready and empty — and the general
+     wording below would tell the reader what percentage of the differences this
+     flat view keeps, of a view that is not there. GPT Sol's finding,
+     2026-08-27. */
+  if (p.blocks < 2) {
+    return "Not enough prose here to place — a paragraph needs a dozen words before the model can say what it is about. The picture below is Strata instead.";
+  }
   const held = Math.round((p.variance[0] + p.variance[1]) * 100);
   const short = p.skipped.tooShort + p.skipped.nonProse;
   const missing = short > 0 ? `, ${short} too short or not prose to place` : "";
   const capped = p.skipped.capped > 0 ? `, ${p.skipped.capped} past the limit` : "";
-  return `${p.blocks} paragraphs${missing}${capped}. This flat view keeps about ${held}% of the differences the model found, so dots far apart really are far apart — dots close together may still differ in what was left out.`;
+  const by = p.model ? ` Placed by ${p.model}.` : "";
+  return `${p.blocks} paragraphs${missing}${capped}. This flat view keeps about ${held}% of the differences the model found, so dots far apart really are far apart — dots close together may still differ in what was left out.${by}`;
 }
 
 /**
@@ -1059,14 +1128,16 @@ function slotStyle(part: number): React.CSSProperties {
  *
  * It also happens to be the ramp with no unusable end on a near-black page: the
  * darkest viridis stop is comfortably above `--page`, where `--heat-0` and
- * `--heat-1` are not, so there is no "start at step 2" caveat to get wrong.
+ * `--heat-1` are not, so there is no "start at step 2" caveat to get wrong —
+ * and the first draft of this got wrong anyway, by keeping inferno's offset
+ * after the ramp had changed and quietly never drawing the two darkest stops.
  *
  * `scatter.ts` decides the step; this file only says which ramp the number
  * indexes into. Same split as `slotStyle` — a component picks a slot, the
  * stylesheet owns what it looks like.
  */
 function rampStyle(step: number): React.CSSProperties {
-  const at = Math.max(0, Math.min(HEAT_STEPS + 1, step));
+  const at = Math.max(0, Math.min(RAMP_STEPS - 1, step));
   return { "--cat-rgb": `var(--vir-${at}-rgb)` } as React.CSSProperties;
 }
 
@@ -1142,7 +1213,13 @@ function NodeShape({
       // stated rather than inferred from the markup. `aria-level` is 1-based
       // where our depth is 0-based, and an option has no level to state.
       {...(!flat && { "aria-level": node.depth + 1 })}
-      {...(flat && { "aria-selected": focused || here })}
+      /* **`aria-selected` is where the keyboard is, and nothing else.** A
+         single-select listbox may have one selected option; folding the
+         reader's scroll position in makes two, and folding *hover* in makes
+         pointing at a dot an act of selection. Where the reader is standing is
+         carried by the label, which says which paragraph of how many. GPT Sol's
+         finding, 2026-08-27. */
+      {...(flat && { "aria-selected": focused })}
       aria-setsize={setSize}
       aria-posinset={posInSet}
       data-diag-id={node.id}

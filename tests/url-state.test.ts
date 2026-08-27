@@ -20,6 +20,9 @@ import {
   findParam,
   matchParam,
   MODES,
+  diagramAxisParam,
+  diagramHueParam,
+  diagramParam,
   modeParam,
   orderParam,
   confParam,
@@ -468,5 +471,55 @@ describe("runsParam and the legacy run= it replaced", () => {
        paints nothing until the reader says so — the rule the glossary and the
        summaries both already follow. */
     expect(resolveRuns(null, null)).toEqual([]);
+  });
+});
+
+/**
+ * The three parameters diagram mode owns.
+ *
+ * They are here rather than left to the parser factory because the rule they
+ * follow is a *design* rule, not a parsing one: **an unknown value degrades to
+ * something real.** A link from a future version of this app, or one somebody
+ * has typed by hand, must open a picture rather than an error — the same call
+ * every other parser in params.ts makes, and worth pinning for the two newest.
+ */
+describe("the diagram parameters", () => {
+  it("takes any of the eight pictures and falls back to strata", () => {
+    expect(diagramParam.parse("trail")).toBe("trail");
+    expect(diagramParam.parse("drift")).toBe("drift");
+    expect(diagramParam.parse("strata")).toBe("strata");
+    // A picture from a version this build has never heard of.
+    expect(diagramParam.parse("hyperbolic")).toBeNull();
+    expect(diagramParam.defaultValue).toBe("strata");
+  });
+
+  it("defaults sideways to lanes, and refuses anything it cannot draw", () => {
+    expect(diagramAxisParam.parse("lanes")).toBe("lanes");
+    expect(diagramAxisParam.parse("spread")).toBe("spread");
+    expect(diagramAxisParam.parse("umap")).toBeNull();
+    expect(diagramAxisParam.parse("")).toBeNull();
+    expect(diagramAxisParam.defaultValue).toBe("lanes");
+  });
+
+  it("defaults colour to the section hues the other pictures use", () => {
+    /* `section` rather than `progress`, so that a reader who has learnt what
+       green means on the other six pictures does not have to learn a second
+       thing on these two. Trail is the picture that wants `progress`, and
+       asking for it is one press. */
+    expect(diagramHueParam.parse("section")).toBe("section");
+    expect(diagramHueParam.parse("progress")).toBe("progress");
+    expect(diagramHueParam.parse("topic")).toBe("topic");
+    expect(diagramHueParam.parse("jet")).toBeNull();
+    expect(diagramHueParam.defaultValue).toBe("section");
+  });
+
+  it("pushes a different picture and replaces a different way of looking at one", () => {
+    /* The split this whole file is about. `?diagram=` is a different picture and
+       Back should undo it; `?dx=` and `?dhue=` are ways of looking at one, and a
+       reader flicking between them to compare should not have to press Back
+       eight times to leave the panel. */
+    expect(diagramParam.history).toBe("push");
+    expect(diagramAxisParam.history).toBe("replace");
+    expect(diagramHueParam.history).toBe("replace");
   });
 });

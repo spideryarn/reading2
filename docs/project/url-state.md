@@ -47,6 +47,24 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `conf` | the bar `prioritised` hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
 | `len` | which rung of the length ladder summary mode is showing, absent for `gist` — [summaries.md](summaries.md) | push | `?len=long` |
 | `deep` | how far down the tree summary mode goes: `0` the article, `1` the parts, `2` the sections | push | `?deep=2` |
+| `diagram` | which of the eight pictures diagram mode is drawing, absent for `strata` — [diagram.md](diagram.md) | push | `?diagram=trail` |
+| `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
+| `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
+
+**`dx` and `dhue` replace where `diagram` pushes**, and the split is the one this
+file draws everywhere: `?diagram=` is a *different picture* and Back should undo
+it, where the other two are ways of looking at one picture — a reader flicking
+between lanes and spread to compare them should not have to press Back eight
+times to leave. Same call `?len=` and `?gate=` make on either side of the same
+line.
+
+**Diagram mode's one exception, and it is deliberate**: which sections the
+reader has *collapsed* is not in the URL at all. Node ids are positional and a
+re-run of `npm run toc` renumbers them ([block-ids.md](block-ids.md)), so a
+pasted link would open the wrong sections on an article that had been
+re-ingested. `dx` and `dhue` are safe for exactly the reason that one is not —
+they are stable words rather than ids, so no amount of re-ingesting can make
+them quietly wrong.
 
 Those are all `/read/<slug>`. The five below are `/`.
 

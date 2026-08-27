@@ -18,7 +18,8 @@ two of those neither can be changed.
 | Scale | Tokens | Means | Status |
 |---|---|---|---|
 | **Categorical** | `--cat-0` … `--cat-7` (+ `-rgb`) | these are different things | in use — one per saved search |
-| **Sequential** | `--heat-0` … `--heat-8` | this much of it | ready, unused |
+| **Sequential (hot)** | `--heat-0` … `--heat-8` | this much of it, and it is hot | ready, unused |
+| **Sequential (neutral)** | `--vir-0` … `--vir-8` (+ `-rgb`) | this much of it | in use — how far through the article a paragraph is |
 | **Diverging** | `--div-0` … `--div-8`, `--div-rg-0` … `--div-rg-8` | which side of the middle | ready, unused |
 
 ## Two rules that apply to all three
@@ -222,15 +223,15 @@ for golden-angle-in-OKLCh beyond it.** We do not have a beyond — the ninth sea
 because a ninth *distinguishable* hue is not available at this point and pretending otherwise would
 be worse than repeating.
 
-## Sequential — nine steps that mean "this much of it"
+## Sequential — two ramps of nine steps that mean "this much of it"
 
 **Inferno**, from matplotlib — Nathaniel Smith and Stéfan van der Walt's set, presented at SciPy
 2015 and designed with `viscm` against the CAM02-UCS perceptual space.
 
 Chosen over viridis for the reason Greg's framing asks for: the axis he described is *hotness*, and
 inferno is the blackbody ramp — dark, red, orange, yellow, white — so the cultural reading and the
-perceptual one agree. Viridis is the choice for a quantity with no temperature in it and is worth
-adding beside this the day one turns up.
+perceptual one agree. Viridis is the choice for a quantity with no temperature in it — that day
+came on 2026-08-27, and it is the next section.
 
 ### The property that actually matters is monotonic lightness
 
@@ -253,6 +254,25 @@ ends, so it **invents boundaries the data does not have** and hides differences 
 made in Borland and Taylor, *Rainbow Color Map (Still) Considered Harmful* (IEEE Computer Graphics
 and Applications, 2007), and restated for a wider audience in Crameri, Shephard and Heron, *The
 misuse of colour in science communication* (Nature Communications, 2020).
+
+### Viridis, for the same job with no heat in it
+
+Same source, same property, same reason it survives greyscale and dichromacy:
+monotonic lightness, `viscm`, CAM02-UCS. It is here because **inferno makes a
+claim** — dark, red, orange, yellow, white is the blackbody ramp, and a reader
+reads *hotter* off it. Reading position is not hot. Neither is a count, a score,
+or a duration.
+
+It has one practical advantage over inferno on this page, and it is worth
+knowing before choosing between them: **every viridis stop is clear of
+`--background`**, where `--heat-0` is darker than the page and `--heat-1` is
+above it by only 0.07. So viridis has no "start at step 2" caveat to forget.
+Both facts are pinned in [`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts).
+
+Written as `-rgb` triplets as well as hex, unlike `--heat-*`, because a component
+sets `--cat-rgb` to one of them inline and the stylesheet paints it at an alpha —
+the same indirection the categorical set uses (`rampStyle` in
+[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)).
 
 ### Start at `--heat-2` when painting on the page
 
@@ -341,11 +361,16 @@ which is almost always zero, and the ends are then asymmetric — which is hones
 
 ## What is not decided
 
-- **No `viridis`, and no `cividis`.** Viridis is wanted the moment something needs a sequential ramp
-  with no temperature in it. Cividis (Nuñez, Anderton & Renslow, PLOS ONE 2018) is the one built
-  specifically so that colour-blind and non-colour-blind viewers see near-identical gradients, and
-  is the right choice over inferno anywhere the colour is doing more work than the number beside it.
-  One more block of nine stops each, when either is wanted.
+- **No `cividis`.** (Nuñez, Anderton & Renslow, PLOS ONE 2018) — the one built specifically so that
+  colour-blind and non-colour-blind viewers see near-identical gradients, and the right choice over
+  either ramp here anywhere the colour is doing more work than the number beside it. One more block
+  of nine stops, when it is wanted.
+
+  **Viridis is no longer on this list.** It was added on 2026-08-27 for the Drift and Trail pictures
+  ([diagram.md](diagram.md)), which colour a dot by how far through the article its paragraph is.
+  That is an ordered quantity with no temperature in it, which is exactly the case this file said
+  viridis was for — and the first draft of that feature reached for `--heat-*` because it was
+  already in the file. A GPT Sol review named it. See § Sequential below.
 - **Nothing checks these against a colour-blindness simulator.** The lightness properties *are*
   measured now ([`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts)), which is the
   half that catches the silent failures. The other half — a dichromacy transform with a minimum
