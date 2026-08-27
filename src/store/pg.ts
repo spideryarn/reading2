@@ -29,7 +29,7 @@
  * § Rules. It would hide exactly the divergence the parity test is looking for.
  */
 
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { describeArticle, titleFor } from "../api.js";
 import { getDb } from "../db/client.js";
@@ -164,11 +164,49 @@ export function ownedByReader() {
   return eq(articles.ownerId, currentOwnerId());
 }
 
+/**
+ * Every column of `article_revisions` **except the source document's bytes**.
+ *
+ * `select({ revision: articleRevisions })` takes the whole row, and one of those
+ * columns is `raw_bytes` — the entire fetched document, up to 32 MiB at stage
+ * 1's ceiling. `listArticles` runs that query **once per article**, for a page
+ * that shows a title, some counts and a blurb. Measured against this laptop's
+ * database with 8 articles: 23.89 MB across the wire, against 0.01 MB for the
+ * columns actually read. Nothing downstream ever touched the bytes — `metaFrom`
+ * reads `rawSha256`, and `LibraryEntry` has no field for them.
+ *
+ * **Derived from the table rather than listed here**, which is the whole point.
+ * A hand-written column list is right on the day it is written and silently
+ * wrong on the day somebody adds a column: the new one is dropped from every
+ * read, and it surfaces as one `undefined` field somewhere far away that reads
+ * like missing data rather than like a query.
+ * tests/store-revision-columns.test.ts asserts the difference is exactly this
+ * one column, so adding to the schema stays green and forgetting fails.
+ *
+ * When docs/plans/raw-bytes-in-storage.md lands, `raw_bytes` stops existing and
+ * this constant can go back to being the table itself.
+ */
+const { rawBytes: _rawBytesNotRead, ...revisionColumns } = getTableColumns(articleRevisions);
+
+/** Exported for the test that guards the omission. Not a read seam. */
+export const REVISION_COLUMNS = revisionColumns;
+
+/**
+ * A revision row **as read** — the table's shape minus the source bytes.
+ *
+ * `typeof articleRevisions.$inferSelect` is the shape of the *table*, and every
+ * read here selects less than that. Using the table's type for a row that was
+ * never fully fetched is how `raw_bytes` gets back into a query: the compiler
+ * asks for a field nobody has, and the cheapest way to satisfy it is to fetch
+ * it again.
+ */
+export type RevisionRead = { [K in keyof typeof revisionColumns]: (typeof articleRevisions.$inferSelect)[K] };
+
 /** One article's current published revision, or undefined. */
 async function currentRevision(slug: string) {
   const db = getDb();
   const rows = await db
-    .select({ article: articles, revision: articleRevisions })
+    .select({ article: articles, revision: revisionColumns })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
     .where(ownedSlug(slug))
@@ -237,7 +275,13 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
  */
 function metaFrom(
   slug: string,
-  revision: typeof articleRevisions.$inferSelect,
+  /* **`RevisionRead`, not `$inferSelect`** — the row as it is actually
+     *selected*, which is every column except `raw_bytes`. Widening it back to
+     the table's full shape would compile and would quietly re-require the one
+     column no read fetches, so the next person to satisfy the typechecker would
+     do it by putting the bytes back in the query. The narrow type is the thing
+     stopping that. */
+  revision: RevisionRead,
   blocks: Block[],
 ): Meta {
   const title =
@@ -418,7 +462,7 @@ export const pgArticleReader: Pick<
   async listArticles(opts: ListOptions = {}): Promise<LibraryEntry[]> {
     const db = getDb();
     const rows = await db
-      .select({ article: articles, revision: articleRevisions })
+      .select({ article: articles, revision: revisionColumns })
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
       /* `is null` / `is not null`, never `= null`. The archived half is asked

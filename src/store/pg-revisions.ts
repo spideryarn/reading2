@@ -78,7 +78,7 @@ import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
-import { ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
+import { REVISION_COLUMNS, ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
 
 const logger = log("store");
 
@@ -853,8 +853,12 @@ export async function publishRevision(opts: PublishRevisionOptions): Promise<{
     const article = await lockArticle(tx, slug);
     if (!article) throw new PublishRefused(slug, ["there is no such article"]);
 
+    /* `REVISION_COLUMNS`, not `select()`. The bare form takes `raw_bytes` too —
+       up to 32 MiB of source document, pulled across the wire so that four
+       fields can be checked and the tree read. Nothing below touches the bytes.
+       See src/store/pg.ts for the measurement. */
     const found = await tx
-      .select()
+      .select(REVISION_COLUMNS)
       .from(articleRevisions)
       .where(eq(articleRevisions.id, revisionId))
       .limit(1);

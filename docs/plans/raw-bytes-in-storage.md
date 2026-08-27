@@ -312,11 +312,17 @@ a laptop with no container — as a configuration somebody chooses, not one they
    dropped later, not now.
 4. **`db:import` and `db:export` are rewritten** — export becomes a Storage read, which makes
    data-portability depend on credentials and object availability for the first time.
-5. **`GET /api/source/:slug` is a redirect to a signed URL**, not a proxied body. It is documented in
-   [`src/routes.ts`](../../src/routes.ts) and not yet built; building it the other way would put an
-   11 MB body through a Vercel function whose response cap is 4.5 MB — working on this laptop and
-   failing in production, which is this repo's most-written-up failure shape
-   ([silent-success](../reusable/silent-success.md)).
+5. **`GET /api/source/:slug` becomes a redirect to a signed URL**, not a proxied body.
+
+   > **Correction.** The first draft said this route was *"documented and not yet built"*. It is
+   > built — `sendSource` in [`src/routes.ts`](../../src/routes.ts) — and that makes it worse rather
+   > than better. It reads `fsLocations(slug)` **unconditionally**, so it goes to the filesystem no
+   > matter what `SPIDERYARN_STORE` says, and then `res.end(bytes)` puts the whole document through
+   > the function. Two consequences, both live: under Postgres it serves from a directory that is not
+   > the source of truth, and on Vercel it would meet the 4.5 MB **response** cap with an 11 MB PDF.
+   > Working on this laptop and failing in production is this repo's most-written-up failure shape
+   > ([silent-success](../reusable/silent-success.md)), and here it is again in a route that already
+   > shipped. Found by an audit of every raw-byte reader, 2026-08-27.
 6. **The three-phase sweep**, above.
 7. **`tests/store-roundtrip.test.ts` gains raw files and manifests — done, 2026-08-27.** It omitted
    them, under a comment reading *"every artefact a round trip should preserve"*, which meant **total
@@ -342,6 +348,44 @@ a laptop with no container — as a configuration somebody chooses, not one they
    all-null columns. So the export writes a reconstruction stamped `backfilled`, a shape this repo
    already has and `readRaw` already ignores the provenance of. That is finding 3 showing up in a
    third place.
+
+## The trap had already sprung
+
+The audit of every raw-byte reader found that **three queries selected the revision row whole**, and
+one of them runs once per article on the library page:
+
+| query | when | reads the bytes? |
+|---|---|---|
+| `listArticles` | every library load, **once per article** | no |
+| `currentRevision` → `loadArticle` | every article view | no |
+| `publishRevision` | every publish | no |
+
+Measured against this laptop's database, joining `articles` to their current revision, 8 articles:
+
+| | time | across the wire |
+|---|---:|---:|
+| whole row, as it was | 28 ms | **23.89 MB** |
+| only the columns read | 0 ms | 0.01 MB |
+
+7.2 MB of that is `raw_bytes`; the rest is the driver rendering a `Buffer` as JSON. On a laptop it is
+28 ms. From a Vercel function to Supabase it is the entire corpus, on every library load, for a page
+showing titles and blurbs.
+
+**Fixed, 2026-08-27**, ahead of the rest of this plan and independently of it: the reads take every
+column *except* `raw_bytes`, derived from the table rather than listed by hand — a hand-written list
+is right the day it is written and silently drops the next column somebody adds.
+`tests/store-revision-columns.test.ts` asserts the difference is exactly that one column, so growing
+the schema stays green and forgetting one fails.
+
+It also asserts something the constant cannot: that **no query takes the whole row**. Getting the
+constant right does not make the queries use it, and TypeScript will not catch a revert, because a
+full row is assignable where the narrow one is wanted. That half reads the source text, which is
+blunt and is the right instrument for a property about code rather than about a value. All three ways
+of undoing this were checked against the test rather than assumed — reverting either query, or
+putting the column back in the constant, each fails it.
+
+When raw bytes leave Postgres this whole section stops being necessary. That it was necessary *now*
+is the argument for the plan restated in a measurement.
 
 ## Is there a quicker v1 in the same direction?
 
