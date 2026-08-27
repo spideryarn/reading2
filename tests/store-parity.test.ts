@@ -42,6 +42,7 @@ import { currentOwnerId } from "../src/owner.js";
 import { ADDED_AT } from "../src/store/pg.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
+import { loadShelf } from "../src/shelf.js";
 import { fsArticleReader, fsCommentStore, fsLibrarySearch, fsSearchStore } from "../src/store/fs.js";
 import { pgLibrarySearch } from "../src/store/pg-shelf.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
@@ -461,6 +462,28 @@ when("the filesystem and Postgres stores agree", () => {
       const word = await distinctiveWord();
 
       const all = await store.searchLibrary(word, LOTS);
+
+      /* **An archived article is already gone**, and both stores mean that on
+         purpose — Delete means archive (docs/project/library.md), and
+         `readArticle` in src/library-search.ts drops an archived slug before it
+         reads a single block. So the precondition below cannot hold for one,
+         and asserting it reports a working exclusion as a broken one.
+
+         Found by leaving two archived articles in `data/` and watching four
+         parity tests go red, 2026-08-27. The scan that builds `slugs` asks only
+         for `blocks.json` and `tree.json`, which an archived article still has,
+         so nothing upstream of here can filter it out.
+
+         Assert what is actually true for it rather than skipping: absent with
+         the exclusion and absent without it. That is the same claim the rest of
+         this test makes, and it is one the archived case can keep. */
+      if ((await loadShelf(slug)).archivedAt) {
+        expect(all.hits.some((h) => h.slug === slug)).toBe(false);
+        const gone = await store.searchLibrary(word, LOTS, { excludeSlug: slug });
+        expect(gone.hits).toEqual(all.hits);
+        return;
+      }
+
       // The test has to be able to fail: if the store cannot find the article
       // by its own longest word, excluding it proves nothing.
       expect(all.hits.some((h) => h.slug === slug)).toBe(true);
