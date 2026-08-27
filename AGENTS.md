@@ -224,6 +224,15 @@ Not descriptions of code, which the code already provides.
   falls back to `CODEX_API_KEY` by itself, so `retrying with CODEX_API_KEY` on stdout is the
   fallback working rather than a failure. Setup, that fallback and the traps are in
   [codex-cli-as-subagent.md](docs/reusable/codex-cli-as-subagent.md).
+- **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
+  a cheap subagent (Haiku, or `Explore`) to sweep the whole repo — code, docs, plans, postmortems,
+  tests, fixtures, scripts, `package.json` — for the old name and for anything that should change
+  *with* it: file names, headings and titles, URL paths and slugs, variables, types, CSS classes, env
+  vars, log messages, and the signpost table in this file. Give it both the old and the new name and
+  ask for a list of every hit with a recommendation, then decide each one yourself. Grep for
+  fragments as well as the whole name — a `camelCase` rename and its `kebab-case` twin do not match
+  the same pattern. The process is in
+  [rename-or-move.md](docs/reusable/rename-or-move.md): `git mv`, then the references.
 - **Reproduce a bug with a failing test before you fix it.** Write the test first and watch it go
   red — a test that was never red proves nothing. Then fix, and check it's gone green.
 - **Root-cause every bug in a subagent, and write it up.** When you're fixing a bug, hand the
