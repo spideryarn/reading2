@@ -6,7 +6,7 @@ The direction survives again, but the second draft still lacks a complete acquis
 
 ### 1. Critical — `deleting` has no safe completion or recovery protocol
 
-The lock is released before Storage deletion ([plan](docs/plans/raw-bytes-in-storage.md), lines 226–235).
+The lock is released before Storage deletion (plan (`docs/plans/raw-bytes-in-storage.md`), lines 226–235).
 
 Reproduction:
 
@@ -22,7 +22,7 @@ Confidence: 100%.
 
 ### 2. Critical — object creation has no corresponding row-creation protocol
 
-The plan says fetch uploads and then “registers” the object ([plan](docs/plans/raw-bytes-in-storage.md), lines 307–308).
+The plan says fetch uploads and then “registers” the object (plan (`docs/plans/raw-bytes-in-storage.md`), lines 307–308).
 
 Reproduction:
 
@@ -44,9 +44,9 @@ Confidence: 100%.
 
 ### 3. High — the filesystem configuration cannot implement the claimed lock
 
-The plan retains filesystem blobs for “a laptop with no container” ([plan](docs/plans/raw-bytes-in-storage.md), lines 301–303). In that configuration there is no Postgres `raw_sources` row to lock.
+The plan retains filesystem blobs for “a laptop with no container” (plan (`docs/plans/raw-bytes-in-storage.md`), lines 301–303). In that configuration there is no Postgres `raw_sources` row to lock.
 
-Additionally, [`fsBlobs.putIfAbsent`](src/store/blobs-fs.ts) uses `writeFile(..., {flag:"wx"})`. A process crash can leave a partial file; the next acquisition receives `EEXIST`/`already-there` and may register corrupt bytes unless it downloads and hashes them.
+Additionally, `fsBlobs.putIfAbsent` (`src/store/blobs-fs.ts`) uses `writeFile(..., {flag:"wx"})`. A process crash can leave a partial file; the next acquisition receives `EEXIST`/`already-there` and may register corrupt bytes unless it downloads and hashes them.
 
 The plan must either forbid sweeping/content-addressed references outside Postgres, require Postgres even with filesystem blobs, or define a filesystem metadata/locking adapter. Explicit backend selection alone does not supply transactions.
 
@@ -69,7 +69,7 @@ Confidence: 100%.
 
 ### 5. High — change A misclassifies a real class of PDFs
 
-[`sniffKind`](src/fetch.ts) accepts PDFs with leading junk because real files contain it; [`looksLikePdf`](src/source.ts) requires `%PDF-` at byte zero. [`writeRawDocument`](src/store/export.ts) uses the stricter function.
+`sniffKind` (`src/fetch.ts`) accepts PDFs with leading junk because real files contain it; `looksLikePdf` (`src/source.ts`) requires `%PDF-` at byte zero. `writeRawDocument` (`src/store/export.ts`) uses the stricter function.
 
 Reproduction:
 
@@ -85,7 +85,7 @@ Confidence: 100%.
 
 ### 6. High — `backfilled` makes the round trip discard known provenance
 
-Export writes `rawContentType`, `rawEncoding`, and `rawSha256`, then stamps the manifest `backfilled` ([export](src/store/export.ts), lines 178–203). On re-import, [`provenance`](src/store/import.ts) converts every backfilled manifest to `null`, so those three known values become null.
+Export writes `rawContentType`, `rawEncoding`, and `rawSha256`, then stamps the manifest `backfilled` (export (`src/store/export.ts`), lines 178–203). On re-import, `provenance` (`src/store/import.ts`) converts every backfilled manifest to `null`, so those three known values become null.
 
 That contradicts the plan’s decision to preserve the original received-byte hash.
 
@@ -97,7 +97,7 @@ Confidence: 100%.
 
 ### 7. High — the signed redirect weakens authorization without defining the window
 
-Today [`sendSource`](src/routes.ts) performs `shelfStore.read(slug)` before every response and forces PDF, `nosniff`, and inline disposition.
+Today `sendSource` (`src/routes.ts`) performs `shelfStore.read(slug)` before every response and forces PDF, `nosniff`, and inline disposition.
 
 After redirect:
 
@@ -136,7 +136,7 @@ const revisions = articleRevisions;
 .select({ revision: revisions })
 ```
 
-It also scans only two files. There is a fourth whole-row read in [`exportArticle`](src/store/export.ts), which the test does not scan—but that read is justified because export genuinely consumes `rawBytes` and the revision artefacts. I found no fourth unnecessary whole-row read.
+It also scans only two files. There is a fourth whole-row read in `exportArticle` (`src/store/export.ts`), which the test does not scan—but that read is justified because export genuinely consumes `rawBytes` and the revision artefacts. I found no fourth unnecessary whole-row read.
 
 Treat the regex as a tactical regression check, not proof that no query can regress.
 
@@ -146,7 +146,7 @@ Confidence: 100%.
 
 The plan gives an article with null `raw_bytes` no reference. That is honest, but incomplete.
 
-A legitimate legacy absence and a failed fresh acquisition both become the same null pair. Current [`publishRevision`](src/store/pg-revisions.ts) validates blocks, tree, and ToC, not source availability, so the database cannot enforce “legacy source unavailable” versus “new revision lost its required raw product.”
+A legitimate legacy absence and a failed fresh acquisition both become the same null pair. Current `publishRevision` (`src/store/pg-revisions.ts`) validates blocks, tree, and ToC, not source availability, so the database cannot enforce “legacy source unavailable” versus “new revision lost its required raw product.”
 
 Database restore adds a third state: a `present` row whose Storage object was deleted after the restore point. In that case no acquirer still holds the bytes.
 

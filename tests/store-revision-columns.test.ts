@@ -72,9 +72,23 @@ describe("the queries that read a revision", () => {
    * row is assignable where `RevisionRead` is wanted, because excess-property
    * checking only fires on object literals.
    *
-   * So this reads the source. That is a blunt instrument and it is the right
-   * one here: the property is "no read of this table takes the whole row", which
-   * is a fact about the text rather than about any value at runtime.
+   * So this reads the source. It is a blunt instrument, and — this is the part
+   * worth being honest about — **it is a regression check, not a proof**. It
+   * scans two files and matches two spellings, so
+   *
+   * ```ts
+   * const revisions = articleRevisions;
+   * .select({ revision: revisions })
+   * ```
+   *
+   * walks straight past it. GPT Sol pointed that out, and also checked for a
+   * fourth whole-row read and found none: `exportArticle` takes the whole row
+   * and is *right* to, because it genuinely writes `rawBytes` out.
+   *
+   * It is kept because the failure it guards is a revert of these two lines by
+   * somebody satisfying a typechecker, which is the likely way this comes back —
+   * not because it is airtight. When `raw_bytes` leaves Postgres the whole file
+   * goes with it.
    */
   const FILES = ["src/store/pg.ts", "src/store/pg-revisions.ts"];
 

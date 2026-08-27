@@ -1,9 +1,16 @@
 # The raw document goes in Storage, and nothing else does
 
-**Status: second draft, 2026-08-27.** First draft reviewed by GPT Sol and returned **NO-SHIP** with
-three criticals — [raw-bytes-in-storage-review-sol.md](raw-bytes-in-storage-review-sol.md). The
-direction survived and the protocol did not, which is the right way round. Every correction is folded
-in below; § What the review changed says which sentences were wrong and why.
+**Status: third draft, 2026-08-27. Not built.** Two cross-family reviews, two NO-SHIPs, and in both
+of them **the direction was never the thing under attack** — the protocol was, twice, and both times
+it deserved it.
+
+- [First review](raw-bytes-in-storage-review-sol.md): three criticals. The sweeper races a commit; a
+  hash is not a key; the backfill can put the wrong bytes under a hash.
+- [Second review](raw-bytes-in-storage-review-2-sol.md), on the draft that answered the first: two
+  more criticals, both about the same gap — **a state machine with no crash-safe transitions**. It
+  also found two real bugs in code that had already shipped.
+
+Every correction is folded in below, and § What the reviews changed lists which sentences were wrong.
 
 Written in answer to a question from Greg:
 
@@ -178,7 +185,9 @@ three times over**, and the review is right about each.
   have nowhere to go, and the checked-in `source` / `source-2` fixtures are two uploads of one
   document with distinct upload identities.
 
-So there is a table, and it is the thing the commit references:
+So there is a table, and it is the thing the commit references. **Its columns are a state machine,
+not a description** — that is the second review's correction, and the reason the second draft was
+still NO-SHIP:
 
 ```
 raw_sources
@@ -186,13 +195,20 @@ raw_sources
   kind          text          )  'pdf' | 'html'
   bytes         bigint
   content_type  text
-  state         text          -- 'present' | 'retiring' | 'deleting'
-  retire_after  timestamptz   -- set by the sweep's first pass, cleared by any acquisition
+  state         text          -- 'uploading' | 'present' | 'deleting'
+  claimed_by    uuid          -- who is uploading, and since when: a lease, like a job's
+  claimed_at    timestamptz
+  retire_after  timestamptz   -- set when nothing references it; cleared by any acquisition
   verified_at   timestamptz   -- when we last confirmed the object hashes to its own key
   created_at    timestamptz
 ```
 
 `article_revisions` gains `raw_source_sha256` and `raw_source_kind`, a composite foreign key onto it.
+**Both columns or neither** — a `CHECK` that they are null together, because two nullable columns
+forming one pointer is a half-pointer waiting to happen, and the review is right that nothing
+currently stops one. A reference may also only name a row in `present`; a revision pointing at
+`uploading` or `deleting` is refused at publication rather than discovered later.
+
 `raw_sha256` **stays where it is and keeps its current meaning** — see the backfill below, where the
 two stop being the same number. Provenance (`origin`, `upload_id`, `filename`) hangs off the revision,
 not off the shared object, because two readers sharing one PDF do not share a filename.
@@ -201,46 +217,58 @@ not off the shared object, because two readers sharing one PDF do not share a fi
 changes it under its own migrations and advises against referencing it. `raw_sources` is *our* record
 of what we believe is in the bucket; the bucket is not asked to enforce anything.
 
-### Deleting an object without deleting one somebody is about to use
+### Acquiring: the row comes first, and says it is not ready
 
-The first draft said an orphan is *"at a name nobody will mint again"*. That is exactly backwards, and
-it is the review's first critical: **content addressing guarantees the same document mints the same
-name again.** So a naive sweep races:
+The second draft said fetch uploads and then "registers" the object, which has no crash-safe ordering:
+upload-then-insert leaks an object no row can find, insert-then-upload leaves a `present` row pointing
+at nothing. And `select … for update` **locks no row that does not exist**, so two first-time
+acquirers of the same document both proceed.
+
+So the row is inserted first, in state `uploading`, with a lease:
+
+1. `insert … values (sha, kind, …, 'uploading', me, now()) on conflict (sha256, kind) do nothing`,
+   then read the row back. Exactly one caller creates it; the primary key is the mutual exclusion,
+   which is the same trick `jobs_only_one_running` already uses rather than a new one.
+2. The winner uploads, verifies the object hashes to its key, and moves the row to `present` —
+   `verified_at` set — in one transaction.
+3. A caller that lost, or found an `uploading` row whose lease has expired, may take the lease over.
+   Taking over is safe here and not in deletion, because the operation is *idempotent by
+   construction*: both callers are writing the same bytes to the same name.
+
+A crash between 1 and 2 leaves an `uploading` row with a dead lease, which is a **finding**, not a
+leak: the sweep can see it, and the object it may or may not have written is at a name that says what
+it should contain, so verification settles it.
+
+### Deleting: a tombstone, and nobody revives it
+
+The second draft's three phases released the lock before removing the object, and the review's first
+critical is that this has no recovery:
 
 ```
-  sweeper                              a job
-  ───────────────────────────────      ──────────────────────────────
-  T0  H is unreferenced → candidate
-                                       T1  putIfAbsent(H) → already-there
-                                       T2  commit a revision referencing H
-  T3  delete H
-                                       ── the committed revision dangles ──
+  sweeper                          an acquirer
+  ──────────────────────────────   ─────────────────────────────
+  marks H `deleting`, commits
+  crashes
+                                   sees `deleting`, re-uploads
+                                   putIfAbsent → already-there   ← the object never went
+                                   nothing completes the deletion
 ```
 
-Age does not protect against this, because `putIfAbsent` does not refresh `created_at` on a dedup hit.
-So deletion is three phases, and the `raw_sources` row is the lock:
+And letting the acquirer take over is worse, because the original sweeper may wake up and delete the
+object somebody has now referenced. So **`deleting` is terminal**:
 
-1. **Mark.** `update raw_sources set state = 'retiring', retire_after = now() + grace where state =
-   'present' and not exists (a revision referencing it)`.
-2. **Wait out the grace.** Nothing happens in between.
-3. **Delete.** In one transaction: `select … for update` the row where `retire_after < now()` and
-   `state = 'retiring'` and *still* nothing references it; set `state = 'deleting'`; commit. **Then**
-   remove the object through the Storage API — never by deleting a `storage.objects` row, which
-   orphans the bytes and keeps billing them. Then delete the row.
+1. **Mark.** Nothing references it → `state = 'retiring'` is *not* a state; `retire_after` is set on
+   the `present` row. Any acquisition clears it, in the transaction that adds the reference.
+2. **Commit to deleting.** Past the grace period, and still unreferenced: `select … for update`, set
+   `state = 'deleting'`, commit. From here the row is a tombstone. **An acquirer never revives it** —
+   it waits for the row to disappear and then acquires from scratch, which is the ordinary path.
+3. **Complete.** A retryable worker removes the object, then deletes the row. Crash anywhere and the
+   row is still `deleting`, so the worker simply runs again; removing an object that is already gone
+   is a no-op.
 
-An acquirer takes the same row `for update` and, in the transaction that adds its reference, sets
-`state = 'present'` and `retire_after = null`. The two cannot interleave: one blocks on the other's
-lock. Whoever loses sees the outcome and acts on it — and this is where "the acquirer still holds the
-bytes" pays for itself: **a `putIfAbsent` that returned `already-there` against a row saying
-`deleting` must re-upload rather than believe the dedup hit.** That is the one rule this protocol adds
-to the existing blob seam, and without it every other phase is decoration.
-
-**`not exists`, never `not in`.** `raw_source_sha256` is nullable, and `not in` against a column
-containing a NULL matches nothing at all — silently, and in the safe direction, so a sweep that had
-stopped deleting anything would look exactly like a sweep with nothing to do.
-`sweepAbandonedDrafts` already avoids this trap and says why. The `not exists` form was run against
-the real schema before being claimed here: on this laptop it returns 1 of the bucket's 4 objects, the
-other three matching live revisions, so it discriminates rather than merely running.
+The price is that acquiring a document that is mid-deletion *blocks* rather than proceeding. That is
+the right trade: it is rare, it is bounded by one Storage delete, and the alternative is a race whose
+losing side is a dangling reference in a committed revision.
 
 ### An orphan is not inert, and the first draft said it was
 
@@ -301,6 +329,14 @@ the one `DATABASE_URL` points at.
 So the blob backend becomes explicit, and a startup invariant refuses the incoherent pairing rather
 than discovering it on the first article. The filesystem adapter stays — it is right for tests and for
 a laptop with no container — as a configuration somebody chooses, not one they fall into.
+
+**And it cannot implement the protocol above**, which the review is right to press on: `raw_sources`
+lives in Postgres and the filesystem store has no Postgres. The honest answer is that the filesystem
+configuration does not get the state machine at all — it writes the object, it never sweeps, and it
+says so. That is the same shape as `uploadGrants()` returning `null` rather than pretending: an
+adapter that cannot do a thing should refuse it, not approximate it. What must not happen is the
+*mixed* configuration — Postgres articles with filesystem blobs — and that is what the startup
+invariant is for.
 
 ## What changes
 
@@ -415,6 +451,28 @@ What is true, and still worth the change:
 Against that, honestly: a `raw_sources` table, a three-phase sweep, a verifying backfill, an explicit
 blob configuration, and rewritten import/export. It is comparable work to piece 2, in a better place.
 
+## Three things the second review left, which are decisions rather than mechanisms
+
+**The source route's authorisation window.** `sendSource` checks ownership and *then* reads the
+bytes, so the check and the delivery are one act. A redirect to a signed URL splits them: the URL
+outlives the check that minted it and can be forwarded. This is not a reason to keep proxying an
+11 MB body through a 4.5 MB function — it is a reason to say the window out loud. Shortest TTL that
+works, single-use if Storage can express it, and the number written down rather than inherited from
+the upload grant's two hours, which was chosen for a browser upload and means nothing here.
+
+**"We never had the bytes" is not the same as "we lost them".** An article imported before we kept
+source documents, and a fresh revision whose acquisition failed, both end as a null reference. So
+does a third case the review found and I had not: a database restored to a point before an object was
+deleted, where the row says `present` and the bucket disagrees — and there, uniquely, **no acquirer
+still holds the bytes**, so the property the whole protocol rests on does not apply. These need to be
+distinguishable before `raw_bytes` is dropped, because after that there is nothing to fall back to.
+
+**The two hashes.** `raw_sources.sha256` is what we have; `article_revisions.raw_sha256` is what we
+were sent. Correct, and the review's worry is fair: two columns with near-identical names, equal for
+every PDF and every UTF-8 page, differing only for the cases nobody tests. Either rename so they
+cannot be confused, or record the relationship (`equal` / `reencoded`) as a field rather than leaving
+it to be inferred from comparing them.
+
 ## Not decided here
 
 - **The erasure deadline** — how long after its last reference an object may live. Needs a number and
@@ -429,7 +487,7 @@ blob configuration, and rewritten import/export. It is comparable work to piece 
   Storage credentials. It does not change the decision — the rollback and backup facts do that alone —
   but it is not evidence we have.
 
-## What the review changed
+## What the reviews changed
 
 | first draft said | actually |
 |---|---|
@@ -441,6 +499,18 @@ blob configuration, and rewritten import/export. It is comparable work to piece 
 | the line is *immutability* | three categories, not two; `extractedHtml` is immutable and still belongs in Postgres |
 | raw source is 86% of bytes | 73% inside article directories, 93% counting strays — two calculations, one published |
 | the filesystem fallback is fine | with Postgres articles it is a split brain; the backend must be configured |
+
+The **second** review, on the draft that answered the first:
+
+| second draft said | actually |
+|---|---|
+| the three-phase sweep closes the race | it releases the lock before the object is removed; a crash mid-delete has no recovery, and `deleting` must be a terminal tombstone |
+| fetch uploads and then registers the object | neither order is crash-safe, and `for update` locks no row that does not exist — the row comes first, in `uploading`, with a lease |
+| the composite reference is enough | two nullable columns are a half-pointer; and nothing stopped a revision referencing a row in `deleting` |
+| the filesystem fallback just needs configuring | it cannot implement the protocol at all, because `raw_sources` is in Postgres — it must refuse rather than approximate |
+| `looksLikePdf` names the exported file | stage 1 accepts a PDF with junk before the header and this did not — the same bug one layer along. **Shipped and fixed the same day.** |
+| the manifest test is enough | it asserted a filename and a stamp; the content type, encoding, hash and URLs could all be wrong and pass. **Fixed.** |
+| the column guard proves no query takes the whole row | it is a regression check over two files and two spellings, bypassable by aliasing the table. Kept, and the claim corrected. |
 
 One correction runs the other way. The research doc called `pg_net` *"POST-only"*; it is not — it
 supports `http_get`, and there is a synchronous `http` extension besides. Neither gives a sensible
