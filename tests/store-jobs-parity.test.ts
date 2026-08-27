@@ -228,14 +228,23 @@ for (const adapter of ADAPTERS) {
     });
 
     it("will not claim a job the reader has stopped, or one already over", async () => {
+      /* Stop on a job somebody is **inside**. That is the only way to reach
+         `stopping` since 2026-08-27: a *queued* job is cancelled outright by
+         the same call, because nobody is there to notice a flag. */
       const stopping = aJob();
       await store.enqueueOrGet(stopping, "k1");
+      const held = crypto.randomUUID();
+      await store.claim(stopping.id, OWNER, held, LEASE);
       await store.requestCancel(stopping.id, OWNER);
       // Otherwise the API key is spent on a job that has already been stopped —
       // one of the three cancellation windows step 12 named.
       expect((await store.claim(stopping.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe(
         "stopping",
       );
+      /* Released before the second half, or it would hold the single running
+         slot and the next job's claim would come back `busy` — a true answer to
+         a different question, and it would look like this test failing. */
+      await store.releaseStep(stopping.id, held, stopping.steps, {});
 
       const over = aJob();
       await store.enqueueOrGet(over, "k2");
@@ -407,19 +416,91 @@ for (const adapter of ADAPTERS) {
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
     });
 
-    it("cancels a queued job outright, and only asks a running one", async () => {
+    it("cancels a queued job outright, and only asks a running one — in one call", async () => {
       const queued = aJob();
       await store.enqueueOrGet(queued, "k1");
       /* Nobody is inside a queued job, so there is no `cancelling` flag for
          anyone to notice — p-queue's own callback used to clear it and Postgres
          provides no such callback. It has to be terminal here or never. */
-      expect((await store.cancelIdle(queued.id, OWNER))?.status).toBe("cancelled");
+      const stopped = await store.requestCancel(queued.id, OWNER);
+      expect(stopped?.status).toBe("cancelled");
+      expect(stopped?.cancelling).toBeFalsy();
 
       const running = aJob();
       await store.enqueueOrGet(running, "k2");
       await store.claim(running.id, OWNER, crypto.randomUUID(), LEASE);
-      expect(await store.cancelIdle(running.id, OWNER)).toBeUndefined();
-      expect((await store.requestCancel(running.id, OWNER))?.cancelling).toBe(true);
+      const asked = await store.requestCancel(running.id, OWNER);
+      expect(asked?.status).toBe("running");
+      expect(asked?.cancelling).toBe(true);
+    });
+
+    /**
+     * **The state that used to be permanent, and the reason cancel is one call.**
+     *
+     * Instance B presses Stop on a job instance A is inside. `cancelling` goes
+     * on; A finishes its step successfully and releases. If the release put the
+     * job back to `queued` and left the flag alone, every later claim would read
+     * the flag, answer `stopping`, and do so for ever — with the reader's Stop
+     * button already disabled, because the job says it is stopping. Nothing in
+     * the system moves that row again.
+     *
+     * So the release is where a cancel observed mid-step lands. GPT Sol found
+     * it reviewing the built queue; there is a same-instance version too, which
+     * is why the ask itself also had to stop being two calls.
+     */
+    it("ends a job whose Stop arrived while a step was running, rather than requeueing it", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = crypto.randomUUID();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+
+      // Somebody else presses Stop. This claimant knows nothing about it.
+      await store.requestCancel(job.id, OWNER);
+
+      // Its step succeeds and it releases, as it would on any ordinary step.
+      const after = await store.releaseStep(job.id, attempt, job.steps, {});
+      expect(after.status).toBe("cancelled");
+      expect(after.cancelling).toBeFalsy();
+      expect(after.finishedAt).toBeTruthy();
+
+      // And it is really over, rather than answering `stopping` for ever.
+      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("finished");
+    });
+
+    /**
+     * **The lease had a deadline and nothing enforced it.**
+     *
+     * `failExpired` was written with the store and had no production caller at
+     * all — GPT Sol's first finding on the built queue, and the worst of them,
+     * because it is a regression rather than a gap. The old in-memory queue
+     * self-healed on restart: a dead process left an empty `Map`, so the next
+     * advance found nothing owning the job and got on with it. A `running` row
+     * with a dead claimant heals by itself never; every advance answers `busy`,
+     * the browser retries for ever and the pump backs off for ever.
+     *
+     * `advanceJob` now sweeps before it claims. Here that is checked at the
+     * level the store owns: after a sweep, the slot is free again.
+     */
+    it("frees the running slot once a claimant has stopped answering", async () => {
+      const dead = aJob();
+      await store.enqueueOrGet(dead, "k1");
+      expect((await store.claim(dead.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
+
+      const waiting = aJob();
+      await store.enqueueOrGet(waiting, "k2");
+      // Blocked, correctly, while the first job is genuinely running.
+      expect((await store.claim(waiting.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("busy");
+
+      await adapter.expire(dead.id);
+      expect(await store.failExpired()).toBeGreaterThanOrEqual(1);
+
+      const after = await store.get(dead.id, OWNER);
+      expect(after?.status).toBe("error");
+      // Failed rather than taken over, and offering Retry rather than a dead end.
+      expect(after?.failureKind).toBe("retry");
+      expect((await store.claim(waiting.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe(
+        "claimed",
+      );
     });
 
     it("refuses to forget a job that is still going", async () => {

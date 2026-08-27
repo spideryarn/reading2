@@ -91,6 +91,45 @@ function toJob(row: Row): Job {
   };
 }
 
+/** One insert-or-look. `null` means the holder finished in between; ask again. */
+async function tryEnqueue(
+job: Job,
+workKey: string,
+): Promise<{ job: Job; created: boolean; sameWork: boolean } | null> {
+  const db = getDb();
+  const inserted = await db
+    .insert(jobs)
+    .values({
+      id: job.id,
+      ownerId: job.ownerId,
+      slug: job.slug,
+      steps: job.steps,
+      status: job.status,
+      workKey,
+      createdAt: new Date(job.createdAt),
+      url: job.url ?? null,
+      title: job.title ?? null,
+      guidance: job.guidance ?? null,
+      profile: job.profile ?? null,
+      uploadId: job.upload?.id ?? null,
+      uploadFilename: job.upload?.filename ?? null,
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (inserted[0]) return { job: toJob(inserted[0]), created: true, sameWork: true };
+
+  const [held] = await db
+    .select()
+    .from(jobs)
+    .where(
+      and(eq(jobs.ownerId, job.ownerId), eq(jobs.slug, job.slug), inArray(jobs.status, ACTIVE)),
+    )
+    .limit(1);
+  // The holder finished between the two statements. The caller asks again.
+  if (!held) return null;
+  return { job: toJob(held), created: false, sameWork: held.workKey === workKey };
+}
+
 export const pgJobStore: JobStore = {
   async list(owner: OwnerId): Promise<Job[]> {
     const db = getDb();
@@ -125,41 +164,27 @@ export const pgJobStore: JobStore = {
     job: Job,
     workKey: string,
   ): Promise<{ job: Job; created: boolean; sameWork: boolean }> {
-    const db = getDb();
-    const inserted = await db
-      .insert(jobs)
-      .values({
-        id: job.id,
-        ownerId: job.ownerId,
-        slug: job.slug,
-        steps: job.steps,
-        status: job.status,
-        workKey,
-        createdAt: new Date(job.createdAt),
-        url: job.url ?? null,
-        title: job.title ?? null,
-        guidance: job.guidance ?? null,
-        profile: job.profile ?? null,
-        uploadId: job.upload?.id ?? null,
-        uploadFilename: job.upload?.filename ?? null,
-      })
-      .onConflictDoNothing()
-      .returning();
-    if (inserted[0]) return { job: toJob(inserted[0]), created: true, sameWork: true };
-
-    const [held] = await db
-      .select()
-      .from(jobs)
-      .where(
-        and(eq(jobs.ownerId, job.ownerId), eq(jobs.slug, job.slug), inArray(jobs.status, ACTIVE)),
-      )
-      .limit(1);
-    /* Nothing conflicting and nothing inserted means the row went in and came
-       straight back out — a finished job with this id, or a race that resolved
-       between the two statements. Treating it as "gone" is wrong and treating
-       it as ours is worse, so it is the caller's problem, loudly. */
-    if (!held) throw new Error(`Could not enqueue job ${job.id} for ${job.slug}, and nothing holds it.`);
-    return { job: toJob(held), created: false, sameWork: held.workKey === workKey };
+    /**
+     * **Two statements, so the second can find nothing — retry rather than
+     * throw.**
+     *
+     * The insert conflicts on `jobs_active_slug`, then a select asks who holds
+     * it. Between the two, that holder can finish perfectly normally, at which
+     * point it is no longer active, the select comes up empty, and the first
+     * version of this threw — turning an ordinary finish into a 500 on somebody
+     * else's request. GPT Sol, reviewing the built queue.
+     *
+     * Retrying the insert is the whole fix: the slug is free now, so the second
+     * attempt succeeds. Bounded, because a caller that loses this race twice in
+     * a row against different holders is in a situation the loop cannot improve.
+     */
+    for (let attempt = 0; ; attempt++) {
+      const result = await tryEnqueue(job, workKey);
+      if (result) return result;
+      if (attempt >= 3) {
+        throw new Error(`Could not enqueue job ${job.id} for ${job.slug}, and nothing holds it.`);
+      }
+    }
   },
 
   async claim(
@@ -229,7 +254,17 @@ export const pgJobStore: JobStore = {
            different request with a different token — is told `busy` until the
            lease expires, which is the endpoint deadlocking itself on the happy
            path. GPT Sol, 2026-08-27. */
-        status: "queued",
+        /* **Back to `queued`, and the token cleared** — unless Stop arrived while
+           this step was running, in which case the release is where the cancel
+           lands. Releasing to `queued` with `cancelling` still set is a state
+           nothing moves on: the next claim reads the flag, answers `stopping`,
+           and does so for ever. GPT Sol found it from the cross-instance end —
+           instance B presses Stop on a job instance A is inside — and there is
+           a same-instance version of it too. Deciding here, in the statement
+           that already knows, is what closes both. */
+        status: sql`case when ${jobs.cancelling} then 'cancelled' else 'queued' end`,
+        cancelling: false,
+        finishedAt: sql`case when ${jobs.cancelling} then now() else ${jobs.finishedAt} end`,
         attemptId: null,
         leaseExpiresAt: null,
         steps,
@@ -316,34 +351,36 @@ export const pgJobStore: JobStore = {
 
   async requestCancel(id: string, owner: OwnerId): Promise<Job | undefined> {
     const db = getDb();
-    const [row] = await db
-      .update(jobs)
-      .set({ cancelling: true })
-      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))
-      .returning();
-    // Not fenced: the reader pressing Stop is not a claimant, and a Stop that
-    // needed the running attempt's token could only be pressed by the process
-    // it is meant to interrupt.
-    return row ? toJob(row) : undefined;
-  },
-
-  async cancelIdle(id: string, owner: OwnerId): Promise<Job | undefined> {
-    const db = getDb();
+    /**
+     * **One statement that decides which kind of cancel this is**, rather than
+     * a look followed by an act.
+     *
+     * It was two calls until 2026-08-27 — `cancelIdle`, and then `requestCancel`
+     * if that found nobody — and GPT Sol found the gap between them. A claimant
+     * that releases in that gap turns a `running` job into a `queued` one, the
+     * second call then writes `cancelling` onto it, and nothing ever moves it
+     * on: `claim` refuses a job with the flag set, so every advance answers
+     * `stopping` for ever while the reader's Stop button is already disabled.
+     *
+     * A `case` inside one `UPDATE` cannot have a gap. Queued means over, right
+     * now; running means ask the claimant, because cancelling it out from under
+     * one would leave that claimant writing artefacts for a job the reader has
+     * been told is finished.
+     *
+     * Not fenced: the reader pressing Stop is not a claimant, and a Stop that
+     * needed the running attempt's token could only be pressed by the process
+     * it is meant to interrupt.
+     */
     const [row] = await db
       .update(jobs)
       .set({
-        status: "cancelled",
-        cancelling: false,
-        attemptId: null,
-        leaseExpiresAt: null,
-        finishedAt: new Date(),
+        status: sql`case when ${jobs.status} = 'queued' then 'cancelled' else ${jobs.status} end`,
+        cancelling: sql`${jobs.status} <> 'queued'`,
+        attemptId: sql`case when ${jobs.status} = 'queued' then null else ${jobs.attemptId} end`,
+        leaseExpiresAt: sql`case when ${jobs.status} = 'queued' then null else ${jobs.leaseExpiresAt} end`,
+        finishedAt: sql`case when ${jobs.status} = 'queued' then now() else ${jobs.finishedAt} end`,
       })
-      /* `queued` only. A running job has a claimant that must be allowed to
-         unwind — cancelling it out from under one would leave that claimant
-         writing artefacts for a job the reader has already been told is over.
-         Queued is the window step 12 named: nobody is there to notice a
-         `cancelling` flag, so the transition has to happen here or never. */
-      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), eq(jobs.status, "queued")))
+      .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))
       .returning();
     return row ? toJob(row) : undefined;
   },

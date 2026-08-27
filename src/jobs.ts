@@ -435,8 +435,34 @@ async function endJob(
      double every failure in an alert count. */
   if (ending.status === "cancelled") jlog.warn(line, `job cancelled: ${job.slug}`);
   else jlog.info(line, `job ${ending.status}: ${job.slug}`);
-  await store.trimFinished(job.ownerId, KEEP_FINISHED);
+  /* **After the return value is decided, and it cannot change it.** The finish
+     has committed; retention is housekeeping. Letting it throw made a job that
+     really had ended answer 500 to the request that ended it — the browser then
+     re-polls, finds the job done, and the only trace is a 500 in the log for a
+     thing that worked. Said out loud rather than swallowed, because a retention
+     sweep that has stopped working is worth knowing about. */
+  await store.trimFinished(job.ownerId, KEEP_FINISHED).catch((err: Error) => {
+    jlog.error({ ...errorFields(err), owner: job.ownerId }, "could not trim finished jobs");
+  });
   return after;
+}
+
+/**
+ * The ending for a step the **claimant** stopped, not the reader.
+ *
+ * An error rather than a cancel, because the reader did not ask for it and the
+ * card has to offer Retry; `INTERRUPTED`'s wording rather than whatever the
+ * abort happened to carry, because "Cancelled" in front of somebody who never
+ * pressed Stop is a lie about their own actions.
+ */
+function interruptedEnding(job: Job): JobEnding {
+  return {
+    status: "error",
+    steps: job.steps,
+    error: INTERRUPTED.message,
+    failureKind: INTERRUPTED.kind,
+    ...(job.title !== undefined && { title: job.title }),
+  };
 }
 
 /** What `runStep` left on the job, as the ending the store wants. */
@@ -587,6 +613,34 @@ export interface Advanced {
  */
 export async function advanceJob(id: string): Promise<Advanced | null> {
   const owner = currentOwnerId();
+
+  /**
+   * **The lease's enforcement, and it lives here rather than on a timer.**
+   *
+   * `failExpired` existed from the day the store was written and **nothing
+   * called it** — GPT Sol's first finding on the built queue, and the worst of
+   * them, because it turned the lease from a deadline into a note. Kill an
+   * instance mid-step and its job stays `running` for ever with a token nobody
+   * holds; every later advance answers `busy`, the browser retries for ever,
+   * and the local pump backs off for ever. The old in-memory queue self-healed
+   * on restart because a dead process left an empty `Map`. This did not, which
+   * makes it a regression rather than a gap.
+   *
+   * Called at the top of every advance rather than from a scheduler, for three
+   * reasons. There is no scheduler on Vercel, and inventing one would be a
+   * second mechanism to keep alive. This is the exact moment somebody wants the
+   * slot, so a sweep that never runs is a sweep nobody needed. And it is one
+   * indexed `UPDATE` over rows that are almost always none.
+   *
+   * It fails the job rather than taking it over — see the header — so the
+   * reader sees a job that stopped and a Retry button, not a job that silently
+   * restarted somewhere else.
+   */
+  const swept = await store.failExpired();
+  if (swept > 0) {
+    log("jobs").warn({ count: swept }, `failed ${swept} job(s) whose claimant stopped answering`);
+  }
+
   const attempt = mintId();
   const outcome = await store.claim(id, owner, attempt, LEASE_MS);
 
@@ -653,13 +707,7 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
            the reader may retry, with `INTERRUPTED`'s wording rather than
            whatever the abort happened to say. */
         const ending = overran
-          ? {
-              status: "error" as const,
-              steps: job.steps,
-              error: INTERRUPTED.message,
-              failureKind: INTERRUPTED.kind,
-              ...(job.title !== undefined && { title: job.title }),
-            }
+          ? interruptedEnding(job)
           : endingFrom(job, outcome === "cancelled" ? "cancelled" : "error");
         const after = await endJob(job, attempt, ending, jlog, startedMs);
         return { job: after, ran: step.name, busy: false, done: true };
@@ -670,9 +718,25 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
          returns keeps every step inside its own serverless invocation, which is
          the whole reason this endpoint exists. */
       if (controller.signal.aborted) {
-        jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
-        markCancelled(job, "Cancelled");
-        const after = await endJob(job, attempt, endingFrom(job, "cancelled"), jlog, startedMs);
+        /* **Whose abort was it?** A step that watches its signal unwinds through
+           `runStep`'s catch and never reaches here; a step that ignores it runs
+           to completion and lands exactly here — and if the thing that aborted
+           was our own deadline rather than the reader, calling it "cancelled"
+           tells them they stopped something they did not. GPT Sol found the
+           mislabelling; the deadline had a branch on the failure path and none
+           on the success path. */
+        const ending = overran
+          ? interruptedEnding(job)
+          : (markCancelled(job, "Cancelled"), endingFrom(job, "cancelled"));
+        if (overran) {
+          jlog.warn(
+            { step: step.name },
+            `step ${step.name} ran past its deadline and ignored the signal — ${job.slug}`,
+          );
+        } else {
+          jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
+        }
+        const after = await endJob(job, attempt, ending, jlog, startedMs);
         return { job: after, ran: step.name, busy: false, done: true };
       }
       const finished = job.steps.every((s) => s.status === "done" || s.status === "skipped");
@@ -794,7 +858,19 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
   }
   const owner = currentOwnerId();
   const forced = cascadeForce(names, new Set(request.force ?? []));
-  const workKey = workKeyFor(names, forced, request.guidance, request.profile, request.upload);
+  /* **`request.url`, not the URL the loop reads off disk below.** They differ
+     for a late step run on an existing article — the request carries none and
+     the job gets one from `meta.json` — and the key has to be a property of the
+     *request*, or two callers asking for the same thing would hash differently
+     depending on what happened to be on disk when each of them asked. */
+  const workKey = workKeyFor(
+    names,
+    forced,
+    request.guidance,
+    request.profile,
+    request.upload,
+    request.url,
+  );
 
   /* **The loop is the deduplication, and the insert is what decides.**
    *
@@ -861,16 +937,47 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
          — the caller gets a job id, watches it succeed, and the refresh never
          happened. */
       if (sameWork) return job;
-      /* The slug is taken by *different* work. Re-allocate rather than append a
-         counter here: the racing job is in the store now, so `freeSlug` sees it
-         this time and derives the next free name properly, where a counter
-         would have to guess and could land on a finished article's slug that
-         only `articleExists` knows about. */
-      slug = request.url
+
+      /**
+       * The slug is taken by **different** work, and what to do about that
+       * depends entirely on whether this request is *asking for* an article or
+       * *naming* one.
+       *
+       * **A URL or an upload is asking for one.** Re-allocating is right, and
+       * re-allocating rather than appending a counter is right too: the racing
+       * job is in the store now, so `freeSlug` sees it this time and derives the
+       * next free name properly, where a counter would have to guess and could
+       * land on a finished article's slug that only `articleExists` knows about.
+       *
+       * **Anything else is naming one**, and moving it is the worst thing this
+       * function could do. `{slug: "paper", steps: ["summary"]}` means *summarise
+       * paper*. If `paper` has a glossary job running, the old code appended a
+       * counter and made it a summary job for `paper-2` — a different article,
+       * already on the shelf, which it would then summarise perfectly
+       * successfully. GPT Sol found it; the plan had said 409 and the code had
+       * not. So: 409, in the reader's words.
+       */
+      if (!request.url && !request.upload) {
+        throw Object.assign(
+          new Error(`That article already has a job running. Wait for it, or stop it first.`),
+          { status: 409 },
+        );
+      }
+      const next = request.url
         ? await freeSlug(request.slug, request.url)
-        : request.upload
-          ? await freeUploadSlug(request.slug, request.upload.id)
-          : `${request.slug}-${tries + 2}`;
+        : await freeUploadSlug(request.slug, (request.upload as JobUpload).id);
+      /* **No progress is not something to retry twenty times.** `freeSlug` will
+         keep handing back the same name when the held slug is legitimately this
+         URL's — which is exactly what happens to a filesystem job that survived
+         a restart without its work key. Spinning to the retry budget and then
+         409ing hides that behind a generic message; saying it once does not. */
+      if (next === slug) {
+        throw Object.assign(
+          new Error(`That article already has a job running. Wait for it, or stop it first.`),
+          { status: 409 },
+        );
+      }
+      slug = next;
       continue;
     }
 
@@ -906,6 +1013,7 @@ export function workKeyFor(
   guidance?: string,
   profile?: string,
   upload?: JobUpload,
+  url?: string,
 ): string {
   return createHash("sha256")
     .update(
@@ -914,6 +1022,12 @@ export function workKeyFor(
         upload: upload?.id ?? "",
         guidance: guidance ?? "",
         profile: profile ?? "",
+        /* **`urlKey`, not the URL.** `http://x.test/p` and `https://x.test/p/`
+           are one article — src/ingest.ts is the only thing in this codebase
+           that gets to decide that — so hashing the raw string would make two
+           spellings of one address two pieces of work, and the dedup this key
+           exists for would stop working for the commonest case of all. */
+        source: url ? urlKey(url) : "",
       }),
     )
     .digest("hex");
@@ -935,6 +1049,17 @@ async function activeFor(slug: string): Promise<Job | undefined> {
  * The same steps, forced the same way, steered the same way — the only case a
  * caller can safely share.
  *
+ * **Nothing in production calls this any more, and that is deliberate.** The
+ * store compares `workKeyFor`'s hash, because the comparison has to happen
+ * inside the statement that inserts. What this is now is the **specification**
+ * that hash has to satisfy, written as prose a person can check — and
+ * `tests/jobs.test.ts` § the work key holds the two together over a grid, so a
+ * field added here and forgotten there turns something red rather than
+ * silently making two requests one.
+ *
+ * Which makes deleting it the wrong tidy-up. A hash is not readable, and "what
+ * counts as the same piece of work" is a decision worth being able to read.
+ *
  * The guidance is part of the comparison, and has to be. Without it, a reader
  * who presses "Write them again", changes their mind about what they are after,
  * and presses it once more gets handed the *first* job: it succeeds, the panel
@@ -952,6 +1077,7 @@ export function sameWork(
   guidance?: string,
   profile?: string,
   upload?: JobUpload,
+  url?: string,
 ): boolean {
   if (job.steps.length !== names.length) return false;
   /* **Two uploads are never one piece of work**, whatever they are called and
@@ -962,6 +1088,20 @@ export function sameWork(
      under their own filename. Sol's finding on the plan: `sameWork` compares
      steps, guidance and profile only, and had no upload identity at all. */
   if ((job.upload?.id ?? "") !== (upload?.id ?? "")) return false;
+  /* **And the URL, which was missing until 2026-08-27.**
+   *
+   * `freeSlug` derives a slug from the last path segment, so `a.example/news`
+   * and `b.example/news` both want `news`. Added at the same moment, both see
+   * the slug free, both build a job whose every *other* work parameter is
+   * identical — and the second one loses the `jobs_active_slug` conflict, is
+   * told this is the same work, and is handed the first URL's job. The reader
+   * watches it succeed and their article was never fetched. GPT Sol found it in
+   * the built queue; `freeSlug`'s own docstring has warned about this pair of
+   * URLs since the day it was written, one layer down.
+   *
+   * `urlKey` rather than the string, so two spellings of one address stay one
+   * piece of work — src/ingest.ts § `urlKey`. */
+  if ((job.url ? urlKey(job.url) : "") !== (url ? urlKey(url) : "")) return false;
   if ((job.guidance ?? "") !== (guidance ?? "")) return false;
   /* And the profile, for the identical reason one field up — plus a sharper
      one. Unticking "use your profile" and pressing the button again is a
@@ -1184,18 +1324,16 @@ export async function cancelJob(id: string): Promise<Job | null> {
   if (!job) return null;
   if (job.status === "done" || job.status === "error" || job.status === "cancelled") return job;
 
-  /* **Idle first, then ask.** A job nobody is inside can be cancelled outright,
-     and `cancelIdle` is the one statement that both decides that and does it —
-     asking and then acting would let a claim arrive in between and cancel a job
-     out from under a running step.
+  /* **One call, because the store decides which kind of stop this is.** A
+     queued job ends outright; a running one is asked, and reads the flag at its
+     next step boundary. It was two calls — cancel-if-idle, then ask — until GPT
+     Sol pointed out that a claimant releasing between them leaves the job
+     `queued` with `cancelling` set, which nothing ever moves on.
 
-     If a claimant does hold it, all we can do is say so where they will see it:
-     `requestCancel` writes `cancelling`, the claim refuses while it is set, and
-     the claimant reads it at its next step boundary. Plus the local abort, for
-     the common case that the claimant is this very process — which is what
-     makes Stop feel instant rather than "at the end of this model call". */
-  const idle = await store.cancelIdle(id, owner);
-  if (idle) return idle;
+     The local abort comes after, and only helps in the common case that the
+     claimant is this very process — which is what makes Stop feel instant
+     rather than "at the end of this model call". Another instance's claimant
+     reads the flag instead, a step boundary later. */
   const asked = await store.requestCancel(id, owner);
   aborts.get(id)?.abort();
   return asked ?? job;

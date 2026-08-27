@@ -22,6 +22,7 @@ import {
   cascadeForce,
   enqueue,
   forceForRetry,
+  forgetJob,
   freeSlug,
   getJob,
   orderSteps,
@@ -606,6 +607,7 @@ describe("the work key", () => {
     guidance?: string;
     profile?: string;
     upload?: { id: string; filename: string };
+    url?: string;
   }[] = [
     { names: ["fetch"], forced: [] },
     { names: ["fetch"], forced: ["fetch"] },
@@ -615,6 +617,18 @@ describe("the work key", () => {
     { names: ["fetch"], forced: [], profile: "a physicist" },
     { names: ["fetch"], forced: [], upload: { id: "spya-upl001", filename: "a.pdf" } },
     { names: ["fetch"], forced: [], upload: { id: "spya-upl002", filename: "a.pdf" } },
+    /* **The dimension that was missing, and the bug it let through.** Two
+       articles whose URLs end in the same path segment both want the slug
+       `news`. Added together, both see it free, both build a job whose every
+       other work parameter is identical — and the loser of the `jobs_active_slug`
+       conflict is told this is the same work and handed the *other* URL's job.
+       Its own article is never fetched, and nothing says so. GPT Sol, on the
+       built queue, 2026-08-27. */
+    { names: ["fetch"], forced: [], url: "https://a.example/news" },
+    { names: ["fetch"], forced: [], url: "https://b.example/news" },
+    /* And the same address spelled differently is the *same* work, which is
+       what `urlKey` is for — so these two must agree with each other. */
+    { names: ["fetch"], forced: [], url: "http://a.example/news" },
   ];
 
   const asJob = (g: (typeof GRID)[number]): Job => ({
@@ -630,6 +644,7 @@ describe("the work key", () => {
     ...(g.guidance ? { guidance: g.guidance } : {}),
     ...(g.profile ? { profile: g.profile } : {}),
     ...(g.upload ? { upload: g.upload } : {}),
+    ...(g.url ? { url: g.url } : {}),
   });
 
   it("agrees with sameWork on every pair, both ways round", () => {
@@ -642,16 +657,36 @@ describe("the work key", () => {
           b.guidance,
           b.profile,
           b.upload,
+          b.url,
         );
         const keysMatch =
-          workKeyFor(a.names, new Set(a.forced), a.guidance, a.profile, a.upload) ===
-          workKeyFor(b.names, new Set(b.forced), b.guidance, b.profile, b.upload);
+          workKeyFor(a.names, new Set(a.forced), a.guidance, a.profile, a.upload, a.url) ===
+          workKeyFor(b.names, new Set(b.forced), b.guidance, b.profile, b.upload, b.url);
         expect(
           { pair: [a, b], sameWork: same, sameKey: keysMatch },
           `sameWork and workKeyFor disagree`,
         ).toEqual({ pair: [a, b], sameWork: same, sameKey: same });
       }
     }
+  });
+
+  it("reads two spellings of one address as the same work", () => {
+    /* The reason the key hashes `urlKey` rather than the string. Without it,
+       adding `http://x.test/piece` when `https://x.test/piece` is already
+       running would be a second job for one article — which is the fault
+       `urlKey` was written for one layer down, in `freeSlug`. */
+    const a = workKeyFor(["fetch"], new Set(), undefined, undefined, undefined, "http://x.test/p");
+    const b = workKeyFor(["fetch"], new Set(), undefined, undefined, undefined, "https://x.test/p");
+    expect(a).toBe(b);
+    const other = workKeyFor(
+      ["fetch"],
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      "https://y.test/p",
+    );
+    expect(other).not.toBe(a);
   });
 
   it("does not depend on how far the job has got", () => {
@@ -690,6 +725,38 @@ describe("running a job", () => {
     // the same meta.json, so there is nothing for a second attempt to find.
     expect(finished.failureKind).toBe("ours");
     expect(jobWorthRetrying(finished)).toBe(false);
+  });
+
+  /**
+   * **A request that *names* an article must never be moved to another one.**
+   *
+   * The sharpest of GPT Sol's findings on the built queue, and it is worth
+   * reading the repro rather than the rule: `paper` has a glossary job running;
+   * `paper-2` is a different article, already on the shelf; somebody asks for a
+   * summary of `paper`. The active-slug conflict says "different work", the
+   * loop reallocated the slug — for a request with neither URL nor upload it
+   * had nothing to reallocate *with*, so it appended a counter — and the job
+   * became a summary of `paper-2`. Which it would then produce, correctly,
+   * under the wrong article. [Silent success](docs/reusable/silent-success.md).
+   *
+   * A URL or an upload is *asking for* an article and may be moved. Anything
+   * else is *naming* one, and the honest answer is 409.
+   */
+  it("refuses rather than renames when a late step lands on a busy article", async () => {
+    const slug = "test-enqueue-busy-article";
+    /* A job holding the slug, doing different work from the one below. It never
+       runs to completion here — `fetch` has no URL — which is exactly the
+       window a reader hits by pressing two buttons in quick succession. */
+    const held = await enqueue({ slug, steps: ["fetch"] });
+    try {
+      await expect(enqueue({ slug, steps: ["summary"] })).rejects.toMatchObject({ status: 409 });
+      /* And the article it named is still the article it named — nothing was
+         quietly created under `${slug}-2`. */
+      expect((await getJob(held.id))?.slug).toBe(slug);
+    } finally {
+      await settle(held.id);
+      await forgetJob(held.id);
+    }
   });
 
   /**

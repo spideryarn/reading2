@@ -190,11 +190,23 @@ export interface JobStore {
    */
   activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined>;
 
-  /** Stop. Not fenced, because the reader is not a claimant. */
+  /**
+   * Stop, and **decide in one statement which kind of stop this is**.
+   *
+   * A queued job is over immediately: nobody is inside it to notice a flag, so
+   * the transition happens here or never. A running job is asked — cancelling
+   * it out from under a claimant would leave that claimant writing artefacts
+   * for a job the reader has been told is finished.
+   *
+   * It was two methods until 2026-08-27, `cancelIdle` then this, and the gap
+   * between them was a permanent stuck state: a claimant releasing in that gap
+   * turns the job `queued`, the second call writes `cancelling` onto it, and
+   * every later claim answers `stopping` for ever while the reader's Stop
+   * button is already disabled. GPT Sol, reviewing the built queue.
+   *
+   * Not fenced, because the reader is not a claimant.
+   */
   requestCancel(id: string, owner: OwnerId): Promise<Job | undefined>;
-
-  /** Cancel a job that no claimant holds, in one step. Returns undefined if one does. */
-  cancelIdle(id: string, owner: OwnerId): Promise<Job | undefined>;
 
   /** Forget one job. Refuses while it is queued or running. */
   forget(id: string, owner: OwnerId): Promise<boolean>;

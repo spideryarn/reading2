@@ -35,6 +35,7 @@ import path from "node:path";
 
 import { errorFields, log } from "../log.js";
 import { INTERRUPTED } from "../messages.js";
+import { environmentOwnerId } from "../owner.js";
 import type { Job, JobStep, OwnerId } from "../types.js";
 import {
   type ClaimOutcome,
@@ -75,12 +76,28 @@ function jobFile(id: string): string {
   return path.join(JOBS_DIR, `${id}.json`);
 }
 
-async function writeOnce(job: Job): Promise<void> {
+/**
+ * What one file holds: the job, plus the work key beside it.
+ *
+ * **`workKey` is not on `Job` and must not be.** It is not the reader's
+ * business — `publicJob` would have to strip it alongside `ownerId` — and it is
+ * derived from the *request* rather than from the record, so putting it on the
+ * type would invite somebody to recompute it from a job whose steps have since
+ * moved. Postgres keeps it in a column of its own for the same reason; here it
+ * is a sibling key in the same document, so the two land in one atomic rename
+ * and cannot disagree.
+ *
+ * Optional, because every file written before 2026-08-27 lacks it.
+ */
+type Stored = Job & { workKey?: string };
+
+async function writeOnce(job: Job, workKey: string | undefined): Promise<void> {
   await mkdir(JOBS_DIR, { recursive: true });
   /* The suffix carries a counter as well as the pid — the pid alone is constant
      within a process, which is exactly the case that broke. */
   const tmp = `${jobFile(job.id)}.${process.pid}.${++writeCounter}.tmp`;
-  await writeFile(tmp, `${JSON.stringify(job, null, 2)}\n`, "utf8");
+  const stored: Stored = { ...job, ...(workKey !== undefined && { workKey }) };
+  await writeFile(tmp, `${JSON.stringify(stored, null, 2)}\n`, "utf8");
   await rename(tmp, jobFile(job.id));
 }
 
@@ -92,9 +109,9 @@ async function writeOnce(job: Job): Promise<void> {
  * not nothing either — it is what the restart sweep reads — so a failure is said
  * out loud rather than swallowed.
  */
-function persist(job: Job): Promise<void> {
+function persist(job: Job, workKey = keys.get(job.id)): Promise<void> {
   const next = (writes.get(job.id) ?? Promise.resolve())
-    .then(() => (forgotten.has(job.id) ? undefined : writeOnce(job)))
+    .then(() => (forgotten.has(job.id) ? undefined : writeOnce(job, workKey)))
     .catch((err: Error) => {
       /* `errorFields`, not `err.message`. This line used to print the message
          and throw the stack away — and the stack is the only part that says
@@ -159,15 +176,40 @@ async function loadFromDisk(): Promise<void> {
      Vercel allows 256 log lines for the whole request. */
   const unreadable: string[] = [];
   for (const file of files) {
-    let job: Job;
+    let stored: Stored;
     try {
-      job = JSON.parse(await readFile(path.join(JOBS_DIR, file), "utf8")) as Job;
+      stored = JSON.parse(await readFile(path.join(JOBS_DIR, file), "utf8")) as Stored;
     } catch {
       unreadable.push(file);
       continue;
     }
-    if (sweepStopped(job)) await persist(job);
-    index.set(job.id, job);
+    const { workKey, ...job } = stored;
+    /**
+     * **A job written before jobs had owners belongs to this installation.**
+     *
+     * Restored on 2026-08-27 after the move here dropped it. Every read and
+     * every list now filters on an exact `ownerId`, so a record without one is
+     * invisible to everybody — not an error, not a warning, just gone. There
+     * were **34** such files in `data/_jobs/` at the time, which is the whole
+     * history of this laptop's ingests before 2026-08-27.
+     *
+     * Worth saying how it was lost, because the mechanism will happen again:
+     * moving the loader made `environmentOwnerId` unused *in the file it moved
+     * out of*, the typechecker said so, and I deleted the import. An unused
+     * import is a symptom, not a verdict — here it was the last reference to a
+     * behaviour, and removing it left code that compiled, passed and quietly
+     * hid a third of the records.
+     */
+    if (!job.ownerId) job.ownerId = environmentOwnerId();
+    if (sweepStopped(job as Job)) await persist(job as Job, workKey);
+    index.set(job.id, job as Job);
+    /* **The key comes back with the job, or an active job survives a restart
+       unable to recognise its own repeat request.** Without it `enqueueOrGet`
+       answers `sameWork: false` for a request identical to the one already
+       running, and `enqueue` — whose reallocation cannot move a URL off a slug
+       it legitimately owns — walks its whole retry budget and 409s a request
+       that should have been handed the job. GPT Sol, 2026-08-27. */
+    if (workKey !== undefined) keys.set(job.id, workKey);
   }
 
   if (unreadable.length > 0) {
@@ -263,9 +305,19 @@ export const fsJobStore: JobStore = {
     outcome: StepOutcome,
   ): Promise<Job> {
     const job = fenced(id, attempt);
-    job.status = "queued";
     job.steps = steps;
     if (outcome.title !== undefined) job.title = outcome.title;
+    /* Stop arrived while this step was running: the release is where it lands.
+       Releasing to `queued` with `cancelling` still set is a state nothing
+       moves on — the next claim reads the flag and answers `stopping` for
+       ever. See the Postgres adapter. */
+    if (job.cancelling) {
+      job.status = "cancelled";
+      job.finishedAt = new Date().toISOString();
+      delete job.cancelling;
+    } else {
+      job.status = "queued";
+    }
     attempts.delete(id);
     await persist(job);
     return structuredClone(job);
@@ -327,22 +379,19 @@ export const fsJobStore: JobStore = {
     await ready();
     const job = ownedBy(id, owner);
     if (!job || TERMINAL.has(job.status)) return undefined;
-    job.cancelling = true;
-    await persist(job);
-    return structuredClone(job);
-  },
-
-  async cancelIdle(id: string, owner: OwnerId): Promise<Job | undefined> {
-    await ready();
-    const job = ownedBy(id, owner);
-    /* `queued` only. A running job has a claimant that must be allowed to
-       unwind — cancelling it out from under one would leave that claimant
-       writing artefacts for a job the reader has been told is over. */
-    if (!job || job.status !== "queued") return undefined;
-    job.status = "cancelled";
-    job.finishedAt = new Date().toISOString();
-    delete job.cancelling;
-    attempts.delete(id);
+    /* Queued means over, right now: nobody is inside it to notice a flag, so
+       the transition happens here or never. Running means ask the claimant —
+       cancelling it out from under one would leave it writing artefacts for a
+       job the reader has been told is finished. One decision rather than two
+       calls; see the Postgres adapter for the gap the two-call version had. */
+    if (job.status === "queued") {
+      job.status = "cancelled";
+      job.finishedAt = new Date().toISOString();
+      delete job.cancelling;
+      attempts.delete(id);
+    } else {
+      job.cancelling = true;
+    }
     await persist(job);
     return structuredClone(job);
   },
@@ -455,6 +504,23 @@ export async function pauseForTests(id: string, from: number): Promise<void> {
     delete step.finishedAt;
   }
   await persist(job);
+}
+
+/**
+ * Read `data/_jobs/` again, as a cold start would.
+ *
+ * Separate from `resetForTests` on purpose: that one is called in an
+ * `afterEach` and re-reading four hundred files each time would make the parity
+ * suite crawl. This is for the two behaviours that only exist *in* the loader —
+ * the legacy-owner stamp and restoring a job's work key — and both of those are
+ * invisible to every other seam.
+ */
+export async function reloadForTests(): Promise<void> {
+  index.clear();
+  attempts.clear();
+  keys.clear();
+  loaded = null;
+  await ready();
 }
 
 /** Forget everything this process is holding, so one test file cannot leak into another. */
