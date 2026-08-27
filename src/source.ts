@@ -243,6 +243,19 @@ const NEXT: Record<UploadStatus, readonly UploadStatus[]> = {
   expired: [],
 };
 
+/**
+ * Every status an upload can be in — **derived from `NEXT`, never written out
+ * again.**
+ *
+ * It exists so that the `uploads_status` CHECK in the database has something to
+ * be asserted against that cannot itself drift. A draft of that constraint
+ * listed four of these five, and four would have passed every test and every
+ * migration and then failed at the first expiry with a violation nobody could
+ * read. A third hand-typed copy in the test would have had the same problem, so
+ * the test reads this. tests/db-schema.test.ts.
+ */
+export const UPLOAD_STATUSES = Object.keys(NEXT) as UploadStatus[];
+
 /** Whether an upload may move from one state to another. Terminal states are terminal. */
 export function canTransition(from: UploadStatus, to: UploadStatus): boolean {
   return NEXT[from].includes(to);

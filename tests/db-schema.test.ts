@@ -23,6 +23,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { Pool, type PoolClient } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
+import { UPLOAD_STATUSES } from "../src/source.js";
 
 loadEnvLocal();
 
@@ -287,9 +288,12 @@ describe("the schema keeps the promises the plan makes", () => {
       await seed(c);
       const running = (id: string) =>
         c.query(
-          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, attempt_id, lease_expires_at)
-           values ($1,$2,'s','[]'::jsonb,'running',gen_random_uuid(), now() + interval '1 minute')`,
-          [id, OWNER],
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, attempt_id, lease_expires_at)
+           values ($1,$2,$3,'[]'::jsonb,'running','w',gen_random_uuid(), now() + interval '1 minute')`,
+          /* A slug each. `jobs_active_slug` reserves one per article, so two
+             running jobs on one slug would now be refused by *that* index and
+             this test would pass while saying nothing about the one it names. */
+          [id, OWNER, id],
         );
       await running("spya-aaaaaa");
       // queue_state gives concurrency 1 only while every claimant follows the
@@ -306,8 +310,8 @@ describe("the schema keeps the promises the plan makes", () => {
       // "someone else got there first" rather than as a bug.
       await expect(
         c.query(
-          `insert into spideryarn.jobs (id, owner_id, slug, steps, status)
-           values ('spya-cccccc',$1,'s','[]'::jsonb,'running')`,
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key)
+           values ('spya-cccccc',$1,'s','[]'::jsonb,'running','w')`,
           [OWNER],
         ),
       ).rejects.toThrow(/jobs_running_is_fenced/);
@@ -347,7 +351,8 @@ describe("the schema keeps the promises the plan makes", () => {
         `select conname from pg_constraint
           where connamespace = 'spideryarn'::regnamespace
             and conname in ('articles_owner_fk','comments_owner_fk','jobs_owner_fk',
-                            'articles_current_revision_fk','reader_profiles_owner_fk')
+                            'articles_current_revision_fk','reader_profiles_owner_fk',
+                            'uploads_owner_fk')
           order by conname`,
       );
       expect(rows.map((r) => r.conname)).toEqual([
@@ -356,7 +361,102 @@ describe("the schema keeps the promises the plan makes", () => {
         "comments_owner_fk",
         "jobs_owner_fk",
         "reader_profiles_owner_fk",
+        "uploads_owner_fk",
       ]);
+    });
+  });
+
+  dbIt("one article cannot have two jobs in flight", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const queued = (id: string, work: string) =>
+        c.query(
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key)
+           values ($1,$2,'paper','[]'::jsonb,'queued',$3)`,
+          [id, OWNER, work],
+        );
+      await queued("spya-dddddd", "w1");
+      /* Both halves of what this index is for, in one assertion each.
+         Same work is the de-duplication: two instances each accept one Add
+         click and only one row survives, so the model call is paid for once.
+         Different work is the slug reservation: two uploads both called
+         `paper.pdf` cannot each choose `paper` and have the second publish into
+         the first's article. */
+      await expectViolation(c, /jobs_active_slug/, () => queued("spya-eeeeee", "w1"));
+      await expectViolation(c, /jobs_active_slug/, () => queued("spya-ffffff", "w2"));
+      // A finished job is history and does not hold the slug.
+      await c.query("update spideryarn.jobs set status = 'done' where id = 'spya-dddddd'");
+      await queued("spya-gggggg", "w1");
+    });
+  });
+
+  dbIt("a job carries both halves of its upload or neither", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      // `upload_id` is ON DELETE SET NULL, so without this a swept upload leaves
+      // a filename with no id — a `JobUpload` the TypeScript type cannot express
+      // and nothing downstream would think to check for.
+      await expectViolation(c, /jobs_upload_both_or_neither/, () =>
+        c.query(
+          `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, upload_filename)
+           values ('spya-hhhhhh',$1,'s','[]'::jsonb,'queued','w','paper.pdf')`,
+          [OWNER],
+        ),
+      );
+    });
+  });
+
+  dbIt("the uploads status CHECK lists exactly the statuses the type has", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      /* **The table copied a TypeScript union, and a copy drifts.** A draft of
+         this table listed four of the five — it left out `expired` — which would
+         have passed every test and every migration and failed at the first
+         expiry with a constraint violation nobody could read.
+
+         So the assertion is against `NEXT`'s own keys rather than a list typed
+         out again here, which would be a third copy with the same problem. Add a
+         sixth status to src/source.ts and this goes red on a laptop. */
+      for (const status of UPLOAD_STATUSES) {
+        await c.query(
+          `insert into spideryarn.uploads
+             (id, owner_id, filename, claimed_bytes, claimed_sha256, status,
+              grant_expires_at, sha256, bytes, reason)
+           values (gen_random_uuid(), $1, 'a.pdf', 10, repeat('a',64), $2,
+                   now() + interval '1 hour', repeat('b',64), 10, 'missing')`,
+          [OWNER, status],
+        );
+      }
+      await expectViolation(c, /uploads_status/, () =>
+        c.query(
+          `insert into spideryarn.uploads
+             (id, owner_id, filename, claimed_bytes, claimed_sha256, status, grant_expires_at)
+           values (gen_random_uuid(), $1, 'a.pdf', 10, repeat('a',64), 'settled', now())`,
+          [OWNER],
+        ),
+      );
+    });
+  });
+
+  dbIt("a terminal upload has to carry its evidence", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      // `verified` with no hash and `rejected` with no reason are states the
+      // TypeScript type cannot express and this table could. Now it cannot
+      // either — which matters because the hash is the whole difference between
+      // a corruption check and a claim about which document we are holding.
+      const bad = (status: string, extra: string) =>
+        c.query(
+          `insert into spideryarn.uploads
+             (id, owner_id, filename, claimed_bytes, claimed_sha256, status, grant_expires_at${extra})
+           values (gen_random_uuid(), $1, 'a.pdf', 10, repeat('a',64), $2, now() + interval '1 hour')`,
+          [OWNER, status],
+        );
+      await expectViolation(c, /uploads_verified_has_evidence/, () => bad("verified", ""));
+      await expectViolation(c, /uploads_rejected_has_reason/, () => bad("rejected", ""));
+      // And the shape that must still be accepted, so the two above are not
+      // passing because every insert here fails.
+      await bad("pending", "");
     });
   });
 

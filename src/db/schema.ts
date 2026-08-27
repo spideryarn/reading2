@@ -561,6 +561,98 @@ export const comments = spideryarn.table(
   ],
 );
 
+/* -------------------------------------------------------------- uploads -- */
+
+/**
+ * **One upload attempt, written down** — from the grant we mint to the bytes we
+ * verified, or the reason we would not take them. `UploadRecord` in
+ * src/upload-records.ts, and the state machine it moves through is
+ * `canTransition` in src/source.ts, which knows nothing about where a record is
+ * kept and is what makes this a change of adapter rather than of rules.
+ *
+ * **Why it is here now.** It was on the filesystem beside `data/_jobs/`, on the
+ * stated principle that an upload record is queue state and should live where
+ * its neighbours live. The queue is moving, so it moves — and the reason both
+ * had to is the same one: minting the grant and queueing the job are *two*
+ * HTTP requests, and on a serverless host they may not run on the same machine.
+ *
+ * ## The two halves of what we know, and only one of them is believed
+ *
+ * `claimed_bytes` and `claimed_sha256` are **what the browser said**. They are
+ * recorded so a mismatch can be reported — "the file that arrived is not the
+ * file you chose" is a useful sentence — and are never treated as identity.
+ * `sha256` and `bytes` without the prefix are ours, computed over what actually
+ * landed, and exist only once `verified`. Nobody may tidy the pair into one
+ * column: a claimed hash taken as identity would let anyone who knows a hash
+ * claim somebody else's document, which is the sharpest thing either review of
+ * the upload design found.
+ */
+export const uploads = spideryarn.table(
+  "uploads",
+  {
+    /** A UUID **we** minted. Never the client's — src/upload-records.ts § `isUploadId`. */
+    id: uuid("id").primaryKey(),
+    /** `auth.users(id)`. FK in the custom migration — see the header. */
+    ownerId: uuid("owner_id").notNull(),
+    /** Cleaned by `cleanFilename`. Display only; nothing derives a storage key from it. */
+    filename: text("filename").notNull(),
+    claimedBytes: integer("claimed_bytes").notNull(),
+    claimedSha256: text("claimed_sha256").notNull(),
+    status: text("status").notNull(),
+    mintedAt: timestamp("minted_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When the grant stops working — **the token's clock, not this row's.**
+     * A record's creation time can precede the token's `iat`, so a sweep
+     * counting from `minted_at` counts from the wrong clock and can delete an
+     * object while a grant over its key is still live — which *re-arms* that
+     * grant. Storing what the issuer told us removes the arithmetic.
+     */
+    grantExpiresAt: timestamp("grant_expires_at", { withTimezone: true }).notNull(),
+    /** Ours, over the bytes we read. Present only once `verified`. */
+    sha256: text("sha256"),
+    /**
+     * **`integer`, not `bigint`.** `node-pg` returns `int8` as a *string*,
+     * because in general it does not fit a JS number — so a `bigint` column
+     * hands `52428800` back as `"52428800"` and every comparison downstream
+     * starts quietly lying. The cap is 50 MB and `integer` holds 2 GB.
+     */
+    bytes: integer("bytes"),
+    /** `RejectReason`. Present only once `rejected`. */
+    reason: text("reason"),
+    /** The article it became, once one exists. */
+    slug: text("slug"),
+  },
+  (t) => [
+    /**
+     * **Five, not four.** `UploadStatus` in src/source.ts carries `expired` as
+     * well, and a draft of this table listed four — which would have passed
+     * every test and every migration and failed at the first expiry with a
+     * constraint violation nobody could read. tests/db-schema.test.ts asserts
+     * this list against the type's own `NEXT` keys, so a sixth status fails on
+     * a laptop rather than in production.
+     */
+    check(
+      "uploads_status",
+      sql`${t.status} in ('pending','claimed','verified','rejected','expired')`,
+    ),
+    /** `MAX_UPLOAD_BYTES` in src/uploads.ts. Written out because a check cannot import. */
+    check("uploads_claimed_bytes", sql`${t.claimedBytes} > 0 and ${t.claimedBytes} <= 52428800`),
+    check("uploads_claimed_sha256", sql`${t.claimedSha256} ~ '^[0-9a-f]{64}$'`),
+    check("uploads_sha256", sql`${t.sha256} is null or ${t.sha256} ~ '^[0-9a-f]{64}$'`),
+    /**
+     * The two terminal states carry their evidence, or they are not those
+     * states. `verified` with no hash and `rejected` with no reason are things
+     * the TypeScript type cannot express and this table could.
+     */
+    check(
+      "uploads_verified_has_evidence",
+      sql`${t.status} <> 'verified' or (${t.sha256} is not null and ${t.bytes} is not null)`,
+    ),
+    check("uploads_rejected_has_reason", sql`${t.status} <> 'rejected' or ${t.reason} is not null`),
+    index("uploads_owner_minted").on(t.ownerId, t.mintedAt.desc()),
+  ],
+);
+
 /* ----------------------------------------------------------------- jobs -- */
 
 /**
@@ -634,6 +726,58 @@ export const jobs = spideryarn.table(
       onDelete: "set null",
     }),
 
+    /**
+     * **The reader profile this job was queued with**, or null for none.
+     *
+     * On `Job` since the profile work and with no column until 2026-08-27, which
+     * is a gap of exactly the kind `guidance`'s comment two fields up describes:
+     * the profile rides in every prompt this job's steps send, so a job resumed
+     * on another instance without it runs the plain prompt, stamps the artefact
+     * as unprofiled, and reports success. Found by putting the type beside the
+     * table rather than by reading either — which is the only way this kind of
+     * gap is ever found. docs/project/reader-profile.md.
+     */
+    profile: text("profile"),
+
+    /**
+     * What kind of failure stopped it — and therefore **whether the card offers
+     * Retry** (`jobWorthRetrying`, src/job-failure.ts).
+     *
+     * No check constraint listing the kinds, deliberately. `FailureKind` is a
+     * closed union in src/messages.ts and it grows; a constraint here would turn
+     * the next kind added to the type into a write that fails in production
+     * rather than a test that fails on a laptop. Null means nobody said, and
+     * that offers the retry — docs/postmortems/toc-max-tokens.md.
+     */
+    failureKind: text("failure_kind"),
+
+    /**
+     * The upload this job's document came off, when it came off a reader's disk.
+     *
+     * **Two columns rather than one jsonb `JobUpload`**, because the id is a
+     * foreign key and a blob cannot be one. They move together or not at all —
+     * `jobs_upload_both_or_neither` below is what makes that true rather than
+     * intended, since `on delete set null` would otherwise leave a filename with
+     * no id, which is a `JobUpload` the TypeScript type cannot express.
+     *
+     * `set null` rather than cascade, for the same reason `draft_revision_id`
+     * has it: a swept upload must not take the job record with it.
+     */
+    uploadId: uuid("upload_id").references(() => uploads.id, { onDelete: "set null" }),
+    uploadFilename: text("upload_filename"),
+
+    /**
+     * **What makes two requests the same work**, so that two instances cannot
+     * each accept one Add click and pay for it twice.
+     *
+     * A hash over the canonical ordered `{step, force}` list plus `guidance` plus
+     * `profile` — the same comparison `sameWork` in src/jobs.ts makes today over
+     * an in-memory Map, which is exactly what stops working the moment there is
+     * a second instance. Immutable: a job's identity cannot change under a
+     * partial unique index without the index becoming decorative.
+     */
+    workKey: text("work_key").notNull(),
+
     createdAt: createdAt(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -674,6 +818,37 @@ export const jobs = spideryarn.table(
     uniqueIndex("jobs_draft_revision_unique")
       .on(t.draftRevisionId)
       .where(sql`${t.draftRevisionId} is not null`),
+
+    /** A `JobUpload` has both fields or the job has none. See `uploadId`. */
+    check(
+      "jobs_upload_both_or_neither",
+      sql`(${t.uploadId} is null) = (${t.uploadFilename} is null)`,
+    ),
+
+    /**
+     * **One active job per article** — `activeFor` and `freeSlug` as a
+     * constraint, and the conflict target `enqueueOrGet` inserts against.
+     *
+     * It does two jobs at once, which is why there is one index here and not
+     * two. It **reserves the slug**, closing the check-then-use race in which
+     * two uploads both named `paper.pdf` each choose `paper` and the second
+     * publishes into the first's article. And it **de-duplicates**, because a
+     * second request for work already in flight conflicts here first: the
+     * caller re-reads the row and compares `work_key` — same work, hand back
+     * that job; different work, allocate the next slug suffix and retry.
+     *
+     * **There was very nearly a second index on `(owner_id, slug, work_key)`,
+     * and it could never have fired.** Any pair of rows violating it violates
+     * this one too, so it was strictly subsumed — a unique index that is a claim
+     * in the schema and does nothing. Found by inserting the rows rather than by
+     * reading the definitions, 2026-08-27. `work_key` stays as a *column*
+     * because it is what the caller compares after this index refuses.
+     *
+     * Partial, because two finished jobs for one article are ordinary history.
+     */
+    uniqueIndex("jobs_active_slug")
+      .on(t.ownerId, t.slug)
+      .where(sql`${t.status} in ('queued','running')`),
   ],
 );
 
