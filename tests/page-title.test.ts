@@ -74,6 +74,7 @@ describe("an article", () => {
       search: "Search",
       diagram: "Diagram",
       chat: "Chat",
+      review: "Review",
     };
     for (const mode of MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });

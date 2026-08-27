@@ -3443,13 +3443,22 @@ td.text.has-hit[data-hues="8"] {
 .review .chat-composer { flex-wrap: wrap; align-items: center; }
 .review .chat-input { flex-basis: 100%; }
 
+/* The bottom row reads left to right in the order the reader does things:
+   talk, choose how the reply comes back, send. The DOM order cannot say that —
+   the send button has to stay next to the textarea for the keyboard, and the
+   dictation button is rendered after it — so the three are ordered here.
+   Without this the box wraps to `send · talk · stance`, which strands send at
+   the far left of a full-width row with the stance at the far right. */
+.review .chat-talk { order: 1; }
+.review .chat-stance { order: 2; }
+.review .chat-send { order: 3; }
+.review .prof-use { order: 4; }
+.review .prof-listening { order: 5; }
+
 .chat-talk {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  /* First in the row, ahead of send. The reading order is the recommendation:
-     talk, then choose how the reply comes back, then send. */
-  order: -1;
 }
 .chat-talk-label {
   font-size: 0.78rem;
@@ -3480,6 +3489,17 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.78rem;
 }
 .chat-stance select:disabled { opacity: 0.45; cursor: default; }
+
+/* Which stance an answer was asked for, in its action row. Quiet, lower-case
+   and un-boxed: it is a note about how the reply was requested, not a label on
+   its quality. Only ever present on a non-default stance. */
+.chat-stance-tag {
+  margin-right: auto;
+  font-size: 0.72rem;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
+}
 
 /* The tag on a review's row in the shared thread list. Quiet on purpose: it
    distinguishes a minority of rows and must not read as a badge worth having. */
@@ -4780,6 +4800,10 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.82rem;
 }
 .srch-failed { color: var(--destructive, oklch(0.65 0.2 25)); }
+/* The 600ms before the spinner is allowed to say anything. Holding one line's
+   worth of height means the panel does not grow when it does — see
+   `SavedLoading`, and useSlow.ts for why the words wait at all. */
+.srch-waiting { min-height: 1.2em; }
 .srch-retry {
   padding: 0.2rem 0.55rem;
   border: 1px solid var(--rule-strong);

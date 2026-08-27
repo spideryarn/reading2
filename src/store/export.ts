@@ -420,6 +420,21 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
            fields is exactly how `tools` went missing from an export once
            already; the anchor is the same trap one row up. */
         ...anchorFragment(thread),
+        /* **Always written, unlike the anchor above and `stopped` below**, and
+           the difference is that `ChatThread.kind` is *required*. Both stores
+           therefore always have one: `withTurn` sets it on every thread it
+           creates, and `normaliseKind` in src/chat.ts supplies `"chat"` when a
+           file written before this field existed is read — so the next write of
+           that file has it too.
+
+           Emitting it only for reviews was the first attempt and was wrong:
+           tests/store-roundtrip.test.ts compares this file against the one the
+           filesystem store wrote, byte for byte, and that one carries
+           `"kind": "chat"`. A file that predates the field and has not been
+           written since is the one case where the two differ, and it converges
+           the moment anything touches it — the same transitional state `tools`
+           passed through. */
+        kind: thread.kind === "review" ? ("review" as const) : ("chat" as const),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,
@@ -438,6 +453,14 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
             error: row.error,
             // `false` is the default and the file simply had no key.
             stopped: row.stopped ? true : null,
+            /* **The field this file's own comment warned about**, four lines
+               up: `tools` went missing from an export exactly this way once
+               already, because the row is built from named fields and a new one
+               is easy not to add. A review thread exported without its stances
+               and imported back is a conversation whose every answer has lost
+               the instruction that produced it, and nothing reports an error.
+               GPT Sol's review of docs/plans/review-mode.md, finding 6. */
+            stance: row.stance,
             editedAt: row.editedAt?.toISOString() ?? null,
           }) as ChatMessage,
         ),

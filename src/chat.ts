@@ -24,7 +24,13 @@
  */
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ChatAnchor, ChatMessage, ChatThread } from "./types.js";
+import type {
+  ChatAnchor,
+  ChatMessage,
+  ChatThread,
+  ReviewStance,
+  ThreadKind,
+} from "./types.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -64,6 +70,26 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/**
+ * A stored thread written before review mode existed has no `kind`. Give it one.
+ *
+ * **`ChatThread.kind` is required**, deliberately — an optional field would mean
+ * a `?? "chat"` at every read site, and one of those would eventually be missed,
+ * which is a review answered with chat's prompt and nothing on screen
+ * disagreeing (GPT Sol's review of docs/plans/review-mode.md, finding 5). The
+ * price of "required" is exactly this function, and its twin in
+ * src/store/pg-chat.ts. Two places hold the default instead of twenty.
+ *
+ * It reads the field off a value the type says always has it, which is the one
+ * honest way to write this: the type describes what the rest of the program may
+ * assume, and JSON on disk is not bound by it.
+ */
+function normaliseKind(thread: ChatThread): ChatThread {
+  return thread.kind === "review" || thread.kind === "chat"
+    ? thread
+    : { ...thread, kind: "chat" };
+}
+
 export async function loadThreads(slug: string): Promise<ChatThread[]> {
   assertSlug(slug);
   try {
@@ -76,7 +102,7 @@ export async function loadThreads(slug: string): Promise<ChatThread[]> {
       await readFile(fileFor(slug), "utf8"),
       `chat.json for ${slug}`,
     );
-    return parsed.threads ?? [];
+    return (parsed.threads ?? []).map(normaliseKind);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
     // No file yet is normal. A file that will not parse means every
@@ -200,6 +226,30 @@ export interface Turn {
    * than letting it fall through and be ignored here.
    */
   anchor?: ChatAnchor;
+  /**
+   * Chat or review — **only meaningful when this turn creates the thread**,
+   * which is the only branch `withTurn` applies it on, exactly like `anchor`
+   * above.
+   *
+   * A kind that contradicts an existing thread is refused here rather than
+   * ignored: silently answering a review with chat's prompt because a stale tab
+   * said so is a transcript half in one voice and half in another, with nothing
+   * anywhere disagreeing. The route refuses it first, with a 409 and a sentence
+   * a person can act on; this is the backstop, and it is inside the Postgres
+   * transaction because `inTurnOrder` is only per-process.
+   *
+   * Absent means `"chat"`, which is what every caller written before review
+   * mode meant.
+   */
+  kind?: ThreadKind;
+  /**
+   * How much the answer should say, for a review turn.
+   *
+   * Written onto the **pending** reply, not onto the finished one — see
+   * `ChatMessage.stance`. An answer that never finished still has to say which
+   * instruction produced it.
+   */
+  stance?: ReviewStance;
 }
 
 /**
@@ -238,11 +288,22 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question, anchor }: Turn,
+  { threadId, question, anchor, kind, stance }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
   const existing = threads.find((t) => t.id === threadId);
+  /* **A thread is one kind for life.** Refused rather than ignored, and refused
+     here rather than only in the route, because the route's `inTurnOrder` is a
+     per-process convenience and this runs inside the Postgres transaction. See
+     `Turn.kind`, and docs/plans/review-mode.md § `kind` belongs to the thread.
+
+     An *identical* kind passes, so a retried send — the same request arriving
+     twice — is harmless rather than a 409 the reader has to understand. Same
+     rule as the anchor check in the route. */
+  if (existing && kind && existing.kind !== kind) {
+    throw new ChatConflict("That conversation is already a different kind.");
+  }
   const user: ChatMessage = {
     id: mintUniqueId(ids),
     role: "user",
@@ -256,6 +317,11 @@ export function withTurn(
     text: "",
     createdAt: at,
     status: "pending",
+    /* On the pending row, before a word of the answer exists. `ChatMessage.stance`
+       says why: an answer that crashed, errored, was stopped or was swept still
+       has to say which instruction produced the words that did arrive, and a
+       retry of it has to have something to inherit. */
+    ...(stance ? { stance } : {}),
   };
   const base: ChatThread = existing ?? {
     /* The client mints the thread id so `?thread=` can be in the URL before
@@ -288,6 +354,13 @@ export function withTurn(
        is on and the two stores are compared field for field, where an explicit
        undefined and an absent key are not the same thing. */
     ...(anchor ? { anchor } : {}),
+    /* **Only on this branch**, the same rule and the same reason as `anchor`
+       just above, sharpened: the kind chooses the system prompt, so a thread
+       that changed kind halfway would have a first half answered by one set of
+       instructions and a second half by another. Unlike `anchor` it is not
+       optional on the type, so it is written unconditionally with its default
+       rather than spread. */
+    kind: kind ?? "chat",
     messages: [],
   };
   const thread: ChatThread = {
@@ -379,8 +452,8 @@ export async function finishTurn(
      and brought the bug back with it. Keep the two in step.
 
      **The throw site is fixed now (2026-08-26).** src/converse.ts no longer puts
-     any of the provider's body in the message — `providerRefused` in
-     src/openrouter-stream.ts — so the string this line declines to log is safe
+     any of the provider's body in the message — `ProviderRefused` in
+     src/ai-call.ts — so the string this line declines to log is safe
      today. It still declines, because a rule that holds only while every call
      site stays careful is not a rule, and because what a reader of this line
      needs is the status and the model, which are already on it. */
@@ -459,6 +532,17 @@ export function withRetry(
     text: "",
     createdAt: at,
     status: "pending",
+    /* **Carried over by name, and it is the one field that is.**
+       Everything else the old attempt had is deliberately dropped — that is what
+       the note above is about. The stance is different in kind: it is not a
+       result of the answer, it is the INSTRUCTION that produced it, and "have
+       another go at that" has to mean another go at the same question asked the
+       same way.
+       If it took the reader's current picker instead, moving the picker and
+       then pressing retry would silently rewrite the instruction attached to a
+       stored turn — a button that says "have another go" changing what was
+       asked. GPT Sol's review of docs/plans/review-mode.md, finding 4. */
+    ...(last.stance ? { stance: last.stance } : {}),
   };
   const thread: ChatThread = {
     ...existing,
@@ -519,6 +603,17 @@ export async function retryTurn(
  * which is what stops a reader reading an answer that no longer matches the
  * question above it and thinking the model wandered.
  */
+/**
+ * The stance on an assistant row, if it has one.
+ *
+ * A named function rather than `m?.stance` at the call site because the call
+ * site is already a conditional spread and the interesting part — *which* row —
+ * would be lost inside it.
+ */
+function stanceOf(message: ChatMessage | undefined): ReviewStance | undefined {
+  return message?.role === "assistant" ? message.stance : undefined;
+}
+
 export function withEdit(
   threads: ChatThread[],
   threadId: string,
@@ -571,6 +666,17 @@ export function withEdit(
     text: "",
     createdAt: at,
     status: "pending",
+    /* **From the answer being REPLACED, not from the tail of the thread.**
+       An edit to question 2 discards turns 3, 4 and 5, which may have had three
+       different stances between them; the reader's picker at that moment is
+       seeded from turn 5's. Inheriting that would answer a rewritten early
+       question in the voice of a later turn that no longer exists.
+       `index + 1` is the answer that sat under the question being rewritten. It
+       may not exist — a question whose answer was never stored — in which case
+       there is nothing to inherit and `balanced` applies downstream. */
+    ...(stanceOf(existing.messages[index + 1])
+      ? { stance: stanceOf(existing.messages[index + 1]) as ReviewStance }
+      : {}),
   };
   const thread: ChatThread = {
     ...existing,

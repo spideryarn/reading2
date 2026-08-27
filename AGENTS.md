@@ -39,6 +39,7 @@ listed here; the names under each are files in `docs/project/`.
   `column-context.md` (the gist column's fisheye) · `glossary.md` · `summaries.md` ·
   `ideas.md` (the propositions the piece assumes) · `search.md` · `diagram.md` ·
   `comments.md` (legacy: explain a selected sentence) · `chat-tools.md` (what chat may call) ·
+  `review-mode.md` (say what you took from it, and find out) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
   `reader-profile.md` · `dictation.md` (talking into a text box) ·

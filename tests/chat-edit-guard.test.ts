@@ -51,6 +51,7 @@ const stored: ChatThread[] = [
     title: "a question",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+    kind: "chat" as const,
     messages: [
       { id: "q1", role: "user", text: "first", createdAt: "2026-01-01T00:00:00.000Z", status: "done" },
       { id: "a1", role: "assistant", text: "one", createdAt: "2026-01-01T00:00:00.000Z", status: "done" },

@@ -585,4 +585,90 @@ when("the Postgres chat store", () => {
     await expect(pgChatStore.load("no-such-article-at-all")).rejects.toMatchObject({ status: 404 });
     await expect(pgChatStore.load("../etc/passwd")).rejects.toMatchObject({ status: 400 });
   });
+
+  /* ------------------------------------------------------- review mode ----
+     The two fields review added, against the two ways Postgres could lose them
+     that the filesystem store cannot. Both are silent failures: no error, no
+     visible symptom, and a transcript that still reads as one conversation.
+     docs/plans/review-mode.md, and GPT Sol's review of it (findings 5 and 6). */
+
+  it("keeps a thread's kind across a second turn that does not mention it", async () => {
+    /* A client continuing a conversation sends no kind — the thread already has
+       one. This checks the **column**, not the loaded object, because
+       `threadsFor` normalises anything unexpected to `"chat"` and would hide a
+       write that had blanked it.
+
+       Be exact about what this does NOT catch, because the first version of
+       this comment claimed otherwise and was wrong: naming `kind` in
+       `upsertThread`'s `set` clause does not make it red. `withTurn` derives
+       the value from the existing thread, so the upsert writes `"review"` over
+       `"review"`. The omission from `set` is defence in depth against a future
+       caller that supplies a kind from somewhere else; the test below is the
+       one that catches a kind actually changing. */
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "review" });
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "and also" });
+    const rows = await getDb()
+      .select()
+      .from(chatThreads)
+      .where(and(eq(chatThreads.articleId, ARTICLE_ID), eq(chatThreads.id, THREAD)));
+    expect(rows[0]?.kind).toBe("review");
+  });
+
+  it("refuses a second turn that contradicts the thread's kind", async () => {
+    /* **The one that matters.** Remove the guard in `withTurn` and this goes
+       red — and a review's second question is then answered with chat's prompt,
+       its list tag changes, and the transcript still reads as one
+       conversation. Nothing else in the suite notices. */
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "what I took", kind: "review" });
+    await expect(
+      pgChatStore.begin(SLUG, { threadId: THREAD, question: "sneaky", kind: "chat" }),
+    ).rejects.toBeInstanceOf(ChatConflict);
+    expect((await pgChatStore.load(SLUG))[0]?.kind).toBe("review");
+  });
+
+  it("defaults a thread with no kind to chat", async () => {
+    await pgChatStore.begin(SLUG, { threadId: THREAD, question: "an ordinary question" });
+    expect((await pgChatStore.load(SLUG))[0]?.kind).toBe("chat");
+  });
+
+  it("stores the stance on the pending answer, before a word of it exists", async () => {
+    const { reply } = await pgChatStore.begin(SLUG, {
+      threadId: THREAD,
+      question: "what I took",
+      kind: "review",
+      stance: "socratic",
+    });
+    expect(reply.status).toBe("pending");
+    const stored = (await pgChatStore.load(SLUG))[0]?.messages.at(-1);
+    expect(stored?.stance).toBe("socratic");
+    // and never on the reader's own row — the check constraint agrees
+    expect((await pgChatStore.load(SLUG))[0]?.messages[0]).not.toHaveProperty("stance");
+  });
+
+  it("keeps the stance through a failed answer, which is when it matters most", async () => {
+    /* An answer that errored still has to say which instruction produced it,
+       because the retry of that row inherits from it. Writing the stance in
+       `finish` rather than on the pending row would lose exactly this case. */
+    const { reply, attempt } = await pgChatStore.begin(SLUG, {
+      threadId: THREAD,
+      question: "what I took",
+      kind: "review",
+      stance: "respond",
+    });
+    await pgChatStore.finish(SLUG, THREAD, reply.id, { status: "error", error: "nope" }, { attempt });
+    expect((await pgChatStore.load(SLUG))[0]?.messages.at(-1)?.stance).toBe("respond");
+  });
+
+  it("carries the stance across a retry rather than dropping it", async () => {
+    const { reply, attempt } = await pgChatStore.begin(SLUG, {
+      threadId: THREAD,
+      question: "what I took",
+      kind: "review",
+      stance: "signposts",
+    });
+    await pgChatStore.finish(SLUG, THREAD, reply.id, { status: "done", text: "a" }, { attempt });
+    const again = await pgChatStore.retry(SLUG, THREAD, reply.id);
+    expect(again.reply.stance).toBe("signposts");
+    expect((await pgChatStore.load(SLUG))[0]?.messages.at(-1)?.stance).toBe("signposts");
+  });
 });

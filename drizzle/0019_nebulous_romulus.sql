@@ -1,0 +1,5 @@
+ALTER TABLE "spideryarn"."chat_messages" ADD COLUMN "stance" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD COLUMN "kind" text DEFAULT 'chat' NOT NULL;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_messages" ADD CONSTRAINT "chat_messages_stance" CHECK ("spideryarn"."chat_messages"."stance" is null or "spideryarn"."chat_messages"."stance" in ('balanced','respond','socratic','signposts'));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_messages" ADD CONSTRAINT "chat_messages_stance_assistant_only" CHECK ("spideryarn"."chat_messages"."stance" is null or "spideryarn"."chat_messages"."role" = 'assistant');--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_threads" ADD CONSTRAINT "chat_threads_kind" CHECK ("spideryarn"."chat_threads"."kind" in ('chat','review'));

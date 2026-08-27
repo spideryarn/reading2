@@ -28,6 +28,7 @@ const optimistic = (messages: ChatMessage[]): ChatThread => ({
   title: "why is it like that, exactly, and what follows fro",
   createdAt: at,
   updatedAt: at,
+  kind: "chat" as const,
   messages,
 });
 

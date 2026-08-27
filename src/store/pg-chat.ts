@@ -67,7 +67,14 @@ import { getDb } from "../db/client.js";
 import { articles, chatMessages, chatThreads } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import type { ChatAnchor, Citation, ChatMessage, ChatThread, ToolRun } from "../types.js";
+import type {
+  ChatAnchor,
+  Citation,
+  ChatMessage,
+  ChatThread,
+  ReviewStance,
+  ToolRun,
+} from "../types.js";
 import type { ChatStore, SweepOptions } from "./contracts.js";
 import { CHAT_SWEPT, requireTail } from "./fs.js";
 import { notFound, ownedSlug, requireSlug } from "./pg.js";
@@ -121,6 +128,10 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.stopped ? { stopped: true } : {}),
     ...(row.editedAt === null ? {} : { editedAt: row.editedAt.toISOString() }),
+    /* Absent, never `stance: undefined` — the filesystem store simply has no
+       key on a chat answer, and tests/store-roundtrip.test.ts compares the two
+       byte for byte. Same rule as every field above it. */
+    ...(row.stance === null ? {} : { stance: row.stance as ReviewStance }),
   };
 }
 
@@ -196,6 +207,12 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ...anchorOf(t),
+    /* Normalised here, the twin of `normaliseKind` in src/chat.ts. The column
+       is `not null default 'chat'` so in practice this only widens the string
+       to the union — but the default lives in exactly two places on purpose,
+       and this is the second. `ChatThread.kind` is required so that nothing
+       downstream has to remember a fallback. */
+    kind: t.kind === "review" ? "review" : "chat",
     messages: byThread.get(t.id) ?? [],
   }));
 }
@@ -235,6 +252,11 @@ function messageRow(
     error: message.error ?? null,
     stopped: message.stopped ?? false,
     editedAt: message.editedAt ? new Date(message.editedAt) : null,
+    /* Written with the row, which for an assistant reply is the **pending**
+       row — see `ChatMessage.stance`. `finish` never touches it: an answer that
+       errored, was stopped, or was swept still has to say which instruction
+       produced it, and the retry of that row has to have something to inherit. */
+    stance: message.stance ?? null,
     createdAt: new Date(message.createdAt),
     ...(attempt === undefined ? {} : { attemptId: attempt, attemptStartedAt: DB_NOW }),
   };
@@ -254,6 +276,7 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
       anchorBlockId: thread.anchor?.blockId ?? null,
       anchorQuote: quoteOf(thread.anchor),
       anchorStart: startOf(thread.anchor),
+      kind: thread.kind,
     })
     .onConflictDoUpdate({
       target: [chatThreads.articleId, chatThreads.id],
@@ -262,7 +285,16 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
          reason — a conversation is about what it started as, and every later
          turn of an anchored thread comes through here. Naming them in `set`
          would blank the anchor on the second question, which is a mark
-         disappearing from the prose rather than an error anybody sees. */
+         disappearing from the prose rather than an error anybody sees.
+
+         **So is `kind`, and it is the sharpest case of the three.** Every later
+         turn of a review thread comes through here. Naming `kind` in `set`
+         would let a stale tab's `kind: "chat"` turn a review into a chat on its
+         second question — the system prompt changes, the list tag changes, a
+         new cache prefix appears, and the transcript reads as one conversation
+         throughout. `withTurn` refuses a contradicting kind before we are
+         reached; this is why it would not have mattered if it had not.
+         docs/plans/review-mode.md § `kind` belongs to the thread. */
       set: { title: thread.title, updatedAt: new Date(thread.updatedAt) },
     });
 }

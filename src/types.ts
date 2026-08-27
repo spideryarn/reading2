@@ -1297,8 +1297,43 @@ export interface Comment {
   /** Where `quote` sat in the block's rendered text when the comment was made. */
   start: number;
   createdAt: string;
-  /** `pending` is written to disk *before* the model call, so a crash is visible rather than silent. */
-  status: "pending" | "done" | "error";
+
+  /**
+   * The reader's own words about this passage.
+   *
+   * Absent on a bare bookmark — the reader marked the words and wrote nothing —
+   * and absent on every explanation made before 2026-08-28, when a comment was
+   * a question you paid for rather than a mark you made.
+   *
+   * **Absent, never `""`.** The route trims once and drops an empty string, so
+   * "they wrote nothing" has one representation rather than two that compare
+   * unequal across the two stores. Reader prose: never logged, never in a URL,
+   * rendered as text. docs/plans/comments-and-bookmarks.md.
+   */
+  body?: string;
+  /** ISO. Present only once the body has been edited since it was made. */
+  updatedAt?: string;
+  /**
+   * The conversation this comment started, if the reader ticked the box.
+   *
+   * **Advisory, and deliberately not a foreign key** — see the plan for why the
+   * reflex to add one is wrong here. A thread the reader has since deleted
+   * leaves this pointing at nothing, which is benign: the comment is still
+   * their mark on the passage, and whoever offers "Open chat" checks the thread
+   * is really there first, exactly as `?thread=` already has to.
+   */
+  threadId?: string;
+
+  /**
+   * How the *model call* went, and only that.
+   *
+   * `none` is every comment made from 2026-08-28: no call was ever attempted,
+   * which is what a bookmark is. The other three keep the meaning they had —
+   * `pending` is written before the call, so a crash is visible rather than
+   * silent. A separate "kind" field would be worse: a body, a legacy answer and
+   * a linked chat are independent properties, not exclusive kinds.
+   */
+  status: "none" | "pending" | "done" | "error";
   answer?: string;
   citations?: Citation[];
   /** How many web searches the model chose to run. 0 means it was sure. */
@@ -1568,7 +1603,61 @@ export interface ChatMessage {
    * old text is **not** kept — see docs/plans/chat-mode.md § Editing a question.
    */
   editedAt?: string;
+  /**
+   * Which stance produced this answer. **Assistant turns only, review threads
+   * only** — absent on every chat answer and on every user message.
+   *
+   * Written when the *pending* row is created, never when it finishes, and that
+   * is the whole rule. An answer that crashed, errored, was stopped, or was
+   * buried by the sweep still has to say which instruction produced the words
+   * that did arrive — and a retry of that row has to have something to inherit.
+   * Writing it in `finishTurn` would leave every one of those rows blank.
+   *
+   * See docs/plans/review-mode.md § Where the stance picker's value lives.
+   */
+  stance?: ReviewStance;
 }
+
+/**
+ * How much the model should say in a review answer — the reader's choice, per
+ * turn.
+ *
+ * Greg named all four, 2026-08-27. `balanced` is the default and is not an
+ * average of the other three: it decides per point, on evidence, and defaults
+ * to telling when it cannot tell. docs/plans/review-mode.md § The stance.
+ */
+export type ReviewStance = "balanced" | "respond" | "socratic" | "signposts";
+
+/**
+ * The four, as a value.
+ *
+ * **One list, used by the route's validation and by the client's picker**, so a
+ * fifth stance cannot be accepted by the server and missing from the menu, or
+ * offered in the menu and rejected by the server. The same trick `MODES` plays
+ * in src/web/params.ts.
+ */
+export const REVIEW_STANCES: readonly ReviewStance[] = [
+  "balanced",
+  "respond",
+  "socratic",
+  "signposts",
+];
+
+/**
+ * What a conversation is *for* — a question about the article, or the reader
+ * saying what they took from it.
+ *
+ * **Required, not optional**, and normalised to `"chat"` when a stored thread
+ * predates this field. An optional kind means a `?? "chat"` at every read site
+ * and one of them will eventually be missed — which is a review thread answered
+ * with chat's prompt, and nothing on screen disagreeing. GPT Sol's review of
+ * docs/plans/review-mode.md, 2026-08-27.
+ *
+ * A thread's kind is set on the turn that creates it and never again, exactly
+ * like its `anchor`. See docs/plans/review-mode.md § `kind` belongs to the
+ * thread.
+ */
+export type ThreadKind = "chat" | "review";
 
 /**
  * One conversation, and there may be several per article.
@@ -1627,6 +1716,20 @@ export interface ChatThread {
    * thread that already has one.
    */
   anchor?: ChatAnchor;
+  /**
+   * A question about the article, or a review of it. See `ThreadKind`.
+   *
+   * **Set on the turn that creates the thread and never again**, the same rule
+   * as `anchor` two fields up and for a sharper reason: it chooses the system
+   * prompt, so a thread that changed kind halfway would have a transcript whose
+   * first half was answered by one set of instructions and second half by
+   * another, with nothing anywhere saying so.
+   *
+   * Required rather than optional. Both stores normalise a stored thread with
+   * no kind to `"chat"` as they load it, so the default lives in exactly two
+   * places instead of at every read.
+   */
+  kind: ThreadKind;
   messages: ChatMessage[];
 }
 
@@ -1650,6 +1753,18 @@ export interface ThreadSummary {
   createdAt: string;
   updatedAt: string;
   anchor?: ChatAnchor;
+  /**
+   * Chat or review — which the reading view needs even though it draws no
+   * review marks.
+   *
+   * `?thread=` opens the floating `ChatDialog` in every mode but the two
+   * conversation modes, and that dialog is chat's UI and asks with chat's
+   * prompt. A pasted `?mode=toc&thread=<a review>` would therefore continue a
+   * review conversation as a chat. The overlay is gated on this instead. See
+   * src/web/App.tsx § overlay, and GPT Sol's review of
+   * docs/plans/review-mode.md, finding 7.
+   */
+  kind: ThreadKind;
   /** How many question-and-answer pairs. What the hover tooltip counts. */
   turns: number;
   /**

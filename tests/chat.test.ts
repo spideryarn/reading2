@@ -599,6 +599,7 @@ const thread = (messages: ChatMessage[]): ChatThread => ({
   title: "why is it like that?",
   createdAt: "2026-08-26T00:00:00.000Z",
   updatedAt: "2026-08-26T00:00:00.000Z",
+  kind: "chat" as const,
   messages,
 });
 

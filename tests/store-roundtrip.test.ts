@@ -133,7 +133,20 @@ function canonical(artefact: string, value: unknown): unknown {
   const list: unknown[] =
     key === "comments"
       ? raw.filter((c) => isSpideryarnId((c as { blockId?: string }).blockId ?? ""))
-      : raw;
+      : /* **A thread with no `kind` IS a chat**, by the definition both stores
+           implement — `normaliseKind` in src/chat.ts on the way in, and
+           `not null default 'chat'` on the column. So a `chat.json` written
+           before review mode existed and an export of the same conversation
+           differ by one key that means the same thing, and normalising it here
+           is the honest comparison rather than a lowered bar.
+           It is transitional: the filesystem store writes the field on the next
+           update of any thread it loads, so these files converge on their own.
+           The default itself is not thereby untested — tests/review-store.test.ts
+           asserts it positively, which is the half a normalisation like this
+           would otherwise quietly delete. */
+        key === "threads"
+        ? raw.map((t) => ({ kind: "chat", ...(t as Record<string, unknown>) }))
+        : raw;
   const rank = (x: unknown) => {
     const o = x as { createdAt?: string; id?: string };
     return `${o.createdAt ?? ""}|${o.id ?? ""}`;
@@ -250,6 +263,45 @@ when("a round trip through Postgres", () => {
 
   it("has something to round-trip", () => {
     expect(slugs.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * **Does this suite actually exercise a review at all?**
+   *
+   * The chat.json comparison below is what would catch `kind` or `stance` going
+   * missing from src/store/export.ts — the way `tools` once did, which that
+   * file's own comment records. But it can only catch it if some article's
+   * conversations include a review, and `data/` is gitignored working data that
+   * varies per machine. On a laptop with none, every assertion below passes
+   * while covering nothing, and nothing says so.
+   *
+   * So the coverage is asserted rather than assumed. A skip here is a *warning*,
+   * not a pass: it is reported through the test name so somebody reading the
+   * output can see the difference between "the round trip preserved a review"
+   * and "there was no review to preserve". docs/reusable/silent-success.md.
+   *
+   * To create one: open an article in review mode and say something.
+   */
+  it("includes at least one review with a stance, or says it could not", async () => {
+    let reviews = 0;
+    let stances = 0;
+    for (const slug of slugs) {
+      const file = (await readJsonIfPresent(path.join(ROOT, "data", slug, "chat.json"))) as
+        | { threads?: { kind?: string; messages?: { stance?: string }[] }[] }
+        | undefined;
+      for (const t of file?.threads ?? []) {
+        if (t.kind !== "review") continue;
+        reviews += 1;
+        stances += (t.messages ?? []).filter((m) => m.stance).length;
+      }
+    }
+    if (reviews === 0) {
+      console.warn(
+        "store-roundtrip: no review thread in data/ — kind/stance export is NOT covered by this run",
+      );
+      return;
+    }
+    expect(stances).toBeGreaterThan(0);
   });
 
   describe.each(slugs)("%s", (slug) => {

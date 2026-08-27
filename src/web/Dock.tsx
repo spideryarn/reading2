@@ -98,6 +98,7 @@ import {
   BookA,
   Lightbulb,
   ChevronUp,
+  LoaderCircle,
   Network,
   Info,
   Layers,
@@ -106,6 +107,7 @@ import {
   MessageSquareText,
   MessagesSquare,
   Search,
+  Speech,
   X,
 } from "lucide-react";
 import type { Comment } from "../types.js";
@@ -113,6 +115,7 @@ import type { Mode, Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useSlow } from "./useSlow.js";
 
 interface Props {
   /**
@@ -152,6 +155,17 @@ interface Props {
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
+    /**
+     * Has the comments fetch come back, and did it work? `CommentsApi`.
+     *
+     * Only the empty state needs these, and it needs both: an empty list is
+     * what this panel holds *before* the request lands, *after* it came back
+     * with nothing, and *after* it failed — and only the middle one of those is
+     * "nothing asked yet".
+     * docs/project/web-client.md § Empty is not the same as not asked yet.
+     */
+    loaded: boolean;
+    loadFailed: boolean;
     /** Which panel is open, or null for a shut drawer. From `?panel=`. */
     panel: Panel | null;
     onPanel(next: Panel | null): void;
@@ -282,6 +296,18 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     label: "Chat",
     blurb: "Ask about this article — answers point back at the paragraphs they came from",
   },
+  /* Last, and one step further out than Chat, which is the end of the ordering
+     this list has followed since Greg set it by hand: it runs from the article
+     restated, through the ways into it, to the conversation about it. Review is
+     the only mode whose content comes from the READER — it cannot be used at
+     all until they have read the piece — so it belongs past the point where the
+     article's own words run out. docs/plans/review-mode.md. */
+  {
+    mode: "review",
+    icon: Speech,
+    label: "Review",
+    blurb: "Say what you took from this, and find out where it holds up",
+  },
 ];
 
 export function Dock({ slug, view, mode, onMode, drawer }: Props) {
@@ -373,7 +399,12 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
               became a page; if a second ever comes back, this is where it
               branches. */}
           <div className="dock-drawer-body">
-            <Questions comments={drawer.comments} onOpen={drawer.onOpenComment} />
+            <Questions
+              comments={drawer.comments}
+              loaded={drawer.loaded}
+              loadFailed={drawer.loadFailed}
+              onOpen={drawer.onOpenComment}
+            />
           </div>
         </div>
       )}
@@ -764,6 +795,28 @@ function DockTab({
 }
 
 /**
+ * The wait before the questions, and nothing at all if the wait is short.
+ *
+ * Its own component only because `useSlow` is a hook and `Questions` returns
+ * early — the same reason `ChatListLoading` is one. `.dock-empty` for the type,
+ * so the sentence sits exactly where the one it stands in for would.
+ */
+function QuestionsLoading() {
+  const slow = useSlow(true);
+  /* `role="status"` for the same reason the chat panel's has one: the sentence
+     arrives 600ms late and would otherwise be announced to nobody. */
+  return (
+    <p className="dock-empty dock-loading" role="status">
+      {slow && (
+        <>
+          <LoaderCircle className="cmt-spinner" size={13} /> Fetching your questions…
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
  * Every question asked about this article, in the order you meet them coming
  * down the page.
  *
@@ -773,7 +826,45 @@ function DockTab({
  * back to a piece a day later. Order comes from comment-nav.ts and therefore
  * from the block index, never from the id string (block-ids.md).
  */
-function Questions({ comments, onOpen }: { comments: Comment[]; onOpen(id: string): void }) {
+function Questions({
+  comments,
+  loaded,
+  loadFailed,
+  onOpen,
+}: {
+  comments: Comment[];
+  loaded: boolean;
+  loadFailed: boolean;
+  onOpen(id: string): void;
+}) {
+  /* **"Nothing asked yet" is a claim about the reader, and it takes a fetch
+     that came back and worked to earn it.** Three states get here with an empty
+     list and only the third one may say it.
+
+     Waiting: the drawer opens on a keypress and the fetch is still out behind
+     it on a slow connection, so the first thing the reader saw was a flat
+     denial of the questions they had opened this to find. Behind `useSlow`, so
+     a fetch that beats 600ms draws nothing at all rather than a spinner that
+     flashes and vanishes — useSlow.ts.
+
+     Failed: the first version of this fix set `loaded` on the failure path too
+     and fell straight through to the same sentence, which is the identical lie
+     one beat later. GPT Sol caught it, 2026-08-27. The transport error itself
+     is printed in the reading view's status line, which is *behind this
+     drawer's scrim* — so saying nothing here would have left the reader with a
+     denial and no way to see the reason. */
+  if (comments.length === 0 && !loaded) {
+    return <QuestionsLoading />;
+  }
+
+  if (comments.length === 0 && loadFailed) {
+    return (
+      <p className="dock-empty">
+        Couldn't load your questions. Reload to try again.
+      </p>
+    );
+  }
+
   if (comments.length === 0) {
     return (
       <p className="dock-empty">

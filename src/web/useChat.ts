@@ -13,7 +13,15 @@
  * every access log between here and the server.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatAnchor, ChatMessage, ChatThread, Citation, ToolRun } from "../types.js";
+import type {
+  ChatAnchor,
+  ChatMessage,
+  ChatThread,
+  Citation,
+  ReviewStance,
+  ThreadKind,
+  ToolRun,
+} from "../types.js";
 import { mintId } from "../ids.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../messages.js";
@@ -31,6 +39,21 @@ export interface ChatApi {
    * and then not create one when they legitimately had none.
    */
   loaded: boolean;
+  /**
+   * Did that first fetch fail?
+   *
+   * **`loaded` says we have asked, not that it worked, and the panel's empty
+   * state needs the difference.** Without this the list falls straight from the
+   * spinner into "Nothing asked yet." the moment the request gives up — the
+   * same false claim the spinner was added to stop, one beat later. GPT Sol,
+   * reviewing that first fix, 2026-08-27.
+   *
+   * Not `error !== null`. `error` carries any failure of any request in this
+   * hook — a stop, a delete, an answer that would not start — and outlives the
+   * one that caused it. This is about the one fetch that fills the list, and
+   * only the effect below ever sets it.
+   */
+  loadFailed: boolean;
   /**
    * Answers whose stream this client has lost, and is now asking the server
    * about. See `watch` — the row is still `pending`, but nothing is arriving
@@ -74,6 +97,27 @@ export interface ChatApi {
      * different one, rather than quietly ignoring it.
      */
     anchor?: ChatAnchor,
+    /**
+     * Chat or review — **only on the send that creates the thread**, and the
+     * server 409s one that contradicts a thread that already exists.
+     *
+     * Deliberately absent from `retry` and `edit` below: their thread already
+     * has a kind, and a field a stale tab could send wrongly is a field worth
+     * not having. The server refuses one sent with either.
+     */
+    kind?: ThreadKind,
+    /**
+     * How much this answer should say — review turns only, and the reader's
+     * current picker.
+     *
+     * Also absent from `retry` and `edit`, and that one is not symmetry: a
+     * retry re-asks a **stored** question, so it must be asked the way it was
+     * asked. `withRetry` on the server carries the stance over from the answer
+     * it is replacing; `withEdit` takes it from the answer being replaced. If
+     * this rode along instead, moving the picker and then pressing retry would
+     * silently rewrite the instruction attached to a stored turn.
+     */
+    stance?: ReviewStance,
   ): string;
   /**
    * Answer the same question again, replacing the answer in place.
@@ -113,7 +157,7 @@ export interface ChatApi {
    */
   cancelAndDiscard(threadId: string, messageId: string): void;
   /** Start an empty conversation locally. Nothing is stored until you send. */
-  begin(): string;
+  begin(kind?: ThreadKind): string;
   /**
    * Forget an empty conversation. Local only, and a no-op on anything that has
    * a message in it — see `withoutEmpty`.
@@ -436,6 +480,7 @@ async function drainTurn(body: ReadableStream<Uint8Array>, sink: TurnSink): Prom
 export function useChat(slug: string): ChatApi {
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -527,26 +572,31 @@ export function useChat(slug: string): ChatApi {
    * stream is still writing into is left alone too — there is nothing the server
    * can tell us about it that is not already older than the screen.
    */
+  /**
+   * Returns whether the list came back. The mount effect below is the only
+   * caller that cares — a per-thread refresh failing later says nothing about
+   * whether the list itself ever arrived. See `loadFailed`.
+   */
   const refresh = useCallback(
-    async (only?: string): Promise<void> => {
+    async (only?: string): Promise<boolean> => {
       const mine = slug;
       try {
         const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
           await apiFetch(`/api/chat/${encodeURIComponent(mine)}`),
         );
-        if (showing.current !== mine) return;
+        if (showing.current !== mine) return false;
         if (body.error) {
           setError(body.error);
-          return;
+          return false;
         }
         const fresh = body.threads ?? [];
         if (only === undefined) {
           setThreads(fresh);
-          return;
+          return true;
         }
         // More than one means somebody else is still writing here — this run is
         // counted too, and it is the one that failed.
-        if ((running.current.get(only) ?? 0) > 1) return;
+        if ((running.current.get(only) ?? 0) > 1) return true;
         const server = fresh.find((t) => t.id === only);
         setThreads((prev) =>
           server
@@ -555,8 +605,10 @@ export function useChat(slug: string): ChatApi {
               // never written down. Either way it is not a conversation.
               prev.filter((t) => t.id !== only),
         );
+        return true;
       } catch (e) {
         if (showing.current === mine) setError(describeFetchFailure(e as Error));
+        return false;
       }
     },
     [slug],
@@ -566,13 +618,41 @@ export function useChat(slug: string): ChatApi {
     showing.current = slug;
     setThreads([]);
     setLoaded(false);
+    setLoadFailed(false);
     // `loaded` even when the fetch failed. It means "we have asked", not "it
     // worked" — a reader whose server is down should still be able to open a
     // conversation and see the send fail with a reason, rather than face a
-    // panel that never resolves into anything.
-    void refresh().finally(() => {
-      if (showing.current === slug) setLoaded(true);
-    });
+    // panel that never resolves into anything. What it *may not* do is let the
+    // panel then say the reader has asked nothing, which is what `loadFailed`
+    // is for.
+    /**
+     * **`live`, not `showing.current`, and the difference is a real bug.**
+     *
+     * `showing.current` distinguishes *slugs*, and what has to be
+     * distinguished here is *runs of this effect*. Under `StrictMode` React
+     * mounts, unmounts and mounts again, so two fetches for the same article
+     * are in flight at once — and the first one failing after the second one
+     * succeeded set `loadFailed` back to true, leaving the panel saying it
+     * could not load a list it was displaying. Same slug, so the ref guard let
+     * it straight through. GPT Sol found it on the second pass, 2026-08-27.
+     *
+     * A `let` closed over by the cleanup below is the same shape useComments.ts
+     * and useSearch.ts already use, and it is per-run by construction.
+     */
+    let live = true;
+    void refresh()
+      // `refresh` catches its own failures, so this only guards against it
+      // being changed later into something that does not — `loaded` must flip
+      // on every path or the panel waits for ever.
+      .catch(() => false)
+      .then((ok) => {
+        if (!live || showing.current !== slug) return;
+        setLoadFailed(!ok);
+        setLoaded(true);
+      });
+    return () => {
+      live = false;
+    };
   }, [slug, refresh]);
 
   /** Rewrite one thread in place, or append it if it is new. Deletions win. */
@@ -593,10 +673,28 @@ export function useChat(slug: string): ChatApi {
    * clean up. The server's `beginTurn` accepts this id when the first message
    * arrives, which is what makes the optimistic id safe.
    */
-  const begin = useCallback(() => {
+  const begin = useCallback((kind: ThreadKind = "chat") => {
     const id = mintId();
     const at = new Date().toISOString();
-    setThreads((prev) => [...prev, { id, title: "New chat", createdAt: at, updatedAt: at, messages: [] }]);
+    setThreads((prev) => [
+      ...prev,
+      {
+        id,
+        /* A review's placeholder title says what it is, because the list is
+           shared: "New chat" sitting in a list the reader reached by pressing
+           Review is a small lie, and it is the row they are about to type
+           into. The real title arrives with the first thing they say. */
+        title: kind === "review" ? "New review" : "New chat",
+        createdAt: at,
+        updatedAt: at,
+        /* An empty thread exists only in this tab, so this kind is a promise
+           rather than a record — the send that follows is what tells the
+           server, and the server's answer is what makes it true. But the panel
+           filters and tags on it in the meantime, so it has to be right now. */
+        kind,
+        messages: [],
+      },
+    ]);
     return id;
   }, []);
 
@@ -1213,6 +1311,8 @@ export function useChat(slug: string): ChatApi {
       useProfile = true,
       onThreadId?: (id: string) => void,
       anchor?: ChatAnchor,
+      kind?: ThreadKind,
+      stance?: ReviewStance,
     ): string => {
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -1240,11 +1340,33 @@ export function useChat(slug: string): ChatApi {
           text: "",
           createdAt: now,
           status: "pending",
+          /* The optimistic row's own copy. The server writes the authoritative
+             one onto its pending row in the same write as the question, but the
+             client does not read that back until the next load — so without
+             this the stance tag on an answer appeared only after a reload,
+             which is precisely the state a reader is never in while they are
+             watching the answer arrive. Found in a browser pass, 2026-08-28.
+
+             A guess, like the ids and the thread's kind beside it, and
+             harmless in the same way: the refresh that follows replaces this
+             row with the stored one. */
+          ...(stance ? { stance } : {}),
         };
         const existing = prev.find((t) => t.id === id);
         const thread: ChatThread = existing
           ? { ...existing, updatedAt: now, messages: [...existing.messages, user, reply] }
-          : { id, title: question.slice(0, 60), createdAt: now, updatedAt: now, messages: [user, reply] };
+          : {
+              id,
+              title: question.slice(0, 60),
+              createdAt: now,
+              updatedAt: now,
+              /* The optimistic row's own guess, and it has to be right rather
+                 than defaulted: this thread is rendered — and filtered by kind
+                 in the panel — in the frame before the server answers. A `?? "chat"`
+                 here would flash a new review into the list as a chat. */
+              kind: kind ?? "chat",
+              messages: [user, reply],
+            };
         return existing ? prev.map((t) => (t.id === id ? thread : t)) : [...prev, thread];
       });
 
@@ -1261,6 +1383,11 @@ export function useChat(slug: string): ChatApi {
           at,
           ...(useProfile ? {} : { useProfile: false }),
           ...(anchor ? { anchor } : {}),
+          /* Sent only when it is a review. A body with no `kind` means chat,
+             which is what every caller written before this feature meant, and
+             what keeps an old tab working. */
+          ...(kind === "review" ? { kind } : {}),
+          ...(stance ? { stance } : {}),
         },
         pendingId,
         onThreadId,
@@ -1288,6 +1415,16 @@ export function useChat(slug: string): ChatApi {
                 text: "",
                 createdAt: new Date().toISOString(),
                 status: "pending" as const,
+                /* **The one field carried across**, mirroring `withRetry` on
+                   the server exactly — see the note there. Everything else
+                   belongs to the attempt being replaced; this is the
+                   instruction that produced it, and a retry re-asks the same
+                   question the same way.
+                   Without it the row loses its stance for as long as the tab
+                   lives, which then seeds the picker with `balanced` and makes
+                   the *next* turn quietly change voice. GPT Sol's review of the
+                   built code, finding 2. */
+                ...(m.stance ? { stance: m.stance } : {}),
               }
             : m,
         ),
@@ -1316,6 +1453,7 @@ export function useChat(slug: string): ChatApi {
         if (index < 0) return t;
         const target = t.messages[index];
         if (!target) return t;
+        const replaced = t.messages[index + 1];
         return {
           ...t,
           // The same rule the server applies in `editTurn`: the first question
@@ -1325,7 +1463,21 @@ export function useChat(slug: string): ChatApi {
           messages: [
             ...t.messages.slice(0, index),
             { ...target, text: question, editedAt: now },
-            { id: pendingId, role: "assistant" as const, text: "", createdAt: now, status: "pending" as const },
+            {
+              id: pendingId,
+              role: "assistant" as const,
+              text: "",
+              createdAt: now,
+              status: "pending" as const,
+              /* From the answer being **replaced** — `t.messages[index + 1]` —
+                 not from the tail of the thread, mirroring `withEdit` on the
+                 server. An edit discards later turns whose stances may differ,
+                 so taking the last one would answer a rewritten early question
+                 in the voice of a turn that no longer exists. */
+              ...(replaced?.role === "assistant" && replaced.stance
+                ? { stance: replaced.stance }
+                : {}),
+            },
           ],
         };
       });
@@ -1399,6 +1551,7 @@ export function useChat(slug: string): ChatApi {
   return {
     threads,
     loaded,
+    loadFailed,
     recovering,
     send,
     cancelAndDiscard,

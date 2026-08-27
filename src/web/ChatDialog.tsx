@@ -197,6 +197,12 @@ export function ChatDialog({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         anchor: target.anchor,
+        /* Always a chat. This dialog is what a selection in the prose opens,
+           and a review has no selection to open from — the route refuses an
+           anchor sent with `kind: "review"`. So every mark the reading view
+           draws belongs to a chat, which is the property the overlay in
+           App.tsx relies on. */
+        kind: "chat",
         turns: 1,
       });
     },
@@ -276,7 +282,11 @@ export function ChatDialog({
             focused={focused}
             draft={draft}
             onDraft={setDraft}
-          />
+            /* Always a chat. This dialog is what a selection in the prose opens, and a
+             review cannot be anchored to one — so there is no stance picker here
+             and never should be. */
+          kind="chat"
+        />
         ) : (
           /* `?thread=` names a conversation that is not there — a shared link to
              one since deleted, or a tab left open across a delete elsewhere.

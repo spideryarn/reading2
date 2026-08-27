@@ -471,9 +471,14 @@ export function ChatPanel({
 
            The transport error is printed above this by `chat-error`, so this
            line does not repeat it; what it does is refuse to make the claim.
-           See `loadFailed` in Props. */
+
+           It also does not promise the conversations survived. This fires on
+           any failure `readJson` throws — a 500, a non-JSON 200, a dropped
+           connection — and only the last of those is evidence about the server
+           at all. GPT Sol's third finding, on the same review. See `loadFailed`
+           in Props. */
         <div className="chat-empty">
-          <p>Couldn't fetch your conversations. They are still there — reload to try again.</p>
+          <p>Couldn't load your conversations. Reload to try again.</p>
         </div>
       ) : (
         <>
@@ -545,7 +550,10 @@ export function ChatPanel({
               onDraft={(text) => {
                 listDraft.current = text;
               }}
-              placeholder="Ask something new…"
+              placeholder={review ? "Say what you took from this…" : "Ask something new…"}
+              kind={kind}
+              stance={stance}
+              onStance={onStance}
             />
           )}
         </>
@@ -609,8 +617,12 @@ const DISARM_MS = 4000;
  */
 function ChatListLoading() {
   const slow = useSlow(true);
+  /* `role="status"`, because the words arrive 600ms after the panel does and a
+     line that simply appears is silent to a screen reader. Polite by
+     definition, so the reader is told when they next pause rather than
+     interrupted. GPT Sol, 2026-08-27. */
   return (
-    <div className="chat-loading">
+    <div className="chat-loading" role="status">
       {slow && (
         <>
           <LoaderCircle className="cmt-spinner" size={13} />
@@ -1304,6 +1316,20 @@ function Turn({
       )}
       {message.status !== "pending" && (
         <div className="chat-actions">
+          {/* **Which stance produced this answer**, on review turns only.
+              A Socratic reply and a Respond reply to the same words look very
+              different, and a reader who moved the picker three turns ago has
+              no other way to tell why. It is also the honest label for a retry,
+              which re-asks in the voice the answer was originally asked in
+              rather than in whatever the picker says now.
+              Not on `balanced`: that is the default and most answers are it, so
+              labelling them would put a tag on nearly every turn to distinguish
+              a minority — the same call the thread list's `review` tag makes. */}
+          {message.stance && message.stance !== "balanced" && (
+            <span className="chat-stance-tag" title={`Asked for a ${message.stance} reply`}>
+              {message.stance}
+            </span>
+          )}
           {message.text !== "" && <CopyAnswer text={message.text} />}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
@@ -1646,6 +1672,11 @@ function Answer({
                somewhere wrong for the second before the rest lands. Everything
                above it is finished text. citations.ts § splitLinks. */
             partial={live && p === paras.length - 1}
+            /* Chat, and only chat. The prompt here has a rule governing what a
+               model may link (converse.ts § LINKING TO THE WEB); the summary
+               prompt has none, so `CitedText` does not draw links for it.
+               Cited.tsx § links. */
+            links
           />
         </p>
       ))}

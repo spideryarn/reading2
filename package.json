@@ -46,6 +46,7 @@
     "db:reset": "supabase db reset",
     "eval:caching": "tsx evals/prompt-caching.ts",
     "eval:reorder": "tsx evals/reorder-quality.ts",
+    "eval:review": "tsx evals/review-stances.ts",
     "eval:embeddings": "tsx evals/embedding-retrieval.ts"
   },
   "keywords": [],

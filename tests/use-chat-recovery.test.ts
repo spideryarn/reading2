@@ -92,6 +92,7 @@ function reply(patch: Partial<ChatMessage>): ChatThread[] {
       title: "a question",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
+      kind: "chat" as const,
       messages: [
         {
           id: QUESTION,

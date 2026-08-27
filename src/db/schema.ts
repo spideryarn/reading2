@@ -594,6 +594,23 @@ export const comments = spideryarn.table(
     blockId: text("block_id").notNull(),
     quote: text("quote").notNull(),
     start: integer("start").notNull(),
+    /**
+     * The reader's own words. Null on a bare bookmark and on every explanation
+     * made before 2026-08-28. `comments_body_nonempty` below is what keeps
+     * "wrote nothing" from having two spellings.
+     */
+    body: text("body"),
+    /** Set when the body is edited, and only then. Null means never edited. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+    /**
+     * The conversation this comment started. **No foreign key, on purpose** —
+     * see docs/plans/comments-and-bookmarks.md § There is deliberately no
+     * foreign key. The short version: the link is advisory, a deleted thread
+     * leaves a comment that is still the reader's mark, and a constraint
+     * Postgres can keep and the filesystem store cannot is exactly what
+     * tests/store-parity.test.ts exists to catch.
+     */
+    threadId: text("thread_id"),
     status: text("status").notNull(),
     answer: text("answer"),
     citations: jsonb("citations").$type<Citation[]>(),
@@ -608,8 +625,21 @@ export const comments = spideryarn.table(
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
-    check("comments_status", sql`${t.status} in ('pending','done','error')`),
+    /**
+     * `none` is every comment made from 2026-08-28: the reader marked a passage
+     * and no model call was ever attempted. The other three keep their meaning,
+     * and `sweepOrphaned` in src/routes.ts still filters on exactly `pending`,
+     * so a bookmark is invisible to it without that function changing at all.
+     */
+    check("comments_status", sql`${t.status} in ('none','pending','done','error')`),
     check("comments_start", sql`${t.start} >= 0`),
+    /**
+     * An empty body is a different value to no body, and the client cannot be
+     * trusted to keep that straight across two stores and an archive
+     * round-trip. `exactOptionalPropertyTypes` makes `""` and absent different
+     * shapes in TypeScript; this makes them impossible in the database.
+     */
+    check("comments_body_nonempty", sql`${t.body} is null or length(btrim(${t.body})) > 0`),
     /**
      * Points at the IDENTITY. This is the whole design: the block's text can
      * vanish in a re-extraction and this row survives, because identities are
@@ -1152,6 +1182,23 @@ export const chatThreads = spideryarn.table(
     anchorBlockId: text("anchor_block_id"),
     anchorQuote: text("anchor_quote"),
     anchorStart: integer("anchor_start"),
+
+    /**
+     * A question about the article, or the reader saying what they took from
+     * it — which chooses the system prompt the whole conversation is answered
+     * with. See docs/plans/review-mode.md.
+     *
+     * **Written on insert only**, and `upsertThread`'s conflict clause does not
+     * name it, for a sharper version of the reason it does not name the anchor
+     * columns: every later turn of a review thread comes through that upsert,
+     * so a stale tab sending `kind: "chat"` would turn a review into a chat on
+     * its second question. The prompt would change, the list tag would change,
+     * and the transcript would still read as one conversation.
+     *
+     * `default 'chat'` is what makes the migration additive: every thread that
+     * existed before review mode is a chat, and no backfill is needed.
+     */
+    kind: text("kind").notNull().default("chat"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
@@ -1183,6 +1230,7 @@ export const chatThreads = spideryarn.table(
       columns: [t.articleId, t.anchorBlockId],
       foreignColumns: [blockIdentities.articleId, blockIdentities.blockId],
     }),
+    check("chat_threads_kind", sql`${t.kind} in ('chat','review')`),
   ],
 );
 
@@ -1249,6 +1297,21 @@ export const chatMessages = spideryarn.table(
     stopped: boolean("stopped").notNull().default(false),
     /** When the reader last rewrote this. User turns only; the old text is not kept. */
     editedAt: timestamp("edited_at", { withTimezone: true }),
+    /**
+     * Which stance produced this answer — review threads, assistant rows only.
+     *
+     * **Written with the PENDING row, never on finish**, which is the whole
+     * rule and the reason it is a column rather than something derived. An
+     * answer that crashed, errored, was stopped, or was buried by the sweep
+     * still has to say which instruction produced the words that did arrive,
+     * and a retry of that row inherits this field by name. Writing it on finish
+     * would leave every one of those blank.
+     *
+     * Null on every chat answer and every user turn, matching the filesystem
+     * store, which omits the key — `tests/store-roundtrip.test.ts` compares the
+     * two byte for byte, which is how `tools` was caught going missing.
+     */
+    stance: text("stance"),
     createdAt: createdAt(),
 
     /**
@@ -1282,6 +1345,18 @@ export const chatMessages = spideryarn.table(
     check("chat_messages_role", sql`${t.role} in ('user','assistant')`),
     check("chat_messages_status", sql`${t.status} in ('pending','done','error')`),
     check("chat_messages_ordinal", sql`${t.ordinal} >= 0`),
+    check(
+      "chat_messages_stance",
+      sql`${t.stance} is null or ${t.stance} in ('balanced','respond','socratic','signposts')`,
+    ),
+    /* A stance is an instruction to the model, so only the model's own rows may
+       carry one. Without this, a bug that wrote it onto the reader's message
+       would be invisible: nothing reads it there, and the transcript would look
+       right. */
+    check(
+      "chat_messages_stance_assistant_only",
+      sql`${t.stance} is null or ${t.role} = 'assistant'`,
+    ),
     foreignKey({
       name: "chat_messages_thread_fk",
       columns: [t.articleId, t.threadId],

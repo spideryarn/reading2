@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { throttle, useQueryState } from "nuqs";
-import type { Article, Block, BlockId, GlossaryEntry } from "../types.js";
+import type { Article, Block, BlockId, ReviewStance, ThreadKind } from "../types.js";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -37,7 +37,7 @@ import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
-import { useGlossary, useGlossaryTerms } from "./useGlossary.js";
+import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
 import { useSummaries } from "./useSummaries.js";
@@ -94,6 +94,7 @@ import {
   spineParam,
   textParam,
   threadParam,
+  type Mode,
 } from "./params.js";
 import {
   arrivalTarget,
@@ -654,7 +655,15 @@ function Reader({
    * through the layout arithmetic. That was the point of choosing a dialog.
    */
   const [note, setNote] = useQueryState("note", noteParam);
-  const { comments, retry, deepen, remove, error: commentError } = useComments(slug);
+  const {
+    comments,
+    loaded: commentsLoaded,
+    loadFailed: commentsLoadFailed,
+    retry,
+    deepen,
+    remove,
+    error: commentError,
+  } = useComments(slug);
 
   /**
    * The floating chat, and the passage it is about.
@@ -705,7 +714,28 @@ function Reader({
    * leaving the mode brings the panel back where the reader left it.
    */
   const overlay: ChatTarget | null =
-    mode === "chat" ? null : (chatDraft ?? (thread ? { kind: "thread", threadId: thread } : null));
+    mode === "chat" || mode === "review"
+      ? null
+      : (chatDraft ??
+        /* **Only a chat may be opened here, and that is not a tidy-up.**
+           `?thread=` survives leaving the mode, so a pasted
+           `?mode=toc&thread=<a review>` used to mount this dialog over a review
+           conversation — chat's UI, chat's composer, no stance picker, and the
+           next question answered with chat's prompt. Nothing on screen would
+           have said so. Gating on the summary's `kind` is what `ThreadSummary.kind`
+           exists for; a review with no matching summary simply opens nothing,
+           which is the same thing a stale id already did. GPT Sol's review of
+           docs/plans/review-mode.md, finding 7. */
+        /* **A positive test, not a negative one.** `?.kind !== "review"` was
+           the first version and had its default backwards: an *unknown* thread
+           — summaries not fetched yet, or a stale id — came out as a chat, so a
+           review URL opened the floating chat dialog for a moment on every
+           load, and a missing thread sat on "Starting…" forever. Asking for
+           `=== "chat"` means the overlay opens only for a thread we can see is
+           one. GPT Sol's review of the built code, finding 3. */
+        (thread && chatAnchors.summaries.find((t) => t.id === thread)?.kind === "chat"
+          ? { kind: "thread" as const, threadId: thread }
+          : null));
 
   /**
    * **Every** glossary term, so every one of them can be underlined in the
@@ -720,11 +750,23 @@ function Reader({
    * that principle now is the *card*: the line is quiet and standing, and the
    * explanation still only arrives when the reader points at something.
    *
-   * `useGlossaryTerms` rather than `useGlossary`, which is the whole of why
-   * `GlossaryBand` still exists: this is one GET and no job poller. See its
-   * docstring.
+   * **One read, shared with the band.** `useGlossaryRead` is the opening fetch
+   * — the list and the three facts about whether it still describes the article
+   * and the reader — and `GlossaryBand` layers the job poller and the verbs on
+   * top of it rather than starting from `loading` of its own. Until 2026-08-27
+   * it fetched the same URL again, so the panel said "Looking for a glossary…"
+   * while the list it wanted was already on screen, underlined, in the prose
+   * behind it. docs/plans/glossary-read-latency.md.
+   *
+   * The band does still *revalidate* when it opens — see `useGlossaryRead` for
+   * why it has to — but behind the list, never in front of it.
+   *
+   * `GlossaryBand` still exists for the reason it always did, which was never
+   * the opening fetch: `useJobs` polls for ever, and a reader who never opens
+   * the band should not pay for a poller.
    */
-  const { entries: terms, setEntries: setTerms } = useGlossaryTerms(slug);
+  const glossaryRead = useGlossaryRead(slug);
+  const terms = glossaryRead.glossary?.entries ?? [];
 
   /**
    * The glossary term the reader has *pressed* in the panel, of the many now
@@ -1299,7 +1341,6 @@ function Reader({
       {!overlay && openComment && (
         <CommentDialog
           comment={openComment}
-          slug={slug}
           position={positionOf(ordered, note)}
           total={ordered.length}
           pending={othersPending}
@@ -1367,19 +1408,25 @@ function Reader({
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —
           see ChatBand. */}
-      {mode === "chat" && (
-        <ChatBand slug={slug} blocks={blockText} onJump={jumpTo} />
+      {/* One component, mounted by two modes, keyed so that switching between
+          them starts clean rather than carrying the other's open conversation,
+          focus nonce and stance across. See ConversationBand. */}
+      {(mode === "chat" || mode === "review") && (
+        <ConversationBand
+          key={mode}
+          slug={slug}
+          blocks={blockText}
+          onJump={jumpTo}
+          kind={mode === "review" ? "review" : "chat"}
+          onMode={setMode}
+        />
       )}
       {mode === "glossary" && (
         <GlossaryBand
           slug={slug}
+          read={glossaryRead}
           onJump={jumpTo}
           onSelected={setTerm}
-          /* The band holds the fresher list while it is open — the reader may
-             have just generated, appended to or reset it — and the underlines
-             in the prose are drawn from the copy up here. So it pushes, exactly
-             as it pushes the selection. */
-          onEntries={setTerms}
         />
       )}
       {mode === "summary" && (
@@ -1458,6 +1505,8 @@ function Reader({
         }}
         drawer={{
           comments: ordered,
+          loaded: commentsLoaded,
+          loadFailed: commentsLoadFailed,
           panel,
           onPanel: (next) => void setPanel(next),
           onOpenComment: (id) => {
@@ -1647,19 +1696,42 @@ function IdeasBand({
  * chat mode, and reading it in `Reader` would put a parameter subscription on
  * every render of the reading view for a value only this component uses.
  */
-function ChatBand({
+function ConversationBand({
   slug,
   blocks,
   onJump,
+  kind,
+  onMode,
 }: {
   slug: string;
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
+  /**
+   * Which mode mounted this — chat, or review.
+   *
+   * **One component for both, and not two.** Everything in here is the same for
+   * either: one `useChat(slug)`, one `?thread=`, one focus nonce, one
+   * once-per-visit latch. A near-copy would have been a second chat state
+   * machine beside the first, which is what GPT Sol's review of
+   * docs/plans/review-mode.md (finding 7) said not to build — and the
+   * unmount/remount path around this one already has a race worth not having
+   * twice.
+   */
+  kind: ThreadKind;
+  /**
+   * Switch mode, for when the reader opens a thread of the *other* kind.
+   *
+   * The list is shared (Greg's call, 2026-08-27), so a review is reachable from
+   * chat mode and vice versa. Opening one has to move `?mode=` as well as
+   * `?thread=` or the conversation would be answered with the wrong prompt.
+   */
+  onMode(next: Mode): void;
 }) {
-  useRenderCount("ChatBand");
+  useRenderCount("ConversationBand");
   const {
     threads,
     loaded,
+    loadFailed,
     recovering,
     send,
     retry,
@@ -1690,9 +1762,19 @@ function ChatBand({
    */
   const [focusNonce, setFocusNonce] = useState(0);
   const startNew = useCallback(() => {
-    void setThread(begin());
+    void setThread(begin(kind));
     setFocusNonce((n) => n + 1);
-  }, [begin, setThread]);
+  }, [begin, setThread, kind]);
+
+  /**
+   * How many conversations **of this kind** the reader has.
+   *
+   * The list is shared, so `threads.length` is the wrong count for the latch
+   * below: a reader with three chats and no reviews would press Review and be
+   * shown three chats, which is not what "start a new one if there are none"
+   * ever meant. GPT Sol's review of docs/plans/review-mode.md, finding 7.
+   */
+  const ownKind = threads.filter((t) => t.kind === kind).length;
 
   /**
    * **An empty chat opens a conversation rather than an empty list.**
@@ -1736,25 +1818,51 @@ function ChatBand({
    * question being sent and the server having written it down.
    */
   const started = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads nothing, and changing article is exactly when the latch stops meaning anything
+  /* `kind` as well as `slug`. This component is now mounted by two modes, and
+     React will reuse the instance if it ever renders in the same position for
+     both — at which point the latch would still be spent from the mode the
+     reader just left, and arriving in the other one would show a list rather
+     than a fresh conversation. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads nothing, and changing article or mode is exactly when the latch stops meaning anything
   useEffect(() => {
     started.current = false;
-  }, [slug]);
+  }, [slug, kind]);
 
 
   useEffect(() => {
     if (!loaded || started.current) return;
-    if (threads.length === 0) {
+    if (ownKind === 0) {
       started.current = true;
       startNew();
     }
-  }, [loaded, threads.length, startNew]);
+  }, [loaded, ownKind, startNew]);
   /* Read, never written, and not a subscription: `?at=` is already tracked by
      useReadingPosition in the parent, so this component re-renders whenever it
      changes and `location.search` is current. It is passed to the model so that
      "this bit" and "what he just said" resolve to where the reader actually is.
      Same read-at-render trick Dock.tsx uses for its carried query string. */
   const at = new URLSearchParams(location.search).get("at");
+
+  /**
+   * The stance the next review answer will be asked for.
+   *
+   * **Not in the URL**, for the rule url-state.md keeps: it changes nothing on
+   * screen, only what the next answer is asked for. The closest existing thing
+   * is chat's profile checkbox, which is component state for the same reason.
+   *
+   * **Seeded from the last answer in the open conversation**, so a reader who
+   * chose Socratic and comes back tomorrow finds it still on Socratic — the
+   * stance is stored on every answer anyway, for the transcript's sake, so this
+   * memory is free. `picked` is what makes it a seed rather than a leash: once
+   * the reader has touched the control it is theirs, and reopening a thread
+   * does not overrule them mid-session.
+   */
+  const [picked, setPicked] = useState<ReviewStance | null>(null);
+  const open = threads.find((t) => t.id === thread);
+  const lastStance = [...(open?.messages ?? [])]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.stance)?.stance;
+  const stance: ReviewStance = picked ?? lastStance ?? "balanced";
 
   return (
     <ChatPanel
@@ -1763,9 +1871,25 @@ function ChatBand({
          this is true, because a conversation minted before the first fetch
          lands is wiped by it. See the composer under `ThreadList`. */
       loaded={loaded}
+      loadFailed={loadFailed}
       threads={threads}
       threadId={thread}
-      onThread={(id) => void setThread(id)}
+      /**
+       * Open a conversation — and follow it into its own mode if it is not the
+       * one we are in.
+       *
+       * The list is shared, so a `review` row is pressable from chat mode.
+       * Moving `?thread=` without `?mode=` would leave a review open in a panel
+       * that asks with chat's prompt and shows no stance picker, and the
+       * transcript would give no sign why. Both setters fire in the same event,
+       * so they land in one navigation rather than putting a chat-mode-plus-
+       * review-thread entry on the Back stack in between.
+       */
+      onThread={(id) => {
+        const target = id ? threads.find((t) => t.id === id) : null;
+        if (target && target.kind !== kind) onMode(target.kind === "review" ? "review" : "chat");
+        void setThread(id);
+      }}
       onNew={startNew}
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
@@ -1773,7 +1897,22 @@ function ChatBand({
       onSend={(question, useProfile) => {
         // `send` returns the thread it went to, minted here when this is a new
         // conversation — so the URL can name it before the request lands.
-        const id = send(thread, question, at, useProfile, (corrected) => void setThread(corrected));
+        /* The OPEN conversation's kind where there is one, and this mode's
+           where there is not — a first message is what decides a new thread's
+           kind, and after that the thread decides. The server refuses a kind
+           that contradicts an existing thread rather than taking our word for
+           it, so this being wrong is a 409 rather than a corrupted transcript. */
+        const sendKind = open?.kind ?? kind;
+        const id = send(
+          thread,
+          question,
+          at,
+          useProfile,
+          (corrected) => void setThread(corrected),
+          undefined,
+          sendKind,
+          sendKind === "review" ? stance : undefined,
+        );
         if (id !== thread) void setThread(id);
       }}
       /* The box under the list. `null` rather than `thread` is the whole
@@ -1784,7 +1923,18 @@ function ChatBand({
          the reader who typed to start it should still have a caret when it
          opens, in the composer that has just replaced the one they typed into. */
       onSendNew={(question, useProfile) => {
-        const id = send(null, question, at, useProfile, (corrected) => void setThread(corrected));
+        /* `null` for the thread, so this mints a new one — and therefore this
+           mode's kind, not any open conversation's. */
+        const id = send(
+          null,
+          question,
+          at,
+          useProfile,
+          (corrected) => void setThread(corrected),
+          undefined,
+          kind,
+          kind === "review" ? stance : undefined,
+        );
         void setThread(id);
         setFocusNonce((n) => n + 1);
       }}
@@ -1806,18 +1956,29 @@ function ChatBand({
       blocks={blocks}
       focusNonce={focusNonce}
       error={error}
+      kind={kind}
+      stance={stance}
+      onStance={setPicked}
     />
   );
 }
 
 /**
- * The glossary, and the fetch that belongs to it.
+ * The glossary's jobs and verbs. The read itself belongs to `Reader`.
  *
- * A component of its own for the reason `ChatBand` above is: **`useGlossary`
- * fetches on mount** — and polls the job list while it is alive — so calling it
- * up in `Reader` would charge every reader of every article for a list almost
- * none of them will open. Hooks cannot be called conditionally, so the
- * condition has to be a component boundary.
+ * A component of its own for the reason `ChatBand` above is — but **no longer
+ * the same reason it used to be**, and the old one is worth deleting rather
+ * than leaving to mislead. It used to say: `useGlossary` fetches on mount, so
+ * calling it up in `Reader` would charge every reader of every article for a
+ * list almost none of them will open. That stopped being true on 2026-08-26,
+ * when the dotted underlines became a standing property of the article and the
+ * list had to be fetched for everyone anyway.
+ *
+ * What survives is the other half: **`useJobs` polls the job list for ever**,
+ * and that is a request every eight seconds for the life of the panel. A reader
+ * who never opens the band should not pay for a poller. Hooks cannot be called
+ * conditionally, so the condition has to be a component boundary — this one.
+ * The band's own mount revalidation rides on the same boundary.
  *
  * `?term=` and `?sort=` live here too, for the same reason: both are
  * meaningless outside glossary mode, and reading them in `Reader` would put two
@@ -1831,18 +1992,25 @@ function ChatBand({
  */
 function GlossaryBand({
   slug,
+  read,
   onJump,
   onSelected,
-  onEntries,
 }: {
   slug: string;
+  /**
+   * The read, owned by `Reader`.
+   *
+   * There is no `onEntries` any more, and its absence is the change: the list
+   * used to be fetched twice and pushed back up from here, which needed a
+   * `pushed` ref to stop the slower copy overwriting the fresher one. One
+   * owner, one list, nothing to push.
+   */
+  read: GlossaryRead;
   onJump(id: BlockId): void;
   onSelected(selection: TermSelection | null): void;
-  /** The list itself, up to `Reader`, which is where the prose's marks are drawn. */
-  onEntries(entries: GlossaryEntry[]): void;
 }) {
   useRenderCount("GlossaryBand");
-  const glossary = useGlossary(slug);
+  const glossary = useGlossary(slug, read);
   const [termId, setTermId] = useQueryState("term", termParam);
   const [sort, setSort] = useQueryState("sort", sortParam);
   /* Null is "nobody has touched the threshold", which the panel resolves to
@@ -1860,32 +2028,6 @@ function GlossaryBand({
       selected ? { id: selected.id, forms: formsOf(selected), blocks: selected.blocks } : null,
     );
   }, [selected, onSelected]);
-
-  /* And the list. `glossary.glossary` is a fresh object only when it has
-     actually been refetched, so this fires on load and on each of the three
-     verbs, not on every render.
-
-     **Keyed on `status`, not on the entries being truthy**, which is a bug fix.
-     `reset()` deletes the artefact and sets `glossary` to null while the new
-     one is written, so there are no entries to push — and a bare `if (entries)`
-     therefore pushed nothing at all, leaving the prose underlined from a list
-     the reader had just thrown away, for as long as the regeneration took and
-     for ever if it failed. `none` is a real answer and has to be said out loud.
-     Found by a GPT Sol review, 2026-08-26.
-
-     `loading` and `error` say nothing, on purpose: neither is a claim that the
-     article has no terms, and pushing `[]` for them would blink every underline
-     out and back on each mount of the band.
-
-     No cleanup that clears it, unlike the selection below: leaving glossary
-     mode must take the *highlight* off the pressed term, but the underlines are
-     not a property of the mode any more and must survive the band closing. */
-  const status = glossary.status;
-  const entries = glossary.glossary?.entries;
-  useEffect(() => {
-    if (status === "ready" && entries) onEntries(entries);
-    else if (status === "none") onEntries([]);
-  }, [status, entries, onEntries]);
 
   /* Leaving glossary mode must take the *highlight* off the pressed term. Not
      the underlines, which since 2026-08-26 are a standing property of the
@@ -1959,7 +2101,7 @@ function SearchBand({
   onOpenHit(next: string | null): void;
 }) {
   useRenderCount("SearchBand");
-  const { runs, loaded, ask, retry, remove, recolour, error } = useSearch(slug);
+  const { runs, loaded, loadFailed, ask, retry, remove, recolour, error } = useSearch(slug);
   const [match, setMatcher] = useQueryState("match", matchParam);
   const [find, setFind] = useQueryState("find", findParam);
   /* `?match=` has no default of its own, so that a URL carrying `?find=` and
@@ -2114,6 +2256,7 @@ function SearchBand({
       }}
       runs={runs}
       loaded={loaded}
+      loadFailed={loadFailed}
       active={active}
       slots={slots}
       onToggle={(id, on) => {

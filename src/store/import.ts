@@ -695,6 +695,13 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
           anchorBlockId: thread.anchor?.blockId ?? null,
           anchorQuote: thread.anchor && "quote" in thread.anchor ? thread.anchor.quote : null,
           anchorStart: thread.anchor && "start" in thread.anchor ? thread.anchor.start : null,
+          /* A `chat.json` written before review mode has no `kind`; the column
+             is `not null`, so it needs one here rather than a null. `"chat"` is
+             the same default `normaliseKind` applies in src/chat.ts and the same
+             one the column declares — three places, all saying chat, because
+             the alternative to a default here is a failed import of every
+             pre-existing file. */
+          kind: thread.kind === "review" ? "review" : "chat",
         })
         .onConflictDoNothing();
 
@@ -719,6 +726,10 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
             error: message.error ?? null,
             stopped: message.stopped ?? false,
             editedAt: message.editedAt ? new Date(message.editedAt) : null,
+            /* See the note beside this field in src/store/export.ts: without
+               it, a restore drops the stance from every review answer and says
+               nothing. */
+            stance: message.stance ?? null,
             createdAt: new Date(message.createdAt),
           })
           .onConflictDoNothing();

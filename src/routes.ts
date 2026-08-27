@@ -976,16 +976,35 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, "Expected { threadId, question }");
   }
   /* Two limits, chosen by what the box actually is — see `MAX_REVIEW_CHARS`.
-     Note this reads the REQUEST's kind, which is the one case where that is
-     right: the cap is on the bytes in this body, and they are already here. */
-  const cap = wantedKind === "review" ? MAX_REVIEW_CHARS : MAX_QUESTION_CHARS;
+
+     **The request's kind is not enough**, and reading only it was a bug: an
+     edit sends no kind at all (it is refused one, just above), so every edit
+     was measured against chat's 4,000 and a 4,001-character review could be
+     created and then never rewritten. So the *thread's* kind decides whenever
+     there is a thread, and the request's is the fallback for the turn that
+     creates one. GPT Sol's review of the built code, finding 5.
+
+     Cheap: `chatStore.load` is called a few lines down anyway. And a smuggled
+     `kind: "review"` on a thread that is a chat buys nothing — the 409 below
+     refuses it before any model call. */
+  const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
+  const askingReview = (storedKind ?? wantedKind) === "review";
+  const cap = askingReview ? MAX_REVIEW_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
       413,
-      wantedKind === "review"
+      askingReview
         ? `A review may be at most ${MAX_REVIEW_CHARS} characters`
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );
+  }
+  /* **A stance is meaningless on a chat, so it is refused rather than stored.**
+     The check constraint only says "assistant rows only"; without this, a
+     request naming a stance and no kind writes one onto a chat answer, where
+     nothing reads it and the transcript looks right. An invariant the database
+     cannot express is one the route has to. GPT Sol's review, finding 7. */
+  if (stance !== undefined && !askingReview) {
+    throw httpError(400, "A stance only applies to a review");
   }
   /* **An anchor belongs to a turn that creates a thread, and to no other.**
      `withRetry` and `withEdit` do not go through `withTurn` at all, so an
