@@ -303,6 +303,18 @@ Each pinned to a specific way of being wrong, and each watched red first.
    Vercel rather than about one process.
 10. **Every CLI still writes its file**, in the same commit as its stage's conversion.
 
+## Two things the reviews left open, and they are both this document's
+
+1. **The claimant's deadline is cooperative.** The timer aborts a signal; a stage that ignores it
+   runs on. So the lease can still lapse under a claimant that is alive, `failExpired` marks the job
+   interrupted, and the stage then completes its **filesystem** writes — which nothing fences. Its
+   job transition is refused, but the artefacts have already landed. Reviewed twice, still open, and
+   it closes here rather than in the queue: the fix is the artefact write being inside the fenced
+   transaction, not a better timer.
+2. **`beginStep` → stage → `finishStep` carries no job attempt.** Same sentence from the other end,
+   and the honest answer to *"does every durable write carry the fence?"* is **no**, and will be no
+   until landing D.
+
 ## Open
 
 1. **`revision_step_runs` needs `attempt_id`.** One nullable column, one migration. Nullable because
