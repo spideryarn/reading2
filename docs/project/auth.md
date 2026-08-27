@@ -45,13 +45,18 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) | the browser client. One of them, module scope, `flowType: "pkce"` |
 | [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for all 31 call sites — and `leavingFetch` for `pagehide` |
 | [`src/web/useSession.ts`](../../src/web/useSession.ts) | who is signed in, as state |
-| [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, a screenshot of the reading view, and the buttons |
+| [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, four screenshots of it working, and the buttons |
 | [`src/web/SignInControls.tsx`](../../src/web/SignInControls.tsx) | the Google button and the email form, and every line of auth logic in them. Two pages render it |
 | [`src/web/SignInPage.tsx`](../../src/web/SignInPage.tsx) | the compact screen at `/login`, for a password-reset landing |
 | [`src/web/AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where Google returns to, and why it reads the URL itself |
 | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) | where the reader was going, in `sessionStorage`, with three rules |
 | [`src/web/AccountSection.tsx`](../../src/web/AccountSection.tsx) | signed in as / sign out, on `/profile` |
 | [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) | the PDF link, because a navigation carries no header |
+| [`scripts/check-remote-auth.sh`](../../scripts/check-remote-auth.sh) | which providers the **remote** project has on. Two controls in every run |
+| [`scripts/supabase-auth-config.ts`](../../scripts/supabase-auth-config.ts) | `show` / `apply` the project's auth settings through the Management API. **Not** `supabase config push`, and the header says why |
+| [`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts) | whose shelf a sign-in lands on — run before and after the first Google sign-in |
+| [`scripts/check-google-redirect.sh`](../../scripts/check-google-redirect.sh) | does Google accept a given redirect URI for our client. Checks a known-bad one every time |
+| [`scripts/check-production-gate.sh`](../../scripts/check-production-gate.sh) | the live site refuses an anonymous request |
 
 ## The four things worth knowing before you touch any of it
 
@@ -70,7 +75,7 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 ## The signed-out page is the landing page
 
 Since 2026-08-27, no session shows you [`LandingPage.tsx`](../../src/web/LandingPage.tsx) rather
-than a bare form: what the thing is, a screenshot of the reading view, and the sign-in buttons
+than a bare form: what the thing is, four screenshots of it working, and the sign-in buttons
 themselves. Greg asked for it and made both of the calls that shape it.
 
 **The buttons are on the page.** Not a Sign in link to `/login` — a landing page whose only control
@@ -94,27 +99,75 @@ Access is not open — see [§ Whose data is it](#whose-data-is-it); the alterna
 plainly is a Google button that works and then hands a stranger a reading tool somebody else is
 paying for.
 
-The screenshot lives in `src/web/assets/` and is of one article — *The Mythology of AI
+The screenshots live in `src/web/assets/` and are all of one article — *The Mythology of AI
 Consciousness*, which is on the public web with nothing sensitive in it. Imported through Vite
-rather than dropped in `public/`, so it is content-hashed and a redeploy cannot serve a stale one.
+rather than dropped in `public/`, so they are content-hashed and a redeploy cannot serve a stale one.
 
-**There is one and there were meant to be four**, and the missing three are worth recording because
-the cause was environmental rather than a decision. A glossary card, an explanation over a selected
-sentence and the force diagram were all going to be shown; partway through capturing them Chrome's
-window went `visibilityState: "hidden"`, which paints every screenshot solid black, and nothing
-reachable from an agent's side raises an occluded window — two Chrome instances were running and
-AppleScript addresses only the other one. This is a new entry on
-[browser-testing.md](browser-testing.md)'s list of ways the browser lies to you, and it is a
-particularly quiet one: the capture *succeeds*, at the right dimensions, and returns a black
-rectangle. Greg's call was one more attempt and then stop, so those three features are described in
-prose on the page instead of shown.
+**There are four, and getting them took two goes.** The first attempt produced one, and the reason
+is worth recording because it was environmental rather than a decision: partway through capturing
+them Chrome's window went `visibilityState: "hidden"`, which paints every screenshot solid black,
+and nothing reachable from an agent's side raises an occluded window — two Chrome instances were
+running and AppleScript addresses only the other one. This is a new entry on
+[browser-testing.md](browser-testing.md)'s list of ways the browser lies to you, and a particularly
+quiet one: the capture *succeeds*, at the right dimensions, and returns a black rectangle. The way
+past it, on 2026-08-27, was Greg taking the other three himself, with the machine's own screenshot
+key.
 
-Adding them later is small: capture at the same aspect ratio, drop the file in `assets/`, and reuse
-the `Shot` component that is already there. [`tests/landing-assets.test.ts`](../../tests/landing-assets.test.ts)
-checks the shape of whatever the page imports, which is what stops a shot taken at a different window
-size from making the page jump as it loads — and it is written against JPEG as well as PNG, because
-JPEG is what the capture tool produces and re-encoding one as a PNG quadruples the bytes without
-recovering anything.
+That is what changed the rules the page had been following, and both changes are the same lesson:
+
+- **Each shot declares its own width and height.** There was one `SHOT_W`/`SHOT_H` pair for the
+  whole page, which held while every capture came from one browser window on one afternoon. Real
+  screenshots of real features are not one shape — two of these are portraits, one is a wide hero,
+  one a landscape card — and a rule saying otherwise has exactly one way out, which is cropping good
+  pictures to please a test. So the numbers sit in a `SHOTS` record beside the file each belongs to,
+  and [`tests/landing-assets.test.ts`](../../tests/landing-assets.test.ts) reads that record and
+  checks every entry against the bytes on disk, in both directions: an import with no entry is a
+  picture drawn with no space reserved, an entry with no import is a file nothing points at.
+- **PNG, quantised, rather than JPEG.** The first shot was a JPEG because the browser automation
+  tool produces JPEG. A person's screenshot key produces PNG, and that is the better format here
+  anyway: JPEG rings visibly around small light text on a near-black ground, and `pngquant` at
+  65–92 takes a UI screenshot — a few dozen flat colours — below what JPEG manages regardless. The
+  hero is 119 KB against 280 KB as a JPEG; all four together are under 280 KB.
+
+Adding one later: capture it, run `pngquant --quality 65-92 --speed 1`, downscale to about twice the
+width it will be drawn at (the column is 720 px, so 1440), drop it in `assets/`, and give it a
+`SHOTS` entry with the real numbers. The `Shot` component takes a max-width utility, which is how
+the portraits avoid filling the column.
+
+## The button on the live site does not work yet
+
+**2026-08-27.** Greg pressed *Continue with Google* on `spideryarn.com` and got a page of JSON on
+`supabase.co`:
+
+```json
+{"code":400,"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}
+```
+
+Nothing in the sign-in code is wrong. The button built the right authorize URL, with the right
+`redirect_to` and a PKCE challenge, and handed the browser over; the project answered that Google is
+switched off. Two settings on two dashboards, neither of them in this repo, and **only Greg can make
+the first of them** — Google Cloud Console blocks agents twice over.
+[google-sign-in-production.md](../plans/google-sign-in-production.md) is the whole of it: what is
+measured, the two scripts, the order, and the check that says whether it took.
+
+**Two things came out of it that are about this app rather than about a dashboard.**
+
+**A misconfigured provider now shows our own sentence, not somebody else's JSON.**
+`googleSignInAvailable()` in [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) asks the
+project whether Google is on, **on the click** and not on first paint, before `signInWithOAuth`
+navigates. There is no other place to catch this: that call makes no request, it assigns
+`location`, so the 400 exists only after our code has stopped running on an origin that is not ours.
+**It fails open** — offline, blocked, slow, a body we do not recognise, `google` missing rather than
+`false`, all proceed exactly as before. A preflight that refuses when it is merely confused does not
+prevent a bad error message, it prevents signing in, on a working site, for a reason the reader
+cannot see. Eight tests, five of them that one point.
+
+**Whether the first Google sign-in gives Greg his own shelf is not obvious**, and it is the failure
+that would look most like data loss. Every row carries an `owner_id`, the existing articles belong to
+an account created through the admin API before there was any way to sign in, and a Google sign-in
+either links to it or makes a second one — in which case everything works and the shelf is empty.
+[`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts) is the before-and-after
+reading. GPT Sol raised it; it is the one thing in that review no spec could settle.
 
 ## What auth is for here
 
@@ -294,18 +347,21 @@ middleware not mounted on every route, a verify call that silently accepts an un
 
 ## What is not done
 
-- **Production.** Google has never been told this project's callback URI, the remote project has
-  Google switched off, and no `VITE_*` variable is set on Vercel. Until all three,
-  the deployed site has a gate and no way through it. The steps, and the order that avoids
-  deploying a blank page, are in
-  [auth-ui-and-production.md](../plans/auth-ui-and-production.md#what-has-to-be-true-before-this-is-promoted).
+- **Google sign-in in production**, still, as of 2026-08-27 — see
+  [§ The button on the live site does not work yet](#the-button-on-the-live-site-does-not-work-yet)
+  just below, which is the current state and the two things that fix it. The `VITE_*` half of this
+  bullet is done: both variables are on the Vercel project, Production only, and the site renders.
 - **A spend limit**, which is the control that is actually missing and always was.
 - **Email in production** needs SMTP: `mailer_autoconfirm` is false there, so a sign-up sends a
   confirmation and Supabase's built-in mailer is not for production use. Google works without it.
 
 ## Still open
 
-- **Anyone with a Google account can still sign in.** Ownership is what stops them reading your
+- **Anyone with a Google account can still sign in** — probably. It depends on whether the OAuth
+  consent screen is *Published* or still in *Testing*, in which case only its listed test users can,
+  and **nobody has looked**. Sol pointed out on 2026-08-27 that this bullet had been asserted rather
+  than measured, and nothing in this repo can read that setting. Ownership is what stops them reading
+  your
   library; nothing stops them making an account and spending your model budget on their own. A spend
   limit is the control for that, and it is the next bullet. If it turns out to be needed sooner,
   `isAllowed()` in [`src/auth.ts`](../../src/auth.ts) is the one line to change.

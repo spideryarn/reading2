@@ -30,40 +30,51 @@
  * "The bet". The original wording is in docs/project/vision.md and CLAUDE.md,
  * which is where it belongs.
  *
- * Anything claimed here has to stay true of what is built: the list of features
- * is what exists today, not a roadmap.
+ * Anything claimed here has to stay true of what is built, and that is a live
+ * cost rather than a slogan: this page said "six diagrams" for a day, having
+ * been written from a doc, and by the time anybody read it there were **four**
+ * — Greg cut half of them on 2026-08-27 (see diagram.ts). A claim here is
+ * checked against the code it describes, never against the doc about the code.
  *
  * ## The Alpha sign
  *
  * *"Also include a very prominent 'Alpha' sign"* — Greg, 2026-08-27. It is a
  * badge beside the wordmark **and** a full-width strip under it, because the
- * one thing a stranger must not conclude from a page with a screenshot on it is
+ * one thing a stranger must not conclude from a page with screenshots on it is
  * that this is a product they can sign up for. Access is one allowlisted email
  * (docs/project/auth.md), so the alternative to saying so is a Google button
  * that works and then refuses them.
  *
- * ## One screenshot, and why there is only one
+ * ## The screenshots
  *
- * The plan was four — the zoom, a glossary card, an explanation over a selected
- * sentence, and the force diagram. Only the first was captured. Chrome's window
- * went `visibilityState: "hidden"` partway through the session, which paints
- * every capture solid black, and nothing available from this side can raise an
- * occluded window (two Chrome instances were running and AppleScript reaches
- * only the other one). Greg's call was to take one more run at it and then stop
- * rather than keep grinding, so the other three features are described in prose
- * below instead of shown.
+ * Four, chosen by Greg on 2026-08-27, one per thing worth seeing rather than
+ * one per feature: the zoom (the whole idea, above the fold), the glossary and
+ * link card, search by meaning, and one of the diagrams. They are ordinary
+ * macOS screen captures of a real article — *The Mythology of AI Consciousness*
+ * by Anil Seth, which is on the public web and has nothing sensitive in it.
  *
- * **Adding them later is a small job**: capture at the same aspect ratio as
- * `zoom.jpg`, drop the files in `assets/`, and use the `Shot` component that is
- * already here. tests/landing-assets.test.ts checks the shape of whatever is
- * imported, so a shot taken at the wrong window size fails loudly instead of
- * making the page jump as it loads. Note that a capture is a JPEG rather than a
- * PNG — that is what the browser tool produces, and re-encoding it as a PNG
- * quadruples the bytes for no picture that anybody can tell apart.
+ * **Each shot declares its own width and height, and they all differ.** There
+ * used to be one `SHOT_W`/`SHOT_H` pair for the page, which was fine while
+ * every capture came from the same browser window at the same size. Real
+ * screenshots do not: two of these are portrait, one is a wide hero, one is a
+ * landscape card. So the numbers live in `SHOTS` beside the file each belongs
+ * to, and tests/landing-assets.test.ts reads that record and checks every entry
+ * against the bytes on disk. The numbers are not decoration — see the note at
+ * the foot of that test for the 1.95x-stretched front door they exist to
+ * prevent, and note that they only work because tailwind.css resets `img` to
+ * `height: auto`.
  *
- * The article in the shot is *The Mythology of AI Consciousness*, which is on
- * the public web and has nothing sensitive in it. Imported rather than dropped
- * in `public/` so Vite hashes it and a redeploy cannot serve a stale one.
+ * **PNG, and quantised, rather than JPEG.** The first shot was a JPEG because
+ * the browser automation tool produces JPEG; these came from macOS, which
+ * produces PNG, and a JPEG of small light text on a near-black ground rings
+ * visibly around every glyph. `pngquant` at 65–92 takes a UI screenshot — a few
+ * dozen flat colours — down further than JPEG does anyway: the hero is 119 KB
+ * against 280 KB as a JPEG, and all four together are under 280 KB. Anything
+ * added later: capture, `pngquant --quality 65-92 --speed 1`, and downscale to
+ * about twice the width it will be drawn at (the column is 720 px, so 1440).
+ *
+ * Imported rather than dropped in `public/` so Vite hashes them and a redeploy
+ * cannot serve a stale one.
  *
  * Styled with Tailwind utilities, which is the rule for chrome rather than a
  * preference — see docs/project/web-client.md § Tailwind and shadcn. Note the
@@ -71,44 +82,75 @@
  */
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SignInControls } from "./SignInControls.js";
-import zoomShot from "./assets/zoom.jpg";
+import glossaryShot from "./assets/glossary.png";
+import meaningShot from "./assets/meaning.png";
+import trailShot from "./assets/trail.png";
+import zoomShot from "./assets/zoom.png";
 
 /**
- * The width and height every screenshot is captured at.
+ * The screenshots, each with the size of the file it points at.
  *
- * One pair of numbers rather than one per file, because a figure whose stated
- * shape disagrees with its image is a layout that jumps once the image lands —
- * the exact thing the `width`/`height` attributes are there to prevent. On a
- * `width: 100%` image those attributes do nothing else: they reserve the
- * aspect ratio and that is all. Any shot added later must match, which is what
- * tests/landing-assets.test.ts enforces.
+ * `file` repeats what the import above already says, and that repetition is the
+ * point: it is the join tests/landing-assets.test.ts uses to put a declared
+ * width and height next to real bytes on disk. The test also checks that every
+ * import has an entry here, so adding a shot and forgetting its numbers fails
+ * loudly rather than reserving the wrong space on the page.
  */
-const SHOT_W = 1245;
-const SHOT_H = 815;
+const SHOTS = {
+  zoom: {
+    src: zoomShot,
+    file: "zoom.png",
+    w: 1440,
+    h: 715,
+    alt: "Three columns of increasingly detailed summary beside the article's own prose, with a tooltip open over one section's gist.",
+  },
+  glossary: {
+    src: glossaryShot,
+    file: "glossary.png",
+    w: 1342,
+    h: 828,
+    alt: "A card over the underlined phrase 'computational functionalism', explaining what the author means by it and where the phrase's link goes.",
+  },
+  meaning: {
+    src: meaningShot,
+    file: "meaning.png",
+    w: 886,
+    h: 1266,
+    alt: "The search panel in 'meaning' mode, listing five passages matching the description 'descriptions of what it feels like to be conscious', each with a confidence score.",
+  },
+  trail: {
+    src: trailShot,
+    file: "trail.png",
+    w: 654,
+    h: 981,
+    alt: "A scatter of coloured dots joined by a line, one dot per paragraph, with the current section named underneath.",
+  },
+} as const;
 
 /** One screenshot, with the sentence that says what you are looking at. */
 function Shot({
-  src,
-  alt,
+  shot,
   title,
   children,
   eager = false,
+  width = "",
 }: {
-  src: string;
-  alt: string;
+  shot: (typeof SHOTS)[keyof typeof SHOTS];
   title: string;
   children: React.ReactNode;
   eager?: boolean;
+  /** A max-width utility for the portrait shots, which must not fill the column. */
+  width?: string;
 }) {
   return (
-    <figure className="tw:my-12">
+    <figure className={`tw:my-12 ${width}`}>
       <img
-        src={src}
-        alt={alt}
-        width={SHOT_W}
-        height={SHOT_H}
-        /* The first shot is the one above the fold and the point of the page;
-           any others can wait until they are scrolled to. */
+        src={shot.src}
+        alt={shot.alt}
+        width={shot.w}
+        height={shot.h}
+        /* The hero is above the fold and is the point of the page; the rest can
+           wait until they are scrolled to. */
         loading={eager ? "eager" : "lazy"}
         className="tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card"
       />
@@ -126,7 +168,7 @@ function H2({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** One of the things the app does, in the list under "What it does". */
+/** One of the things the app does, in the list under "The rest of it". */
 function Feature({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <li>
@@ -164,12 +206,7 @@ export function LandingPage() {
         <SignInControls />
       </section>
 
-      <Shot
-        src={zoomShot}
-        alt="The reading view: three columns of increasingly detailed summary beside the article's own prose."
-        title="One article, every level of detail at once."
-        eager
-      >
+      <Shot shot={SHOTS.zoom} title="One article, every level of detail at once." eager>
         Sideways is how much detail; down is where you are in the piece. Move left or right and the
         text expands or contracts without you losing your place. The far right is always the
         author’s own words.
@@ -196,33 +233,75 @@ export function LandingPage() {
         without leaving the page. Finish holding something.
       </p>
 
-      <H2>What else it does</H2>
+      <H2>Every term the piece leans on</H2>
       <p>
-        One spine carries all of it — every block of the article has a stable id — so the rest come
-        cheap:
+        The words an author assumes you already have are where a hard piece loses you — and looking
+        one up means leaving. So they are underlined where they stand, and the card comes to you.
+      </p>
+      <Shot shot={SHOTS.glossary} title="What the author means, and what you have to bring.">
+        Two things, because they are two different problems: the sense this piece is using, written
+        from this piece, and the background you need from outside it. If the phrase is also a link,
+        the same card says where it goes — one card, not two racing for the same three words.
+      </Shot>
+
+      <H2>Search by what a passage says, not what it says exactly</H2>
+      <p>
+        Two matchers behind one box. <strong className="tw:text-foreground">words</strong> finds the
+        string. <strong className="tw:text-foreground">meaning</strong> takes a description —{" "}
+        <em>descriptions of what it feels like to be conscious</em> — and finds the passages that do
+        that, whatever words they happened to use.
+      </p>
+      <Shot
+        shot={SHOTS.meaning}
+        title="Every hit says how sure, and where."
+        width="tw:mx-auto tw:max-w-sm"
+      >
+        The number is the model’s own guess rather than a measurement, so the panel says so out loud
+        and hands you the slider. Hits are marked in the prose too, and the spine paints one lane
+        per question — the thing a list of thirty passages cannot show you.
+      </Shot>
+
+      <H2>The rest of it</H2>
+      <p>
+        One spine carries all of this — every block of the article has a stable id — so the rest
+        come cheap:
       </p>
       <ul className="tw:mt-4 tw:flex tw:flex-col tw:gap-4">
-        <Feature name="A glossary written from this piece.">
-          Every term the article leans on, underlined wherever it appears. Point at one and the card
-          says two things: what the author means by it here, and what you need to bring to it from
-          outside.
-        </Feature>
         <Feature name="Ask at the point of confusion.">
           Select a sentence and the model explains it — from the surrounding argument, and from the
           web when it needs to. The answer starts arriving in a second or two, and the article never
           leaves the screen.
         </Feature>
-        <Feature name="The shape of the argument.">
-          Six diagrams in the band beside the prose. Three draw the article’s tree. Three draw its
-          sections as a graph, joined by the distinctive words they share — the one relationship a
-          table of contents cannot hold.
+        <Feature name="Summaries at the length you pick.">
+          The whole piece, or any section of it, at any rung of the ladder. The shortest is already
+          on the page before anybody has paid for a model call.
         </Feature>
-        <Feature name="Search, summaries, and a chat that cites.">
-          Find a passage by its exact words or by what it says, marked in the prose. Summarise the
-          whole piece, or any part of it, at a length you pick. Ask a question and every claim in
-          the answer links back into the article.
+        <Feature name="A chat that cites.">
+          Ask a question and every claim in the answer links back into the article. It can search
+          the piece, pull a passage, or go to the web — and it cannot summarise for you, on purpose.
+        </Feature>
+        <Feature name="Anything you can read.">
+          A URL, or a PDF off your own machine. Both come out as the same article.
         </Feature>
       </ul>
+
+      <H2>And a picture of the shape</H2>
+      <p>
+        Four diagrams in the band beside the prose, one per kind of thing to say.{" "}
+        <strong className="tw:text-foreground">tree</strong> is the outline.{" "}
+        <strong className="tw:text-foreground">force</strong> joins sections by the distinctive
+        words they share — the one relationship an outline cannot hold. And two put one dot per
+        paragraph, placed by what that paragraph is about.
+      </p>
+      <Shot
+        shot={SHOTS.trail}
+        title="trail: reading order as a line through meaning."
+        width="tw:mx-auto tw:max-w-[19rem]"
+      >
+        Both axes are meaning, so a long jump is a change of subject. Dots far apart really are far
+        apart; dots close together may differ in what the projection threw away — which the strip
+        says in words rather than in a percentage.
+      </Shot>
 
       <H2>Three commitments</H2>
       <ul className="tw:mt-3 tw:flex tw:flex-col tw:gap-4">
@@ -255,7 +334,7 @@ export function LandingPage() {
       </section>
 
       <footer className="tw:mt-14 tw:border-t tw:border-border tw:pt-5 tw:text-xs tw:text-ink-faint">
-        Spideryarn — alpha. The screenshot is of <em>The Mythology of AI Consciousness</em> by Anil
+        Spideryarn — alpha. Every screenshot is of <em>The Mythology of AI Consciousness</em> by Anil
         Seth, read in Spideryarn.
       </footer>
     </main>
