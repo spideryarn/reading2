@@ -365,14 +365,15 @@ is read by nothing.
 | | |
 |---|---|
 | `SPIDERYARN_STORE=postgres` | which store serves reads. **Unset means `files`**, and on a host with no durable disk that is an empty shelf and a 200 |
-| `DATABASE_URL` | **set on Production, 2026-08-27** — `/api/health` reports `store: postgres` and reads work. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two. Note it is on Production only, so a preview deployment still has no database |
+| `DATABASE_URL` | **set on Production, 2026-08-27** — `/api/health` reports `store: postgres` and reads work. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two. **Production only, deliberately, as of 2026-08-27** — there is one remote database and no staging copy, so putting it on Preview would point every branch build at the real data. A preview therefore still has no database, and `SPIDERYARN_STORE=postgres` *is* set there, so a preview fails at the store rather than serving an empty shelf. That is the intended failure until somebody decides otherwise |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
-| `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production only, not Preview** (measured 2026-08-26) — so a preview deployment used to check anything will fail for a reason unrelated to whatever you are checking |
+| `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production and, since 2026-08-27, Preview.** It was Production-only until then (measured 2026-08-26), which meant a preview deployment used to check anything failed for a reason unrelated to whatever you were checking |
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
 | `ANTHROPIC_API_KEY` | the pipeline stages. Note it is *not* in `.env.local` — it comes from Greg's shell, so it is the easy one to forget |
 | `OPENROUTER_API_KEY` | explain, and chat |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. Production only, so a preview still throws. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
+| `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI, the pipeline, `npm run db:import`. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 
 ## `/api/health`, and why to look at it first
@@ -567,7 +568,12 @@ reader is told about it is the only symptom most people will ever report.
    called for cannot be granted `REFERENCES` on `auth.users`, and the grant that
    was supposed to do it is a silent no-op.
 2. ~~**An owner in `auth.users`**~~ — `greg@gregdetre.com` →
-   `001bb7a0-7720-4f1b-8b9d-1ee6e63d132a`. Still to set `SPIDERYARN_OWNER_ID` here.
+   `001bb7a0-7720-4f1b-8b9d-1ee6e63d132a`, and `SPIDERYARN_OWNER_ID` is set to it on
+   Production and Preview. **It is no longer what decides whose rows a request touches**
+   — inside an API request the signed-in user wins and the environment gets no vote, which
+   is the whole of [the ownership work](auth.md#whose-data-is-it). This variable now only
+   answers for the CLI, the pipeline and anything else with nobody to ask.
+   [`src/owner.ts`](../../src/owner.ts).
 3. ~~**`DATABASE_URL`**~~ — set on Vercel production 2026-08-27, transaction
    pooler, no `ssl*` parameters, verified by connecting with the exact value
    Vercel holds. `SPIDERYARN_OWNER_ID` too; the rest were already there.
