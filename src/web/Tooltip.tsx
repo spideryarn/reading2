@@ -70,11 +70,40 @@ interface Props {
   children: ReactElement<Record<string, unknown>>;
   /** Preferred side. Flipped automatically if it doesn't fit. */
   placement?: Placement;
+  /**
+   * **Stay on the side you asked for, and slide along it rather than moving.**
+   *
+   * By default `flip` watches *both* axes, so a tooltip that is simply too wide
+   * to centre on its trigger is treated as not fitting and is thrown onto the
+   * cross axis — a `placement="bottom"` card next to the left edge of the
+   * window comes out on the *right* of its trigger. That is usually the kindest
+   * thing to do for one tooltip in open space, and it is wrong for a **row of
+   * triggers**: the card lands on top of the neighbours the reader is about to
+   * hover, which is the row they are trying to read along.
+   *
+   * Measured in the diagram band, 2026-08-27: the two leftmost chips' cards
+   * went to the right and covered the two chips beside them, while the two
+   * rightmost chips — which had room to centre — behaved. So it looked like
+   * *most* of it worked, which is why it needed measuring rather than a glance.
+   * The dock's mode switcher does not hit this because its cards are narrower
+   * than the run of buttons they sit over.
+   *
+   * With this set, `flip` only ever swaps top↔bottom or left↔right, and `shift`
+   * below slides the card along the edge to fit. Off by default, because for a
+   * lone trigger the wider search really is better.
+   */
+  keepSide?: boolean;
   /** Extra class on the panel, for per-use sizing or accents. */
   className?: string;
 }
 
-export function Tooltip({ content, children, placement = "right", className }: Props) {
+export function Tooltip({
+  content,
+  children,
+  placement = "right",
+  keepSide = false,
+  className,
+}: Props) {
   const [open, setOpen] = useState(false);
   const arrowRef = useRef<SVGSVGElement>(null);
 
@@ -88,9 +117,14 @@ export function Tooltip({ content, children, placement = "right", className }: P
     whileElementsMounted: autoUpdate,
     middleware: [
       offset(10),
-      // `fallbackAxisSideDirection` lets a tooltip that fits on neither side
-      // drop to the top/bottom axis instead of jamming against the edge.
-      flip({ padding: 10, fallbackAxisSideDirection: "end" }),
+      /* `fallbackAxisSideDirection` lets a tooltip that fits on neither side
+         drop to the top/bottom axis instead of jamming against the edge —
+         unless the caller has asked to stay on one axis, in which case
+         `crossAxis: false` stops a card that is merely too wide to centre from
+         counting as "does not fit". See `keepSide` above. */
+      keepSide
+        ? flip({ padding: 10, crossAxis: false })
+        : flip({ padding: 10, fallbackAxisSideDirection: "end" }),
       shift({ padding: 10 }),
       arrow({ element: arrowRef, padding: 8 }),
     ],

@@ -143,6 +143,19 @@ second, cannot be styled, truncates at the OS's own idea of a line, and does not
 exist at all on a touch device — for a sentence whose job is to explain what a
 picture *is*, that is close to not being there.
 
+**And it needed `keepSide`**, which is a browser finding and not one any test
+would have caught. `placement="bottom"` was not what the first version did: the
+card is wider than a chip, and Floating UI's `flip` watches *both* axes, so a
+card that simply cannot be centred on a chip near the window's left edge counts
+as "does not fit" and gets thrown onto the cross axis. The two leftmost chips'
+cards came out to the **right**, on top of the two chips beside them — which are
+exactly the ones you are reading along towards. The two rightmost chips had room
+and behaved, so three quarters of it looked correct. `Tooltip`'s `keepSide` says
+*stay on this axis and let `shift` slide you along it*; it is opt-in, because for
+a lone trigger in open space the wider search really is better. The dock's mode
+switcher never hit this — its cards are narrower than the run of buttons they
+sit over.
+
 ## The graph Force is drawn from
 
 Force needs more than the tree, and
@@ -476,6 +489,13 @@ minimum, where WCAG 2.2's Target Size (Minimum) is 24 — because the two sit ne
 to each other and the cost of missing is going somewhere you did not mean to.
 Under the picture rather than over it, for the same reason the whole footer card
 is there.
+
+They are **outlines, not filled buttons**, and that is a correction. The first
+version gave them `--surface-raised`, which at 160×44 is two mid-grey slabs in a
+panel where every other control is a thin border — they read as *disabled* while
+live, which is the same mistake
+[design-css-overview.md](design-css-overview.md) records against the shelf's
+primary button. The fill now arrives on hover, where it means something.
 
 **They step by distinct row, not by node**, and that is the one piece of design
 in them. `layout.nodes` is in preorder, so on a Tree the root, part 1 and

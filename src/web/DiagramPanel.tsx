@@ -848,6 +848,13 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               <Tooltip
                 key={k}
                 placement="bottom"
+                /* The card is wider than a chip, and the leftmost chips sit
+                   near the window's edge — without this the card is thrown
+                   onto the cross axis and lands on top of the chips beside it,
+                   which are exactly the ones the reader is reading along
+                   towards. Found in a browser, 2026-08-27; Tooltip.tsx
+                   § keepSide has the measurement. */
+                keepSide
                 className="tip-soon"
                 content={
                   <>

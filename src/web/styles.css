@@ -5894,6 +5894,13 @@ td.text.has-hit[data-hues="8"] {
   padding: 0.25rem 0.7rem;
   border-top: 1px solid var(--rule);
 }
+/* **Transparent, not filled**, which is a correction rather than a preference.
+   The first pass gave these `--surface-raised`, and at 160×44 that is two big
+   mid-grey slabs in a panel whose every other control is a thin outline — they
+   read as *disabled* even when live, which is the same mistake
+   design-css-overview.md records against the shelf's primary button. Seen in a
+   browser, 2026-08-27. The border and the chevron carry the affordance; the
+   fill arrives on hover, where it means something. */
 .diag-step-btn {
   display: flex;
   align-items: center;
@@ -5901,15 +5908,20 @@ td.text.has-hit[data-hues="8"] {
   min-height: 44px;
   border: 1px solid var(--rule);
   border-radius: calc(var(--radius) * 0.5);
-  background: var(--surface-raised);
+  background: transparent;
   color: var(--ink-faint);
   cursor: pointer;
+  transition: color 120ms, border-color 120ms, background-color 120ms;
   /* The buttons fill their thirds, which is what makes them the biggest thing
      a finger can land on in this panel. */
   width: 100%;
 }
-.diag-step-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--rule-strong); }
-.diag-step-btn:active:not(:disabled) { background: var(--panel); }
+.diag-step-btn:hover:not(:disabled) {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  background: var(--highlight-wash);
+}
+.diag-step-btn:active:not(:disabled) { background: var(--surface-raised); }
 /* **Disabled, not hidden.** At the two ends of the article one of these does
    nothing, and a button that disappeared would move the other one under the
    reader's thumb between presses. */

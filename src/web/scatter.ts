@@ -691,6 +691,23 @@ function chainStep(i: number, total: number, here: number): number {
  * is. Same rule the vocabulary edges follow, and it is the most important thing
  * `diagram.md` records about them.
  */
+/**
+ * A word folded to something a reader would call the same chip.
+ *
+ * Not a stemmer and not trying to be: this exists only so that two lane labels
+ * cannot read alike, so the cost of being wrong is one lane using its second
+ * word instead of its first. `-ies → -y`, `-es`, `-s`, and nothing shorter than
+ * four letters is touched (which is `terms()`'s own floor anyway).
+ */
+function singular(word: string): string {
+  if (word.length < 5) return word;
+  if (word.endsWith("ies")) return `${word.slice(0, -3)}y`;
+  if (word.endsWith("sses") || word.endsWith("shes") || word.endsWith("ches")) return word.slice(0, -2);
+  if (word.endsWith("ss")) return word;
+  if (word.endsWith("s")) return word.slice(0, -1);
+  return word;
+}
+
 export function laneTerms(
   points: readonly ProjectionPoint[],
   blocks: readonly Block[],
@@ -746,7 +763,17 @@ export function laneTerms(
      `constitution` two of eight chips both read "claudes", which is a legend
      that names nothing and looks like a bug in the labelling. Found in a
      browser pass, 2026-08-27.
-     
+
+     **Compared on a crude singular, not on the string**, and that is the second
+     round of the same finding: exact matching let "claude" and "claudes" both
+     through, so the legend read the same to a human while every string in it
+     was distinct. A browser pass on 2026-08-27 found the first pair; the same
+     pass after the fix found the second. `terms()` deliberately does not stem —
+     it is a tf-idf vocabulary and stemming would merge words that earn their
+     own weights — so the fold lives here, where the only question is whether
+     two *chips* read alike, and where being crude costs nothing: the worst case
+     is a lane stepping down to its second word when it need not have.
+
      Lanes are served left to right, so an earlier lane keeps the shared word
      and a later one steps down its own list. That is arbitrary between the two,
      and it is the only rule here that could be: what matters is that the reader
@@ -755,8 +782,9 @@ export function laneTerms(
   return scored.map((ranked) => {
     const out: string[] = [];
     for (const { t } of ranked) {
-      if (out.length === 0 && taken.has(t)) continue;
-      if (out.length === 0) taken.add(t);
+      const key = singular(t);
+      if (out.length === 0 && taken.has(key)) continue;
+      if (out.length === 0) taken.add(key);
       out.push(t);
       if (out.length === 3) break;
     }
