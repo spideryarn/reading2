@@ -151,15 +151,20 @@ theme appears.
 
 ### Vertical rhythm
 
-`--rhythm` is `17px × 1.4 ≈ 23.8px`, and every vertical gap **in the article column** is a multiple
-of it: half a unit above and below each block (so one unit between paragraphs), one unit above a
-heading, a quarter below. Theirs, and it is arithmetic rather than evidence — but good arithmetic,
-and the thing that makes a page look considered rather than assembled.
+`--rhythm` is `17px × 1.4 ≈ 23.8px`. Theirs, and it is arithmetic rather than evidence — but good
+arithmetic, and the thing that makes a page look considered rather than assembled.
+
+Every vertical gap **in the article column** is a multiple of `--block-pad`, which is a third of a
+unit: one pad above and below each block (so two pads — two thirds of a unit — between paragraphs),
+two above a heading, half a pad below. **`--block-pad` is the one number to change** if the article
+wants more or less air; every rule is written as a multiple of it, so the heading spacing keeps its
+proportions on its own. It was half a unit until 2026-08-27, when Greg asked for a smaller gap
+between blocks.
 
 **Scoped to the reading column on purpose.** The chrome keeps its per-rule `rem` values; sweeping
 1,800 lines onto a scale is a different job, and Greg scoped this one to the article. Do not reach
-for `--rhythm` outside `.prose` / `td.text` — the one exception is the section of `/design` that
-exists to display it.
+for `--rhythm` or `--block-pad` outside `.prose` / `td.text` — the one exception is the section of
+`/design` that exists to display them.
 
 ### Content that cannot reflow
 

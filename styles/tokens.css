@@ -186,15 +186,27 @@
     --reading-weight: 450;
 
     /* ---- vertical rhythm (the article column only) --------------------- */
-    /* 17px x 1.4 = 23.8px, and every vertical gap in the reading column is a multiple of it:
-       one unit between paragraphs, one above a heading, a quarter below one. Theirs, from the
-       research doc named in this file's header — arithmetic rather than evidence, but good
-       arithmetic, and the thing that makes a page look considered rather than assembled.
+    /* 17px x 1.4 = 23.8px. Theirs, from the research doc named in this file's header —
+       arithmetic rather than evidence, but good arithmetic, and the thing that makes a page
+       look considered rather than assembled. Every vertical gap in the reading column is a
+       multiple of a THIRD of it; --block-pad below is that third, and it is what the rules
+       are written against.
 
        Deliberately scoped to the reading column. The chrome keeps its per-rule rem values;
        sweeping 1,800 lines of styles.css onto a scale is a different job and Greg scoped this
        one to the article (2026-08-25). Do not reach for --rhythm outside .prose / td.text. */
     --rhythm: calc(var(--reading-size) * 1.4);
+
+    /* Half the gap between two blocks — each row of the reading table pads by this much top
+       and bottom, so two neighbouring rows make a gap of two. **This is the number to change
+       if the article wants more or less air**, and changing it here moves the heading spacing
+       with it, because those are written as multiples of this rather than of --rhythm.
+
+       A third of a unit rather than a half: the gap between paragraphs went from one unit to
+       two thirds on 2026-08-27, when Greg asked for less (it had been a full unit since the
+       column was built). The ratios are untouched — a heading still gets twice the space above
+       it that it gets below, which is the part that carries meaning. */
+    --block-pad: calc(var(--rhythm) / 3);
 }
 
 /* The article column. Every zoom level renders into this, so the measure never changes

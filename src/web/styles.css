@@ -709,13 +709,16 @@ td.gist .title::before {
    reads ~7% faster but comprehends ~12% worse. The measure is applied to
    .prose rather than by using .reading-column, because that class centres
    itself and here the text is left-aligned in a table cell.  */
-/* Vertical rhythm. Every gap in this column is a multiple of --rhythm (17px x
-   1.4 = 23.8px, styles/tokens.css), so paragraph spacing and heading spacing
-   are related by arithmetic rather than by two people's taste on two days.
+/* Vertical rhythm. Every gap in this column is a multiple of --block-pad
+   (a third of --rhythm, styles/tokens.css), so paragraph spacing and heading
+   spacing are related by arithmetic rather than by two people's taste on two
+   days. **Change the size of the gaps in tokens.css, not here** — every rule
+   below is a multiple of that one number, and they only stay in proportion if
+   nobody hand-picks a value.
 
-   Half a unit top and bottom, so the gap BETWEEN two paragraphs — which is two
-   halves, one from each row — is exactly one unit. Padding rather than margin
-   because these are table cells and margins on a <td> do nothing. */
+   One pad top and bottom, so the gap BETWEEN two paragraphs — which is two
+   pads, one from each row — is two. Padding rather than margin because these
+   are table cells and margins on a <td> do nothing. */
 /* No rule between blocks here. Every other column is a list of separate
    answers, so a hairline between rows helps; this column is one continuous
    article, and a line across it every paragraph cuts the prose into strips.
@@ -723,7 +726,7 @@ td.gist .title::before {
    stays — that one divides this column from its neighbour, not paragraph from
    paragraph. */
 td.text {
-  padding: calc(var(--rhythm) / 2) 1.4rem calc(var(--rhythm) / 2) 5.2rem;
+  padding: var(--block-pad) 1.4rem var(--block-pad) 5.2rem;
   position: relative;
   border-bottom: 0;
 }
@@ -735,19 +738,19 @@ td.text {
    therefore floated exactly halfway between the section it ended and the
    section it introduced, attached to neither.
 
-   Above: 1 unit + the previous row's half = 1.5 units (35.7px).
-   Below: 0.25 units + the next row's half = 0.75 units (17.9px).
+   Above: 2 pads + the previous row's 1 = 3 pads (23.8px).
+   Below: half a pad + the next row's 1 = 1.5 pads (11.9px).
 
    The class comes off `block.kind`, which the splitter has always set
    (src/blocks.ts § classify) and which nothing was reading. */
 td.text.kind-heading {
-  padding-top: var(--rhythm);
-  padding-bottom: calc(var(--rhythm) / 4);
+  padding-top: calc(var(--block-pad) * 2);
+  padding-bottom: calc(var(--block-pad) / 2);
 }
 
-/* The first row has nothing above it to be separated from, so the extra unit
+/* The first row has nothing above it to be separated from, so the extra pad
    would just be a gap under the table head. */
-tbody tr:first-child td.text.kind-heading { padding-top: calc(var(--rhythm) / 2); }
+tbody tr:first-child td.text.kind-heading { padding-top: var(--block-pad); }
 
 tr.row-active td.text { background: var(--panel); }
 
@@ -2780,12 +2783,12 @@ td.text.has-hit[data-hues="8"] {
    variable, never as hand-picked numbers, so the sample still shows the real
    spacing rather than an imitation of it:
 
-     between blocks   half a unit each side of a row  = 1 unit
-     above a heading  1 unit + the previous half      = 1.5 units
-     below a heading  a quarter + the next half       = 0.75 units  */
-.design-sample > * + * { margin-top: var(--rhythm); }
-.design-sample > :is(h1, h2, h3, h4, h5, h6) { margin-top: calc(var(--rhythm) * 1.5); }
-.design-sample > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--rhythm) * 0.75); }
+     between blocks   one pad each side of a row     = 2 pads
+     above a heading  2 pads + the previous row's 1  = 3 pads
+     below a heading  half a pad + the next row's 1  = 1.5 pads  */
+.design-sample > * + * { margin-top: calc(var(--block-pad) * 2); }
+.design-sample > :is(h1, h2, h3, h4, h5, h6) { margin-top: calc(var(--block-pad) * 3); }
+.design-sample > :is(h1, h2, h3, h4, h5, h6) + * { margin-top: calc(var(--block-pad) * 1.5); }
 
 .design-row {
   display: flex;
@@ -2886,14 +2889,14 @@ td.text.has-hit[data-hues="8"] {
 .design-icon-cell em { font-style: normal; }
 .design-icon-cell .design-note { margin: 0; }
 
-/* The one place in the app outside the article where --rhythm is legitimate:
-   this section exists to display it. */
+/* The one place in the app outside the article where --rhythm and --block-pad
+   are legitimate: this section exists to display them. */
 .design-rhythm > * { margin: 0; }
 .design-rhythm p {
   font-family: var(--font-reading);
   font-size: var(--reading-size);
   line-height: var(--reading-line-height);
-  padding-block: calc(var(--rhythm) / 2);
+  padding-block: var(--block-pad);
 }
 /* Beats `.design h3:not(.prose *)` (0,2,1) by adding the section class, so this
    demonstration heading is set as article prose rather than as page chrome. */
@@ -2905,8 +2908,8 @@ td.text.has-hit[data-hues="8"] {
   text-transform: none;
   letter-spacing: -0.005em;
   color: var(--ink);
-  padding-top: var(--rhythm);
-  padding-bottom: calc(var(--rhythm) / 4);
+  padding-top: calc(var(--block-pad) * 2);
+  padding-bottom: calc(var(--block-pad) / 2);
 }
 
 /* --------------------------------------------------------- § mode band ----

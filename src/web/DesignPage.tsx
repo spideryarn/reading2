@@ -288,7 +288,7 @@ export function DesignPage() {
         </p>
         <div className="design-panel">
           {/* `design-sample` restates the row padding the reading view gets from
-              its table, off the same --rhythm. Without it these blocks touch —
+              its table, off the same --block-pad. Without it these blocks touch —
               see styles.css § THE SAMPLE ARTICLE HAS NO TABLE UNDER IT. */}
           <div className="prose design-sample">
             <h2>How markets learn, and how slowly</h2>
@@ -593,8 +593,9 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
       <section>
         <h2>Vertical rhythm</h2>
         <p className="design-note">
-          One unit is 17px × 1.4 ≈ 23.8px. One unit between paragraphs; one and a half above a
-          heading, three quarters below it — a heading belongs to what follows it.
+          One unit is 17px × 1.4 ≈ 23.8px, and the gaps are thirds of it. Two thirds between
+          paragraphs; a full unit above a heading, a third below it — a heading belongs to what
+          follows it.
         </p>
         <div className="design-panel design-rhythm">
           <p>The paragraph that ends the previous section.</p>
