@@ -32,11 +32,23 @@ describe("the widths granularity-zoom.md promises", () => {
     expect(f.overflowing).toBe(false);
   });
 
-  it("700px: overflows by 44", () => {
+  it("744px is the crossover, and it is derived rather than chosen", () => {
+    // GIST_MIN (176) + PROSE_MIN (544) + the spine (24). One pixel above it the
+    // last gist column still fits; at it and below there is no room for one, so
+    // auto-fit gives up rather than overflowing. No breakpoint was picked: this
+    // number falls out of the two constants that were already in the file.
+    expect(fit({ windowWidth: 744 }).columns).toEqual([2]); // fits exactly
+    expect(fit({ windowWidth: 743 }).columns).toEqual([]);
+  });
+
+  it("700px: no gist column, and the prose fills the window exactly", () => {
+    // It used to be a 720px table in a 676px window — sideways scrolling to
+    // read a line. See layout.ts § gistsThatFit.
     const f = fit({ windowWidth: 700 });
-    expect(f.tableW).toBe(720);
-    expect(f.overflowing).toBe(true);
-    expect(f.tableW - (700 - 24)).toBe(44);
+    expect(f.columns).toEqual([]);
+    expect(f.tableW).toBe(676);
+    expect(f.overflowing).toBe(false);
+    expect(f.minWidth).toBe(700);
   });
 });
 
@@ -49,10 +61,44 @@ describe("which levels get given up", () => {
     }
   });
 
-  it("never gives up the last gist column, and overflows instead", () => {
-    const f = fit({ windowWidth: 400 });
+  it("gives up the last gist column too, rather than overflowing a phone", () => {
+    // The reverse of what this file asserted until 2026-08-27. A 390px window
+    // used to get a 720px table whose every line of prose was cut mid-word.
+    const f = fit({ windowWidth: 390 });
+    expect(f.columns).toEqual([]);
+    expect(f.widths).toEqual([366]); // the window, less the spine
+    expect(f.overflowing).toBe(false);
+    expect(f.minWidth).toBe(390);
+  });
+
+  it("a phone-width outline is the leaf column at full width", () => {
+    // showText: false, so the leaf column is the detail column and the spine is
+    // off. Nothing to scroll sideways to.
+    const f = fit({ windowWidth: 390, showText: false });
+    expect(f.columns).toEqual([3]);
+    expect(f.widths).toEqual([390]);
+    expect(f.overflowing).toBe(false);
+  });
+
+  it("still honours a manual choice that cannot fit", () => {
+    // The promise the window must not break: `?cols=` is obeyed exactly, and
+    // the narrow-window floor above is written as min(detailMin, avail) so that
+    // it cannot quietly cancel one.
+    const f = fit({ windowWidth: 390, chosen: [2] });
     expect(f.columns).toEqual([2]);
     expect(f.overflowing).toBe(true);
+    /* **What is promised exactly is the choice of columns, not their widths.**
+       GPT Sol read the promise the stronger way, 2026-08-27, and asked whether
+       the prose should still hold its 544px floor here — which would make this
+       a 720px table rather than 542px. It should not, and the reason is what
+       the reader does next: they are going to scroll sideways to the prose
+       either way, and at 366px it then fills the screen, while at 544px it is
+       still cut off the right-hand edge when they get there. So the widths
+       follow the window, always; only the set of columns is theirs. */
+    expect(f.widths).toEqual([176, 366]);
+    const wide = fit({ windowWidth: 900, chosen: [0, 1, 2] });
+    expect(wide.columns).toEqual([0, 1, 2]);
+    expect(wide.overflowing).toBe(true);
   });
 
   it("shrinks before it drops", () => {

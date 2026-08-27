@@ -91,6 +91,39 @@
   --depth-3: oklch(0.44 0.045 40);
 
   --bar-h: 2.75rem; /* .controls */
+  /**
+   * **The y where the controls bar ends**, and the one name for what five
+   * separate rules were each spelling `var(--bar-h)`: the table head, the mode
+   * band, the spine, the overflow fade and a gist cell's sticky box all pin
+   * *underneath the controls bar*, and the bar itself derives its own `top`
+   * from it. A bar that moved without them would leave a 44px band of article
+   * sliding along above a row of pinned chrome, so they have to move together —
+   * one substitution rather than five judgement calls, and the next thing that
+   * pins below the bar gets it right by using the obvious token.
+   *
+   * It is `--bar-h` everywhere except a short viewport being scrolled down
+   * through, where § a short viewport switches it to `0px`. See
+   * docs/plans/mobile-reading-view.md for why a landscape phone needed the 44px.
+   *
+   * **Deliberately a plain custom property, and deliberately not animated
+   * itself.** The first version of this was a `@property`-registered
+   * `--bar-shift`, on the reasoning that only a *registered* custom property
+   * interpolates and the bar and the header therefore had to share one animated
+   * value. That reasoning is correct about CSS and wrong about this build:
+   * Vite's CSS transform **drops the `@property` rule and statically replaces
+   * every `var()` reference to it with its `initial-value`**. The result was
+   * `transform: translateY(0px)` and `top: calc(2.75rem + 0px)` baked into the
+   * served stylesheet — a bar that could never move, from a stylesheet that
+   * looked exactly right in the editor and reported no error anywhere. Setting
+   * the property by hand in the console did nothing either, which is the tell:
+   * a control property set the same way read back fine.
+   *
+   * What replaces it needs no registration at all. This token switches value,
+   * and each *consumer* transitions its own ordinary animatable property —
+   * `transform` on the bar, `top` on everything pinned under it. They still
+   * move as one thing, because they are all driven by the same switch.
+   */
+  --bar-bottom: var(--bar-h);
   /* The wordmark fixed in the top-left corner — HomeLogo.tsx. A token because
      three rules need the same number: the logo's own width, and the left
      padding the masthead and the controls bar reserve so that a narrow window
@@ -122,11 +155,18 @@
    docs/reusable/css-sticky-containing-block.md. */
 .reader {
   --spine-w: 1.5rem;
-  /* The mode band's width, set inline in pixels by App from `fit.modeW`, and
-     ZERO in the table-of-contents mode. Declared here so every rule below can
+  /* **How much horizontal room the mode band takes from the table**, set inline
+     in pixels by App from `fit.modeW`. Declared here so every rule below can
      add it unconditionally: `+ 0px` is a no-op, which is what makes the default
      mode cost nothing rather than needing a second set of rules.
-     See § mode band at the end of this file. */
+     See § mode band at the end of this file.
+
+     It is ZERO in two cases, not one, and the second is easy to misread as a
+     bug: the table-of-contents mode, where there is no band — and **a narrow
+     window, where there is a band and it takes no room from the table because
+     it covers it instead** (§ a narrow window). So `--mode-w: 0` does not mean
+     "no band is open"; nothing may infer that from it. The name is the width it
+     costs, not the width it is. */
   --mode-w: 0px;
   padding-left: calc(var(--spine-w) + var(--mode-w));
   /* min-width is set inline, in pixels, by App — see the note above. */
@@ -280,7 +320,32 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 
 .controls {
   position: sticky;
-  top: 0;
+  /* Zero everywhere but a short viewport being scrolled down, where § a short
+     viewport switches `--bar-bottom` to `0px` and this becomes `-44px` — a
+     sticky element with a negative `top` sticks that far *above* the viewport,
+     which is exactly "get out of the way" and needs nothing else.
+
+     **`top` rather than `transform`, and the transform version is why this
+     comment is long.** Moving it by `translateY` is the textbook answer — it
+     only moves the paint, where animating a sticky element's `top` re-runs the
+     stickiness constraint every frame — and on this element it silently did
+     nothing: computed `transform` stayed `matrix(1,0,0,1,0,0)` even with the
+     declaration set *inline from the console*, against a control property set
+     the same way that read back fine. **Why is not established.** It is not the
+     cascade (inline beats every layer), and the obvious suspect — the
+     reduced-motion block in tailwind.css — touches only durations. Not chased
+     further, because every other thing that pins under this bar already moves
+     by `top`, so one mechanism for the whole group is better than two even if
+     the transform could be made to work. If you are tempted back to `transform`
+     here, reproduce the inline-console test first; and if transforms turn out
+     to be inert more widely than this one element, that is a much bigger
+     finding than this rule and belongs in a postmortem.
+
+     The trap the transform version would have had is still worth knowing, since
+     it is why scroll.ts changed: a moved bar still *measures* 44px tall, so
+     `stickyOffset()` had to stop reading its height. That is true of `top`
+     too — the height never changes either way. */
+  top: calc(var(--bar-bottom) - var(--bar-h));
   left: calc(var(--spine-w) + var(--mode-w));
   width: calc(100vw - var(--spine-w) - var(--mode-w));
   z-index: 40;
@@ -296,6 +361,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   background: var(--page);
   border-bottom: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
+  transition: top 0.18s ease;
 }
 
 .controls-label {
@@ -394,7 +460,7 @@ table.zoom {
 
 thead th {
   position: sticky;
-  top: var(--bar-h);
+  top: var(--bar-bottom);
   z-index: 25;
   height: var(--head-h);
   background: var(--panel);
@@ -511,7 +577,7 @@ thead th.pin-left { z-index: 35; }
 .reader:has(table.zoom.overflowing)::after {
   content: "";
   position: fixed;
-  top: var(--bar-h);
+  top: var(--bar-bottom);
   right: 0;
   /* Stops at the bar. Run to 0 and the gradient washes over the dock's right
      end, which does not scroll and has nothing more to the right of it. */
@@ -554,7 +620,7 @@ td.gist {
 
 td.gist .sticky {
   position: sticky;
-  top: calc(var(--bar-h) + var(--head-h)); /* clears both bars */
+  top: calc(var(--bar-bottom) + var(--head-h)); /* clears both bars */
   padding: 0.85rem 1rem 1rem;
 }
 
@@ -898,7 +964,7 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 .spine {
   position: fixed;
   left: 0;
-  top: var(--bar-h);
+  top: var(--bar-bottom);
   bottom: 0;
   width: var(--spine-w);
   /* How much of the rail's width the search lanes may take, and how wide one
@@ -1626,7 +1692,23 @@ td.text.has-hit[data-hues="8"] {
      bug. */
   bottom: calc(var(--dock-h) + 0.75rem);
   width: min(24rem, calc(100vw - 2.5rem));
-  max-height: min(34rem, calc(100vh - 8rem - var(--dock-h)));
+  /* **`dvh`, not `vh`, and the difference only exists on a phone.** `100vh` is
+     the *large* viewport: the height the page would have with the browser's own
+     retractable chrome hidden. On a phone that chrome is on screen most of the
+     time, so `vh` routinely overstates the room by the height of an address
+     bar. `dvh` tracks the viewport as it currently is. Same change on
+     `.chat-dialog`, which has the same shape.
+
+     **It does not fix the on-screen keyboard, which is what this was first
+     changed for.** With the default viewport policy the keyboard resizes only
+     the *visual* viewport, and every viewport unit — `dvh` included — stays
+     tied to the layout viewport; making the keyboard shrink these needs
+     `interactive-widget=resizes-content` on the viewport meta in index.html.
+     That is an app-wide change to how every page reacts to a keyboard and it is
+     not being made blind, so it is deferred to a real-device pass. Corrected by
+     GPT Sol, 2026-08-27, after the first version of this note claimed the
+     keyboard case was solved. */
+  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-h)));
   display: flex;
   flex-direction: column;
   /* **Not `auto`, and this is half of why the ✕ used to move.** The whole box
@@ -1660,7 +1742,7 @@ td.text.has-hit[data-hues="8"] {
    Only while it arrives — a permanently constant height would put a two-line
    explanation in a 34rem box. The relax-to-fit happens when the answer settles,
    by which point the reader is not aiming at a button. */
-.cmt-dialog.busy { height: min(34rem, calc(100vh - 8rem - var(--dock-h))); }
+.cmt-dialog.busy { height: min(34rem, calc(100dvh - 8rem - var(--dock-h))); }
 
 /* The one part that scrolls. `min-height: 0` is load-bearing and silent: a flex
    item's default `min-height: auto` refuses to shrink below its content, so
@@ -2844,7 +2926,7 @@ td.text.has-hit[data-hues="8"] {
   /* Below the controls bar and above the dock. NOT below the masthead: the
      masthead scrolls away, and a band that started under it would slide up to
      meet the bar and leave a gap that opens and closes as you read. */
-  top: var(--bar-h);
+  top: var(--bar-bottom);
   bottom: var(--dock-h);
   z-index: 44; /* under the spine (45), over the controls bar (40) */
   display: flex;
@@ -4032,6 +4114,22 @@ td.text.has-hit[data-hues="8"] {
 .dock-modes {
   display: inline-flex;
   align-items: stretch;
+  /* **The segment must never shrink, and `overflow: hidden` below is why.**
+     This is a flex item in the dock's row, so its default `flex: 0 1 auto` let
+     the bar squeeze it whenever the row did not fit — and squeezing something
+     that clips its own overflow does not make it smaller, it makes it *shorter*
+     by deleting buttons off the right-hand end, with no scrollbar and no sign
+     that anything is gone. Measured at 390px on 2026-08-27: `clientWidth` 48
+     against a `scrollWidth` of 245, so five of the six modes could not be
+     pressed at all. Greg had noticed the symptom on a phone — "I couldn't see
+     the radio-group properly" — and it is the same failure the note beside the
+     `max-width: 1100px` query at the end of this file predicted and only half
+     fixed, because the half it fixed is the half a laptop can see.
+
+     `flex: none` turns a silent deletion into an honest overflow of the bar,
+     which § a narrow window then makes scrollable. This is not a narrow-window
+     rule: any width where the row does not fit was losing buttons the same way. */
+  flex: none;
   /* Sits inside a bar of --dock-h with no vertical room to spare, so the frame
      is inset rather than added: margin, not padding, or the buttons would grow
      the bar. */
@@ -6186,7 +6284,7 @@ line.diag-now {
   right: 1.25rem;
   bottom: calc(var(--dock-h) + 0.75rem);
   width: min(26rem, calc(100vw - 2.5rem));
-  max-height: min(34rem, calc(100vh - 8rem - var(--dock-h)));
+  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-h)));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -6205,7 +6303,7 @@ line.diag-now {
    not open as a 34rem rectangle. `.chat-scroll` is `Conversation`'s own
    transcript element, so this is "there is a conversation in here" said in CSS
    rather than a second class threaded down for the stylesheet's benefit. */
-.chat-dialog:has(.chat-scroll) { height: min(34rem, calc(100vh - 8rem - var(--dock-h))); }
+.chat-dialog:has(.chat-scroll) { height: min(34rem, calc(100dvh - 8rem - var(--dock-h))); }
 
 .chat-dialog header,
 .chat-dialog footer { flex: 0 0 auto; }
@@ -6389,6 +6487,27 @@ tr:hover .block-chat,
   opacity: 1;
   pointer-events: auto;
 }
+/* **On a touch device there is no hover, so this button did not exist.**
+   Every way of reaching it was a pointer state — `tr:hover`, `:focus-visible`,
+   or the block already having a conversation — and a finger produces none of
+   them, so the door into chat beside every paragraph was shut on exactly the
+   device Greg was reading on. There is already a rule doing this job for
+   `.chat-actions` further up this file; this one never got one.
+
+   Found by reading the stylesheet rather than by looking at the page, and it
+   could only have been found that way: the browser harness runs in a desktop
+   Chrome, where `(hover: none)` never matches and the button works fine.
+
+   Quieter than the hover-revealed state rather than fully lit: on a phone this
+   is one small glyph beside every paragraph in the article, and at full
+   strength eighty of them read as a column of decoration. */
+@media (hover: none) {
+  .block-chat {
+    opacity: 0.45;
+    pointer-events: auto;
+  }
+}
+
 /* A block that already has conversations says so whether or not you are
    hovering it — the only affordance a whole-block anchor gets, since it draws
    no mark in the prose. */
@@ -7010,3 +7129,306 @@ tr:hover .block-chat,
   font-size: 0.72rem;
   line-height: 1.4;
 }
+
+
+/* ================================================================================
+   § A NARROW WINDOW — the reading view on a phone
+   ================================================================================
+
+   Everything here is one of two rules followed further than the desktop needed,
+   never a second layout. There is no mobile view to keep in step with this one.
+
+   docs/plans/mobile-reading-view.md has the measurements and the arguments.
+
+   ## The breakpoint is derived, not chosen
+
+   744px is `GIST_MIN (176) + PROSE_MIN (544) + the spine (24)` — the exact width
+   at which layout.ts can still fit one gist column beside the prose. Below it
+   `fitView` shows no gist columns at all, so **the prose column IS the window**,
+   and every horizontal luxury the reading view affords itself stops being free:
+   136px reserved for a wordmark and 83px reserved for a block id are 21% and 35%
+   of a 390px screen.
+
+   That is why one number governs all of it. If `GIST_MIN` or `PROSE_MIN` ever
+   moves, this query moves with it — tests/layout.test.ts pins the crossover at
+   744/743 so the pair cannot drift silently.
+
+   ## The other axis has its own query
+
+   Width is scarce in portrait; height is scarce in landscape, where 44 + 40 + 40
+   of bars was 32% of a 390px-tall viewport. Those two problems do not share a
+   breakpoint and do not share a fix, so `max-height` is a separate query below.
+*/
+
+@media (max-width: 743px) {
+  :root {
+    /* The wordmark gives up its word. Both sticky bars reserve `--logo-w` as
+       left padding (§ shell), so this one token was pushing the article's title
+       136px into a 390px window — and HomeLogo.tsx is explicit that changing the
+       logo's size without changing the token is how a wordmark ends up sitting
+       on top of the title. Both, in the same query. */
+    --logo-w: 2.6rem;
+  }
+  .logo-text { display: none; }
+
+  /* **The block-id gutter, which is what Greg actually asked about.**
+
+     83px of every prose row, always, for a 64px debugging affordance — "a big
+     waste of horizontal space", and on a phone it is 21% of the article's width.
+
+     Hidden rather than moved: an id above each paragraph would cost ~18px of
+     height on every block, and the whole point of this query is that the column
+     has become the window.
+
+     **What is left is weaker than it first looks, and worth saying exactly.**
+     `?at=` does carry a block id, but position is stored as a *section* rather
+     than a paragraph (position.ts), so scrolling rewrites it to section starts
+     and only a deliberate jump ever puts a particular paragraph there. Both
+     ends of every gist range are still links (BlockRef.tsx), which on a phone
+     means Summary mode. So a phone reader can still reach a section's id and
+     cannot conveniently reach an arbitrary paragraph's. That is a real
+     reduction, judged worth 21% of the screen; GPT Sol was right that the first
+     version of this note overstated what survived.
+
+     Deliberately NOT hidden on a wide window. There the prose column is capped
+     at a measure anyway, so the gutter costs the reader nothing; it is only ever
+     a cost when the column is the whole screen. See § Open for Greg in the plan
+     — making it hover-only everywhere is his call, not a tidy-up. */
+  .block-id { display: none; }
+
+  /* What is left of the gutter is what the per-paragraph chat button needs, and
+     nothing more. 5.2rem → 2.1rem gives 50px of a 390px window back to the
+     prose. Trailing padding shrinks too: 1.4rem of right margin is generous
+     when the measure is 366px. */
+  td.text { padding-left: 2.1rem; padding-right: 0.9rem; }
+
+  /* ------------------------------------------------------------------------
+     The two bars that were silently eating their own controls.
+
+     Measured at 390px: `.controls` had a clientWidth of 366 against a
+     scrollWidth of 642, and `.dock-modes` 48 against 245. Nothing overflowed
+     visibly, nothing scrolled, and there was no sign anything was missing —
+     five of six mode buttons simply could not be pressed.
+
+     Two moves, in this order:
+
+      1. **Drop what does not earn its place**, so the row genuinely fits.
+      2. **Let whatever still does not fit scroll**, so the failure can never be
+         silent again. A safety net, not the plan: a bar you have to discover is
+         scrollable is a poor control, but it beats a button that is not there.
+     ------------------------------------------------------------------------ */
+
+  .controls {
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* The bar is 44px tall with no room for a scrollbar inside it, and this is
+       a touch surface where scrollbars are overlays anyway. */
+    scrollbar-width: none;
+    padding-right: 0.75rem;
+  }
+  .controls::-webkit-scrollbar { display: none; }
+  /* Nothing in the bar may shrink; that is what turned `.dock-modes` into a
+     deletion machine. Items keep their size and the row scrolls instead. */
+  .controls > * { flex: none; }
+
+  /* The four things in the bar that a phone cannot use or does not need:
+     the section label above the pills (the pills say `L2`, which is the part
+     that matters), the ↑↓ hint (a phone has no arrow keys), the `fit`/`auto`
+     and `reading`/`outline` chips, and the tree version. `.mode.on` is NOT in
+     this list — in a mode band it is the only thing on screen naming which mode
+     you are in. */
+  .controls-label,
+  .keynav,
+  .controls .mode:not(.on),
+  .controls .provenance { display: none; }
+
+  /* The masthead's left padding follows `--logo-w` on its own (§ shell), but its
+     generous vertical padding does not, and it is the first thing between the
+     reader and the article. */
+  .masthead { padding: 0.85rem 1rem 0.7rem; }
+  h1 { font-size: 1.25rem; }
+
+  .dock {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .dock::-webkit-scrollbar { display: none; }
+  /* `.dock-gap` is `flex: 1` and would collapse to nothing in a scrolling row,
+     which is exactly right — the buttons close up and the row scrolls. Every
+     other child holds its width. */
+  .dock > *:not(.dock-gap) { flex: none; }
+
+  /* Every dock button drops its label, not just the six modes. The modes have
+     done this below 1100px since Ideas made them six (§ the modes segment); at
+     390px the other three have to follow or nine buttons cannot share 390px.
+     Same argument as there: each carries its name in a tooltip and in an
+     explicit `aria-label`, so this costs a sighted reader a hover and costs a
+     screen-reader user nothing. */
+  .dock .dock-btn-label { display: none; }
+  /* Nine icons in 390px. 0.45rem rather than the 0.6rem the 1100px query uses,
+     and the extra 0.15 is not cosmetic — at 0.55rem the row came to 401px
+     against 390 of bar, and closing an 11px gap exactly would have reopened it
+     the moment the Questions count reached three digits. This leaves ~25px of
+     slack, which is a badge's worth. */
+  .dock .dock-btn { padding-inline: 0.45rem; }
+  .dock { padding-inline: 0.2rem; }
+  .dock-modes { margin-inline: 0.15rem; }
+
+}
+
+/* ------------------------------------------------ § a band with no room ----
+   **A mode is a full-screen panel once the band and the prose cannot share a
+   screen** — and that happens at a *different* width from everything in
+   § a narrow window above, which is why this is its own query rather than a few
+   more lines in that one.
+
+   **855px, and it is derived rather than chosen**, exactly like the 743 above:
+   `MODE_MIN (288) + PROSE_MIN (544) + the spine (24)` is 856, the last width at
+   which `fitMode` can give the band its minimum and the prose its floor. One
+   pixel under, it hands the band `modeW: 0` instead. `tests/chat.test.ts` pins
+   the 856/855 crossover so this number and that one cannot drift apart.
+
+   **Getting this wrong deletes the panel rather than making it look odd**, and
+   it did for a while: these rules were written inside the 743 query, so between
+   744 and 855 `fitMode` was handing the band a width of zero while no rule was
+   widening it, and Chat, Search, Glossary, Summary, Ideas and Diagram were all
+   simply invisible on a small laptop window. Nothing errored — the element was
+   in the DOM, correctly positioned, and nought pixels wide. Caught by GPT Sol
+   reviewing the built code, 2026-08-27.
+
+   `fitMode` returning `modeW: 0` is what makes the rest of the page need no
+   changes at all: every rule that reserves horizontal room for a band reserves
+   none, so the two sticky bars keep their full `100vw` and `.reader` keeps its
+   ordinary padding. All that is left is to widen the band, which is
+   `position: fixed` and therefore costs the layout underneath it nothing.
+
+   layout.ts § fitMode has what was tried first, and why a fixed element cannot
+   be one of two panes you scroll between. */
+@media (max-width: 855px) {
+  /* **The window minus the rail — not the whole window.** `left: 0` was tried
+     first and the panel came out with its left-hand ~24px missing: every term
+     name lost its first letter, the slider ran off the edge, and the heading
+     read "reshold". The spine is `position: fixed` at z-index 45 and the band
+     is 44, so a band starting at zero simply spends its first 24px underneath
+     the rail — drawn, and unreadable. Nothing overflows and nothing scrolls, so
+     it looks like a panel laid out slightly wrong rather than one being covered.
+
+     Starting where the rail ends is also just what every other element on this
+     page does; the band is the full width *available*, which was always what
+     "full width" meant here. */
+  .mode-band {
+    left: var(--spine-w);
+    width: calc(100vw - var(--spine-w));
+    border-right: none;
+  }
+
+  /* **And the article's masthead goes while a mode is open.**
+     The band is `position: fixed` from `--bar-bottom` down, which on a wider
+     window is fine because it is a 400px column starting where the bars end
+     horizontally. Full width, it lands on top of whatever is in the top-left of
+     the page — and at the top of the article that is the title, the byline and
+     the controls bar, all of them drawn and none of them reachable.
+
+     Hiding the masthead is the fix rather than moving the band, because a fixed
+     element cannot be positioned relative to a sticky one that has not stuck
+     yet. It also happens to be right on its own terms: the masthead is the
+     *article's* identity, the article is behind a full-screen panel, and with
+     it gone the controls bar sticks at zero immediately and the band sits
+     exactly underneath it — which is what says which mode you are in and offers
+     the way back. */
+  .reader:has(.mode-band) .masthead { display: none; }
+}
+
+/* --------------------------------------------------- § a short viewport ----
+   Landscape, where the scarce axis is the other one.
+
+   Measured at 844 × 390: `.controls` 44 + `thead` 40 + `.dock` 40 = **124px, a
+   third of the viewport**, permanently. Greg: *"the vertical screen estate was
+   at a premium … combine the top two bars into one? Only show after certain
+   kinds of scrolling?"*
+
+   Both, in the end, and neither by merging anything:
+
+    - The table head goes whenever the article is the only column — that rule
+      lives with the table (`table.only-prose` below), because it is true of a
+      chat band on a laptop too and has nothing to do with height.
+    - **The controls bar hides while you are reading forwards and comes back the
+      moment you scroll back.** The scroll direction is watched in
+      `src/web/scroll.ts § watchBarVisibility`, which sets `data-bars` on the
+      root element and re-renders nothing — see performance.md for why a React
+      state here would have been the expensive way to do it.
+
+   Only on a short viewport. Portrait has the height to spare, and a bar that
+   moves is a bar you can lose track of; this fires exactly where the problem
+   was found. 620px rather than 500 so a landscape phone with browser chrome is
+   comfortably inside it, and no laptop ever is.
+
+   The bar and everything pinned under it move together because they are all
+   driven by `--bar-bottom` — see the token's own note in § tokens for the
+   `@property` version of this that could not survive the build. */
+@media (max-height: 620px) {
+  :root[data-bars="hidden"] {
+    --bar-bottom: 0px;
+  }
+  /* Each consumer animates its own ordinary property. `top` is animatable on a
+     sticky or fixed element, and there are only ever four of these on screen at
+     once, so the layout cost of the 180ms is not worth avoiding. */
+  thead th,
+  td.gist .sticky,
+  .spine,
+  .mode-band,
+  .reader:has(table.zoom.overflowing)::after {
+    transition: top 0.18s ease;
+  }
+
+  /* `td.gist .sticky` is in that list because it was missed first time and
+     snapped while everything around it slid — GPT Sol, 2026-08-27. One thing it
+     does **not** cover: the column-context panels are positioned by JS
+     (useColumnContext.ts), which samples on scroll, so for up to 180ms after the
+     bar moves a panel can sit up to 44px out of step. In practice the bar only
+     ever moves *because* the reader is scrolling, so another sample is moments
+     away; it is a transient, not a resting state. If it ever looks wrong,
+     the fix is to re-sample on `transitionend` rather than to drop the slide. */
+  /* **Never hide a bar somebody is using.** A keyboard reader tabbing along the
+     granularity pills scrolls the page as focus moves, and without this the
+     control they are on slides off the top mid-tab — focus lands somewhere
+     invisible and the page looks broken.
+
+     `:root:has(…)` rather than the obvious `.controls:focus-within`, and the
+     difference is the whole rule: `--bar-bottom` is an inherited property that
+     only `:root` ever sets, and the table head reads it too. Declared on the
+     bar itself it would bring the bar back down on top of a header still parked
+     at the top of the viewport. Whatever moves this has to move both, so it has
+     to be set where both inherit from. Specificity (0,3,0) beats the attribute
+     rule above whichever order they end up in. */
+  :root:has(.controls:focus-within) {
+    --bar-bottom: var(--bar-h);
+  }
+  /* Tighter chrome as well, which is free and needs no state: 12px more of the
+     article at every scroll position. */
+  :root {
+    --dock-h: 2.2rem;
+  }
+  .masthead { padding-top: 0.6rem; padding-bottom: 0.55rem; }
+  .root-gist { margin-top: 0.35rem; }
+}
+
+/* The bar still gets out of the way for a reader who has asked for less
+   motion — it just arrives there rather than travelling. Hiding the chrome is
+   the point; the 180ms slide is only how it is announced. */
+@media (prefers-reduced-motion: reduce) {
+  .controls,
+  thead th,
+  .spine,
+  .mode-band {
+    transition: none;
+  }
+}
+
+/* The table head, when the article is the only column there is.
+   Set by TableView.tsx — read the comment there for why the condition is "no
+   gist columns and the prose is on" rather than "one column". Worth 40px in a
+   landscape phone, and it removes a row reading `Text verbatim` above a column
+   of the author's paragraphs, which is not a loss at any size. */
+table.only-prose thead { display: none; }

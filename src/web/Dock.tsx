@@ -693,9 +693,24 @@ function DockLink({
       className={`dock-btn${current ? " on" : ""}`}
       aria-current={current ? "page" : undefined}
       title={title}
+      /* Explicit, for the reason DockModes gives: § a narrow window hides the
+         visible label, and an accessible name computed from the text would go
+         with it. `title` would step in as a fallback, but `title` is the long
+         sentence — a screen reader would read the whole blurb where the name
+         is wanted. Not hypothetical since 2026-08-27: these three lose their
+         labels at 390px too, not just the six modes.
+
+         So `title` is now the hover description and **not** the accessible
+         name — this attribute is. Anything below claiming otherwise is stale. */
+      aria-label={label}
     >
       <Icon size={15} />
-      <span>{label}</span>
+      {/* Same class the modes segment gives its label, so § a narrow window
+          can drop all nine of the bar's labels with one rule rather than with
+          one rule and a bare-element selector that would break the moment
+          somebody wrapped the text. The name is still announced: the `title`
+          above is the accessible name on both of these. */}
+      <span className="dock-btn-label">{label}</span>
     </Link>
   );
 }
@@ -730,10 +745,18 @@ function DockTab({
       // DockLink above.
       aria-expanded={on}
       title={title}
+      // Explicit for the same reason as DockLink above — the visible label is
+      // hidden on a narrow window and `title` is a sentence, not a name.
+      aria-label={label}
       onClick={() => onPanel(on ? null : panel)}
     >
       <Icon size={15} />
-      <span>{label}</span>
+      {/* Same class the modes segment gives its label, so § a narrow window
+          can drop all nine of the bar's labels with one rule rather than with
+          one rule and a bare-element selector that would break the moment
+          somebody wrapped the text. The name is still announced: the `title`
+          above is the accessible name on both of these. */}
+      <span className="dock-btn-label">{label}</span>
       {children}
       <ChevronUp className={`dock-chev${on ? " open" : ""}`} size={12} />
     </button>

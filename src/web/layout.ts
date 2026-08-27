@@ -79,9 +79,15 @@ export interface Fit extends Layout {
   /** What `.reader` needs as an inline min-width so the sticky bars have range. */
   minWidth: number;
   /**
-   * The width of the mode band, and `0` when the middle is the table of
-   * contents. Set as `--mode-w` on `.reader`; every rule that has to make room
-   * for the band reads it from there (styles.css § mode band).
+   * **How much horizontal room the mode band takes from the table.** Set as
+   * `--mode-w` on `.reader`; every rule that has to make room for the band
+   * reads it from there (styles.css § mode band).
+   *
+   * It is `0` in two cases, and reading it as "there is no band" is wrong in
+   * the second: the table-of-contents mode, where there genuinely is no band —
+   * and **a window under 856px, where there is one and it takes no room from
+   * the table because it covers it instead** (`fitMode`). Ask `mode !== "toc"`
+   * if what you want to know is whether a band is open.
    */
   modeW: number;
 }
@@ -174,10 +180,49 @@ export function fitView({
   // holds nav labels rather than paragraphs, so it needs far less room.
   const detailMin = showText ? PROSE_MIN : GIST_IDEAL;
 
-  /** How many gist columns survive auto-fit in `avail` px. */
+  /**
+   * How many gist columns survive auto-fit in `avail` px.
+   *
+   * **It may return zero, and until 2026-08-27 it could not.** The loop stopped
+   * at one, on the reasoning that "a single gist beside the prose is the point
+   * of the view, so we overflow rather than lose it". That is true of a laptop
+   * and false of a phone: below `GIST_MIN + PROSE_MIN` (720px) the promise to
+   * keep one gist and the promise to give the prose 544px cannot both be kept,
+   * so the table became wider than the window and the page scrolled sideways —
+   * measured at 390px, a 720px table in which every line of prose was cut
+   * mid-word. Reading a line by scrolling to it is not a worse trade-off, it is
+   * a failure.
+   *
+   * So the rule this file already states is followed one step further: shrink
+   * first, drop second, and **drop all the way to zero when zero is what fits**.
+   * There is no new breakpoint — the crossover falls out of the two constants
+   * that were already here, which is why the same change improves a 700px
+   * laptop window for the same reason it rescues a phone.
+   *
+   * **What the reader loses on a phone is real, and it is bought back by a
+   * switch rather than by a scroll.** Two coarse views are one tap away and
+   * both are full-screen on a narrow window: outline mode (the `Text` pill) is
+   * the paragraph outline at full width, and Summary mode is the article at
+   * whichever length you ask for. The whole-article gist is in the masthead as
+   * ordinary text. So the horizontal axis stops being a scroll and becomes a
+   * switch — which is what the `Text` toggle already was.
+   *
+   * **The spine is not part of that answer, though the obvious sentence says it
+   * is.** An earlier version of this comment claimed the coarse levels are what
+   * the rail already shows. They are not, on this device: the rail is 24px of
+   * slivers and every name, gist and count it carries lives in a *hover* card
+   * (Spine.tsx), which a finger cannot open. A touch reader gets the rail's
+   * shape and its jumps and none of its words. GPT Sol caught the claim,
+   * 2026-08-27.
+   *
+   * Whether a phone should also stack the current section's gist above the
+   * prose — orientation without a mode switch — is a design question for Greg
+   * rather than something to decide here. docs/plans/mobile-reading-view.md
+   * § Open for Greg.
+   */
   const gistsThatFit = (avail: number) => {
     let n = gistDepths.length;
-    while (n > 1 && n * GIST_MIN + detailMin > avail) n--;
+    while (n > 0 && n * GIST_MIN + detailMin > avail) n--;
     return n;
   };
 
@@ -224,8 +269,8 @@ export function fitView({
   const leafBesideText = showText && (chosen?.includes(leafDepth) ?? false);
 
   if (chosen === null) {
-    // Drop the coarsest first, and never the last one: a single gist beside the
-    // prose is the point of the view, so we overflow rather than lose it.
+    // Drop the coarsest first — see `gistsThatFit` for why the floor is zero
+    // rather than one.
     gists = gists.slice(gists.length - gistsThatFit(avail));
   }
 
@@ -236,7 +281,24 @@ export function fitView({
     fixedCount === 0
       ? 0
       : clamp(Math.floor((avail - detailMin) / fixedCount), GIST_MIN, GIST_IDEAL);
-  const detailW = Math.max(detailMin, avail - fixedCount * gistW);
+  /**
+   * **A minimum that protects nothing is not a minimum.**
+   *
+   * `detailMin` exists to stop the gist columns squeezing the reading column,
+   * and dropping the last gist to zero (above) was only half the fix without
+   * this line: at 390px the table came out `0 + 544` and the page went on
+   * scrolling sideways, because the floor was still being applied to a column
+   * that had nothing left to be protected from.
+   *
+   * So the floor yields to the window itself. Note where it does *not* bite: it
+   * is `min(detailMin, avail)`, so it changes nothing whenever the window is at
+   * least as wide as the prose minimum — including the case the file promises
+   * to leave alone, a manual `?cols=` that does not fit. A reader who asks for
+   * four columns on a 900px window still gets four columns and still overflows.
+   * Only a window narrower than one reading column is affected, and there the
+   * alternative is not a wider column, it is a column you scroll to read.
+   */
+  const detailW = Math.max(Math.min(detailMin, avail), avail - fixedCount * gistW);
 
   const widths = [...Array<number>(fixedCount).fill(gistW), detailW];
   const tableW = widths.reduce((a, b) => a + b, 0);
@@ -276,6 +338,50 @@ export function fitView({
 function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
   const spine: SpineMode = showSpine === false ? "off" : "on";
   const avail = Math.max(0, windowWidth - spineWidth(spine));
+
+  /**
+   * **Below `MODE_MIN + PROSE_MIN` the band stops taking room from the article
+   * and covers it instead.**
+   *
+   * The negotiation below has an implied floor and no behaviour underneath it:
+   * both terms bottom out, so at 390px this function used to return a 288px
+   * band beside a 544px column and ask a 390px window for 856px of content.
+   * Opening chat on a phone put two half-visible panels side by side and
+   * neither of them could be read.
+   *
+   * **`modeW` is 0 here, and that is not a lie about there being a band.** The
+   * field's job is to say how much horizontal room the band takes *from the
+   * table* — it is written straight out as `--mode-w`, which five rules in
+   * styles.css subtract from the two sticky bars and add to `.reader`'s
+   * padding. On a phone the band takes none: it is `position: fixed`, so
+   * styles.css § a narrow window simply widens it to the whole window and it
+   * sits on top of the article. Everything else on the page can then keep the
+   * geometry it has when no band is open at all.
+   *
+   * That fixed positioning is also why the obvious alternative does not work,
+   * and it was tried first: giving the band and the prose a full screen each
+   * and letting the page scroll between them. A fixed band cannot scroll away,
+   * so the second pane never arrives — and `--mode-w` at a full screen makes
+   * `calc(100vw - --spine-w - --mode-w)` zero, which is the masthead and the
+   * controls bar. Caught by GPT Sol reviewing this plan, 2026-08-27.
+   *
+   * The prose does not go away, for the reason `proseVisible` exists: a mode
+   * with no article behind it is how the outline-mode bug produced an empty
+   * table beside a chat panel. It is still there, still full width, one tap on
+   * the dock's Contents button away.
+   */
+  if (MODE_MIN + PROSE_MIN > avail) {
+    return {
+      columns: [],
+      widths: [avail],
+      tableW: avail,
+      overflowing: false,
+      minWidth: spineWidth(spine) + avail,
+      spine,
+      modeW: 0,
+    };
+  }
+
   const modeW = clamp(avail - PROSE_MIN, MODE_MIN, MODE_IDEAL);
   const proseW = Math.max(PROSE_MIN, avail - modeW);
   return {

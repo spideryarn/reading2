@@ -174,8 +174,17 @@ export function TableView({
    * underneath draw only their boundaries; the panel's current entry carries
    * everything the cell's sticky box used to. In outline mode the table is
    * the list, so the cells draw themselves as they always did.
+   *
+   * **And there must be a column for a panel to be laid over.** `showText`
+   * alone was enough for as long as reading mode always had at least one gist
+   * column; since 2026-08-27 it can have none (layout.ts § gistsThatFit), and
+   * on that path `ColumnPanels` mounted with an empty depth set and
+   * `useColumnContext` went on measuring every section row on every scroll to
+   * decide which entry of nothing to highlight. Pure waste, and it landed on
+   * the narrow window least able to afford it — performance.md is specifically
+   * about this hook's geometry work. Found by GPT Sol, 2026-08-27.
    */
-  const panels = showText;
+  const panels = showText && columns.length > 0;
 
   /**
    * Reading mode only: a vertical swipe over a gist column steps one item
@@ -388,7 +397,27 @@ export function TableView({
   return (
     <>
     <table
-      className={`zoom ${showText ? "reading" : "outline"}${overflowing ? " overflowing" : ""}`}
+      /* `only-prose` — the article is the only column there is, so the table
+         head is a label for the whole screen. It reads `Text verbatim` above
+         a column of the author's paragraphs, which says nothing that looking
+         at them does not, and it costs 40px of a 390px landscape viewport
+         where a third of the height is already bars. So the stylesheet drops
+         it (§ a narrow window).
+
+         The condition is `no gist columns AND the prose is on`, not
+         `one column`: a single *gist* column still has to say which level it
+         is, and in outline mode that is the only place saying so. Reached
+         three ways — a phone in reading mode, and either width of mode band,
+         where the head has been equally redundant beside a chat panel on a
+         laptop all along.
+
+         `stickyOffset()` needs no telling: it measures `thead th` rather than
+         reading `--head-h`, and a `display: none` head measures zero. That is
+         the second time this week that "measure it, don't agree a number with
+         another file" has paid for itself — scroll.ts says why. */
+      className={`zoom ${showText ? "reading" : "outline"}${overflowing ? " overflowing" : ""}${
+        columns.length === 0 && showText ? " only-prose" : ""
+      }`}
       style={{ width: layout.tableW }}
     >
       <colgroup>

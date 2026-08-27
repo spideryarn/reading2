@@ -411,7 +411,19 @@ says no.
   comment asking you to keep it in step with `--bar-h` and `--head-h`. `stickyOffset()` measures
   `.controls` and `thead th` instead: drift there is pure
   [silent success](../reusable/silent-success.md) — nothing throws, every jump just lands slightly
-  under the bar, and `scrollY` confirms the scroll happened.
+  under the bar, and `scrollY` confirms the scroll happened. Since 2026-08-27 it measures how much
+  of the bar a row arriving at the top will have to **clear** rather than how tall the bar is,
+  because on a short viewport the bar slides away while you read and a moved element's height does
+  not change. And **no jump may change that number while it is travelling**: every path in
+  `scroll.ts` that moves the page marks the window it owns, and the bar watcher sits it out — a
+  destination is computed once, so chrome that answered to our own scrolling would land every jump
+  44px out. [mobile-reading-view.md](../plans/mobile-reading-view.md).
+- **On a phone the horizontal axis is a switch, not a scroll.** Below 744px `fitView` offers no gist
+  columns at all and the prose column *is* the window; a mode band stops taking horizontal room and
+  covers the article instead. Both are the same rule — the view would otherwise promise more columns
+  than the window has and cut every line of prose mid-word. What a phone loses, and the one thing
+  the spine cannot make up for on touch, is in
+  [mobile-reading-view.md](../plans/mobile-reading-view.md).
 - **Never substitute generated text for prose silently.** The verbatim column is the author's words;
   a gist stands in for text only where the reader chose that level. See
   [vision.md](vision.md#principles) — "no hidden reformulation".

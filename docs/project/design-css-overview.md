@@ -311,6 +311,34 @@ The check is one line in the console, at whatever width you are worried about:
 document.documentElement.scrollWidth - document.documentElement.clientWidth  // must be 0
 ```
 
+### The reading view's narrow window, which is a different problem
+
+Everything above is the shelf, where a narrow window breaks *rows*. On the reading view it breaks
+the **columns**, and the fix is not CSS at all — it is arithmetic in
+[`src/web/layout.ts`](../../src/web/layout.ts), which stops offering gist columns once one will not
+fit beside the prose. `styles.css` § **a narrow window** and § **a short viewport** at the end of the
+file are only what is left over after that: the block-id gutter, the wordmark, the two bars that
+were silently clipping their own controls, and the mode band going full-screen.
+
+Three things worth carrying to whatever is built next:
+
+- **The breakpoint is derived, not chosen.** `743px` is `GIST_MIN + PROSE_MIN + the spine`, minus
+  one — the width at which layout.ts gives up the last gist column and the prose column *becomes*
+  the window. `tests/layout.test.ts` pins the crossover so the CSS and the TypeScript cannot drift
+  apart silently.
+- **A row that does not fit must scroll, never clip.** `.dock-modes` had `overflow: hidden` for a
+  good reason (rounded corners on a segmented control) and it quietly turned into a machine for
+  deleting buttons: 48px of clip over a 245px control, five of six modes unpressable, no scrollbar
+  and no sign anything was missing. `flex: none` on anything whose overflow is hidden, and
+  `overflow-x: auto` on the bar around it.
+- **`transform` is not reliably available on `.controls`.** Moving that bar by `translateY` computes
+  to identity even when set inline from the console — proven with a control, cause not chased.
+  Everything that pins under the bar moves by `top` and reads `--bar-bottom`; do the same rather
+  than reintroducing a transform there.
+
+The full account, including what the measuring harness cannot see, is
+[docs/plans/mobile-reading-view.md](../plans/mobile-reading-view.md).
+
 ## What is not written down yet
 
 The honest list. Each of these currently lives only as values in `styles.css`, and someone will

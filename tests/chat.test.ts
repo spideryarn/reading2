@@ -187,13 +187,60 @@ describe("fitView in a mode — the band replaces the columns", () => {
     expect(f.overflowing).toBe(false);
   });
 
-  it("stops shrinking at MODE_MIN and overflows instead", () => {
-    const f = band(700);
+  it("shrinks to MODE_MIN, and that is the last width where both fit", () => {
+    // 856 - 24 spine = 832 available, which is exactly MODE_MIN + PROSE_MIN.
+    const f = band(856);
     expect(f.modeW).toBe(MODE_MIN);
-    // The prose keeps its floor; the page scrolls sideways, exactly as the
-    // table does when the columns do not fit.
     expect(f.widths).toEqual([544]);
-    expect(f.overflowing).toBe(true);
+    expect(f.overflowing).toBe(false);
+  });
+
+  /**
+   * **Below that the band stops sharing the screen and covers the article**,
+   * which reverses what this file asserted until 2026-08-27: the band used to
+   * hold MODE_MIN and let the page scroll sideways, on the same "honour the
+   * floors and overflow" reasoning the column layout used.
+   *
+   * It is the wrong answer for the same reason it was wrong there. At 390px it
+   * asked a phone for 832px of content and produced two half-visible panels,
+   * neither of them readable. And it is inconsistent even on a laptop: below
+   * 744px the reading view has already given up sideways scrolling entirely, so
+   * a mode that reintroduces it contradicts the page the reader just left.
+   *
+   * `modeW: 0` is not a claim that there is no band — it is how much horizontal
+   * room the band takes *from the table*, and a fixed full-screen panel takes
+   * none. layout.ts § fitMode, and styles.css § a narrow window.
+   */
+  it("gives the band the whole screen once the two no longer fit", () => {
+    const f = band(855);
+    expect(f.modeW).toBe(0);
+    expect(f.widths).toEqual([831]); // the prose, still there, still full width
+    expect(f.overflowing).toBe(false);
+    expect(f.minWidth).toBe(855); // never wider than the window
+  });
+
+  /**
+   * **The number the stylesheet has to agree with.**
+   *
+   * styles.css § a band with no room widens the fixed `.mode-band` to the window
+   * below `855px`, and this is the only thing keeping that literal honest. They
+   * were out of step for a while and the failure was total rather than untidy:
+   * `fitMode` handed the band `modeW: 0` from 855 down, the CSS widened it only
+   * from 743 down, and between those two every mode was a correctly-positioned
+   * element nought pixels wide. Nothing threw. Move either number and this test
+   * is what tells you about the other.
+   */
+  it("hands over to the stylesheet at exactly 856/855", () => {
+    expect(band(856).modeW).toBe(MODE_MIN); // still a band beside the prose
+    expect(band(855).modeW).toBe(0); // the stylesheet takes it from here
+  });
+
+  it("never asks a phone for more width than it has", () => {
+    for (const w of [320, 390, 480, 600, 744, 855]) {
+      const f = band(w);
+      expect(f.minWidth).toBe(w);
+      expect(f.overflowing).toBe(false);
+    }
   });
 
   /* There is one rail since 2026-08-26 — the labelled form is gone — so in a

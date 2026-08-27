@@ -91,7 +91,13 @@ import {
   textParam,
   threadParam,
 } from "./params.js";
-import { arrivalTarget, isBlockOnScreen, scrollToBlock, stickyOffset } from "./scroll.js";
+import {
+  arrivalTarget,
+  isBlockOnScreen,
+  scrollToBlock,
+  stickyOffset,
+  watchBarVisibility,
+} from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
   activeSectionIndex,
@@ -245,7 +251,36 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
    */
   const [loaded, setLoaded] = useState<{ slug: string; article: Article } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const article = loaded?.slug === slug ? loaded.article : null;
+
+  /**
+   * The title the reader has just given this article, if they have.
+   *
+   * **Layered over the fetched payload rather than written into it**, which is
+   * the same shape the server uses: `titleFor` in src/api.ts does not edit the
+   * extractor's meta either, it picks the reader's title over it at the moment
+   * of answering. Two reasons it matters here.
+   *
+   * One, `setLoaded` is guarded — everything that reaches it has been through
+   * `sanitizeArticle` (tests/sanitize-client.test.ts), and that guard is worth
+   * more than the convenience of editing state in place. A rename introduces no
+   * HTML and would have to be spelled as an exemption, and an exemption is how a
+   * guard stops meaning anything.
+   *
+   * Two, the memo. `Reader` rebuilds the whole geometry from `article` by
+   * identity, so a fresh object per render would rebuild the table on every
+   * keystroke elsewhere in the page. Hence the `useMemo` below rather than a
+   * spread in the render body.
+   *
+   * Cleared with the payload when the slug changes, in the fetch effect — one
+   * article's title must not survive into another's.
+   */
+  const [renamed, setRenamed] = useState<string | null>(null);
+  const fetched = loaded?.slug === slug ? loaded.article : null;
+  const article = useMemo(
+    () =>
+      fetched && renamed ? { ...fetched, meta: { ...fetched.meta, title: renamed } } : fetched,
+    [fetched, renamed],
+  );
 
   useEffect(() => {
     // The slug is in the path now, so it can change under us — via back/forward,
@@ -253,6 +288,7 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
     // a fast second one.
     let live = true;
     setLoaded(null);
+    setRenamed(null);
     setError(null);
     apiFetch(`/api/article/${encodeURIComponent(slug)}`)
       .then((r) => readJson<Article>(r))
@@ -333,9 +369,10 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
   // one article's reading position into another's blocks. NOT keyed on the
   // view: switching view is meant to keep the fetch, which is the whole reason
   // it happens up here.
-  if (view === "metadata") return <Metadata key={slug} slug={slug} article={article} />;
+  if (view === "metadata")
+    return <Metadata key={slug} slug={slug} article={article} onRenamed={setRenamed} />;
   if (view === "tweets") return <Tweets key={slug} slug={slug} article={article} />;
-  return <Reader key={slug} slug={slug} article={article} />;
+  return <Reader key={slug} slug={slug} article={article} onRenamed={setRenamed} />;
 }
 
 /** The window width, as state, because the whole layout is computed from it. */
@@ -411,6 +448,26 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
     };
   }, [sections, setAt, layoutKey]);
 
+  /* The controls bar gets out of the way while you read forwards, on a viewport
+     short enough for 44px to matter — scroll.ts § watchBarVisibility, and
+     styles.css § a short viewport for the half that decides whether it applies.
+
+     A second scroll listener rather than a branch inside the one above, and
+     deliberately: that one exists to keep `?at=` in step with the reader and
+     owns React state, this one touches nothing but a `data-` attribute and
+     causes no renders at all.
+
+     They do schedule their own rAF callbacks rather than sharing one, so on a
+     short viewport this is a second frame callback per scroll — said plainly
+     because an earlier version of this comment claimed the pair cost one
+     between them, which was simply false (GPT Sol, 2026-08-27). It is bounded:
+     the watcher attaches only while the short-viewport media query matches, so
+     a laptop installs no listener and pays nothing at all.
+
+     Mounted with no dependencies because it depends on nothing — it re-reads
+     the world every frame it runs. */
+  useEffect(() => watchBarVisibility(), []);
+
   // A jump is the one scroll that pushes history: Back must not undo scrolling,
   // but flinging yourself across the article is a deliberate act. The debounce is
   // cancelled too, so a click isn't sluggish.
@@ -435,7 +492,16 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
   return { at, jumpTo };
 }
 
-function Reader({ slug, article }: { slug: string; article: Article }) {
+function Reader({
+  slug,
+  article,
+  onRenamed,
+}: {
+  slug: string;
+  article: Article;
+  /** Passed straight through to the masthead’s pencil — see Masthead.tsx. */
+  onRenamed: (title: string) => void;
+}) {
   useRenderCount("Reader");
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
@@ -982,7 +1048,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       {/* Everything constant about the article — see Masthead.tsx for why
           constant is the word that decides it belongs here and not in a
           column. */}
-      <Masthead article={article} />
+      <Masthead article={article} onRenamed={onRenamed} />
       <div className="controls">
         {/* The granularity controls belong to the table-of-contents mode, so
             they go with it. Leaving them on screen in another mode would offer

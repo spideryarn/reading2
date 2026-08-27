@@ -13,25 +13,6 @@
  */
 
 /**
- * Height of the two sticky bars a row has to clear: `.controls` plus the table
- * head. **Measured, not declared.**
- *
- * This used to be the literal `84`, with a comment asking whoever changed
- * `--bar-h` or `--head-h` in styles.css to remember to change it here too. Three
- * separate things now depend on it — deep links, the `?at=` tracker, and the
- * arrow keys — and the failure when it drifts is the quiet kind this codebase
- * keeps meeting (docs/reusable/silent-success.md): nothing errors, every jump
- * simply lands a few pixels under the bar it was supposed to clear, and the
- * check you would run to confirm the scroll worked says it worked.
- *
- * Measuring the bars themselves cannot drift, and it is also more honest about
- * what the number means: not "what two custom properties say", but "how tall the
- * things in the way actually are" — which also covers a header that wraps to two
- * lines, browser zoom, and a user's larger default font size.
- *
- * Two rects per call. Everything asking already reads layout in the same batch.
- */
-/**
  * Height of the fixed bar along the bottom — Dock.tsx.
  *
  * The counterpart to `stickyOffset`, and it exists for the same reason: a line
@@ -50,12 +31,217 @@ export function dockOffset(): number {
   return dock ? dock.getBoundingClientRect().height : 0;
 }
 
+/**
+ * Height of the chrome a row arriving at the top has to clear: `.controls` plus
+ * the table head. **Measured, not declared.**
+ *
+ * This used to be the literal `84`, with a comment asking whoever changed
+ * `--bar-h` or `--head-h` in styles.css to remember to change it here too. Three
+ * separate things now depend on it — deep links, the `?at=` tracker, and the
+ * arrow keys — and the failure when it drifts is the quiet kind this codebase
+ * keeps meeting (docs/reusable/silent-success.md): nothing errors, every jump
+ * simply lands a few pixels under the bar it was supposed to clear, and the
+ * check you would run to confirm the scroll worked says it worked.
+ *
+ * Measuring the bars themselves cannot drift, and it covers a header that wraps
+ * to two lines, browser zoom, and a user's larger default font size. Note it is
+ * no longer *only* a height — see the note inside on the bar that moves, and on
+ * why the clamp's ceiling is a prediction rather than a measurement.
+ *
+ * Two rects per call. Everything asking already reads layout in the same batch.
+ */
 export function stickyOffset(): number {
   const bar = document.querySelector<HTMLElement>(".controls");
   const head = document.querySelector<HTMLElement>("thead th");
   // Before the table exists there is nothing in the way, so nothing to clear.
   if (!bar || !head) return 0;
-  return bar.getBoundingClientRect().height + head.getBoundingClientRect().height;
+  const rect = bar.getBoundingClientRect();
+  /**
+   * **How much of the bar a row arriving at the top will have to clear** — not
+   * how tall the bar is.
+   *
+   * The height was right for as long as the bar could only ever be stuck at
+   * `top: 0`. On a short viewport it now slides out of the way while you read
+   * forwards (styles.css § a short viewport) — by going to a negative sticky
+   * `top`, which moves where it is drawn and **does not change what it
+   * measures**. (A `transform` would not have either; that was the first
+   * implementation.) So the old expression
+   * went on reporting a confident 44 for a bar that was entirely off screen, and
+   * every deep link, every `?at=` reading and every arrow-key step would have
+   * landed 44px too low — a wrong number from a function doing exactly what it
+   * said. The class of bug this file's own header is about.
+   *
+   * **The clamp's upper end is a prediction, and it is deliberately not a
+   * measurement.** At the very top of the article the bar has not stuck yet: it
+   * is sitting below the masthead, its `bottom` is several hundred pixels down
+   * the page, and it is covering nothing at all. This still returns its full
+   * height there, because every caller is asking about a *destination* — where
+   * a row will end up — and by the time anything arrives at the top of the
+   * viewport the bar will be stuck across it. Answering "0, it covers nothing
+   * right now" would be the more literal reading of the rect and would send
+   * every jump from the top of the article 44px too high.
+   *
+   * An earlier version of this comment claimed the number was current coverage.
+   * It is not, and GPT Sol was right to say so — the value was already what the
+   * callers want, and only the sentence describing it was wrong.
+   */
+  const covering = Math.max(0, Math.min(rect.height, rect.bottom));
+  return covering + head.getBoundingClientRect().height;
+}
+
+/** px of downward travel before the bar gives way. */
+export const BAR_HIDE_AFTER = 24;
+/** Never hide inside the first screenful — see `stepBar`. */
+export const BAR_KEEP_UNTIL = 160;
+
+export interface BarStep {
+  /** Whether the controls bar should be out of the way. */
+  hidden: boolean;
+  /** The scroll position the *next* delta is measured from. */
+  from: number;
+}
+
+/**
+ * One scroll sample in, one bar state out.
+ *
+ * **Pulled out of the listener because it cannot be tested inside it**, which
+ * is the same reason `nextModeIndex` sits outside `DockModes` in Dock.tsx. The
+ * only way to exercise this in place is to drive a real browser, and it turns
+ * out that is not merely awkward but impossible from the harness we have: the
+ * measuring tab is not the frontmost window, `document.visibilityState` reads
+ * `hidden`, and **`requestAnimationFrame` does not run in a hidden tab at all**
+ * — so the listener never fires and a completely broken implementation would
+ * look exactly like this one. (It looked exactly like this one for ten minutes
+ * on 2026-08-27.) Everything below is arithmetic on three numbers and none of
+ * it needs a DOM. See tests/bar-visibility.test.ts.
+ *
+ * Three rules, and the asymmetry between the first two is the design:
+ *
+ *  - **Down takes a push.** `BAR_HIDE_AFTER` of accumulated downward travel
+ *    before the bar goes, so a jittery hand does not make chrome flicker.
+ *  - **Up is instant.** Any upward movement brings it back, because a reader
+ *    scrolling up is usually looking *for* something.
+ *  - **Never near the top.** Inside the first screenful the bar has not
+ *    finished sticking, and hiding something that is still sliding into place
+ *    reads as a glitch rather than as an affordance.
+ *
+ * The threshold is cumulative rather than per-event: a downward delta that does
+ * not reach it leaves `from` alone, so a slow scroll eventually adds up to it
+ * instead of never reaching it in one go. That is the whole reason this returns
+ * `from` rather than the caller just remembering the last `y`.
+ */
+export function stepBar(hidden: boolean, y: number, from: number): BarStep {
+  if (y < BAR_KEEP_UNTIL) return { hidden: false, from: y };
+  const delta = y - from;
+  if (delta > BAR_HIDE_AFTER) return { hidden: true, from: y };
+  if (delta < 0) return { hidden: false, from: y };
+  return { hidden, from };
+}
+
+/**
+ * Hide the controls bar while the reader is going forwards; give it back the
+ * moment they turn round.
+ *
+ * Greg, 2026-08-27, on a landscape phone: *"the vertical screen estate was at a
+ * premium … Only show after certain kinds of scrolling?"* At 844 × 390 the three
+ * bars were 124px of a 390px viewport, and this is 44 of them.
+ *
+ * Three things about how it is written, each of which is the reason it is here
+ * rather than in a component:
+ *
+ *  - **It re-renders nothing.** The result goes onto a `data-` attribute on the
+ *    root element and the stylesheet does the rest. React state would have
+ *    re-rendered `Reader` on every direction change, and performance.md is a
+ *    long account of what scroll-time re-renders cost this particular page.
+ *  - **The listener is passive**, so it can never delay a scroll.
+ *  - **The reading is deferred to a frame.** `scrollY` is cheap, but doing the
+ *    work in rAF means at most one update per painted frame however fast the
+ *    events arrive — and it is skipped entirely in a background tab, where rAF
+ *    does not run and nobody is looking anyway.
+ *
+ * The threshold is deliberately asymmetric. Going **down** it takes a
+ * deliberate push (`HIDE_AFTER`) before the bar goes, so a jitter while reading
+ * does not make chrome flicker; coming **up**, any movement at all brings it
+ * straight back, because a reader scrolling up is usually looking *for*
+ * something. And it never hides near the top of the article, where the bar has
+ * not finished sticking and hiding it would just look like a glitch.
+ *
+ * **The breakpoint is asked twice, and on purpose.** The stylesheet owns
+ * whether a hidden bar means anything, and this function asks `matchMedia` the
+ * same question so that a laptop installs no scroll listener at all rather than
+ * maintaining an attribute nothing reads — performance.md is why that is worth
+ * the duplicated string. An earlier version of this note claimed the decision
+ * lived in one place and that this function knew nothing about viewport
+ * heights; that stopped being true the moment the listener started coming and
+ * going with the query. Keep the two `620px` in step.
+ *
+ * Returns its own teardown.
+ */
+export function watchBarVisibility(): () => void {
+  /**
+   * **Only where a rule reads it.** The attribute could be set at every size
+   * and left for the media query to ignore, which is what this did first — but
+   * that installs a scroll listener on every laptop in exchange for nothing,
+   * on a page whose scroll cost is documented at length in performance.md. So
+   * the query is asked here as well, and the listener comes and goes with it.
+   * The string is duplicated from styles.css § a short viewport, which is the
+   * ordinary cost of a breakpoint two languages have to agree on.
+   */
+  const short = window.matchMedia("(max-height: 620px)");
+  let listening = false;
+  let hidden = false;
+  let from = window.scrollY;
+  let pending = 0;
+
+  const show = () => {
+    hidden = false;
+    delete document.documentElement.dataset.bars;
+  };
+
+  const apply = () => {
+    pending = 0;
+    // A jump we started is not the reader scrolling, and chrome that answers to
+    // it would move the ground under a destination already calculated. See
+    // `markOurScroll`.
+    if (performance.now() < quietUntil) {
+      from = window.scrollY;
+      return;
+    }
+    const next = stepBar(hidden, window.scrollY, from);
+    from = next.from;
+    if (next.hidden === hidden) return;
+    hidden = next.hidden;
+    if (hidden) document.documentElement.dataset.bars = "hidden";
+    else delete document.documentElement.dataset.bars;
+  };
+
+  const onScroll = () => {
+    if (pending) return;
+    pending = requestAnimationFrame(apply);
+  };
+
+  const sync = () => {
+    if (short.matches === listening) return;
+    listening = short.matches;
+    if (listening) {
+      from = window.scrollY;
+      window.addEventListener("scroll", onScroll, { passive: true });
+    } else {
+      window.removeEventListener("scroll", onScroll);
+      if (pending) cancelAnimationFrame(pending);
+      pending = 0;
+      show(); // rotating to portrait must not leave the bar stuck off screen
+    }
+  };
+
+  sync();
+  short.addEventListener("change", sync);
+  return () => {
+    short.removeEventListener("change", sync);
+    window.removeEventListener("scroll", onScroll);
+    if (pending) cancelAnimationFrame(pending);
+    show();
+  };
 }
 
 /**
@@ -96,8 +282,42 @@ let release: (() => void) | null = null;
  */
 let aiming: number | null = null;
 
+/**
+ * When the page is being moved by us rather than by the reader.
+ *
+ * **The bar must not react to our own scrolling, and this is a correctness
+ * problem rather than a tidiness one.** Every jump in this file computes its
+ * destination once, from `stickyOffset()`, and then travels. If the travel
+ * itself can hide the controls bar — and a jump down the article is a downward
+ * scroll, so it can — the clearance the destination was calculated with is no
+ * longer the clearance that exists when it arrives, and the row lands 44px
+ * under the header it was supposed to clear. An upward jump has the mirror
+ * fault: it reveals the bar and lands behind it.
+ *
+ * Neither shows up as an error, and both look exactly like a jump that worked.
+ * Caught by GPT Sol reviewing the plan, 2026-08-27, before it was ever run.
+ *
+ * `mark()` is called by every path in this file that moves the page, and the
+ * window it opens covers the whole animation with a little either side.
+ * `watchBarVisibility` sits out anything inside it — chrome answers to the
+ * reader's gesture, never to ours, which is the rule that makes the race
+ * impossible rather than unlikely.
+ */
+let quietUntil = 0;
+function markOurScroll(ms = SCROLL_MS + 150) {
+  quietUntil = performance.now() + ms;
+}
+
 /** Abandon any jump in flight — a newer one, or the reader taking over. */
 function cancel() {
+  /* **The reader taking over ends the quiet window, and must.** `cancel` is what
+     a wheel, a touch or a `pointercancel` runs (see `bail` below), so past this
+     line the page is moving because *they* are moving it — and leaving
+     `quietUntil` set would go on ignoring their scrolling for up to 350ms,
+     which is exactly the gesture most likely to be them reaching for the chrome
+     this suppresses. Cheap to get wrong, invisible when wrong: the bar would
+     merely feel unresponsive now and then. Raised by GPT Sol, 2026-08-27. */
+  quietUntil = 0;
   if (frame) cancelAnimationFrame(frame);
   frame = 0;
   aiming = null;
@@ -115,6 +335,10 @@ function glide(to: number) {
   const from = window.scrollY;
   const distance = to - from;
   if (Math.abs(distance) < 1) return;
+  // AFTER the early return, not before it: a jump to where we already are moves
+  // nothing, and opening the quiet window for it would deafen the bar to a third
+  // of a second of the reader's own scrolling for no reason at all.
+  markOurScroll();
   const started = performance.now();
   aiming = to;
 
@@ -195,6 +419,7 @@ export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
   if (behavior === "smooth" && !reducedMotion()) glide(target);
   else {
     cancel();
+    markOurScroll(150); // instant, so only the event it fires needs covering
     window.scrollTo({ top: target, behavior: "auto" });
   }
 }
@@ -263,6 +488,7 @@ export function scrollByScreen(dir: -1 | 1) {
   if (Math.abs(from - target) < 2) return;
   if (reducedMotion()) {
     cancel();
+    markOurScroll(150); // instant, so only the event it fires needs covering
     window.scrollTo({ top: target, behavior: "auto" });
   } else glide(target);
 }
