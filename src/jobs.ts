@@ -49,7 +49,7 @@ import { mintId } from "./ids.js";
 import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
 import { fsJobStore } from "./store/jobs-fs.js";
 import { pgJobStore } from "./store/pg-jobs.js";
-import { StaleAttemptError, type JobEnding, type JobStore } from "./store/jobs.js";
+import { mintAttempt, StaleAttemptError, type JobEnding, type JobStore } from "./store/jobs.js";
 import { STORE } from "./store/live.js";
 import { readRaw } from "./fetch.js";
 import { failureKindOf } from "./job-failure.js";
@@ -641,7 +641,10 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
     log("jobs").warn({ count: swept }, `failed ${swept} job(s) whose claimant stopped answering`);
   }
 
-  const attempt = mintId();
+  /* `mintAttempt`, **not** `mintId`. `jobs.attempt_id` is a uuid column, and a
+     `spya-` token is rejected by Postgres on the claim — the first statement of
+     every advance. See the note on `mintAttempt`. */
+  const attempt = mintAttempt();
   const outcome = await store.claim(id, owner, attempt, LEASE_MS);
 
   switch (outcome.kind) {

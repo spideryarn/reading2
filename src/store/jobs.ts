@@ -39,6 +39,8 @@
  * See docs/plans/durable-queue-and-uploads.md.
  */
 
+import { randomUUID } from "node:crypto";
+
 import type { FailureKind } from "../messages.js";
 import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
 
@@ -85,6 +87,25 @@ export interface JobEnding {
  * exists to prevent is zero-rows-reads-as-success —
  * docs/reusable/silent-success.md.
  */
+/**
+ * A fresh attempt token.
+ *
+ * **A uuid, not a `spya-` id**, and it lives here so that the one caller and
+ * the two adapters cannot disagree about that. `jobs.attempt_id` is a `uuid`
+ * column (src/db/schema.ts), so a `mintId()` token is rejected by Postgres with
+ * `22P02` on the *claim* — the first statement of every advance.
+ *
+ * Which is exactly what `advanceJob` passed until 2026-08-27, and the reason
+ * nothing caught it is worth more than the fix. The filesystem adapter takes any
+ * string, so the whole job suite was green. The parity suite exercised both
+ * adapters, but it minted its own tokens with `crypto.randomUUID()` — so the
+ * store was tested, the caller was tested, and *the value that travels between
+ * them* was not. One function, so there is nothing left to disagree about.
+ */
+export function mintAttempt(): string {
+  return randomUUID();
+}
+
 export class StaleAttemptError extends Error {
   constructor(readonly jobId: string) {
     super(`Job ${jobId} is no longer held by this attempt.`);

@@ -113,17 +113,18 @@ survive, so a second invocation re-runs the step. The Vercel guard on uploads st
 Nothing can be committed atomically until there is one place that owns the transaction. Three pieces,
 none of which exists:
 
-**1. `openOrBeginJobDraft(jobId, attemptId)`.** The review's second critical, and it would have been
-found the hard way on the second `/advance` of every fresh ingest: `beginRevision` **always** mints a
+**1. `openOrBeginJobDraft(jobId, attemptId)` — built 2026-08-27.** The review's second critical, and
+it would have been found the hard way on the second `/advance` of every fresh ingest: `beginRevision` **always** mints a
 `randomUUID()` and copies from `articles.current_revision_id`. So request 1 creates R1 and writes
 `fetch` into it; request 2 creates R2 from the still-empty published state, points the job at R2, and
 `extract` looks for a raw document that is in R1. `RevisionLifecycle` has no reopen, and `toJob` does
 not even expose `draft_revision_id` — so the job cannot find the draft it owns. One statement:
 reuse the job's draft if the fenced row has one, mint if not.
 
-**2. A raw product with the bytes in it.** The third critical. The first draft spotted that
-`ArtifactMap.raw` is declared `string` while the artefact is an object, and proposed correcting the
-type to `RawManifest` — which does not help, because a `RawManifest` holds a *filename*
+**2. A raw product with the bytes in it.** The third critical. The type lie was fixed on 2026-08-27
+— `ArtifactMap.raw` is a `RawManifest` now rather than a `string`, with a test that goes red if it
+goes back — but **that is not this piece**, and the review is right about why: a `RawManifest` holds
+a *filename*
 ([`src/fetch.ts`](../../src/fetch.ts)) and `article_revisions.raw_bytes` needs bytes. A store-neutral
 raw product carries provenance **and** payload; anything else reintroduces the filesystem dependency
 the whole landing exists to remove.

@@ -469,11 +469,25 @@ export interface BeginRevisionResult {
  * possible later.
  */
 export async function beginRevision(opts: BeginRevisionOptions): Promise<BeginRevisionResult> {
-  const { slug } = opts;
-  requireSlug(slug);
-  const db = getDb();
+  requireSlug(opts.slug);
+  return getDb().transaction((tx) => beginDraftIn(tx, opts));
+}
 
-  return db.transaction(async (tx) => {
+/**
+ * The body of `beginRevision`, taking the caller's transaction.
+ *
+ * Split out on 2026-08-27 so that `openOrBeginJobDraft` can do its lookup and
+ * this minting **in one transaction** rather than two. Two would be a race with
+ * teeth: between "this job has no draft" and "here is one", a second request
+ * for the same job could get the same answer and mint a second draft, and the
+ * later `fenceJob` would silently point the job at whichever won.
+ */
+async function beginDraftIn(
+  tx: Tx,
+  opts: BeginRevisionOptions,
+): Promise<BeginRevisionResult> {
+  const { slug } = opts;
+  {
     let article = await lockArticle(tx, slug);
     if (!article) {
       const inserted = await tx
@@ -588,6 +602,112 @@ export async function beginRevision(opts: BeginRevisionOptions): Promise<BeginRe
       "draft revision begun",
     );
     return { revisionId, articleId: article.id, basedOn, blocksCopied, stepRunsCopied };
+  }
+}
+
+/* ------------------------------------------------- reopening a job's draft -- */
+
+export interface OpenDraftResult extends BeginRevisionResult {
+  /** True when this call minted the draft; false when it reopened the job's own. */
+  readonly created: boolean;
+}
+
+/**
+ * The draft **this job already owns**, or a new one if it has none.
+ *
+ * ## The bug this exists to prevent, which would have hit every ingest
+ *
+ * `advanceJob` runs exactly one step per HTTP request — that is the whole point
+ * of it, and it is what lets each step have its own serverless invocation. So a
+ * runner that called `beginRevision` per step would, on request 2:
+ *
+ * 1. mint a fresh revision id (it always does — see § The revision id is
+ *    minted, not derived);
+ * 2. copy from `articles.current_revision_id`, which for a *new* article is
+ *    null, so the draft comes up empty;
+ * 3. point `jobs.draft_revision_id` at it, throwing away the draft request 1
+ *    had just written `fetch`'s output into.
+ *
+ * `extract` then looks for a raw document that is sitting in a revision nothing
+ * points at any more. GPT Sol found this reviewing
+ * docs/plans/transactional-stage-runner.md, and it is worth noticing that the
+ * symptom would have been *"extract cannot find the raw document"* on every
+ * fresh article — a message pointing at stage 2, from a fault in the runner.
+ *
+ * ## Why this is not the lookback `beginRevision` refuses
+ *
+ * That section rejects carrying from "the latest draft for this slug", because
+ * it would pick up **another job's** draft and resurrect exactly what copying
+ * from published prevents. This asks a different question, and the answer is a
+ * fact rather than a guess: `jobs.draft_revision_id` names one row, that row was
+ * written by this job, and the read is fenced on the live attempt. Retry still
+ * mints a new job with a new id and therefore a new draft, which is the
+ * behaviour that section chose.
+ *
+ * ## The four ways the recorded draft is not usable
+ *
+ * All four fall back to minting rather than throwing, because none of them is
+ * the caller's fault and every one of them is a state the database can reach:
+ * the pointer is null (the first step of a job); the revision has been swept
+ * (`sweepAbandonedDrafts` spares job-referenced drafts, but `db:import` and a
+ * cascade from `articles` do not); it is no longer a draft (something published
+ * or failed it); or it belongs to a different article, which would mean the job
+ * changed slug under us and is the one that would be a bug elsewhere.
+ */
+export async function openOrBeginJobDraft(opts: {
+  readonly slug: string;
+  readonly job: { readonly id: string; readonly attemptId: string };
+}): Promise<OpenDraftResult> {
+  const { slug, job } = opts;
+  requireSlug(slug);
+
+  return getDb().transaction(async (tx) => {
+    /* Fenced, and read inside the same transaction that may mint. Reading the
+       pointer through an unfenced select would let a claimant whose lease has
+       lapsed reopen a draft it no longer owns and write a step into it. */
+    const [row] = await tx
+      .select({ draftRevisionId: jobs.draftRevisionId })
+      .from(jobs)
+      .where(and(eq(jobs.id, job.id), eq(jobs.attemptId, job.attemptId), eq(jobs.status, "running")))
+      .limit(1);
+    if (!row) throw new NotTheLiveAttempt(job.id);
+
+    if (row.draftRevisionId) {
+      const article = await lockArticle(tx, slug);
+      const [draft] = article
+        ? await tx
+            .select({ id: articleRevisions.id, status: articleRevisions.status })
+            .from(articleRevisions)
+            .where(
+              and(
+                eq(articleRevisions.id, row.draftRevisionId),
+                eq(articleRevisions.articleId, article.id),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (article && draft?.status === "draft") {
+        logger.debug({ slug, revisionId: draft.id, jobId: job.id }, "reopened this job's draft");
+        return {
+          revisionId: draft.id,
+          articleId: article.id,
+          /* Unknown from here, and `null` would be a lie — it means "this
+             article's first draft". The two counts are `0` because this call
+             copied nothing; whatever the minting call copied is already in the
+             row. A caller that needs the lineage reads the revision. */
+          basedOn: null,
+          blocksCopied: 0,
+          stepRunsCopied: 0,
+          created: false,
+        };
+      }
+      logger.info(
+        { slug, jobId: job.id, recorded: row.draftRevisionId, status: draft?.status ?? null },
+        "the draft this job recorded is not usable — minting a new one",
+      );
+    }
+
+    return { ...(await beginDraftIn(tx, opts)), created: true };
   });
 }
 

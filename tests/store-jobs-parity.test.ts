@@ -29,6 +29,7 @@ import { jobs } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
+import { mintAttempt } from "../src/store/jobs.js";
 import type { JobStore } from "../src/store/jobs.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
 import {
@@ -200,15 +201,38 @@ for (const adapter of ADAPTERS) {
       await store.enqueueOrGet(job, "k1");
       expect(await store.get(job.id, OWNER)).toBeDefined();
       expect(await store.get(job.id, STRANGER)).toBeUndefined();
-      expect((await store.claim(job.id, STRANGER, crypto.randomUUID(), LEASE)).kind).toBe("gone");
+      expect((await store.claim(job.id, STRANGER, mintAttempt(), LEASE)).kind).toBe("gone");
+    });
+
+    /**
+     * **The value that travels between the caller and the store.**
+     *
+     * `advanceJob` minted its attempt token with `mintId()` — a `spya-` id —
+     * while `jobs.attempt_id` is a `uuid` column, so every advance against
+     * Postgres died with `22P02` on the claim. Nothing caught it: the
+     * filesystem adapter takes any string so the job suite was green, and this
+     * suite minted its own tokens with `crypto.randomUUID()`, so the store was
+     * tested and the caller was tested and the thing passed between them was
+     * not.
+     *
+     * Every case in this file now mints the way the caller does, which is the
+     * real fix. This one states it, so that changing `mintAttempt` to something
+     * a column will not take fails here rather than in production.
+     */
+    it("accepts the token the caller actually mints", async () => {
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = mintAttempt();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      await store.releaseStep(job.id, attempt, job.steps, {});
     });
 
     it("lets one claimant in and turns the second away", async () => {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
 
-      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
-      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("busy");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("busy");
     });
 
     it("turns a claim away while another job holds the one running slot", async () => {
@@ -217,12 +241,12 @@ for (const adapter of ADAPTERS) {
       await store.enqueueOrGet(a, "k1");
       await store.enqueueOrGet(b, "k2");
 
-      expect((await store.claim(a.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
+      expect((await store.claim(a.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
       /* In Postgres `jobs_only_one_running` raises 23505 rather than matching no
          rows, so this escapes as a 500 unless the adapter catches that code by
          name — and Drizzle wraps the driver error, so the obvious check compiles
          and never matches. An index doing its job is not an exception. */
-      const blocked = await store.claim(b.id, OWNER, crypto.randomUUID(), LEASE);
+      const blocked = await store.claim(b.id, OWNER, mintAttempt(), LEASE);
       expect(blocked.kind).toBe("busy");
       expect(blocked.kind === "busy" && blocked.why).toMatch(/another job is running/);
     });
@@ -233,12 +257,12 @@ for (const adapter of ADAPTERS) {
          the same call, because nobody is there to notice a flag. */
       const stopping = aJob();
       await store.enqueueOrGet(stopping, "k1");
-      const held = crypto.randomUUID();
+      const held = mintAttempt();
       await store.claim(stopping.id, OWNER, held, LEASE);
       await store.requestCancel(stopping.id, OWNER);
       // Otherwise the API key is spent on a job that has already been stopped —
       // one of the three cancellation windows step 12 named.
-      expect((await store.claim(stopping.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe(
+      expect((await store.claim(stopping.id, OWNER, mintAttempt(), LEASE)).kind).toBe(
         "stopping",
       );
       /* Released before the second half, or it would hold the single running
@@ -248,10 +272,10 @@ for (const adapter of ADAPTERS) {
 
       const over = aJob();
       await store.enqueueOrGet(over, "k2");
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       expect((await store.claim(over.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
       await store.finish(over.id, attempt, { status: "done", steps: over.steps });
-      expect((await store.claim(over.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("finished");
+      expect((await store.claim(over.id, OWNER, mintAttempt(), LEASE)).kind).toBe("finished");
     });
 
     /**
@@ -265,7 +289,7 @@ for (const adapter of ADAPTERS) {
     it("lets the claim go after a step, so the next request can have it", async () => {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
 
       const done: JobStep[] = [{ ...job.steps[0]!, status: "done" }];
@@ -275,7 +299,7 @@ for (const adapter of ADAPTERS) {
       expect(after.steps[0]?.status).toBe("done");
 
       // A different request, a different token, and it gets in.
-      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
     });
 
     it("writes what the card says mid-step without letting go of the claim", async () => {
@@ -286,7 +310,7 @@ for (const adapter of ADAPTERS) {
          put — a `queued` here would let a second request in mid-step. */
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
 
       const running: JobStep[] = [{ ...job.steps[0]!, status: "running", detail: "12 KB" }];
@@ -296,7 +320,7 @@ for (const adapter of ADAPTERS) {
       expect(after.steps[0]?.detail).toBe("12 KB");
 
       // Still held: a second request must not get in behind a progress write.
-      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("busy");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("busy");
       // And the claimant still owns it.
       await store.releaseStep(job.id, attempt, running, {});
     });
@@ -310,7 +334,7 @@ for (const adapter of ADAPTERS) {
          `jobs_running_is_fenced` constrains `running` rows only. */
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
 
       await adapter.expire(job.id);
@@ -334,7 +358,7 @@ for (const adapter of ADAPTERS) {
       // Somebody else asking learns nothing, exactly as with `get`.
       expect(await store.activeForSlug(job.slug, STRANGER)).toBeUndefined();
 
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       await store.claim(job.id, OWNER, attempt, LEASE);
       expect((await store.activeForSlug(job.slug, OWNER))?.id).toBe(job.id);
 
@@ -359,7 +383,7 @@ for (const adapter of ADAPTERS) {
     it("refuses a write onto a finished job that still carries its token", async () => {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
 
       // Its lease runs out and the sweep fails it. The claimant does not know.
@@ -382,10 +406,10 @@ for (const adapter of ADAPTERS) {
     it("refuses a write from a claimant whose job somebody else now holds", async () => {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
-      const mine = crypto.randomUUID();
+      const mine = mintAttempt();
       await store.claim(job.id, OWNER, mine, LEASE);
       await store.releaseStep(job.id, mine, job.steps, {});
-      await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE);
+      await store.claim(job.id, OWNER, mintAttempt(), LEASE);
 
       // The first claimant comes back late. It cannot write, and it learns that
       // rather than affecting zero rows and being told nothing.
@@ -397,7 +421,7 @@ for (const adapter of ADAPTERS) {
     it("fails a job whose lease ran out, and leaves a live one alone", async () => {
       const dead = aJob();
       await store.enqueueOrGet(dead, "k1");
-      await store.claim(dead.id, OWNER, crypto.randomUUID(), LEASE);
+      await store.claim(dead.id, OWNER, mintAttempt(), LEASE);
       await adapter.expire(dead.id);
       expect(await store.failExpired()).toBe(1);
       const failed = await store.get(dead.id, OWNER);
@@ -411,7 +435,7 @@ for (const adapter of ADAPTERS) {
       // The running slot is free again, which is the other half of why this runs.
       const alive = aJob();
       await store.enqueueOrGet(alive, "k2");
-      await store.claim(alive.id, OWNER, crypto.randomUUID(), LEASE);
+      await store.claim(alive.id, OWNER, mintAttempt(), LEASE);
       expect(await store.failExpired()).toBe(0);
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
     });
@@ -428,7 +452,7 @@ for (const adapter of ADAPTERS) {
 
       const running = aJob();
       await store.enqueueOrGet(running, "k2");
-      await store.claim(running.id, OWNER, crypto.randomUUID(), LEASE);
+      await store.claim(running.id, OWNER, mintAttempt(), LEASE);
       const asked = await store.requestCancel(running.id, OWNER);
       expect(asked?.status).toBe("running");
       expect(asked?.cancelling).toBe(true);
@@ -451,7 +475,7 @@ for (const adapter of ADAPTERS) {
     it("ends a job whose Stop arrived while a step was running, rather than requeueing it", async () => {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
 
       // Somebody else presses Stop. This claimant knows nothing about it.
@@ -464,7 +488,7 @@ for (const adapter of ADAPTERS) {
       expect(after.finishedAt).toBeTruthy();
 
       // And it is really over, rather than answering `stopping` for ever.
-      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("finished");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("finished");
     });
 
     /**
@@ -484,12 +508,12 @@ for (const adapter of ADAPTERS) {
     it("frees the running slot once a claimant has stopped answering", async () => {
       const dead = aJob();
       await store.enqueueOrGet(dead, "k1");
-      expect((await store.claim(dead.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
+      expect((await store.claim(dead.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
 
       const waiting = aJob();
       await store.enqueueOrGet(waiting, "k2");
       // Blocked, correctly, while the first job is genuinely running.
-      expect((await store.claim(waiting.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("busy");
+      expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE)).kind).toBe("busy");
 
       await adapter.expire(dead.id);
       expect(await store.failExpired()).toBeGreaterThanOrEqual(1);
@@ -498,7 +522,7 @@ for (const adapter of ADAPTERS) {
       expect(after?.status).toBe("error");
       // Failed rather than taken over, and offering Retry rather than a dead end.
       expect(after?.failureKind).toBe("retry");
-      expect((await store.claim(waiting.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe(
+      expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE)).kind).toBe(
         "claimed",
       );
     });
@@ -507,7 +531,7 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       expect(await store.forget(job.id, OWNER)).toBe(false);
-      const attempt = crypto.randomUUID();
+      const attempt = mintAttempt();
       expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
       await store.finish(job.id, attempt, { status: "done", steps: job.steps });
       expect(await store.forget(job.id, OWNER)).toBe(true);
@@ -522,7 +546,7 @@ for (const adapter of ADAPTERS) {
       for (let i = 0; i < 4; i++) {
         const job = aJob({ createdAt: new Date(Date.now() - (4 - i) * 60_000).toISOString() });
         await store.enqueueOrGet(job, `k${i}`);
-        const attempt = crypto.randomUUID();
+        const attempt = mintAttempt();
         await store.claim(job.id, OWNER, attempt, LEASE);
         // The oldest one failed; the rest succeeded.
         await store.finish(job.id, attempt, {
