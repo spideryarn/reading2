@@ -4334,7 +4334,7 @@ td.text.has-hit[data-hues="8"] {
 .srch-icon-dead:hover { background: none; color: var(--ink-faint); }
 
 /* ---------------------------------------------------------------------------
-   The colour picker — eight swatches and "Automatic", in a floating panel.
+   The colour picker — sixteen swatches and "Automatic", in a floating panel.
    `srch-picker-*`, NOT `srch-swatches`: that name was already taken, by the
    three-hue specimen strip in the results legend a few hundred lines up. The
    first version of this block used it and the two silently merged — the legend
@@ -4370,9 +4370,12 @@ td.text.has-hit[data-hues="8"] {
 }
 .srch-picker-grid {
   display: grid;
-  /* Four across, two down, for eight. Wider than tall because the panel sits
-     beside a row in a vertical list, and a tall one would cover the rows above
-     and below the one being recoloured. */
+  /* Four across, four down, for sixteen — and four columns rather than eight
+     because the panel sits beside a row in a vertical list, so a wide one
+     reaches across the prose while a squarer one stays over the band it
+     belongs to. Row-major in hue order (`PALETTE_BY_HUE`, hit-colours.ts), so
+     each row is a quarter of the wheel: warms, greens, blues, violets — and
+     the one colourless slot last, where it cannot interrupt the run. */
   grid-template-columns: repeat(4, 1.35rem);
   /* Wide enough that the two rings below never touch their neighbours. They are
      `box-shadow`, so they take no space in the grid and will happily overlap

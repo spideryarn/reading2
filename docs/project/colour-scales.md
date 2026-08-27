@@ -24,7 +24,7 @@ two of those neither can be changed.
 
 | Scale | Tokens | Means | Status |
 |---|---|---|---|
-| **Categorical** | `--cat-0` … `--cat-7` (+ `-rgb`) | these are different things | in use — one per saved search, and since 2026-08-27 the reader can pick which |
+| **Categorical** | `--cat-0` … `--cat-15` (+ `-rgb`) | these are different things | in use — one per saved search. **The hash reaches the first eight; a reader can pick any of the sixteen** |
 | **Sequential (hot)** | `--heat-0` … `--heat-8` | this much of it, and it is hot | ready, unused |
 | **Sequential (neutral)** | `--vir-0` … `--vir-8` (+ `-rgb`) | this much of it | in use — how far through the article a paragraph is |
 | **Diverging** | `--div-0` … `--div-8`, `--div-rg-0` … `--div-rg-8` | which side of the middle | ready, unused |
@@ -73,7 +73,56 @@ announce themselves.
 So every stop is written out. Interpolating *between adjacent stops* at render time is fine — they
 are close enough that neither failure has room to happen.
 
-## Categorical — eight hues that mean "these are different things"
+## Categorical — sixteen hues that mean "these are different things", eight of them automatic
+
+**Two numbers, and everything below turns on the gap between them.**
+`CATEGORICAL_SLOTS` is 8 — what the hash hands out on its own — and
+`PALETTE_SLOTS` is 16, what a reader may choose from
+([hit-colours.ts](../../src/web/hit-colours.ts)). Greg asked for the second on
+2026-08-27:
+
+> And add more colours, arranged more naturally.
+>
+> — Greg, 2026-08-27
+
+Growing one number instead of two would have been simpler and wrong twice.
+**Every saved search would have changed colour**, because the automatic slot is
+`hash % CATEGORICAL_SLOTS` and changing the modulus moves every run in every
+article at once — silently, to everybody. And **the argument in the next
+section would have broken exactly where it matters**: eight really is the top of
+the range anyone claims is reliably distinguishable, and the automatic set is
+the hard case — nobody chose those hues, several are overlaid on one paragraph,
+and the reader is telling apart searches they never coloured. A hue somebody
+picked on purpose is a different question, and the answer to it is "give them a
+wheel".
+
+The eight new ones fill the gaps rather than extending the list. Okabe–Ito's
+seven chromatic hues sit at 43°, 73°, 105°, 168°, 236°, 261° and 345° in OKLCH —
+three crowded into the warms and four gaps of 58° to 84°. The additions land at
+14, 126, 147, 191, 213, 282, 303 and 326, leaving fifteen chromatic hues spaced
+21–32° apart the whole way round. Each is the highest chroma sRGB will hold at
+its lightness and hue, capped at 0.16 so none shouts louder than the originals,
+and every lightness falls between 0.69 and 0.78 — inside the range the original
+eight already occupy, and far above the page's 0.145.
+
+**That "arranged more naturally" is a checked property, not a hand-written
+list.** `PALETTE_BY_HUE` orders the picker's grid, and
+`tests/hit-colours.test.ts` reads this stylesheet, converts every triplet to
+OKLCH and requires the array to be sorted by hue angle — so a hue that moves
+turns a test red instead of quietly putting the grid out of order. The
+achromatic slot sorts last, which is where the neutral belongs; giving a
+colourless colour a hue angle would have parked the grey in the middle of the
+spectrum.
+
+**What the sixteen cost, measured rather than asserted.** In normal vision the
+closest pair is 0.059 in OKLab — comfortably apart, though tighter than the
+eight were. Under simulated dichromacy it is much worse: deuteranopia collapses
+slot 5 and slot 11 to 0.016, and tritanopia takes slot 0 and slot 2 to zero.
+That is the honest reason these are opt-in and the automatic set is not — a
+reader who cannot tell teal from reddish purple will not choose both, whereas
+the hash would cheerfully hand them out together.
+
+## The original eight, and why those eight
 
 **Okabe–Ito, lifted for a black page.** The source is Masataka Okabe and Kei Ito's Color Universal
 Design set (2002, revised 2008), the most-used colour-blind-safe qualitative palette there is. Two

@@ -10,6 +10,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SearchPanel } from "./SearchPanel.js";
 import { assignSlots } from "./hit-colours.js";
+import { MODE_MIN } from "./layout.js";
 import type { SavedSearch } from "./useSearch.js";
 import "./styles.css";
 import "./tailwind.css";
@@ -32,8 +33,34 @@ function Preview() {
   const [active, setActive] = useState<string[]>([FIXTURE[0]!.id]);
   const slots = assignSlots(runs);
   return (
-    <div style={{ display: "flex", height: "100vh", background: "var(--page)" }}>
-      <div style={{ width: 288, display: "flex" }}>
+    /* **`.reader`, and the two custom properties App sets at runtime.** Not
+       decoration: `SearchPanel` renders `.mode-band`, which is
+       `position: fixed; left: var(--spine-w); width: var(--mode-w)`, and both
+       of those are declared on `.reader` alone (styles.css § .reader). A plain
+       `<div style={{width: 288}}>` therefore leaves them unset, `width`
+       resolves to `auto`, and the band shrink-wraps to its content — measured
+       at 824–930px in a browser pass, which is three times the real band and
+       makes every placement check meaningless. Found the hard way, 2026-08-27.
+
+       `MODE_MIN` rather than a literal 288, so this stays the narrowest real
+       band on the day that number moves. */
+    <div
+      className="reader spine-on"
+      style={
+        {
+          height: "100vh",
+          background: "var(--page)",
+          "--mode-w": `${MODE_MIN}px`,
+          /* The band is `top: var(--bar-h); bottom: var(--dock-h)`, and neither
+             exists here — there is no controls bar and no dock on this page. An
+             unset length is not zero, it is invalid, so the band would have no
+             top or bottom at all. */
+          "--bar-h": "0px",
+          "--dock-h": "0px",
+        } as React.CSSProperties
+      }
+    >
+      <div>
         <SearchPanel
           matcher="meaning"
           onMatcher={() => {}}
@@ -72,7 +99,17 @@ function Preview() {
           error={null}
         />
       </div>
-      <pre id="state" style={{ color: "#bbb", padding: "1rem", fontSize: 12 }}>
+      {/* Clear of the fixed band, so the state dump is readable beside it
+          rather than underneath it. */}
+      <pre
+        id="state"
+        style={{
+          marginLeft: `${MODE_MIN + 24}px`,
+          color: "#bbb",
+          padding: "1rem",
+          fontSize: 12,
+        }}
+      >
         {JSON.stringify(
           runs.map((r) => ({ id: r.id, colour: r.colour ?? null, slot: slots.get(r.id) })),
           null,

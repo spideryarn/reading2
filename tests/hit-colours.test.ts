@@ -19,7 +19,13 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assignSlots, CATEGORICAL_SLOTS } from "../src/web/hit-colours.js";
+import {
+  assignSlots,
+  CATEGORICAL_SLOTS,
+  isPaletteSlot,
+  PALETTE_BY_HUE,
+  PALETTE_SLOTS,
+} from "../src/web/hit-colours.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -205,7 +211,10 @@ describe("assignSlots", () => {
     const first = list[0];
     if (!first) throw new Error("fixture");
     const auto = assignSlots(list).get(first.id);
-    for (const bad of [CATEGORICAL_SLOTS, 99, -1, 2.5, Number.NaN]) {
+    /* `PALETTE_SLOTS`, not `CATEGORICAL_SLOTS`: slot 8 became a real hue on
+       2026-08-27 and this line used to be the one that said it was not. It
+       failing was the palette growing correctly. */
+    for (const bad of [PALETTE_SLOTS, 99, -1, 2.5, Number.NaN]) {
       const slots = assignSlots(list.map((r) => (r.id === first.id ? { ...r, colour: bad } : r)));
       expect(slots.get(first.id)).toBe(auto);
     }
@@ -242,15 +251,17 @@ describe("assignSlots", () => {
 describe("the palette the slots index into", () => {
   const css = readFileSync(path.join(root, "styles/colourscales.css"), "utf8");
 
-  it("defines exactly CATEGORICAL_SLOTS hues", () => {
+  it("defines exactly PALETTE_SLOTS hues", () => {
     /* Both directions matter and only one is loud. A stylesheet with *more*
        entries wastes them silently; with fewer, every mark belonging to a
        search past the end refers to an undefined custom property, which is an
        invalid value — so the wash and the rule paint nothing and the search
        looks like it found nothing. */
     const defined = [...css.matchAll(/^\s*--cat-(\d+)-rgb\s*:/gm)].map((m) => Number(m[1]));
+    /* `PALETTE_SLOTS`, not `CATEGORICAL_SLOTS` — the stylesheet holds every
+       hue that exists, and the hash only reaches the first eight of them. */
     expect([...defined].sort((a, b) => a - b)).toEqual(
-      Array.from({ length: CATEGORICAL_SLOTS }, (_, i) => i),
+      Array.from({ length: PALETTE_SLOTS }, (_, i) => i),
     );
   });
 
@@ -265,8 +276,90 @@ describe("the palette the slots index into", () => {
     }
   });
 
+  /** OKLCH hue angle, 0–360, for an `r g b` triplet. Ottosson's matrices. */
+  function hueOf(triplet: string): number {
+    const [r, g, b] = triplet.split(/\s+/).map(Number) as [number, number, number];
+    const lin = (c: number) => {
+      const v = c / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    const [R, G, B] = [lin(r), lin(g), lin(b)];
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    const q = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * q;
+    const Bb = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * q;
+    const chroma = Math.hypot(A, Bb);
+    if (chroma < 0.02) return Number.POSITIVE_INFINITY; // achromatic: sorts last
+    const h = (Math.atan2(Bb, A) * 180) / Math.PI;
+    return h < 0 ? h + 360 : h;
+  }
+
+  const triplets = new Map(
+    [...css.matchAll(/--cat-(\d+)-rgb\s*:\s*([^;]+);/g)].map((m) => [
+      Number(m[1]),
+      (m[2] ?? "").trim(),
+    ]),
+  );
+
+  it("orders the picker's grid by actual hue angle, measured from the stylesheet", () => {
+    /* **The test that makes "arranged more naturally" a property rather than a
+       hand-written list.** `PALETTE_BY_HUE` is an array of slot numbers living
+       in TypeScript, and the hues it claims to be sorted by live here — the
+       same two-places problem `CATEGORICAL_SLOTS` carries, and it rots the same
+       way: adjust one triplet in this file and the grid is silently out of
+       order, which looks like nothing at all. So the order is not trusted, it
+       is recomputed. Achromatic slots sort last, which is where the neutral
+       belongs and is why `hueOf` returns Infinity rather than an angle for it —
+       a hue angle for a colourless colour is arbitrary, and sorting on one
+       would put the grey somewhere in the middle of the spectrum. */
+    const angles = PALETTE_BY_HUE.map((slot) => {
+      const triplet = triplets.get(slot);
+      if (triplet === undefined) throw new Error(`no --cat-${slot}-rgb in the stylesheet`);
+      return hueOf(triplet);
+    });
+    expect(angles).toEqual([...angles].sort((a, b) => a - b));
+  });
+
+  it("puts every slot in the grid exactly once", () => {
+    // A permutation, so no hue is unreachable and none is offered twice.
+    expect([...PALETTE_BY_HUE].sort((a, b) => a - b)).toEqual(
+      Array.from({ length: PALETTE_SLOTS }, (_, i) => i),
+    );
+  });
+
+  it("keeps every hue clear of the page it is painted on", () => {
+    /* The failure the section header in colourscales.css is about: a colour
+       darker than `--page` (L 0.145) is a mark nobody can see, and it renders
+       perfectly. Measured rather than trusted, because eight of these were
+       generated and a generator is exactly the thing that can be wrong the
+       same way sixteen times. */
+    for (const [slot, triplet] of triplets) {
+      const [r, g, b] = triplet.split(/\s+/).map(Number) as [number, number, number];
+      const lin = (c: number) => {
+        const v = c / 255;
+        return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      const L =
+        0.2104542553 * Math.cbrt(0.4122214708 * lin(r) + 0.5363325363 * lin(g) + 0.0514459929 * lin(b)) +
+        0.793617785 * Math.cbrt(0.2119034982 * lin(r) + 0.6806995451 * lin(g) + 0.1073969566 * lin(b)) -
+        0.0040720468 * Math.cbrt(0.0883024619 * lin(r) + 0.2817188376 * lin(g) + 0.6299787005 * lin(b));
+      expect(L, `--cat-${slot}-rgb is too dark for the page`).toBeGreaterThan(0.55);
+    }
+  });
+
+  it("lets a reader choose a hue the hash will never hand out", () => {
+    /* The point of the two numbers. Slot 11 is a real colour and a valid
+       stored choice, and no automatic assignment can produce it. */
+    expect(isPaletteSlot(CATEGORICAL_SLOTS)).toBe(true);
+    expect(isPaletteSlot(PALETTE_SLOTS)).toBe(false);
+    const auto = [...assignSlots(runs(30)).values()];
+    expect(Math.max(...auto)).toBeLessThan(CATEGORICAL_SLOTS);
+    expect(assignSlots([{ ...runs(1)[0]!, colour: 11 }]).get(runs(1)[0]!.id)).toBe(11);
+  });
+
   it("gives every categorical hue a plain-colour alias beside it", () => {
-    for (let i = 0; i < CATEGORICAL_SLOTS; i++) {
+    for (let i = 0; i < PALETTE_SLOTS; i++) {
       expect(css).toMatch(new RegExp(`--cat-${i}\\s*:\\s*rgb\\(var\\(--cat-${i}-rgb\\)\\)`));
     }
   });

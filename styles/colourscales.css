@@ -42,7 +42,8 @@
 
 :root {
     /* ==================================================================
-       CATEGORICAL — eight hues that mean "these are different things"
+       CATEGORICAL — sixteen hues that mean "these are different things",
+       of which the first eight are the only ones handed out automatically
 
        In use: one per saved search (docs/project/search.md). Assigned by
        src/web/hit-colours.ts, which hands out slot *numbers* and never touches
@@ -89,6 +90,64 @@
     --cat-6-rgb: 232 163 59;    /* orange        — Okabe–Ito #E69F00, unchanged */
     --cat-7-rgb: 201 201 201;   /* light neutral — replaces Okabe–Ito's black */
 
+    /* ------------------------------------------------------------------
+       Eight more, 2026-08-27, and **only the reader may reach them.**
+
+       > And add more colours, arranged more naturally.
+       >
+       > — Greg, 2026-08-27
+
+       The automatic assignment still hands out slots 0–7 and nothing else
+       (`CATEGORICAL_SLOTS`, src/web/hit-colours.ts). These eight exist so that
+       somebody choosing a colour for a saved search has a palette to choose
+       from rather than a shortlist. That split is the whole design, and it is
+       what lets this section exist at all without contradicting the paragraph
+       above it: eight really is the top of the range anyone claims is reliably
+       distinguishable, and it still is — for hues nobody chose, overlaid on
+       each other in the prose, telling apart searches the reader did not
+       colour. A hue the reader picked on purpose is a different question, and
+       the answer to it is "give them a wheel".
+
+       It is also what keeps every saved search the colour it already was: the
+       automatic slot is `hash % CATEGORICAL_SLOTS`, so growing *that* number
+       would have recoloured every search anybody has ever run.
+
+       **Chosen to fill the gaps rather than to look nice.** Okabe–Ito's seven
+       chromatic hues sit at 43°, 73°, 105°, 168°, 236°, 261° and 345° in
+       OKLCH — three of them crowded into the warms, and four gaps of 58° to
+       84° with nothing in them. These eight land at 14, 126, 147, 191, 213,
+       282, 303 and 326, which leaves the fifteen chromatic hues spaced 21° to
+       32° apart the whole way round. That even spacing is what "arranged more
+       naturally" asks for: the picker lays them out in hue order, so the grid
+       reads as a wheel unrolled rather than as a bag of colours.
+
+       Every one is the **highest chroma sRGB will hold** at its lightness and
+       hue, capped at 0.16 so none of them shouts louder than the originals,
+       and every lightness is between 0.69 and 0.78 — inside the range the
+       Okabe–Ito eight already occupy (0.655–0.902), and far above the page's
+       0.145. Generated rather than eyeballed, and the numbers are recorded
+       beside each so a hand edit is visible.
+
+       **What this costs, measured rather than asserted.** In normal vision the
+       closest pair in the full sixteen is 0.059 in OKLab — comfortably apart,
+       though tighter than the eight were. Under simulated dichromacy it is
+       much worse: deuteranopia collapses slot 5 and slot 11 to 0.016, and
+       tritanopia takes slot 0 and slot 2 to zero. That is the honest reason
+       these are opt-in and the automatic set is not: a reader who cannot tell
+       teal from reddish purple will not choose both, whereas the hash would
+       cheerfully hand them out together. And the mitigation from the section
+       above still holds everywhere — the criterion is printed in full beside
+       every dot, so colour is never the only carrier.
+       ------------------------------------------------------------------ */
+    --cat-8-rgb:  240 111 128;  /* crimson       — L 0.700 C 0.159 h  14 */
+    --cat-9-rgb:  158 201 76;   /* yellow-green  — L 0.780 C 0.160 h 126 */
+    --cat-10-rgb: 89 196 106;   /* green         — L 0.736 C 0.161 h 147 */
+    --cat-11-rgb: 0 201 195;    /* teal          — L 0.755 C 0.130 h 191 */
+    --cat-12-rgb: 0 178 204;    /* cyan-blue     — L 0.701 C 0.123 h 213 */
+    --cat-13-rgb: 141 140 251;  /* violet        — L 0.690 C 0.160 h 282 */
+    --cat-14-rgb: 185 137 246;  /* purple        — L 0.720 C 0.160 h 303 */
+    --cat-15-rgb: 228 138 231;  /* magenta       — L 0.759 C 0.160 h 326 */
+
     --cat-0: rgb(var(--cat-0-rgb));
     --cat-1: rgb(var(--cat-1-rgb));
     --cat-2: rgb(var(--cat-2-rgb));
@@ -97,6 +156,14 @@
     --cat-5: rgb(var(--cat-5-rgb));
     --cat-6: rgb(var(--cat-6-rgb));
     --cat-7: rgb(var(--cat-7-rgb));
+    --cat-8: rgb(var(--cat-8-rgb));
+    --cat-9: rgb(var(--cat-9-rgb));
+    --cat-10: rgb(var(--cat-10-rgb));
+    --cat-11: rgb(var(--cat-11-rgb));
+    --cat-12: rgb(var(--cat-12-rgb));
+    --cat-13: rgb(var(--cat-13-rgb));
+    --cat-14: rgb(var(--cat-14-rgb));
+    --cat-15: rgb(var(--cat-15-rgb));
 
     /* ==================================================================
        SEQUENTIAL — nine steps that mean "this much of it"

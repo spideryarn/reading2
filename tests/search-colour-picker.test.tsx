@@ -21,7 +21,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchPanel } from "../src/web/SearchPanel.js";
-import { assignSlots, CATEGORICAL_SLOTS } from "../src/web/hit-colours.js";
+import { assignSlots, PALETTE_BY_HUE, PALETTE_SLOTS } from "../src/web/hit-colours.js";
 import type { SavedSearch } from "../src/web/useSearch.js";
 
 let container: HTMLDivElement;
@@ -134,30 +134,34 @@ describe("the colour picker on a saved search", () => {
     /* The count is the palette's, read from the same constant the stylesheet is
        pinned against (tests/hit-colours.test.ts). A grid hard-coded at eight
        would keep passing here on the day a ninth hue is added and simply never
-       offer it. */
+       offer it — which is not hypothetical: the palette went from eight to
+       sixteen on 2026-08-27, and `PALETTE_SLOTS` rather than
+       `CATEGORICAL_SLOTS` is what makes this line follow it. */
     await mount();
     await press(triggerFor(RUNS[0]!));
-    expect(swatches()).toHaveLength(CATEGORICAL_SLOTS);
+    expect(swatches()).toHaveLength(PALETTE_SLOTS);
   });
 
   it("reports the slot the reader pressed, and closes", async () => {
     await mount();
     await press(triggerFor(RUNS[0]!));
     await press(swatches()[3]!);
-    expect(recoloured).toEqual([[RUNS[0]!.id, 3]]);
+    // The fourth swatch, whichever slot the hue order puts there — the grid is
+    // laid out by hue and the reader is pressing a position, not a slot.
+    expect(recoloured).toEqual([[RUNS[0]!.id, PALETTE_BY_HUE[3]]]);
     expect(swatches()).toHaveLength(0);
   });
 
-  it("reports slot 0, which is the one an off-by-one would swallow", async () => {
-    /* The first swatch and the first hue have to be the same thing. An
-       implementation numbering the cells from one — which is what the *label*
-       does, deliberately — would send a 1 here and every colour in the app
-       would be one place along, which looks like a palette change rather than
-       like a bug. */
+  it("reports the first cell's slot, the one an off-by-one would swallow", async () => {
+    /* The first swatch and the first hue in the order have to be the same
+       thing. An implementation numbering the cells from one — which is what the
+       *label* does, deliberately — would send the second hue here, and every
+       colour in the app would be one place along, which looks like a palette
+       change rather than like a bug. */
     await mount();
     await press(triggerFor(RUNS[0]!));
     await press(swatches()[0]!);
-    expect(recoloured).toEqual([[RUNS[0]!.id, 0]]);
+    expect(recoloured).toEqual([[RUNS[0]!.id, PALETTE_BY_HUE[0]]]);
   });
 
   it("sends null for Automatic, never undefined", async () => {
@@ -177,7 +181,7 @@ describe("the colour picker on a saved search", () => {
     await mount();
     await press(triggerFor(RUNS[1]!));
     await press(swatches()[2]!);
-    expect(recoloured).toEqual([[RUNS[1]!.id, 2]]);
+    expect(recoloured).toEqual([[RUNS[1]!.id, PALETTE_BY_HUE[2]]]);
   });
 
   it("marks the reader's own choice, and says so to a screen reader", async () => {
@@ -186,8 +190,10 @@ describe("the colour picker on a saved search", () => {
     await press(triggerFor(RUNS[0]!));
     const current = swatches().filter((s) => s.classList.contains("current"));
     expect(current).toHaveLength(1);
-    expect(swatches().indexOf(current[0]!)).toBe(6);
-    expect(swatches()[6]?.getAttribute("aria-pressed")).toBe("true");
+    expect(swatches().indexOf(current[0]!)).toBe(PALETTE_BY_HUE.indexOf(6));
+    expect(
+      swatches()[PALETTE_BY_HUE.indexOf(6)]?.getAttribute("aria-pressed"),
+    ).toBe("true");
     // And "Automatic" is not also claiming to be the current one.
     expect(autoCell()?.classList.contains("current")).toBe(false);
     expect(autoCell()?.getAttribute("aria-pressed")).toBe("false");
@@ -218,8 +224,9 @@ describe("the colour picker on a saved search", () => {
     const runs = RUNS.map((r, i) => (i === 0 ? { ...r, colour: 2 } : r));
     await mount(runs);
     await press(triggerFor(RUNS[0]!));
-    expect(swatches()[2]?.classList.contains("current")).toBe(true);
-    expect(swatches()[2]?.classList.contains("showing")).toBe(true);
+    const at = PALETTE_BY_HUE.indexOf(2);
+    expect(swatches()[at]?.classList.contains("current")).toBe(true);
+    expect(swatches()[at]?.classList.contains("showing")).toBe(true);
   });
 
   it("closes on Escape without recolouring anything", async () => {
@@ -236,8 +243,11 @@ describe("the colour picker on a saved search", () => {
     await mount();
     await press(triggerFor(RUNS[0]!));
     // Numbered from one: the reader is counting swatches, not indexing an array.
+    /* Numbered by grid position, so the labels run 1..16 in order however the
+       slots underneath are arranged — a label naming the *slot* would say
+       "Colour 9" on the second swatch, which describes the database. */
     expect(swatches().map((s) => s.getAttribute("aria-label"))).toEqual(
-      Array.from({ length: CATEGORICAL_SLOTS }, (_, i) => `Colour ${i + 1}`),
+      Array.from({ length: PALETTE_SLOTS }, (_, i) => `Colour ${i + 1}`),
     );
     // And the trigger says which search it is about, since the row's own name
     // belongs to the button beside it.
@@ -250,8 +260,9 @@ describe("the colour picker on a saved search", () => {
        stylesheet, and a palette change would then mean editing TypeScript. */
     await mount();
     await press(triggerFor(RUNS[0]!));
-    for (const [i, swatch] of swatches().entries()) {
-      expect(swatch.getAttribute("style")).toContain(`--cat-rgb: var(--cat-${i}-rgb)`);
+    for (const [position, swatch] of swatches().entries()) {
+      const slot = PALETTE_BY_HUE[position];
+      expect(swatch.getAttribute("style")).toContain(`--cat-rgb: var(--cat-${slot}-rgb)`);
     }
     expect(document.querySelector(".srch-picker")?.outerHTML).not.toMatch(/#[0-9a-f]{3,6}\b/i);
   });

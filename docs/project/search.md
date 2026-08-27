@@ -610,12 +610,31 @@ Three things about it are worth knowing before touching it, and all three are in
   wrong: `if (!colour)` refuses the first hue in the palette, `if (colour !== undefined)` lets a
   float through to a custom-property name, where it paints nothing and says nothing.
 
+**Sixteen hues, arranged as a wheel** — Greg again, once the picker existed:
+*"add more colours, arranged more naturally."* The grid is 4×4 in hue order, so
+each row is a quarter of the circle (warms, greens, blues, violets) with the one
+colourless slot parked at the end. Two things about that are worth knowing:
+
+- **The hash still hands out only the first eight.** `CATEGORICAL_SLOTS` against
+  `PALETTE_SLOTS` — growing one number instead of two would have recoloured
+  every saved search anybody has ever run, and would have broken the
+  distinguishability argument exactly where it matters, which is hues nobody
+  chose overlaid on one paragraph. [colour-scales.md](colour-scales.md) has the
+  measurements, including the pairs that collapse under dichromacy.
+- **"Arranged more naturally" is a checked property.** The order is a list of
+  slot *numbers*; a test reads `colourscales.css`, converts each triplet to
+  OKLCH and requires that list to be sorted by hue angle. Move a hue and a test
+  goes red rather than the grid quietly falling out of order.
+
 **No colour-picker library**, and not for the usual reasons — `react-colorful` is 5.9M downloads a
 week, zero dependencies and 4.8KB. It is the wrong tool because it picks an *arbitrary* colour, and
 an arbitrary colour is the thing this control must not offer: the eight hues were chosen together
 for a near-black page ([colour-scales.md](colour-scales.md)), and the first thing anybody reaches for
 on a black background is a dark one nobody will be able to see. The picker is Floating UI, which was
-already here for the tooltips, with `useClick` where the tooltip has `useHover`.
+already here for the tooltips, with `useClick` where the tooltip has `useHover`. Note that "more
+colours" did **not** become a wheel — it became sixteen vetted ones, which is the same answer with a
+bigger number in it. The reason for a fixed set is that every hue has to survive a near-black ground
+and stand apart from its neighbours, and that is no less true of the sixteenth than of the eighth.
 
 ## The rail, and the shape of a search
 

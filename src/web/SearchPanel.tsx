@@ -112,7 +112,7 @@ import {
 } from "./search-hits.js";
 import type { HitOrder, Matcher } from "./params.js";
 import { MATCHERS } from "./params.js";
-import { CATEGORICAL_SLOTS } from "./hit-colours.js";
+import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { nextModeIndex } from "./Dock.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
@@ -1541,10 +1541,17 @@ function Hit({
 }
 
 /**
- * **Pick this search's colour** — eight swatches in a popover, and *automatic*.
+ * **Pick this search's colour** — the palette in a popover, and *automatic*.
  *
  * Greg, 2026-08-27: *"In Search mode, I'd like to be able to change the colour
- * for a given row."*
+ * for a given row."* And, once it existed: *"add more colours, arranged more
+ * naturally."* So it is sixteen hues in hue order, in a 4×4 grid, and the
+ * ninth choice under them.
+ *
+ * **The palette the picker offers is bigger than the one the hash uses** —
+ * `PALETTE_SLOTS` against `CATEGORICAL_SLOTS`, hit-colours.ts, which is where
+ * the reasoning for the split is. From in here the only consequence is that
+ * `PALETTE_BY_HUE` is what to iterate, never `CATEGORICAL_SLOTS`.
  *
  * ## Why there is no colour-picker library here
  *
@@ -1553,12 +1560,19 @@ function Hit({
  * reason is not weight or maintenance — react-colorful is 5.9M downloads a
  * week, zero dependencies and 4.8KB. It is that **every one of them is a
  * picker for an arbitrary colour**, and an arbitrary colour is the one thing
- * this control must not offer. The eight hues were chosen *together*: lifted
- * off Okabe–Ito for a near-black page, checked against each other for
- * colour-blind safety, and three of them moved because the published values
- * vanish on this background (docs/project/colour-scales.md). A spectrum wheel
- * invites a reader to pick a ninth colour nobody vetted, and the first thing
- * they would reach for on a black page is a dark one.
+ * this control must not offer. The hues were chosen *together*: lifted off
+ * Okabe–Ito for a near-black page, checked against each other for colour-blind
+ * safety, and extended along the gaps in that set's hue circle rather than by
+ * taste (docs/project/colour-scales.md). A spectrum wheel invites a reader to
+ * pick a seventeenth colour nobody vetted, and the first thing they would
+ * reach for on a black page is a dark one.
+ *
+ * Note that "more colours" did **not** become "a wheel" — it became sixteen
+ * vetted ones. That is the same answer as before with a bigger number in it,
+ * and it is worth saying because the obvious reading of Greg's second ask is
+ * that the survey's conclusion had expired. It had not: the reason for a fixed
+ * set is that every hue has to survive a near-black ground and stand apart from
+ * its neighbours, and that is no less true of the sixteenth than of the eighth.
  *
  * React Aria's `ColorSwatchPicker` *is* shaped right — a listbox of fixed
  * swatches, real keyboard semantics, explicit React 19 support — and was
@@ -1629,7 +1643,6 @@ function ColourPicker({
     useRole(context, { role: "dialog" }),
   ]);
 
-  const cells = Array.from({ length: CATEGORICAL_SLOTS }, (_, i) => i);
 
   return (
     <>
@@ -1660,7 +1673,15 @@ function ColourPicker({
               {...getFloatingProps()}
             >
               <div className="srch-picker-grid">
-                {cells.map((i) => (
+                {/* **In hue order, not slot order** — Greg, 2026-08-27:
+                    *"arranged more naturally"*. Slot numbers record when a hue
+                    was added, not where it sits on the wheel, so laying the
+                    grid out by index would scatter the spectrum: the eight
+                    Okabe–Ito hues first in their own arbitrary order, then the
+                    eight that fill their gaps. `PALETTE_BY_HUE` in
+                    hit-colours.ts is the ordering, and a test pins it against
+                    the stylesheet's actual hue angles so it cannot rot. */}
+                {PALETTE_BY_HUE.map((i, position) => (
                   <button
                     key={i}
                     type="button"
@@ -1676,12 +1697,15 @@ function ColourPicker({
                        component in the app that shows a reader the palette
                        itself, and it still does not know what is in it. */
                     style={{ "--cat-rgb": `var(--cat-${i}-rgb)` } as React.CSSProperties}
-                    /* Numbered from one, because the reader is counting
-                       swatches and not indexing an array. The number is here at
-                       all because "colour 3" is the only name these hues have —
-                       naming them "blue", "vermilion" and so on would be a
+                    /* Numbered from one, and by **where it is in the grid**
+                       rather than by its slot: the reader is counting swatches
+                       left to right, and a slot number is an implementation
+                       detail they have no way to see — "Colour 9" on the second
+                       swatch would be describing the database. The number is
+                       here at all because a position is the only name these
+                       hues have; calling them "blue" and "vermilion" would be a
                        second vocabulary that goes wrong the day a hue moves. */
-                    aria-label={`Colour ${i + 1}`}
+                    aria-label={`Colour ${position + 1}`}
                     aria-pressed={chosen === i}
                     onClick={() => {
                       onPick(i);

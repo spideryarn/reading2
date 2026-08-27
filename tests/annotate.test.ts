@@ -10,15 +10,19 @@
  * See docs/project/comments.md § Anchoring.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   annotateHtml,
+  BAR_HUES,
   HUE_STRIPES,
   renderedText,
   resolveMark,
   termMarks,
   type Mark,
 } from "../src/web/annotate.js";
-import { CATEGORICAL_SLOTS } from "../src/web/hit-colours.js";
+import { CATEGORICAL_SLOTS, PALETTE_SLOTS } from "../src/web/hit-colours.js";
 
 describe("renderedText", () => {
   it("is the concatenation of text nodes, with entities decoded", () => {
@@ -529,14 +533,52 @@ describe("annotateHtml — the colours of the searches that found the words", ()
   });
 
   it("ignores a slot past the end of the palette", () => {
-    /* An eight-hue palette has no `--cat-8-rgb`, so a slot of 8 emits a
+    /* A sixteen-hue palette has no `--cat-16-rgb`, so a slot of 16 emits a
        reference to a property nobody defined — invalid at computed-value time,
        which paints nothing. Exactly as silent as the NaN case above, and the
        reason the guard checks both ends of the range rather than just the
-       bottom. Raised by a GPT Sol review, 2026-08-26. */
-    const out = annotateHtml(HTML, [hitMark({ slot: CATEGORICAL_SLOTS })]);
+       bottom. Raised by a GPT Sol review, 2026-08-26.
+
+       **`PALETTE_SLOTS`, not `CATEGORICAL_SLOTS`**, since 2026-08-27. This line
+       said `CATEGORICAL_SLOTS` while the two were the same number, and it went
+       red the day the palette grew — correctly, because slot 8 is now a real
+       hue a reader can pick. The question the guard asks is "does this name a
+       hue we have?", never "would the hash have chosen it?". */
+    const out = annotateHtml(HTML, [hitMark({ slot: PALETTE_SLOTS })]);
     expect(out).not.toContain("data-hues");
-    expect(out).not.toContain(`--cat-${CATEGORICAL_SLOTS}-rgb`);
+    expect(out).not.toContain(`--cat-${PALETTE_SLOTS}-rgb`);
+  });
+
+  it("caps the paragraph bar at as many hues as the stylesheet can draw", () => {
+    /* **`BAR_HUES` is not a property of the palette**, which is the whole
+       reason it stopped being `CATEGORICAL_SLOTS` on 2026-08-27. It is the
+       number of `td.text.has-hit[data-hues="N"]` rules styles.css actually
+       defines, because that gradient's stops are written out per count. Set
+       `data-hues="9"` with only eight rules and *no* rule matches, so the bar
+       paints nothing at all — the whole mark vanishes rather than losing its
+       ninth stripe. Nothing in TypeScript can see that, so it is checked
+       against the stylesheet here rather than left to a comment. */
+    const css = readFileSync(
+      path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src/web/styles.css"),
+      "utf8",
+    );
+    const counts = [
+      ...css.matchAll(/td\.text\.has-hit\[data-hues="(\d+)"\]/g),
+    ].map((m) => Number(m[1]));
+    expect(counts.length).toBeGreaterThan(0);
+    expect(Math.max(...counts)).toBe(BAR_HUES);
+  });
+
+  it("paints a hue only a reader could have chosen", () => {
+    /* The other half of the same change: a slot in [8, 16) can never come out
+       of `assignSlots`, so nothing upstream of here produces one by accident —
+       and this is the line that decides whether a reader's own choice is drawn
+       at all. A guard still bounded at eight would have dropped every
+       hand-picked colour in the second half of the palette and painted the
+       paragraph as though the search had matched nothing. */
+    const out = annotateHtml(HTML, [hitMark({ slot: CATEGORICAL_SLOTS })]);
+    expect(out).toContain('data-hues="1"');
+    expect(out).toContain(`--cat-${CATEGORICAL_SLOTS}-rgb`);
   });
 
   it("gives a literal match no stripe attribute at all", () => {

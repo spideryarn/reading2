@@ -122,6 +122,62 @@
 export const CATEGORICAL_SLOTS = 8;
 
 /**
+ * How many hues the palette holds **in total** — what a reader may choose from.
+ *
+ * Greg, 2026-08-27: *"And add more colours, arranged more naturally."*
+ *
+ * **Two numbers, and the gap between them is the whole design.** The eight
+ * above are what the hash hands out on its own; these sixteen are what the
+ * picker offers. Growing one number rather than two would have been simpler
+ * and wrong twice over:
+ *
+ * - **Every saved search would change colour.** The automatic slot is
+ *   `hash32(id) % CATEGORICAL_SLOTS`. Change the modulus and every run in
+ *   every article lands somewhere else — which is precisely the one thing this
+ *   file exists to prevent, and it would happen silently, once, to everybody.
+ * - **The distinguishability argument would break where it actually matters.**
+ *   Eight is the top of the range anyone claims is reliably distinguishable,
+ *   and the automatic set is the hard case: nobody chose those hues, several
+ *   of them are overlaid on the same paragraph, and the reader is trying to
+ *   tell apart searches they never coloured. A hue somebody picked on purpose
+ *   is a different question. styles/colourscales.css has the measurements,
+ *   including the pairs that collapse under dichromacy.
+ *
+ * So a slot of 11 is a perfectly good stored colour and can never be handed
+ * out by accident. `isPaletteSlot` bounds on this number, because the question
+ * it answers is *"does this name a hue we have?"* — and everything that paints
+ * (annotate.ts, TableView.tsx, the picker) bounds on it too.
+ */
+export const PALETTE_SLOTS = 16;
+
+/**
+ * The slots in **hue order**, for anything that shows the palette as a palette.
+ *
+ * This is the "arranged more naturally" half of Greg's ask. Slot numbers are
+ * an accident of when a hue was added — the eight Okabe–Ito ones came first
+ * and the eight that fill their gaps came second — so laying the picker out in
+ * slot order would scatter the spectrum. In hue order the grid reads as a
+ * wheel unrolled: crimson through the warms to yellow, down through the greens
+ * and teals to the blues, round the violets and back to red, with the one
+ * colourless slot parked at the end where it cannot interrupt the run.
+ *
+ * **A list of numbers, so the seam holds.** Nothing here is a colour; this is
+ * an ordering *of slots*, and it is as much as TypeScript is allowed to know.
+ * It does mean the order and the stylesheet have to agree, which is the same
+ * two-places problem `CATEGORICAL_SLOTS` carries — so it is checked the same
+ * way: `tests/hit-colours.test.ts` reads colourscales.css, converts every
+ * triplet to OKLCH, and requires this array to be sorted by hue angle. A hue
+ * that moves therefore turns a test red rather than quietly putting the grid
+ * out of order.
+ */
+export const PALETTE_BY_HUE: readonly number[] = [
+  8, 1, 6, 3, // crimson, vermilion, orange, yellow
+  9, 10, 2, 11, // yellow-green, green, bluish green, teal
+  12, 0, 4, 13, // cyan-blue, sky blue, blue, violet
+  14, 15, 5, 7, // purple, magenta, reddish purple, and the neutral last
+];
+
+/**
  * What `assignSlots` needs to know about a run: who it is, when it arrived,
  * and whether the reader has already said what colour it should be.
  *
@@ -139,6 +195,10 @@ export interface PalettedRun {
 
 /**
  * Does this number name a hue we actually have?
+ *
+ * `PALETTE_SLOTS`, **not** `CATEGORICAL_SLOTS` — the question is "does this
+ * name a hue we have?", not "would the hash have chosen it?". A reader can pin
+ * a search to slot 11, which no automatic assignment will ever produce.
  *
  * **The only place that can answer**, because it is the only side of the seam
  * that knows how big the palette is — the server stores a slot without knowing
@@ -158,7 +218,7 @@ export function isPaletteSlot(value: number | undefined): value is number {
     typeof value === "number" &&
     Number.isInteger(value) &&
     value >= 0 &&
-    value < CATEGORICAL_SLOTS
+    value < PALETTE_SLOTS
   );
 }
 

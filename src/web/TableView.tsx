@@ -21,13 +21,13 @@ import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
 import {
   annotateHtml,
+  BAR_HUES,
   renderedText,
   resolveMark,
   termMarks,
   type Mark,
   type TermSelection,
 } from "./annotate.js";
-import { CATEGORICAL_SLOTS } from "./hit-colours.js";
 import { readSelection } from "./selection.js";
 import { internalTarget } from "./internal-links.js";
 import type { Section } from "./position.js";
@@ -643,7 +643,7 @@ export function TableView({
                            of your eye, so it answers "is any of my searches in
                            here" rather than "which of them is in this clause".
                            blockHues() in search-hits.ts. */
-                        /* `CATEGORICAL_SLOTS`, not `HUE_STRIPES`. The two caps
+                        /* `BAR_HUES`, not `HUE_STRIPES`. The two caps
                            are different because the two marks have different
                            amounts of room, and conflating them was throwing
                            away provenance for no reason: the stripes under a
@@ -653,7 +653,7 @@ export function TableView({
                            hue the palette has and never needs to drop one. */
                         ...Object.fromEntries(
                           (hitHues?.get(block.id) ?? [])
-                            .slice(0, CATEGORICAL_SLOTS)
+                            .slice(0, BAR_HUES)
                             .map((slot, i) => [`--h${i}`, `var(--cat-${slot}-rgb)`]),
                         ),
                       } as CSSProperties)
@@ -666,7 +666,7 @@ export function TableView({
                    been. */
                 data-hues={
                   hitHues?.get(block.id)?.length
-                    ? Math.min(hitHues.get(block.id)?.length ?? 0, CATEGORICAL_SLOTS)
+                    ? Math.min(hitHues.get(block.id)?.length ?? 0, BAR_HUES)
                     : undefined
                 }
               >

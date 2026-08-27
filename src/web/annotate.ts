@@ -34,7 +34,7 @@
  */
 
 import { termPattern, termSpans } from "../term-match.js";
-import { CATEGORICAL_SLOTS } from "./hit-colours.js";
+import { PALETTE_SLOTS } from "./hit-colours.js";
 import type { Block, BlockId } from "../types.js";
 
 /**
@@ -110,6 +110,27 @@ export type MarkKind = "cmt" | "chat" | "term" | "hit";
  * a segment in the bar down the left of the paragraph.
  */
 export const HUE_STRIPES = 6;
+
+/**
+ * How many hues the **bar down the left of a paragraph** can draw — eight.
+ *
+ * A different cap from `HUE_STRIPES` for the reason the comment above gives:
+ * the two marks have different amounts of room. The stripes share the few
+ * pixels of leading under one line of text; the bar runs the whole height of
+ * the paragraph. TableView.tsx sets it.
+ *
+ * **Its own constant since 2026-08-27, and that is the point of it.** It used
+ * to be `CATEGORICAL_SLOTS`, which was the same number by coincidence and
+ * stopped being so the day the palette grew to sixteen
+ * (`PALETTE_SLOTS`, hit-colours.ts). The number here is not a property of the
+ * palette at all: it is **how many `td.text.has-hit[data-hues="N"]` rules
+ * styles.css actually defines**, because the gradient's stops are written out
+ * per count. Set `data-hues="9"` and no rule matches, so the bar paints
+ * nothing — the whole mark disappears rather than losing its ninth stripe,
+ * which is the loud failure hiding inside a quiet-looking constant. Pinned
+ * against the stylesheet by tests/annotate.test.ts.
+ */
+export const BAR_HUES = 8;
 
 export interface Mark {
   /** The comment, or the glossary term, this mark belongs to. */
@@ -350,7 +371,7 @@ export function annotateHtml(html: string, marks: Mark[]): string {
             typeof slot !== "number" ||
             !Number.isInteger(slot) ||
             slot < 0 ||
-            slot >= CATEGORICAL_SLOTS
+            slot >= PALETTE_SLOTS
           ) {
             continue;
           }

@@ -82,6 +82,60 @@ reason. The one thing checked strictly is the *kind*: a float or a string reache
 `var(--cat-2.5-rgb)`, which is not an error anywhere and paints nothing at all —
 [silent-success](../reusable/silent-success.md) with a colour on it.
 
+## Sixteen hues, and why the automatic set stayed at eight
+
+Greg, once the picker existed:
+
+> And add more colours, arranged more naturally.
+>
+> — Greg, 2026-08-27
+
+**Two numbers now, and the gap between them is the design.** `CATEGORICAL_SLOTS`
+is 8 — what the hash hands out on its own — and `PALETTE_SLOTS` is 16, what the
+picker offers. Growing one number instead of two would have been simpler and
+wrong twice:
+
+- **Every saved search would have changed colour.** The automatic slot is
+  `hash32(id) % CATEGORICAL_SLOTS`; change the modulus and every run in every
+  article lands somewhere else. Silently, once, to everybody — the exact thing
+  hit-colours.ts exists to prevent.
+- **The distinguishability argument would break where it matters.** Eight is the
+  top of the range anyone claims is reliably distinguishable, and the automatic
+  set is the hard case: nobody chose those hues, several are overlaid on one
+  paragraph, and the reader is telling apart searches they never coloured. A hue
+  somebody picked on purpose is a different question.
+
+So a slot of 11 is a perfectly good stored colour that no automatic assignment
+can ever produce. Everything that *paints* had to move to the bigger number —
+`isPaletteSlot`, `annotate.ts`'s range guard, `TableView.tsx` — because a guard
+still bounded at eight would have dropped every hand-picked colour in the second
+half of the palette and drawn the paragraph as though the search had matched
+nothing.
+
+**One constant turned out to be two.** `TableView.tsx` capped the bar down the
+left of a paragraph at `CATEGORICAL_SLOTS`, which was the right number for the
+wrong reason: the cap is really *how many `td.text.has-hit[data-hues="N"]` rules
+`styles.css` defines*, because that gradient's stops are written out per count.
+It is now `BAR_HUES`, and it is pinned against the stylesheet by a test — set
+`data-hues="9"` with eight rules and **no** rule matches, so the bar paints
+nothing at all rather than losing its ninth stripe.
+
+The new hues fill the gaps rather than extending the list: Okabe–Ito's seven
+chromatic hues cluster three-in-the-warms with four gaps of 58–84°, and the
+additions land so that fifteen chromatic hues sit 21–32° apart the whole way
+round. Generated at the highest chroma sRGB will hold, capped so none shouts
+louder than the originals, and every lightness checked against the page.
+[colour-scales.md](../project/colour-scales.md) has the numbers and the honest
+cost under dichromacy.
+
+**"Arranged more naturally" is a checked property, not a hand-list.**
+`PALETTE_BY_HUE` orders the grid and is an array of slot *numbers*, so the seam
+holds — but it has to agree with a stylesheet it cannot see. So it is not
+trusted: `tests/hit-colours.test.ts` reads `colourscales.css`, converts every
+triplet to OKLCH and requires the array to be sorted by hue angle. Achromatic
+slots sort last, which is where the neutral belongs; giving a colourless colour
+a hue angle would have parked the grey in the middle of the spectrum.
+
 ## Two passes, not one
 
 `assignSlots` now reserves every chosen slot **before** a single automatic run probes. One ordered
