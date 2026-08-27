@@ -360,11 +360,19 @@ carry `input_cache_read`. The full set of pricing keys seen across all models is
 `input_cache_write`, `input_cache_write_1h`, `internal_reasoning`, `overrides`, `prompt`,
 `web_search`.
 
-**And one hole, found by looking.** `voyageai/voyage-4` — this app's embedding model, chosen by
-measurement in [semantic-search.md](semantic-search.md) — **is not in that endpoint at all.** Zero
-models match `/voyage/i`. So a price table built from `/api/v1/models` has no price for embeddings
-and would report every embedding call as costing nothing. That is exactly the failure this plan is
-supposed to prevent, and it would have shipped.
+**And one hole, found by looking — then found to be a different hole than it looked.**
+`voyageai/voyage-4`, this app's embedding model, returns **zero matches** in that endpoint. First
+reading: the model is simply absent, so a scraped price table reports every embedding call as free.
+
+Second reading, and the correct one: **embedding models are in a different catalog.**
+`GET /api/v1/embeddings/models` returns 33 of them, and voyage-4 is there —
+`{"prompt": "0.00000006"}`, i.e. $0.06/Mtok, matching this repo's own committed embedding eval
+figures. Verified live, 2026-08-27.
+
+Which makes the lesson sharper rather than weaker. The danger was never "the model does not exist".
+It was **that we looked in the one catalog we knew about, found nothing, and a zero would have been
+indistinguishable from an answer.** A scrape of `/api/v1/models` alone still produces exactly the
+silent failure described — it just does so while the price sits in plain sight one endpoint over.
 
 It does not matter much in the end, because embeddings are the one call that already gets a real
 dollar figure back: [`src/embeddings.ts`](../../src/embeddings.ts) reads
@@ -398,6 +406,17 @@ What arrives already is:
 estimate, already including whatever markup and routing it applied. For the five OpenRouter call
 sites, store it verbatim and do not recompute it. A second number computed from a price table could
 only ever disagree with the real bill.
+
+**And nothing in this app has ever read it.** Grepped: `usage.cost` appears at none of
+[`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts),
+[`src/search.ts`](../../src/search.ts) or
+[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts). Those files read `prompt_tokens`,
+`completion_tokens` and the two cache counts carefully — the plumbing is all there — and then let
+the one field that states the actual charge go past unread. So the gap on the OpenRouter half is not
+a flag to send or a request to change: **it is four lines that pick a value off an object the app is
+already parsing.** (`stream_options: { include_usage: true }`, which those three do send, is now a
+no-op like OpenRouter's own accounting flag — usage ships regardless. Harmless, and its comment
+should say so.)
 
 ### A bug I thought I had found in embeddings, and did not
 
@@ -557,6 +576,39 @@ The old app had `pending | success | failed` and a correlation id
 ([llm-plumbing.md](../project/original-version/llm-plumbing.md)); this plan dropped both without
 noticing, and the review caught it. They come back.
 
+### An aborted call's cost is a lower bound, and the row has to say so
+
+The uncomfortable half, and it does not have a fix — only an honest label.
+
+Aborting the HTTP connection stops the billing clock **only for providers that support server-side
+cancellation.** OpenRouter's list of those includes Anthropic, and this app pins routing to
+`anthropic/claude-sonnet-5` rather than routing openly, so we are in the favourable case. That is
+luck rather than design: the guarantee is a property of the upstream, and it would stop applying —
+silently — the day a task moved tier or the provider pin in
+[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) stopped biting.
+
+For the direct Anthropic SDK path there is no documented cancellation semantics at all. The safe
+assumption is the industry one: by the time a client closes its connection the model is mid-
+generation, most serving stacks do not check client liveness between tokens, and generation — with
+billing — often continues past the abort. Whether the final usage frame arrives on an aborted stream
+is provider-dependent and, as far as the research could establish, guaranteed by nobody.
+
+So the rule for the schema, and it should be written on the column rather than left to be inferred:
+
+> **On a row with `status = 'aborted'`, the cost is a lower bound.** It is what streamed before we
+> stopped listening, not what was generated and charged. `npm run cost` reports aborted spend on its
+> own line rather than folding it into the total.
+
+The distinction that would resolve this — *did the provider actually stop, or did we merely stop
+listening* — **is not observable from here.** `readerAborted` and the deadline signals in
+`openrouter-stream.ts` know only our side of it. Worth saying plainly, because a cost table that
+looks authoritative is exactly the thing somebody will later bill from.
+
+The metric the research turned up for this is worth stealing eventually: **paid-to-delivered token
+ratio**, which real deployments have measured above 1.5x. It is invisible on any dashboard built
+from provider-reported usage — which is what this table is — so it is a thing to be aware this table
+*cannot* tell us, rather than a column to add.
+
 **One trade to write down rather than solve.** Recording only in `finally` means a process killed
 mid-call leaves no row at all. The alternative — a `pending` row written *before* the call — costs
 a second write on every call to catch a case that ends in a job marked failed anyway. Taking the
@@ -675,6 +727,17 @@ rather than three. The remainder, kept short because each is now a decision rath
   exists for exactly this and keeps the insert off the reader's latency. Pipeline calls stay
   awaited, because the end-of-run total has to be exact. It is bounded by the function's duration,
   so it is not a completeness guarantee and a future spend cap must not be built on it.
+- **`pg_cron` and the transaction pooler: probably fine, and not verified.** A cron job's own
+  execution does not go through the pooler at all — pg_cron opens its own direct session-mode
+  connection — so none of the four things
+  [`src/db/client.ts`](../../src/db/client.ts) warns about apply to the job when it runs. Scheduling
+  it from a migration *does* cross the pooler, but `cron.schedule(...)` is a single statement in one
+  implicit transaction, and every one of those four footguns is about state surviving *across*
+  round-trips. **That is inference from pg_cron's architecture plus PgBouncer semantics, not a
+  Supabase doc anybody could quote.** So it gets a five-minute empirical check before it is relied
+  on: schedule a trivial job through the pooler connection, confirm it lands in `cron.job` and
+  actually fires. Cheap, and exactly the kind of assumption that otherwise fails in production and
+  nowhere else.
 - **`pg_cron` needs schema-qualifying.** `ai_calls` lives in the `spideryarn` schema and the plan
   scheduled a bare `update ai_calls`; the cron worker's search path cannot be assumed to include
   it. Schedule `select spideryarn.prune_ai_call_raw_responses()` instead, with a fixed empty

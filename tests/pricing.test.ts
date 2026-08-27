@@ -168,10 +168,12 @@ describe("priceAnthropicCall — additive, because input_tokens excludes the cac
   });
 
   /**
-   * The rule from the plan, and the reason it is a rule: `voyageai/voyage-4` is
-   * absent from OpenRouter's own model listing, so a price table built by
-   * scraping it would have reported every embedding call as free. An unknown
-   * model has to be distinguishable from a cheap one.
+   * The rule from the plan, and the worked example that makes it a rule:
+   * `voyageai/voyage-4` returns zero matches in OpenRouter's `/api/v1/models`,
+   * so a price table scraped from that endpoint alone reports every embedding
+   * call as free — while its real price ($0.06/Mtok) sits in a second catalog,
+   * `/api/v1/embeddings/models`. An unknown model has to be distinguishable
+   * from a cheap one.
    */
   it("returns null for a model it does not know, never zero", () => {
     expect(

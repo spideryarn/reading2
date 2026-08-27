@@ -53,12 +53,20 @@
  * ## A model with no price is an error, not a zero
  *
  * `priceAnthropicCall` returns `null` for a model it does not know, and callers
- * must record that as `unpriced` rather than as `0`. This is not theoretical:
- * `voyageai/voyage-4`, this app's embedding model, is not in OpenRouter's
- * `/api/v1/models` listing at all, so a price table built by scraping that
- * endpoint would have reported every embedding call as free. A missing price
- * must never be able to look like a cheap call.
- * docs/reusable/silent-success.md.
+ * must record that as `unpriced` rather than as `0`. A missing price must never
+ * be able to look like a cheap call.
+ *
+ * This is not theoretical, and the worked example is better than the rule.
+ * `voyageai/voyage-4` — this app's embedding model — returns **zero matches**
+ * in OpenRouter's `/api/v1/models`. It reads as a model with no price. It is
+ * not: embedding models live in a *separate* catalog,
+ * `/api/v1/embeddings/models`, where voyage-4 sits at $0.06/Mtok.
+ *
+ * So the trap was never "the model does not exist". It was that we looked in
+ * the one catalog we knew about, found nothing, and a zero would have been
+ * indistinguishable from an answer — while the real price sat one endpoint
+ * over. That is why the missing case is `null` and loud rather than `0` and
+ * plausible. docs/reusable/silent-success.md.
  */
 
 /**
