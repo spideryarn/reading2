@@ -269,6 +269,70 @@ for (const adapter of ADAPTERS) {
       expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("claimed");
     });
 
+    it("writes what the card says mid-step without letting go of the claim", async () => {
+      /* The reader-facing half of the claim. A step is one request and a model
+         call inside it takes tens of seconds; without this the poll in between
+         shows the step still `pending` and the card says nothing is happening.
+         So: the steps move, the status stays `running`, and the token stays
+         put — a `queued` here would let a second request in mid-step. */
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = crypto.randomUUID();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+
+      const running: JobStep[] = [{ ...job.steps[0]!, status: "running", detail: "12 KB" }];
+      const after = await store.noteProgress(job.id, attempt, running);
+      expect(after.status).toBe("running");
+      expect(after.steps[0]?.status).toBe("running");
+      expect(after.steps[0]?.detail).toBe("12 KB");
+
+      // Still held: a second request must not get in behind a progress write.
+      expect((await store.claim(job.id, OWNER, crypto.randomUUID(), LEASE)).kind).toBe("busy");
+      // And the claimant still owns it.
+      await store.releaseStep(job.id, attempt, running, {});
+    });
+
+    it("refuses a progress write onto a job that has ended under the claimant", async () => {
+      /* Built the dangerous way round, for the reason spelled out three tests
+         down: releasing clears the status *and* the token, so a test that
+         released first would pass with either condition deleted and prove
+         neither. The state that needs the third condition is a job that is over
+         and still carries its token — which the schema permits, because
+         `jobs_running_is_fenced` constrains `running` rows only. */
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      const attempt = crypto.randomUUID();
+      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+
+      await adapter.expire(job.id);
+      expect(await store.failExpired()).toBeGreaterThanOrEqual(1);
+      await adapter.reattach(job.id, attempt);
+
+      // id matches, attempt matches. Only `status = 'running'` refuses this.
+      await expect(store.noteProgress(job.id, attempt, job.steps)).rejects.toBeInstanceOf(
+        StaleAttemptError,
+      );
+    });
+
+    it("names the job holding a slug, and says nothing about a finished one", async () => {
+      /* What slug allocation asks. A job that has not written a `meta.json` yet
+         still owns its name, or two articles whose URLs end in the same segment
+         both take the bare one and the second is quietly handed the first's
+         job. A *finished* job owns nothing — its article speaks for it. */
+      const job = aJob();
+      await store.enqueueOrGet(job, "k1");
+      expect((await store.activeForSlug(job.slug, OWNER))?.id).toBe(job.id);
+      // Somebody else asking learns nothing, exactly as with `get`.
+      expect(await store.activeForSlug(job.slug, STRANGER)).toBeUndefined();
+
+      const attempt = crypto.randomUUID();
+      await store.claim(job.id, OWNER, attempt, LEASE);
+      expect((await store.activeForSlug(job.slug, OWNER))?.id).toBe(job.id);
+
+      await store.finish(job.id, attempt, { status: "done", steps: job.steps });
+      expect(await store.activeForSlug(job.slug, OWNER)).toBeUndefined();
+    });
+
     /**
      * **The fence's third condition, tested on the state that needs it.**
      *

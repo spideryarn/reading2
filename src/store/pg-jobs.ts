@@ -294,6 +294,26 @@ export const pgJobStore: JobStore = {
     return failed.length;
   },
 
+  async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
+    const db = getDb();
+    /* `steps` and nothing else — not the status, and **not the lease**. See the
+       contract: renewing here would turn the lease into a heartbeat, and the
+       claimant's own deadline has to be the thing that fires first. */
+    const moved = await db.update(jobs).set({ steps }).where(fence(id, attempt)).returning();
+    if (!moved[0]) throw new StaleAttemptError(id);
+    return toJob(moved[0]);
+  },
+
+  async activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined> {
+    const db = getDb();
+    const [row] = await db
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.ownerId, owner), eq(jobs.slug, slug), inArray(jobs.status, ACTIVE)))
+      .limit(1);
+    return row ? toJob(row) : undefined;
+  },
+
   async requestCancel(id: string, owner: OwnerId): Promise<Job | undefined> {
     const db = getDb();
     const [row] = await db

@@ -142,6 +142,26 @@ export interface JobStore {
    */
   releaseStep(id: string, attempt: string, steps: JobStep[], outcome: StepOutcome): Promise<Job>;
 
+  /**
+   * A step is **still running**: write what the card should say, keep the claim.
+   *
+   * The one write that is neither a release nor a finish, and it exists for the
+   * reader rather than for the queue. A step is one HTTP request and a model
+   * call inside it can take half a minute; without this, a poll during that
+   * half-minute sees the step still `pending` and the card says nothing is
+   * happening. `ingest-queue.md` spends a section on why the label is in the
+   * present tense — "Extracting the article" — and a label nobody is shown is
+   * not a label.
+   *
+   * Same three-condition fence as `releaseStep`, and deliberately **does not
+   * touch the lease**. Renewing here would be a heartbeat, and a heartbeat is
+   * what makes an expired lease mean "probably dead" instead of "definitely
+   * over its own deadline" — see the header on why takeover is out. The
+   * claimant's own timer is the thing that has to fire first, and it cannot if
+   * progress keeps pushing the lease away from it.
+   */
+  noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job>;
+
   /** The job is over. Same fence, and it clears the token and the lease. */
   finish(id: string, attempt: string, ending: JobEnding): Promise<Job>;
 
@@ -153,6 +173,22 @@ export interface JobStore {
    * removes the whole class of two-claimants-one-article. See the header.
    */
   failExpired(now?: Date): Promise<number>;
+
+  /**
+   * The job queued or running for this slug, if there is one.
+   *
+   * Slug allocation needs it — `freeSlug` has to know that a slug is spoken for
+   * by a job that has not written a `meta.json` yet, or two articles whose URLs
+   * end in the same segment, added a minute apart, both take the bare name.
+   *
+   * **Not the same question as `enqueueOrGet`'s conflict**, though they read
+   * the same row. That one is *may I have this slug*, answered by inserting;
+   * this is *who has it*, answered by looking — and the difference is that a
+   * lookup is allowed to be stale by the time the caller acts on it. Which is
+   * why the insert is still the thing that decides, and this is only what stops
+   * the caller offering a name it can already see is taken.
+   */
+  activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined>;
 
   /** Stop. Not fenced, because the reader is not a claimant. */
   requestCancel(id: string, owner: OwnerId): Promise<Job | undefined>;

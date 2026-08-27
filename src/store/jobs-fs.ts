@@ -271,6 +271,13 @@ export const fsJobStore: JobStore = {
     return structuredClone(job);
   },
 
+  async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
+    const job = fenced(id, attempt);
+    job.steps = steps;
+    await persist(job);
+    return structuredClone(job);
+  },
+
   async finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
     const job = fenced(id, attempt);
     job.status = ending.status;
@@ -306,6 +313,14 @@ export const fsJobStore: JobStore = {
       failed++;
     }
     return failed;
+  },
+
+  async activeForSlug(slug: string, owner: OwnerId): Promise<Job | undefined> {
+    await ready();
+    const held = [...index.values()].find(
+      (j) => j.ownerId === owner && j.slug === slug && !TERMINAL.has(j.status),
+    );
+    return held ? structuredClone(held) : undefined;
   },
 
   async requestCancel(id: string, owner: OwnerId): Promise<Job | undefined> {
