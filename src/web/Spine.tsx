@@ -100,6 +100,7 @@ import {
   type Row,
 } from "./spine-marks.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRenderCount } from "./perf.js";
 
 interface Band {
   entry: OutlineEntry;
@@ -222,6 +223,7 @@ const READING_LINE = 0.35;
 const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
 
 export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
+  useRenderCount("Spine");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [viewportH, setViewportH] = useState(() => window.innerHeight);

@@ -746,7 +746,14 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           arguable with — the same rule the vocabulary edges follow, and the
           most important thing docs/project/diagram.md records about them. */}
       {drawingPoints && axis === "lanes" && kind === "drift" && lanes.length > 0 && (
-        <ul className="diag-lanes" aria-label="What each column is about">
+        <ul
+          className="diag-lanes"
+          aria-label="What each column is about"
+          /* The grid needs to know how many columns to make, and only this
+             component knows — see § drift and trail in styles.css for why the
+             legend is a grid rather than a wrapping row. */
+          style={{ "--lanes": lanes.length } as React.CSSProperties}
+        >
           {lanes.map((words, i) => (
             <li
               // The lane index IS the identity here — lane 3 is lane 3 whatever
@@ -755,7 +762,11 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               key={i}
               className="diag-lane"
               style={hue === "topic" ? slotStyle(i) : undefined}
-              title={words.length > 0 ? words.join(" · ") : "No distinctive words in this column"}
+              title={
+                words.length > 0
+                  ? `Column ${i + 1}: ${words.join(" · ")}`
+                  : `Column ${i + 1}: no distinctive words`
+              }
             >
               {words[0] ?? "—"}
             </li>

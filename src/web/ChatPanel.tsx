@@ -63,6 +63,7 @@ import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { UseProfile } from "./WrittenForYou.js";
 import { useHasProfile } from "./useProfile.js";
+import { useRenderCount } from "./perf.js";
 
 interface Props {
   threads: ChatThread[];
@@ -212,6 +213,7 @@ export function ChatPanel({
   focusNonce,
   error,
 }: Props) {
+  useRenderCount("ChatPanel");
   const open = threads.find((t) => t.id === threadId) ?? null;
 
   /**

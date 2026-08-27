@@ -256,7 +256,11 @@ export function Library() {
             developer furniture, and a reader arriving at their shelf should not
             have to step over it. Same faint-until-hovered treatment as the
             back-link in Masthead.tsx, so the two read as one convention. */}
-        <div className="tw:flex tw:items-baseline tw:justify-between tw:gap-4">
+        {/* Wraps rather than letting the two links crush the wordmark in a
+            narrow window. They keep `justify-between` when they fit and drop to
+            their own line when they do not — and `gap-y-1` keeps that second
+            line off the strapline below. */}
+        <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1">
           <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
           <div className="tw:flex tw:items-baseline tw:gap-4">
             {/* Home is where a global thing gets a way in. The profile page

@@ -68,6 +68,7 @@ import { currentEntryId, rungText, type SummaryNode } from "./tree.js";
 import type { UseSummaries } from "./useSummaries.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { useRenderCount } from "./perf.js";
 
 interface Props extends UseSummaries {
   /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
@@ -123,6 +124,7 @@ export function SummaryPanel({
   atRow,
   onJump,
 }: Props) {
+  useRenderCount("SummaryPanel");
   /**
    * Which sections the reader has closed.
    *

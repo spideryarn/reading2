@@ -60,6 +60,21 @@ export default defineConfig(() => {
         configureServer(server) {
           server.middlewares.use(apiMiddleware);
         },
+        /* The same API in front of the built bundle, so `vite preview` serves
+           something a reader could actually use.
+           
+           This exists for performance work, and the reason is that **the dev
+           server is the wrong thing to measure**. `StrictMode` renders every
+           component twice on purpose, `@react-refresh` installs timers of its
+           own, and modules arrive unbundled and untranspiled — so a render
+           count taken from `npm run dev` is roughly double the real one, and a
+           CPU figure is inflated by machinery that never ships. Without this
+           hook, `vite preview` has no `/api`, the article never loads, and the
+           only measurable thing is the dev server. See
+           docs/project/performance.md. */
+        configurePreviewServer(server) {
+          server.middlewares.use(apiMiddleware);
+        },
       },
     ],
     // `@/` -> src/web, matching "paths" in src/web/tsconfig.json. Points at the

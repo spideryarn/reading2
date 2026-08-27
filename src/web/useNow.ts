@@ -24,8 +24,42 @@ export function useNow(everyMs: number = A_MINUTE): number {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), everyMs);
-    return () => clearInterval(timer);
+    /* **Not while the tab is hidden.** "3 minutes ago" going stale matters
+       only to somebody reading it, and nobody is: this hook exists so a shelf
+       left open does not quietly rot, and a shelf in a background tab is not
+       being looked at to rot in front of. Left running it re-rendered the whole
+       library once a minute, all night, to change no pixel anybody saw.
+
+       The catch-up on return is the whole reason this is safe. Coming back
+       reads the clock immediately rather than up to a minute later, so the
+       reader never sees the stale number the pause created — which is the one
+       failure this could have introduced, and the one it must not. */
+    const tick = () => setNow(Date.now());
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const start = () => {
+      if (timer === undefined) timer = setInterval(tick, everyMs);
+    };
+    const stop = () => {
+      clearInterval(timer);
+      timer = undefined;
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        stop();
+        return;
+      }
+      tick();
+      start();
+    };
+
+    if (document.visibilityState !== "hidden") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [everyMs]);
 
   return now;

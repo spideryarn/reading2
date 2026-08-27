@@ -47,6 +47,7 @@ import { BlockRef } from "./BlockRef.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
+import { useRenderCount } from "./perf.js";
 
 interface Props extends UseIdeas {
   /** Which idea is open, from `?idea=`. */
@@ -106,6 +107,7 @@ export function IdeasPanel({
   onOpenKey,
   onJump,
 }: Props) {
+  useRenderCount("IdeasPanel");
   /* Seeded from what the list on screen was written with, so the box is already
      in the state the reader last chose and nothing has to remember it between
      visits: the artefact does. `useState`'s initialiser rather than an effect,

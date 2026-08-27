@@ -87,6 +87,7 @@ import type { HitOrder, Matcher } from "./params.js";
 import { MATCHERS } from "./params.js";
 import { nextModeIndex } from "./Dock.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRenderCount } from "./perf.js";
 
 interface Props {
   matcher: Matcher;
@@ -158,6 +159,7 @@ export function SearchPanel({
   onOpen,
   error,
 }: Props) {
+  useRenderCount("SearchPanel");
   /**
    * The draft question, lifted out of `Box`.
    *

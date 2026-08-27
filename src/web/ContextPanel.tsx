@@ -38,6 +38,7 @@ import { TooltipGroup } from "./Tooltip.js";
 import { FOCUS_LINE, type ColumnRect } from "./useColumnContext.js";
 import { NAV_DEPTH_ATTR } from "./keynav.js";
 import { SWIPE_ATTR } from "./swipe.js";
+import { useRenderCount } from "./perf.js";
 
 /**
  * Long enough that crossing the list on the way to the prose fires nothing;
@@ -118,6 +119,7 @@ export function ContextPanel({
   onJump,
   onHoverNode,
 }: Props) {
+  useRenderCount("ContextPanel");
   const panel = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
 

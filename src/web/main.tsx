@@ -5,6 +5,7 @@ import { LucideProvider } from "lucide-react";
 import { App } from "./App.js";
 import { CALLBACK_HREF, canonicalAddHref, parseRoute, readHref } from "./router.js";
 import { isSpideryarnId } from "../ids.js";
+import { startPerf } from "./perf.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
 // styles.css inside `@layer app` — importing the two side by side would
 // leave styles.css unlayered, where it silently outranks every Tailwind
@@ -23,6 +24,20 @@ import "./tailwind.css";
  * that decides. See src/web/position.ts.
  */
 history.scrollRestoration = "manual";
+
+/**
+ * Count what the page does when nobody is asking it to — but only if asked.
+ *
+ * **First, and before React exists.** The probe patches `setTimeout`, `fetch`
+ * and `requestAnimationFrame`, and anything that captured one of those before
+ * the patch goes on calling the original and is invisible for the life of the
+ * page. Modules run in import order, so a poller that grabs `setTimeout` at
+ * module scope would already have escaped by the time an effect ran.
+ *
+ * Off unless `?perf=1` or `localStorage["spya-perf"]`, in which case this is a
+ * function call that returns. See src/web/perf.ts.
+ */
+startPerf();
 
 /**
  * Let nuqs see the history writes it did not make. **This is opt-in, and

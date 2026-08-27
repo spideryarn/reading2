@@ -89,6 +89,7 @@ import { hostOf, isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
+import { useRenderCount } from "./perf.js";
 
 interface Props extends UseGlossary {
   /** The selected term, from `?term=`. Null is a list nobody has picked from. */
@@ -139,6 +140,7 @@ export function GlossaryPanel({
   looking,
   lookFailed,
 }: Props) {
+  useRenderCount("GlossaryPanel");
   /* `effectiveSort` and not `sort`: `prioritised` is the default, so it arrives
      on glossaries whose scores cannot support it, and everything below — the
      groups, the SortBar's pressed state, the numbers on each row — has to agree
