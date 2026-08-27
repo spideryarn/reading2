@@ -31,6 +31,7 @@ import {
   TooLongForOnePass,
   truncationFailure,
 } from "../src/token-budget.js";
+import { DEV_OWNER_ID } from "../src/owner.js";
 import type { Job, Tree } from "../src/types.js";
 
 /** A finished, failed job carrying whatever kind we want to ask about. */
@@ -38,6 +39,7 @@ function failed(failureKind?: Job["failureKind"]): Job {
   return {
     id: "spya-testjb",
     slug: "a-slug",
+    ownerId: DEV_OWNER_ID,
     steps: [],
     status: "error",
     createdAt: "2026-08-26T10:00:00.000Z",

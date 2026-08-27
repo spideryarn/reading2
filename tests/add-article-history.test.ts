@@ -17,6 +17,7 @@
  * shows this sitting.
  */
 import { describe, expect, it } from "vitest";
+import { DEV_OWNER_ID } from "../src/owner.js";
 import type { Job, JobStatus } from "../src/types.js";
 import { earlier } from "../src/web/AddArticle.js";
 
@@ -24,8 +25,15 @@ const OPENED = Date.parse("2026-08-27T12:00:00.000Z");
 const BEFORE = "2026-08-27T11:00:00.000Z";
 const AFTER = "2026-08-27T12:30:00.000Z";
 
-const job = (status: JobStatus, finishedAt?: string): Job =>
-  ({ id: "j", slug: "s", ownerId: "o", status, createdAt: BEFORE, steps: [], finishedAt }) as Job;
+const job = (status: JobStatus, finishedAt?: string): Job => ({
+  id: "j",
+  slug: "s",
+  ownerId: DEV_OWNER_ID,
+  status,
+  createdAt: BEFORE,
+  steps: [],
+  ...(finishedAt ? { finishedAt } : {}),
+});
 
 describe("what the add box folds away", () => {
   it("folds away anything that finished before the tab was opened", () => {

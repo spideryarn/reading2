@@ -40,6 +40,7 @@ import type { StepContext } from "../src/pipeline.js";
 import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
 import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
+import { DEV_OWNER_ID } from "../src/owner.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
 function step(name: StepName, status: JobStep["status"]): JobStep {
@@ -50,6 +51,7 @@ function job(status: Job["status"], steps: JobStep[]): Job {
   return {
     id: "spya-testjb",
     slug: "a-slug",
+    ownerId: DEV_OWNER_ID,
     steps,
     status,
     createdAt: "2026-08-25T10:00:00.000Z",
@@ -906,13 +908,22 @@ describe("advancing a job one step at a time", () => {
     const [a, b] = await Promise.all([advanceJob(queued.id), advanceJob(queued.id)]);
     expect(fetched).toHaveBeenCalledTimes(1);
     expect(most).toBe(1);
-    // One did the work; the other was told to wait and ask again. Neither is an
-    // error: a second tab cannot know without asking.
-    expect([a?.busy, b?.busy].sort()).toEqual([false, true]);
-    expect([a?.ran, b?.ran].sort()).toEqual([null, "fetch"]);
+    /* One did the work; the other was told to wait and ask again. Neither is an
+       error: a second tab cannot know without asking.
+
+       Named rather than sorted. The first version of this asserted
+       `[a?.ran, b?.ran].sort()` against `[null, "fetch"]` and was red, because
+       the default sort compares *strings* — `"fetch"` before `"null"` — so it
+       was pinning the order a comparator happened to produce rather than the
+       fact it meant. Pick the winner out by the thing that identifies it. */
+    const [winner, loser] = a?.busy === false ? [a, b] : [b, a];
+    expect(winner?.busy).toBe(false);
+    expect(loser?.busy).toBe(true);
+    expect(winner?.ran).toBe("fetch");
+    expect(loser?.ran).toBeNull();
     // And the one that was turned away must not claim the job is over, or its
     // loop would stop on a job that still has a step to run.
-    expect(a?.busy === true ? a?.done : b?.done).toBe(false);
+    expect(loser?.done).toBe(false);
   });
 
   it("refuses while the in-process queue still owns the job", async () => {
