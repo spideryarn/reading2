@@ -1,6 +1,7 @@
 # Reading offline
 
-Status: **proposal, nothing built.** Written 2026-08-27. GPT Sol's review of this proposal is in
+Status: **Slices 0, 1 and 2 built, 2026-08-27** — see § What was built. Slices 3–5 not started.
+Written 2026-08-27. GPT Sol's review of this proposal is in
 [offline-reading-review-sol.md](offline-reading-review-sol.md) and its findings are folded in below.
 
 The ask, from Greg, 2026-08-27:
@@ -160,6 +161,171 @@ elsewhere in this app and reusing it would collide.
 
 If reconnecting finds a changed ETag, **do not replace the article under the reader.** Offer *"A
 newer version is available — reload when ready."*
+
+## What already works offline, and what does not
+
+Established by reading the code, 2026-08-27 — the Claude-in-Chrome extension was not connected, so
+this has not yet been watched happening in a browser.
+
+Greg's impression was that things *"seemed to work ok within an article for at least the things I'd
+already downloaded"*. Half right, and the other half is the best argument for doing this at all:
+
+```
+  offline, article already open on screen
+  ---------------------------------------
+  keep reading the prose            works   (held in React state)
+  the ToC / tree                    works   (arrives inside the article payload)
+  scroll, zoom columns, up/down     works   (all client-side)
+  switch to the summary band        BREAKS  (panel remounts, refetches)
+  switch to glossary, ideas, chat   BREAKS  (same)
+  go Home, come back                BREAKS  (whole page remounts)
+```
+
+Every band is mounted only while it is open — `{mode === "glossary" && …}`
+([`App.tsx:1289`](../../src/web/App.tsx)) — and each fetches on mount. That is deliberate and the
+reason is good: *"`useSummaries` fetches on mount, and calling it up in `Reader` would charge every
+reader of every article a request for a panel almost none of them will open"*
+([`App.tsx:2088`](../../src/web/App.tsx)). The consequence is that everything already computed for
+the article in front of you — glossary, summaries, ideas, chat history — is one band-switch away
+from an error, offline.
+
+So the cache earns its keep even in the narrowest case Greg cares most about: the document already
+open.
+
+## Libraries
+
+Chosen against [third-party-library-selection.md](../reusable/third-party-library-selection.md),
+whose first criterion is a long-lived, heavily-documented community.
+
+**`idb`** — Jake Archibald's promise wrapper, 1.4KB gzipped, 24.5M weekly downloads, the wrapper MDN
+and web.dev reach for and the one Workbox and Firebase use internally. We need one thing beyond
+get/put: **order by `lastOpened`, for eviction**. That needs a real IndexedDB index, which rules out
+`idb-keyval` (0.8KB but a single store with no indexes — an LRU pass would have to load every cached
+article body into memory to sort them, defeating the size cap). `dexie` is excellent and actively
+maintained but is 31KB of schema-migration and live-query machinery we would not use.
+`localforage` is out: last release 2021, still references WebSQL, which browsers removed.
+
+**`vite-plugin-pwa`, in `injectManifest` mode — later, only if layer 2 happens.** Its peer range
+covers Vite 8. The one part worth not hand-rolling is the precache manifest of Vite's hashed
+filenames, which has to be re-derived correctly on *every* deploy and fails silently when it isn't.
+The fetch handler itself we write by hand, because the rules that matter — deny `/api/`, no
+`skipWaiting`, the kill switch — are ours.
+
+**Nothing else.** Online/offline detection is ~20 lines of `useSyncExternalStore` over the `online`
+and `offline` events, and no generic hook would fit the four-state auth machine anyway. The cache
+policy is ~50 lines against `idb`; the purpose-built "fetch with an IndexedDB fallback" packages are
+all single-maintainer or the wrong shape, and none encodes our rules (401/403/404/410 pass straight
+through, never fall back after an `AbortError`).
+
+**Not TanStack Query — and this is the one worth explaining.** By the community criterion it is the
+best-represented library in the entire search, and it would replace ten hand-rolled hooks that each
+reinvent loading and error state. But it conflates two jobs: *make articles readable offline*, which
+is a change to one function, and *stop every feature hand-rolling its own hook*, which is a real but
+separate refactor nobody has asked for. Doing both at once turns a 4–6 day feature into a much
+larger one, against code that already works. It interoperates with a plain `apiFetch` as its
+`queryFn`, so it can be adopted for **new hooks only** later, with no forced migration — a separate
+conversation.
+
+## The plan, ordered by ease against value
+
+### Slice 0 — make the offline failure fast and honest *(half a day)*
+
+Cheapest thing here, fixes a real bug today whether or not anything else gets built, and nothing else
+works without it. Today an offline reader an hour into a session waits ~25 seconds and is then told
+their credentials are bad.
+
+- Do not enter a token refresh that cannot succeed. Treat `navigator.onLine === false` as a hint to
+  skip it, and put a short deadline on the attempt regardless.
+- Persist the last authenticated user id ourselves, so "we know who you are and cannot reach the
+  server" is representable.
+- Let the app render for a known user without a live session, rather than timing out into sign-in.
+
+### Slice 1 — the cache *(~2 days)*
+
+- One `idb` store, records `{ userId, url, body, savedAt, lastOpened, bytes }`, `lastOpened` indexed.
+- Write through on a **200 JSON** response to a whitelisted GET. Never cache a non-200 — a 404 from
+  `/api/glossary/:slug` is the ordinary "not generated yet" answer and must not be frozen in.
+- Read back **only** on a transport failure. Not on 401/403/404/410, not on an `AbortError`.
+- Whitelist: `/api/article/:slug` and the per-article artefacts Greg named — glossary, summary,
+  ideas, metadata, tweets, chat, comments, searches — plus `/api/library`.
+- Do not cache `/api/library/search`, `/api/jobs`, `/api/models`.
+- Evict least-recently-opened past 100 articles or 50MB.
+- Suppress the open-counter `POST` and other fire-and-forget writes while offline.
+
+### Slice 2 — say so *(half a day)*
+
+One strip for the connection, one line on the article for its saved date. Driven by what actually
+happened to requests, never by `navigator.onLine` alone.
+
+### Later, in this order
+
+3. Offline Home lists only articles whose bodies we actually hold.
+4. Content-derived ETags and `304` handling, so a cached copy can be checked rather than trusted.
+5. The shell service worker, for reload and cold start.
+
+## What was built
+
+Two Sol reviews, the second of them
+[offline-reading-slices-review-sol.md](offline-reading-slices-review-sol.md), on the sliced plan
+above. Slices 0, 1 and 2 landed together, because Sol's third finding was that shipping the cache
+without the strip is exactly the silent success this repo keeps writing postmortems about.
+
+- **[`src/web/lib/offline-store.ts`](../../src/web/lib/offline-store.ts)** — the IndexedDB store.
+  Records are keyed on `${userId}\n${url}`; eviction is by **article**, not by response.
+- **[`src/web/lib/api.ts`](../../src/web/lib/api.ts)** — the auth deadline, the cache read on
+  transport failure, the write-through, and invalidation after a successful mutation.
+- **[`src/web/offline.ts`](../../src/web/offline.ts)** — connected, and reading-a-copy, kept as two
+  facts rather than one.
+- **[`src/web/OfflineStrip.tsx`](../../src/web/OfflineStrip.tsx)** — the one line at the bottom.
+- Tests: `tests/api-fetch-offline.test.ts` (order of operations, `apiFetch`'s cache mocked) and
+  `tests/offline-store.test.ts` (the store, against a real IndexedDB via `fake-indexeddb`).
+
+### Where this diverged from Sol's review, and why
+
+**Kept the wider whitelist, and added invalidation instead.** Sol wanted chat, comments and saved
+searches cut from the first slice, because they are lists the reader mutates and a cache kept past a
+delete resurrects what they deleted. That risk is real, but the ask was explicit —
+
+> I'm hoping that stuff that has already been computed (e.g. existing ToC, glossary, summary, ideas,
+> chat history, etc etc) will be available?
+>
+> — Greg, 2026-08-27
+
+— so rather than drop them, any successful non-GET now clears the cached reads under the same
+resource prefix. `DELETE /api/chat/<slug>/<thread>` clears `/api/chat/<slug>`. The cost is the one
+Sol named and it is accepted rather than solved: delete a comment and immediately lose your
+connection, and you have no cached comments for that article until you are back online. A worse
+offline experience and a correct one.
+
+**Kept `/api/library`, and built the filter with it.** Sol said either build the
+cached-shelf-intersection filter or defer both. Built it: `onlyWhatWeHave` in `api.ts` filters the
+cached shelf through `cachedSlugs()`, which asks the database rather than trusting a flag. A shelf
+that lists articles it cannot open is worse than a short one.
+
+**Did not build the offline-known-user gate**, exactly as Sol recommended — `useSession.ts` and the
+`App()` gate are untouched. The stored user id partitions the cache and nothing else; it is not an
+authorisation and there is no path by which it becomes one. That decision comes back with the
+service worker, if it does.
+
+**Took the cheap answer on a body that dies mid-read.** `apiFetch` falls back only when `fetch()`
+itself rejects. A body that fails after its headers arrived leaves the previous copy alone rather
+than replacing it with half a document — but it is not rescued. Buffering every cacheable response
+to fix that would change what `apiFetch` returns for every caller, which is not an 80/20.
+
+### Two bugs found by testing, both worth keeping
+
+**Three "does not save…" tests could not fail.** They asserted `writeCache` had not been called,
+immediately after an `await` — but the save is deliberately fire-and-forget, so it had not happened
+*yet* rather than never. Run against a `cacheable()` forced to `true`, all three still passed. They
+now wait a turn first. A negative assertion about an unawaited promise is not a test.
+
+**`tests/client-imports.test.ts` had a latent bug this was the first code to hit.** It read one
+leading `../` as "this import leaves `src/web`", which is only true for a file sitting directly in
+`src/web`. `src/web/lib/` is two deep, so `api.ts` importing `../offline.js` — a sibling of its own
+parent, plainly inside the client — was reported as an escape. Nothing had caught it because
+everything under `lib/` had until now imported only its own directory. The rule now resolves the
+specifier against the importing file. Checked both ways: it still catches an import reaching outside
+`src/`, and one reaching a `src/` module that is not on the shared allowlist.
 
 ## Decisions Greg made, 2026-08-27
 

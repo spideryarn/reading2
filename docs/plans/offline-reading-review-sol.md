@@ -48,7 +48,7 @@ The hard parts are instead:
 - A worker needs custom cache-key logic or a user-id message from the page.
 - Most importantly, the worker sees nothing until the page calls `fetch`. Today `apiFetch` waits for Supabase first, so auth can hang before the worker gets a request.
 
-You already have the better semantic seam in [api.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/lib/api.ts:227). Use IndexedDB records such as:
+You already have the better semantic seam in api.ts (`src/web/lib/api.ts:227`). Use IndexedDB records such as:
 
 ```text
 { userId, url, body, etag, savedAt, checkedAt, lastOpened, bytes }
@@ -72,13 +72,13 @@ Keep it shell-only: `index.html`, hashed JS/CSS, fonts, icons, and navigation fa
 
 ## 3. The auth trap is real and worse than suspected
 
-Current `apiFetch` calls `getSession()` before `fetch` [here](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/lib/api.ts:242). The installed Supabase client:
+Current `apiFetch` calls `getSession()` before `fetch` here (`src/web/lib/api.ts:242`). The installed Supabase client:
 
 - Waits for initialization.
 - Treats a token inside a 90-second margin as expired.
-- Attempts a refresh with exponential retries bounded around a 30-second tick—but an individual `fetch` has no deadline. [Installed `GoTrueClient.ts`](/Users/greg/Dropbox/dev/experim/spideryarn2/node_modules/@supabase/auth-js/src/GoTrueClient.ts:2864).
+- Attempts a refresh with exponential retries bounded around a 30-second tick—but an individual `fetch` has no deadline. Installed `GoTrueClient.ts` (`node_modules/@supabase/auth-js/src/GoTrueClient.ts:2864`).
 
-Meanwhile, [useSession.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useSession.ts:48) gives up after eight seconds, and [App.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/App.tsx:129) gates the entire application on that result. A cold offline launch can therefore become the landing page before the article cache is consulted.
+Meanwhile, useSession.ts (`src/web/useSession.ts:48`) gives up after eight seconds, and App.tsx (`src/web/App.tsx:129`) gates the entire application on that result. A cold offline launch can therefore become the landing page before the article cache is consulted.
 
 Correct shape:
 
@@ -116,7 +116,7 @@ Use network-first semantics whenever the network is healthy:
 - Transport failure or selected 5xx: use the cached body.
 - 401/403/404/410: do not conceal the answer with old data.
 
-The current `Article` response has no revision identity [in its type](/Users/greg/Dropbox/dev/experim/spideryarn2/src/types.ts:964), although Postgres has one internally. Prefer a strong content-derived ETag across both file and Postgres stores. A database revision UUID would not exist consistently during the dual-store period and may change without meaningful payload changes.
+The current `Article` response has no revision identity in its type (`src/types.ts:964`), although Postgres has one internally. Prefer a strong content-derived ETag across both file and Postgres stores. A database revision UUID would not exist consistently during the dual-store period and may change without meaningful payload changes.
 
 Do not call the cache result `stale`; that term already means artefact/article mismatch elsewhere. Call it an “offline copy.”
 

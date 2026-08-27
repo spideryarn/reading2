@@ -6,6 +6,8 @@ import { App } from "./App.js";
 import { CALLBACK_HREF, canonicalAddHref, parseRoute, readHref } from "./router.js";
 import { isSpideryarnId } from "../ids.js";
 import { startPerf } from "./perf.js";
+import { watchConnection } from "./offline.js";
+import { OfflineStrip } from "./OfflineStrip.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
 // styles.css inside `@layer app` — importing the two side by side would
 // leave styles.css unlayered, where it silently outranks every Tailwind
@@ -253,11 +255,24 @@ if (!onCallback && aboutish) {
  * because on the dark ground a 2px stroke reads as bold: the icons are meant to
  * sit behind the prose, not compete with it.
  */
+/**
+ * Notice the moment the network interface goes away.
+ *
+ * Only the loss — coming back is decided by a request actually succeeding,
+ * because `navigator.onLine` says `true` on a captive portal. See offline.ts.
+ */
+watchConnection();
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <LucideProvider size={16} strokeWidth={1.75}>
       <NuqsAdapter>
         <App />
+        {/* Outside `App`, which returns early down a dozen different paths —
+            the sign-in screen and the landing page need to say this as much as
+            the reading view does, and a reader who cannot reach the server is
+            precisely the reader most likely to be looking at one of them. */}
+        <OfflineStrip />
       </NuqsAdapter>
     </LucideProvider>
   </StrictMode>,

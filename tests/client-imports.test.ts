@@ -107,13 +107,23 @@ describe("the client's imports", () => {
       for (const spec of importsOf(file)) {
         // Only relative imports can escape; a bare specifier is a package.
         if (!spec.startsWith("../")) continue;
-        // `../../src/x` cannot occur from src/web, so one `../` means src/.
-        const target = spec.slice(3);
-        if (target.includes("/")) {
+
+        /* **Resolved against the importing file, not counted as `../`s.** The
+           check used to read one leading `../` as "this leaves src/web", which
+           is only true for a file sitting directly in src/web. `src/web/lib/`
+           is two deep, so its own `../offline.js` is a sibling of its parent —
+           inside the client, and perfectly legal — and the old rule called it
+           an escape. It never came up because everything under lib/ had until
+           now imported only its own directory. 2026-08-27. */
+        const resolved = path.resolve(path.dirname(file), spec);
+        if (resolved === WEB || resolved.startsWith(`${WEB}${path.sep}`)) continue;
+
+        const fromSrc = path.relative(path.join(ROOT, "src"), resolved);
+        if (fromSrc.startsWith("..") || fromSrc.includes(path.sep)) {
           offenders.push(`${path.relative(ROOT, file)} → ${spec} (outside src/)`);
           continue;
         }
-        if (!SHARED.has(target)) {
+        if (!SHARED.has(fromSrc)) {
           offenders.push(`${path.relative(ROOT, file)} → ${spec}`);
         }
       }

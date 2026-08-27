@@ -56,6 +56,16 @@
  * them. docs/plans/auth-supabase.md.
  */
 
+import {
+  cachedSlugs,
+  forgetUser,
+  invalidate,
+  lastKnownUser,
+  readCached,
+  rememberUser,
+  writeCached,
+} from "./offline-store.js";
+import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.js";
 import { supabase } from "./supabase.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
@@ -240,8 +250,8 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   };
 
   const token = await accessToken();
-  const first = await send(token);
-  if (first.status !== 401) return first;
+  const first = await attempt(input, init, () => send(token));
+  if (first.status !== 401) return saving(input, init, first);
 
   /* **Nobody was signed in, so there is nothing to refresh.** Without this the
      sign-in screen's own requests would each provoke a pointless refresh call,
@@ -258,13 +268,251 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
      with a `TypeError` about `fetch`. */
   let refreshed: string | undefined;
   try {
+    /* Offline this cannot succeed, and the SDK will spend around twenty-five
+       seconds finding that out — see `accessToken` below. A 401 we already have
+       is a better answer than the same 401 half a minute later. */
+    if (!probablyOnline()) return first;
     const { data } = await supabase.auth.refreshSession();
     refreshed = data?.session?.access_token;
   } catch {
     return first;
   }
   if (!refreshed) return first;
-  return send(refreshed);
+  return saving(input, init, await attempt(input, init, () => send(refreshed)));
+}
+
+/**
+ * Run a request, and fall back to a saved copy if the *transport* failed.
+ *
+ * The distinction this function exists to hold is between **no answer** and
+ * **an answer you did not want**. A `TypeError` from `fetch` means the request
+ * never happened — no network, no DNS, a dead Wi-Fi captive portal — and a copy
+ * we saved earlier is strictly better than an error. A 401, a 404 or a 500 is
+ * the server speaking, and dressing an answer up as a network failure so we can
+ * show older data is how a reader ends up trusting something untrue.
+ *
+ * Two more things are deliberately not fallbacks:
+ *
+ * - **An abort.** A caller that cancelled its own request is not offline, and
+ *   several hooks here cancel on every keystroke. Answering those from cache
+ *   would resurrect requests the caller had already decided it did not want.
+ * - **Anything that is not a GET.** A failed write has not happened, and the
+ *   reader has to be told. See
+ *   docs/plans/offline-reading.md for why there
+ *   is no write queue.
+ */
+async function attempt(
+  input: string,
+  init: RequestInit,
+  run: () => Promise<Response>,
+): Promise<Response> {
+  try {
+    const res = await run();
+    /* A reply of any status means the server was reachable — a 404 is not a
+       network problem, and treating it as one would leave the strip saying
+       "no connection" to somebody whose connection is fine. */
+    noteReachedServer();
+    return res;
+  } catch (e) {
+    const method = (init.method ?? "GET").toUpperCase();
+    if (method !== "GET") throw e;
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    if (init.signal?.aborted) throw e;
+    if (!cacheable(input)) throw e;
+
+    const user = lastKnownUser();
+    const saved = await readCached(input, user);
+    if (!saved) {
+      noteNoConnection();
+      throw e;
+    }
+    noteServedCopy(saved.savedAt);
+
+    const body = input.split("?")[0] === "/api/library"
+      ? await onlyWhatWeHave(saved.body, user)
+      : saved.body;
+
+    /* A real `Response`, so every caller downstream — `readJson`, the hooks,
+       the panels — carries on unchanged. The two headers are how the UI can
+       say *this is a copy, and this is when we got it* without any of those
+       call sites having to know about the cache. */
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "x-spideryarn-offline": "copy",
+        "x-spideryarn-saved-at": String(saved.savedAt),
+      },
+    });
+  }
+}
+
+/**
+ * Keep a good answer, and hand the caller back an untouched one.
+ *
+ * `res.clone()` is the load-bearing part: a `Response` body can be read exactly
+ * once, so reading it here to save it would hand every caller an empty stream —
+ * a bug that would look like the server returning nothing.
+ *
+ * Saving is fire-and-forget on purpose. It is bookkeeping, and a reader waiting
+ * for their article should not also wait for a database write; a quota error
+ * must cost them nothing at all.
+ */
+function saving(input: string, init: RequestInit, res: Response): Response {
+  if ((init.method ?? "GET").toUpperCase() !== "GET") {
+    /* **A successful write makes our copy of that thing wrong.** Deleting a
+       chat thread and then going offline must not bring the thread back, which
+       is what a cache kept past the delete would do — and it would look exactly
+       like the delete having failed. See `invalidate`. */
+    if (res.ok) {
+      const user = lastKnownUser();
+      const prefix = resourceOf(input);
+      if (user && prefix) void invalidate(prefix, user);
+    }
+    return res;
+  }
+  if (!res.ok || res.status !== 200) return res;
+  if (!cacheable(input)) return res;
+  if (res.headers.get("x-spideryarn-offline") === "copy") return res;
+  /* Only JSON, and the media type parsed rather than searched. An HTML body
+     with a 200 is Vercel's SPA fallback or a captive portal's sign-in page, and
+     freezing either into the cache would poison the article rather than save
+     it. A substring test would also have to be right about
+     `application/json; charset=utf-8`, so it is split on `;` instead. */
+  if (!isJson(res)) return res;
+
+  const user = lastKnownUser();
+  if (!user) return res;
+
+  try {
+    /* `clone()` before anything reads the body. A `Response` body can be read
+       once, so saving the real one would hand the caller an empty stream — a
+       bug that looks exactly like the server returning nothing. `clone()` can
+       itself throw if the body is already disturbed, hence the `try`. */
+    const copy = res.clone();
+    void copy
+      .json()
+      .then((body) => writeCached(input, body, user, slugOf(input)))
+      .catch(() => {
+        /* A body that dies after its headers arrived. Nothing to save, and the
+           previous copy — if any — is left alone rather than replaced by half
+           a document. */
+      });
+  } catch {
+    /* Not worth failing a good response over. */
+  }
+  return res;
+}
+
+/** `application/json`, whatever parameters follow it. */
+function isJson(res: Response): boolean {
+  const type = (res.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+  return type === "application/json";
+}
+
+/**
+ * Which article a request belongs to, or `""`.
+ *
+ * Eviction works in whole articles, so every cached record has to say which one
+ * it is part of — see `evict` in [offline-store.ts](./offline-store.ts). The
+ * shelf and the reader profile belong to no article and get `""`.
+ */
+function slugOf(input: string): string {
+  const path = input.split("?")[0] ?? input;
+  const parts = path.split("/").filter(Boolean); // ["api", "glossary", "<slug>", …]
+  if (parts[0] !== "api" || parts.length < 3) return "";
+  return decodeURIComponent(parts[2] ?? "");
+}
+
+/**
+ * Which reads are worth keeping.
+ *
+ * Everything the reader already paid a model for, plus the article and the
+ * shelf — Greg's ask was that *"stuff that has already been computed (e.g.
+ * existing ToC, glossary, summary, ideas, chat history, etc etc)"* survive
+ * losing the connection. The ToC needs no entry of its own: it arrives inside
+ * the article payload.
+ *
+ * What is missing is as deliberate. `/api/jobs` describes work in flight and a
+ * stale copy of it would be a lie about the present; `/api/library/search`
+ * spends a model call per query, so a cached answer to one question would be
+ * served for a different one; `/api/models` is configuration nobody reads
+ * offline.
+ */
+const CACHEABLE = [
+  "/api/article/",
+  "/api/glossary/",
+  "/api/summary/",
+  "/api/ideas/",
+  "/api/metadata/",
+  "/api/tweets/",
+  "/api/chat/",
+  "/api/comments/",
+  "/api/search/",
+  "/api/reader",
+];
+
+function cacheable(input: string): boolean {
+  const path = input.split("?")[0] ?? input;
+  if (path === "/api/library") return true;
+  return CACHEABLE.some((prefix) => path.startsWith(prefix));
+}
+
+/**
+ * The resource a mutation touches, as a URL prefix — or `""` if we cannot tell.
+ *
+ * `POST /api/chat/<slug>` and `DELETE /api/chat/<slug>/<threadId>` both make our
+ * copy of `GET /api/chat/<slug>` wrong, so both map to `/api/chat/<slug>`. The
+ * two-segment paths (`/api/reader`) map to themselves.
+ */
+function resourceOf(input: string): string {
+  const path = input.split("?")[0] ?? input;
+  const parts = path.split("/").filter(Boolean);
+  if (parts[0] !== "api") return "";
+  if (parts.length === 2) return `/api/${parts[1]}`;
+  if (parts.length < 3) return "";
+  return `/api/${parts[1]}/${parts[2]}`;
+}
+
+/**
+ * The shelf, less every article we could not actually open.
+ *
+ * **A library page that lists articles it cannot open is worse than a short
+ * one.** Offline, every card is a promise, and one that opens to an error is a
+ * promise broken at the moment the reader is least able to do anything about
+ * it. So the cached shelf is filtered through what is really in the cache —
+ * derived by asking the database, never from a remembered flag, because the
+ * cache evicts on its own schedule and a flag would go on saying yes.
+ *
+ * Shape-tolerant on purpose: if the payload is not what we expect, the whole
+ * list is returned unfiltered rather than emptied. Showing too much is a
+ * disappointment; showing nothing looks like the shelf is gone.
+ */
+async function onlyWhatWeHave(body: unknown, user: string | null): Promise<unknown> {
+  if (!Array.isArray(body)) return body;
+  const have = await cachedSlugs(user);
+  return body.filter((entry) => {
+    const slug = (entry as { slug?: unknown } | null)?.slug;
+    return typeof slug === "string" ? have.has(slug) : true;
+  });
+}
+
+/**
+ * Whether it is worth waiting on the network at all.
+ *
+ * `navigator.onLine` is famously unreliable in one direction — it says `true`
+ * on a captive portal, and on a LAN with no route out — so it is never trusted
+ * to mean *online*. It is trusted for the other direction only: when the
+ * browser says there is no network interface at all, there is no network
+ * interface at all, and a token refresh that would spend twenty-five seconds
+ * discovering that should not be started.
+ */
+function probablyOnline(): boolean {
+  try {
+    return typeof navigator === "undefined" || navigator.onLine !== false;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -276,9 +524,44 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
  * do not need a special case.
  */
 async function accessToken(): Promise<string | undefined> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token;
+  /* **No network, no wait.** `getSession()` refreshes a token it thinks has
+     expired, and offline that refresh is a retry loop the SDK bounds at its own
+     thirty-second tick. Skipping it here is the difference between a reader
+     seeing a saved copy at once and a reader watching nothing happen for
+     twenty-five seconds and then being told their credentials are bad. */
+  if (!probablyOnline()) return cachedToken;
+
+  /* Online, the same hang is still possible — a captive portal accepts the
+     connection and never answers — so the wait has a deadline as well as a
+     condition. The fallback is the token the SDK last told us about: possibly
+     expired, in which case the server says 401 and the existing refresh-and-
+     retry below handles it. Being refused quickly is recoverable. Hanging is
+     not. */
+  return await Promise.race([
+    supabase.auth.getSession().then((r) => r.data.session?.access_token),
+    after(SESSION_DEADLINE_MS).then(() => cachedToken),
+  ]);
 }
+
+/**
+ * How long a request will wait to be told which token to use.
+ *
+ * Long enough that an ordinary cold start — where the SDK is still reading
+ * `localStorage` and settling — is never cut short, and short enough that a
+ * reader does not sit looking at a blank panel wondering. It is a deadline on
+ * *our* patience, not a timeout on the SDK: the refresh carries on, and the
+ * next request gets the benefit of it.
+ */
+const SESSION_DEADLINE_MS = 1_500;
+
+/**
+ * A promise that resolves after `ms`.
+ *
+ * `unref`-free and deliberately not cancelled: the timer is a millisecond of
+ * nothing in the worst case, and a cancellation path here would be more code
+ * than the thing it saves.
+ */
+const after = (ms: number) => new Promise<void>((go) => setTimeout(go, ms));
 
 /**
  * The token we already have, without waiting to find out if it is fresh.
@@ -332,4 +615,21 @@ const KEEPALIVE_LIMIT = 60 * 1024;
 let cachedToken: string | undefined;
 supabase.auth.onAuthStateChange((_event, session) => {
   cachedToken = session?.access_token;
+
+  /* **Whose cache to read, kept beside the token and for the same reason.** A
+     request needs to know which reader's copies to look in before it knows
+     whether the network works, and asking the SDK would be the very wait this
+     file just stopped doing. Note this is an id, never a token: it selects a
+     drawer and authorises nothing.
+
+     Signing out drops that reader's copies. Not the database — somebody else
+     may share this iPad, and their saved articles are not ours to throw away. */
+  const id = session?.user?.id ?? null;
+  if (id) {
+    rememberUser(id);
+  } else {
+    const previous = lastKnownUser();
+    rememberUser(null);
+    if (previous) void forgetUser(previous);
+  }
 });
