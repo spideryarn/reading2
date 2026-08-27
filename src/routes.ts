@@ -113,6 +113,7 @@ import { describeAdminMiss, isAdmin } from "./admin.js";
 import { requireUser, type Verifier } from "./auth.js";
 import { UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
+import { collectSpend, currentSpend, spendFields } from "./ai-spend.js";
 import { stagingKey } from "./source.js";
 import { uploadGrants } from "./store/blobs.js";
 import { uploadProblem } from "./uploads.js";
@@ -2738,6 +2739,14 @@ function logRequest(
   };
   const line = log("http");
   const msg = `${method} ${path} ${status}`;
+  /* **What this request spent on models**, from the collector `handleApi`
+     opened. Read here rather than returned, because this line is written in
+     `serveApi`'s own `finally` — inside the scope, before it closes. An ordinary
+     request that called no model gets no extra fields at all. */
+  Object.assign(
+    fields,
+    spendFields(currentSpend() ?? { calls: [], pending: [] }),
+  );
   if (status >= 500) line.error(fields, msg);
   else if (status >= 400) line.warn(fields, msg);
   else line.info(fields, msg);
@@ -2763,7 +2772,30 @@ export function handleApi(
      Everything the request does happens inside this callback, including the
      awaits — that is the property AsyncLocalStorage gives us and a module-level
      variable does not. src/owner.ts § Why an AsyncLocalStorage. */
-  return runInRequest(() => serveApi(req, res, verify));
+  /* **And a spend collector, in the same place and for the same reason.**
+
+     The pipeline's unit of accounting is a step, opened by `runStep` in
+     src/jobs.ts. A reader's request is not a step, and until this line the five
+     reader-facing model calls — explain, chat, search, dictation, and the
+     embeddings a search runs — recorded their cost into no collector at all, so
+     `unscopedCalls()` counted them and nothing added them up. Those are
+     precisely the calls Greg's *"spend limit per user"* is about.
+
+     It has to wrap the whole of `serveApi`, not the point where a stream is
+     created: `explain`, `chat` and `search` all drive their generator to
+     completion inside this frame (the three `for await`s below), so the scope
+     covers the whole answer. **If a route ever returns before its stream
+     finishes, this stops being true** — the report would be a snapshot and the
+     rest of the calls would land as `aiLateFinishes`, which is exactly why that
+     field exists rather than the late records being dropped. Raised by a GPT Sol
+     review.
+
+     The result is discarded because `serveApi` reports its own cost, on the line
+     it already writes — see `logRequest`, which reads `currentSpend()` from
+     inside the scope. */
+  return runInRequest(
+    async () => (await collectSpend(() => serveApi(req, res, verify))).result,
+  );
 }
 
 async function serveApi(

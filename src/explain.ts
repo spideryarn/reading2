@@ -61,14 +61,12 @@ import {
   type StreamEnd,
   type Usage,
   explainAbort,
-  PROVIDER_ORDER,
   providerFailedMidAnswer,
-  providerRefused,
   readerAborted,
-  sseChunks,
   stoppedByReader,
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
+import { ProviderRefused, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
 import { isWebUrl } from "./urls.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
@@ -94,8 +92,6 @@ import {
  * constant would be captured before some callers have run `loadEnvLocal()`.
  */
 export const defaultModel = (): string => modelFor("explain");
-
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 /**
  * How long to wait for the model before giving up.
@@ -496,31 +492,25 @@ export async function* explainStream({
     signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],
   );
 
-  let response: Response;
+  /* **The request, the status check and the spend record are one operation now**
+     — src/ai-call.ts. What used to be here was a `fetch`, a `!response.ok`
+     branch and a `sseChunks` loop, with three chances to return early between
+     paying for a call and recording it. The clocks above stay here, because a
+     deadline is this feature's policy and not the transport's; `provider` moved
+     into `AI_JOB_ROUTE`, because six callers each keeping their own copy of a
+     routing preference is how three of them ended up differing. */
   touch();
-  try {
-    response = await fetch(ENDPOINT, {
-      method: "POST",
-      signal: composite,
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        // OpenRouter attributes traffic with these; harmless and useful in its dashboard.
-        "HTTP-Referer": "http://localhost:5273",
-        "X-Title": "Spideryarn",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 1500,
-        stream: true,
-        /* Without this, a streamed response carries no `usage` at all — so the
-           token counts, the cache counts and the web-search count all come back
-           null and the log line says the call was free. The one flag whose
-           absence looks like good news. */
-        stream_options: { include_usage: true },
-        tools: [
-          {
-            /* **Byte-identical on every call, including a deep one, and that is
+  /* Which of two sentences the failure log gets. "It died before saying
+     anything" and "it died two paragraphs in" want different reactions, and
+     with the fetch inside the generator both now surface from the same `catch`. */
+  let answered = false;
+
+  const request = {
+    model,
+    max_tokens: 1500,
+    tools: [
+      {
+        /* **Byte-identical on every call, including a deep one, and that is
                not a stylistic preference.** Tools render at position 0, ahead of
                the system prompt and the article, and editing a tool definition
                invalidates all three cache tiers — see the invalidation table in
@@ -537,50 +527,12 @@ export async function* explainStream({
                So the cap is a cap, not a quota: eight for everyone, and the
                model still decides whether to search at all. `deep` buys an
                instruction after the cache breakpoint and nothing else. */
-            type: "openrouter:web_search",
-            parameters: { max_uses: MAX_SEARCHES, max_results: 5 },
-          },
-        ],
-        provider: PROVIDER_ORDER,
-        messages,
-      }),
-    });
-  } catch (err) {
-    clearTimeout(stallTimer);
-    /* `timedOut` is the field that matters here, and it is why this is logged
-       as an object rather than folded into the message. "The model took too
-       long" and "the network refused us" want different reactions — wait and
-       retry versus go and look at the provider — and by the time the error
-       reaches the reader both are just a sentence in a dialog. The headers are
-       *not* logged: `redact` is path-based, and one of them carries the key. */
-    line.error(
-      {
-        ...errorFields(err),
-        model,
-        ms: since(started),
-        timedOut: deadline.aborted,
-        stalled: stall.signal.aborted,
+        type: "openrouter:web_search",
+        parameters: { max_uses: MAX_SEARCHES, max_results: 5 },
       },
-      `no reply from ${model}${deadline.aborted ? " — deadline fired" : ""}`,
-    );
-    throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
-  }
-
-  if (!response.ok || !response.body) {
-    clearTimeout(stallTimer);
-    /* Drained and dropped without being looked at. The body has to be
-       consumed or the connection leaks, but nothing here wants to know
-       what it said — see `providerRefused`. */
-    await response.text().catch(() => "");
-    // The status, not the body. OpenRouter's error text is the one place a
-    // provider might echo part of what we sent back at us, and what we sent is
-    // the whole article plus the reader's selection.
-    line.error(
-      { model, ms: since(started), status: response.status },
-      `OpenRouter refused: ${response.status}`,
-    );
-    throw providerRefused(response.status);
-  }
+    ],
+    messages,
+  };
 
   let text = "";
   const citations = new Map<string, Citation>();
@@ -596,7 +548,12 @@ export async function* explainStream({
   const end: StreamEnd = { terminated: false };
   let stopped = false;
   try {
-    for await (const chunk of sseChunks(response.body, composite, touch, end)) {
+    for await (const chunk of openRouterStream("explain", request, {
+      signal: composite,
+      onActivity: touch,
+      end,
+    })) {
+      answered = true;
       if (chunk.model) used = chunk.model;
       // A 200 that carries an error in the stream — a mid-generation provider
       // failure. It arrives as data, not as a broken connection, so nothing
@@ -642,6 +599,16 @@ export async function* explainStream({
         { model: used, ms: since(started), chars: text.length },
         `explanation from ${used} was abandoned`,
       );
+    } else if (err instanceof ProviderRefused) {
+      /* The status, not the body. OpenRouter's error text is the one place a
+         provider might echo part of what we sent back at us, and what we sent is
+         the whole article plus the reader's selection — so `ProviderRefused`
+         carries the number and nothing else. */
+      line.error(
+        { model: used, ms: since(started), status: err.status },
+        `OpenRouter refused: ${err.status}`,
+      );
+      throw err;
     } else {
       line.error(
         {
@@ -654,7 +621,9 @@ export async function* explainStream({
           // anything" and "it died two paragraphs in" are different faults.
           chars: text.length,
         },
-        `stream from ${used} broke off`,
+        answered
+          ? `stream from ${used} broke off`
+          : `no reply from ${model}${deadline.aborted ? " — deadline fired" : ""}`,
       );
       throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
     }

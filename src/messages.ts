@@ -19,8 +19,8 @@
  *    is the worst mistake available here, because they will do it repeatedly.
  * 3. **Say what to do next**, when there is anything.
  * 4. **Never repeat what the provider said.** Its error body is the one place an
- *    upstream might echo the article back — see `providerRefused` in
- *    src/openrouter-stream.ts, and docs/project/logging.md.
+ *    upstream might echo the article back — see `ProviderRefused` in
+ *    src/ai-call.ts, and docs/project/logging.md.
  * 5. **Carry a short code at the end** for whoever is supporting this. It is in
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
@@ -97,7 +97,7 @@ export function canRetry(kind: FailureKind): boolean {
  * ## Why this exists rather than a `kind` field on the wire
  *
  * The interface has to know whether to offer another go, and by the time it is
- * rendering, all it has is a sentence: `providerRefused` throws an `Error`, and
+ * rendering, all it has is a sentence: `ProviderRefused` throws an `Error`, and
  * what gets stored — on a comment, a chat message, a search run, a glossary
  * lookup — is `err.message` and nothing else. Threading a `kind` alongside it
  * means a new field on four persisted types and a column on each of their
@@ -469,7 +469,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
  *
  * Anthropic's `stop_reason: "refusal"`, which arrives with a `stop_details`
  * object. **That object does not reach the reader and does not reach a log**,
- * for the same reason `providerRefused` drops OpenRouter's error body: it is
+ * for the same reason `ProviderRefused` drops OpenRouter's error body: it is
  * the provider's own words about a request that contained the whole article,
  * and we cannot promise it holds none of it back.
  *
@@ -482,7 +482,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
  * closed. The lesson is the one that plan's Rule 1 already stated — **grep the
  * genre, not the list** (docs/plans/simplification-audit.md).
  *
- * Be honest about the cost, as `providerRefused` is: something was lost.
+ * Be honest about the cost, as `ProviderRefused` is: something was lost.
  * `stop_details` is occasionally the fastest explanation of why a stage failed.
  * What remains is `stop_reason`, the stage and the elapsed time, which is what
  * separates a refusal from a timeout.

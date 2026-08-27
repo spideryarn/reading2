@@ -52,6 +52,7 @@ function sse(raw: string, splitAt = 7): Response {
   let i = 0;
   return {
     ok: true,
+    headers: new Headers(),
     body: new ReadableStream<Uint8Array>({
       pull(c) {
         if (i < parts.length) c.enqueue(parts[i++] as Uint8Array);
@@ -262,6 +263,7 @@ describe("failures are loud", () => {
        as a slow model rather than a dropped connection. */
     fetchMock.mockResolvedValue({
       ok: true,
+      headers: new Headers(),
       body: new ReadableStream<Uint8Array>({ pull() {} }), // opens, then says nothing
     } as unknown as Response);
     await expect(

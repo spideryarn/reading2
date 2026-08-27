@@ -440,8 +440,8 @@ export async function finishRun(
      slow model.
 
      **The durable fix landed on 2026-08-26.** src/search.ts no longer puts any
-     of the provider's body in what it throws (`providerRefused` /
-     `providerSpokeNonsense`, src/openrouter-stream.ts), so the string this line
+     of the provider's body in what it throws (`ProviderRefused` in
+     src/ai-call.ts, `providerSpokeNonsense` in src/openrouter-stream.ts), so the string this line
      declines to log is safe today. It still declines, because a rule that holds
      only while every call site stays careful is not a rule.
 

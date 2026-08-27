@@ -41,6 +41,7 @@
  * themselves — src/similar.ts is the current example, and says so.
  */
 import { loadEnvLocal } from "./env.js";
+import { type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
 
 /**
  * The measured winner. See the file header — this is a conclusion, not a
@@ -101,13 +102,11 @@ const TOTAL_TIMEOUT_MS = 240_000;
  * a batch loop that hits a rate limit retries all of its requests on exactly
  * the same schedule and hits it again together.
  */
-function backoffMs(res: Response, attempt: number): number {
-  const header = res.headers.get("retry-after");
-  if (header) {
-    const seconds = Number(header);
-    const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(header) - Date.now();
-    if (Number.isFinite(ms) && ms > 0) return Math.min(ms, 30_000);
-  }
+function backoffMs(retryAfterMs: number | null, attempt: number): number {
+  /* The provider's own `Retry-After`, already parsed to a number by
+     `ProviderRefused` — a header, not a body, so nothing it carries came from
+     us. */
+  if (retryAfterMs !== null) return retryAfterMs;
   const base = 2000 * 2 ** (attempt - 1);
   return Math.min(30_000, base) * (0.75 + Math.random() * 0.5);
 }
@@ -149,27 +148,19 @@ export async function embedBatch(
      else gives up. `AbortSignal.any` keeps the caller's own signal working
      beside it, so navigating away still cancels. */
   const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const res = await fetch("https://openrouter.ai/api/v1/embeddings", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(inputType ? { model, input, input_type: inputType } : { model, input }),
-    signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    /* 429 and 5xx are the provider being busy, not the request being wrong, and
-       they are common enough on a run of a few hundred blocks that failing on
-       one would waste every batch already paid for. Back off and try again.
-
-       The 404 clause is not a catch-all and must not become one. OpenRouter
-       answers "No endpoints available matching your guardrail restrictions and
-       data policy" with a 404, and it means *no upstream is free right now* —
-       it fired mid-run on a model whose identical request had just succeeded. A
-       real 404 (a model id that does not exist) does not carry that string, so
-       it still fails on the first attempt with the message intact. */
-    const noEndpoints = res.status === 404 && body.includes("No endpoints available");
-    const retryable = res.status === 429 || res.status >= 500;
-
+  /* **The request, the status check and the spend record are one operation now**
+     — src/ai-call.ts. This was the last call in the app making its own `fetch`,
+     and the only one whose *input is article prose*, which is why the failure
+     handling below changed shape as well as location. */
+  let call: JsonCall;
+  try {
+    call = await openRouterJson(
+      "embeddings",
+      inputType ? { model, input, input_type: inputType } : { model, input },
+      { signal: signal ? AbortSignal.any([signal, deadline]) : deadline, apiKey },
+    );
+  } catch (err) {
+    if (!(err instanceof ProviderRefused)) throw err;
     /**
      * "No endpoints available matching your guardrail restrictions and data
      * policy" is a 404 and reads like a bad model id. It is neither: it is
@@ -183,18 +174,29 @@ export async function embedBatch(
      *
      * Retrying cannot help — it is a setting, not a queue — so this fails fast
      * with instructions rather than backing off five times first.
+     *
+     * **`raw: ${body}` used to be the last line of this message and is gone.**
+     * The provider's body is the one place an upstream may echo the request
+     * back, and the request *here* is a batch of the article's own paragraphs —
+     * so this error, thrown from a pipeline stage, could carry article prose
+     * into a log that docs/project/logging.md forbids it from reaching. The
+     * classification survives; only the sentence somebody else wrote is gone.
+     * See `ProviderRefused.kind`.
      */
-    if (noEndpoints) {
+    if (err.kind === "no-endpoints") {
       throw new Error(
         `embeddings ${model}: OpenRouter has no endpoint this account may use.\n` +
           `This is an account setting, not a transient failure and not a bad model id.\n` +
           `  key in use: ${apiKey.slice(0, 12)}…\n` +
-          `  fix: allow this model's providers at https://openrouter.ai/settings/privacy\n` +
-          `  raw: ${body}`,
+          `  fix: allow this model's providers at https://openrouter.ai/settings/privacy`,
       );
     }
+    /* 429 and 5xx are the provider being busy, not the request being wrong, and
+       they are common enough on a run of a few hundred blocks that failing on
+       one would waste every batch already paid for. Back off and try again. */
+    const retryable = err.status === 429 || err.status >= 500;
     if (retryable && attempt < MAX_ATTEMPTS) {
-      const wait = backoffMs(res, attempt);
+      const wait = backoffMs(err.retryAfterMs, attempt);
       /* **The sleep is abortable.** A deadline that only gets looked at between
          requests is not a deadline when the wait between them can be thirty
          seconds — the whole point is to stop *before* the platform does. */
@@ -202,9 +204,32 @@ export async function embedBatch(
       if (signal?.aborted) throw new Error(`embeddings ${model}: gave up waiting`);
       return embedBatch(model, input, apiKey, inputType, signal, attempt + 1);
     }
-    throw new Error(`embeddings ${model}: ${res.status} ${body}`);
+    /* The status, not the body — same rule, same reason as the branch above. */
+    throw new Error(`embeddings ${model}: ${err.status}`);
   }
-  const body = (await res.json()) as {
+
+  /* **Validated, not asserted.** `openRouterJson` returns `unknown` — a
+     deliberate refusal to hand back a lie in a type's clothing — and the cast
+     below is only safe because of this check. Without it a provider that
+     answers 200 with an error envelope, or with something that is not JSON at
+     all, reaches `body.data.length` and throws a raw `TypeError` naming a
+     property, which tells whoever reads the pipeline failure nothing about what
+     happened. Raised by a GPT Sol review. */
+  /* **Validated, not asserted.** `openRouterJson` returns `unknown` — a
+     deliberate refusal to hand back a lie in a type's clothing — and the cast
+     below is only safe because of this check. Without it a provider that
+     answers 200 with an error envelope, or with something that is not JSON at
+     all, reaches `body.data.length` and throws a raw `TypeError` naming a
+     property, which tells whoever reads the pipeline failure nothing about what
+     happened. Raised by a GPT Sol review. */
+  if (
+    call.json === null ||
+    typeof call.json !== "object" ||
+    !Array.isArray((call.json as { data?: unknown }).data)
+  ) {
+    throw new Error(`embeddings ${model}: the response carried no vectors`);
+  }
+  const body = call.json as {
     data: { index: number; embedding: number[] }[];
     usage?: { prompt_tokens?: number; cost_details?: { upstream_inference_cost?: number } };
   };

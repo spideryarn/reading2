@@ -107,9 +107,37 @@ describe("embedBatch", () => {
     expect(calls).toBe(1);
   });
 
+  it("refuses a 200 that carries no vectors, in words rather than a TypeError", async () => {
+    /* `openRouterJson` hands back `unknown`, deliberately. Without a check the
+       cast reaches `body.data.length` and throws a raw `TypeError` naming a
+       property — a pipeline failure that says nothing about what happened.
+       Raised by a GPT Sol review. */
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response(JSON.stringify({ error: { message: "nope" } }), { status: 200 }),
+    );
+    await expect(call(1)).rejects.toThrow(/carried no vectors/);
+  });
+
   it("does not treat an ordinary 404 as that", async () => {
-    vi.stubGlobal("fetch", async () => new Response("model not found", { status: 404 }));
-    await expect(call(1)).rejects.toThrow(/404 model not found/);
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response("model not found", { status: 404 }),
+    );
+    /* **The status, without the provider's words.** This used to assert
+       `/404 model not found/` — the status *and* the body — and the body half is
+       deliberately gone: an embeddings request carries the article's own
+       paragraphs, so an upstream that echoes the request back would put article
+       prose into an error thrown from a pipeline stage, which
+       docs/project/logging.md forbids from reaching a log. Raised by a GPT Sol
+       review of src/ai-call.ts.
+
+       What the test still has to prove is the distinction that matters: this
+       404 is not the "no endpoints available" one, so it must not carry that
+       message or its instructions. Asserting the absence is the half that would
+       otherwise be lost with the body. */
+    await expect(call(1)).rejects.toThrow(/embeddings m: 404/);
+    await expect(call(1)).rejects.not.toThrow(/account setting/);
   });
 });
 

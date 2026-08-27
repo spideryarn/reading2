@@ -7,11 +7,12 @@
  * different causes all throw the same `AbortError`. It moved out unchanged when
  * `explain` became a stream too — see docs/plans/explain-deeper-answers.md § 2.
  *
- * It has since grown a second job, at the bottom of the file: the parts of an
- * OpenRouter call that **three** callers must not answer differently — where to
- * route, and what may be repeated from a failure. Those sit outside the
- * streaming machinery because they were shared before all three streamed, which
- * they now do.
+ * **It no longer opens a call.** It grew a second job for a while — the routing
+ * preference and the error mapping the three streaming callers had to agree on —
+ * and on 2026-08-27 both of those, and the `fetch` itself, moved into
+ * [`src/ai-call.ts`](ai-call.ts), which makes a request and its spend record one
+ * indivisible operation. What is left here is the byte-level work: parsing SSE
+ * and telling three kinds of abort apart. See docs/project/ai-gateway.md.
  *
  * **This module knows nothing about chat, comments, articles or readers.** It
  * parses a byte stream and tells aborts apart. If something here starts needing
@@ -20,7 +21,8 @@
  * The three callers are src/converse.ts (chat), src/explain.ts (explanations
  * and glossary lookups) and src/search.ts (finding passages) — the last of
  * which arrived on 2026-08-26, and this header said "it does not stream at all"
- * until then.
+ * until then. All three now reach `sseChunks` through `openRouterStream` rather
+ * than calling it directly.
  *
  * They differ in two ways, both deliberate. Chat sets `cache_control` at the
  * top level and explain sets it on a content part — see
@@ -34,7 +36,6 @@
 import {
   PROVIDER_FAILED_MID_ANSWER,
   PROVIDER_UNREADABLE,
-  providerHttpFailure,
   tookTooLong,
   wentQuiet,
 } from "./messages.js";
@@ -368,61 +369,19 @@ export interface StreamChunk {
   }[];
 }
 
-/* ------------------------------------------ what the three callers must agree --
-   converse.ts, explain.ts and search.ts each open an OpenRouter call, and there
-   are two things they must not answer differently. Both used to be written out
-   in all three files, comments included, with nothing checking they matched. */
+/* --------------------------------------------- what is left in this file, and why --
+   Two of the three things that used to live down here have gone to
+   src/ai-call.ts: `PROVIDER_ORDER`, which is now one row of `AI_JOB_ROUTE`, and
+   `providerRefused`, which is now the `ProviderRefused` class — an error that
+   carries the status, a classified `kind` and a parsed retry delay rather than a
+   sentence a caller has to re-derive the number from.
 
-/**
- * Where to send the call, and why it is a preference rather than a rule.
- *
- * Ordered, **not** `allow_fallbacks: false`. A cache lives on the upstream that
- * wrote it, so naming Anthropic first is what keeps repeat calls landing where
- * the article already is — and OpenRouter's own sticky routing hashes the first
- * user message, which varies here, so the heuristic would miss exactly the case
- * this is for.
- *
- * But forbidding fallback outright would turn an Anthropic outage into a hard
- * failure on a call a reader is sitting and waiting for. A cache miss costs
- * money; an unavailable feature costs the reader the feature. Preference, not a
- * ban.
- */
-export const PROVIDER_ORDER = { order: ["anthropic"] } as const;
-
-/**
- * The provider refused, and **what it said about why is not ours to repeat.**
- *
- * OpenRouter's error body is the one place an upstream might echo part of what
- * we sent back at us, and what we sent is the whole article plus the reader's
- * question or selection. All three callers used to put up to 400 characters of
- * it into `Error.message`, which routes.ts hands to Pino and also returns to the
- * client — so article prose could reach a log, which
- * docs/project/logging.md forbids outright.
- *
- * The body is discarded **here, at the boundary**, rather than carried on a
- * field marked do-not-log: sensitive data parked on an object is sensitive data
- * waiting for the next serialiser to find it.
- *
- * Be honest about the cost: something *was* lost. The provider's own reason used
- * to reach the stored error and the reader's screen, and occasionally a log, and
- * it is sometimes the fastest explanation of a failure. It was not safe to keep
- * and it is not coming back in that form — but "nothing diagnostic was lost" (as
- * an earlier draft of this comment claimed) is not true. What every caller still
- * logs on its own line before throwing is the status, the model and the elapsed
- * time, which is what separates a bad key from a slow model. If more is ever
- * needed, the safe shape is structured and allowlisted — a request id header, or
- * a provider error *code* — never the prose.
- *
- * The status is **mapped rather than shown**, which is the opposite of what this
- * comment said until 2026-08-26. It used to leave the number in the sentence,
- * arguing that a later decision about telling "busy, try again" apart from "this
- * is broken" would need something to key on. That decision has since been made,
- * in src/messages.ts, and it keys on the status *here* — so the reader gets the
- * sentence and the number stays out of it.
- */
-export function providerRefused(status: number): Error {
-  return new Error(providerHttpFailure(status).message);
-}
+   **Both were deleted rather than left exported**, which is the point of this
+   note. A `PROVIDER_ORDER` still sitting here is a routing preference a seventh
+   caller can reach for, bypassing the exhaustive table that exists so nobody has
+   to remember which jobs are Anthropic's — and it would work, and would answer,
+   and would be wrong only on the bill. Dead code that still compiles is a trap
+   with a docstring on it. */
 
 /**
  * A 200 that carries an error in its body or its stream — a provider failing

@@ -224,8 +224,8 @@ export async function patchComment(
      fired, which is what actually tells a bad key from a slow model. Found by
      GPT/Codex reviewing this change.
      **The throw site is fixed now (2026-08-26).** `src/explain.ts` no longer puts any of
-     the provider's body in the message — see `providerRefused` in
-     src/openrouter-stream.ts — so the string this line declines to log is safe
+     the provider's body in the message — see `ProviderRefused` in
+     src/ai-call.ts — so the string this line declines to log is safe
      today. The line still declines to log it, because a rule that holds only
      while six call sites stay careful is not a rule; and because what a reader
      of this log line needs is the status and the model, which are already on

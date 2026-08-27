@@ -1,7 +1,18 @@
 # The AI gateway: one vendor, two wires
 
-Every paid model call this app makes goes through **OpenRouter**. Since 2026-08-27 there are no
-exceptions — not the pipeline, not chat, not embeddings, not the PDF reader.
+Every paid model call this app makes goes through **OpenRouter**, and every one of them is
+*recorded*. Since 2026-08-27 there are no exceptions — not the pipeline, not chat, not embeddings,
+not dictation, not the PDF reader.
+
+Recorded, not necessarily *priced*: a call that dies before its usage arrives is written down as
+having happened with a cost of `null`, and counted as unpriced rather than as free. That distinction
+is the whole point and an earlier version of this sentence lost it by saying "every one of them
+records what it cost" — which is the claim a spend report would then be built on.
+
+> Presumably we want to do this in a way that's reusable (i.e. whenever we make an AI call, we do it
+> in the same way, which takes care of cost-tracking etc)?
+>
+> — Greg, 2026-08-27
 
 > I'm fine with gating everything through OpenRouter. Their reliability is good, and this gives us
 > simplicity/consistency/flexibility.
@@ -41,12 +52,57 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the seven pipeline stages | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, embeddings, PDF reading | [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, dictation, PDF reading | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
-[`src/models.ts`](../../src/models.ts) holds this as `TASK_WIRE: Record<Task, Wire>` — a record
-rather than two lists, so a task nobody assigned fails to compile rather than quietly getting a
-default. `Provider` is still a type there, now with exactly one member. One member is not an
-oversight; it is the decision, written where somebody will trip over it.
+Two files, thirteen call sites, and **no third way to spend money**. Each gateway's tests scan `src/`
+and fail if any other file constructs an Anthropic client, opens a message stream, or names an
+OpenRouter endpoint.
+
+[`src/models.ts`](../../src/models.ts) holds the wire assignment as `AI_JOB_WIRE: Record<AiJob,
+Wire>` — a record rather than lists, so a job nobody assigned fails to compile rather than quietly
+getting a default. `Provider` is still a type there, now with exactly one member. One member is not
+an oversight; it is the decision, written where somebody will trip over it.
+
+`AiJob` rather than `Task`, and rather than `Job`. A `Task` is a judgment about how much *reasoning*
+a job needs, which is why transcribing a PDF, embedding a paragraph and transcribing a voice are
+deliberately excluded from it — but **the bill does not care about tiers**, and a spend record keyed
+on `Task` would have had nowhere to put those three. `Job` was already taken, by the ingest queue's
+row in [`src/types.ts`](../../src/types.ts); two types with one name in one codebase is a bug
+waiting for whoever imports the wrong one.
+
+### One call, one frame — the shape a review changed
+
+The chat gateway makes **the request and its accounting a single indivisible operation**:
+`openRouterStream` is a *lazy async generator*, so nothing is sent until the first `next()`, and from
+then the same `finally` owns the call.
+
+**The Messages gateway is not that, and the difference is worth knowing.** It wraps the Anthropic
+SDK, so the call belongs to the SDK's stream object; `streamMessage` hands that object back, and a
+stage that awaited `call.stream.finalMessage()` instead of `call.finalMessage()` would work and
+record nothing. What guards it there is a test that scans `src/`, not the shape of the API. That is a
+weaker guarantee, honestly stated: the two seams are not equally hard to misuse. Early `break`, a throw, an abort, a
+missing `[DONE]`, a 429, a body that will not read — all of them cross it.
+
+The first draft handed the caller three things instead: open the call, parse the chunks, finish the
+meter. A GPT Sol review found the hole in about a page, and it is the hole every such design has:
+*the call returns a non-200, the caller throws its own error before reaching the metering step, and
+the request sits open having cost money nobody recorded.* Only one frame owning the whole lifecycle
+closes that.
+
+### `provider` is a table, not a default
+
+The obvious next step after pinning Anthropic on the Messages wire is to do the same on this one. It
+is **wrong, and wrong silently**: dictation talks to Gemini and needs `zdr`, the PDF reader talks to
+OpenAI and must forbid fallback, embeddings talks to Voyage. On any of those three
+`order: ["anthropic"]` finds no Anthropic upstream, falls through to the real one, and answers — the
+pin does nothing at all while looking like it did something.
+
+Leaving each of the six callers to pass its own was the second draft, and Sol rejected that too: a
+field six callers set independently is a field that drifts. So it is `AI_JOB_ROUTE` in
+[`src/ai-call.ts`](../../src/ai-call.ts) — one exhaustive row per job giving its endpoint *and* its
+routing policy, injected **after** the caller's body so it cannot be overridden by accident, and
+asserted on the outgoing request rather than trusted.
 
 ### Why the stages were not translated
 
@@ -109,7 +165,12 @@ evidence.
 **2. The default upstream is not Anthropic.** Unpinned, live probes landed on "Claude Platform on
 AWS" every time. A prompt cache lives on the upstream that wrote it, so an unpinned stage would work
 perfectly and never read a cache again — the bill roughly triples and nothing complains. Hence
-`MESSAGES_PROVIDER`, sent on every call, mandatory rather than advisory.
+`MESSAGES_PROVIDER`, injected on every call rather than left to seven stages to remember.
+
+A caller *may* still pass its own — that is what makes the injection testable, and the tests use it —
+so "mandatory" overstates it. What is true is that forgetting it is impossible, which is the property
+that was actually wanted. On the chat wire `AI_JOB_ROUTE` is stricter: it is injected **after** the
+caller's body, so a `provider` in the body is overwritten rather than honoured.
 
 **3. `require_parameters` defaults to `false`, while `allow_fallbacks` defaults to `true`.** So a
 fallback upstream that cannot honour `cache_control` or `thinking` may still be handed the request
@@ -122,7 +183,22 @@ a model call — `summarise` batches per parent, `labels` fans out — so no sta
 total. Outside a collector `recordSpend` is deliberately a no-op, because a CLI run must not fail for
 want of bookkeeping. But "silently does nothing" is how a cost table ends up plausible and short, so
 `unscopedCalls()` counts what fell on the floor and anything reporting a total is expected to admit
-it.
+it. Its sibling `lateCalls()` counts a call that finished *after* its collector had already
+reported — which cannot be a field on the report, by definition, and a first draft that made it one
+produced a counter nobody could ever read.
+
+There are two scopes: a pipeline **step**, opened by `runStep` in [`src/jobs.ts`](../../src/jobs.ts),
+and an HTTP **request**, opened by `handleApi` in [`src/routes.ts`](../../src/routes.ts). Until
+2026-08-27 there was only the first, so every reader-facing call — chat, explain, search, dictation,
+the embeddings a search runs — recorded into no collector at all. Those are the wrong ones to be
+missing: a pipeline stage spends Greg's money on Greg's article, and a chat turn spends it on
+somebody else's question, which is what a per-user spend limit is about.
+
+**And the collector is not a spend limit.** It is accounting — it says what a request spent *after*
+the request. A cap needs a reservation taken before each call and reconciled after, because final
+usage arrives when the money has already gone and two simultaneous requests both pass a `SUM(cost)`
+check. [The plan](../plans/ai-cost-tracking.md) says so at length; it is repeated here because the
+per-request total looks like the harder half and is not.
 
 And the rule that found the first three, worth holding before adding a fourth field to a request:
 **OpenRouter accepting a request is never evidence that OpenRouter honoured a field.** A made-up
@@ -179,8 +255,9 @@ clause.
 
 ## See also
 
-- [`src/messages-stream.ts`](../../src/messages-stream.ts) — the gateway, and the longest version of
-  the reasoning above
+- [`src/messages-stream.ts`](../../src/messages-stream.ts) — the Messages gateway, and the longest
+  version of the reasoning above
+- [`src/ai-call.ts`](../../src/ai-call.ts) — the chat gateway, and `AI_JOB_ROUTE`
 - [`src/ai-spend.ts`](../../src/ai-spend.ts) — the ambient spend collector
 - [ai-cost-tracking.md](../plans/ai-cost-tracking.md) — the plan this came out of, including the
   three probes that changed its mind

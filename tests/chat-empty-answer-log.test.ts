@@ -197,6 +197,7 @@ beforeAll(() => {
       let n = 0;
       return {
         ok: true,
+        headers: new Headers(),
         body: new ReadableStream({
           pull(c) {
             const enc = new TextEncoder();

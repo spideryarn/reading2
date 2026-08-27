@@ -45,6 +45,7 @@ function sse(raw: string, splitAt = 7): Response {
   let i = 0;
   return {
     ok: true,
+    headers: new Headers(),
     body: new ReadableStream<Uint8Array>({
       pull(c) {
         if (i < parts.length) c.enqueue(parts[i++] as Uint8Array);
@@ -319,11 +320,23 @@ describe("cancellation", () => {
     const events: unknown[] = [];
     const iter = findPassagesStream({ ...req(), signal: controller.signal });
     setTimeout(() => controller.abort(new Error("stopped by the reader")), 5);
+    /* **This used to assert `/stopped by the reader/` — the raw `AbortError`,
+       rethrown by a `catch` that sat around the `fetch` itself.** When the fetch
+       moved inside src/ai-call.ts's generator, that catch went with it, and this
+       case now lands where every other disconnect lands: `READER_LEFT`.
+
+       That is the improvement, not the regression. `stopped by the reader` is
+       the *caller's* abort reason — a string a test happened to choose, which in
+       production is whatever the route passed and by default is Node's own "This
+       operation was aborted". The test three below this one ("the same honest
+       disconnect message") already asserted `READER_LEFT` for a cancel a few
+       milliseconds later, so the two nearly identical cases had two different
+       answers and only one of them was a sentence. */
     await expect(
       (async () => {
         for await (const e of iter) events.push(e);
       })(),
-    ).rejects.toThrow(/stopped by the reader/);
+    ).rejects.toThrow(/disconnected before this search finished/);
     expect(events).toEqual([]);
   });
 
@@ -341,7 +354,10 @@ describe("cancellation", () => {
         () =>
           ({
             ok: true,
-            body: hangingBody([frame({ choices: [{ delta: { content: missingOuterBrace } }] })]),
+            headers: new Headers(),
+            body: hangingBody([
+              frame({ choices: [{ delta: { content: missingOuterBrace } }] }),
+            ]),
           }) as Response,
       ),
     );

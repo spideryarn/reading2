@@ -66,6 +66,7 @@ import {
 } from "./pdf.js";
 import { type Check, check, report } from "./pdf-score.js";
 import type { Meta } from "./types.js";
+import { ProviderRefused, openRouterJson } from "./ai-call.js";
 
 /**
  * The prompt's name, which goes in `meta.method` so an article on disk says
@@ -365,46 +366,66 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
         );
       }
       const started = performance.now();
-      const res = await withTransportRetries(() =>
-        fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        ...(signal ? { signal } : {}),
-        body: JSON.stringify({
-          model,
-          max_tokens: MAX_TOKENS,
-          messages: [
-            { role: "system", content: SYSTEM },
-            {
-              role: "user",
-              content: [
-                { type: "text", text: instruction },
-                {
-                  type: "file",
-                  file: { filename: "source.pdf", file_data: `data:application/pdf;base64,${data}` },
-                },
-              ],
+      /* **Each attempt is its own metered call**, which falls out of the retry
+         wrapping the whole of `openRouterJson` rather than only the `fetch`: a
+         transport retry that succeeds on the second try has paid for one call
+         and possibly for two, and one record per attempt is the only shape that
+         can say which. `provider` moved into `AI_JOB_ROUTE` in src/ai-call.ts
+         — `allow_fallbacks: false` is not a preference here, because an upstream
+         that quietly ignores the JSON schema writes prose instead. */
+      const call = await pdfCall(() =>
+        openRouterJson(
+          "pdf",
+          {
+            model,
+            max_tokens: MAX_TOKENS,
+            messages: [
+              { role: "system", content: SYSTEM },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: instruction },
+                  {
+                    type: "file",
+                    file: {
+                      filename: "source.pdf",
+                      file_data: `data:application/pdf;base64,${data}`,
+                    },
+                  },
+                ],
+              },
+            ],
+            plugins: [{ id: "file-parser", pdf: { engine: "native" } }],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "transcription",
+                strict: true,
+                schema: SCHEMA,
+              },
             },
-          ],
-          plugins: [{ id: "file-parser", pdf: { engine: "native" } }],
-          response_format: {
-            type: "json_schema",
-            json_schema: { name: "transcription", strict: true, schema: SCHEMA },
           },
-          provider: { require_parameters: true, allow_fallbacks: false },
-          usage: { include: true },
-        }),
-        }),
+          ...(signal ? [{ signal }] : []),
+        ),
       );
-      const body = await res.text();
-      if (!res.ok) throw new Error(`The transcription service answered ${res.status}.`);
-      let json: OpenRouterResponse;
-      try {
-        json = JSON.parse(body) as OpenRouterResponse;
-      } catch {
-        throw new Error("The transcription service sent something that is not JSON.");
+      if (call.json === null) {
+        throw new Error(
+          "The transcription service sent something that is not JSON.",
+        );
       }
-      if (json.error) throw new Error(`The transcription service refused: ${json.error.message}`);
+      const json = call.json as OpenRouterResponse;
+      if (json.error) {
+        /* **The provider's own words are not repeated**, and this line used to
+           repeat them. A 200 carrying an `error` object is still the upstream
+           talking about *our request*, and our request here is the PDF the
+           reader uploaded — so a provider that echoes any of it back would put a
+           stranger's document into a pipeline failure, and from there into a log
+           that docs/project/logging.md forbids it from reaching. The same rule
+           `ProviderRefused` follows on the HTTP path, arriving by a route that
+           does not look like an HTTP error at all. Found by a GPT Sol review of
+           the code, which noticed the boundary had a back door. */
+        throw new Error("The transcription service refused this chunk.");
+      }
       const choice = json.choices?.[0];
       const parsed = parseRecords(choice?.message?.content ?? "");
       return {
@@ -417,6 +438,26 @@ export function openRouterReader(model: string = PDF_READER_MODEL): PdfReader {
       };
     },
   };
+}
+
+/**
+ * The call, with this stage's own words for a refusal.
+ *
+ * `ProviderRefused.message` is written for a *reader* — it is the sentence a
+ * chat panel shows — and nobody reads this one: it lands in a pipeline step's
+ * failure, where the useful thing is which status came back. Same information,
+ * different audience, which is why the mapping is here rather than in the
+ * transport.
+ */
+async function pdfCall<T>(send: () => Promise<T>): Promise<T> {
+  try {
+    return await withTransportRetries(send);
+  } catch (error) {
+    if (error instanceof ProviderRefused) {
+      throw new Error(`The transcription service answered ${error.status}.`);
+    }
+    throw error;
+  }
 }
 
 /** How many times a *transport* failure is retried, before any answer exists to judge. */
@@ -438,12 +479,20 @@ const TRANSPORT_ATTEMPTS = 3;
  * thing every network client does, and its absence was simply a gap.
  *
  * An abort is not a failure to retry: the reader has gone.
+ *
+ * **Neither is a refusal.** A `ProviderRefused` means the provider answered —
+ * with a 400, a 429, a 402 — and asking twice more changes none of those. This
+ * guard exists because the refusal used to be thrown *outside* this wrapper and
+ * moving the call inside it would silently have started retrying every bad
+ * request three times. The rule the function is named for was already the right
+ * one; it just had to be written down once the shape changed.
  */
-async function withTransportRetries(send: () => Promise<Response>): Promise<Response> {
+async function withTransportRetries<T>(send: () => Promise<T>): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await send();
     } catch (error) {
+      if (error instanceof ProviderRefused) throw error;
       if (error instanceof Error && error.name === "AbortError") throw error;
       if (attempt >= TRANSPORT_ATTEMPTS) throw error;
       await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));

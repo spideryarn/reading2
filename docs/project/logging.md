@@ -183,22 +183,32 @@ what tells those two apart. See [prompt-caching.md](prompt-caching.md#how-to-tel
 
 Counts only, like everything else here: no prose, no article text, no criterion, no question.
 
-### What a step cost, in money
+### What a step or a request cost, in money
 
 Since 2026-08-27 every model call in this app goes through OpenRouter, and OpenRouter puts
 `usage.cost` on the response — a figure from the party doing the billing, not one we worked out.
 [ai-gateway.md](ai-gateway.md) is the decision; what it means here is that a log line can carry a
-cost without a price table behind it. So each step's line in [`src/jobs.ts`](../../src/jobs.ts)
-carries four more fields:
+cost without a price table behind it.
+
+**Two lines carry it, not one.** Each pipeline step's line in [`src/jobs.ts`](../../src/jobs.ts),
+and each API request's line in [`src/routes.ts`](../../src/routes.ts) — because a step is what the
+pipeline spends money in and a request is what a *reader* spends it in, and until that second scope
+existed every chat turn, explanation, search and dictation was recorded into no collector at all.
+Same fields, same formatter (`spendFields` in [`src/ai-spend.ts`](../../src/ai-spend.ts)), so the
+two can be added up together:
 
 | field | means |
 |---|---|
-| `aiCalls` | how many model calls the step actually made |
+| `aiCalls` | how many model calls this step or request actually made |
 | `aiCostNanos` | the total in nano-dollars — an integer, for anything that adds them up |
 | `aiCost` | the same number as `$0.0142`, for the person reading the line |
 | `aiUnpriced` | how many of those calls came back with no cost at all. **Present only when it is not zero** |
+| `aiPending` | calls started and never recorded — always a bug. **Present only when it is not zero** |
+| `aiPendingJobs` | which jobs those were, because a bare count says something leaked without saying where |
 
-**Four fields rather than one number, because a bare total cannot be checked.** `aiCalls` is the
+A line with none of these made no model call at all, which is most of them.
+
+**Several fields rather than one number, because a bare total cannot be checked.** `aiCalls` is the
 thing nobody can guess from outside — one step is often several calls, since `summarise` batches per
 parent and `labels` fans out — so a total of $0.30 over nine calls and a total of $0.30 over one are
 the same line without it. And `aiUnpriced` is what stops a total that is quietly short from reading
@@ -208,6 +218,12 @@ presence on a line is a fact to explain**, which is why it is omitted when zero 
 as `aiUnpriced: 0` — and why absent numbers are `null` everywhere underneath rather than `0`, since
 a zero is indistinguishable from a free call and understates a bill for as long as nobody looks
 ([`src/ai-spend.ts`](../../src/ai-spend.ts)).
+
+**One anomaly cannot be on these lines at all**, and it is worth knowing why rather than assuming it
+was forgotten: a call that finishes *after* its step or request has already reported. By definition
+that arrives after the line is written, so no field on it could ever be non-zero — a first draft
+added one and it was a counter nobody could read. It is counted process-wide by `lateCalls()`
+instead, beside `unscopedCalls()`, and `npm run cost` is where both belong.
 
 All four are omitted together when a step made no calls. Most steps in most jobs are cached or free,
 and four zeroes on every line is noise that makes the lines that matter harder to find.
@@ -876,7 +892,7 @@ line, not as a table.
   **There is a cost on the line now, and the reason it is not the same mistake is that nobody here
   computes it.** Since 2026-08-27 every call goes through OpenRouter and comes back with its own
   `usage.cost`; `aiCost` is that number added up, not a rate multiplied by a token count
-  ([§ What a step cost, in money](#what-a-step-cost-in-money)). The objection above was never to
+  ([§ What a step or a request cost, in money](#what-a-step-or-a-request-cost-in-money)). The objection above was never to
   logging money — it was to logging a *guess* at it, dressed as a fact. One honest caveat survives:
   OpenRouter's figure is credits consumed, and its margin is a ~5.5% fee on buying credits rather
   than a per-token markup, so the cash that left the bank is about 5.5% higher than any total on

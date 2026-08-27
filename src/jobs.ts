@@ -38,7 +38,7 @@
  * version of this apart.
  */
 import { createHash } from "node:crypto";
-import { type SpendRecord, collectSpend, formatNanos, totalSpend } from "./ai-spend.js";
+import { type SpendReport, collectSpend, spendFields } from "./ai-spend.js";
 import { mintId } from "./ids.js";
 /* The store the pipeline reads and writes through. Named for the role rather
    than imported under its own name, because the role is what changes: the
@@ -243,31 +243,6 @@ function stillForced(step: JobStep): boolean {
 type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
 
 /**
- * What a step's model spend looks like on a log line.
- *
- * Four fields rather than one number, because a bare total cannot be checked.
- * `aiCalls` says how many calls a step actually made — which is the thing
- * nobody can guess from the outside, since one step is often several calls —
- * and `aiUnpriced` says how many of them came back without a cost, so a total
- * that is quietly short says so rather than reading as a cheap run. See
- * docs/project/logging.md on why the numbers live here and not inside a stage.
- *
- * Omitted entirely when a step made no calls, rather than logged as zeroes:
- * most steps in most jobs are cached or free, and four zeroes on every line is
- * noise that makes the lines that matter harder to find.
- */
-function spendFields(spend: readonly SpendRecord[]): Record<string, unknown> {
-  if (spend.length === 0) return {};
-  const { nanos, unpriced } = totalSpend(spend);
-  return {
-    aiCalls: spend.length,
-    aiCostNanos: nanos,
-    aiCost: formatNanos(nanos),
-    ...(unpriced > 0 ? { aiUnpriced: unpriced } : {}),
-  };
-}
-
-/**
  * Run — or skip — exactly one step, recording all of it on the job.
  *
  * The single implementation of "do this step", shared by the two things that
@@ -356,7 +331,7 @@ async function runStep(
 
   /* Filled by `collectSpend`'s `onDone` below, which fires on both paths — so
      this is readable from the `catch` as well as from the success path. */
-  let spend: readonly SpendRecord[] = [];
+  let spend: SpendReport = { calls: [], pending: [] };
 
   try {
     /* Bracketing the run, not decorating it. A step that dies between two of
@@ -378,8 +353,8 @@ async function runStep(
        threw, and the retry after it pays again. */
     const { result } = await collectSpend(
       () => STEPS[step.name].run(ctx),
-      (calls) => {
-        spend = calls;
+      (report) => {
+        spend = report;
       },
     );
     step.detail = result;

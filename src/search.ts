@@ -70,16 +70,14 @@ import { findQuote } from "./quote-match.js";
 import { modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
 import {
-  PROVIDER_ORDER,
   type StreamEnd,
   type Usage,
   explainAbort,
   providerFailedMidAnswer,
-  providerRefused,
   readerAborted,
-  sseChunks,
   stoppedByReader,
 } from "./openrouter-stream.js";
+import { ProviderRefused, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
 import {
   ANSWER_OVERFLOWED,
@@ -101,8 +99,6 @@ import {
  * the override is read in that file rather than here.
  */
 export const defaultModel = (): string => modelFor("search");
-
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 /**
  * How long to wait before giving up.
@@ -590,75 +586,28 @@ export async function* findPassagesStream({
     signal ? [signal, deadline, stall.signal] : [deadline, stall.signal],
   );
 
-  let response: Response;
+  /* **The request, the status check and the spend record are one operation now**
+     — src/ai-call.ts. What used to be here was a `fetch`, its own copy of the
+     attribution headers, its own copy of `PROVIDER_ORDER`, and a `!response.ok`
+     branch that could return between paying for a call and recording it. The
+     clocks stay here; the transport does not. */
   touch();
-  try {
-    response = await fetch(ENDPOINT, {
-      method: "POST",
-      signal: composite,
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5273",
-        "X-Title": "Spideryarn",
-      },
-      body: JSON.stringify({
-        model,
-        /* Room for twenty hits, each carrying a quote and a sentence. Set with
-           MAX_HITS in mind rather than picked round: a ceiling too low truncates
-           the JSON mid-object, and a truncated object is not a short list, it is
-           a parse error — which `parseHits` reports as one rather than as an
-           empty result. */
-        max_tokens: 4000,
-        stream: true,
-        // Without this a streamed response carries no `usage` at all — see the
-        // same note in explain.ts. The token counts, the cache counts, all of
-        // it comes back null and the log line reads as a free call.
-        stream_options: { include_usage: true },
-        // No tools. See the header: the question is always "where in this
-        // piece", and no page on the web can answer it.
-        provider: PROVIDER_ORDER,
-        messages,
-      }),
-    });
-  } catch (err) {
-    clearTimeout(stallTimer);
-    if (stoppedByReader(err, signal, deadline, stall.signal)) {
-      // The reader left before the model replied at all — a disconnect, not
-      // a provider failure. Nothing to log as an error and nothing to try to
-      // parse; see the fuller version of this reasoning where `stopped` is
-      // declared, below.
-      line.info({ model, ms: since(started) }, `search was abandoned before ${model} replied`);
-      throw err;
-    }
-    line.error(
-      {
-        ...errorFields(err),
-        model,
-        ms: since(started),
-        timedOut: deadline.aborted,
-        stalled: stall.signal.aborted,
-      },
-      `no reply from ${model}${deadline.aborted ? " — deadline fired" : ""}`,
-    );
-    throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
-  }
-
-  if (!response.ok || !response.body) {
-    clearTimeout(stallTimer);
-    /* Drained and dropped without being looked at. The body has to be
-       consumed or the connection leaks, but nothing here wants to know
-       what it said — see `providerRefused`. */
-    await response.text().catch(() => "");
-    // The status, not the body. OpenRouter's error text is the one place a
-    // provider might echo part of what we sent, and what we sent is the whole
-    // article plus the reader's criterion.
-    line.error(
-      { model, ms: since(started), status: response.status },
-      `OpenRouter refused: ${response.status}`,
-    );
-    throw providerRefused(response.status);
-  }
+  /* Which of two sentences a failure gets logged with. With the fetch inside the
+     generator, "no reply at all" and "the stream broke off" arrive at the same
+     `catch`, so the difference has to be remembered rather than inferred. */
+  let answered = false;
+  const request = {
+    model,
+    /* Room for twenty hits, each carrying a quote and a sentence. Set with
+       MAX_HITS in mind rather than picked round: a ceiling too low truncates
+       the JSON mid-object, and a truncated object is not a short list, it is
+       a parse error — which `parseHits` reports as one rather than as an
+       empty result. */
+    max_tokens: 4000,
+    // No tools. See the header: the question is always "where in this
+    // piece", and no page on the web can answer it.
+    messages,
+  };
 
   const extractor = hitExtractor();
   let emitted = 0;
@@ -695,9 +644,16 @@ export async function* findPassagesStream({
     // hits-array element while leaving JSON either side that still parses,
     // which is the opposite of the trade chat and explain make. See
     // `SseChunksOptions` in src/openrouter-stream.ts.
-    for await (const chunk of sseChunks(response.body, composite, touch, end, {
+    for await (const chunk of openRouterStream("search", request, {
+      signal: composite,
+      onActivity: touch,
+      end,
+      /* **Strict, unlike the other two.** Their payload is prose, where a dropped
+         frame costs a few words; this one carries a single JSON object, where a
+         dropped frame can lose a whole hit and still leave text that parses. */
       malformedFrames: "throw",
     })) {
+      answered = true;
       if (chunk.model) used = chunk.model;
       // A 200 that carries an error in the stream — a mid-generation provider
       // failure. It arrives as data, not as a broken connection.
@@ -735,8 +691,20 @@ export async function* findPassagesStream({
       clearTimeout(stallTimer);
       line.info(
         { model: used, ms: since(started), chars: extractor.text().length },
-        `search from ${used} was abandoned`,
+        answered
+          ? `search from ${used} was abandoned`
+          : `search was abandoned before ${model} replied`,
       );
+    } else if (err instanceof ProviderRefused) {
+      /* The status, not the body. OpenRouter's error text is the one place a
+         provider might echo part of what we sent, and what we sent is the whole
+         article plus the reader's criterion — so `ProviderRefused` carries the
+         number and nothing else. */
+      line.error(
+        { model, ms: since(started), status: err.status },
+        `OpenRouter refused: ${err.status}`,
+      );
+      throw err;
     } else {
       line.error(
         {
@@ -747,7 +715,9 @@ export async function* findPassagesStream({
           stalled: stall.signal.aborted,
           chars: extractor.text().length,
         },
-        `stream from ${used} broke off`,
+        answered
+          ? `stream from ${used} broke off`
+          : `no reply from ${model}${deadline.aborted ? " — deadline fired" : ""}`,
       );
       throw explainAbort(err, deadline, stall.signal, timeoutMs, stallMs);
     }

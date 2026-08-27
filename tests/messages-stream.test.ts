@@ -253,20 +253,22 @@ describe("streamMessage — the recording lifecycle", () => {
   it("records exactly one call, with the cost that was on the wire", async () => {
     const t = stubTransport(cannedStream());
     try {
-      const { calls } = await collectSpend(async () => {
+      const { report } = await collectSpend(async () => {
         const call = streamMessage("toc", A_BODY);
         await call.finalMessage();
       });
 
-      expect(calls).toHaveLength(1);
-      expect(calls[0]?.task).toBe("toc");
-      expect(calls[0]?.costNanos).toBe(21_523_500);
-      expect(calls[0]?.outcome).toBe("ok");
-      expect(calls[0]?.upstream).toBe("Claude Platform on AWS");
-      expect(calls[0]?.generationId).toBe("gen-1787844432-JKwGQebcNXfkCfTX5mUq");
+      expect(report.calls).toHaveLength(1);
+      expect(report.calls[0]?.job).toBe("toc");
+      expect(report.calls[0]?.costNanos).toBe(21_523_500);
+      expect(report.calls[0]?.outcome).toBe("ok");
+      expect(report.calls[0]?.upstream).toBe("Claude Platform on AWS");
+      expect(report.calls[0]?.generationId).toBe(
+        "gen-1787844432-JKwGQebcNXfkCfTX5mUq",
+      );
       /* Tokens come off the SDK's merged message, cost off the raw event. Both
          have to survive, or the row can say what it did without what it cost. */
-      expect(calls[0]?.cacheWriteTokens).toBe(8583);
+      expect(report.calls[0]?.cacheWriteTokens).toBe(8583);
     } finally {
       t.restore();
     }
@@ -338,13 +340,13 @@ describe("streamMessage — the recording lifecycle", () => {
        undercounting: it is wrong in the direction that looks like the answer. */
     const t = stubTransport(cannedStream());
     try {
-      const { calls } = await collectSpend(async () => {
+      const { report } = await collectSpend(async () => {
         const call = streamMessage("arc", A_BODY);
         const first = await call.finalMessage();
         const second = await call.finalMessage();
         expect(second).toBe(first);
       });
-      expect(calls).toHaveLength(1);
+      expect(report.calls).toHaveLength(1);
     } finally {
       t.restore();
     }
@@ -353,14 +355,14 @@ describe("streamMessage — the recording lifecycle", () => {
   it("still records a call whose stream never carried a cost", async () => {
     const t = stubTransport(cannedStream({ cost: undefined }));
     try {
-      const { calls } = await collectSpend(async () => {
+      const { report } = await collectSpend(async () => {
         await streamMessage("labels", A_BODY).finalMessage();
       });
       /* The row exists and admits it does not know — rather than not existing,
          which is a hole in the bill that nothing points at. */
-      expect(calls).toHaveLength(1);
-      expect(calls[0]?.costNanos).toBeNull();
-      expect(totalSpend(calls).unpriced).toBe(1);
+      expect(report.calls).toHaveLength(1);
+      expect(report.calls[0]?.costNanos).toBeNull();
+      expect(totalSpend(report.calls).unpriced).toBe(1);
     } finally {
       t.restore();
     }
@@ -369,11 +371,13 @@ describe("streamMessage — the recording lifecycle", () => {
   it("records a failed call as an error rather than losing it", async () => {
     const t = stubTransport({ fail: true });
     try {
-      const { calls } = await collectSpend(async () => {
-        await expect(streamMessage("ideas", A_BODY).finalMessage()).rejects.toThrow();
+      const { report } = await collectSpend(async () => {
+        await expect(
+          streamMessage("ideas", A_BODY).finalMessage(),
+        ).rejects.toThrow();
       });
-      expect(calls).toHaveLength(1);
-      expect(calls[0]?.outcome).toBe("error");
+      expect(report.calls).toHaveLength(1);
+      expect(report.calls[0]?.outcome).toBe("error");
     } finally {
       t.restore();
     }
@@ -382,12 +386,12 @@ describe("streamMessage — the recording lifecycle", () => {
   it("calls the transport once per streamMessage, so a record is one real call", async () => {
     const t = stubTransport(cannedStream());
     try {
-      const { calls } = await collectSpend(async () => {
+      const { report } = await collectSpend(async () => {
         await streamMessage("toc", A_BODY).finalMessage();
         await streamMessage("arc", A_BODY).finalMessage();
       });
       expect(t.seenRequests).toHaveLength(2);
-      expect(calls.map((c) => c.task)).toEqual(["toc", "arc"]);
+      expect(report.calls.map((c) => c.job)).toEqual(["toc", "arc"]);
     } finally {
       t.restore();
     }
@@ -398,16 +402,16 @@ describe("streamMessage — the recording lifecycle", () => {
        each other's cost and the total would still look plausible. */
     const t = stubTransport(cannedStream());
     try {
-      const { calls } = await collectSpend(async () => {
+      const { report } = await collectSpend(async () => {
         await Promise.all([
           streamMessage("labels", A_BODY).finalMessage(),
           streamMessage("labels", A_BODY).finalMessage(),
           streamMessage("labels", A_BODY).finalMessage(),
         ]);
       });
-      expect(calls).toHaveLength(3);
-      for (const c of calls) expect(c.costNanos).toBe(21_523_500);
-      expect(totalSpend(calls).nanos).toBe(3 * 21_523_500);
+      expect(report.calls).toHaveLength(3);
+      for (const c of report.calls) expect(c.costNanos).toBe(21_523_500);
+      expect(totalSpend(report.calls).nanos).toBe(3 * 21_523_500);
     } finally {
       t.restore();
     }

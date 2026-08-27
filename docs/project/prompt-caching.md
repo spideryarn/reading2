@@ -250,7 +250,7 @@ The pipeline half of this page used to end at token counts, because Anthropic's 
 price. OpenRouter's Anthropic-compatible endpoint returns Anthropic's native `usage` **and** its own
 `cost` in the same object — so a cached call now says both what it did and what it cost, with no
 price table in between. That is what
-[§ What a step cost, in money](logging.md#what-a-step-cost-in-money) puts on each step's log line,
+[§ What a step cost, in money](logging.md#what-a-step-or-a-request-cost-in-money) puts on each step's log line,
 and it is a second, independent way to notice a cache that has stopped working: the token counts and
 the money have to move together.
 
@@ -291,7 +291,7 @@ Three defences, and none substitutes for another:
   tenth the price of a fresh one, so the same step costing ten times more than it did last week is
   the cache having stopped, in a number nobody had to compute. It cannot tell you *why*, and it says
   nothing on a step that was skipped. See
-  [logging.md § What a step cost, in money](logging.md#what-a-step-cost-in-money).
+  [logging.md § What a step cost, in money](logging.md#what-a-step-or-a-request-cost-in-money).
 
 **Run 2026-08-26 against the live API: all three articles pass.** (Against OpenRouter, which is what
 those three calls already used — the pipeline's move to it came a day later and is

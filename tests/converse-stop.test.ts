@@ -184,6 +184,7 @@ describe("a stop ends in `done`, never in a throw", () => {
         if (call > 1) return new Promise<Response>(() => {}); // round two never replies
         return {
           ok: true,
+          headers: new Headers(),
           body: closedBody([
             delta("Looking that up. "),
             `data: ${JSON.stringify({
@@ -262,6 +263,7 @@ describe("a stop ends in `done`, never in a throw", () => {
         () =>
           ({
             ok: true,
+            headers: new Headers(),
             body: hangingBody([
               // A fragment with no id and no name — the head never arrived.
               `data: ${JSON.stringify({
@@ -338,6 +340,7 @@ describe("a stop ends in `done`, never in a throw", () => {
         () =>
           ({
             ok: true,
+            headers: new Headers(),
             body: new ReadableStream<Uint8Array>({
               start(c) {
                 c.enqueue(encoder.encode(delta("Looking. ")));
@@ -425,6 +428,7 @@ describe("a stop ends in `done`, never in a throw", () => {
         () =>
           ({
             ok: true,
+            headers: new Headers(),
             body: new ReadableStream<Uint8Array>({
               start(c) {
                 c.enqueue(encoder.encode(delta("Looking. ")));
@@ -561,6 +565,7 @@ describe("failures are loud", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
+        headers: new Headers(),
         body: new ReadableStream<Uint8Array>({ pull() {} }), // opens, then says nothing
       } as unknown as Response),
     );
@@ -601,6 +606,7 @@ describe("failures are loud", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: false,
+        headers: new Headers(),
         status: 429,
         text: async () => secret,
         body: null,

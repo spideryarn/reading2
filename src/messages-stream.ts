@@ -57,7 +57,7 @@
  * response proves anything.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { type SpendRecord, recordSpend } from "./ai-spend.js";
+import { type SpendRecord, beginSpend, recordSpend } from "./ai-spend.js";
 import { NOT_CONFIGURED } from "./messages.js";
 import { type Task, modelFor } from "./models.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
@@ -126,6 +126,24 @@ export function messagesClient(): Anthropic {
     apiKey: key,
     authToken: key,
     logLevel: "off",
+    /* **`0`, not the SDK's default of `2`, and this is an accounting decision
+       rather than a reliability one.**
+
+       `streamMessage` opens exactly one meter around one SDK operation, and the
+       whole design rests on *one record, one call*. With the default the SDK
+       retries a failed request up to twice inside that operation, so a single
+       `SpendRecord` could quietly cover three HTTP attempts — and a retry after
+       a 5xx that arrived *post-generation* is an attempt that was billed. The
+       row would then be a third of the truth, with nothing to say so, which is
+       the exact shape of understatement this whole module exists to prevent.
+       Found by a GPT Sol review of the code.
+
+       What it costs: a transport blip that the SDK used to paper over now
+       surfaces as a failed step. That is the honest trade — the pipeline
+       already retries at the step level, where a retry is visible on the job,
+       and [`src/pdf-read.ts`](pdf-read.ts) shows what a deliberate,
+       *countable* transport retry looks like when one is wanted. */
+    maxRetries: 0,
   });
 }
 
@@ -154,6 +172,13 @@ export interface CallMeter {
   costNanos: Nanos | null;
   /** `usage.cost` verbatim, in dollars, for logging and for a report to re-check. */
   costUsd: number | null;
+  /**
+   * `cost_details.upstream_inference_cost`, in nano-dollars — **a different
+   * definition of money from `costNanos`.** They agree on an ordinary call and
+   * diverge under BYOK, where `cost` is 0 because OpenRouter charged nothing and
+   * the inference was still worth something. See `SpendRecord.upstreamCostNanos`.
+   */
+  upstreamCostNanos: Nanos | null;
   /** `x-generation-id`, the key for `GET /api/v1/generation?id=…` later. */
   generationId: string | null;
   /** Which upstream actually answered — "Anthropic", "Claude Platform on AWS", … */
@@ -186,6 +211,7 @@ export function meterStream(stream: MessageStream): CallMeter {
   const meter: CallMeter = {
     costNanos: null,
     costUsd: null,
+    upstreamCostNanos: null,
     generationId: null,
     upstream: null,
     isByok: null,
@@ -196,7 +222,11 @@ export function meterStream(stream: MessageStream): CallMeter {
        typing it against them would remove exactly what we came for. */
     const raw = event as unknown as {
       message?: { id?: string; provider?: string };
-      usage?: { cost?: unknown; is_byok?: unknown };
+      usage?: {
+        cost?: unknown;
+        is_byok?: unknown;
+        cost_details?: { upstream_inference_cost?: unknown };
+      };
     };
     if (event.type === "message_start") {
       if (typeof raw.message?.id === "string") meter.generationId = raw.message.id;
@@ -207,7 +237,12 @@ export function meterStream(stream: MessageStream): CallMeter {
         meter.costUsd = raw.usage.cost;
         meter.costNanos = providerCostToNanos(raw.usage.cost);
       }
-      if (typeof raw.usage?.is_byok === "boolean") meter.isByok = raw.usage.is_byok;
+      const upstreamCost = raw.usage?.cost_details?.upstream_inference_cost;
+      if (typeof upstreamCost === "number") {
+        meter.upstreamCostNanos = providerCostToNanos(upstreamCost);
+      }
+      if (typeof raw.usage?.is_byok === "boolean")
+        meter.isByok = raw.usage.is_byok;
     }
   });
   return meter;
@@ -318,6 +353,9 @@ export function streamMessage(
   const client = messagesClient();
   const startedAt = Date.now();
   const model = body.model ?? modelFor(task);
+  /* Registered before the stream opens, so a call that never comes back leaves a
+     trace rather than simply not appearing. See `PendingCall` in ai-spend.ts. */
+  const callId = beginSpend(task, model);
   const stream = client.messages.stream(
     { provider: MESSAGES_PROVIDER, ...body, model } as Anthropic.MessageStreamParams,
     options,
@@ -336,7 +374,16 @@ export function streamMessage(
     settled ??= (async () => {
       try {
         const message = await stream.finalMessage();
-        record(task, model, meter, message.usage, startedAt, "ok");
+        record(
+          task,
+          model,
+          meter,
+          message.usage,
+          startedAt,
+          "ok",
+          callId,
+          message.model,
+        );
         return message;
       } catch (err) {
         /* **An aborted or failed call has usually still cost money.** Recording
@@ -358,7 +405,16 @@ export function streamMessage(
            reads as an error, and a provider failure racing a later signal abort
            reads as a cancel. Both found by a GPT Sol review. */
         const aborted = stream.aborted || options?.signal?.aborted === true;
-        record(task, model, meter, null, startedAt, aborted ? "aborted" : "error");
+        record(
+          task,
+          model,
+          meter,
+          null,
+          startedAt,
+          aborted ? "aborted" : "error",
+          callId,
+          null,
+        );
         throw err;
       }
     })();
@@ -376,20 +432,27 @@ function record(
   usage: Anthropic.Usage | null,
   startedAt: number,
   outcome: SpendRecord["outcome"],
+  callId: number | null,
+  answeredBy: string | null,
 ): void {
   const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
-  recordSpend({
-    task,
-    model,
-    costNanos: meter.costNanos,
-    generationId: meter.generationId,
-    upstream: meter.upstream,
-    isByok: meter.isByok,
-    inputTokens: num(usage?.input_tokens),
-    outputTokens: num(usage?.output_tokens),
-    cacheReadTokens: num(usage?.cache_read_input_tokens),
-    cacheWriteTokens: num(usage?.cache_creation_input_tokens),
-    ms: Date.now() - startedAt,
-    outcome,
-  });
+  recordSpend(
+    {
+      job: task,
+      model,
+      answeredBy,
+      costNanos: meter.costNanos,
+      upstreamCostNanos: meter.upstreamCostNanos,
+      generationId: meter.generationId,
+      upstream: meter.upstream,
+      isByok: meter.isByok,
+      inputTokens: num(usage?.input_tokens),
+      outputTokens: num(usage?.output_tokens),
+      cacheReadTokens: num(usage?.cache_read_input_tokens),
+      cacheWriteTokens: num(usage?.cache_creation_input_tokens),
+      ms: Date.now() - startedAt,
+      outcome,
+    },
+    callId,
+  );
 }

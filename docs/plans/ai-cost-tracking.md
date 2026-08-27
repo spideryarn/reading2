@@ -1,6 +1,6 @@
 # AI cost tracking — what every model call costs, and who it cost it for
 
-**Status: plan, not built.** Written 2026-08-27.
+**Status: the measuring is built; the storing and the reporting are not.** Written 2026-08-27.
 
 Greg, 2026-08-27, on why:
 
@@ -15,6 +15,12 @@ already happened without an owner on it can never be attributed afterwards.
 Nothing about spend limits is built here. What is built is the record they would have to read.
 
 ## What exists today
+
+> **Read this section as the state on the morning of 2026-08-27, not as current fact.** It describes
+> two vendors, twelve call sites and numbers that were computed and dropped. All three have changed
+> — see [the status block below](#what-gets-built-and-in-what-order). It is kept because the gap it
+> describes is what the rest of the document was written to close, and a plan that quietly rewrites
+> its own premises is a plan you cannot check afterwards.
 
 Two things, and the gap between them is the whole of this work.
 
@@ -949,34 +955,41 @@ the twelve wirings are not finished until both are done.
 
 ## What gets built, and in what order
 
-> **Status, 2026-08-27, end of day.** This plan was written for **two** transports and is now half
-> overtaken. Greg approved routing everything through OpenRouter, and that is built and committed
-> (`fd93e27`). What follows is what is true rather than what this document originally proposed.
+> **Status, 2026-08-27, end of day.** This plan was written for **two** transports and for twelve
+> call sites. Both numbers were wrong. Greg approved routing everything through OpenRouter, and
+> every model call this app makes now goes through one of exactly two seams and records what it
+> cost. What follows is what is true rather than what this document originally proposed.
+>
+> **There are thirteen call sites, not twelve.** The count in the first draft omitted
+> [`src/transcribe.ts`](../../src/transcribe.ts) — dictation — which Greg had named explicitly in
+> the original request (*"including embeddings, transcription, etc"*). An inventory that quietly
+> means "the ones I could think of" is worse than no inventory, because the next person trusts it.
 >
 > **Built:**
 >
-> - **All seven pipeline stages moved onto OpenRouter's Anthropic-compatible endpoint** via a shared
->   gateway, [`src/messages-stream.ts`](../../src/messages-stream.ts). Same SDK, same
->   `messages.stream`, same adaptive thinking and `cache_control` — a `baseURL` and a model spelling.
+> - **One seam per wire, and no third way to spend money.**
+>   [`src/messages-stream.ts`](../../src/messages-stream.ts) owns the seven pipeline stages on
+>   Anthropic's Messages shape; [`src/ai-call.ts`](../../src/ai-call.ts) owns the six that speak
+>   OpenAI's shape over `fetch` — chat, explain, search, dictation, the PDF reader, embeddings.
 >   Written up in [ai-gateway.md](../project/ai-gateway.md).
-> - **Those seven calls report what they cost**, taken off the raw `message_delta` because
->   `finalMessage()` drops it. The provider is pinned with `require_parameters: true`.
+> - **All thirteen report what they cost**, with the provider's own figure rather than our
+>   arithmetic. A live run of both wires on 2026-08-27: `explain` $0.000062 through Anthropic,
+>   `dictation` $0.0000023 through Gemini, nothing unscoped, nothing pending.
 > - **An ambient spend collector**, [`src/ai-spend.ts`](../../src/ai-spend.ts), on the
 >   `AsyncLocalStorage` pattern [`src/owner.ts`](../../src/owner.ts) already uses — because a step is
->   not a call, which is what [§1](#1-a-step-is-not-a-call) is entirely about.
-> - **A total on every step's log line** — `aiCalls`, `aiCost`, and `aiUnpriced` when a call reported
->   nothing. On the failure and cancel lines too.
+>   not a call, which is what [§1](#1-a-step-is-not-a-call) is entirely about. Opened per pipeline
+>   step by `src/jobs.ts` **and per HTTP request** by `handleApi`.
+> - **A total on every step's log line and every request's** — `aiCalls`, `aiCost`, and the three
+>   ways it can be wrong: `aiUnpriced`, `aiPending`, `aiPendingJobs`.
 >
-> **Not built, and the first bullet is the one that matters:**
+> **Not built:**
 >
-> - ❌ **The other five call sites are not metered at all.** `explain`, `chat`, `search`,
->   `embeddings` and `pdf-read` go down the chat wire through
->   [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts), which does not call `recordSpend`.
->   **An earlier version of this status block said "every call now reports what it cost". That was
->   wrong** — it is seven of twelve, and the missing five are precisely the reader-facing ones, which
->   is where Greg's *"spend limit per user"* actually bites. A pipeline stage is spending Greg's
->   money on Greg's article; a chat turn is spending it on somebody else's question.
 > - ❌ No database row, no `npm run cost`, no per-article number, no spend page.
+> - ❌ **No spend limit, and the collector is not one.** It is accounting: it says what a request
+>   spent *after* the request. A cap needs a reservation taken *before* each call and reconciled
+>   after, because final usage arrives when the money has already gone, and two simultaneous
+>   requests both pass a `SUM(cost)` check. GPT Sol's design review said so plainly and it is worth
+>   repeating here rather than discovering later.
 >
 > **What the migration deletes from the phases below**: the price table stops being the source of
 > truth and becomes the *check* on one; the Anthropic Admin Cost API reconciliation goes entirely
@@ -1023,41 +1036,75 @@ own `finalMessage()` may be awaited twice, and the first version appended a seco
 
 Proven against a real call of each shape that can differ, per this plan's own instruction — plus one
 it did not think of, a live `arc` run end to end against the API (`upstream: Anthropic`, `$0.0206`,
-nothing unpriced). **The chat wire is not behind a gateway and is not metered**; that is now the
-substance of phase 3.
+nothing unpriced).
 
-**Phase 3 — the other five call sites.** ❌ **Not started, and this is the next piece of work.**
-`explain`, `chat`, `search`, `embeddings` and `pdf-read` reach OpenRouter through
-[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) and record nothing. Two things are
-needed and they are not the same size:
+**Phase 3 — the chat wire.** ✅ **Built, 2026-08-27.** [`src/ai-call.ts`](../../src/ai-call.ts) is
+the sibling of the Messages gateway, and it owns six call sites rather than the five this plan
+counted. Two exports, `openRouterStream` and `openRouterJson`, and **each is one indivisible
+operation**: send, check the status, read the body, meter it, finish. Nothing between them is
+exported — no `Response`, no meter, no separately callable chunk parser.
 
-- The **metering** — those responses already carry `usage.cost`, so this is reading a field that is
-  already on the wire, plus a `recordSpend` at each of the five. `src/embeddings.ts` already reads
-  `cost_details.upstream_inference_cost`; that call is nearly free of new work.
-- The **collector**, which is the real question. `collectSpend` is opened per *step* by
-  `src/jobs.ts`. A reader's chat turn is not a step: it is a request, so the scope belongs in
-  `handleApi` in [`src/routes.ts`](../../src/routes.ts) beside `runInRequest`, which is where the
-  owner already comes from ([§3](#3-the-owner-is-already-in-scope-everywhere-and-that-is-lucky)).
-  That is a small change in a busy file and should be its own commit.
+That shape came from a GPT Sol design review, and the first draft's hole is worth keeping written
+down because every "hand the caller a meter" design has some version of it: `openRouterCall()` hands
+back a non-200 response, the caller throws its own error before it ever reaches the metering step,
+and the call sits open having cost money nobody recorded. The generator's `finally` closes it. Early
+`break`, a throw, an abort, a missing `[DONE]`, a 429, a body that will not read — all of them cross
+it, and [`tests/ai-call.test.ts`](../../tests/ai-call.test.ts) asserts exactly one record on each.
 
-The **import rule** that was to arrive with this phase is ✅ **already built**, ahead of it and in a
-different form:
-[`tests/messages-stream.test.ts`](../../tests/messages-stream.test.ts) scans `src/` and fails if any
-file other than the gateway constructs an `Anthropic` client, opens a message stream, or awaits the
-unmetered `stream.finalMessage()`. Comment lines are stripped first, so the several files whose
-*comments* warn about that call do not read as violations. A GPT Sol review asked for it: the
-behavioural tests cannot catch a call site that was never written to run.
+Three things it deliberately does **not** own, each for a reason found the hard way:
 
-**Phase 4 — a total at the end of every run.** 🟡 **Half built.** Each *step* logs its own cost
-(`aiCalls`, `aiCostNanos`, `aiCost`, `aiUnpriced`) on success, failure and cancel —
-[logging.md § What a step cost, in money](../project/logging.md). What does not exist is the *job*
-total: one line at the end saying what the whole ingest cost. Cheap, and worth doing once phase 3
-lands so it is not a total that quietly omits the reader-facing half.
+- **The clocks, the abort wording and the per-chunk loop stay with the callers.** `converse` runs a
+  multi-round tool loop with one deadline and a fresh stall clock per round, `search` reads the
+  stream strictly because its payload is JSON rather than prose, `explain` guards a race where the
+  stall cancel beats the pending read's rejection. Folding those together would be one refactor
+  risking three working files to remove duplication that is not duplication.
+- **`loadEnvLocal()`.** Same reason as the other gateway, which learned it expensively. An explicit
+  `apiKey` argument is allowed — `src/embeddings.ts` uses it — because a caller deciding is the
+  opposite of a library re-reading a file.
+- **A single `provider` default.** The obvious move was to inject the Anthropic pin the way the
+  Messages gateway does, and it is **wrong silently**: dictation talks to Gemini and needs `zdr`,
+  the PDF reader talks to OpenAI and must forbid fallback, embeddings talks to Voyage. On those
+  three `order: ["anthropic"]` finds no Anthropic upstream, falls through, and answers — the pin
+  does nothing while looking like it did something. Leaving each caller to pass its own was the
+  second draft, and Sol rejected that too: a field six callers set independently is a field that
+  drifts. It is `AI_JOB_ROUTE` now — one exhaustive row per job, so a seventh cannot be added
+  without somebody deciding.
+
+**The collector is open per request**, in `handleApi` beside `runInRequest`
+([§3](#3-the-owner-is-already-in-scope-everywhere-and-that-is-lucky)). It wraps the whole of
+`serveApi` rather than the point where a stream is created, because `explain`, `chat` and `search`
+all drive their generator to completion inside that frame. If a route ever returns before its stream
+finishes, that stops being true — which is what `lateCalls()` counts, rather than the records simply
+vanishing. [`tests/request-spend.test.ts`](../../tests/request-spend.test.ts) drives four real
+requests through a child process and reads the log lines, because the logger is silent under
+`NODE_ENV=test` and an in-process assertion would have been satisfied by a logger emitting nothing.
+
+The **import rule** arrived ahead of this phase and in a different form: both test files scan `src/`
+and fail if any file outside the two gateways constructs an Anthropic client, opens a message
+stream, awaits an unmetered `finalMessage()`, or names an OpenRouter endpoint. Comment lines are
+stripped first, since several files' *comments* warn about exactly those. It is the backstop rather
+than the guarantee — the lifecycle is what makes metering unforgettable; this is what makes the
+lifecycle unavoidable.
+
+**Phase 4 — a total at the end of every run.** 🟡 **Half built.** Each *step* logs its own cost and
+so does each *request* — `aiCalls`, `aiCostNanos`, `aiCost`, plus `aiUnpriced` and
+`aiPending`/`aiPendingJobs` when something went wrong — on success, failure and cancel
+([logging.md § What a step cost, in money](../project/logging.md)). What does not exist is the *job*
+total: one line at the end saying what the whole ingest cost. Cheap, and unblocked now.
 
 **Phase 5 — `npm run cost`.** Spend by day, stage, model, article and owner; the cache-saving
 figure; the unpriced count; the aborted-spend line; the oldest surviving raw response and the
-pruner's last successful run. And it must print `unscopedCalls()` when it is not zero, or it is a
-total that silently omits rows.
+pruner's last successful run. And it must print **both** floor-sweeping counters when they are not
+zero — `unscopedCalls()` for calls made with no collector open, `lateCalls()` for calls that
+finished after their collector had already reported. Either one non-zero means the total below it is
+short, and by different amounts for different reasons.
+
+**And it cannot read either of them from the server**, which is the catch: both live in one
+process's memory, and `npm run cost` is a new process that starts them at zero. GPT Sol pointed this
+out. So the counters are a *server-side* signal — the log line beside a late finish is what actually
+reaches a person — and the CLI's version of the same question has to be asked of the rows: a spend
+row with `outcome: "error"` and a null cost, or a job whose steps do not add up to its total. Two
+mechanisms, because they are two processes.
 
 **One reconciliation, not the two this plan proposed.** The Anthropic Admin Cost API half is gone
 with the vendor, and what replaces it is strictly better — per call rather than per UTC-day-and-model,
@@ -1080,7 +1127,7 @@ that we did not record — `evals/`, a one-off CLI run — as the expected diffe
 always non-zero for a known reason is a check nobody reads, so that difference has to be nameable.
 
 **Phase 6 — the article's own number**, on the metadata page: what it cost to prepare, and what
-questions about it have cost since. The second half needs phase 3.
+questions about it have cost since. Both halves are now measurable; neither is stored.
 
 **Phase 7 — the spend page in the app.**
 
