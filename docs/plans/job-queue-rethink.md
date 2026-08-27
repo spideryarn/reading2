@@ -14,6 +14,19 @@ research passes and a GPT Sol judgement, all on 2026-08-26.
 Greg did not quite propose. But the most important thing this exercise turned up is not an answer to
 any of the three: **ingest on Vercel does not currently work, and two documents say it does.**
 
+> **The endpoint was built on 2026-08-27**, along with the durable job record it needs —
+> [durable-queue-and-uploads.md § 8](durable-queue-and-uploads.md#8-the-wiring-built-2026-08-27), and
+> two code reviews of it are in this folder. **Ingest on Vercel still does not work**, and the
+> sentence above is still the most important thing here: the *job* is durable now and the *pipeline*
+> is not, because every stage still writes `data/<slug>/*.json`. That half is
+> [transactional-stage-runner.md](transactional-stage-runner.md).
+>
+> The paragraph below headed *"And the fencing must cover the output, not just the job row"* called
+> it correctly and it is still open — see that plan's § *Two things the reviews left open*. It also
+> called it *"the single most likely thing to get wrong"*, which is worth its own line, because what
+> actually happened is subtler than getting it wrong: the fence was built correctly around the job
+> row and the output stayed outside it, so nothing looks broken.
+
 ---
 
 ## The live bug this uncovered
@@ -283,7 +296,8 @@ wrong whichever design wins.
 1. **Fix or write down the `waitUntil` gap.** Independent of everything above, and currently
    misdescribed in two documents.
 2. **Answer the watch-versus-walk-away question.** It selects the design.
-3. Then either spike pg-boss's three unknowns, or build the advance endpoint — not both.
+3. ~~Then either spike pg-boss's three unknowns, or build the advance endpoint — not both.~~
+   **The advance endpoint, 2026-08-27.** pg-boss stays deferred with the trigger this document set.
 
 ## Resuming after the tab closes
 

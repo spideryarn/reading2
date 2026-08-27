@@ -50,7 +50,7 @@ Legend: ✅ done · 🔵 in progress · 📐 designed, not built · ⬜ not star
 | 9b | Shelf state — archive, rename, opens — and library-wide search | ✅ **added 2026-08-26**, both adapters. See [library-shelf-actions-and-search.md](library-shelf-actions-and-search.md) |
 | 10 | Chat, searches, glossary lookups — writes | 🔵 **stores built and reviewed 2026-08-26; not yet wired into `src/routes.ts`.** All three adapters exist on both sides, with a scripted parity sequence and the two criticals from the design review applied — then [a second review of the built code](#what-the-review-found-in-the-built-step-10) found two more races and four tests that passed for bad reasons. Those are fixed. **The wiring was started 2026-08-26 evening and is uncommitted** — `src/routes.ts`, `src/store/index.ts`, `src/term-lookup.ts` and three new test files, with one unused-import typecheck error still in `routes.ts`. `deleteGlossary` stays 501 by construction. See [where this stopped](#where-this-stopped-2026-08-26-evening) |
 | 11 | Pipeline writes to draft revisions (+ carry-forward) | 🔵 **half B stages 1–4 built 2026-08-26** (`39b9892`, `fa3945c`): the artefact store, the file adapter, `produces` beside `outputs` with an agreement test, and `stepIsDone` taking a store — `has()` now **parses** rather than `stat`s, which closes the truncation hazard for the five steps that had no freshness check. Then [a review of the built code](#what-the-review-of-the-built-seam-found) found three criticals; **all three are fixed** (`8d751c1`, `b541557`) — see [what was fixed and the two choices inside it](#what-was-fixed-and-the-two-choices-inside-it). The store now records the *attempt* as well as the output, `blocks` checks that the HTML really carries its ids, and the store argument is required. **Half A (carry-forward and publication) was started 2026-08-26 evening and is uncommitted** — `drizzle/0010_job_owned_draft_and_fixture.sql` (generated and applied locally), `src/store/pg-revisions.ts`, `tests/store-revision-policy.test.ts`. See [where this stopped](#where-this-stopped-2026-08-26-evening) |
-| 12 | Jobs and claiming | ⚠️ **superseded 2026-08-26 — do not build what is below.** [job-queue-rethink.md](job-queue-rethink.md) replaced the autonomous queue with a **browser-driven advance endpoint**, on Greg's *"whichever's easiest"*: a queue library gives you a queue, not durable compute, and Vercel has no worker. Surviving from the old design: the attempt token, the **fenced output write**, a job-owned draft, and the single-running-step rule. Also found there: **ingest does not currently work on Vercel**, independent of all of this |
+| 12 | Jobs and claiming | ✅ **built 2026-08-27**, to the replacement design rather than the one below — **do not build what is below.** [job-queue-rethink.md](job-queue-rethink.md) swapped the autonomous queue for a **browser-driven advance endpoint** on Greg's *"whichever's easiest"*; [durable-queue-and-uploads.md § 8](durable-queue-and-uploads.md#8-the-wiring-built-2026-08-27) is what was built, and two code reviews of it ([built](durable-queue-code-review-sol.md), [fixes](durable-queue-fixes-review-sol.md)) both returned NO-SHIP and are folded in. Three of the four things the old design contributed survive: the attempt token, a job-owned draft (`openOrBeginJobDraft`) and the single-running-step rule (`jobs_only_one_running`). **The fourth — the fenced *output* write — does not, and is the main thing still open**: the fence covers the job row and the artefacts sit outside it. **Ingest still does not work on Vercel**, for that reason: see item 4 above and [transactional-stage-runner.md](transactional-stage-runner.md) |
 | 13 | Cutover: flip the default, delete the filesystem adapter | ⬜ Two decisions now made: the `example` fixture **goes in, marked as one** (a `fixture boolean` on `articles`, the directory staying on disk), and an unknown slug **404s** — the files side comes up to Postgres, not the reverse. Both in [postgres-migration.md § Open questions](postgres-migration.md#open-questions). The importer's reconciliation direction **reverses here**, and that is the reason this is a step rather than a flag flip |
 
 **What step 10 still needs before it is done**, all of it in `src/routes.ts` and deliberately left
@@ -126,8 +126,26 @@ documents, and several agents work this tree at once.
    write through the store, and `assertProduced` cannot tell a freshly written artefact from an old
    readable one because the validation is not shared with the skip decision. Doing this as eight
    independent "move my writes" commits would leave all three open.
-5. **The advance endpoint** ([job-queue-rethink.md](job-queue-rethink.md)), which depends on
-   `draft_revision_id` from step 3 above.
+
+   **This now has a plan of its own —
+   [transactional-stage-runner.md](transactional-stage-runner.md), written and reviewed 2026-08-27 —
+   and it is bigger again than the paragraph above.** Two things that paragraph does not say and
+   that plan does: no stage reads or writes through the seam *at all* today (`ArtifactStore.write()`
+   has no production caller), and not every stage write is an artefact — `toc`'s
+   `labels-progress.json` and the PDF chunk cache are resumable working state that must survive a
+   failed step, so they need somewhere to live the moment `dir` disappears. Read that before
+   starting any part of this item.
+5. ~~**The advance endpoint**~~ ([job-queue-rethink.md](job-queue-rethink.md)) — **done 2026-08-27**,
+   and it did **not** wait for step 3 as this line assumed. The job record moved behind `JobStore`
+   with a claim, a lease and a fence
+   ([durable-queue-and-uploads.md § 8](durable-queue-and-uploads.md#8-the-wiring-built-2026-08-27)),
+   which is the *precondition* for `fenceJob` rather than a consumer of it: until a job row existed
+   in `spideryarn.jobs`, every fence in `pg-revisions.ts` matched zero rows. Two code reviews of it
+   returned NO-SHIP and are folded in
+   ([the built code](durable-queue-code-review-sol.md), [the fixes](durable-queue-fixes-review-sol.md)).
+
+   **It does not make an ingest work on Vercel**, and the ordering above is why: item 4 is what does,
+   and item 4 is not started.
 6. **Step 13.** Flip the default, seed the fixture, delete the filesystem adapter — and **reverse the
    importer's reconciliation direction**, or cutover day deletes every comment, thread and lookup
    added since the last export while reporting a clean import.

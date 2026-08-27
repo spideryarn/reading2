@@ -346,7 +346,14 @@ exist and have been watched red**; the rest are still descriptions.
 4. **`finishStep` will not accept another attempt's token**, on both adapters, watched red with the
    `attempt_id` condition removed. Built on the state that needs it — a step-run that has ended and
    still carries its token — not on one reached through the happy path, or it passes with the
-   condition deleted and proves nothing. That mistake has already been made once here.
+   condition deleted and proves nothing.
+
+   **That mistake has now been made three times on this piece of work**, which is enough to call it
+   the default rather than a slip: once on the job fence (a different line in the code under test
+   cleared the field the second condition checked), and twice on the draft's row lock (§ B). Every
+   one of them was a test that looked like it exercised the mechanism and exercised an outcome. The
+   habit that catches it costs a minute: copy the file aside, delete the one line, run the single
+   test by name, restore.
 5. **A step that writes half its artefacts writes none.** Kill between two parts and prove the
    transaction took neither. The property the whole landing is for, and the one the filesystem
    cannot have.
