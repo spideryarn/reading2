@@ -43,6 +43,18 @@ import { useNow } from "./useNow.js";
 /** Kept out of the render so the table is not rebuilt from a fresh `[]`. */
 const EMPTY: AdminUser[] = [];
 
+/**
+ * Stable identity, and — see lib/DataTable.tsx — the tiebreak behind every sort.
+ *
+ * **Module scope, like the shelf's `slugOf`, and for the same reason.** Written
+ * inline as `rowId: (u) => u.id` this was a new function every render, and
+ * `useSortedTable` keys its `ordered` memo on it — so the core and sorted row
+ * models were rebuilt every render, which is one half of the ring that froze
+ * the shelf (docs/postmortems/shelf-render-loop.md). Found by GPT Sol,
+ * 2026-08-27, reviewing the fix for the other half.
+ */
+const idOf = (u: AdminUser) => u.id;
+
 /** The page shell both admin pages wear: the back-link, the heading, the width. */
 function Shell({
   title,
@@ -159,7 +171,7 @@ export function AdminUsersPage() {
     columns,
     sorting,
     onSortingChange,
-    rowId: (u) => u.id,
+    rowId: idOf,
   });
 
   const rows = table.getRowModel().rows;

@@ -162,6 +162,9 @@ export function toggleSort<T>(table: Table<T>, columnId: string, shift: boolean)
   else table.setSorting([{ id: columnId, desc: column.getFirstSortDir() === "desc" }]);
 }
 
+/** See `defaultColumn` below. One object, so its identity is not render-scoped. */
+const DEFAULT_COLUMN = { sortUndefined: false } as const;
+
 export function useSortedTable<T>({
   data,
   columns,
@@ -192,10 +195,37 @@ export function useSortedTable<T>({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     enableMultiSort: true,
+    /**
+     * **Off, because nothing here paginates and this is the hinge of a render
+     * loop.**
+     *
+     * TanStack keys its sorted-row-model memo on `table.getState().sorting`,
+     * and that memo's `onChange` queues `resetPageIndex()`. The reset sets
+     * React state, which renders again — so a caller who hands `sorting` a new
+     * array on each render gets: render → memo recomputes → reset queued →
+     * setState → render, for ever, synchronously, with the tab unable to paint
+     * or accept a keystroke.
+     *
+     * That is not hypothetical. On 2026-08-27 the homepage was doing about 470
+     * renders a second while sitting still, and one character typed into the
+     * add box locked the tab up outright —
+     * docs/postmortems/shelf-render-loop.md has the measurement.
+     * `Library.tsx`'s `dir` was the unstable array, and it is fixed; this line
+     * is the reason the *next* one cannot do the same thing.
+     *
+     * It costs nothing to switch off: no page here supplies
+     * `getPaginationRowModel`, so pagination is a passthrough and there is no
+     * page index for a reset to be about. It is on by default only because
+     * `manualPagination` is unset, which is TanStack asking a question about a
+     * feature this app does not use.
+     */
+    autoResetPageIndex: false,
     // See the header comment — all three of these are decisions, not defaults.
     enableSortingRemoval: false,
     // Off, and `table-sort.ts` § numberOrMissing has the measurement that says why.
-    defaultColumn: { sortUndefined: false },
+    // Module scope so it is not a fresh object handed to TanStack every render —
+    // GPT Sol, 2026-08-27, while reviewing docs/postmortems/shelf-render-loop.md.
+    defaultColumn: DEFAULT_COLUMN,
   });
 }
 

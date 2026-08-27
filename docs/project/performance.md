@@ -350,6 +350,54 @@ and five appeared or vanished inside one 25-second window. Renderer identificati
 one" is hopeless there; `chrome-cpu.ts` therefore identifies a tab by making it burn CPU on purpose
 (`window.__perf.spin(9000)`) and looking for the jump.
 
+## The shelf was in an infinite render loop, 2026-08-27
+
+The worst number on this page was found by a bug report rather than by any of the instruments above:
+the **homepage** was doing roughly **470 renders a second while nobody touched it**, and typing one
+character into any of its inputs froze the tab outright. Every doc here was about the reading view;
+this was one room along.
+
+The cause was a fresh `[]` per render feeding a `useMemo`, feeding TanStack's sorted-row-model memo,
+whose `onChange` queues a page-index reset, which sets React state, which renders again.
+[shelf-render-loop.md](../postmortems/shelf-render-loop.md) has the ring, the fix, and the stack
+trace that named it.
+
+Three things from it are worth carrying into any future hunt here.
+
+**A page in an infinite render loop looks exactly like a page.** The DOM was correct and stable at
+339 nodes. Nothing on screen was wrong — it was just being rebuilt three hundred times a second.
+[silent-success](../reusable/silent-success.md) usually means a check that agrees with the code;
+this was the *output* agreeing with the code. Do not take "the page looks right" as evidence of
+anything.
+
+**A CDP input command that never returns is a renderer that is not running its event loop.**
+`Input.insertText` is acknowledged by the renderer, so a 15-second timeout on it is a wedge, not a
+slow page. That is the single cheapest freeze detector available, and it needs no probe in the page.
+
+**A false-conditioned breakpoint is a counter you can attach to somebody else's library.**
+
+```js
+await cdp.send("Debugger.setBreakpointByUrl", {
+  urlRegex: "tanstack_react-table",
+  lineNumber: 1536,
+  condition: "(globalThis.__resets = (globalThis.__resets || 0) + 1, false)",
+});
+```
+
+The condition runs on every hit; because it evaluates falsy the debugger never pauses and the page
+runs at full speed. This is what turned "it wedges when you type" into "it was wedged the whole
+time, you could not tell": **2,358 hits in five seconds at rest, and 0 after the fix.** It works on
+minified vendor code, needs no source edit, and — unlike `perf.ts` — costs nothing to leave off.
+
+Two companions to it, when a page is already spinning:
+
+- `Debugger.pause` **does** break into a running script (it is a V8 interrupt), so a wedged tab is
+  still inspectable. The stack alone said `processRootScheduleInMicrotask → performSyncWorkOnRoot →
+  renderRootSync`, repeating.
+- The React fiber hangs off any DOM node as `__reactFiber$…`, so from a paused frame you can walk to
+  the root and read `root.memoizedUpdaters` — the set of fibers that scheduled the work. It named
+  `Library` in one step, with no React DevTools involved.
+
 ## The regression test
 
 [`tests/idle-work.test.ts`](../../tests/idle-work.test.ts) holds the behaviour rather than the
@@ -570,6 +618,17 @@ order, none of it done:
    is deliberately dynamic near the masthead, and `useReadingPosition` has no observer at all, so a
    naive cache would go stale on a late image or a font swap and point at the wrong section. Wrong
    position is worse than slow position.
+
+And one more, found 2026-08-27 while reviewing the shelf's render loop
+([shelf-render-loop.md](../postmortems/shelf-render-loop.md)) — same class, different room, not
+fixed here because it is another stage's file:
+
+5. **An article with no glossary rebuilds `termSelections` every render.**
+   [`App.tsx`](../../src/web/App.tsx) line ~759 reads `glossaryRead.glossary?.entries ?? []`, so
+   until a glossary exists that is a fresh array on every render, and the `termSelections` memo
+   below it — whose own comment records a GPT Sol measurement of **44–135ms** on a 400-block,
+   60-term article — has a changed dependency every time. The fix is the same as the shelf's: one
+   module-level frozen empty array, or the `?? []` moved inside the memo. Found by GPT Sol.
 
 Explicitly **not** worth doing, checked and dismissed: hover cards (delegated listeners, a 320ms
 gate, a `MutationObserver` scoped to one open block), shelf search (already debounced and aborted),

@@ -107,10 +107,21 @@ export type NaturalDirections = Readonly<Record<string, "asc" | "desc">>;
  * empty sort rather than the obvious one. Anything in `by` that is not a known
  * column is dropped rather than passed through, because an id TanStack does not
  * recognise sorts by nothing while looking like it sorted.
+ *
+ * **Absent is spelt `null`, which is what the parser already returns**, and it
+ * is a `null` rather than a defaulted `[]` for a reason that cost a day. The
+ * callers used to write `rawDir ?? []` above a `useMemo`, which builds a fresh
+ * array on every render — so the memo re-ran every render, the `SortingState`
+ * it returned was new every render, and TanStack's sorted-row-model memo (keyed
+ * on exactly that array) recomputed every render and queued a page-index reset,
+ * which set state, which rendered again. The homepage sat there doing about 470
+ * renders a second and locked up entirely on the first keystroke.
+ * docs/postmortems/shelf-render-loop.md. Taking the `null` here means there is
+ * no per-render array for anybody to build.
  */
 export function sortingFromUrl(
   by: string[],
-  dir: ("asc" | "desc")[],
+  dir: ("asc" | "desc")[] | null,
   natural: NaturalDirections,
   /** Where to land when nothing in `by` is usable. Never sort by nothing. */
   fallback: string[] = [],
@@ -130,7 +141,7 @@ export function sortingFromUrl(
   by.forEach((id, i) => {
     if (!(id in natural) || seen.has(id)) return;
     seen.add(id);
-    out.push({ id, desc: (dir[i] ?? natural[id]) === "desc" });
+    out.push({ id, desc: (dir?.[i] ?? natural[id]) === "desc" });
   });
 
   /* Never empty. An empty sort is not a state the reader can ask for or see the
@@ -138,7 +149,7 @@ export function sortingFromUrl(
      order the data arrived in — so a URL that names nothing we recognise lands
      on the ordinary default instead. */
   if (out.length === 0 && fallback.length > 0) {
-    return sortingFromUrl(fallback, [], natural);
+    return sortingFromUrl(fallback, null, natural);
   }
   return out;
 }
