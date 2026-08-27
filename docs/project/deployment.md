@@ -405,15 +405,43 @@ reader is told about it is the only symptom most people will ever report.
    was supposed to do it is a silent no-op.
 2. ~~**An owner in `auth.users`**~~ — `greg@gregdetre.com` →
    `001bb7a0-7720-4f1b-8b9d-1ee6e63d132a`. Still to set `SPIDERYARN_OWNER_ID` here.
-3. **`DATABASE_URL`** — the transaction pooler, with no `ssl*` parameters in it.
-   Written into `.env.prod`; not yet set on Vercel, along with `SPIDERYARN_STORE`
-   and `PGSSLROOTCERT`.
+3. ~~**`DATABASE_URL`**~~ — set on Vercel production 2026-08-27, transaction
+   pooler, no `ssl*` parameters, verified by connecting with the exact value
+   Vercel holds. `SPIDERYARN_OWNER_ID` too; the rest were already there.
 4. ~~**Import the articles**~~ — done 2026-08-27. Five articles, 635 blocks, 24
    comments, 56 chat messages, and reads verified through the store seam over the
    transaction pooler. `ball-lightning` and `coolabah-memory` have no
    `blocks.json`/`tree.json` yet, so the importer correctly skipped them.
 5. **[The beta gate](../plans/deploy-and-repo-move.md#the-beta-gate)**, which is
    what makes a stable URL possible and what the domain move needs.
+
+## It is up, and here is the reading of it
+
+**2026-08-27, commit `bfe3a77`.** `/api/health` on the production alias:
+
+```json
+{ "ok": true, "warnings": [], "node": "v24.18.0", "region": "lhr1",
+  "store": { "name": "postgres", "articles": 5 },
+  "ssl": { "mode": "verified", "why": "verified against certs/supabase-ca.crt" } }
+```
+
+Three things that reading tells you which a `Ready` status does not: reads are coming from Postgres
+rather than an empty disk, the server's certificate is being *checked* rather than merely encrypted
+against, and the commit is the one you think it is.
+
+Getting there needed one fix, and it is the best example this repo has of why `Ready` means nothing.
+The first successful build in seven hours returned `500` to every request, because
+[`src/pdf.ts`](../../src/pdf.ts) imported pdf.js at module scope and Vercel's tracer had left
+pdf.js's own optional native dependency out of the bundle — so *loading* the API threw
+`DOMMatrix is not defined`, on every route, PDF or not, and never on a laptop.
+[pdfjs-dommatrix-serverless.md](../postmortems/pdfjs-dommatrix-serverless.md).
+
+**The API routes are gated and `/api/health` is not.** An unauthenticated request to `/api/library`
+returns `401 You need to be signed in to do that. [auth-none]`; the health endpoint answers anybody,
+which is what a health endpoint is for. It reports environment variable *names* only. Note the
+production hostname cannot be SSO-protected on the Pro plan, so the gate in
+[`src/auth.ts`](../../src/auth.ts) is the thing standing between a stranger and the shelf — not
+Vercel.
 
 ## See also
 
