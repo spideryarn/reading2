@@ -290,7 +290,7 @@ The answer to the last sentence is one line, and it is the whole design:
 
 **One sort state, two renderers.**
 
-Six chips above the shelf — **Added**, **Last opened**, **Title**, **Length**, **Times opened**,
+Six chips above the shelf — **Last opened**, **Added**, **Title**, **Length**, **Times opened**,
 **Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
 identically, so switching between them keeps your place in the order: there is only one order.
 Clicking the key you are already on reverses it; clicking a key you are not on starts at *that key's*
@@ -308,6 +308,30 @@ The two views are not a real one and a decoration. **The card is a decision aid*
 says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article
 stands against the rest of the shelf — and gives the blurb up for six columns you can run your eye
 down. Neither is a fallback for the other.
+
+### The shelf's resting state
+
+**Last opened, most recent first** — since 2026-08-27, on Greg's instruction. It was **Added**,
+which is what a list of things that *arrived* wants; a shelf is not an inbox. What you are most
+likely to want off it is the piece you were half-way through an hour ago, and under Added that sat
+wherever it happened to have been fetched — for anything imported in a batch, nowhere near the top.
+
+The chip row leads with whatever the default is, so Last opened is now leftmost. That rule did not
+change; the default did. Both live in `DEFAULT_BY` and `CHIP_ORDER` in
+[`library-columns.tsx`](../../src/web/library-columns.tsx), and the default writes **no parameters
+at all** into the URL, so a bare `/` and `?by=opened` are the same shelf.
+
+**An article you have never opened goes to the bottom**, in either direction. That is `sinkLast` in
+[`Library.tsx`](../../src/web/Library.tsx) rather than a property of the comparator — a missing date
+is not a small one, and ascending by Last opened must not fill the top of the shelf with everything
+you have never read, which is a real thing to want and is what the Unread filter is for. It sounds
+like it buries every new arrival and does not: adding an article takes you straight into it
+([`AddPage.tsx`](../../src/web/AddPage.tsx) navigates to the reading view when the job finishes), so
+by the time you next look at the shelf it has been opened.
+
+It is a **single** key, not `opened` then `added`. The compound version orders the never-opened
+block at the foot better and lights *two* chips on a shelf nobody has clicked, which reads as a sort
+somebody else left behind.
 
 Two of the six keys are Greg's "actions/interactions performed", and they are the only two we can
 honestly count: opens and questions are the only reader interactions stored as numbers. Chat threads

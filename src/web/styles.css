@@ -1088,7 +1088,8 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
      keeps the panel on screen, but shifting a 352px box inside a 390px viewport
      leaves it pinned to one edge with nowhere to go; capping the width instead
      lets it stay near the thing it is about. The subtraction is the 10px
-     `shift` padding on each side plus a little air. Only bites below ~374px. */
+     `shift` padding on each side plus a little air. Measured: in a 390px
+     viewport this still resolves to 352px, so the cap only bites below 380. */
   max-width: min(22rem, calc(100vw - 1.75rem));
   padding: 0.6rem 0.75rem 0.55rem;
   border: 1px solid var(--rule-strong);

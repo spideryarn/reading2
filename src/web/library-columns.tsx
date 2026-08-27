@@ -84,23 +84,51 @@ export const CARD_NOTES: Record<string, CardNote> = {
     e.comments === 0 ? "no questions" : e.comments === 1 ? "1 question" : `${e.comments} questions`,
 };
 
-/** The default sort: exactly the order the shelf had before any of this existed. */
-export const DEFAULT_BY = ["added"];
+/**
+ * The default sort: **what you read most recently, first.**
+ *
+ * Greg, 2026-08-27:
+ *
+ * > Default to sorting by Last Opened.
+ *
+ * It was `added` — the order the shelf had before any of this existed, which is
+ * the order a *list of things that arrived* wants. But a shelf is not an inbox.
+ * The thing you are most likely to want is the piece you were part-way through
+ * an hour ago, and under `added` that sat wherever it happened to have been
+ * fetched, which for anything imported in a batch is nowhere near the top.
+ *
+ * **What this does to an article you have never opened**: it goes to the
+ * bottom, in either direction, and that is `sinkLast` in Library.tsx rather
+ * than an accident of the comparator — a missing date is not a small one. Which
+ * sounds like it buries every new arrival, and does not, because adding one
+ * takes you straight into it (AddPage.tsx navigates to the reading view when
+ * the job finishes), so it has been opened by the time you next see the shelf.
+ * The two ways back to the ones you have not read are the Added chip and the
+ * Unread filter, which is exactly what that filter is for.
+ *
+ * Single-key on purpose. A compound default — `opened` then `added`, so the
+ * never-opened block at the foot came out newest-first — orders the tail better
+ * and lights **two** chips on a shelf nobody has clicked, which reads as a
+ * sort somebody else left behind.
+ */
+export const DEFAULT_BY = ["opened"];
 
 /**
  * The order the chips appear in, which is **not** the order of the columns.
  *
  * The table wants the article first, because that is what a row is; the chip
- * row wants Added first, because that is the default sort and the shelf's
- * resting state should be the leftmost thing you see. Two different orders for
- * two different controls, said once here.
+ * row wants **whatever `DEFAULT_BY` names** first, because that is the shelf's
+ * resting state and it should be the leftmost thing you see. Two different
+ * orders for two different controls, said once here. It led with Added until
+ * 2026-08-27 for that reason and leads with Last opened now for the same one —
+ * the rule did not change, the default did.
  *
  * Anything sortable and missing from this list is appended rather than dropped
  * — a new column must not be able to vanish from the chip row by being
  * forgotten here. A cross-family review noticed Added had quietly stopped being
  * first when the chips started following column order, 2026-08-26.
  */
-export const CHIP_ORDER = ["added", "opened", "title", "length", "opens", "questions"];
+export const CHIP_ORDER = ["opened", "added", "title", "length", "opens", "questions"];
 
 /**
  * `now` is passed in rather than read here so that every relative date on one

@@ -135,7 +135,13 @@ export function ShelfCard({
         </p>
       )}
 
-      <p className="tw:mt-3 tw:mb-0 tw:flex tw:items-center tw:gap-4 tw:text-xs tw:text-muted-foreground">
+      {/* **Wraps, and the note keeps its `ml-auto` when it does.** The row is
+          three things of unpredictable width — a word count, a question count,
+          and a note that is whatever the current sort makes it ("opened 3 weeks
+          ago", "added 26 Aug 2026") — and in a narrow window the last of them
+          is the one that gets squeezed. `gap-y-1` so a wrapped second line does
+          not touch the gist above it. */}
+      <p className="tw:mt-3 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
         <span className="tw:inline-flex tw:items-center tw:gap-1.5">
           <FileText size={13} />
           {entry.words.toLocaleString()} words

@@ -17,6 +17,13 @@
  * previous version of this project, which had no queue at all but did get its
  * loading text right — docs/project/original-version/extraction.md#document-lifecycle-atomic-no-processing-state.
  *
+ * **The list is this sitting's, not the whole history.** A success leaves after
+ * eight seconds and a failure never left at all, so on any shelf more than a
+ * few weeks old this box became a column of every import that had ever gone
+ * wrong, sitting above the shelf. Anything that finished before the tab was
+ * opened is now folded behind one chevron — `TAB_OPENED_AT` and `earlier`
+ * below, and docs/project/ingest-queue.md § The box only shows this sitting.
+ *
  * See docs/project/ingest-queue.md.
  */
 import { useEffect, useMemo, useState } from "react";
@@ -56,6 +63,60 @@ function faded(job: Job, now: number): boolean {
   );
 }
 
+/**
+ * When this tab loaded, and the line between *what you just did* and *history*.
+ *
+ * > The "Add an article" shows this long history of imports. Perhaps just show
+ * > the most recent, or the ones since the page was opened, with the rest
+ * > hidden by default, and a button to expand them.
+ * >
+ * > — Greg, 2026-08-27
+ *
+ * A successful job leaves after eight seconds (`KEEP_DONE_MS` above) because
+ * the article it made is on the shelf directly below. **A failed one has never
+ * left at all** — deliberately, since the card is the only account of what went
+ * wrong — and the server keeps fifty of those per reader, preferring failures
+ * when it prunes (`KEEP_FINISHED` in src/jobs.ts). So the box that is meant to
+ * say "here is what is happening now" was showing every import that had ever
+ * gone wrong, oldest at the bottom, above a shelf that was the actual point of
+ * the page.
+ *
+ * **Module scope, not a mount, and that is the load-bearing part.** Adding an
+ * article navigates to `/add/<url>`, and coming home remounts this component —
+ * so a per-mount clock would fold the failure you caused thirty seconds ago
+ * into "earlier" before you had read it. This is client-side navigation inside
+ * one tab, so a module constant is exactly "since the page was opened", which
+ * is what Greg asked for and what a reader means by it. A real reload resets
+ * it, and should: that is a new sitting.
+ */
+const TAB_OPENED_AT = Date.now();
+
+/**
+ * A job that ended before `before` — history rather than news.
+ *
+ * The test is positive: a job is only earlier when we can *establish* that it
+ * finished first. Anything still running, and anything whose `finishedAt` we
+ * cannot read, stays on screen. Every terminal state in src/jobs.ts stamps
+ * `finishedAt`, so the fallback should never fire — but it errs towards showing
+ * a job rather than hiding one, and that is the direction to err in when the
+ * thing being hidden may be a failure.
+ *
+ * `Date.parse` of a malformed string is `NaN`, and `NaN < anything` is false —
+ * so that case would fall out right anyway. It is written out because falling
+ * out right by accident is how the next edit breaks it: the shelf's own sort
+ * has a test about exactly this (tests/library-sorting.test.ts § unparseable).
+ *
+ * The cutoff is a parameter rather than `TAB_OPENED_AT` read from scope, so
+ * this is a function of its arguments and a test does not have to arrange for a
+ * module to be imported at a particular moment.
+ */
+export function earlier(job: Job, before: number): boolean {
+  if (job.status === "queued" || job.status === "running") return false;
+  if (job.finishedAt === undefined) return false;
+  const at = Date.parse(job.finishedAt);
+  return Number.isFinite(at) && at < before;
+}
+
 export function AddArticle({ queue }: { queue: UseJobs }) {
   const [url, setUrl] = useState("");
   const slug = useMemo(() => slugFromUrl(url), [url]);
@@ -68,6 +129,15 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
   const [, redraw] = useState(0);
   const now = Date.now();
   const showing = queue.jobs.filter((j) => !dismissed.has(j.id) && !faded(j, now));
+
+  /* Two lists out of one, split on when the job ended rather than on what it
+     is. Sorting is the server's — newest first, `listJobs` in src/jobs.ts — and
+     partitioning preserves it, so neither list needs its own opinion. */
+  const current = showing.filter((j) => !earlier(j, TAB_OPENED_AT));
+  const history = showing.filter((j) => earlier(j, TAB_OPENED_AT));
+  /* Cancelled is not failed: you stopped it, and you know you did. */
+  const failedEarlier = history.filter((j) => j.status === "error").length;
+  const [openHistory, setOpenHistory] = useState(false);
 
   // **Strictly in the future, and over `showing` rather than every job.** A
   // faded job stays in `queue.jobs` for as long as its record lives, so taking
@@ -118,6 +188,11 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
     if (!slug) return;
     navigate(addHref(url));
   }
+
+  /* Hidden here *and* forgotten on the server, which `JobCard` already does —
+     this is only the local half, so the card goes the moment it is clicked
+     rather than on the next poll. */
+  const hide = (id: string) => setDismissed((prev) => new Set(prev).add(id));
 
   return (
     <section className="tw:mb-8 tw:rounded-lg tw:border tw:border-border tw:bg-card tw:p-4">
@@ -184,20 +259,79 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
         <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive">{queue.error}</p>
       )}
 
-      {showing.length > 0 && (
-        <ul className="tw:mt-4 tw:mb-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
-          {showing.map((job) => (
-            <li key={job.id}>
-              <JobCard
-                job={job}
-                queue={queue}
-                onHide={() => setDismissed((s) => new Set(s).add(job.id))}
-              />
-            </li>
-          ))}
-        </ul>
+      {current.length > 0 && <JobList jobs={current} queue={queue} onHide={hide} />}
+
+      {history.length > 0 && (
+        <div className="tw:mt-4">
+          {/* The same disclosure the shelf's deleted articles wear — a chevron
+              that turns, the hit area widened with `-ml-2` so the label stays
+              on the section's left margin, and one height (28px) shared with
+              every other small control on this page. See Library.tsx § Show
+              deleted and docs/project/design-css-overview.md § Controls. */}
+          <button
+            type="button"
+            onClick={() => setOpenHistory((v) => !v)}
+            aria-expanded={openHistory}
+            className="tw:-ml-2 tw:inline-flex tw:h-7 tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
+          >
+            <ChevronRight
+              size={13}
+              className={`tw:transition-transform ${openHistory ? "tw:rotate-90" : ""}`}
+            />
+            {history.length === 1 ? "1 earlier import" : `${history.length} earlier imports`}
+            {/* **Said out loud, and in the destructive colour, whether or not
+                the group is open.** Everything folded away here is finished, so
+                the only reason to look is that one of them went wrong — and a
+                collapsed disclosure that hides a failure without mentioning it
+                is exactly the shape of bug docs/reusable/silent-success.md is
+                about, with the reader as the thing that fails silently. The
+                count is the whole of the case for opening it. */}
+            {failedEarlier > 0 && (
+              <>
+                {/* A separator, because the two halves are both counts and a
+                    flex gap alone leaves "3 earlier imports 2 failed" reading
+                    as one run of numbers. The same middot the cards use. */}
+                <span aria-hidden="true" className="tw:opacity-50">
+                  ·
+                </span>
+                <span className="tw:text-destructive">
+                  {failedEarlier === 1 ? "1 failed" : `${failedEarlier} failed`}
+                </span>
+              </>
+            )}
+          </button>
+
+          {openHistory && <JobList jobs={history} queue={queue} onHide={hide} />}
+        </div>
       )}
     </section>
+  );
+}
+
+/**
+ * The list itself, so the two groups cannot drift apart.
+ *
+ * They are the same cards in the same order with the same buttons; the only
+ * difference between them is whether a chevron had to be clicked first, and
+ * that difference belongs to the caller.
+ */
+function JobList({
+  jobs,
+  queue,
+  onHide,
+}: {
+  jobs: Job[];
+  queue: UseJobs;
+  onHide: (id: string) => void;
+}) {
+  return (
+    <ul className="tw:mt-3 tw:mb-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
+      {jobs.map((job) => (
+        <li key={job.id}>
+          <JobCard job={job} queue={queue} onHide={() => onHide(job.id)} />
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -43,7 +43,7 @@ export function ShelfControls({
   onFilter,
 }: {
   table: Table<LibraryEntry>;
-  /** Added first, because it is the default sort — see library-columns.tsx § CHIP_ORDER. */
+  /** Last opened first, because it is the default sort — library-columns.tsx § CHIP_ORDER. */
   chipOrder: string[];
   view: ShelfView;
   onView: (v: ShelfView) => void;

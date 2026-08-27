@@ -247,6 +247,36 @@ is exported because the shelf has two more chips of its own
 ([`ShelfControls.tsx`](../../src/web/ShelfControls.tsx)) and the class string had been copied out
 character for character.
 
+### Narrow windows: wrap, do not shrink
+
+There are no breakpoints on the shelf and it does not need any — `max-w-4xl` makes the page fluid
+below 896px and `mx-auto` simply stops doing anything. What a narrow window actually breaks is the
+**rows**, and the rule that keeps them honest is: *a row of things whose widths you do not control
+must be allowed to wrap.*
+
+Three of them were not, and were fixed on 2026-08-27 as a set:
+
+- the page's masthead line, wordmark against the **You** / **Design** links
+- a card's bottom meta line — word count, question count, and a note whose text is whatever the
+  current sort makes it (`opened 3 weeks ago`, `added 26 Aug 2026`)
+- the tooltip, capped at `min(22rem, calc(100vw - 1.75rem))`. Floating UI's `shift` already keeps a
+  panel on screen, but shifting a 352px box inside a 390px viewport pins it to one edge with
+  nowhere left to go; capping the width is what lets it stay near the thing it is about.
+
+Two rows were already right and are worth knowing about, because they are the pattern to copy.
+`ShelfControls` is `flex-wrap` around a `flex-wrap` fieldset, so the chips reflow inside their own
+group and the Unread / view-toggle pair takes its own line, still right-aligned by `ml-auto`. And
+the dense table is inside `overflow-x-auto`, which is the other half of the rule: content that
+genuinely **cannot** reflow — a six-column table — scrolls in its own box rather than pushing the
+page sideways. Same call as the code blocks in
+[Content that cannot reflow](#content-that-cannot-reflow).
+
+The check is one line in the console, at whatever width you are worried about:
+
+```js
+document.documentElement.scrollWidth - document.documentElement.clientWidth  // must be 0
+```
+
 ## What is not written down yet
 
 The honest list. Each of these currently lives only as values in `styles.css`, and someone will

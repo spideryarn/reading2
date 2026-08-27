@@ -28,10 +28,11 @@ import {
   type TableState,
 } from "@tanstack/table-core";
 import type { LibraryEntry } from "../src/types.js";
-import { libraryColumns } from "../src/web/library-columns.js";
+import { CHIP_ORDER, DEFAULT_BY, libraryColumns } from "../src/web/library-columns.js";
+import { sortingFromUrl } from "../src/web/lib/table-sort.js";
 import type { Shelf } from "../src/web/ShelfEntry.js";
 import { sinkLast } from "../src/web/lib/table-sort.js";
-import { toggleSort } from "../src/web/lib/DataTable.js";
+import { naturalDirections, toggleSort } from "../src/web/lib/DataTable.js";
 
 const NOW = Date.parse("2026-08-26T12:00:00.000Z");
 
@@ -150,6 +151,35 @@ describe("the shelf's order", () => {
       expect(order(list, asc(id)).at(-1)).toBe("example");
       expect(order(list, desc(id)).at(-1)).toBe("example");
     }
+  });
+
+  it("lands a bare URL on last-opened, most recent first", () => {
+    /* **The shelf's resting state, pinned as behaviour rather than as a
+       string.** Greg asked for this on 2026-08-27, and the version of this test
+       that asserts `DEFAULT_BY[0] === "opened"` would pass while the shelf came
+       out oldest-first — the direction is `sortDescFirst` on the column, which
+       is somewhere else entirely. So this goes through the parser the page
+       goes through, with the empty `by`/`dir` a bare `/` actually carries, and
+       then asks the table what order that produces. */
+    const natural = naturalDirections(libraryColumns(NO_SHELF, NOW));
+    const resting = sortingFromUrl([], [], natural, DEFAULT_BY);
+    expect(resting).toEqual([{ id: "opened", desc: true }]);
+
+    const list = [
+      entry({ slug: "yesterday", lastOpenedAt: "2026-08-25T00:00:00.000Z" }),
+      entry({ slug: "today", lastOpenedAt: "2026-08-26T09:00:00.000Z" }),
+      entry({ slug: "never" }),
+    ];
+    expect(order(list, resting)).toEqual(["today", "yesterday", "never"]);
+  });
+
+  it("puts the default sort's chip first in the row", () => {
+    /* The chip row leads with whatever the shelf's resting state is, so that
+       the order you are already in is the leftmost thing you see. Two constants
+       in one file, and nothing but this connects them — CHIP_ORDER was quietly
+       reordered by a refactor once already (2026-08-26). */
+    expect(CHIP_ORDER[0]).toBe(DEFAULT_BY[0]);
+    for (const id of DEFAULT_BY) expect(CHIP_ORDER).toContain(id);
   });
 
   it("sorts a missing value last whichever way the arrow points", () => {
