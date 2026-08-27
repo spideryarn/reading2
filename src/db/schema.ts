@@ -282,8 +282,21 @@ export const articleRevisions = spideryarn.table(
      * Null is a real answer and means **we do not hold the source document**:
      * an article imported before we kept them. It is told apart from *we tried
      * and failed* by `revision_step_runs` — a revision with a successful `fetch`
-     * run in its lineage must carry this reference, which `publishRevision`
-     * enforces. See docs/plans/raw-bytes-in-storage.md.
+     * run in its lineage must carry this reference.
+     *
+     * **That rule is intent, not a guard. Nothing enforces it today**, and this
+     * comment said `publishRevision` did until 2026-08-27, which was simply
+     * untrue: that function checks blocks, the tree, `checkTree` and the `toc`
+     * run, and has never looked at these two columns. Nothing writes them yet
+     * either, so the claim was vacuous rather than merely wrong — there is no
+     * revision it could have been false about.
+     *
+     * Writing it down as a fact was the same mistake as the comment in
+     * src/store/pg.ts that claimed the ToC guard checked what it did not —
+     * docs/postmortems/toc-status-never-checked.md, found the same day. The
+     * rule lands in `reasonsNotToPublish` with the live write path;
+     * docs/plans/delete-the-importer.md § The publication gate has the full
+     * truth table, including the failed-fetch case this sentence omits.
      *
      * Note this is **not** `raw_sha256` above. That one is the hash of what the
      * network sent; this is the hash of what we stored, and for HTML in any
