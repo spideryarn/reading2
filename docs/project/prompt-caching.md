@@ -43,6 +43,9 @@ matching before the article is even reached.
 | **pipeline** | arc and tweets — one shared entry per article. **Not glossary; see below** | `articleText` |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
+All three are OpenRouter's caches now, and were not always — see
+[§ Every cache now goes through OpenRouter](#every-cache-now-goes-through-openrouter).
+
 Note what the pipeline row does **not** mean. Each of those stages makes *one* call per run, so none
 of them caches anything for itself; the entry only pays off when two of them run close together —
 within one ingest, or a top-up landing inside the 5-minute TTL of the pass before it. That is
@@ -179,13 +182,90 @@ whole of it, including why all three defences on this page were blind to it.
 byte-identically on the next request, and nothing in this app guarantees that.** Prefer an explicit
 breakpoint at the boundary you actually mean.
 
+## Every cache now goes through OpenRouter
+
+**Until 2026-08-27 there were two caches in a different sense than this page means.** The three
+request-path calls cached at OpenRouter; the seven pipeline stages cached at Anthropic, because they
+held their own `new Anthropic(…)` and talked to `api.anthropic.com`. Everything now goes through
+OpenRouter — Greg's decision, and [ai-gateway.md](ai-gateway.md) is the whole of it.
+
+Nothing above changed. `cache_control` is still placed by
+[`src/article-prompt.ts`](../../src/article-prompt.ts), the breakpoints are still explicit, the
+groupings are still `STAGE_EFFORT` and `ARTICLE_RENDERER`, and the floor is still 1,024 tokens. What
+changed is where the entry lives and how you read it back.
+
+**It was checked, not assumed.** A cold call through the Skin wrote 13,863 cache-creation tokens at
+`cost` 0.0347235; the warm repeat of the same request read the same 13,863 at `cost` 0.0028386. Both
+match [`src/pricing.ts`](../../src/pricing.ts)'s list prices to the digit — 1.25× write, 0.1× read —
+which is the second thing that run proves: OpenRouter is not adding a per-token markup on top.
+
+### The provider pin stopped being advice
+
+`provider: { order: ["anthropic"] }` was already on the three request-path calls, described in
+[§ What breaks a cache](#what-breaks-a-cache) as the sixth thing on a list. **On the pipeline stages
+it is now the difference between a cache and no cache at all**, because there is a routing layer
+where there used to be none.
+
+A cache lives on the upstream that wrote it. Unpinned, live probes landed on *"Claude Platform on
+AWS"* every single time rather than on Anthropic — so an unpinned stage would produce the right
+article, raise nothing, and never read a cache again. The bill roughly triples and no line anywhere
+says so. `MESSAGES_PROVIDER` in [`src/messages-stream.ts`](../../src/messages-stream.ts) is injected
+by `streamMessage` rather than passed by each stage, for exactly that reason: a stage that forgets it
+does not fail, it just quietly stops hitting the cache.
+
+**And it carries a third field the request-path pin does not: `require_parameters: true`.** This is
+the one that would have been walked into. `allow_fallbacks` defaults to **true** and
+`require_parameters` defaults to **false**, so a fallback upstream that does not support
+`cache_control` may be handed the request and serve it *without it* — successfully. That is not a
+degraded answer. It is a full-price answer that looks exactly like a cheap one, which is every
+failure on this page wearing a new hat. With the field set, an upstream that cannot honour the
+parameter is not offered the request at all.
+
+`order` rather than `only` on both wires, and that part is unchanged and still right: banning
+fallback outright turns an Anthropic outage into a hard failure, and a cache miss costs money where
+an unavailable model costs the reader the feature.
+
+### The two usage shapes are a wire difference now, not a vendor one
+
+This is the part most likely to catch somebody reading a log line. The same cache, reported two ways,
+depending on which protocol the request went down:
+
+| | reports | `prompt_tokens` / `input_tokens` |
+|---|---|---|
+| **Messages wire** — the seven stages | Anthropic's native `cache_read_input_tokens` and `cache_creation_input_tokens`, plus the `cache_creation.ephemeral_5m/1h` split | **additive** — the cached tokens are *not* in it |
+| **chat wire** — search, explain, chat | OpenRouter's normalised `prompt_tokens_details.cached_tokens` | **inclusive** — `prompt_tokens` counts the whole prompt, cached or not |
+
+So `inputTokens` on a `pipeline` line and `inputTokens` on a `model` line are not the same
+measurement, and a repeat call that reads a 47,000-token article shows a small `input_tokens` on one
+and a large `prompt_tokens` on the other. Both are correct. Neither is wrong about the cache.
+
+**It used to be true that this difference tracked the vendor**, and it no longer does — which matters
+because "we talk to Anthropic here and OpenRouter there" was the sentence a reader would have used to
+predict which shape to expect, and that sentence is now false everywhere while the two shapes
+survive. The thing to key on is [`TASK_WIRE`](../../src/models.ts).
+
+### And the Skin returns the cost as well
+
+The pipeline half of this page used to end at token counts, because Anthropic's response carries no
+price. OpenRouter's Anthropic-compatible endpoint returns Anthropic's native `usage` **and** its own
+`cost` in the same object — so a cached call now says both what it did and what it cost, with no
+price table in between. That is what
+[§ What a step cost, in money](logging.md#what-a-step-cost-in-money) puts on each step's log line,
+and it is a second, independent way to notice a cache that has stopped working: the token counts and
+the money have to move together.
+
+One trap worth carrying over: **`finalMessage()` in the Anthropic SDK drops `cost`.** It is on the
+wire, in the `message_delta` event, and the SDK's merge keeps only the fields its own types know
+about. `meterStream` subscribes to the raw stream events instead. A stage reading
+`message.usage.cost` would get `undefined` for ever and nothing would error.
+
 ## How to tell whether it is working
 
 **You cannot tell by looking.** A cache that has silently stopped hitting returns the same correct
 answer, raises no error, and costs more. It is
 [silent-success.md](../reusable/silent-success.md) exactly.
 
-Two defences, and neither substitutes for the other:
+Three defences, and none substitutes for another:
 
 - **`tests/article-prompt.test.ts`** proves the prefix is *stable* — byte-identical across two
   questions, two selections, two reading positions, a growing conversation. Deterministic, no
@@ -202,7 +282,20 @@ Two defences, and neither substitutes for the other:
   breakpoint, so it is covered by construction — which is a weaker thing than being called, and is
   written here as such.
 
-**Run 2026-08-26 against the live API: all three articles pass.** On the constitution, a cold call
+  **All three of those are on the chat wire, so the eval covers one wire and not the other.** No
+  eval calls a pipeline stage. That is the same "covered by construction" weakness one level up, and
+  it is worth naming rather than assuming the migration inherited the coverage: what actually stands
+  behind the seven stages is the live probe recorded above and the third defence below.
+- **`aiCost` on the step's own log line**, which is new since 2026-08-27 and is the only one of the
+  three that watches a *real* run rather than a run somebody set up. A cached read is roughly a
+  tenth the price of a fresh one, so the same step costing ten times more than it did last week is
+  the cache having stopped, in a number nobody had to compute. It cannot tell you *why*, and it says
+  nothing on a step that was skipped. See
+  [logging.md § What a step cost, in money](logging.md#what-a-step-cost-in-money).
+
+**Run 2026-08-26 against the live API: all three articles pass.** (Against OpenRouter, which is what
+those three calls already used — the pipeline's move to it came a day later and is
+[covered above](#every-cache-now-goes-through-openrouter).) On the constitution, a cold call
 writes 47,739 tokens and costs $0.119 — *more* than the $0.096 it would have cost uncached, which is
 the 1.25× write premium — and every call after it costs $0.0097. That is the whole bargain in two
 lines, and break-even at the second use is not a projection any more.
@@ -219,12 +312,16 @@ Every call also logs its counts, next to the tokens it already logged:
 
 | Field | Where |
 |---|---|
-| `cacheReadTokens`, `cacheWriteTokens` | the `model` lines in search, explain, converse |
-| the same two | the `pipeline` line, from the seam in [`src/pipeline.ts`](../../src/pipeline.ts) |
+| `cacheReadTokens`, `cacheWriteTokens` | the `model` lines in search, explain, converse — from `prompt_tokens_details.cached_tokens`, the chat wire's spelling |
+| the same two | the `pipeline` line, from the seam in [`src/pipeline.ts`](../../src/pipeline.ts) — from `cache_read_input_tokens`, the Messages wire's |
 | `tooShortToCache` | the request-path lines only |
+| `aiCalls`, `aiCost` | the `jobs` line, from the seam in [`src/jobs.ts`](../../src/jobs.ts) — what the step actually paid |
 
-**`cacheReadTokens: 0` on a repeat call is the alarm.** There is no other one. Counts only — no
-prose, nothing sensitive, per [logging.md](logging.md).
+**`cacheReadTokens: 0` on a repeat call is still the alarm**, and since 2026-08-27 it has a
+companion rather than being alone: a step whose `aiCost` jumps by roughly ten times is the same fault
+said in money. Watch the pair — a cache that broke moves both, and only one of them moving is
+usually a bug in the *reporting*. Counts only — no prose, nothing sensitive, per
+[logging.md](logging.md).
 
 ## The floor, and why zero is ambiguous
 
@@ -258,11 +355,16 @@ In rough order of how easily it happens here:
    [`src/labels.ts`](../../src/labels.ts).
 5. **Editing one stage's article rendering.** There is one renderer for a reason; changing it changes
    what several stages send.
-6. **Provider routing.** A cache lives on the upstream that wrote it. All three OpenRouter calls
-   send `provider: { order: ["anthropic"] }` — an ordering, deliberately **not**
-   `allow_fallbacks: false`. Banning fallback would turn an Anthropic outage into a hard failure on
-   a call a reader is waiting for, and a cache miss costs money where an unavailable feature costs
-   the reader the feature.
+6. **Provider routing.** A cache lives on the upstream that wrote it. Every call sends a `provider`
+   preference — `{ order: ["anthropic"] }` on the request path
+   ([`PROVIDER_ORDER`](../../src/openrouter-stream.ts)), the same plus `require_parameters: true` on
+   the pipeline ([`MESSAGES_PROVIDER`](../../src/messages-stream.ts)) — an ordering, deliberately
+   **not** `allow_fallbacks: false`. Banning fallback would turn an Anthropic outage into a hard
+   failure on a call a reader is waiting for, and a cache miss costs money where an unavailable
+   feature costs the reader the feature. **This moved from sixth on a list to a precondition when
+   the pipeline moved onto OpenRouter** — see
+   [§ The provider pin stopped being advice](#the-provider-pin-stopped-being-advice), which is also
+   where `require_parameters` is explained and why it is not optional.
 
 Changing `temperature` or `max_tokens` does **not** break anything — they are not part of the
 rendered prompt.
@@ -270,7 +372,10 @@ rendered prompt.
 ## The prices this rests on
 
 Sonnet 5, per MTok, as of 2026-08-26: input `$2.00`, cache write (5 min) `$2.50`, cache read `$0.20`.
-Break-even is the **second** use of a prefix, which is why single-use prefixes are left unmarked.
+Those were Anthropic's list prices, and the 2026-08-27 migration re-checked both of them through
+OpenRouter — write and read each billed at list to the digit, so the arithmetic on this page did not
+have to move when the route did. Break-even is the **second** use of a prefix, which is why
+single-use prefixes are left unmarked.
 The 1-hour TTL is deliberately not used — it doubles the write and needs three uses, and a reading
 session's calls land within minutes of each other. A cache hit refreshes the TTL for free.
 
@@ -281,5 +386,7 @@ session's calls land within minutes of each other. A cache hit refreshes the TTL
   for the previous version of this app and never built. It named the prerequisite that killed it —
   five prompts each wrapping the article differently — and warned this repo would reproduce it. It
   did. This is that debt paid.
+- [ai-gateway.md](ai-gateway.md) — one vendor, two wires: why every cache on this page is now
+  OpenRouter's, and the four things about that which fail without saying so
 - [silent-success.md](../reusable/silent-success.md) — the shape of every failure on this page
 - [logging.md](logging.md) · [testing.md](testing.md) · [setup-dev.md](setup-dev.md)

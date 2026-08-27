@@ -428,10 +428,12 @@ that inference safe. Two consequences:
    wrote it. Unpinned, the default here was a different upstream on every probe, so an unpinned
    migration would look like it worked and quietly never hit a cache — precisely the failure §3.1.1
    catalogues, arrived at from a new direction.
-2. **The same model bills differently by upstream.** Flagged, not explained: two identical 16-token
-   calls, 0.000182 via AWS against 0.000082 via Anthropic. Too small a sample to draw a rate from,
-   large enough that a cost model must record *which upstream answered* — `provider` is on the
-   response and should be a column.
+2. ~~**The same model bills differently by upstream.**~~ **Retracted the same day.** Those two calls
+   produced different numbers of *output* tokens (16 against 6, one having hit `max_tokens`), and
+   that — not a rate difference — is the whole of the gap. Re-run against an identical body, both
+   upstreams bill at exactly list price: AWS `11 in / 16 out = 0.000182`, Anthropic
+   `11 in / 6 out = 0.000082`, each matching `in×$2 + out×$10` per Mtok to the digit. `provider` is
+   still worth a column, as a diagnostic for which upstream held the cache, not as a billing input.
 
 ### The one that was not on the list: streaming drops `cost` from `finalMessage()`
 

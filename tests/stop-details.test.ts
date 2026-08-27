@@ -244,8 +244,18 @@ beforeAll(async () => {
   env.NODE_ENV = "development";
   /* A key the SDK will accept, because the constructor throws without one and
      that throw would be indistinguishable from a stage refusing. Nothing is
-     sent anywhere: `fetch` is stubbed above. */
+     sent anywhere: `fetch` is stubbed above.
+
+     Two of them, because the six stages and the control now reach the SDK by
+     different routes. The stages go through `messagesClient()` in
+     src/messages-stream.ts, which reads `OPENROUTER_API_KEY` and throws
+     `NOT_CONFIGURED` without it — a throw that carries `[ai-not-set-up]` and
+     would fail the `[ai-model-refused]` assertions below while looking exactly
+     like a stage that never reached the refusal branch. The control builds a
+     bare `new Anthropic(...)`, which wants `ANTHROPIC_API_KEY`. Both are
+     nonsense strings and neither leaves the process. */
   env.ANTHROPIC_API_KEY = "test-key-not-a-real-one";
+  env.OPENROUTER_API_KEY = "test-key-not-a-real-one";
   delete env.ANTHROPIC_AUTH_TOKEN;
 
   const child = spawnSync(TSX, ["-e", body], { env, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
@@ -416,6 +426,27 @@ describe("the source itself", () => {
     expect(stripped).not.toContain("trailing comment");
   });
 
+  it("lets the one exception read only .type, and never carry the object anywhere", async () => {
+    /* The exception is a hole in a privacy rule, so it is worth spelling out how
+       small it is. `stop_details` is the provider's own words about a request
+       that carried the whole article; what may leave `wasRefused` is a boolean. */
+    const file = path.join(ROOT, "src", "messages-stream.ts");
+    const code = stripComments(await readFile(file, "utf8"));
+
+    const reads = code.match(/stop_details/g) ?? [];
+    expect(reads.length).toBe(1);
+
+    /* Never stringified, never logged, never thrown, never spread into an
+       object that goes somewhere else — the four ways the old
+       `Model refused: ${JSON.stringify(...)}` reached a screen. */
+    expect(code).not.toMatch(/JSON\.stringify\s*\(\s*[^)]*stop_details/);
+    expect(code).not.toMatch(/stop_details[^\n]*(log|throw|Error\()/);
+
+    /* And the function's contract is a boolean, so nothing downstream can widen
+       it by accident. */
+    expect(code).toContain("export function wasRefused(message: Anthropic.Message): boolean");
+  });
+
   it("reads no stop_details anywhere in src/", async () => {
     const files = await sourceFiles();
     /* Non-vacuity, twice over: the scan has to have found files, and it has to
@@ -429,6 +460,14 @@ describe("the source itself", () => {
     for (const file of files) {
       const code = stripComments(await readFile(file, "utf8"));
       if (code.includes("stop_reason")) sawStopReason += 1;
+      /* **One deliberate exception, added 2026-08-27.** The rule used to be
+         "nowhere in src/", and that was right while `stop_reason` alone could
+         answer the question. Going through OpenRouter made it ambiguous — its
+         Messages reference shows `stop_details.type: "refusal"` beside
+         `stop_reason: "end_turn"` — so `wasRefused` reads the one field and
+         returns a boolean. The rule becomes *only the central discriminator may
+         look, and only at `.type`*, which the next test pins. */
+      if (path.basename(file) === "messages-stream.ts") continue;
       if (code.includes("stop_details")) offenders.push(path.relative(ROOT, file));
     }
     expect(sawStopReason).toBeGreaterThan(0);

@@ -67,11 +67,13 @@
  * where it landed. Same rule, same reasoning, as src/arc.ts.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
+import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
@@ -861,7 +863,6 @@ export interface SummariesRun {
 
 /** One batch, with one bounded retry that feeds the parse error back. */
 async function runBatch(opts: {
-  client: Anthropic;
   meta: Meta | null;
   tree: Tree;
   blocks: Block[];
@@ -894,12 +895,20 @@ async function runBatch(opts: {
     /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
        anywhere upstream of here, and the installed SDK builds `Error.message`
        from the upstream error body — the one place it can echo back part of
-       what we sent, which is the whole article. See src/anthropic-call.ts. */
+       what we sent, which is the whole article. See src/anthropic-call.ts.
+
+       `streamMessage` builds the client, and sets `logLevel: "off"` on it — a
+       privacy setting rather than a preference. The SDK has a logger of its own
+       that defaults to `console` and reads `ANTHROPIC_LOG` from the
+       environment; at `debug` it prints the outgoing request — **which is the
+       whole article** — and, for a non-JSON error response, the raw upstream
+       body. Neither goes through Pino, so neither can be redacted, and
+       `anthropicCallFailed` never sees them. See docs/project/logging.md. */
     let message: Anthropic.Message;
     try {
-      const stream = opts.client.messages.stream(
+      const call = streamMessage(
+        "summarise",
         {
-          model: CAPABLE_MODEL,
           max_tokens: maxTokens,
           thinking: { type: "adaptive" },
           output_config: { effort: "medium" },
@@ -919,16 +928,19 @@ async function runBatch(opts: {
             },
           ],
         },
-        { signal: opts.signal },
+        { ...(opts.signal ? { signal: opts.signal } : {}) },
       );
-      message = await stream.finalMessage();
+      /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper
+         is what records what this call cost. The stream's own method works and
+         records nothing. See src/messages-stream.ts. */
+      message = await call.finalMessage();
     } catch (err) {
       throw anthropicCallFailed(err);
     }
 
     opts.onTokens(message.usage.input_tokens, message.usage.output_tokens);
 
-    if (message.stop_reason === "refusal") {
+    if (wasRefused(message)) {
       /* `stop_details` is deliberately neither thrown nor logged — it is the
          provider's own words about a request that carried the whole article,
          and this error is copied onto the job and shown on the progress card.
@@ -1041,22 +1053,16 @@ export async function generateSummaries(opts: {
   const batches = batchesOf(tree, targets);
   const started = Date.now();
 
-  /* `logLevel: "off"`, and it is a privacy setting rather than a preference. The
-     SDK has a logger of its own that defaults to `console` and reads
-     `ANTHROPIC_LOG` from the environment; at `debug` it prints the outgoing
-     request — **which is the whole article** — and, for a non-JSON error
-     response, the raw upstream body. Neither goes through Pino, so neither can
-     be redacted, and `anthropicCallFailed` never sees them. One environment
-     variable, set by somebody debugging something else, and every article this
-     app has read is on stdout. See docs/project/logging.md. */
-  const client = new Anthropic({ logLevel: "off" });
+  /* No client is built here and none is passed down: `streamMessage` builds one
+     per call inside `runBatch`, which is also where the privacy setting that
+     used to be spelled out at this line (`logLevel: "off"`, and why it is not a
+     preference) now lives. */
   let inputTokens = 0;
   let outputTokens = 0;
   let done = 0;
 
   const results = await pooled(batches, CONCURRENCY, async (batch) => {
     const out = await runBatch({
-      client,
       meta,
       tree,
       blocks,
@@ -1129,6 +1135,11 @@ async function main(): Promise<void> {
   // Before the calls, not after. This is the only thing on screen for the
   // minute or two the model takes, and printing it afterwards made the sibling
   // stages look hung for the whole request.
+  /* At the program's edge, not inside the gateway — see `messagesClient` in
+     src/messages-stream.ts for the test that proved the difference. Without it
+     this command answers `[ai-not-set-up]` on a machine where the key is right
+     there in `.env.local`. */
+  loadEnvLocal();
   console.log(`Writing the summaries with ${CAPABLE_MODEL}…`);
   const run = await generateSummaries({
     dir,

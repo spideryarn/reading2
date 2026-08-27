@@ -74,16 +74,28 @@ the callback never runs and you lose your place, with nothing anywhere saying wh
 taken, Vite quietly picks 5274 or 5275, which is not on the allow-list, and Google sign-in fails
 for a reason that has nothing to do with your code.
 
-It is needed by the two LLM calls that happen in a request handler rather than in the pipeline:
-the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
-([comments.md](comments.md)), and the chat in [`src/converse.ts`](../../src/converse.ts)
-([chat-mode.md](../plans/chat-mode.md)). Without it the reading view works normally, selecting a
-passage returns an error into the dialog, and a chat message returns one into the thread.
+**That one key now pays for everything.** Until 2026-08-27 it covered only the calls that happen in
+a request handler — the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
+([comments.md](comments.md)), the chat in [`src/converse.ts`](../../src/converse.ts)
+([chat-mode.md](../plans/chat-mode.md)), and search — while the seven pipeline stages went straight
+to `api.anthropic.com` on an `ANTHROPIC_API_KEY` of their own. Greg's call, 2026-08-27:
+
+> I'm fine with gating everything through OpenRouter. Their reliability is good, and this gives us
+> simplicity/consistency/flexibility.
+
+So without this key the reading view still renders, selecting a passage returns an error into the
+dialog, a chat message returns one into the thread — **and nothing can be ingested at all.** What
+the pipeline stages did *not* do is change protocol: they still speak Anthropic's Messages shape
+through the Anthropic SDK, pointed at OpenRouter's Anthropic-compatible endpoint. See
+[ai-gateway.md](ai-gateway.md) and the header of
+[`src/messages-stream.ts`](../../src/messages-stream.ts), which is the source of truth for it.
+
+`ANTHROPIC_API_KEY` is no longer read by any model call in `src/`.
 
 **`.env.local` wins over the shell**, so `SPIDERYARN_CHAT_MODEL=… npm run dev` does *not* do what
 it looks like it does — put the line in the file instead. This paragraph said the opposite until
 2026-08-27, having been left behind by the reversal two sections down, which is where the reasoning
-is. The pipeline stages use the Anthropic SDK and want `ANTHROPIC_API_KEY` instead.
+is.
 
 `CODEX_API_KEY` is the odd one out: nothing in the app reads it. It is for
 [`scripts/run-codex.ts`](../../scripts/run-codex.ts), which dispatches a GPT/Codex subagent for
@@ -146,36 +158,65 @@ drifted a version behind.
 
 | Tier | The model | Reached through |
 |---|---|---|
-| **capable** | Claude Sonnet 5 — `claude-sonnet-5`, or `anthropic/claude-sonnet-5` | the Anthropic SDK *and* OpenRouter, one spelling each |
-| **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter only |
-| **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter only, and not a *tier* — see below |
-| **PDF reader** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter only, and not a *tier* either — `PDF_READER_MODEL` |
+| **capable** | Claude Sonnet 5 — `anthropic/claude-sonnet-5` on the wire, stamped `claude-sonnet-5` | OpenRouter, on both wires — see below |
+| **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter |
+| **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter, and not a *tier* — see below |
+| **PDF reader** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter, and not a *tier* either — `PDF_READER_MODEL` |
+| **dictation** | Gemini 3.1 Flash Lite — `google/gemini-3.1-flash-lite` | OpenRouter, and not a tier — `DICTATION_MODEL` |
+
+**Every one of those goes through OpenRouter**, since 2026-08-27 and Greg's decision to gate the
+whole app through one vendor. What still varies is not the vendor but the **wire** — which protocol
+the request is written in — and that axis has its own doc: [ai-gateway.md](ai-gateway.md). The short
+version is that the seven pipeline stages speak Anthropic's Messages shape
+([`src/messages-stream.ts`](../../src/messages-stream.ts)) and everything else speaks OpenAI's
+chat/completions shape ([`src/openrouter-stream.ts`](../../src/openrouter-stream.ts)), both to
+OpenRouter.
 
 ### Three spellings, and only one of them is a name
 
-A model id is an address, and this app sends two different addresses for the same model — one for
-the Anthropic SDK, one for OpenRouter. **Neither of them is what the model is called.** The
-distinction cost nothing until something displayed one: on 2026-08-27 `/profile` listed all ten jobs
-with their raw wire ids, so seven rows read `claude-sonnet-5` and three read
-`anthropic/claude-sonnet-5`. Every string was the right thing to send, and the page was still wrong,
-because the question it exists to answer is *which model writes what* and it came back in two
-spellings depending on a transport detail the reader cannot see.
+A model id is an address, and this app holds two different addresses for the same model. **Neither
+of them is what the model is called.** The distinction cost nothing until something displayed one:
+on 2026-08-27 `/profile` listed all ten jobs with their raw wire ids, so seven rows read
+`claude-sonnet-5` and three read `anthropic/claude-sonnet-5`. Every string was the right thing to
+send, and the page was still wrong, because the question it exists to answer is *which model writes
+what* and it came back in two spellings depending on a transport detail the reader cannot see.
 
-So `src/models.ts` now separates the three jobs that one string was doing, and **nothing outside
-that file gets to choose between them**:
+**What those two spellings mean changed later the same day, and the pair survived the change.** They
+used to be *vendor A's address and vendor B's address* — one for the Anthropic SDK talking to
+`api.anthropic.com`, one for OpenRouter. Now everything is OpenRouter, every task sends
+`anthropic/claude-sonnet-5`, and `CAPABLE_MODEL` is on no request at all. It stayed because the
+second job it was doing is the one that never moved: it is the **name stamped into stored
+artefacts**, and `glossary.ts`, `summarise.ts` and `tweets.ts` each compare a file's `generator`
+against it to decide whether the work is stale. Moving the stamps to the prefixed spelling would have
+marked the whole corpus stale in one edit and regenerated it at full price — a large bill, for a
+migration whose whole purpose was to see the bill. So the rule that arrived with `/profile` is the
+rule that saved it: **a provider prefix is an address, not a name.**
+[ai-gateway.md § Two spellings](ai-gateway.md#two-spellings-of-one-model-and-why-both-survive) has
+the rest.
+
+So `src/models.ts` separates the three jobs that one string was doing, and **nothing outside that
+file gets to choose between them**:
 
 | Ask for | With | You get |
 |---|---|---|
-| what a task actually sends | `resolveModel(task)` | `{ id, provider, source }` — the wire id in its own provider's spelling, and whether the environment chose it |
+| what a task actually sends | `resolveModel(task)` | `{ id, provider, wire, source }` — the wire id, who serves it, which protocol it speaks, and whether the environment chose it |
 | just the id | `modelFor(task)` | the same `id` |
-| which wire it goes down | `providerFor(task)` | `"anthropic"` or `"openrouter"` |
+| which protocol it speaks | `wireFor(task)` | `"messages"` or `"chat"` |
 | what to show a person | `displayName(id)` | one name per model, no provider prefix |
+
+`wireFor` was `providerFor` and answered `"anthropic"` or `"openrouter"` until 2026-08-27. The
+function did not disappear when the vendor split did, because the question it was really answering —
+*what does this request look like?* — is still a live one. `Provider` is now a type with exactly one
+member, which is the decision written down where somebody will trip over it rather than an oversight.
 
 **There is exactly one public task-level model function**, and that is deliberate. There used to be
 two — `modelFor` and `modelForOpenRouter` — one of which knew which wire a task was on and one of
 which did not, and the one that did not would cheerfully answer for `labels`, a stage that has never
-spoken to OpenRouter. Reaching for the wrong one of a similarly-named pair gets you a real model id
-and a wrong answer. The tier→OpenRouter-id helper is now private and takes a tier.
+sent a chat/completions request in its life. Reaching for the wrong one of a similarly-named pair
+gets you a real model id and a wrong answer. The tier→OpenRouter-id helper is now private and takes
+a tier. (When that was written the wrong answer was a *vendor* mismatch as well as a wire one;
+`labels` now really does go to OpenRouter, and the function is still private, because the bug was
+never about which vendor — it was about a public function answering a question it could not know.)
 
 **`resolveModel` reads `SPIDERYARN_*_MODEL`, and an earlier version of it deliberately did not.**
 That was wrong. The three request-path calls each read their own override, so `/api/models` could
@@ -185,9 +226,9 @@ and `source` tells the page to add "set in the environment" rather than passing 
 the app's configuration. The same applies to effort: the route calls `effortFor`, not raw
 `STAGE_EFFORT`, so `SPIDERYARN_PIPELINE_EFFORT` shows up too.
 
-Which task is on which wire is a `Record<Task, Provider>` (`TASK_PROVIDER`), not a list plus a
-default — so an unassigned task fails to compile rather than quietly getting the pipeline answer.
-`PIPELINE_TASKS` and `REQUEST_PATH_TASKS` are derived from it.
+Which task is on which wire is a `Record<Task, Wire>` (`TASK_WIRE`), not a list plus a default — so
+an unassigned task fails to compile rather than quietly getting the pipeline answer. `PIPELINE_TASKS`
+and `REQUEST_PATH_TASKS` are derived from it.
 
 Two things worth knowing about `displayName`. It is a **table of literals**, not
 `id.split("/").pop()` — the same rule the file applies to wire spellings, and not a hypothetical
@@ -201,11 +242,13 @@ That request-path list used to have a second copy inside `modelsInUse` in
 decided what ran. [`tests/models.test.ts`](../../tests/models.test.ts) is the rest of the guard.
 
 `/profile` shows the name, the effort where there is one, and the provider, with the exact wire id
-on hover — and two extra rows for the **PDF transcriber and the embedding model**, both on no tier
-and therefore in no table the route can loop over, so a page called *what's running* was listing ten
-Claude jobs and quietly omitting both of the app's calls to a model from somebody else. They are in
-`NON_TASK_MODELS`; sharing an inventory does not merge the decisions, and neither of them is going
-on a tier.
+on hover — and three extra rows for the **PDF transcriber, the embedding model and the dictation
+model**, all on no tier and therefore in no table the route can loop over, so a page called *what's
+running* was listing ten Claude jobs and quietly omitting the app's calls to a model from somebody
+else. They are in `NON_TASK_MODELS`; sharing an inventory does not merge the decisions, and none of
+them is going on a tier. The provider column now reads `openrouter` on every row, which is the
+honest answer and no longer an interesting one — the column that varies is the wire, and the page
+does not show it.
 
 Most of the above beyond the first fix came from a GPT-5.6-sol review, 2026-08-27.
 
@@ -227,9 +270,18 @@ for now)."*
 **Changing a row is not the whole of moving a job**, and the file carries the list: the completion
 ceilings were sized for a model that does not spend a reasoning allocation out of them, the
 web-search cap is one only Anthropic honours, and a truncated answer is stored here as a finished
-one. The seven pipeline stages cannot move by that table at all — they reach the model through the
-Anthropic SDK, and setting one of them to `quick` makes the app refuse to start rather than pretend
-it worked.
+one. The seven pipeline stages cannot move by that table at all, and setting one of them to `quick`
+makes the app refuse to start rather than pretend it worked.
+
+**The reason that guard exists shifted on 2026-08-27, and the guard did not.** It used to be a
+*vendor* fact: those stages went to `api.anthropic.com`, and Luna is not there. Now everything is
+OpenRouter, and what still separates them is the **wire** — they speak Anthropic's Messages shape,
+and all seven send `thinking: { type: "adaptive" }`, which the chat/completions shape has no
+equivalent for at all ([ai-gateway.md § Why the stages were not translated](ai-gateway.md#why-the-stages-were-not-translated)).
+So moving one to the quick tier still means moving it to the other wire first, and that is still a
+rewrite of the call rather than a config change. Note that the error the guard throws is worded for
+the old reason — *"only reachable through OpenRouter"* — which is now true of everything and
+therefore says nothing.
 
 **And the one on that list that has no guard at all: the provider pin.** All three request-path
 calls send `provider: { order: ["anthropic"] }` ([`PROVIDER_ORDER`](../../src/openrouter-stream.ts)),
@@ -243,8 +295,18 @@ function of the model id before any request-path row goes to `quick`; today it i
 this paragraph is the only thing standing between the two. See
 [silent-success.md](../reusable/silent-success.md), which is the shape of it.
 
+**Still true, and now true on both wires.** The Messages wire has a pin of its own —
+`MESSAGES_PROVIDER` in [`src/messages-stream.ts`](../../src/messages-stream.ts) — which is the same
+constant shape and would be wrong in the same silent way if a pipeline stage were pointed at a
+non-Anthropic model. That half is covered, because the load-time check above stops the row being
+flipped at all. The request-path half is not. Two differences between the two pins are worth knowing:
+`MESSAGES_PROVIDER` also sends `require_parameters: true`, which stops a fallback upstream serving
+the request having quietly dropped `cache_control` or `thinking`, and `PROVIDER_ORDER` does not.
+`DICTATION_MODEL` deliberately sends no pin at all, for exactly the reason this paragraph gives — it
+is a Gemini model.
+
 Four things that file will tell you and this one will not: why the two spellings are not derived
-from each other, why the quick tier has no Anthropic-SDK spelling *and cannot have one*, why the
+from each other, why the quick tier has no Messages-wire spelling *and cannot have one*, why the
 provider pin and the cache breakpoint have to move with the model, and why editing the capable
 model marks stored tweet threads stale.
 

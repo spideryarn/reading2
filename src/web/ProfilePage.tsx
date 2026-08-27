@@ -78,6 +78,7 @@ type ModelRow = {
   model: string;
   id: string;
   provider: string;
+  wire: string;
   /** `"override"` when an environment variable, not the code, chose this model. */
   source: "default" | "override";
   effort?: string;
@@ -99,6 +100,25 @@ type ModelRow = {
 const PROVIDER_LABEL: Record<string, string> = {
   anthropic: "Anthropic",
   openrouter: "OpenRouter",
+};
+
+/**
+ * **What each row says now that every row says OpenRouter.**
+ *
+ * Until 2026-08-27 the provider column separated the seven pipeline stages
+ * (Anthropic's own API) from the three request-path ones (OpenRouter). That
+ * distinction is gone — everything goes through OpenRouter — and a column with
+ * one value in it tells a reader nothing.
+ *
+ * The axis that still varies is the *protocol*: the pipeline stages speak
+ * Anthropic's Messages shape through OpenRouter's compatible endpoint, the
+ * request-path ones speak OpenAI's. That is a real difference to anyone
+ * debugging a call, and it is what replaces the old split. See
+ * src/messages-stream.ts.
+ */
+const WIRE_LABEL: Record<string, string> = {
+  messages: "Messages",
+  chat: "chat",
 };
 
 export function ProfilePage() {
@@ -256,13 +276,14 @@ export function ProfilePage() {
                     third spelling. */}
                 <span
                   className="tw:font-mono tw:text-xs tw:text-foreground"
-                  title={`${m.id} · via ${PROVIDER_LABEL[m.provider] ?? m.provider}`}
+                  title={`${m.id} · via ${PROVIDER_LABEL[m.provider] ?? m.provider} · ${WIRE_LABEL[m.wire] ?? m.wire} API`}
                 >
                   {m.model}
                   {m.effort && <span className="tw:text-ink-faint"> · {m.effort}</span>}
                   <span className="tw:text-ink-faint">
                     {" · "}
                     {PROVIDER_LABEL[m.provider] ?? m.provider}
+                    {` (${WIRE_LABEL[m.wire] ?? m.wire})`}
                     {/* An override is a one-off comparison somebody is running,
                         not this app's configuration, and the difference matters
                         to anyone reading the table to find out what the app

@@ -44,12 +44,13 @@
  * recorded, because "what you need to bring" is *defined by* who is reading.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
 import { mintUniqueId } from "./ids.js";
+import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -772,15 +773,15 @@ export async function generateIdeas(opts: {
   const answerTokens = 400 + count * 420;
   const maxTokens = budgetFor("ideas", answerTokens);
 
-  /* `logLevel: "off"` is a privacy setting rather than a preference — the SDK's
-     own logger reads ANTHROPIC_LOG and at `debug` prints the outgoing request,
-     which is the whole article, outside Pino and so unredactable. */
-  const client = new Anthropic({ logLevel: "off" });
+  /* `streamMessage` builds the client, and sets `logLevel: "off"` on it — a
+     privacy setting rather than a preference, since the SDK's own logger reads
+     ANTHROPIC_LOG and at `debug` prints the outgoing request, which is the
+     whole article, outside Pino and so unredactable. */
   let message: Anthropic.Message;
   try {
-    const stream = client.messages.stream(
+    const call = streamMessage(
+      "ideas",
       {
-        model: CAPABLE_MODEL,
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: effortFor("ideas") },
@@ -817,14 +818,17 @@ export async function generateIdeas(opts: {
         ],
         messages: [{ role: "user", content: renderPrompt({ tree, count, profile }) }],
       },
-      { signal: opts.signal },
+      { ...(opts.signal ? { signal: opts.signal } : {}) },
     );
 
     if (opts.onProgress) {
       const report = opts.onProgress;
       let chars = 0;
       let last = 0;
-      stream.on("text", (delta) => {
+      /* `delta: string` spelled out because `MeteredCall.stream` is typed as
+         `ReturnType<…messages.stream>`, which instantiates that method's generic at
+         its constraint and loses `on`'s per-event listener types. */
+      call.stream.on("text", (delta: string) => {
         chars += delta.length;
         // Throttled: the model emits deltas far faster than anyone reads them,
         // and each of these is a write the job poller may pick up.
@@ -835,11 +839,14 @@ export async function generateIdeas(opts: {
       });
     }
 
-    message = await stream.finalMessage();
+    /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper is
+       what records what this call cost. The stream's own method works and
+       records nothing. See src/messages-stream.ts. */
+    message = await call.finalMessage();
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (message.stop_reason === "refusal") {
+  if (wasRefused(message)) {
     /* `stop_details` is neither thrown nor logged — it is the provider's own
        words about a request that carried the whole article. src/messages.ts. */
     throw new Error(MODEL_REFUSED.message);

@@ -230,9 +230,12 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   cannot be precomputed or
   cached on a content hash, because it does not exist until they make it. See
   [comments.md § Why this call is not a pipeline stage](comments.md#why-this-call-is-not-a-pipeline-stage).
-  That call goes to **OpenRouter** (`OPENROUTER_API_KEY`); everything in the pipeline uses the
-  Anthropic SDK. Before writing any Anthropic SDK code, load the `claude-api` skill for current
-  model ids and parameters.
+  That call goes to **OpenRouter** (`OPENROUTER_API_KEY`) — and since 2026-08-27 so does
+  everything else, the pipeline included. ~~everything in the pipeline uses the Anthropic SDK~~:
+  the pipeline still *uses* the SDK, but pointed at OpenRouter's Anthropic-compatible endpoint
+  rather than at `api.anthropic.com`. One vendor, two wire shapes —
+  [ai-gateway.md](ai-gateway.md). Before writing any Anthropic SDK code, load the `claude-api`
+  skill for current model ids and parameters.
 
 ## Conventions
 
@@ -242,6 +245,9 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   hash input rather than only the idea — [database.md](database.md#today-files-under-dataslug).
 - What the model calls cost, and the three prompt caches that stop us paying for the article twice,
   are in [prompt-caching.md](prompt-caching.md).
+- **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through
+  OpenRouter, why the seven pipeline stages kept Anthropic's Messages protocol instead of being
+  translated into OpenAI's shape, and the four things on that path that fail without saying so.
 - Test article: `output/noema-mythology-of-conscious-ai.html` (Anil Seth, ~54 min, long and largely
   *unstructured*). It's the deliberate hard case for anything that assumes headings exist.
 - **`output/` is generated and not in version control**, alongside `data/`. Both are rebuilt by

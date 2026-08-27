@@ -36,12 +36,12 @@ import {
   PIPELINE_TASKS,
   QUICK_MODEL_OPENROUTER,
   REQUEST_PATH_TASKS,
-  TASK_PROVIDER,
+  TASK_WIRE,
   TASK_TIER,
   type Task,
   displayName,
   modelFor,
-  providerFor,
+  wireFor,
   resolveModel,
 } from "../src/models.js";
 
@@ -54,32 +54,51 @@ afterEach(() => {
 describe("which wire each task is on", () => {
   it("puts every task in exactly one of the two lists", () => {
     /* Belt and braces. The real guarantee is the type: `TASK_PROVIDER` is a
-       `Record<Task, Provider>`, so an unassigned task will not compile, and
+       `Record<Task, Wire>`, so an unassigned task will not compile, and
        both lists are derived from it. It used to be two hand-written lists with
-       `providerFor` defaulting to "anthropic" — under which a task nobody
+       a provider function defaulting to "anthropic" — under which a task nobody
        listed did not fail, it just got the pipeline answer and was reported
        with the Anthropic spelling however it really ran. GPT-5.6-sol asked for
-       the compile-time version, 2026-08-27. */
-    expect(Object.keys(TASK_PROVIDER).sort()).toEqual([...ALL_TASKS].sort());
+       the compile-time version, 2026-08-27; the same day the axis itself
+       changed from *which vendor* to *which protocol*, everything having moved
+       behind OpenRouter. */
+    expect(Object.keys(TASK_WIRE).sort()).toEqual([...ALL_TASKS].sort());
     const listed = [...PIPELINE_TASKS, ...REQUEST_PATH_TASKS];
     expect([...listed].sort()).toEqual([...ALL_TASKS].sort());
     expect(new Set(listed).size).toBe(listed.length);
   });
 
-  it("agrees with providerFor", () => {
-    for (const task of PIPELINE_TASKS) expect(providerFor(task)).toBe("anthropic");
-    for (const task of REQUEST_PATH_TASKS) expect(providerFor(task)).toBe("openrouter");
+  it("agrees with wireFor", () => {
+    for (const task of PIPELINE_TASKS) expect(wireFor(task)).toBe("messages");
+    for (const task of REQUEST_PATH_TASKS) expect(wireFor(task)).toBe("chat");
+  });
+
+  it("sends every task to OpenRouter, which is now the only gateway", () => {
+    /* The decision of 2026-08-27, pinned so that reversing it has to be
+       deliberate. Before it, the seven pipeline stages went straight to
+       Anthropic's own API and this loop would have failed on all seven. */
+    for (const task of ALL_TASKS) expect(resolveModel(task).provider).toBe("openrouter");
   });
 });
 
 describe("the model id a task sends", () => {
-  it("gives a pipeline stage the Anthropic SDK's spelling", () => {
-    expect(modelFor("labels")).toBe(CAPABLE_MODEL);
-    expect(modelFor("labels")).not.toContain("/");
+  it("gives every task OpenRouter's spelling, pipeline stages included", () => {
+    /* Both wires now address the model the same way: the Anthropic-compatible
+       endpoint wants `anthropic/claude-sonnet-5` exactly as chat/completions
+       does. Until 2026-08-27 `labels` sent the bare `claude-sonnet-5`. */
+    expect(modelFor("labels")).toBe(CAPABLE_MODEL_OPENROUTER);
+    expect(modelFor("explain")).toBe(CAPABLE_MODEL_OPENROUTER);
+    expect(modelFor("labels")).toContain("/");
   });
 
-  it("gives a request-path call OpenRouter's", () => {
-    expect(modelFor("explain")).toBe(CAPABLE_MODEL_OPENROUTER);
+  it("keeps the unprefixed spelling out of every request", () => {
+    /* `CAPABLE_MODEL` still exists and is still load-bearing — it is the name
+       stamped into stored artefacts, and every staleness check compares against
+       it. What it must never again be is the id on a request: sending it to
+       OpenRouter is a 404, and *changing the stamps to match the wire* would
+       mark the whole corpus stale and regenerate it at full price. Two
+       spellings, two jobs. See src/models.ts. */
+    for (const task of ALL_TASKS) expect(modelFor(task)).not.toBe(CAPABLE_MODEL);
   });
 
   it("lets the environment override it, and says that it did", () => {
@@ -91,6 +110,7 @@ describe("the model id a task sends", () => {
     expect(resolveModel("chat")).toEqual({
       id: "someone/else-9",
       provider: "openrouter",
+      wire: "chat",
       source: "override",
     });
   });

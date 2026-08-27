@@ -25,11 +25,13 @@
  * artefacts, so the pipeline sees one step. docs/plans/toc-scaling.md.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
+import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
@@ -634,35 +636,36 @@ export async function generateToc(opts: {
   const answerTokens = estimateTocTokens(blocks);
   const maxTokens = budgetFor("table of contents", answerTokens);
 
-  /* `logLevel: "off"`, and it is a privacy setting rather than a preference. The
-     SDK has a logger of its own that defaults to `console` and reads
-     `ANTHROPIC_LOG` from the environment; at `debug` it prints the outgoing
-     request — **which is the whole article** — and, for a non-JSON error
-     response, the raw upstream body. Neither goes through Pino, so neither can
-     be redacted, and `anthropicCallFailed` never sees them. One environment
-     variable, set by somebody debugging something else, and every article this
-     app has read is on stdout. See docs/project/logging.md. */
-  const client = new Anthropic({ logLevel: "off" });
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
      anywhere upstream of here, and the installed SDK builds `Error.message`
      from the upstream error body — the one place it can echo back part of
-     what we sent, which is the whole article. See src/anthropic-call.ts. */
+     what we sent, which is the whole article. See src/anthropic-call.ts.
+
+     The client is built by `streamMessage`, which also sets `logLevel: "off"`
+     — a privacy setting rather than a preference. The SDK has a logger of its
+     own that defaults to `console` and reads `ANTHROPIC_LOG` from the
+     environment; at `debug` it prints the outgoing request — **which is the
+     whole article** — and, for a non-JSON error response, the raw upstream
+     body. Neither goes through Pino, so neither can be redacted, and
+     `anthropicCallFailed` never sees them. See docs/project/logging.md. */
   let message: Anthropic.Message;
   try {
-    const stream = client.messages.stream({
-      model: CAPABLE_MODEL,
+    const call = streamMessage("toc", {
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       system: SYSTEM,
       messages: [{ role: "user", content: renderBlocks(blocks) }],
-    }, { signal: opts.signal });
+    }, { ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {
       const report = opts.onProgress;
       let chars = 0;
       let last = 0;
-      stream.on("text", (delta) => {
+      /* `delta: string` spelled out because `MeteredCall.stream` is typed as
+         `ReturnType<…messages.stream>`, which instantiates that method's generic at
+         its constraint and loses `on`'s per-event listener types. */
+      call.stream.on("text", (delta: string) => {
         chars += delta.length;
         // Throttled, because the model emits deltas far faster than anyone can
         // read them and every one of these is a write the poller may pick up.
@@ -673,7 +676,10 @@ export async function generateToc(opts: {
       });
     }
 
-    message = await stream.finalMessage();
+    /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper is
+       what records what this call cost. The stream's own method works and
+       records nothing. See src/messages-stream.ts. */
+    message = await call.finalMessage();
   } catch (err) {
     throw anthropicCallFailed(err);
   }
@@ -682,7 +688,7 @@ export async function generateToc(opts: {
     .map((b) => b.text)
     .join("");
 
-  if (message.stop_reason === "refusal") {
+  if (wasRefused(message)) {
     /* `stop_details` is deliberately neither thrown nor logged — it is the
        provider's own words about a request that carried the whole article,
        and this error is copied onto the job and shown on the progress card.
@@ -788,6 +794,11 @@ async function main(): Promise<void> {
   const argOutDir = process.argv[3];
   // Before the call, not after: this is the only thing on screen for the two
   // minutes the model takes.
+  /* At the program's edge, not inside the gateway — see `messagesClient` in
+     src/messages-stream.ts for the test that proved the difference. Without it
+     this command answers `[ai-not-set-up]` on a machine where the key is right
+     there in `.env.local`. */
+  loadEnvLocal();
   console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
   const run = await generateToc({
     blocksPath,

@@ -28,13 +28,15 @@
  * exactly that and nothing else, which is why it would be hard to notice.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
+import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
+import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -1098,7 +1100,6 @@ export interface LabelRun {
 }
 
 async function runBatch(
-  client: Anthropic,
   batch: Batch,
   blocks: Block[],
   outline: string,
@@ -1113,12 +1114,33 @@ async function runBatch(
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
      anywhere upstream of here, and the installed SDK builds `Error.message`
      from the upstream error body — the one place it can echo back part of
-     what we sent, which is the whole article. See src/anthropic-call.ts. */
+     what we sent, which is the whole article. See src/anthropic-call.ts.
+
+     `streamMessage` builds the client, and sets `logLevel: "off"` on it — a
+     privacy setting rather than a preference. The SDK has a logger of its own
+     that defaults to `console` and reads `ANTHROPIC_LOG` from the environment;
+     at `debug` it prints the outgoing request — **which is the whole article**
+     — and, for a non-JSON error response, the raw upstream body. Neither goes
+     through Pino, so neither can be redacted, and `anthropicCallFailed` never
+     sees them. One environment variable, set by somebody debugging something
+     else, and every article this app has read is on stdout. See
+     docs/project/logging.md.
+
+     It also builds the client *per call*, which is what keeps the property the
+     old lazy `clientFor` existed for: a run that resumes every batch from a
+     checkpoint reaches this function never, so it needs no API key to say so.
+     That is what makes the resume path testable without a network or a
+     credential — the only way a test can prove a resumed batch did not quietly
+     go and ask again.
+
+     **`call.finalMessage()`, never `call.stream.finalMessage()`** — the
+     wrapper is what records what this call cost; the stream's own method works
+     and records nothing. See src/messages-stream.ts. */
   let message: Anthropic.Message;
   try {
-    message = await client.messages.stream(
+    message = await streamMessage(
+      "labels",
       {
-        model: CAPABLE_MODEL,
         max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: EFFORT },
@@ -1137,7 +1159,7 @@ async function runBatch(
           },
         ],
       },
-      { signal },
+      { ...(signal ? { signal } : {}) },
     ).finalMessage();
   } catch (err) {
     throw anthropicCallFailed(err);
@@ -1148,7 +1170,7 @@ async function runBatch(
     .map((b) => b.text)
     .join("");
 
-  if (message.stop_reason === "refusal") {
+  if (wasRefused(message)) {
     /* `stop_details` is deliberately neither thrown nor logged — it is the
        provider's own words about a request that carried the whole article,
        and this error is copied onto the job and shown on the progress card.
@@ -1229,21 +1251,12 @@ export async function generateLabels(opts: {
   const started = Date.now();
   const batches = planBatches(opts.tree, opts.blocks);
   const outline = renderOutline(opts.tree);
-  /* Built on first use, not up front. A run that resumes every batch from a
-     checkpoint makes no call, and should not need an API key to say so — the
-     SDK's constructor throws without one. That also makes the resume path
-     testable without a network or a credential, which is the only way a test
-     can prove a resumed batch did not quietly go and ask again. */
-  let client: Anthropic | null = null;
-  /* `logLevel: "off"`, and it is a privacy setting rather than a preference. The
-     SDK has a logger of its own that defaults to `console` and reads
-     `ANTHROPIC_LOG` from the environment; at `debug` it prints the outgoing
-     request — **which is the whole article** — and, for a non-JSON error
-     response, the raw upstream body. Neither goes through Pino, so neither can
-     be redacted, and `anthropicCallFailed` never sees them. One environment
-     variable, set by somebody debugging something else, and every article this
-     app has read is on stdout. See docs/project/logging.md. */
-  const clientFor = (): Anthropic => (client ??= new Anthropic({ logLevel: "off" }));
+  /* No client is built here, and that is deliberate rather than an omission:
+     `streamMessage` builds one per call inside `runBatch`, so a run that
+     resumes every batch from a checkpoint makes no call and needs no API key to
+     say so. The privacy setting that used to be spelled out at this line
+     (`logLevel: "off"`, and why it is not a preference) now lives with the call
+     in `runBatch`. */
   const sourceHash = hashBlocks(opts.blocks);
   const manifest = {
     version: PROMPT_VERSION,
@@ -1367,7 +1380,7 @@ export async function generateLabels(opts: {
 
         let out: Awaited<ReturnType<typeof runBatch>>;
         try {
-          out = await runBatch(clientFor(), batch, opts.blocks, outline, signal, LABEL_HEADROOM);
+          out = await runBatch(batch, opts.blocks, outline, signal, LABEL_HEADROOM);
         } catch (err) {
           /* Matched on the class, not on words in the message. A message test
              would go quietly dead the first time somebody improved the wording,
@@ -1375,7 +1388,7 @@ export async function generateLabels(opts: {
              as a rarer, stranger failure rather than as anything red. */
           if (!(err instanceof BatchIncomplete)) throw err;
           try {
-            out = await runBatch(clientFor(), batch, opts.blocks, outline, signal, LABEL_HEADROOM * 2);
+            out = await runBatch(batch, opts.blocks, outline, signal, LABEL_HEADROOM * 2);
           } catch (again) {
             /* An abort is not a second model failure and must not be dressed as
                one. If another batch has already ended the run, or the caller
@@ -1579,6 +1592,11 @@ async function main(): Promise<void> {
     blocks: Block[];
   };
 
+  /* At the program's edge, not inside the gateway — see `messagesClient` in
+     src/messages-stream.ts for the test that proved the difference. Without it
+     this command answers `[ai-not-set-up]` on a machine where the key is right
+     there in `.env.local`. */
+  loadEnvLocal();
   console.log(`Labelling ${blocks.filter((b) => b.gistable).length} blocks with ${CAPABLE_MODEL}…`);
   const run = await generateLabels({
     tree,

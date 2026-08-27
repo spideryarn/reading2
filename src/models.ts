@@ -26,7 +26,7 @@
  *
  * | Constant | Reached through | The name |
  * |---|---|---|
- * | `CAPABLE_MODEL` | the Anthropic SDK — the pipeline stages | `claude-sonnet-5` |
+ * | `CAPABLE_MODEL` | Anthropic's own spelling — sent by nothing, kept for reference | `claude-sonnet-5` |
  * | `CAPABLE_MODEL_OPENROUTER` | OpenRouter — the three request-path calls | `anthropic/claude-sonnet-5` |
  * | `QUICK_MODEL_OPENROUTER` | OpenRouter, and **only** OpenRouter | `openai/gpt-5.6-luna` |
  *
@@ -62,7 +62,7 @@
  * The rule that falls out of it: **a wire id is what we send, a display name is
  * what we show, and nothing outside this file should be choosing between the
  * two.** `modelFor(task)` gives the first, `displayName(id)` the second, and
- * `providerFor(task)` says which wire a task is on — which is what stopped
+ * `wireFor(task)` says which protocol a task speaks — which is what stopped
  * src/routes.ts keeping its own copy of the request-path list.
  *
  * ## Why the quick tier has no Anthropic-SDK spelling
@@ -184,6 +184,24 @@ import { EMBEDDING_MODEL } from "./embeddings.js";
  * with a 400 — this app has never used it.
  */
 export const CAPABLE_MODEL = "claude-sonnet-5";
+/* ^ **Nothing puts this on the wire any more — and it is still load-bearing.**
+   Since 2026-08-27 the seven stages send `CAPABLE_MODEL_OPENROUTER`, which is
+   literally this string with a vendor prefix. But this one stayed, because the
+   two spellings answer different questions and only one of them moved.
+
+   On the wire, a model id is an **address**: it has to say which gateway, so it
+   carries `anthropic/`. In a stored artefact's `generator` field it is a
+   **name**: it says which model wrote this, and that is what every staleness
+   check compares against — `glossary.ts`, `summarise.ts` and `tweets.ts` each
+   have a `generator !== CAPABLE_MODEL` line that marks work stale and pays to
+   redo it.
+
+   Changing the *address* did not change the *model*, so the name must not move
+   with it. Had the stamps been switched to the prefixed spelling in the same
+   change, every article in the corpus would have gone stale at once and
+   regenerated at full price — a large bill, for a migration whose entire purpose
+   was to see the bill. Same reasoning as § the third spelling in
+   docs/project/setup-dev.md: a provider prefix is an address, not a name. */
 
 /**
  * **The capable tier, in OpenRouter's spelling** — the three calls that happen
@@ -236,6 +254,36 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
  * enough to start with and not enough to build around.
  */
 export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
+
+/**
+ * **What turns a dictation into text.** Not on a tier, for the same reason the
+ * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
+ * and this one needs none — it needs ears and a vocabulary list.
+ *
+ * A *chat* model rather than one of OpenRouter's nineteen dedicated
+ * speech-to-text models, and that is the whole finding of
+ * docs/plans/dictation-two-pass.md. Measured on 2026-08-27, one 22-second
+ * sample, three runs each:
+ *
+ * | | latency | word errors |
+ * |---|---|---|
+ * | this model, vocabulary in the system prompt | 2.4s | 0.0% |
+ * | this model, bare prompt | 3.3s | 3.6–7.3% |
+ * | `openai/gpt-transcribe` (dedicated) | 1.6s | 3.6% |
+ * | `deepgram/nova-3` (dedicated) | 1.0s | 18.2% |
+ *
+ * Every dedicated model got `Spideryarn` and the block id `spya-k3m9qt` wrong.
+ * This one, *told what the words might be*, got them right every run. The
+ * dedicated endpoint cannot be told: `POST /api/v1/audio/transcriptions`
+ * accepts OpenAI's `prompt` parameter, returns 200, and ignores it — verified
+ * by sending a field called `wibble_not_a_real_field` and getting the same 200.
+ * docs/reusable/silent-success.md, with a status code on it.
+ *
+ * **Do not add `provider: { order: ["anthropic"] }` to this call.** See the
+ * warning under `CAPABLE_MODEL_OPENROUTER`: pointed at a Gemini model that
+ * preference is wrong, and wrong quietly.
+ */
+export const DICTATION_MODEL = "google/gemini-3.1-flash-lite";
 
 /** The two tiers a task can be on. */
 export type Tier = "capable" | "quick";
@@ -321,16 +369,45 @@ function openRouterIdForTier(tier: Tier): string {
   return tier === "quick" ? QUICK_MODEL_OPENROUTER : CAPABLE_MODEL_OPENROUTER;
 }
 
-/** Which wire a task's model call goes down. */
-export type Provider = "anthropic" | "openrouter";
+/**
+ * **Who serves every model call in this app — all of them.**
+ *
+ * Was a two-member union (`"anthropic" | "openrouter"`) until 2026-08-27, when
+ * the seven pipeline stages moved off the Anthropic SDK's own endpoint and onto
+ * OpenRouter's Anthropic-compatible one. One member is not a mistake: it is the
+ * decision, written where a future reader will trip over it. See
+ * docs/plans/ai-cost-tracking.md and src/messages-stream.ts.
+ */
+export type Provider = "openrouter";
+
+/** The one gateway. Every paid call in this app goes through it. */
+export const GATEWAY: Provider = "openrouter";
+
+/**
+ * **Which protocol a task speaks** — the axis that still varies now that the
+ * vendor does not.
+ *
+ * `"messages"` is Anthropic's Messages shape, over
+ * [`src/messages-stream.ts`](messages-stream.ts). `"chat"` is OpenAI's
+ * chat/completions shape, over
+ * [`src/openrouter-stream.ts`](openrouter-stream.ts). Both reach OpenRouter;
+ * they differ in what the request and the response look like, which is a real
+ * difference to a caller and none at all to the bill.
+ *
+ * The seven stages stayed on `"messages"` rather than being translated, because
+ * `thinking: {type: "adaptive"}` does not exist on the other one — OpenRouter's
+ * `reasoning.effort` takes `max|xhigh|high|medium|low|minimal|none` and answers
+ * `adaptive` with a 400. All seven send it.
+ */
+export type Wire = "messages" | "chat";
 
 /**
  * **Which wire each task is on** — and the reason this is a `Record` rather
  * than the two lists it replaced.
  *
- * A list plus "everything else is Anthropic" makes an unassigned task *work*:
- * it gets the pipeline answer, sends nothing different, and is reported with
- * the Anthropic spelling however it really ran. A `Record<Task, Provider>` can
+ * A list plus "everything else is the default" makes an unassigned task *work*:
+ * it gets an answer, sends nothing different, and is reported with whichever
+ * spelling the default implies however it really ran. A `Record<Task, Wire>` can
  * only be wrong by not compiling. `tests/models.test.ts` still checks the
  * derived lists, but the guarantee that matters is this type.
  *
@@ -339,34 +416,34 @@ export type Provider = "anthropic" | "openrouter";
  * copy that decided what the profile page *claimed*, while this file decided
  * what ran. Two copies of that pair disagree silently.
  */
-export const TASK_PROVIDER: Record<Task, Provider> = {
-  toc: "anthropic",
-  labels: "anthropic",
-  arc: "anthropic",
-  tweets: "anthropic",
-  glossary: "anthropic",
-  summarise: "anthropic",
-  ideas: "anthropic",
-  explain: "openrouter",
-  chat: "openrouter",
-  search: "openrouter",
+export const TASK_WIRE: Record<Task, Wire> = {
+  toc: "messages",
+  labels: "messages",
+  arc: "messages",
+  tweets: "messages",
+  glossary: "messages",
+  summarise: "messages",
+  ideas: "messages",
+  explain: "chat",
+  chat: "chat",
+  search: "chat",
 };
 
-/** Which wire this task's model call goes down. */
-export function providerFor(task: Task): Provider {
-  return TASK_PROVIDER[task];
+/** Which protocol this task's model call speaks. */
+export function wireFor(task: Task): Wire {
+  return TASK_WIRE[task];
 }
 
-const ALL_TASKS = Object.keys(TASK_PROVIDER) as Task[];
+const ALL_TASKS = Object.keys(TASK_WIRE) as Task[];
 
-/** The seven tasks that reach a model through the Anthropic SDK rather than OpenRouter. */
+/** The seven that speak Anthropic's Messages shape — the unwatched pipeline work. */
 export const PIPELINE_TASKS: readonly Task[] = ALL_TASKS.filter(
-  (t) => TASK_PROVIDER[t] === "anthropic",
+  (t) => TASK_WIRE[t] === "messages",
 );
 
-/** The three that reach it through OpenRouter — the calls a reader waits on. */
+/** The three on OpenAI's chat shape — the calls a reader sits and waits on. */
 export const REQUEST_PATH_TASKS: readonly Task[] = ALL_TASKS.filter(
-  (t) => TASK_PROVIDER[t] === "openrouter",
+  (t) => TASK_WIRE[t] === "chat",
 );
 
 /**
@@ -397,10 +474,12 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
 
 /** What a task will really send, and whether anything overrode the code to say so. */
 export type ResolvedModel = {
-  /** The wire id, in the spelling this task's own provider wants. */
+  /** The wire id, in OpenRouter's spelling — which is now the only spelling. */
   id: string;
-  /** Which wire it goes down. */
+  /** Who serves it. Always OpenRouter; kept as a field so the page can say so. */
   provider: Provider;
+  /** Which protocol it speaks — `"messages"` or `"chat"`. */
+  wire: Wire;
   /** `"override"` when an environment variable put this id here. */
   source: "default" | "override";
 };
@@ -431,12 +510,13 @@ export type ResolvedModel = {
  * id captured at module load can be captured before `.env.local` has been read.
  */
 export function resolveModel(task: Task): ResolvedModel {
-  const provider = TASK_PROVIDER[task];
+  const wire = TASK_WIRE[task];
   const envVar = MODEL_ENV_VAR[task];
   const override = envVar ? process.env[envVar] : undefined;
-  if (override) return { id: override, provider, source: "override" };
-  const id = provider === "openrouter" ? openRouterIdForTier(TASK_TIER[task]) : CAPABLE_MODEL;
-  return { id, provider, source: "default" };
+  if (override) return { id: override, provider: GATEWAY, wire, source: "override" };
+  /* One spelling now, for every task on either wire: OpenRouter's. The Skin
+     wants `anthropic/claude-sonnet-5` exactly as chat/completions does. */
+  return { id: openRouterIdForTier(TASK_TIER[task]), provider: GATEWAY, wire, source: "default" };
 }
 
 /**
@@ -480,16 +560,17 @@ export const DISPLAY_NAME: Record<string, string> = {
   "anthropic/claude-sonnet-5": "claude-sonnet-5",
   "openai/gpt-5.6-luna": "gpt-5.6-luna",
   "voyageai/voyage-4": "voyage-4",
+  "google/gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
 };
 
 /**
  * **The model calls this app makes that are not a `Task`**, in the shape the
  * profile page wants them.
  *
- * Two of them, and neither belongs on a tier — a tier is a judgment about how
- * much *reasoning* a job needs, and one of these transcribes a PDF while the
- * other turns a paragraph into a vector. `PDF_READER_MODEL` and
- * `EMBEDDING_MODEL` say why, each where it lives.
+ * Three of them, and none belongs on a tier — a tier is a judgment about how
+ * much *reasoning* a job needs, and these transcribe a PDF, turn a paragraph
+ * into a vector, and turn a reader's voice into words. `PDF_READER_MODEL`,
+ * `EMBEDDING_MODEL` and `DICTATION_MODEL` say why, each where it lives.
  *
  * They are here anyway, because "not a tier decision" and "not worth telling
  * the reader about" are different claims, and a page called *what's running*
@@ -505,6 +586,7 @@ export const DISPLAY_NAME: Record<string, string> = {
 export const NON_TASK_MODELS: readonly { job: string; id: string; provider: Provider }[] = [
   { job: "pdf", id: PDF_READER_MODEL, provider: "openrouter" },
   { job: "embeddings", id: EMBEDDING_MODEL, provider: "openrouter" },
+  { job: "dictation", id: DICTATION_MODEL, provider: "openrouter" },
 ];
 
 /**

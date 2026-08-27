@@ -38,6 +38,7 @@
  * version of this apart.
  */
 import { createHash } from "node:crypto";
+import { type SpendRecord, collectSpend, formatNanos, totalSpend } from "./ai-spend.js";
 import { mintId } from "./ids.js";
 /* The store the pipeline reads and writes through. Named for the role rather
    than imported under its own name, because the role is what changes: the
@@ -55,6 +56,7 @@ import { readRaw } from "./fetch.js";
 import { failureKindOf } from "./job-failure.js";
 import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
+import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import {
   articleExists,
@@ -241,6 +243,31 @@ function stillForced(step: JobStep): boolean {
 type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
 
 /**
+ * What a step's model spend looks like on a log line.
+ *
+ * Four fields rather than one number, because a bare total cannot be checked.
+ * `aiCalls` says how many calls a step actually made — which is the thing
+ * nobody can guess from the outside, since one step is often several calls —
+ * and `aiUnpriced` says how many of them came back without a cost, so a total
+ * that is quietly short says so rather than reading as a cheap run. See
+ * docs/project/logging.md on why the numbers live here and not inside a stage.
+ *
+ * Omitted entirely when a step made no calls, rather than logged as zeroes:
+ * most steps in most jobs are cached or free, and four zeroes on every line is
+ * noise that makes the lines that matter harder to find.
+ */
+function spendFields(spend: readonly SpendRecord[]): Record<string, unknown> {
+  if (spend.length === 0) return {};
+  const { nanos, unpriced } = totalSpend(spend);
+  return {
+    aiCalls: spend.length,
+    aiCostNanos: nanos,
+    aiCost: formatNanos(nanos),
+    ...(unpriced > 0 ? { aiUnpriced: unpriced } : {}),
+  };
+}
+
+/**
  * Run — or skip — exactly one step, recording all of it on the job.
  *
  * The single implementation of "do this step", shared by the two things that
@@ -327,6 +354,10 @@ async function runStep(
   jlog.debug({ step: step.name }, `step starting: ${step.name} — ${job.slug}`);
   await note();
 
+  /* Filled by `collectSpend`'s `onDone` below, which fires on both paths — so
+     this is readable from the `catch` as well as from the success path. */
+  let spend: readonly SpendRecord[] = [];
+
   try {
     /* Bracketing the run, not decorating it. A step that dies between two of
        its own writes leaves artefacts that all exist and all parse and
@@ -336,7 +367,22 @@ async function runStep(
        the step honestly not-done. See `beginStep` in
        src/store/artifacts.ts. */
     const attempt = await pipelineStore.beginStep(job.slug, step.name);
-    step.detail = await STEPS[step.name].run(ctx);
+    /* **The one place that knows a step is over.** A step is not a model call
+       — summarise batches per parent, labels fans out — so no stage can report
+       its own total, and threading one up would be a return-type change on
+       seven of them. `collectSpend` is ambient (src/ai-spend.ts), so the stages
+       say nothing and this still gets the whole bill.
+
+       `onDone` rather than the resolved value, because it fires on the failure
+       path too: a step that threw had usually already paid for the call that
+       threw, and the retry after it pays again. */
+    const { result } = await collectSpend(
+      () => STEPS[step.name].run(ctx),
+      (calls) => {
+        spend = calls;
+      },
+    );
+    step.detail = result;
     await assertProduced(STEPS[step.name], ctx, pipelineStore);
     /* **Before the abort check, not after.** A cancel here is about the job,
        not about this step: `run` returned and its postcondition passed, so
@@ -360,7 +406,10 @@ async function runStep(
        numbers — tokens, model, block counts — under the `pipeline`
        component, where the fields are named and auditable. Found by
        GPT/Codex reviewing this change. */
-    jlog.info({ step: step.name, ms: since(stepStarted) }, `step done: ${step.name} — ${job.slug}`);
+    jlog.info(
+      { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
+      `step done: ${step.name} — ${job.slug}`,
+    );
     // The title only exists once extraction has run, and the moment it does
     // is the moment the progress card can stop calling the article by its slug.
     if (step.name === "extract") job.title = step.detail;
@@ -379,12 +428,23 @@ async function runStep(
        anything inside `msg`. The full error goes in the object, where it can. */
     if (controller.signal.aborted) {
       jlog.debug(
-        { step: step.name, ms: since(stepStarted) },
+        { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
         `step cancelled: ${step.name} — ${job.slug}`,
       );
     } else {
+      /* **The cost goes on the failure line too.** A step that failed has
+         usually already paid for the call that failed, and the reader's Retry
+         pays for it again — so a bill that only counts successes reads low
+         exactly where somebody is trying to find out why it is high. */
+      /* Reported, and only on this branch. A cancel unwinds through the same
+         catch and is not a fault — the `if` above is what separates them, and
+         it is the same test that keeps Stop out of the error log. An ingest
+         step failing is the "happened while nobody was watching" case this
+         whole exercise is for: the reader sees a red card, and without this
+         nobody else ever hears about it. */
+      captureFailure(err, { step: step.name, slug: job.slug, jobId: job.id });
       jlog.error(
-        { ...errorFields(err), step: step.name, ms: since(stepStarted) },
+        { ...errorFields(err), step: step.name, ms: since(stepStarted), ...spendFields(spend) },
         `step failed: ${step.name} — ${job.slug}`,
       );
     }
@@ -521,6 +581,7 @@ function pump(id: string, owner: OwnerId): void {
            is, and this is the one path where nobody can guess it from the step
            that failed, because no step failed. */
         log("jobs").error({ ...errorFields(err), jobId: id }, "the job pump threw");
+        captureFailure(err, { jobId: id, phase: "pump" });
         return;
       }
       if (!advanced || advanced.done) return;

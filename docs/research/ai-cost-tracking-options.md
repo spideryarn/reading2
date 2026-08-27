@@ -633,7 +633,7 @@ to `usage.cost`.
 
 Not deeply researched this round (deprioritized per the brief), but the framing is worth recording
 because it's the trap the old app fell into — see
-[llm-plumbing.md](../project/original-version/llm-plumbing.md#the-numbers-that-exist): *"a year of
+[llm-plumbing.md](../project/original-version/llm-plumbing.md#timeouts-and-the-numbers-that-exist): *"a year of
 production and the question 'what does this cost us' was still unanswerable, because the logging
 existed and nobody ever aggregated it."* Cheapest fix, worth doing on day one rather than as
 follow-up work: print a running total at the end of every pipeline CLI run (`npm run toc`, `npm run

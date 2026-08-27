@@ -1054,12 +1054,23 @@ describe("generateLabels, resuming", () => {
    * testing anything on a machine that had the other. GPT-5.6-sol, 2026-08-26.
    */
   async function noAuth(fn: () => Promise<void>): Promise<void> {
+    /* `OPENROUTER_API_KEY` is the one that matters since 2026-08-27: the stage
+       reaches the SDK through `messagesClient()` in src/messages-stream.ts,
+       which reads that name and no other. The two Anthropic names stay because
+       they are still what a bare `new Anthropic(...)` would pick up, and a
+       future call site that went back to one must not quietly find a key here.
+       Named explicitly rather than trusted to be absent — vite.config.ts's
+       `loadEnvLocal()` leaks into vitest, so a key in `.env.local` would
+       otherwise turn "no key, so it throws" into a real paid call on Greg's
+       machine and nowhere else. */
     const saved = {
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
       ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+      OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     };
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_AUTH_TOKEN;
+    delete process.env.OPENROUTER_API_KEY;
     try {
       await fn();
     } finally {

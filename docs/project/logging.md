@@ -149,8 +149,8 @@ the name you meant.
 | component | file | what it says |
 |---|---|---|
 | `http` | [`src/routes.ts`](../../src/routes.ts) | one line per API request: method, path, status, `ms`. Level follows the status — 4xx is the client's fault and is not an alarm, 5xx is ours and is |
-| `jobs` | [`src/jobs.ts`](../../src/jobs.ts) | the queue: enqueued, each step's transition, the outcome. See [ingest-queue.md](ingest-queue.md) |
-| `pipeline` | [`src/pipeline.ts`](../../src/pipeline.ts) | **what a step cost** — model, tokens in and out, `ms` |
+| `jobs` | [`src/jobs.ts`](../../src/jobs.ts) | the queue: enqueued, each step's transition, the outcome — and **what the step cost in money**, on every one of those three. See [ingest-queue.md](ingest-queue.md) |
+| `pipeline` | [`src/pipeline.ts`](../../src/pipeline.ts) | **what a step cost in tokens** — model, tokens in and out, `ms`. Its `model` is the stamp name (`claude-sonnet-5`), not the wire id the request carried; [setup-dev.md](setup-dev.md) says why those differ |
 | `store` | [`src/api.ts`](../../src/api.ts), [`src/comments.ts`](../../src/comments.ts) | the silent fallbacks, chiefly the fixture one |
 | `model` | [`src/explain.ts`](../../src/explain.ts), [`src/converse.ts`](../../src/converse.ts), [`src/search.ts`](../../src/search.ts) | the model calls with a reader waiting on them — explaining a selection, chat, and semantic search |
 
@@ -180,6 +180,52 @@ breakpoint is accepted and does nothing — returning the same zeros as a broken
 what tells those two apart. See [prompt-caching.md](prompt-caching.md#how-to-tell-whether-it-is-working).
 
 Counts only, like everything else here: no prose, no article text, no criterion, no question.
+
+### What a step cost, in money
+
+Since 2026-08-27 every model call in this app goes through OpenRouter, and OpenRouter puts
+`usage.cost` on the response — a figure from the party doing the billing, not one we worked out.
+[ai-gateway.md](ai-gateway.md) is the decision; what it means here is that a log line can carry a
+cost without a price table behind it. So each step's line in [`src/jobs.ts`](../../src/jobs.ts)
+carries four more fields:
+
+| field | means |
+|---|---|
+| `aiCalls` | how many model calls the step actually made |
+| `aiCostNanos` | the total in nano-dollars — an integer, for anything that adds them up |
+| `aiCost` | the same number as `$0.0142`, for the person reading the line |
+| `aiUnpriced` | how many of those calls came back with no cost at all. **Present only when it is not zero** |
+
+**Four fields rather than one number, because a bare total cannot be checked.** `aiCalls` is the
+thing nobody can guess from outside — one step is often several calls, since `summarise` batches per
+parent and `labels` fans out — so a total of $0.30 over nine calls and a total of $0.30 over one are
+the same line without it. And `aiUnpriced` is what stops a total that is quietly short from reading
+as a cheap run: a call that was aborted or that failed mid-stream never reached the `message_delta`
+event carrying `cost`, so it is recorded as *happened, cost unknown* rather than as zero. **Its
+presence on a line is a fact to explain**, which is why it is omitted when zero rather than logged
+as `aiUnpriced: 0` — and why absent numbers are `null` everywhere underneath rather than `0`, since
+a zero is indistinguishable from a free call and understates a bill for as long as nobody looks
+([`src/ai-spend.ts`](../../src/ai-spend.ts)).
+
+All four are omitted together when a step made no calls. Most steps in most jobs are cached or free,
+and four zeroes on every line is noise that makes the lines that matter harder to find.
+
+**Logged from `jobs.ts`, which is the same rule as the section above** — log at the seam the queue
+already owns, not inside another agent's stage
+([architecture.md § Stage ownership](architecture.md#stage-ownership)). It is a stronger case here
+than it was for tokens, because a step is *not* a model call: no stage can report its own total, and
+threading one up would be a return-type change on all seven of them plus a place to forget it in
+each. `collectSpend` in [`src/ai-spend.ts`](../../src/ai-spend.ts) is an `AsyncLocalStorage`, so the
+stages say nothing at all and the seam still gets the whole bill —
+[`src/messages-stream.ts`](../../src/messages-stream.ts) records each call on their behalf.
+
+**And the cost is on the failure and cancel lines too, not only the success one.** That is
+[§ The failure line carries what the success line carries](#the-failure-line-carries-what-the-success-line-carries)
+applied to money, and it is one of the clearer cases for it: a step that failed had usually already
+*paid* for the call that failed, and the Retry a reader presses afterwards pays again. A cost that
+appears only on success would report the cheapest possible version of a bad day. `collectSpend`
+hands the records back through an `onDone` callback rather than through its return value precisely
+because the return value never happens when the step throws.
 
 The same seam gives the block-id counts for free — `{ total, minted, carried, reused }` from stage 3.
 An article re-run that mints new ids instead of carrying the old ones has **orphaned every comment on
@@ -407,7 +453,11 @@ a dependency's: JSDOM's default virtual console quotes the page it failed to par
 the Anthropic SDK has a logger of its own that reads `ANTHROPIC_LOG` and, at `debug`, prints whole
 outgoing prompts — the whole article — plus raw upstream error bodies. Both closed:
 [`extract.ts`](../../src/extract.ts) passes an empty `VirtualConsole`, and all six stages construct
-their client with `logLevel: "off"`.
+their client with `logLevel: "off"`. **That second one is now one line rather than six**: since the
+gateway migration of 2026-08-27 the stages do not build clients at all —
+[`src/messages-stream.ts`](../../src/messages-stream.ts) builds the one, and sets `logLevel: "off"`
+on it. The SDK is still the SDK, so `ANTHROPIC_LOG=debug` would still print whole outgoing prompts
+if that setting were dropped; there is simply one place left to drop it from.
 
 The honest status: **four declarations that this class was closed, four of them wrong.** The fifth
 round was the one written up in [error-boundary.md](../plans/error-boundary.md) — Drizzle puts every
@@ -732,19 +782,42 @@ returns the answer you were hoping for. That is
 [silent-success.md](../reusable/silent-success.md#the-remedy-statable) applied to prose, and this
 section exists so this file does not join the list.
 
-So, plainly: **there is no error tracker, no log drain, no metrics dashboard, and no database of
-model calls.** What exists is what is described above, and nothing else.
+So, plainly: **there is no log drain, no metrics dashboard, and no database of model calls.** What
+exists is what is described above, plus the error tracker below, and nothing else.
 
-### Error tracking, when
+### Error tracking
 
 Logs and error tracking answer different questions. A log tells you what happened during a request
 while you are watching. An error tracker tells you something broke when you were not, groups the
 thousandth occurrence with the first, and keeps the stack trace longer than a day.
 
-**The trigger is specific: the first time you want to look at something that happened more than
-24 hours ago.** At that point the choice is Sentry's free tier or Vercel's Observability Plus —
-crashes point at the first, request behaviour at the second. Nothing here has to change either way;
-Sentry can ingest Pino output.
+**Built on 2026-08-27** — Sentry, free tier, errors only. The trigger this section used to name was
+*"the first time you want to look at something that happened more than 24 hours ago"*, and the free
+tier's 30-day retention against Vercel's one day is most of why it is worth having.
+
+Four things about it are worth knowing from here, and the rest is in
+[error-monitoring-sentry.md](../plans/error-monitoring-sentry.md):
+
+- **It is a fifth egress, and the rules of this file apply to it.** Everything
+  [error-boundary.md](../plans/error-boundary.md) says about an `Error.message` carrying the
+  article is *more* true when the message leaves the machine. `Error.message` is dropped unless it
+  ends in a code from [`src/messages.ts`](../../src/messages.ts), the whole event is rebuilt from an
+  allowlist in [`src/monitoring-scrub.ts`](../../src/monitoring-scrub.ts), and the SDK's own
+  defaults — which include the local variables of every stack frame — are turned off one by one.
+- **It is not wired through this file, deliberately.** A log line does not become a Sentry event.
+  The two subsystems must be able to fail independently, and rule 5 here is that a log call never
+  throws. Capture is an explicit call beside the log line, at six seams:
+  [`src/routes.ts`](../../src/routes.ts)'s outer catch and its three streams, and
+  [`src/jobs.ts`](../../src/jobs.ts)'s failed step and pump.
+- **`pinoIntegration` exists and must never be added.** It would forward these lines to Sentry, and
+  the whole design of this file rests on stdout being the only destination.
+- **The rule for what gets reported is the status we answered with**, `>= 500` — the same threshold
+  `logRequest` uses to choose between `warn` and `error`. So the log and the tracker cannot come to
+  disagree about what counts as a fault.
+
+Vercel's Observability Plus is still the other half of the question and is still not bought: crashes
+point at Sentry, request behaviour at Vercel. A **log drain** — which would keep these lines past 24
+hours — is a third thing again, and also not done.
 
 ### The correlation id, not yet
 
@@ -795,8 +868,17 @@ line, not as a table.
   kill a model call.**
 - **Cost estimates.** Theirs computed cost three ways in three places, one of them
   `totalTokens * 0.000003` — a single hardcoded rate, model-agnostic, multiplying *total* tokens by
-  what looks like an input rate. Wrong by construction. We log token counts, which are facts, and
-  leave cost to whoever is doing the arithmetic.
+  what looks like an input rate. Wrong by construction. We logged token counts, which are facts, and
+  left cost to whoever was doing the arithmetic.
+
+  **There is a cost on the line now, and the reason it is not the same mistake is that nobody here
+  computes it.** Since 2026-08-27 every call goes through OpenRouter and comes back with its own
+  `usage.cost`; `aiCost` is that number added up, not a rate multiplied by a token count
+  ([§ What a step cost, in money](#what-a-step-cost-in-money)). The objection above was never to
+  logging money — it was to logging a *guess* at it, dressed as a fact. One honest caveat survives:
+  OpenRouter's figure is credits consumed, and its margin is a ~5.5% fee on buying credits rather
+  than a per-token markup, so the cash that left the bank is about 5.5% higher than any total on
+  these lines ([ai-gateway.md](ai-gateway.md)).
 
 ### The half-migration, and the one line that caused it
 
@@ -921,6 +1003,9 @@ from a grep, which is the mistake that section is about.
 - [architecture.md § Stage ownership](architecture.md#stage-ownership) — why the pipeline logs from
   the seam rather than from inside each stage
 - [ingest-queue.md](ingest-queue.md) — the queue whose lifecycle the `jobs` component narrates
+- [ai-gateway.md](ai-gateway.md) — where every model call goes, and where `usage.cost` comes from
+- [prompt-caching.md](prompt-caching.md) — what the cache counts on these lines are for, and why
+  the same cache is reported two different ways on the two wires
 - [comments.md](comments.md) — the model call in a request handler, and why it is the exception
 - [security.md](security.md) — the fixture fallback that the `store` warning now watches
 - [block-ids.md](block-ids.md) — why re-minted ids are worth a warning

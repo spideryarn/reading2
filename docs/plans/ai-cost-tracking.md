@@ -483,9 +483,21 @@ A cache lives on the upstream that wrote it. Unpinned, a migrated stage would wo
 never hit a cache again. [`PROVIDER_ORDER`](../../src/openrouter-stream.ts) already exists for this
 and would have to travel with the stages.
 
-That table also carries something a cost model has to record: **the same model bills differently by
-upstream.** Two 16-token calls, 0.000182 against 0.000082. Far too small a sample to draw a rate
-from, big enough that `provider` belongs in a column rather than being averaged away.
+~~That table also carries something a cost model has to record: **the same model bills differently by
+upstream.**~~ **Wrong, and caught by re-running it properly.** The two costs in that table differ
+because the two calls produced *different numbers of output tokens* — 16 against 6, one having hit
+`max_tokens` — not because the upstreams charge different rates. Held to an identical body, both bill
+at exactly list:
+
+| upstream | in | out | `cost` | list-price arithmetic |
+|---|---|---|---|---|
+| Claude Platform on AWS | 11 | 16 | 0.000182 | 0.000182 |
+| Anthropic | 11 | 6 | 0.000082 | 0.000082 |
+
+Same rate, to the digit, both. I had compared two numbers whose inputs differed and attributed the
+difference to the one variable I happened to be looking at — the same error as
+[[committed-results-are-not-evidence]] wearing different clothes. `provider` still belongs in a
+column, but as a *diagnostic* — which upstream held the cache — rather than as a billing input.
 
 And one method note worth keeping, because it nearly went the other way: a made-up top-level key
 (`"spideryarn_nonsense": true`) is accepted with a 200 and no complaint. **OpenRouter accepting a
@@ -919,6 +931,31 @@ the twelve wirings are not finished until both are done.
 
 ## What gets built, and in what order
 
+> **Status, 2026-08-27, end of day.** The plan below was written for **two** transports and is now
+> partly overtaken: Greg approved routing everything through OpenRouter, and that is built. What
+> exists is the transport migration and the metering underneath the cost table, not the table
+> itself:
+>
+> - ✅ **All seven pipeline stages moved onto OpenRouter's Anthropic-compatible endpoint** via a new
+>   shared gateway, [`src/messages-stream.ts`](../../src/messages-stream.ts). Same SDK, same
+>   `messages.stream`, same adaptive thinking and `cache_control` — a `baseURL` and a model spelling.
+>   Written up in [ai-gateway.md](../project/ai-gateway.md).
+> - ✅ **Every call now reports what it cost**, taken off the raw `message_delta` because
+>   `finalMessage()` drops it. `provider` is pinned with `require_parameters: true`.
+> - ✅ **An ambient spend collector**, [`src/ai-spend.ts`](../../src/ai-spend.ts), on the
+>   `AsyncLocalStorage` pattern [`src/owner.ts`](../../src/owner.ts) already uses — because a step is
+>   not a call, which is the fact §1 below is entirely about.
+> - ✅ **A total on every step's log line** — `aiCalls`, `aiCost`, and `aiUnpriced` when some call
+>   reported nothing. On the failure and cancel lines too.
+> - ❌ **No database row, no `npm run cost`, no per-article number, no spend page.** Phases 2–7.
+>
+> **What the migration deletes from the phases below**: the Anthropic price table stops being the
+> source of truth and becomes the *check* on one, the Admin Cost API reconciliation goes entirely
+> (question 0 is withdrawn — OpenRouter's `x-generation-id` gives a settled per-call figure instead),
+> and the two-formula additive/subtractive split becomes a difference between *wires* rather than
+> between *vendors*. The schema, the owner attribution and the storage decisions are untouched: none
+> of them was ever about where the number came from.
+
 Greg asked for all four of the things I offered, so all four are here. Ordered so that each phase is
 useful on its own and nothing later is needed to make something earlier true.
 
@@ -1084,7 +1121,7 @@ the first migration checks the table is empty rather than assuming it.
    credential this individual account may not be able to issue at all. OpenRouter's
    `GET /api/v1/generation?id=…` gives a settled **per-call** figure on a key we already have, which
    is both stronger and cheaper than the per-UTC-day-and-model reconciliation that question was for.
-   See [the Skin section above](#the-option-that-deletes-the-arithmetic-entirely--and-it-works).
+   See [the Skin section above](#the-option-that-deletes-the-arithmetic-entirely-and-it-works).
 
    **Replaced by the real question: do we route everything through OpenRouter?** Everything below
    still needs answering either way, but this one comes first because it changes what gets built.
