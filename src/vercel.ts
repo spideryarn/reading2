@@ -39,11 +39,36 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { errorFields, log } from "./log.js";
+import {
+  captureFailure,
+  flushMonitoring,
+  initMonitoring,
+  withMonitoringScope,
+} from "./monitoring.js";
 import { UNEXPECTED_FAILURE } from "./messages.js";
 import { handleApi } from "./routes.js";
 import { health } from "./vercel-health.js";
 
 export const config = { runtime: "nodejs" };
+
+/**
+ * Start error reporting once per instance, not once per request.
+ *
+ * At module scope because that is the one piece of code a Vercel function runs
+ * exactly once, on a cold start, before any request exists. `initMonitoring` is
+ * idempotent and is a no-op without `SENTRY_DSN`, so this line does nothing at
+ * all on a laptop, in a test, or on a deployment nobody has configured.
+ *
+ * Note what it deliberately is *not*: an `--import ./instrument.mjs` flag, which
+ * is what Sentry's ESM guide asks for. That flag exists so the SDK can hook
+ * module loading and auto-instrument libraries for **tracing**, and tracing is
+ * off here (src/monitoring.ts says why). Error capture needs a client and a
+ * transport, both of which `Sentry.init` builds on the spot. Adding the flag
+ * would also mean editing `NODE_OPTIONS` on the Vercel project, which already
+ * carries `--experimental-require-module` and is one string — see
+ * docs/project/deployment.md.
+ */
+initMonitoring();
 
 /**
  * The path the browser actually asked for, recovered from the rewrite.
@@ -107,7 +132,46 @@ export function originalUrl(raw: string): string | null {
   return `/api/${path}${rest.length ? `?${rest.join("&")}` : ""}`;
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+/**
+ * Every request, inside one isolation scope and one flush.
+ *
+ * The wrapper is separate from `serve` below for two reasons, both of which
+ * were review findings rather than taste.
+ *
+ * **The scope.** Fluid Compute runs several requests concurrently in one
+ * instance — the same fact behind src/log.ts's rule against a module-level
+ * "current request" — so anything attached to Sentry's *global* scope would
+ * turn up on another request's error, intermittently. One isolation scope per
+ * invocation, opened here, is what makes the tags on an issue belong to the
+ * request that raised it.
+ *
+ * **The reach.** The `finally` has to cover the health route and the URL
+ * restoration too, not just the routed body. An earlier version put the try
+ * inside, after both, so a failure in either was the one kind of failure this
+ * whole exercise is for and the one kind that went unreported.
+ */
+export default function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  return withMonitoringScope(async () => {
+    try {
+      await serve(req, res);
+    } finally {
+      /* **The line without which none of this works.** A Vercel function
+         freezes the instant its handler resolves, and Sentry's transport is an
+         in-memory buffer drained by a background worker that then never runs.
+         So the events that go missing are the ones raised at the end of a
+         request — which is all of them. src/monitoring.ts § flushMonitoring.
+
+         Awaited rather than handed to `waitUntil`: awaiting keeps the
+         invocation alive until the buffer drains, which is the property we
+         need, and it costs no new dependency. The response has already been
+         written by this point, so nothing a reader is waiting for is held up by
+         it. */
+      await flushMonitoring();
+    }
+  });
+}
+
+async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const restored = originalUrl(req.url ?? "");
   if (restored === null) {
     res.statusCode = 400;
@@ -151,6 +215,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       { ...errorFields(err), method: req.method, path, status: 500 },
       `${req.method} ${path} 500`,
     );
+    /* Anything reaching here escaped handleApi's own catch, which means it is
+       unexpected by definition — there is no "did it name its own status?"
+       question to ask, the way there is in src/routes.ts. */
+    captureFailure(err, { method: req.method, path, status: 500 });
     if (!res.headersSent) {
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json");

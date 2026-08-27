@@ -8,6 +8,7 @@ import { isSpideryarnId } from "../ids.js";
 import { startPerf } from "./perf.js";
 import { watchConnection } from "./offline.js";
 import { OfflineStrip } from "./OfflineStrip.js";
+import { AppBoundary } from "./AppBoundary.js";
 // The entry stylesheet, and the ONLY one imported here. It pulls in
 // styles.css inside `@layer app` — importing the two side by side would
 // leave styles.css unlayered, where it silently outranks every Tailwind
@@ -267,7 +268,15 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <LucideProvider size={16} strokeWidth={1.75}>
       <NuqsAdapter>
-        <App />
+        {/* Inside `NuqsAdapter` and `LucideProvider` so the fallback is drawn
+            with the app's own chrome, and around `App` rather than inside it —
+            `App` returns early down a dozen paths and a boundary inside one of
+            them would miss the other eleven. `OfflineStrip` is left outside on
+            purpose: a reader whose page has just broken is exactly the reader
+            who still needs to be told the connection is down. */}
+        <AppBoundary>
+          <App />
+        </AppBoundary>
         {/* Outside `App`, which returns early down a dozen different paths —
             the sign-in screen and the landing page need to say this as much as
             the reading view does, and a reader who cannot reach the server is

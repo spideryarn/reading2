@@ -21,6 +21,9 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/web/main.tsx"></script>
+    <!-- boot.tsx, not main.tsx — it starts error reporting and then imports the
+         app *dynamically*, so a module that throws while evaluating is still
+         reported rather than being a blank page. See src/web/boot.tsx. -->
+    <script type="module" src="/src/web/boot.tsx"></script>
   </body>
 </html>

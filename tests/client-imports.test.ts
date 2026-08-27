@@ -58,6 +58,22 @@ const SHARED = new Set([
   // exactly what stops anyone noticing a message reads badly.
   // See docs/project/copy.md.
   "messages.js",
+  /* How big a dictation may be, and what containers we can transcribe. On the
+     list for the reason the header gives rather than for convenience: it
+     imports nothing at all, and the alternative is two copies of one number.
+     The recorder's cap, the request's cap and Vercel's 4.5 MB body limit are a
+     single arithmetic problem with an end in the browser and an end on the
+     server, and a client that records more than the server will take is a 413
+     after somebody has talked for two minutes.
+     See src/dictation-limits.ts. */
+  "dictation-limits.js",
+  /* What may be said about a failure when it leaves the machine. On the list
+     for the same reason `messages.js` is: it imports nothing but that file and
+     types, and both halves of monitoring have to agree on the rules exactly —
+     a browser copy and a server copy would be two allowlists, and the looser
+     one would be the one nobody read. See docs/plans/error-monitoring-sentry.md
+     and src/monitoring-scrub.ts. */
+  "monitoring-scrub.js",
   // Whether a failed ingest job is worth offering a Retry for. It imports
   // messages.js and nothing else, and the card is the only thing that asks —
   // so the rule lives in one place rather than being spelled out at the
@@ -70,6 +86,14 @@ const SHARED = new Set([
   // in one place and refused in the other. Imports nothing.
   // See docs/plans/pdf-upload-and-storage.md.
   "uploads.js",
+  // Who the administrator is. On the list because it qualifies rather than
+  // because it was convenient: one exported constant, one three-line function,
+  // no imports at all. The client needs it so the shelf can decide whether to
+  // draw an Admin link — a decision that is cosmetic, while the refusal that
+  // matters is the server's on `/api/admin/`. Both sides asking one function is
+  // the point: two spellings of "is this Greg" is one place for them to
+  // disagree. See docs/project/admin.md.
+  "admin.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */
