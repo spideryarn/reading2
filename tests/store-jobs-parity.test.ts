@@ -36,7 +36,7 @@ import {
   expireLeaseForTests,
   fsJobStore,
   reattachAttemptForTests,
-  resetForTests,
+  forgetForTests,
 } from "../src/store/jobs-fs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
@@ -106,8 +106,11 @@ const ADAPTERS: Adapter[] = [
     async reattach(id, attempt) {
       reattachAttemptForTests(id, attempt);
     },
-    async forgetAll() {
-      resetForTests();
+    /* By id. `resetForTests` alone cleared the maps and left every record in
+       `data/_jobs/` — which is where a job actually lives — so each run of this
+       file leaked its ~20 `queued` records, and retention never touches those. */
+    async forgetAll(ids) {
+      await forgetForTests(ids);
     },
   },
   {

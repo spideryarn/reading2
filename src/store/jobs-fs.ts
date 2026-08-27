@@ -526,7 +526,32 @@ export async function reloadForTests(): Promise<void> {
   await ready();
 }
 
-/** Forget everything this process is holding, so one test file cannot leak into another. */
+/**
+ * Forget the jobs a test made — **from the disk as well as from memory**.
+ *
+ * The first version cleared the four maps and nothing else, which looked like
+ * cleanup and was not: `data/_jobs/` is where a job actually lives, so every
+ * run of the parity suite left its ~20 records behind. They were `queued`, and
+ * retention only trims *finished* jobs, so nothing would ever have removed
+ * them. By the time it was noticed there were **537**, every one of them read
+ * and swept at each cold start, and they had begun to show up as a timeout in
+ * an unrelated suite that walks the shelf.
+ *
+ * **By id, never by sweep.** `index` holds the reader's real jobs too, loaded
+ * from that same directory — clearing what is in memory is safe, deleting what
+ * is on disk is not. So the caller names what it made, which is the same rule
+ * `tests/store-job-draft.test.ts` had to learn about `running` rows.
+ */
+export async function forgetForTests(ids: readonly string[]): Promise<void> {
+  for (const id of ids) await removeJob(id).catch(() => undefined);
+  index.clear();
+  attempts.clear();
+  keys.clear();
+  writes.clear();
+  forgotten.clear();
+}
+
+/** Forget everything this process is holding **in memory**. Leaves the disk alone. */
 export function resetForTests(): void {
   index.clear();
   attempts.clear();

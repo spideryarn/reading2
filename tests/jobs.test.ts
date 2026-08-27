@@ -567,18 +567,31 @@ const JOBS_DIR = path.resolve(import.meta.dirname, "..", "data", "_jobs");
 const SLUG = "test-jobs-fixture-no-such-article";
 const ROOT_DATA = path.resolve(import.meta.dirname, "..", "data");
 
+/**
+ * Every slug this half of the suite makes an article directory for.
+ *
+ * `beginStep` does a `mkdir` before the stage runs, so **a job that fails on its
+ * first step still leaves `data/<slug>/steps/` behind** — which is most of the
+ * jobs here, because failing offline is how they avoid spending money. Left
+ * there, those directories are walked by every suite that reads the shelf, and
+ * turn up as a mystery extra row in somebody else's assertion.
+ */
+const OWN_SLUGS = [SLUG, "test-advance-token", "test-advance-sweeps", "test-enqueue-busy-article"];
+
 /* Remove only this suite's records. `data/_jobs/` is a real directory a reader
    may have jobs in — the test must not tidy away theirs. */
 afterAll(async () => {
   for (const file of await readdir(JOBS_DIR).catch(() => [])) {
     const full = path.join(JOBS_DIR, file);
     const job = JSON.parse(await readFile(full, "utf8")) as { slug?: string };
-    if (job.slug === SLUG) await rm(full, { force: true });
+    if (job.slug !== undefined && OWN_SLUGS.includes(job.slug)) await rm(full, { force: true });
   }
   // And the run markers those failed jobs left behind. Not tidiness: a marker
   // surviving into the next run of this suite would make the fixture's `fetch`
   // not-done for a reason that has nothing to do with what is being tested.
-  await rm(path.join(ROOT_DATA, SLUG, "steps"), { recursive: true, force: true });
+  for (const slug of OWN_SLUGS) {
+    await rm(path.join(ROOT_DATA, slug), { recursive: true, force: true });
+  }
 });
 
 /** Poll until the job stops moving, or give up. */
