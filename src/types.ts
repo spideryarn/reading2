@@ -861,7 +861,7 @@ export interface Meta {
 /**
  * One pair of passages an embedding model thinks are about the same thing.
  *
- * The wire shape of `GET /api/similar/:slug`. Here rather than in
+ * The wire shape of `POST /api/similar/:slug`. Here rather than in
  * src/similar.ts because the browser reads it too, and a client importing a
  * module that pulls in pino and reads `process.env` is a bundle waiting to
  * break — every other response shape in this app lives here for the same reason.
@@ -877,6 +877,14 @@ export interface SimilarResponse {
   model: string;
   /** How many blocks were embedded — not how many the article has. */
   blocks: number;
+  /** How many were long enough to be worth embedding, before any ceiling. */
+  eligible: number;
+  /**
+   * How many eligible blocks the ceiling left out. Zero for every article in
+   * this corpus, and reported anyway: a bounded sweep that says nothing about
+   * its bound reads as complete coverage.
+   */
+  omitted: number;
   pairs: SimilarPair[];
 }
 
