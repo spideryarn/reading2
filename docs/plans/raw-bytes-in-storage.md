@@ -170,6 +170,13 @@ mechanism.
 
 ## The part the first draft did not have: a reference the transaction owns
 
+> **Most of this section is superseded** by § Three things the second review left — now settled,
+> which records Greg's decision that objects are never deleted. What survives is everything about the
+> *reference*: the table, the composite key, the CHECK, and why a hash alone is not a pointer. What
+> goes is the lifecycle — `state`, the lease, `retire_after`, and both halves of the deletion
+> protocol below. It is kept rather than cut so that the reasoning is on the record if the erasure
+> path is ever built, since that is when every word of it becomes load-bearing again.
+
 The first draft said `raw_sha256` is already the pointer and nothing needs adding. **That was wrong
 three times over**, and the review is right about each.
 
@@ -451,27 +458,137 @@ What is true, and still worth the change:
 Against that, honestly: a `raw_sources` table, a three-phase sweep, a verifying backfill, an explicit
 blob configuration, and rewritten import/export. It is comparable work to piece 2, in a better place.
 
-## Three things the second review left, which are decisions rather than mechanisms
+## Three things the second review left — now settled
 
-**The source route's authorisation window.** `sendSource` checks ownership and *then* reads the
-bytes, so the check and the delivery are one act. A redirect to a signed URL splits them: the URL
-outlives the check that minted it and can be forwarded. This is not a reason to keep proxying an
-11 MB body through a 4.5 MB function — it is a reason to say the window out loud. Shortest TTL that
-works, single-use if Storage can express it, and the number written down rather than inherited from
-the upload grant's two hours, which was chosen for a browser upload and means nothing here.
+**1. Objects are kept indefinitely. Greg's call, 2026-08-27:**
 
-**"We never had the bytes" is not the same as "we lost them".** An article imported before we kept
-source documents, and a fresh revision whose acquisition failed, both end as a null reference. So
-does a third case the review found and I had not: a database restored to a point before an object was
-deleted, where the row says `present` and the bucket disagrees — and there, uniquely, **no acquirer
-still holds the bytes**, so the property the whole protocol rests on does not apply. These need to be
-distinguishable before `raw_bytes` is dropped, because after that there is nothing to fall back to.
+> Maybe keep them indefinitely (at least for now)?
+>
+> — Greg, asked for an erasure deadline
 
-**The two hashes.** `raw_sources.sha256` is what we have; `article_revisions.raw_sha256` is what we
-were sent. Correct, and the review's worry is fair: two columns with near-identical names, equal for
-every PDF and every UTF-8 page, differing only for the cases nobody tests. Either rename so they
-cannot be confused, or record the relationship (`equal` / `reencoded`) as a field rather than leaving
-it to be inferred from comparing them.
+**This is the decision that removes most of this document.** Every critical across both reviews was
+about deletion, or about ordering that only matters because deletion exists. With no deletion:
+
+| the review's critical | why it stops applying |
+|---|---|
+| the sweeper deletes an object immediately before its reference commits | there is no sweeper |
+| `deleting` has no safe completion or recovery | there is no `deleting` |
+| a crash between upload and insert leaks an object no row can find | that "leak" **is** the retention policy — an object with no row is a *kept* object |
+| a reference may name a row in `deleting` | there is no such state |
+
+So `raw_sources` keeps `sha256`, `kind`, `bytes`, `content_type`, `verified_at`, `created_at` and
+loses its entire lifecycle — no `state`, no lease, no `retire_after`. The protocol becomes two steps:
+put the object, which is idempotent by construction and permanent; then **one transaction** that
+inserts the row, the revision's reference, the artefacts, the step run and the job transition. That
+last is the single fenced commit [transactional-stage-runner.md](transactional-stage-runner.md)
+already requires, so this adds no transaction of its own.
+
+Crash between the two: the object is kept, nothing references it, the retry re-uploads (getting
+`already-there`) and commits. Two acquirers of one document: both write identical bytes to the same
+name and one wins the insert, with nothing to disagree about. **A decision by the person who owns the
+consequence, and reversible** — the erasure path is a thing we are not building yet rather than a
+thing we have ruled out. § Not decided here records what taking it back would cost.
+
+**2. The signed-URL window: fifteen minutes, not sixty seconds — and the cache is the real control.**
+
+My first answer was 60 seconds, reasoning that the redirect is one hop. **The redirect is one hop and
+the PDF session is not one request**, which is the correction. A browser viewing a PDF inline makes
+Range requests, and it makes them against the *final* signed URL — it does not come back to
+`/api/source/:slug` for a fresh one. Suspend the tab and resume, and the token is expired mid-document.
+Sixty seconds buys a viewer that breaks.
+
+Worse, and this is the part that would have been found in production: **with Smart CDN, token expiry
+and the object's `cacheControl` are independent**, so a cached signed response can stay usable after
+its token has expired — the documented default is about an hour. A "60 second" window that is
+actually an hour is not a tighter promise than fifteen minutes, it is a *wrong* one, and it would have
+been written into this document as a security property.
+
+So:
+
+- **Fifteen minutes**, which covers a realistic read of a long PDF without pretending to be
+  revocation. Supabase offers TTL and nothing narrower — no single-use, no audience — and a signed URL
+  cannot ordinarily be revoked before it expires. That is the honest shape of what we get.
+- **`Cache-Control: no-store` on our redirect**, and the bucket's own cache policy set deliberately
+  rather than left at its default, because otherwise the number above means nothing.
+- The ownership check stays **before** minting, so an unauthorised caller never receives a URL at all.
+  What the window governs is forwarding by someone who was authorised, which is a different and much
+  smaller thing than the check it replaced.
+- **Test it against the 11 MB PDF** under throttling, with delayed Range requests and a suspended tab,
+  before believing any of the above.
+
+**3. "We never had the bytes" and "we lost them" are told apart by a publication rule, not a column.**
+
+The review's point was that a legacy import with no source and a fresh revision whose acquisition
+failed both end as the same null reference. They do not, and the distinction is already in data we
+keep: **a revision with successful fetch evidence in its lineage must carry a raw source reference**,
+enforced in `publishRevision` beside the checks already there.
+
+*In its lineage*, and **`status = 'done'`** rather than merely a row — both are corrections. Step runs
+are copied forward by `beginDraftIn`, so a later revision legitimately inherits a `fetch` run it did
+not perform; the rule is about the article's history, not about this attempt. And
+`revision_step_runs.status` admits `running` and `error`, so testing for existence would accept a
+revision whose fetch is recorded as having failed.
+
+Checked rather than assumed, because the rule is only worth having if the data supports it:
+
+- [`src/store/import.ts`](../../src/store/import.ts) records a `fetch` step run **only when the raw
+  file was actually there** — `{ step: "fetch", present: Boolean(rawBytes) }` — and *withdraws* the
+  row for any step that was not. So a legacy article with no source has no `fetch` run and publishes
+  with a null reference, correctly.
+- `beginDraftIn` copies step runs forward, which is the vacuous pass the review asked about. It is not
+  one: the reference is in the `CARRY` list too, so a carried `fetch` run and a carried reference
+  travel together. A re-extraction job publishes with the source the previous revision had, which is
+  the truth.
+
+No new column, and one fewer thing to keep in step.
+
+## Two things that had to survive the simplification — both built, 2026-08-27
+
+Greg's "keep them indefinitely" removes the lifecycle. Asked whether it removes the *protocol*, the
+third review's answer was: the lifecycle columns can go, and **three non-lifecycle guarantees cannot**.
+Two of them were small enough to build straight away.
+
+**`already-there` is not verification.**
+[`storeRawSource`](../../src/store/blobs.ts), tests in
+[`tests/raw-source-store.test.ts`](../../tests/raw-source-store.test.ts).
+
+`putIfAbsent` is create-only against a key that is the hash of the contents, so a dedup hit *looks*
+like proof. It is not, and no deletion is required to break it: something can be at a canonical name
+because a write crashed, because a backfill went wrong, or because somebody has the service key.
+Committing `verified_at` on the strength of a hit records a verified reference to bytes we never read.
+So a hit is now read back and hashed; only a successful *create* is trusted on its own, because there
+we hashed the buffer we wrote.
+
+A mismatch is **repaired**, not refused, and the exception to "never delete" is deliberate and narrow:
+an object that does not hash to its own name is not a retained document, it is wreckage, and provably
+so, because the name is a claim the contents settle. Refusing would be permanent in the wrong
+direction — that article could never be ingested by anybody, ever, without a human with a service key.
+
+The concrete crash window was in our own filesystem adapter, whose comment argued the case and got it
+backwards: *"a partial write can only happen inside this call, and the caller is holding the whole
+buffer"* — true, and *inside this call* includes **and then the process was killed**. `wx` created the
+canonical name first and wrote the bytes second. It writes to a temp name and `link`s now — `link`
+rather than `rename`, because rename overwrites and create-only is the entire contract.
+
+**The database and the bucket must be the same project.**
+`projectMismatch` in [`src/store/blobs.ts`](../../src/store/blobs.ts), refused at boot in
+[`src/store/index.ts`](../../src/store/index.ts), tests in
+[`tests/store-project-pair.test.ts`](../../tests/store-project-pair.test.ts).
+
+This is **the one way the dangling reference arrives without anybody deleting anything**, and it is
+pure configuration: `DATABASE_URL` picks the database, a service key picks the blob store, and nothing
+compared them. Put the object in project B, commit the reference in project A, and every correctly
+configured reader of A finds nothing. Hosted Supabase writes the project ref into both strings — the
+pooler username is `postgres.<ref>`, the API origin is `https://<ref>.supabase.co` — so it is
+answerable at boot, and it is refused there rather than discovered as a missing document weeks later.
+
+The third guarantee is **the upload state machine, which stays**. `acquireUpload` verifies mutable
+staging bytes once, hashes them, promotes them and settles the upload; none of that was
+`raw_sources`'s lifecycle and none of it goes. One consequence of "never delete" belongs on the record
+though: **every successful upload is kept twice** — under `staging/<id>` and under its canonical hash —
+and abandoned and rejected uploads are kept for ever. Staging objects were already never deleted (a
+deleted one *re-arms* any live grant over its key), so this is not new; it is now permanent by policy
+rather than by accident, and worth knowing before the bucket is ever measured.
 
 ## Not decided here
 

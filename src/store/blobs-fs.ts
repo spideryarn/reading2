@@ -19,7 +19,8 @@
  *    UTF-8 corrupts a PDF and returns success, which is why the round-trip test
  *    uses a NUL and a lone `0xFF`.
  */
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { link, mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { BlobHead, PutResult, RawSourceStore } from "./blobs.js";
 
@@ -77,14 +78,39 @@ export function fsBlobs(dir: string = DEFAULT_DIR): RawSourceStore {
     async putIfAbsent(key, bytes, contentType): Promise<PutResult> {
       const file = fileFor(dir, key);
       await mkdir(path.dirname(file), { recursive: true });
-      /* Written to a temp name and `link`ed into place would be the fully
-         correct version; `wx` is enough here because a partial write can only
-         happen inside this call, and the caller is holding the whole buffer. */
+      /* **A temp file, then `link`** — and the comment here used to say `wx` was
+         enough "because a partial write can only happen inside this call, and
+         the caller is holding the whole buffer". The premise is true and the
+         conclusion does not follow: *inside this call* includes **and then the
+         process was killed**. `wx` creates the file at the canonical name first
+         and writes the bytes second, so a kill in between leaves a short file
+         wearing a name that is a promise about its contents — and the next
+         `putIfAbsent` answers `already-there` about it.
+
+         `link` rather than `rename`, which is the load-bearing choice: rename
+         overwrites, and this method's entire contract is that it never does.
+         `link` fails with EEXIST when the target is there, which is exactly the
+         dedup hit we want to report. The canonical name now appears only when
+         the bytes behind it are already complete and flushed.
+
+         GPT Sol found the crash window, 2026-08-27. `storeRawSource` in
+         src/store/blobs.ts is the belt to this pair of braces — it verifies a
+         dedup hit rather than trusting it — because a short file written before
+         this fix can outlive it. */
+      const temp = `${file}.${randomUUID()}.part`;
       try {
-        await writeFile(file, bytes, { flag: "wx" });
+        await writeFile(temp, bytes, { flag: "wx" });
+        await link(temp, file);
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === "EEXIST") return "already-there";
         throw err;
+      } finally {
+        /* The temp name is dropped whether or not the link succeeded; on the
+           success path the bytes survive under the canonical name, because that
+           is what a hard link is. A `.part` left by a crash is litter with a
+           name that says so, and nothing will ever mistake it for an object —
+           `fileFor` cannot produce that name. */
+        await unlink(temp).catch(() => {});
       }
       /* After the bytes, and deliberately not create-only: the type is a note
          about an object that already exists, so a crash between the two leaves

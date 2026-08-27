@@ -107,7 +107,30 @@ import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
  */
 export { type StoreName, STORE, storeFromEnv } from "./live.js";
 
+import { projectMismatch } from "./blobs.js";
+
 if (STORE === "postgres") {
+  /**
+   * **The database and the bucket have to be the same Supabase project.**
+   *
+   * `DATABASE_URL` chooses the database; the presence of a service key chooses
+   * the blob store (src/store/blobs.ts, and deliberately not `SPIDERYARN_STORE`
+   * — blobs follow the credentials, because only Supabase can hand a browser a
+   * write grant). Two independent choices, and once a revision row holds an
+   * object key they must agree or the row points at nothing.
+   *
+   * A boot-time refusal for the same reason as the one below: it would
+   * otherwise surface as a missing source document on some article, weeks
+   * later, which reads like a lost file rather than like a configuration that
+   * was never coherent. Loud, now, before anybody's data is involved.
+   *
+   * Only under `postgres`, because it is only there that a reference is written
+   * down at all. GPT Sol raised it, 2026-08-27, as the one way the dangling
+   * reference arrives without anybody deleting anything.
+   */
+  const mismatch = projectMismatch(process.env.DATABASE_URL, process.env.SUPABASE_URL);
+  if (mismatch) throw new Error(`${mismatch} See src/store/index.ts.`);
+
   // info, not debug: which store is serving reads is the first thing anybody
   // investigating a wrong answer needs to know, and it is one line per boot.
   log("store").info({ store: STORE }, "serving article reads from Postgres");
