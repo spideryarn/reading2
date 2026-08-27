@@ -121,10 +121,23 @@ With no test users, **nobody can complete a Google sign-in, Greg included.** Tha
 standing between the two settings above and a working button, and the fix is one click on that same
 page: add `greg@gregdetre.com` under **Test users**.
 
-**And then leave it in Testing.** Publishing is genuinely cheap — this client asks only for `email`,
-`profile` and `openid`, all non-sensitive, so *In production* needs no Google verification, no demo
-video and no privacy-policy review; it is a button and a warning dialog. The reason not to press it
-is the opposite of effort:
+**And then leave it in Testing.** Not because publishing is hard — it is a button, and for these
+scopes it needs no Google verification, no demo video and no privacy-policy review.
+
+**The reason it is a close call at all, and then isn't**, was researched on 2026-08-27 against
+Google's own pages rather than reasoned about, because the obvious cost of Testing is the
+*"Google hasn't verified this app → Advanced → Go to (unsafe)"* screen, and putting that in front of
+somebody you want to impress would have been a real argument for publishing. It does not apply here.
+Google's [Manage App Audience](https://support.google.com/cloud/answer/15549945) names the exception
+explicitly: the pre-consent warning is shown to test users *except* where the app requests only
+`userinfo.email`, `userinfo.profile` and `openid` — which is exactly this client. The same exception
+is why the seven-day expiry does not apply either. And the
+[app-state reference](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview)
+conditions the published-but-unverified "Danger UI" *and* its 100-user cap on sensitive or
+restricted scopes too.
+
+So both states show an ordinary Google sign-in, and the scary-screen argument — the one thing that
+would have decided this the other way — turns out not to exist on either side. What is left is:
 
 > **Testing plus a test-user list is the beta allowlist this repo decided not to build**, enforced by
 > Google before a request ever reaches us.
@@ -134,6 +147,18 @@ stops a stranger making an account and spending the model budget, and that a spe
 missing control. Publishing the consent screen is the moment that goes from theoretical to live.
 Staying in Testing costs one click per person and gives the protection back for free — and it is
 undone by a button on the day a spend limit exists.
+
+Two smaller things fell out of the same research and both point the same way. Published-and-unverified
+means Google may show the bare **domain** rather than an app name on the consent screen, unless
+somebody also does the separate (and fast) *brand verification* — so publishing is not even the
+better-looking option without extra work. And **the consent screen is a property of the Cloud
+project, not of the client**: there is one "brand" per project, this project is shared with the old
+app, and publishing would publish both at once. Neither is decisive on its own; together they mean
+the cheap option is also the tidy one.
+
+Two claims in that research came back flagged as inferred rather than quoted, and neither changes
+the decision: that the test-user list survives a publish (so the move is reversible), and the exact
+client-versus-brand object relationship behind the per-project point. Recorded as inferences.
 
 **One correction, because it was overstated in this session.** Google expires refresh tokens after
 seven days for apps in Testing, and that was passed to Greg as "sign-in will silently stop working

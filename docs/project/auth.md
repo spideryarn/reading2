@@ -383,8 +383,10 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
   rather than measured: it is **`Testing`, `External`**, which means only accounts on its test-user
   list get through, and Google enforces that before a request reaches us. So there *is* an allowlist
   after all — it is just not ours and not in this repo. Keeping it that way is the cheap stand-in for
-  the spend limit below, and publishing is a button on the day that limit exists (no verification is
-  needed: this client asks only for `email`, `profile` and `openid`). See
+  the spend limit below, and publishing is a button on the day that limit exists — no verification is
+  needed, and **no scary interstitial either way**: Google's own exception for apps requesting only
+  `email`, `profile` and `openid` covers both the unverified-app warning and the seven-day
+  authorisation expiry, so staying in Testing costs a listed reader nothing. See
   [google-sign-in-production.md](../plans/google-sign-in-production.md). Ownership is what stops a
   reader who does get in from reading your
   library; nothing stops them making an account and spending your model budget on their own. A spend
