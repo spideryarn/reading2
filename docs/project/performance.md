@@ -67,8 +67,12 @@ no main-thread profiler can see, `perf.ts` included.
 So **the first place to look is not React.** A main-thread profile that comes back clean is not
 evidence the page is idle; it is evidence the cost is somewhere a main-thread profile cannot go.
 
-And the hidden row is the one that says the background work is actually gone: **2.3% → 0.2%**, which
-is the floor plus noise.
+**The hidden row is not evidence for any fix on this page, and it would be easy to read as if it
+were.** The sign-in shell mounts neither the job poller nor the clock, so its 2.3% → 0.2% is just
+Chrome declining to render a tab nobody is looking at — a useful baseline (the app has no *inherent*
+background cost) and not a before-and-after. What the fixes below do is stop the pages that *do*
+mount those hooks from being the exception to it, and the evidence for that is
+[the regression test](#the-regression-test), not this table.
 
 ### The last column is not CPU
 
