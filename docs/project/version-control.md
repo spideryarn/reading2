@@ -112,6 +112,8 @@ push would still turn that project red — but it now costs the old app rather t
 ## See also
 
 - [CLAUDE.md](../../CLAUDE.md) — the working agreements these rules are stated in
+- [git-commit-changes.md](../reusable/git-commit-changes.md) — the batch version: how to decide a
+  pile of uncommitted changes is finished, quiet and safe to commit
 - [deployment.md](deployment.md) — Vercel, and why it ships a working tree rather than a commit
 - [setup-dev.md](setup-dev.md) — install, dev, secrets
 - [testing.md](testing.md), [typechecking.md](typechecking.md) — what to run before you commit

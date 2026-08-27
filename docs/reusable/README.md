@@ -17,6 +17,7 @@ inventing a process.
 | [write-deep-dive-as-doc.md](write-deep-dive-as-doc.md) | researching a topic and writing it up as a reference doc with its sources attached |
 | [third-party-library-selection.md](third-party-library-selection.md) | picking a dependency — favour long-lived, heavily-documented ones, then write the decision down |
 | [rename-or-move.md](rename-or-move.md) | `git mv`, then every reference — a rename is never one edit |
+| [git-commit-changes.md](git-commit-changes.md) | sweeping up an uncommitted tree — batch it, oldest first, and commit only what you can vouch for |
 | [generate-mermaid-diagram.md](generate-mermaid-diagram.md) | authoring `.mermaid` files and rendering them to SVG, plus the house style |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | a GPT/Codex subagent for cross-family review or delegated work, via [`scripts/run-codex.ts`](../../scripts/run-codex.ts) |
 
