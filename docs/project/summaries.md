@@ -46,7 +46,7 @@ Code: [`src/summarise.ts`](../../src/summarise.ts) (the stage),
  │  ▇▇       │    ▸ 1.2 Why colour is a guess   5¶   │                      ▼  │
  │           │                                       │                         │
  │           │  ▸ 2  The hard problem, dissolved     │                         │
- │           │                          +4 sections  │                         │
+ │           │     +4 sections  ← opens just this one │                         │
  └───────────┴───────────────────────────────────────┴─────────────────────────┘
       where you are        the mode band                 what you are reading
 ```
@@ -117,7 +117,7 @@ The panel's second control is the **depth cut-off**, taken from their structure 
 control that view had, and the one thing it proved: *one control, whole-document granularity* is
 usable. See [original-version/structure-panel.md](original-version/structure-panel.md).
 
-### Two ways to be hidden, and they are not one variable
+### Three ways to be hidden, and they are not one variable
 
 The one design note worth copying from their structure panel verbatim:
 
@@ -126,8 +126,65 @@ The one design note worth copying from their structure panel verbatim:
 So `deep` removes a whole level and `closed` is a set the reader put nodes into, and the two compose.
 A node hidden by the cut-off does not quietly un-close itself when the cut-off moves. The `+N
 sections` badge is theirs too, capped at `99+` and suppressed at zero exactly as their reviewer asked
-for — and it is a **control when the reader closed those sections and a fact when the cut-off hid
-them**, because pressing it in the second case would silently overrule the Depth buttons above it.
+for.
+
+There is a third state since **2026-08-27**, and it is that same note applied once more. Greg:
+
+> when it has collapsed more granular levels, the only way to see the more granular levels is to
+> switch articles -> parts -> sections. Could we make it easier to see them for this part of the doc
+> (e.g. click `+N sections` to expand those, and click the parent again to collapse)?
+>
+> — Greg, 2026-08-27
+
+He is describing the cost of a single whole-document control, which is the thing their structure
+panel proved *and* the thing it never solved: at `parts`, wanting one part's sections means giving
+every other part's sections to yourself as well, and then scrolling past them.
+
+So the badge is now a **control in every case**, and `opened` is the set of nodes the reader opened
+past the cut-off. The objection that kept it a mere fact — *pressing it would silently overrule the
+Depth buttons above it* — is answered by making the override its own variable rather than by moving
+the cut-off: the Depth pills stay exactly where the reader put them, every other part stays shut, and
+what changed is one node. The twist beside the part's title is the same control the other way round,
+which is Greg's "click the parent again to collapse".
+
+The three compose and none of them rewrites another. Collapsing always clears the override, so
+`closed` and `opened` can never both hold the same id — which matters because the reader can reach
+that state by hand: open a part past the cut-off, raise Depth, close it there, drop Depth back. A
+version with one set gets stuck there and the badge does nothing at all. `tests/summary-expand.test.tsx`
+is that sequence.
+
+All three feed exactly one function, [`showsChildren`](../../src/web/tree.ts), because the panel and
+the follow both need the answer and a rule written twice will eventually disagree with itself —
+silently, since a scroll to a row that is not on screen moves nothing and reports nothing
+([silent-success.md](../reusable/silent-success.md)).
+
+The badge also uses the Depth control's own words now — `+2 parts` under the article, `+3 sections`
+under a part — rather than saying "sections" at every level. It opens what those buttons name, so it
+had better use their word.
+
+**The root is the one row where the badge stays a fact**, and GPT Sol's review is what found it: the
+root draws no title row, so it has no twist, so an override written there could never be taken off
+again. Pressing `+5 parts` at the `article` cut-off would have left the `article` button no longer
+meaning *the whole article, and nothing under it* for the rest of the session, with no control
+anywhere on screen to put it back. Leaving Summary mode was the only reset.
+
+That is the right answer rather than a missing feature, which is the part worth writing down. What
+the badge is *for* is picking one node out of several without moving the cut-off for the rest. At the
+root there are no others: the only thing it could do is exactly what the `parts` button one inch
+above it does, reversibly. So there it goes back to naming the control that does the job — *"Press
+parts above to see these"*.
+
+Two things the same review got right about the badge as a control, both since fixed:
+
+- **It is named for the node it opens.** `+3 sections` is what the eye needs beside a title it can
+  see; a screen reader's button list has no such context, and four of these in a row were four
+  indistinguishable controls. The accessible name is now *"Open the 3 sections of Framing The
+  Question"*.
+- **It hands the keyboard to the twist as it goes.** The badge unmounts the moment the children are
+  open — its job is done — and a focused button that disappears drops focus onto `document.body`,
+  which loses a screen reader's place in the outline entirely. Focus moves to the twist, which stays
+  mounted and now reads *"Close Framing The Question"*. Only when the badge actually had focus, so a
+  mouse click does not leave a ring on a control nobody was using.
 
 The paragraph count on every row (`18¶`) is the other half of that borrowing, and it answers a
 question our gist columns cannot: *how much am I not seeing?* A section holding forty paragraphs and
@@ -330,14 +387,15 @@ stops at **the deepest entry that is actually drawn**, which is not the same as 
 containing the reader:
 
 - a node below the `deep` cut-off is not drawn, so its parent is where the reader is as far as this
-  panel goes;
+  panel goes — unless the reader pressed that node's `+N sections` badge, which puts its children
+  back on screen and the mark back down onto one of them;
 - a node inside a section the reader closed is not drawn either — closing a section must not move the
   mark somewhere invisible;
 - a part's range can cover blocks that none of its sections do, so the walk stops on the parent rather
   than returning nothing in the middle of an article.
 
-That walk mirrors `Entry`'s own three lines — `tooDeep`, `openable`, `showChildren` — and **that
-agreement is the whole risk in the function**. Get it wrong and nothing errors: the panel scrolls to
+That walk mirrors what `Entry` draws, and **that agreement is the whole risk in the function** — which
+is why both sides call `showsChildren` rather than each writing the rule out. Get it wrong and nothing errors: the panel scrolls to
 an element that is not in the DOM, which moves nothing, or marks a row nobody can see. Another
 [silent success](../reusable/silent-success.md), and the reason the rule is written once, in
 `tree.ts`, rather than decided independently by the component and the scroller.
@@ -427,7 +485,7 @@ whether or not the rule is present. Only a trusted OS-level wheel exercises it.
 Stated rather than smoothed over:
 
 - Opening or closing a section, moving either control, or the summaries arriving reflows the list
-  without changing which row is current, so `rung`, `deep`, `closed` and the joined tree are passed to
+  without changing which row is current, so `rung`, `deep`, `closed`, `opened` and the joined tree are passed to
   the hook as re-run triggers. A re-run with the row already in view costs one
   `getBoundingClientRect` and moves nothing. `root` is the one that was missing at first: it changes
   when a rewrite lands, which can turn every one-sentence gist into a paragraph.

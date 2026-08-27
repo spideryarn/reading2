@@ -447,16 +447,18 @@ export function rungText(
  * deepest entry that contains the reader:
  *
  *  - a node below the `deep` cut-off is not drawn, so its parent is where the
- *    reader is *as far as this panel goes*;
+ *    reader is *as far as this panel goes* — unless the reader pressed that
+ *    node's `+N sections` badge, which opens it past the cut-off and puts its
+ *    children back on screen;
  *  - a node inside a section the reader closed is not drawn either, and closing
  *    a section must not put the mark somewhere invisible.
  *
- * **The walk mirrors `Entry`'s own three lines** — `tooDeep`, `openable`,
- * `showChildren` — and that agreement is the whole risk in this function. Get
- * it wrong and nothing errors: the panel scrolls to an element that is not
- * there (no move at all), or marks a row the reader cannot see, which reads as
- * "the highlight is broken" rather than as a rule disagreeing with itself.
- * docs/reusable/silent-success.md.
+ * **The walk mirrors `Entry`'s own `showChildren`**, and that agreement is the
+ * whole risk in this function. Get it wrong and nothing errors: the panel
+ * scrolls to an element that is not there (no move at all), or marks a row the
+ * reader cannot see, which reads as "the highlight is broken" rather than as a
+ * rule disagreeing with itself. docs/reusable/silent-success.md. Which is why
+ * both sides call `showsChildren` below rather than each writing the rule out.
  *
  * Returns `null` above the first section, and for the root — which covers the
  * whole article and is therefore "here" the entire time, a light that is always
@@ -468,16 +470,48 @@ export function currentEntryId(
   atRow: number | null,
   deep: number,
   closed: ReadonlySet<string>,
+  opened: ReadonlySet<string> = new Set(),
 ): string | null {
   if (atRow === null) return null;
   let node: SummaryNode | undefined = root;
   let deepest: string | null = null;
   while (node) {
     if (node !== root) deepest = node.node.id;
-    const showChildren =
-      node.children.length > 0 && node.node.depth < deep && !closed.has(node.node.id);
-    if (!showChildren) break;
+    if (!showsChildren(node, deep, closed, opened)) break;
     node = node.children.find((c) => atRow >= c.startRow && atRow <= c.endRow);
   }
   return deepest;
+}
+
+/**
+ * Whether one entry's children are drawn — the single rule, in one place.
+ *
+ * There are **three** states in it and each is its own variable, which is the
+ * design note copied verbatim from their structure panel and then extended by
+ * one:
+ *
+ *  - `deep` is the cut-off, and it removes a whole level of the tree;
+ *  - `closed` is the set the reader shut;
+ *  - `opened` is the set the reader opened *past* the cut-off, by pressing a
+ *    `+N sections` badge on a node the cut-off was hiding.
+ *
+ * They compose, and none of them silently rewrites another: moving the Depth
+ * buttons does not un-close anything, and pressing `+N` on one part does not
+ * move the Depth buttons. `closed` wins over `opened` because it is the more
+ * recent statement about that node — a collapse always clears the override, so
+ * the two can never both be set (SummaryPanel § toggle).
+ *
+ * The panel's `Entry` and `currentEntryId` above both call this. They used to
+ * write the rule out separately, which is a rule that will eventually disagree
+ * with itself in a way nothing errors on.
+ */
+export function showsChildren(
+  entry: SummaryNode,
+  deep: number,
+  closed: ReadonlySet<string>,
+  opened: ReadonlySet<string>,
+): boolean {
+  if (entry.children.length === 0) return false;
+  if (closed.has(entry.node.id)) return false;
+  return entry.node.depth < deep || opened.has(entry.node.id);
 }

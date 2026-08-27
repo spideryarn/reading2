@@ -3292,6 +3292,21 @@ td.text.has-hit[data-hues="8"] {
   overflow-wrap: break-word;
 }
 
+/* Where the link actually goes, beside where the model said it goes.
+
+   Quiet — faint, one step down, no underline — because it is a check rather
+   than a thing to read: the label is the model's words and the host is the only
+   part of a link an untrusted page cannot dress up. The hover card says the
+   same and more, but a card takes 320ms of rest to open and a click does not
+   wait for it. Cited.tsx § link. */
+.cited-link-host {
+  margin-left: 0.25em;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78em;
+  overflow-wrap: break-word;
+}
+
 /* ---- what the model did before it answered ----
    A strip ABOVE the answer, not below it. Sources sit below because they are
    where the answer came from and you want them after reading it; this is what
@@ -3397,6 +3412,83 @@ td.text.has-hit[data-hues="8"] {
 }
 .chat-send:disabled { opacity: 0.45; cursor: default; }
 .chat-send:not(:disabled):hover { border-color: var(--highlight); color: var(--highlight-ink); }
+
+/* ---- review mode's composer ----
+   Same component as chat's, two differences on screen: the box is a place to
+   put a paragraph rather than a sentence, and the microphone is a labelled
+   control rather than one icon among three.
+
+   Greg, 2026-08-27: *"the input box should be much larger for Review mode, and
+   probably emphasise the microphone UI, because talking will be much less
+   annoying than typing."*
+
+   `.review` is on the `.mode-band` (ChatPanel's `<aside>`), so these are all
+   descendants rather than a second set of class names on the elements
+   themselves — which keeps the chat rules the single definition of what a
+   composer looks like, and these the delta.
+
+   The ceiling is set inline by the component as the content grows (360px in
+   review, 160px in chat); `max-height` here has to allow it or the two would
+   silently disagree and the box would stop growing where the CSS said. */
+.review .chat-input {
+  max-height: 22.5rem;
+  /* A shade larger than chat's 0.85rem. This is prose the reader is composing
+     and will want to read back before sending, not a one-line question. */
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+/* The whole control row drops below the box rather than sitting beside it: at
+   six rows tall, buttons aligned to `flex-end` beside the textarea sit level
+   with its last line and read as belonging to nothing. */
+.review .chat-composer { flex-wrap: wrap; align-items: center; }
+.review .chat-input { flex-basis: 100%; }
+
+.chat-talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  /* First in the row, ahead of send. The reading order is the recommendation:
+     talk, then choose how the reply comes back, then send. */
+  order: -1;
+}
+.chat-talk-label {
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+/* Follows the button it labels, so "Listening…" is orange while the microphone
+   is genuinely open — the same signal, said twice, for a control whose whole
+   job is to be unambiguous about whether it is hearing you. */
+.chat-talk:has(.prof-mic.on) .chat-talk-label { color: var(--highlight-ink); }
+
+.chat-stance {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+.chat-stance-label { white-space: nowrap; }
+.chat-stance select {
+  padding: 0.15rem 0.25rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+.chat-stance select:disabled { opacity: 0.45; cursor: default; }
+
+/* The tag on a review's row in the shared thread list. Quiet on purpose: it
+   distinguishes a minority of rows and must not read as a badge worth having. */
+.chat-thread-kind {
+  white-space: nowrap;
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
 
 /* ------------------------------------------------------- § glossary mode ----
    The terms this piece uses, in the mode band. The shell is `.mode-band` above;

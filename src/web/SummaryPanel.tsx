@@ -38,13 +38,33 @@
  *  └───────────┴──────────────────────────────────┴─────────────────────┘
  * ```
  *
- * ## Two ways to be hidden, and they are not the same variable
+ * ## Three ways to be hidden, and they are not the same variable
  *
  * The one design note worth copying verbatim from their structure panel:
  * *"too deep to show" and "I closed this" are different states and should not
  * share a variable.* So `deep` is a cut-off that removes a whole level, `closed`
  * is a set the reader put nodes into, and they compose. A node hidden by the
  * cut-off does not un-close itself when the cut-off moves.
+ *
+ * There is a third, added 2026-08-27, and it is the same note applied once
+ * more. Greg:
+ *
+ * > when it has collapsed more granular levels, the only way to see the more
+ * > granular levels is to switch articles -> parts -> sections. Could we make
+ * > it easier to see them for this part of the doc (e.g. click `+N sections`
+ * > to expand those, and click the parent again to collapse)?
+ *
+ * So `opened` is the set the reader opened *past* the cut-off, by pressing the
+ * `+N sections` badge on a node the cut-off was hiding. It is a per-node
+ * override and it leaves the Depth buttons exactly where they are — which was
+ * the objection to letting that badge be pressed at all, and the objection is
+ * answered by making the override its own variable rather than by moving the
+ * cut-off. The one rule all three feed is `showsChildren` in tree.ts, which is
+ * where they are written down once for both the panel and the follow.
+ *
+ * The root is the one row where that badge stays a fact, because it draws no
+ * title row and so has no twist to undo an override with — see the badge
+ * itself for why that is the right answer rather than a missing feature.
  *
  * ## What is on screen and not generated
  *
@@ -64,7 +84,7 @@ import { TooltipGroup } from "./Tooltip.js";
 import type { Rung } from "./params.js";
 import { MAX_SUMMARY_DEPTH, RUNGS } from "./params.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
-import { currentEntryId, rungText, type SummaryNode } from "./tree.js";
+import { currentEntryId, rungText, showsChildren, type SummaryNode } from "./tree.js";
 import type { UseSummaries } from "./useSummaries.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
@@ -135,12 +155,35 @@ export function SummaryPanel({
    * The depth is the stable half, and the depth is what the URL carries.
    */
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
-  const toggle = (id: string) =>
-    setClosed((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  /**
+   * And which the reader has opened past the depth cut-off — see the header.
+   *
+   * Kept apart from `closed` rather than folded into one tri-state map because
+   * they answer different questions and the cut-off moves underneath both: a
+   * node can be shut at `sections` and, at `parts`, be shut *and* below the
+   * cut-off, and only two sets can say which of those the reader chose.
+   */
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+
+  /**
+   * Flip one node's children, from what is on screen rather than from which
+   * variable is holding them there.
+   *
+   * `showing` is what `Entry` has drawn and `beyond` is whether the cut-off
+   * alone would hide these children. Deriving the new state from the first
+   * rather than from the sets is what keeps the twist and the `+N` badge
+   * honest when both a close and an override are set: a reader who opens a
+   * part past the cut-off, raises Depth, closes it there and drops Depth back
+   * would otherwise find the badge doing nothing at all.
+   *
+   * Collapsing always clears the override, so the two sets never both hold the
+   * same id and `closed` never has to be checked against `opened` — the
+   * precedence in `showsChildren` is a belt on top of that.
+   */
+  const toggle = (id: string, showing: boolean, beyond: boolean) => {
+    setClosed((prev) => (showing ? withId(prev, id) : withoutId(prev, id)));
+    setOpened((prev) => (showing ? withoutId(prev, id) : beyond ? withId(prev, id) : prev));
+  };
 
   /**
    * The one row the reader is actually on, and the row the panel follows.
@@ -151,7 +194,7 @@ export function SummaryPanel({
    * in tree.ts beside the shape it walks; see the note there on why "deepest"
    * means *deepest drawn* and not simply deepest.
    */
-  const current = root ? currentEntryId(root, atRow, deep, closed) : null;
+  const current = root ? currentEntryId(root, atRow, deep, closed, opened) : null;
 
   /* Follow the reader, without taking the scroll off them: the panel moves when
      `current` changes and the row is not already comfortably visible, and never
@@ -163,7 +206,7 @@ export function SummaryPanel({
      push the current row off the bottom without any id changing. follow.ts has
      the argument. */
   const scroll = useRef<HTMLDivElement>(null);
-  useFollow(scroll, current, [rung, deep, closed, root]);
+  useFollow(scroll, current, [rung, deep, closed, opened, root]);
 
   /**
    * What the reader wants these summaries to lean towards.
@@ -304,6 +347,7 @@ export function SummaryPanel({
                 rung={rung}
                 deep={deep}
                 closed={closed}
+                opened={opened}
                 onToggle={toggle}
                 atRow={atRow}
                 current={current}
@@ -438,6 +482,7 @@ function Entry({
   rung,
   deep,
   closed,
+  opened,
   onToggle,
   atRow,
   current,
@@ -449,7 +494,8 @@ function Entry({
   rung: Rung;
   deep: number;
   closed: ReadonlySet<string>;
-  onToggle(id: string): void;
+  opened: ReadonlySet<string>;
+  onToggle(id: string, showing: boolean, beyond: boolean): void;
   atRow: number | null;
   /** The one entry the reader is on — see SummaryPanel § current. */
   current: string | null;
@@ -458,14 +504,22 @@ function Entry({
   root?: boolean;
 }) {
   const shown = rungText(entry, rung);
-  const shut = closed.has(entry.node.id);
-  /* The two ways to be hidden, kept apart on purpose — see the file header.
-     `tooDeep` is the cut-off; `shut` is the reader. Either hides the children,
-     and neither changes the other. */
-  const tooDeep = entry.node.depth >= deep;
-  const openable = entry.children.length > 0 && !tooDeep;
-  const showChildren = openable && !shut;
-  const hidden = entry.children.length > 0 && !showChildren ? entry.children.length : 0;
+  /* The three ways to be hidden, kept apart on purpose — see the file header.
+     `beyond` is the cut-off, `closed` is the reader shutting it, `opened` is
+     the reader opening it past the cut-off. None of them changes another, and
+     `showsChildren` in tree.ts is the one place they are combined, because the
+     follow has to reach the same answer and a rule written twice will
+     eventually disagree with itself. */
+  const beyond = entry.node.depth >= deep;
+  const openable = entry.children.length > 0;
+  const showChildren = showsChildren(entry, deep, closed, opened);
+  const hidden = openable && !showChildren ? entry.children.length : 0;
+
+  /* The `+N` badge hands the keyboard to the twist as it unmounts — see its
+     `onClick`. Two refs rather than a query, because a selector would have to
+     know this row apart from its children's rows. */
+  const twistRef = useRef<HTMLButtonElement>(null);
+  const badgeRef = useRef<HTMLButtonElement>(null);
 
   /* Where the reader is. An ancestor of the current section counts as "here"
      too, because at depth 1 the part you are inside is the honest answer to
@@ -522,13 +576,19 @@ function Entry({
       >
         {!root && (
           <div className="summ-title-row">
+            {/* Enabled whenever there is anything under this, including when
+                the Depth cut-off is what is hiding it — that is the whole of
+                Greg's "click the parent again to collapse", and its opposite:
+                the twist is now the way to open one part's sections without
+                moving Depth for the whole article. */}
             <button
               type="button"
-              className={`summ-twist${openable ? "" : " leaf"}${shut ? "" : " open"}`}
-              aria-expanded={openable ? !shut : undefined}
-              aria-label={shut ? `Open ${entry.node.title}` : `Close ${entry.node.title}`}
+              ref={twistRef}
+              className={`summ-twist${openable ? "" : " leaf"}${showChildren ? " open" : ""}`}
+              aria-expanded={openable ? showChildren : undefined}
+              aria-label={showChildren ? `Close ${entry.node.title}` : `Open ${entry.node.title}`}
               disabled={!openable}
-              onClick={() => onToggle(entry.node.id)}
+              onClick={() => onToggle(entry.node.id, showChildren, beyond)}
             >
               <ChevronRight size={12} />
             </button>
@@ -586,18 +646,60 @@ function Entry({
         <button
           type="button"
           className="summ-more"
-          // Only ever openable when the reader is the one who closed it. When
-          // the cut-off is what hid them the badge is a fact, not a control —
-          // pressing it would silently overrule the Depth buttons above.
-          disabled={!openable}
-          onClick={() => openable && onToggle(entry.node.id)}
+          /* A control since 2026-08-27, and on every row but the root. It used
+             to be a fact whenever the cut-off was what hid these — pressing it
+             would have had to overrule the Depth buttons above. It does not
+             overrule them: it writes this one node into `opened`, the Depth
+             buttons stay where the reader put them, and every other part stays
+             shut. See the file header for Greg's ask.
+
+             **The root is the exception, and it has to be.** It draws no title
+             row, so it has no twist, so an override written there could never
+             be taken off again — the `article` button would stop meaning "the
+             whole article, and nothing under it" for the rest of the session,
+             with no control anywhere on screen to put it back. Found by GPT
+             Sol's review, 2026-08-27.
+
+             That is not a special case grudgingly carved out, either. What the
+             badge is *for* is picking one node out of several without moving
+             the cut-off for the rest. At the root there are no others: the only
+             thing it could do is exactly what the `parts` button one inch above
+             it does, reversibly. So on the root it goes back to being a fact,
+             pointing at the control that does the job. */
+          disabled={root}
+          onClick={() => {
+            /* Move the keyboard along with the state. This button is about to
+               unmount — its job is done the moment the children are open — and
+               a focused button that disappears drops focus onto `document.body`,
+               which loses a screen-reader's place in the outline entirely. The
+               twist is where the reader should land: it stays mounted, it now
+               reads "Close <title>", and it is the control that undoes this.
+
+               Only when the badge actually had focus, so that a mouse click
+               does not leave a focus ring on a control nobody was using. */
+            const takeFocus = document.activeElement === badgeRef.current;
+            onToggle(entry.node.id, false, beyond);
+            if (takeFocus) twistRef.current?.focus();
+          }}
+          ref={badgeRef}
+          /* Named for the one node it opens. "+3 sections" is what the eye
+             needs, beside a title it can see; it is also what a screen reader's
+             button list shows, where four of them in a row are four
+             indistinguishable controls. Same review. */
+          aria-label={`Open the ${hidden} ${childLabel(entry.node.depth, hidden)} of ${
+            entry.node.title
+          }`}
           title={
-            openable
-              ? "Open these"
-              : `Raise the depth to ${DEPTH_LABELS[entry.node.depth + 1] ?? "more"} to see these`
+            root
+              ? `Press ${DEPTH_LABELS[entry.node.depth + 1] ?? "a deeper level"} above to see these`
+              : beyond
+                ? `Open just this one's ${childLabel(entry.node.depth, hidden)} — Depth stays on ${
+                    DEPTH_LABELS[deep] ?? "where it is"
+                  }`
+                : "Open these"
           }
         >
-          +{cap(hidden)} {hidden === 1 ? "section" : "sections"}
+          +{cap(hidden)} {childLabel(entry.node.depth, hidden)}
         </button>
       )}
 
@@ -610,6 +712,7 @@ function Entry({
               rung={rung}
               deep={deep}
               closed={closed}
+              opened={opened}
               onToggle={onToggle}
               atRow={atRow}
               current={current}
@@ -630,6 +733,33 @@ function Entry({
  */
 function cap(n: number): string {
   return n > 99 ? "99+" : String(n);
+}
+
+/**
+ * What the things under a node at this depth are called — `parts` under the
+ * article, `sections` under a part.
+ *
+ * The badge said "sections" at every depth until 2026-08-27, which was wrong on
+ * the article row and, more to the point, wrong in the one place the reader
+ * needs the badge and the Depth buttons to be talking about the same thing:
+ * the badge now opens what the buttons name, so it had better use their word.
+ */
+function childLabel(depth: number, n: number): string {
+  const plural = DEPTH_LABELS[depth + 1] ?? "sections";
+  return n === 1 ? plural.replace(/s$/, "") : plural;
+}
+
+/** A set with `id` in it, and the same set back when it already was. */
+function withId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  return set.has(id) ? set : new Set(set).add(id);
+}
+
+/** A set without `id`, and the same set back when it was not in it. */
+function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  if (!set.has(id)) return set;
+  const next = new Set(set);
+  next.delete(id);
+  return next;
 }
 
 /**
