@@ -25,6 +25,11 @@ with eleven findings. Ten are folded in below and every one of them was checked 
 before it was accepted. Two of them killed things I had just written down as answers, which is the
 useful kind of review.
 
+> **Where it stands, 2026-08-27.** This document is the sequence, not any of the work. **One thing in
+> it is built**: the ToC status hole, which was a live bug rather than a new rule — `e18ac5f`, and
+> § The publication gate, as a truth table. Everything else is B2's remnant, B3, C, D, the demolition
+> and E, in that order and none of them started.
+
 ---
 
 ## What the decision deletes
@@ -167,11 +172,15 @@ The first draft reduced it to one condition — a done `fetch` and a null refere
 that is not a complete truth table. A revision whose fetch **failed** carries a perfectly good
 inherited reference from `beginDraftIn` and passes.
 
-The same hole is already **live** in the ToC guard, which is a real bug found in passing: it reads
-the `toc` step run and compares `input_hash`, and never looks at `status`
-([`src/store/pg-revisions.ts:902-918`](../../src/store/pg-revisions.ts)). A `toc` row that errored
-with a matching hash publishes today. That gets its own red test and its own fix, before the source
-gate is written on top of the same shape.
+The same hole was already **live** in the ToC guard — a real bug found in passing. It read the `toc`
+step run, compared `input_hash`, and never looked at `status`, so a run that ended in error published
+as long as the hash matched. It matched *especially* in that case: a step records its hash when it
+starts.
+
+**Fixed first and on its own, `e18ac5f`**, precisely so the source gate would not be written on top
+of it. `tests/store-publish-guards.test.ts` was watched red, and checked again after the refactor by
+disabling the branch — three red, four green with it back. The guards now live in
+`reasonsNotToPublish`, which is where the source condition below goes.
 
 | `fetch` run in the lineage | rule |
 |---|---|
@@ -336,8 +345,8 @@ relearning ([silent-success.md](../reusable/silent-success.md)).
 3. **The gate refuses a failed fetch**, even with a good inherited reference.
 4. **The gate is silent about a draft that never fetched** — refused by the block/tree checks, and
    the reason strings say so.
-5. **The ToC guard refuses an errored `toc` run** with a matching `input_hash`. This one is a live
-   bug, not a new rule.
+5. ✅ **The ToC guard refuses an errored `toc` run** with a matching `input_hash` — done, `e18ac5f`.
+   This one was a live bug, not a new rule.
 6. **The importer refuses an article carrying a reference**, from the commit D lands in.
 7. **The adapter refuses a manifest with no `storedSha256`** rather than writing a null reference.
 8. **Block identities outlive the revision that dropped them**, through the production path.
