@@ -573,11 +573,28 @@ Greg, asked whether an interrupted job should survive a restart (2026-08-25):
 > simpler machinery that's a step in that direction.
 
 **What is built.** Every step declares the files it produces, and a step whose files are all already
-on disk is *skipped* rather than run. Job records live in `data/_jobs/<id>.json`, written
-atomically. On startup, anything still marked `running` or `queued` is turned into an error —
-this process has just started and its queue is empty, so nothing on disk can have work happening
-against it. The steps keep their individual statuses through that sweep, so a swept job still shows
+on disk is *skipped* rather than run. Job records live behind `JobStore` — `data/_jobs/<id>.json`
+written atomically on the filesystem adapter, a row on the Postgres one. On startup the filesystem
+adapter returns anything still `running` to `queued`, because this process has just started and
+nothing on disk can have work happening against it; Postgres cannot reason that way and uses a
+**lease** instead. The steps keep their individual statuses either way, so a resumed job still shows
 which stages finished, and **Retry queues the same steps and skips them**.
+
+**A lease that nothing enforces is a note.** `failExpired` is what turns an abandoned claim back into
+something a reader can act on — the job is marked failed, with a sentence saying it was interrupted
+and a Retry button, rather than taken over. It runs at the top of every advance rather than on a
+timer: there is no scheduler on Vercel, that is the exact moment somebody wants the slot, and it is
+one indexed `UPDATE` over rows that are almost always none. It had **no caller at all** for the first
+day of its life, which meant a killed instance left its job `running` for ever and every advance
+answered `busy` — the in-memory queue had self-healed on restart, so this was a regression rather
+than a gap. GPT Sol found it; see [durable-queue-code-review-sol.md](../plans/durable-queue-code-review-sol.md).
+
+**Taking a job away from a claimant is deliberately not done.** Guessing that an owner is dead is how
+two runners end up writing one article, and it is only safe once every durable write is inside the
+fenced transaction — [transactional-stage-runner.md](../plans/transactional-stage-runner.md), not
+built. What makes an expired lease mean something in the meantime is that the claimant sets **its own
+timer**, shorter than the lease, and aborts its own step: so a lapsed lease says *the process is
+gone* rather than *the process is slow*.
 
 So in practice: the server dies during `toc`, you press Retry, and `fetch`, `extract` and `blocks`
 are skipped in milliseconds while `toc` starts again. That is "picks up from where it started" for
@@ -762,6 +779,27 @@ either way, so there is nothing to save by letting the call run on — and a Sto
 nothing for two minutes is a Stop button that looks broken. Between the click and the step
 unwinding the job carries `cancelling`, which is why the button says "Stopping…" rather than
 staying "Stop".
+
+### Stop is one statement, and it used to be two
+
+The decision — *is anybody inside this job?* — happens **inside the `UPDATE`**. Queued means over
+right now; running means set `cancelling` and let the claimant read it at its next step boundary.
+
+It was two calls until 2026-08-27, cancel-if-idle and then ask, and GPT Sol found what lives in the
+gap between them. A claimant that releases in that gap turns the job `queued`; the second call then
+writes `cancelling` onto it; and **nothing in the system ever moves that row again** — every later
+claim reads the flag, answers `stopping`, and the reader's Stop button is already disabled because
+the job says it is stopping. A job stuck for ever, with no error, from two statements that were each
+correct.
+
+The same state is reachable from the other end, so `releaseStep` is also where a cancel that arrived
+mid-step lands: a step that succeeds under a Stop ends the job rather than requeueing it.
+
+**Stopping a job on one instance and running it on another works**, which is the part the abort
+signal cannot do. An `AbortSignal` is a thing a running function is listening to, and a second
+instance has no function to interrupt — so Stop is two halves: the flag, which everybody can see, and
+the local abort, which only helps when the claimant happens to be here. That is why Stop feels
+instant on a laptop and takes until the next step boundary in production.
 
 ## Naming the step is the point
 
