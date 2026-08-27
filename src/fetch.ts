@@ -147,6 +147,22 @@ export interface RawManifest {
    * which is a fact rather than a gap. docs/plans/raw-bytes-in-storage.md.
    */
   storedSha256?: string;
+  /**
+   * How many bytes are at `storedSha256` — the size of the object in the
+   * `sources` bucket, which is **not** `bytes` above.
+   *
+   * `bytes` counts what the network sent. This counts what we kept, and for any
+   * page that was not already UTF-8 those differ for exactly the reason the two
+   * hashes do: `writeRaw` stores the decoded string. `raw_sources.bytes`
+   * describes the object, so it needs this number and cannot use the other one
+   * — which the first version of the storage plan assumed it could.
+   *
+   * Optional, alongside `storedSha256` and for the same reason: every manifest
+   * written before 2026-08-27 has no object behind it, and absent is the honest
+   * way to say so. GPT Sol, 2026-08-28;
+   * docs/plans/artifacts-pg-has-sol.md.
+   */
+  storedBytes?: number;
   fetchedAt: string;
   /** Present only on a backfilled manifest, saying so in a sentence. */
   backfilled?: string;
@@ -196,6 +212,10 @@ export async function writeRaw(dir: string, doc: FetchedDocument): Promise<RawMa
     bytes: doc.bytes.byteLength,
     sha256: createHash("sha256").update(doc.bytes).digest("hex"),
     storedSha256: stored.sha256,
+    /* The length of what was written above, not of what arrived. `writeRaw`
+       computes `storedBytes` and recorded only its hash until now, so
+       `raw_sources.bytes` had no source but a second call to the bucket. */
+    storedBytes: storedBytes.byteLength,
     fetchedAt: doc.fetchedAt,
   };
   await writeFile(path.join(dir, "raw.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");

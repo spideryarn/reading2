@@ -29,9 +29,9 @@ useful kind of review.
 
 ## Where it stands, 2026-08-28
 
-Ten commits. **C2 is done and reviewed; C1 was built and withdrawn.** Four of the ten were live bugs
-found on the way, which is the pattern worth noticing: **every one came out of reading code near
-something else**, not out of the work item that was planned.
+Thirteen commits. **C2, C3, C4 and C5 are done and reviewed; C1 was built and withdrawn.** Four of
+them were live bugs found on the way, which is the pattern worth noticing: **every one came out of
+reading code near something else**, not out of the work item that was planned.
 
 | | what | why it is here |
 |---|---|---|
@@ -44,10 +44,31 @@ something else**, not out of the work item that was planned.
 | `1f624e6` | **The copy helper completes its steps**, rather than only writing them. | § What the second review changed, finding 2. |
 | `4da9bcf` | **C2 — `beginStepRun` and `finishStepRun`**, the first writer and first reader of `revision_step_runs.attempt_id`. The sentinels move to `artifacts.ts` to break an import cycle the linter refused. | § The build order for C. |
 | `414f3f9` | **C1 withdrawn, and three holes in C2's fence closed** — a stale claimant could finish a step for a job that had already failed; a token could reopen a run it had ended; the copy helper finished half-copied steps. | § What the review of the built code changed. |
+| `c6ceed5` | The plan, brought up to date with what the built code taught. | |
+| `f40461c` | **C3 — the map, `readArtefact` and `stampForStep`**, plus a third Sol round that returned NO-SHIP on three of my answers and took the `toc` case out of C4 before it was written. | § What the third review changed. |
+| `cca945b` | **C4 and C5 — `has`, `interrupted`, `write`, and the two store views.** The seam now has a working Postgres adapter for everything but `raw`. | § The build order for C. |
+| `5dc3b32` | **Not mine.** `src/library-scalars.ts`, committed because the commit before it had already imported it — see below. | |
 
-**Done:** C2. **Withdrawn:** C1, and its absence now shapes C4.
-**Not started:** C3 through C7, then B3, D, the demolition, E — in that order. B2's remnant has grown
-and lives inside C6.
+**Done:** C2, C3, C4, C5. **Withdrawn:** C1 — and the consequence I drew from withdrawing it was
+itself wrong, which is § lesson 7.
+**In progress:** C6, blocked on a migration — see below.
+**Not started:** C7, then B3, D, the demolition, E — in that order.
+
+**I committed another session's work under my message, and this is the second time this repo has
+recorded it.** `git add src/store/pg-revisions.ts` stages that file *whole*, and a peer's rename of
+`REVISION_COLUMN_POLICY` and their extraction of `deriveLibraryScalars` into a new module went in
+under `cca945b`. I checked the diffstat and not the diff. The repair was additive — `5dc3b32` adds
+the new module, because without it `cca945b` imports a file nothing tracks and does not build.
+Unpicking it would have meant editing a file another session is in the middle of.
+[version-control.md](../project/version-control.md) already says to run `git diff --cached` on every
+shared file; the diffstat is not that.
+
+**C6 is blocked, and not by anything in this plan.** It needs two new columns, and `src/db/schema.ts`
+has 127 uncommitted lines of somebody else's ai-spend work plus an ungenerated migration.
+`drizzle-kit generate` diffs the *whole* schema, so running it now would sweep their tables into my
+migration — the same accident as the paragraph above, in the one place where it cannot be repaired by
+adding a file. Everything in C6 that needs no column is done; the columns wait for the schema to go
+quiet.
 
 **One thing has moved earlier.** The re-ingest of the corpus was going to happen at the demolition.
 It has to happen **before C7** instead: all seven checked-in manifests predate `storedSha256`, so
@@ -58,8 +79,8 @@ fixtures are the same file as `evals/pdf/easy`. § What it does not delete has t
 
 ## What this has taught us, so far
 
-Written down because four of these are the same shape, and the fifth is the one that keeps this
-project honest.
+Written down because several of these are the same shape — a check, a comment or a conclusion that
+looks like evidence and is not.
 
 **1. A check proves nothing along any dimension it shares with the code it checks** — and that
 includes checks on checks. Not *nothing at all*: an assertion can be sound about one thing and blind
@@ -117,6 +138,37 @@ finding, and it was less.
 The habit that would have caught it is the same one as lesson 1, pointed at my own conclusion: state
 what would have to be true for the finding to be *right*, and check that, rather than checking the
 first mechanism that comes to hand.
+
+**7. A withdrawal has consequences, and I got mine backwards.** Withdrawing C1 was right. What I then
+wrote into C4 — *"with no stamp to compare, `has` must carry an explicit `toc` case comparing the run
+row's `input_hash` against the stored blocks"* — was wrong in three separate ways, and I put it in
+the plan, in a commit message, and in a comment on `STEPS.toc`.
+
+- It is a **freshness rule**, in the one function two rounds of review had just finished carving
+  freshness out of.
+- It walks **back into the hazard C1 was withdrawn for**. `has` false makes `stepIsDone` false makes
+  `toc` re-run makes the tree's boundaries move makes `arc` and `summary` silently lose entries. A
+  different door into the same room.
+- It could **never have matched**. `beginStepRun` writes `NO_INPUT_HASH` on purpose, and
+  `finishStepRun` leaves it there for a step that declares no input — so `toc`'s `input_hash` would
+  have been the string `"unstamped"` for every article the pipeline ever wrote, and `has` would have
+  answered false for ever.
+
+And the same paragraph contained the disproof: four lines below, it says `has` should be **true** for
+a carried `toc`. I wrote both and did not notice they contradict.
+
+What makes this different from lesson 6 is that nothing here needed checking against the code. It
+needed reading twice.
+
+**8. Two stamps are not one stamp.** Falling out of lesson 7, and it is the more useful half.
+`PipelineStep.stamp` is the *expected* stamp, computed before a step runs, and `toc` must not have
+one. The `input_hash` a completed run **records** is a different thing, and `toc` must have that —
+because `reasonsNotToPublish` compares it against the stored blocks and refuses the publication when
+they differ. Leaving it as `NO_INPUT_HASH` would have made every article the new runner produced
+unpublishable, and the symptom would have been a refusal naming the tree.
+
+**9. `git add <file>` is not `git add <my changes to file>`.** See § Where it stands. The rule was
+already written down; what was missing was doing it. A diffstat is not a diff.
 
 ## What the second review changed
 
@@ -191,6 +243,41 @@ Two things it checked and passed, worth recording because they were deliberate c
 `NO_INPUT_HASH` on begin is honest (a crashed row stays non-`done`, and `articleMetadata` gates on
 that), and `rowCount !== 1` is correct because `(revision_id, step_name)` is the primary key, so
 concurrent finishes serialise.
+
+## What the third review changed — the design of C3 and C4, before either was built
+
+[The fifth Sol round](artifacts-pg-has-sol.md) was asked one question: is the `toc` case in C4 wrong?
+It said yes, and then said NO-SHIP on three more of my answers. Every finding was checked against the
+code before being acted on.
+
+- **The `toc` case is deleted**, for the three reasons in lesson 7. So is the now-false consequence
+  I had written onto `STEPS.toc`.
+- **But the runner must still record `toc`'s input hash**, or nothing publishes. Lesson 8; written
+  where it will be read, at `STEPS.toc` and at `writeArtefacts`.
+- **A stamp the row and the artefact disagree about is refused, not resolved.** My design let the
+  artefact silently win. The artefact is the *authority* — the file adapter reads it and nothing else
+  — but a disagreement is a fact, and picking the one that looks current is how a stale artefact gets
+  served for ever. `stampForStep` returns `null` and warns; `writeArtefacts` refuses the write, which
+  is where the disagreement can still be prevented.
+- **The row may not fill a field the artefact has no room for.** `arc.json` carries no `sourceHash`,
+  and `revision_step_runs.input_hash` is NOT NULL and always populated — so a merge that filled the
+  gap would give Postgres freshness evidence the filesystem does not have, and the same article would
+  be current in one store and stale in the other. The row contributes exactly one field:
+  `implementation_version`, which no artefact carries. **My own test could not see this**: it only
+  ever set the field the correct rule allows.
+- **A raw document whose source reference and stored bytes are different kinds is corruption**, and
+  is refused rather than resolved. I had the reference winning.
+- **Meta absence is `title === null`, not falsy.** An empty title means extraction ran and produced
+  nothing usable; null means nothing was recorded. Reading the first as the second reports an article
+  as never extracted.
+- **And one premise of mine was simply wrong:** `raw_filename` is the *reader's* name for an uploaded
+  file, not `RawManifest.file`, which is derived from the kind and always has been.
+
+**It also grew C6, and this one is a NO-SHIP on the plan rather than on the code.** After `raw_bytes`
+is dropped, `RawManifest.bytes` — the count of what the network sent — has **nowhere to live**.
+`raw_sources.bytes` is the *stored* count and answers a different question, and adding `storedBytes`
+to the manifest (which C6 already planned) does not preserve the other one. So C6 needs two columns,
+not one. § The build order for C.
 
 ---
 
@@ -555,63 +642,97 @@ with every other, and `store-job-draft` and `store-jobs-parity` already fail aga
 parallel vitest. This suite waits its turn and leaves nothing behind rather than becoming a third
 contender.
 
-**C3. The kind ↔ storage map, and the read half.** `src/store/artifacts-pg.ts` with `read` and
-`stampFor` only, over a `JobDraftRef` and a mandatory `Db | Tx`.
+**C3. The kind ↔ storage map, and the read half — done, `f40461c`.**
+[`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts): `STORAGE` (the exact counterpart of
+`PATHS`), `readArtefact`, `stampForStep`. It binds a resolved `JobDraftRef`, and its executor is
+`Db | Tx` with **no default**.
 
 **Its oracle is explicit mapping fixtures, not importer-written rows** — the first draft had that
 wrong. Agreeing with the importer would prove importer-plus-adapter behaviour, and the importer is
 known to store `extractedHtml: null`, to stamp every inferred step with the same fingerprint where
-`ideas` uses blocks-plus-tree, and to hold no source reference. Importer rows stay as separate
-legacy-compatibility cases, which is a different and smaller claim.
+`ideas` uses blocks-plus-tree, and to hold no source reference. There is one parity oracle that is
+neither: the two storage maps must cover the same `(step, kind)` pairs, and a test compares them.
 
-`stampFor` merges the run row with the artefact's own fields, preserving `profileHash: null` as the
-real value it is.
+*Three things moved into `artifacts.ts` so both adapters share one copy* — the shape checks
+(`whyUnusable`), `STAMP_SOURCE` and `stampOf`, and later `assertStampAgrees`. Two lists that agree on
+the day they are written are not a parity claim.
 
-**C4. `has`, and the `toc` case C1 was supposed to remove.** Separately from C3 because its
-definition is the one Sol rewrote: every requested value
-reconstructs and passes the same shallow shape checks the filesystem decoder applies, **and** a
-`revision_step_runs` row exists with `status = 'done'`. No comparison against today's expected stamp.
+*Two of my own checks were watched passing against the bug they name.* The fixture's block ids sorted
+the same way as the ordinals, so `order by block_id` left the ordering test green; and with three
+rows Postgres answers from the `(revision_id, ordinal)` index, so deleting the `ORDER BY` altogether
+was green too. The fixture ids now sort backwards, and there is a second case that runs with index
+scans off. A third passed alone and failed in the suite, because `onConflictDoUpdate`'s `set` writes
+only the keys it is given and the previous case's `prompt_version` was still sitting there.
 
-**And it carries an explicit `toc` case, said out loud.** C1 would have removed the need for one;
-C1 is withdrawn, so `toc` still has no stamp and `has` cannot answer "is this tree current" the way
-it does for every other step. The rule is therefore: for `toc`, the stored run row's `input_hash`
-must match the stored block rows. That is a documented difference from the filesystem adapter, and a
-documented difference beats a false parity claim — this document has now produced three of those.
+**C4. `has` and `interrupted` — done, `cca945b`. There is no `toc` case.** `has` means: every
+requested kind reads back and passes the shared shape check, **and** `revision_step_runs` holds a row
+with `status = 'done'`. No comparison against an expected stamp, for any step. The `toc` case this
+heading used to promise is deleted — lesson 7, and § What the third review changed.
 
-*Red first, with the case corrected.* The first draft kept a test from an earlier definition and it
-contradicts this one: `beginDraftIn` carries block rows **and** a done `toc` run, so under
-presence-and-completion `has(slug, "toc", ["blocks"])` is **true**, and it is `stepIsDone` that
-answers no once C1's stamp is compared. Assert exactly that pair — `has` true, `stepIsDone` false —
-which is also what keeps freshness out of storage. Watched red by deleting the `status = 'done'`
-requirement over a revision whose run errored.
+The run row is the half the filesystem cannot ask, and it is what `beginDraftIn` makes necessary: a
+carried column is present without this step having produced it. `interrupted` is the same row,
+`status = 'running'` — a row that ended in `error` is not interrupted, it finished badly, and
+`stepIsDone` treats those differently.
 
-**C5. `write`.** The whole atomic set in one statement per destination: the revision row's columns,
-then blocks as identities-upsert → unconditional delete → insert-if-any. Delete-all on empty is the
-decision, and it gets its own test.
+*Red first:* the run-row requirement was watched red over a revision whose columns are all present
+and whose run was never recorded — which is exactly the shape carry-forward produces. The
+`status = 'done'` half was isolated separately, over a run that errored beside every artefact it
+declares.
 
-*Red first:* start with carried blocks, write `{ blocks: [] }`, assert zero rows — then force the
-job fence to fail and assert the delete rolled back.
+**C5. `write` — done, `cca945b`.** Takes a `Tx`, and there is **no overload taking a `Db`**: a write
+that could commit on its own would commit before the job fence and the step transition it belongs
+with, which is the whole reason this landing exists, and the typechecker is where that is said.
 
-**C6. `raw`, the manifest's missing number, and the columns.** Bigger than the first draft said,
-because B2 is not "mostly built":
+Four things in order: the job fence (`requireLiveJobOwnsDraft`, taken here as well as in the
+`finishStepRun` that follows, because *"the write is safe because the call after it checks"* holds
+until somebody calls the write alone); the stamp checked against **all** the artefacts before any of
+them is written; the artefacts, one `UPDATE` for every column-shaped part; and then the stamp onto
+the running row.
 
-1. **`RawManifest` gains a stored byte count.** `bytes` is the length of what the network sent;
-   `raw_sources.bytes` describes the object at the *stored* hash, and for any non-UTF-8 page those
-   differ for exactly the reason the two hashes do. `writeRaw` already computes `storedBytes` and
-   records only its hash.
-2. **`raw_filename` on `article_revisions`**, classified `carry` in `REVISION_COLUMN_POLICY` — the
-   exhaustive check throws at module load otherwise, which is the schema forcing the decision.
-3. **The `raw_sources` row and the reference pair**, written for the first time by anything.
-4. **The refusal**: a manifest with no `storedSha256` is refused rather than written as a null
+**Empty blocks means delete-all**, and it is the one importer behaviour deliberately not copied:
+`src/store/import.ts` puts its delete *inside* `if (blocks.length)`, so an empty write leaves the
+inherited rows in place, the old article survives, and the run reports done.
+
+*What the tests taught.* The stamp fence could not be one statement with the update: three steps
+declare no stamp at all and an `UPDATE` with nothing to set is an error, so folding the fence in
+would have made the fence **conditional on the step having a stamp** — backwards, since those are the
+steps whose completion nothing else can check. It locks the row `for update`, then writes if there is
+anything to write. And one test passed for the wrong reason: a bare `rejects.toThrow()` was green
+with the job fence deleted, because the stamp update refuses an unrecognised token anyway.
+
+*Also in this commit:* the two views. `readOnlyPgArtifacts(ref, Db | Tx)` for the four questions
+`stepIsDone` asks, and `pgArtifactsIn(ref, tx)` for the whole `ArtifactStore`. `beginStep` returns
+`ref.attemptId` rather than minting a token — `revision_step_runs.attempt_id` **is** `jobs.attempt_id`,
+which the interface predicted would "end up being literally the same value". `finishStep` is stricter
+than the interface allows for, and says why: the filesystem tolerates finishing a step it never saw
+start because every CLI run is in that state, and nothing on this path can be.
+
+**C6. `raw`, and it now needs two columns rather than one.** `writeArtefacts` refuses `raw` outright
+today (`RawNotWritable`) rather than recording a `fetch` with no document behind it.
+
+1. **`RawManifest` gains `storedBytes`** — done, in `src/fetch.ts`. `bytes` is the length of what the
+   network sent; `raw_sources.bytes` describes the object at the *stored* hash, and for any non-UTF-8
+   page those differ for exactly the reason the two hashes do. `writeRaw` already computed the number
+   and recorded only its hash.
+2. **A column for the network byte count.** Sol's NO-SHIP on this section: `RawManifest.bytes` is
+   required, its only home today is `length(raw_bytes)`, and `raw_bytes` is dropped at the demolition.
+   `storedBytes` does not preserve it — it answers the other question.
+3. **`raw_filename` on `article_revisions`**, classified `carry`. It is the **reader's own name** for
+   an uploaded file, not `RawManifest.file`, which is derived from the kind. Both new columns must be
+   classified or `REVISION_CARRY_POLICY`'s exhaustive check throws at module load, which is the
+   schema forcing the decision.
+4. **The `raw_sources` row and the reference pair**, written for the first time by anything.
+5. **The refusal**: a manifest with no `storedSha256` is refused rather than written as a null
    reference beside a done `fetch`.
+
+**The migration is blocked, and not by this plan.** `src/db/schema.ts` has 127 uncommitted lines of
+another session's ai-spend work and an ungenerated migration beside them; `drizzle-kit generate`
+diffs the whole schema. § Where it stands.
 
 **And the refusal has a scheduling consequence.** All seven checked-in manifests predate
 `storedSha256`, so turning it on breaks every fixture that has not been re-fetched. The re-ingest
 therefore happens **before C7**, not at the demolition.
 
-The migration itself is the small part: a nullable `ADD COLUMN` that does not interact with the
-existing CHECK or composite FK. Generated in one sitting with `src/db/schema.ts` otherwise clean, the
-diff read line by line, `tests/db-schema.test.ts` updated in the same commit.
 
 **C7. The three replacement suites**, and they need more than a swapped call. `copyArtefacts` moves
 what the *artefact store* owns, which is deliberately less than the importer moved. Each suite has to
@@ -749,11 +870,18 @@ relearning ([silent-success.md](../reusable/silent-success.md)).
    This one was a live bug, not a new rule.
 6. ✅ **Only the attempt that began a step may end it, and only while its job is live** — done,
    `4da9bcf` + `414f3f9`, four guards each watched red on its own. § The build order for C.
-7. **The importer refuses an article carrying a reference**, from the commit D lands in.
-8. **The adapter refuses a manifest with no `storedSha256`** rather than writing a null reference.
-9. **Block identities outlive the revision that dropped them**, through the production path.
-10. **`db:export` refuses to run against Postgres without matching blob credentials.**
-11. **A retry does not buy a checkpoint twice**, on a different store instance.
+7. ✅ **`has` refuses a step whose artefacts are all present and whose run was never recorded** —
+   done, `cca945b`. This is carry-forward's shape exactly, and it is the one question the filesystem
+   adapter cannot ask.
+8. ✅ **Writing no blocks deletes the blocks** — done, `cca945b`, watched red by moving the delete
+   back inside `if (blocks.length)` where the importer keeps it.
+9. ✅ **A stamp the row and the artefact disagree about is refused at the write** — done, `cca945b`.
+   The read side refuses it too, which is the legacy half.
+10. **The importer refuses an article carrying a reference**, from the commit D lands in.
+11. **The adapter refuses a manifest with no `storedSha256`** rather than writing a null reference.
+12. **Block identities outlive the revision that dropped them**, through the production path.
+13. **`db:export` refuses to run against Postgres without matching blob credentials.**
+14. **A retry does not buy a checkpoint twice**, on a different store instance.
 
 ## Open
 
