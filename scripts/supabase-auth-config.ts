@@ -55,9 +55,16 @@
  * `security find-generic-password`, correctly), but a human can hand it over
  * for one command without it being written down anywhere:
  *
- *     SUPABASE_ACCESS_TOKEN=$(security find-generic-password -s "Supabase CLI" -w \
- *       | sed 's/^go-keyring-base64://' | base64 -d) \
+ *     SUPABASE_ACCESS_TOKEN=$(security find-generic-password -s "Supabase CLI" \
+ *       -a access-token -w | sed 's/^go-keyring-base64://' | base64 -d) \
  *       npx tsx scripts/supabase-auth-config.ts show
+ *
+ * **`-a access-token` is not optional**, and leaving it off is not a no-op: the
+ * CLI keeps several items under that service name, `-s` alone returns whichever
+ * comes first, and here that is a *project's* secret keyed by its ref. It
+ * decodes cleanly, looks like a credential, and the API answers
+ * `401 JWT could not be decoded`. Written down because the first version of
+ * this comment had it wrong and cost Greg a confusing minute.
  *
  * This token is a *management* credential — it can create and delete projects.
  * Nothing in this script prints it, and `.env.local` is gitignored.
@@ -252,10 +259,13 @@ async function main(): Promise<void> {
   if (!token) {
     die(
       "No SUPABASE_ACCESS_TOKEN.\n\n" +
-        "Make one at https://supabase.com/dashboard/account/tokens and put it in .env.local, or\n" +
-        "hand the CLI's own token to this one command:\n\n" +
-        '  SUPABASE_ACCESS_TOKEN=$(security find-generic-password -s "Supabase CLI" -w \\\n' +
-        "    | sed 's/^go-keyring-base64://' | base64 -d) \\\n" +
+        "Make one at https://supabase.com/dashboard/account/tokens and put it in .env.local —\n" +
+        "that is the reliable way, and it survives a CLI logout.\n\n" +
+        "Or hand this one command the CLI's own token. Note `-a access-token`: without it\n" +
+        "the keychain returns a different item under the same service name, and the API\n" +
+        "answers `401 JWT could not be decoded`.\n\n" +
+        '  SUPABASE_ACCESS_TOKEN=$(security find-generic-password -s "Supabase CLI" \\\n' +
+        "    -a access-token -w | sed 's/^go-keyring-base64://' | base64 -d) \\\n" +
         `    npx tsx scripts/supabase-auth-config.ts ${command}\n`,
     );
   }

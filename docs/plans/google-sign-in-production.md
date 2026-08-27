@@ -41,7 +41,7 @@ Neither is a guess and neither is in this repo.
 `"email":true` in the same response is the control — the endpoint can say *on*, so `"google":false`
 is a reading rather than a silence. That is the entire cause of the message above.
 
-### 2. Google has still never heard of this project's callback
+### 2. Google had never heard of this project's callback — **fixed 2026-08-27**
 
 ```
 $ ./scripts/check-google-redirect.sh https://alschkahzfagtppxspfq.supabase.co/auth/v1/callback
@@ -51,9 +51,13 @@ REJECTED  https://not-registered.example/cb                            (invalid_
 REJECTED  https://alschkahzfagtppxspfq.supabase.co/auth/v1/callback    (redirect_uri_mismatch)
 ```
 
-Unchanged since 2026-08-26. **This is the one that matters most**, because fixing only #1 moves the
-failure one hop later: Supabase would redirect to Google, and Google would refuse with
-`redirect_uri_mismatch`. A different error page, the same dead end. So #2 goes first.
+That was the reading for two days. Greg added the URI on 2026-08-27 and the same command now says
+`ACCEPTED`, with the control still `REJECTED` beside it — which is the only reason the ACCEPTED
+means anything.
+
+**It mattered most**, because fixing only #1 would have moved the failure one hop later: Supabase
+redirects to Google, Google refuses with `redirect_uri_mismatch`. A different error page, the same
+dead end.
 
 ### And a third thing that is not yet readable
 
@@ -121,16 +125,25 @@ npx tsx scripts/supabase-auth-config.ts show     # prints what the remote thinks
 npx tsx scripts/supabase-auth-config.ts apply    # writes the six settings, then re-reads them
 ```
 
-It needs `SUPABASE_ACCESS_TOKEN` — a personal access token from
-<https://supabase.com/dashboard/account/tokens>, in `.env.local`. **The Supabase CLI on this machine
-is already logged in**, and its token is in the macOS keychain; an agent cannot read it (the
-classifier blocks `security find-generic-password`, correctly), but Greg can hand it to one command
-without it ever being written down:
+It needs `SUPABASE_ACCESS_TOKEN`. **The reliable way is a personal access token** from
+<https://supabase.com/dashboard/account/tokens>, pasted into `.env.local` — it survives a CLI logout
+and there is nothing to get subtly wrong.
+
+The CLI on this machine is already logged in, and its token can be handed to one command without
+being written down anywhere. An agent cannot do this (the classifier blocks
+`security find-generic-password`, correctly), and **the `-a access-token` is the load-bearing part**:
 
 ```bash
-SUPABASE_ACCESS_TOKEN=$(security find-generic-password -s "Supabase CLI" -w \
+SUPABASE_ACCESS_TOKEN=$(security find-generic-password -s "Supabase CLI" -a access-token -w \
   | sed 's/^go-keyring-base64://' | base64 -d) npx tsx scripts/supabase-auth-config.ts show
 ```
+
+**The first version of that line did not have it, and the failure was a good one.** `-s` alone
+returns whichever item under that service name comes first, and on this machine that is a *project's*
+secret keyed by its ref — not the access token. It is base64 like the real one, it decodes cleanly,
+it looks exactly like a credential, and the API answers `401 JWT could not be decoded`, which reads
+as an expired login rather than as the wrong secret entirely. Worth keeping because the shape
+recurs: a lookup that takes the first match is a lookup that will one day match something else.
 
 What `apply` writes:
 
