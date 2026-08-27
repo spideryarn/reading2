@@ -354,14 +354,19 @@ export interface PipelineStep {
    * `assertProduced` still uses `outputs`, because "did you write the file"
    * stays a separate question from "was it worth writing".
    *
-   * **`stamp` above is what replaces this, and two steps are still here.**
-   * `tweets` and `summary` keep their `PROMPT_VERSION` as a module-private
-   * const, so a `stamp` for either would have to write the version out a second
-   * time in this file — two copies of one string, free to drift, and the drift
-   * would show up as an artefact that never regenerates. Exporting those two
-   * constants belongs to those stages' owners; the day it happens, each becomes
-   * one `stamp` line here and one deletion there. `glossary` already exports
-   * its version and has made the move.
+   * **`stamp` above is what replaces this, and two steps are still here** —
+   * `tweets` and `summary`.
+   *
+   * The reason used to be that both kept `PROMPT_VERSION` module-private, so a
+   * `stamp` for either would have written the version out a second time in this
+   * file: two copies of one string, free to drift, and the drift showing up as
+   * an artefact that never regenerates. **That reason has gone** — both export
+   * it now (`tweets/2`, `summary/3`), as `glossary` did when it made the move.
+   * What is left is one `stamp` line here and one deletion in each stage.
+   *
+   * Worth doing before the artefacts leave the filesystem rather than after:
+   * both of these `isDone` implementations read `ctx.dir`, and under Postgres
+   * there is no directory to read. docs/plans/transactional-stage-runner.md § D.
    */
   isDone?(ctx: StepContext, store: ArtifactStore): Promise<boolean>;
   /** Do the work. The returned string is the one-line summary kept on the finished step. */

@@ -9,6 +9,17 @@ question and he answered **A — port the writes**. It is the piece that actuall
 Vercel, and it is much larger than that section's two paragraphs make it sound. This document says
 how large, in what order, and what is true after each landing rather than only at the end.
 
+> **Where it stands, 2026-08-27.** Landing **A** is done — the queue is behind `JobStore`, with a
+> claim, a lease and a fence, and a job now survives the invocation that made it. Of landing **B**,
+> one of three pieces is built (`openOrBeginJobDraft`). **C, D and E are not started.** The one
+> migration C needs was blocked on a shared `src/db/schema.ts` for most of the day and **is not any
+> more** — § Open 1 and 5.
+>
+> **So uploading still cannot be switched on in production, and none of the above changes that.**
+> Every stage still writes `data/<slug>/*.json` and `stepIsDone` reads those files, so invocation A
+> writes `raw.json` to an ephemeral disk and invocation B finds nothing and fetches again. The job is
+> durable; the pipeline is not.
+
 **Read the correction first, again.**
 [GPT Sol's review](transactional-stage-runner-review-sol.md) returned **NO-SHIP** on the first draft
 of this document, and it was right about the thing everything else hangs off:
@@ -23,6 +34,11 @@ another; production runs through a **transaction pooler**, so separate calls can
 a session. So there were three transactions where the design needs one, and the failure is not
 theoretical: A writes its artefacts and commits, `failExpired` invalidates A, the release throws —
 and A's artefacts are already there. Reverse the order and you get the opposite corruption.
+
+**And that scenario stopped being hypothetical on the same day.** When the review was written,
+`failExpired` had no caller at all; wiring it (landing A) is what makes the sweep something that
+really happens. So the window is open now, not later — which is why § Two things the reviews left
+open is at the end of this document rather than in the queue's.
 
 **The job transition is the commit.** It cannot be a separate call. Three more criticals and a
 fourth finding that nobody had written down are folded in below, each marked where it lands.
@@ -110,16 +126,49 @@ survive, so a second invocation re-runs the step. The Vercel guard on uploads st
 
 ### B. The coordinator — one transaction, and something to put in it
 
-Nothing can be committed atomically until there is one place that owns the transaction. Three pieces,
-none of which exists:
+Nothing can be committed atomically until there is one place that owns the transaction. Three pieces;
+**the first is built, the other two are not.**
 
-**1. `openOrBeginJobDraft(jobId, attemptId)` — built 2026-08-27.** The review's second critical, and
-it would have been found the hard way on the second `/advance` of every fresh ingest: `beginRevision` **always** mints a
-`randomUUID()` and copies from `articles.current_revision_id`. So request 1 creates R1 and writes
-`fetch` into it; request 2 creates R2 from the still-empty published state, points the job at R2, and
-`extract` looks for a raw document that is in R1. `RevisionLifecycle` has no reopen, and `toJob` does
-not even expose `draft_revision_id` — so the job cannot find the draft it owns. One statement:
-reuse the job's draft if the fenced row has one, mint if not.
+**1. `openOrBeginJobDraft(slug, job)` — built 2026-08-27**
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts), tests in
+[`tests/store-job-draft.test.ts`](../../tests/store-job-draft.test.ts)).
+
+The review's second critical, and it would have been found the hard way on the second `/advance` of
+every fresh ingest: `beginRevision` **always** mints a `randomUUID()` and copies from
+`articles.current_revision_id`. So request 1 creates R1 and writes `fetch` into it; request 2 creates
+R2 from the still-empty published state, points the job at R2, and `extract` looks for a raw document
+that is in R1 — a message about stage 2, from a fault in the runner. `RevisionLifecycle` had no
+reopen, and `toJob` does not expose `draft_revision_id`, so the job could not find the draft it owns.
+
+It reads `jobs.draft_revision_id` **fenced on the live attempt and locked `for update`**, inside the
+same transaction that may mint. The lock is not belt and braces, and the review of the *fix* is where
+that was settled: fencing on the attempt does not stop two callers both reading a null pointer and
+both queueing on `lockArticle`, after which the second mints over the first. The job lock is taken
+**before** the article lock so every caller takes the two in one order.
+
+**What it does when the recorded draft is not usable**, which is four cases and one refusal:
+
+| state | what happens |
+|---|---|
+| the job has no `draft_revision_id` | mint — this is the first step of every job |
+| there is no `articles` row for the slug | mint, and `beginDraftIn` creates the article |
+| the revision is absent, or is not this article's | mint — `sweepAbandonedDrafts` spares job-referenced drafts, but `db:import` and a cascade from `articles` do not |
+| the revision exists but is `published` or `failed` | mint |
+| **the job row's own slug is not the one asked for** | **`NotTheLiveAttempt`** |
+
+The last is refused rather than recovered from because it is the only one that is somebody's fault: a
+live token with the wrong slug means a caller has mixed two jobs up, and minting would repoint a
+perfectly good job at an article it has nothing to do with — the same class of fault as `enqueue`
+renaming a slug out from under a request.
+
+> **Proving the lock took three attempts and the first two were green against the broken code.**
+> Firing two calls with `Promise.all` and asserting one draft passes with `for update` deleted — the
+> transactions do not interleave at the point that matters. Holding the *job* row and showing the
+> call blocks also passes, because `fenceJob`'s `UPDATE` at the end blocks on that row anyway. What
+> works is holding the **article** row, so the call is stuck inside `lockArticle` and has not reached
+> `fenceJob`, then asking a third connection for the job row `for update nowait`: refused if the lock
+> was taken, granted if it was not — and that grant is precisely the gap. Written down because the
+> same shape will come up for every lock in landings C and D.
 
 **2. A raw product with the bytes in it.** The third critical. The type lie was fixed on 2026-08-27
 — `ArtifactMap.raw` is a `RawManifest` now rather than a `string`, with a test that goes red if it
@@ -135,7 +184,8 @@ must **not** be in the atomic set (a failed step has to leave them behind — th
 them), and must not be published. Small interface, two callers, and it is what stops a retry paying
 twice for work that succeeded.
 
-**True afterwards:** there is a transaction with a shape. Nothing uses it.
+**True afterwards:** there is a transaction with a shape. Nothing uses it — `openOrBeginJobDraft` has
+no production caller today, because the thing that would call it is landing D's runner.
 
 ### C. The Postgres artefact adapter, inside the coordinator
 
@@ -235,10 +285,16 @@ tweets, glossary, summaries and ideas. So there is no separate "landing D for th
 commit keeps its CLI writing files, and moving the CLIs onto the shared runner is the *last* landing
 rather than the repair for one this created.
 
-**`tweets` and `summary` need one thing from their owners first**: both keep `PROMPT_VERSION`
-module-private, so neither can declare a `stamp` without writing the version out a second time in
-`pipeline.ts` — two copies of one string, free to drift, and the drift shows up as an artefact that
-never regenerates. `pipeline.ts` says so already. Exporting the two constants is two lines in each.
+**`tweets` and `summary` still answer the freshness question the old way**, and the thing that was
+stopping them has already gone. Both declare `isDone` rather than `stamp`
+([`src/pipeline.ts`](../../src/pipeline.ts)), and both read `ctx.dir` to do it — so under Postgres
+they are asking a directory that is not there. The reason given for leaving them was that
+`PROMPT_VERSION` was module-private in each, so a `stamp` would have to write the version out a
+second time in `pipeline.ts`; **both export it now** (`tweets/2`, `summary/3`, beside
+`glossary/3` which made the move first). What is left is one `stamp` line in `pipeline.ts` and one
+deletion in each stage. The docstring above `isDone` in `pipeline.ts` still says they are private and
+is wrong — worth fixing when those stages are converted, since it is that file's own account of why
+two steps are exceptions.
 
 **The upload branch writes to a second store inside the commit's window.** `acquireUpload` advances
 the upload record (`claimed → verified`, or `→ rejected`) from inside `fetch`'s `run`. The first
@@ -272,11 +328,14 @@ artefacts are shared.
 
 ## What has to be true before this is believable
 
-Each pinned to a specific way of being wrong, and each watched red first.
+Each pinned to a specific way of being wrong, and each watched red first. **✅ marks the ones that
+exist and have been watched red**; the rest are still descriptions.
 
-1. **One draft per job, across requests.** Two `/advance` calls on one fresh job, on two connections,
-   and prove the second wrote into the *same* revision the first did. This is the failure that would
-   otherwise appear as "extract cannot find the raw document" on every single ingest.
+1. ✅ **One draft per job, across requests.** Two calls on one job get the *same* revision, a third
+   adds nothing, and the job row is held across the article-lock wait so two callers cannot both act
+   on a stale null. Plus a live token with the wrong slug refused.
+   [`tests/store-job-draft.test.ts`](../../tests/store-job-draft.test.ts) — and see the note in § B
+   about the two versions of this that passed against the broken code.
 2. **Both adapters agree.** One set of cases over `fsArtifacts` and the Postgres store — `has` on a
    half-written step, `read` of every kind, `stampFor` where a stamp exists and where the step
    records none, `beginStep`/`finishStep` with the wrong attempt token.
@@ -303,6 +362,14 @@ Each pinned to a specific way of being wrong, and each watched red first.
    Vercel rather than about one process.
 10. **Every CLI still writes its file**, in the same commit as its stage's conversion.
 
+**One more, inherited from the queue and easy to lose here.** Every id and token that crosses into
+the database has to be minted by the function the *column* requires, not by a plausible-looking
+literal in a test. `advanceJob` passed `mintId()` where `jobs.attempt_id` is a `uuid`, and neither
+the caller's tests nor the two-adapter parity suite caught it, because the parity suite minted its
+own. The coordinator passes job tokens into `fenceJob`, so the same seam is about to be crossed
+several more times: `mintAttempt()` in [`src/store/jobs.ts`](../../src/store/jobs.ts) is the one
+place, and tests should read the value out of the caller rather than construct their own.
+
 ## Two things the reviews left open, and they are both this document's
 
 1. **The claimant's deadline is cooperative.** The timer aborts a signal; a stage that ignores it
@@ -317,8 +384,11 @@ Each pinned to a specific way of being wrong, and each watched red first.
 
 ## Open
 
-1. **`revision_step_runs` needs `attempt_id`.** One nullable column, one migration. Nullable because
-   every row written by `db:import` and by a CLI has no attempt and never will.
+1. **`revision_step_runs` needs `attempt_id`.** One nullable column, one migration — **the only
+   schema change this whole document needs**, and it is now unblocked (see 5). Nullable because every
+   row written by `db:import` and by a CLI has no attempt and never will. It is what turns
+   `finishStep` into one fenced `UPDATE … WHERE attempt_id = $attempt`, which the filesystem
+   adapter's own comment has been asking for since it was written.
 2. **What a cross-step write means under the runner.** `extract`'s PDF path rewrites `fetch`'s
    artefacts. Either the runner allows a step to return parts belonging to another step — which makes
    `produces` a lie — or the PDF path hands the corrected manifest back some other way.
@@ -331,9 +401,12 @@ Each pinned to a specific way of being wrong, and each watched red first.
 4. **Where the checkpoint store lives.** Not the artefact store, because its contents must survive a
    failed step. Not the blob store either, probably. A small table keyed by revision and step is the
    obvious answer and it has not been weighed against anything.
-5. **Migration ownership, again.** `src/db/schema.ts` is modified in the working tree by somebody
-   else right now, and `drizzle-kit generate` diffs the whole schema. The one migration this needs is
-   generated when that lands and not before.
+5. **Migration ownership.** `drizzle-kit generate` diffs the *whole* schema, so a migration written
+   while somebody else has `src/db/schema.ts` open sweeps their in-flight column in with yours. That
+   is what held this up for most of 2026-08-27 — the `search_runs.colour` work was uncommitted —
+   and it **landed as `0016_search_colour`, so the tree is clean and the block has lifted.** The one
+   column this document needs (§ Open 1) can be generated now, in one sitting, with the diff read
+   line by line and `tests/db-schema.test.ts` updated in the same commit.
 
 ## See also
 
@@ -344,7 +417,11 @@ Each pinned to a specific way of being wrong, and each watched red first.
   above: the commit boundary, the per-request draft, the raw bytes, and the working state nobody had
   written down
 - [durable-queue-and-uploads-review-sol.md](durable-queue-and-uploads-review-sol.md) — the review of
-  the queue half, whose build order this document follows except in one place, and says why
+  the queue half's *plan*, whose build order this document follows except in one place, and says why
+- [durable-queue-code-review-sol.md](durable-queue-code-review-sol.md) and
+  [durable-queue-fixes-review-sol.md](durable-queue-fixes-review-sol.md) — the reviews of the queue
+  as **built**, and then of the fixes. Landing A is what they are about, and two of their findings
+  are open here rather than there: § Two things the reviews left open
 - [postgres-storage-implementation.md](postgres-storage-implementation.md) — step 11 half B, of which
   this is stage 5
 - [postgres-migration.md](postgres-migration.md) · [job-queue-rethink.md](job-queue-rethink.md) ·

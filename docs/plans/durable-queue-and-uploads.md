@@ -518,15 +518,33 @@ have meant writing that function twice.
 > **everybody's** jobs, so that `prune` could sweep them. Retention is now `trimFinished(owner, keep)`
 > called with the finishing job's own owner, so nothing needs that hole any more and it is gone.
 > `tests/owner-jobs.test.ts` says so where it used to say the opposite.
+>
+> **Then two reviews of the built code took it apart**, and what they changed is bigger than the
+> three additions above. [The first](durable-queue-code-review-sol.md) returned NO-SHIP with nine
+> findings, four critical; [the second](durable-queue-fixes-review-sol.md) reviewed the fixes and
+> returned NO-SHIP again. The specification below is **not** what the code now does in five places:
+>
+> - **`failExpired` is called**, at the top of every advance. It had no caller at all, which meant a
+>   killed instance left its job `running` for ever and every later advance answered `busy` — a
+>   regression, because the in-memory queue self-healed on restart.
+> - **`cancelIdle` is gone from the contract.** Stop is one `UPDATE` with a `case`: the gap between
+>   cancel-if-idle and ask was a permanently stuck `queued + cancelling`, and `releaseStep` now
+>   settles a cancel it observes. `finish` deliberately does not — see its docblock.
+> - **`enqueue` refuses rather than renames** when a request that *names* an article (no URL, no
+>   upload) lands on a busy slug. Renaming made a summary of `paper` into a summary of `paper-2`.
+> - **The work key and `sameWork` both hash `urlKey(url)`.** Without it, two articles whose URLs end
+>   in the same path segment produce identical keys and the second is handed the first's job.
+> - **The attempt token is `mintAttempt()`, a uuid.** `jobs.attempt_id` is a uuid column and this
+>   passed `mintId()`, so every advance against Postgres would have died with `22P02` on the claim.
+>
+> Plus: the filesystem adapter persists the work key and restores the legacy-owner stamp, and
+> `enqueue` starts a pump for a job it hands back — one left `queued` by a restart otherwise came
+> back with nothing driving it.
 
+**Built on 2026-08-27.** What follows is the specification as it was written, kept as the record of
+one; read the banner above for the five places the code has since moved past it.
 
-
-Everything above is built except the change that makes it reachable: `src/jobs.ts` still holds the
-`Map`. That is **one piece of work and it is the whole module**, so it is specified here rather than
-begun — the half-done state of a file several agents share is the expensive one, and
-[a peer commit can ship it](../../CLAUDE.md).
-
-**What has to change, in order.**
+**What had to change, in order.**
 
 1. **Delete the persistence machinery.** `JOBS_DIR`, `jobFile`, `writeOnce`, `persist`, `writes`,
    `forgotten`, `writeCounter`, `loadFromDisk`, `ready`, `sweepStopped` and the `jobs` Map itself all
@@ -566,15 +584,19 @@ begun — the half-done state of a file several agents share is the expensive on
 6. **`runJob` and p-queue become the pump** — §5. `while (!done) await advanceJob(id)`, backing off
    on `busy`, not started on Vercel. Concurrency 1 stops being p-queue's promise and becomes
    `jobs_only_one_running`.
-7. **The rest follow the store**: `listJobs` → `list`, `getJob` → `get`, `cancelJob` → `cancelIdle`
-   then `requestCancel`, `forgetJob` → `forget`, `prune` → `trimFinished`, and `freeSlug`'s
-   claim lookup asks the store rather than the Map.
+7. **The rest follow the store**: `listJobs` → `list`, `getJob` → `get`, `cancelJob` →
+   `requestCancel` (**one** call — the `cancelIdle`-then-ask this line originally specified is the
+   permanently-stuck state the first code review found), `forgetJob` → `forget`, `prune` →
+   `trimFinished`, and `freeSlug`'s claim lookup asks the store rather than the Map.
 
 **Two things to know before starting.** `tests/jobs.test.ts` currently fails typecheck (its fixtures
 predate `Job.ownerId`) and carries an order-dependent assertion about two simultaneous advance
 callers — so fix those first, or a regression will be indistinguishable from the breakage already
 there. And `runStep` is about to be restructured by the stage-runner work § 7 chose, so keep the
 claim/release *outside* it: that boundary is what survives.
+
+*Both were done first, and the second one held: the claim and release are outside `runStep`, which is
+what [transactional-stage-runner.md](transactional-stage-runner.md) § D grows a transaction around.*
 
 ## 9. Open
 
