@@ -231,6 +231,28 @@ The `raw` kind writes a `raw_sources` row and the revision's reference columns r
 columns including an 11 MiB `bytea`. The suites are part of this landing, not a follow-up: they are
 what makes deleting the importer safe, so they cannot trail behind it.
 
+**What the adapter must get right**, from a sweep of the existing write path, so none of it is
+rediscovered the hard way. `import.ts` is the reference implementation for the *write* half and is
+worth reading before starting, not after.
+
+| trap | the rule |
+|---|---|
+| `revision_blocks.fts` is `generatedAlwaysAs` | never name it in an insert, and never bare-`select()` a row you intend to hash |
+| two composite FKs need `article_id` | `revision_blocks` carries it for both `(article_id, revision_id)` and `(article_id, block_id)`, so every write resolves slug → article → draft |
+| identities first, never deleted | upsert `block_identities`, then `delete` this revision's rows, then insert with `ordinal` from the array index. `revision_blocks_revision_ordinal` is unique, so delete-before-insert is required |
+| carry-forward means present ≠ produced | `beginDraftIn` copies carried columns, block rows **and** step-run rows. So `has()` must consult `revision_step_runs` and compare the stamp — a non-null column reports a carried glossary as this step's output |
+| `implementation_version = "imported"` is the importer's | it scopes the importer's own withdrawal `DELETE`. Nothing the adapter writes may use that string, or `db:import` deletes pipeline records |
+| unstamped steps still need values | `input_hash` and `implementation_version` are NOT NULL and `fetch`/`extract`/`blocks` have no stamp. Use `NO_INPUT_HASH` and `PIPELINE_RUN`, never the draft's block hash — that claims a step ran against blocks it never saw |
+| `labels` is not a step | the `revision_step_runs_step` CHECK rejects it; it is a `toc` output |
+| `attempt_id` has no writer, and `recordStepRun` would clobber it | its upsert does `set: values`, which omits `attempt_id`. The adapter is the first writer, so that function has to be extended in the same commit |
+| an empty blocks array | the importer silently keeps the old rows. The adapter must decide, out loud, whether empty means delete-all or no-op |
+| null is a real value in a stamp | `StepStamp.profileHash` uses `null` to mean *written deliberately without a profile*, and `exactOptionalPropertyTypes` is on, so absent and null are different answers |
+
+The transaction convention is already settled and should be copied rather than reinvented: a private
+`…In(tx, opts)` with the public function opening the transaction around it, exactly as
+`beginRevision`/`beginDraftIn` are split. Lock order is job row `for update` first, then article,
+and must not be deviated from.
+
 ### The metadata page — **not the blocker I said it was**
 
 The first draft called `src/api.ts` a blocker before D and proposed a new `ArtifactStore` method to
