@@ -56,9 +56,14 @@ acceptedChallenges: ["http-01"]
 ipStatus: "optional-change"
 ```
 
-Two things fall out of that. `http-01` means verification happens over the edge,
-so **no `_vercel` TXT record is needed** and the domain arrives at the new project
-already `verified: true`. And `optional-change` is Vercel recommending its newer
+Two things fall out of that. **No `_vercel` TXT record was needed** — the domain
+was already verified under this team, and verification is a team-level fact rather
+than a per-project one, so it arrived at the new project already `verified: true`.
+(An earlier draft of this section credited `acceptedChallenges: ["http-01"]` for
+that, which GPT Sol correctly called a conflation: that field is about which ACME
+*certificate* challenge Vercel can run, not about Vercel's own ownership check.
+The conclusion was right and the reason was wrong.) And `optional-change` is
+Vercel recommending its newer
 values (`216.150.1.1`, `63e40ce30383a400.vercel-dns-016.com`) while ranking the
 current ones second — the dashboard shows this as "DNS Change Recommended" on both
 rows, which looks like a problem and is not one. It is unrelated to the move and
@@ -66,14 +71,16 @@ still not done.
 
 ### How it was done
 
-Not through the dashboard, which has no button for this. The per-domain rows offer
-only Refresh and Edit; the account-level `~/domains` page has a **Move** item, and
-it is the wrong one — it transfers ownership to another *team*, and warns that
-project domains deliberately stay behind. The dashboard route is to add the domain
-to the new project and let it detach from the old one silently, with no warning
-shown before you submit.
+Not through the dashboard. We drove it and **found no control that moves a domain
+from one project to another** — the per-domain rows offer Refresh and Edit, and
+the account-level **Move** is a different thing entirely, transferring ownership
+to another *team* while warning that project domains deliberately stay behind. The
+dashboard route is to add the domain to the new project and let it detach from the
+old one silently. (Stated as what we found rather than what exists: this is UI, it
+was true on 2026-08-27, and a 2022 changelog describes a move prompt we did not
+see.)
 
-The API has a purpose-built endpoint instead, and it is atomic:
+The API has a purpose-built endpoint instead:
 
 ```
 POST /v1/projects/<source-project>/domains/<domain>/move?teamId=…
@@ -87,10 +94,14 @@ easy and the error it gives you is `not_found`.
 **One call moved both names.** The endpoint also moves "all redirects pointed to
 that domain in the same project", and `spideryarn.com` was a redirect pointing at
 `www.spideryarn.com` — so moving `www` brought the apex along, redirect config
-intact. The second call, for the apex, then returned `not_found`, which reads
-exactly like a failure and was the opposite: there was nothing left at the source
-to move. **Check what each project holds before concluding anything from that
-error** — `GET /v9/projects/<project>/domains`.
+intact. The second call, for the apex, then returned `not_found`.
+
+**The lesson is the state check, not the error.** `not_found` means the domain was
+not at the source you named; here that was because it had already left, but it
+means the same thing when you have typed the projects the wrong way round, and
+those two readings are opposite. So do not learn "`not_found` means it worked" —
+learn to answer it with `GET /v9/projects/<project>/domains` on **both** projects
+before concluding anything.
 
 The CLI can do it too, `vercel domains add <domain> <project> --force` (*"Force a
 domain name for a project and remove it from an existing one"*). It was not used,
@@ -99,9 +110,13 @@ that `vercel domains move` is the team-transfer command, not this one, and that
 `vercel domains ls` prints **zero domains** here while the dashboard lists
 `spideryarn.com` perfectly well — do not read that as the domain being missing.
 
-There was **no downtime and no new certificate**. The existing Let's Encrypt cert
-(`notAfter Nov 16 2026`) kept working, because the domain never stopped pointing
-at Vercel's edge.
+**No downtime was observed, and the served certificate did not change.** Both are
+worth stating that carefully. Curls after the cutover show it completed, not that
+no request failed during it. And the certificate claim rests on `notBefore Aug 18
+2026` — the cert being served afterwards predates the move, so the cutover did not
+need a replacement. It does not prove Vercel issued nothing in the background.
+Either way the domain never stopped pointing at Vercel's edge, which is the reason
+there was nothing to wait for.
 
 **It did quietly cost the app its `noindex`**, which is a property of the address
 rather than of the project and so is not the kind of thing a move checklist asks
@@ -338,14 +353,14 @@ is read by nothing.
 | | |
 |---|---|
 | `SPIDERYARN_STORE=postgres` | which store serves reads. **Unset means `files`**, and on a host with no durable disk that is an empty shelf and a 200 |
-| `DATABASE_URL` | **not set yet**, which is why `/api/health` is a 503 and nothing can be read in production. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two |
+| `DATABASE_URL` | **set on Production, 2026-08-27** — `/api/health` reports `store: postgres` and reads work. Supabase's **transaction** pooler, port 6543. See [database.md § Connecting to the remote](database.md#connecting-to-the-remote) for why that one and not the other two. Note it is on Production only, so a preview deployment still has no database |
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production only, not Preview** (measured 2026-08-26) — so a preview deployment used to check anything will fail for a reason unrelated to whatever you are checking |
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
 | `ANTHROPIC_API_KEY` | the pipeline stages. Note it is *not* in `.env.local` — it comes from Greg's shell, so it is the easy one to forget |
 | `OPENROUTER_API_KEY` | explain, and chat |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **not set, and read at BUILD time.** Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next one. Missing means `src/web/lib/supabase.ts` throws at module load and the site is a blank page — see [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **still not set, and read at BUILD time — this is the live bug.** Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next one. Missing means `src/web/lib/supabase.ts` throws at module load and the site is a blank page. **It already has**: the bundle now being served on `www.spideryarn.com` contains no project URL and no key, only the SDK's own `*.supabase.co` wildcard. Set both on the project *before* the next build. [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 
 ## `/api/health`, and why to look at it first

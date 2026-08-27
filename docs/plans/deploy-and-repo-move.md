@@ -250,11 +250,16 @@ directory.
 5. **The beta gate**, before anything is reachable — see [§ The beta gate](#the-beta-gate). This
    belongs *before* the domain move in the order of work, not after it.
 
-   **Not built.** Its job is being done for now by Vercel's own login wall, which costs no code and
-   admits only Greg. That is only adequate because there is no custom domain: Vercel's Pro plan
-   cannot protect a production *domain*, and `<project>.vercel.app` counts as one — which is why
-   there deliberately is no `spideryarn.vercel.app`. **The gate is what makes a stable URL possible**,
-   so it is the next thing here rather than a later one.
+   **Built**, 2026-08-27 — [`src/auth.ts`](../../src/auth.ts). It went in before the domain move, in
+   the order this bullet asked for, and it had to: Vercel's Pro plan cannot protect a production
+   *domain*, so from the moment `spideryarn.com` pointed here the gate was the only thing in front
+   of the shelf.
+
+   Two things it does **not** do, both deliberate and both Greg's call rather than the file's.
+   `isAllowed()` returns true for anyone Supabase will vouch for — *"We can get rid of the allowlist
+   once we've added authentication. I'll accept the risk"* (2026-08-26). And knowing who someone is
+   was for a while separate from showing them only their own things; ownership isolation landed
+   later the same day in `8cd0579`.
 6. **Environment variables** on the new project: `ANTHROPIC_API_KEY` (pipeline — note it is *not*
    in `.env.local`, it comes from Greg's shell, so it is easy to forget) and `OPENROUTER_API_KEY`
    (the explain call), plus whatever Supabase needs.
@@ -273,10 +278,18 @@ directory.
 There are a few non-paying users. Two cheap kindnesses, neither of which is on the critical path:
 
 - **Give the old app a home at `old.spideryarn.com`** — one CNAME at the registrar, one domain added
-  to the old Vercel project. Note that its `.vercel.app` URL is *not* a substitute: Deployment
-  Protection is on ("(Legacy) Standard Protection"), which guards preview and `.vercel.app` URLs
-  while leaving the production custom domain public. So `spideryarn-reading.vercel.app` asks for a
-  Vercel login and `old.spideryarn.com` would not.
+  to the old Vercel project, **and the new origin added to Supabase's redirect allowlist**, which
+  this bullet used to forget: a sign-in that comes back to an origin Supabase does not know about
+  fails at the callback rather than at the button.
+
+  This bullet also used to say the `.vercel.app` URL was *not* a substitute, because Deployment
+  Protection ("(Legacy) Standard Protection") would make it ask for a Vercel login. **That is
+  measurably false** — `spideryarn-reading.vercel.app` returned `200` unauthenticated on
+  2026-08-27, and the project's `ssoProtection` is `prod_deployment_urls_and_all_previews`, which
+  does not cover a generated production alias. It is the same trap as
+  [deployment.md § Who can reach it](../project/deployment.md#who-can-reach-it), one project over:
+  the setting says Protected and the address answers anyway. So the old app is *reachable* without
+  `old.spideryarn.com`; what it lacks is an address anybody would remember.
 - **Tell them, and offer an export**, before the swap rather than after. Whether anything in
   Supabase is worth extracting before the old project is eventually retired is
   [an open question](#open-questions).

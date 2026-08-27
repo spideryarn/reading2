@@ -4,7 +4,17 @@
 [docs/research/auth-options.md](../research/auth-options.md) — this file is the decision and where
 its pieces live.
 
-**Built, locally, on 2026-08-27.** Not yet true in production — see [§ What is not done](#what-is-not-done).
+**Built, locally, on 2026-08-27.** In production it is **half true, and the halves fail
+differently** — see [§ What is not done](#what-is-not-done). The *server* gate is deployed and
+enforcing: an unauthenticated `/api/library` on `www.spideryarn.com` returns
+`401 … [auth-none]`. The *browser* half is not working, because `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` are read at build time and are not set on the Vercel project, so
+[`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load exactly as it
+promises to. Nobody can sign in there yet.
+
+That combination is safe rather than dangerous — no session can be obtained, so the gate refuses
+everything — but it is safe by accident, and the accident is load-bearing until those two variables
+are set. [deployment.md § Environment variables](deployment.md#environment-variables).
 
 **The build is planned in [auth-supabase.md](../plans/auth-supabase.md)** (2026-08-26) — what to
 click in Google Cloud and in the Supabase dashboard, the client seam, the gate, the tests, and an
