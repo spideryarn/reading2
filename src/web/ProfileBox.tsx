@@ -25,7 +25,7 @@
  * into the middle of a sentence and starts talking means it there.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Mic, Square, TriangleAlert, X } from "lucide-react";
+import { Construction, Download, Mic, Square, TriangleAlert, X } from "lucide-react";
 import { MicLevel } from "./MicLevel.js";
 import { type MicDevice, listInputs } from "./mic-devices.js";
 import { type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
@@ -135,6 +135,24 @@ export function ProfileBox({
     };
   }, [picking]);
 
+  /* **Dictation does not reliably work, and the reader is told before they
+     rely on it.** Greg, 2026-08-27, after the encoder bug was chased down and
+     the microphone still would not do the job: *"I still couldn't get it to
+     work properly, but don't have time to work on it. For now, add a warning
+     message and/or under-construction icon."*
+
+     The words live here once and are used three times — beside the button, as
+     the button's accessible description, and under the strip while it is
+     running — because three copies of a warning are three warnings that drift.
+
+     It says what to do next rather than only what is wrong, and it says the
+     typed text is safe, because the fear a broken dictation actually creates is
+     that it has eaten what was already in the box. docs/project/copy.md. */
+  const wipId = `${id}-mic-wip`;
+  const WIP =
+    "Dictation is still being worked on and often transcribes nothing. " +
+    "If no words appear, type instead — whatever is already in the box is safe.";
+
   /* What the strip says, in one place, because it is also what the live region
      says and the two must not be allowed to drift apart. */
   const listeningWords =
@@ -160,62 +178,82 @@ export function ProfileBox({
         <label className="prof-box-label" htmlFor={id}>
           {label}
         </label>
+        {/* One conditional over both, rather than the same test written twice:
+            the caveat and the control appear and disappear together, and there
+            is no state in which one of them is right on its own. */}
         {dictation.supported && (
-          <button
-            type="button"
-            /* Three phases, two of which are armed. `.on` — the orange — is
-               only worn once `audiostart` has fired and the microphone is
-               genuinely open; `.opening` is the second before that, and it
-               looks different on purpose. The old code went orange on the line
-               after `start()`, a measured 1.1 seconds before the microphone
-               could hear anything, which meant the button's one piece of
-               feedback was wrong exactly when the reader was watching it.
-               docs/plans/microphone-level-meter.md. */
-            className={`prof-mic${dictation.phase === "listening" ? " on" : ""}${
-              dictation.phase === "opening" ? " opening" : ""
-            }`}
-            /* **An action button, not a toggle.** The name says what the
-               press will do, and there is no `aria-pressed` — which is the
-               same model the glyph already uses (a filled square meaning
-               "stop"), so the icon, the tooltip and the announced name all say
-               one thing. The APG allows either this or a fixed name carrying
-               state in `aria-pressed`; what it does not allow is both at once,
-               which is what was here before. Mixing them a second time via
-               `title` is just as bad — with an `aria-label` present, an
-               otherwise-unused `title` becomes the accessible *description*,
-               so the two must agree rather than merely not collide.
-               docs/research/microphone-library-options.md. */
-            aria-label={dictation.armed ? "Stop dictating" : "Dictate"}
-            title={dictation.armed ? "Stop dictating" : "Dictate"}
-            disabled={disabled}
-            onClick={() => {
-              if (dictation.armed) {
-                /* The commit now happens in `onEnd` rather than here, so that
-                   every way of stopping saves and not just this one. */
+          <>
+            {/* Before the button in the DOM, so somebody arriving by keyboard
+                meets the warning on the way to the control rather than after
+                it. */}
+            <span id={wipId} className="prof-mic-wip" title={WIP}>
+              <Construction size={12} aria-hidden="true" />
+              <span className="prof-mic-wip-word" aria-hidden="true">
+                unreliable
+              </span>
+              <span className="sr-only">{WIP}</span>
+            </span>
+            <button
+              type="button"
+              /* Three phases, two of which are armed. `.on` — the orange — is
+                 only worn once `audiostart` has fired and the microphone is
+                 genuinely open; `.opening` is the second before that, and it
+                 looks different on purpose. The old code went orange on the line
+                 after `start()`, a measured 1.1 seconds before the microphone
+                 could hear anything, which meant the button's one piece of
+                 feedback was wrong exactly when the reader was watching it.
+                 docs/plans/microphone-level-meter.md. */
+              className={`prof-mic${dictation.phase === "listening" ? " on" : ""}${
+                dictation.phase === "opening" ? " opening" : ""
+              }`}
+              /* **An action button, not a toggle.** The name says what the
+                 press will do, and there is no `aria-pressed` — which is the
+                 same model the glyph already uses (a filled square meaning
+                 "stop"), so the icon, the tooltip and the announced name all say
+                 one thing. The APG allows either this or a fixed name carrying
+                 state in `aria-pressed`; what it does not allow is both at once,
+                 which is what was here before. Mixing them a second time via
+                 `title` is just as bad — with an `aria-label` present, an
+                 otherwise-unused `title` becomes the accessible *description*,
+                 so the two must agree rather than merely not collide.
+                 docs/research/microphone-library-options.md. */
+              aria-label={dictation.armed ? "Stop dictating" : "Dictate"}
+              /* The warning is the button's *description*, so focusing it reads
+                 the name and then the caveat. This replaces a `title` that
+                 duplicated the name — with an `aria-label` present an unused
+                 `title` becomes the description anyway, so the slot was already
+                 spoken for and saying the name twice was the worse use of it. */
+              aria-describedby={wipId}
+              disabled={disabled}
+              onClick={() => {
+                if (dictation.armed) {
+                  /* The commit now happens in `onEnd` rather than here, so that
+                     every way of stopping saves and not just this one. */
+                  dictation.toggle();
+                  return;
+                }
+                // Where the reader had the caret when they pressed it. Read now,
+                // because the button is about to take the focus.
+                caret.current = box.current?.selectionStart ?? value.length;
                 dictation.toggle();
-                return;
-              }
-              // Where the reader had the caret when they pressed it. Read now,
-              // because the button is about to take the focus.
-              caret.current = box.current?.selectionStart ?? value.length;
-              dictation.toggle();
-            }}
-          >
-            {/* **A filled square, not `MicOff`.**
-                `MicOff` is the icon for *muted*, so the one moment the
-                microphone was live it wore the glyph for dead — and it said
-                nothing about what pressing it would do. The rule is that the
-                icon says what the press does, which is "stop" from the moment
-                the button is armed, including through the `opening` second.
-                The phase is carried by the colour, the pulse and the strip's
-                own words; it does not need the glyph as well.
-                docs/plans/microphone-device-and-recording.md. */}
-            {dictation.armed ? (
-              <Square size={11} fill="currentColor" strokeWidth={0} />
-            ) : (
-              <Mic size={14} />
-            )}
-          </button>
+              }}
+            >
+              {/* **A filled square, not `MicOff`.**
+                  `MicOff` is the icon for *muted*, so the one moment the
+                  microphone was live it wore the glyph for dead — and it said
+                  nothing about what pressing it would do. The rule is that the
+                  icon says what the press does, which is "stop" from the moment
+                  the button is armed, including through the `opening` second.
+                  The phase is carried by the colour, the pulse and the strip's
+                  own words; it does not need the glyph as well.
+                  docs/plans/microphone-device-and-recording.md. */}
+              {dictation.armed ? (
+                <Square size={11} fill="currentColor" strokeWidth={0} />
+              ) : (
+                <Mic size={14} />
+              )}
+            </button>
+          </>
         )}
       </div>
 
@@ -288,7 +326,7 @@ export function ProfileBox({
                 {dictation.deviceLabel}
               </span>
               <button
-                type="button"
+              type="button"
                 className="prof-mic-change"
                 onClick={() => setPicking((p) => !p)}
               >
@@ -350,6 +388,16 @@ export function ProfileBox({
             )}
           </select>
           <span className="prof-mic-picker-note">Restarts dictation on the one you choose.</span>
+        </p>
+      )}
+
+      {/* Said again while it is actually running, because the marker beside the
+          button is easy to have skimmed past, and this is the minute in which
+          it matters. `aria-hidden`: the button's description already carried
+          these words to anybody using a screen reader. */}
+      {dictation.armed && (
+        <p className="prof-mic-wip-note" aria-hidden="true">
+          <Construction size={12} /> {WIP}
         </p>
       )}
 

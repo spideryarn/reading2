@@ -15,6 +15,13 @@
  * so a "fixed name, moving tooltip" arrangement rebuilds the same problem one
  * layer down. Found by GPT Sol reviewing
  * docs/research/microphone-library-options.md, which has the reasoning.
+ *
+ * That description slot now carries something worth saying instead: dictation
+ * does not reliably work, and the reader is told so before they lean on it.
+ * Greg asked for that on 2026-08-27 having failed to get it working — so these
+ * tests also pin that the warning is reachable from the button rather than
+ * merely present somewhere on the page, which is the difference between a
+ * caveat and a decoration.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -97,10 +104,51 @@ describe("the microphone button", () => {
     expect(render().hasAttribute("aria-pressed")).toBe(false);
   });
 
-  /* `title` is the accessible description here, not a free-floating tooltip. */
-  it("keeps the tooltip saying exactly what the name says", () => {
-    expect(render().getAttribute("title")).toBe("Dictate");
+  /* The description slot is finite: it now carries the caveat, so it must not
+     also carry a `title` that merely repeats the name. */
+  it("spends its accessible description on the warning, not on its own name", () => {
+    const button = render();
+    expect(button.hasAttribute("title")).toBe(false);
+    const describedBy = button.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    const described = host.querySelector(`#${describedBy}`);
+    expect(described?.textContent).toContain("often transcribes nothing");
+  });
+});
+
+describe("the under-construction warning", () => {
+  it("is on the page before the button is ever pressed", () => {
+    render();
+    const mark = host.querySelector(".prof-mic-wip");
+    expect(mark?.textContent).toContain("unreliable");
+  });
+
+  /* Somebody arriving by keyboard should meet the caveat on the way to the
+     control, not after it. */
+  it("comes before the button in reading order", () => {
+    const button = render();
+    const mark = host.querySelector(".prof-mic-wip");
+    if (!mark) throw new Error("no warning marker");
+    // Node.DOCUMENT_POSITION_FOLLOWING: the button follows the marker.
+    expect(mark.compareDocumentPosition(button) & 4).toBeTruthy();
+  });
+
+  it("says what to do instead, and that the typed text is safe", () => {
+    render();
+    const words = host.querySelector(".prof-mic-wip .sr-only")?.textContent ?? "";
+    expect(words).toContain("type instead");
+    expect(words).toContain("safe");
+  });
+
+  /* Repeated while it is running, since the marker is easy to skim past and
+     that minute is when it matters — but not read twice, because the button's
+     description already carried it. */
+  it("says it again while dictation is running, silently", () => {
+    expect(host.querySelector(".prof-mic-wip-note")).toBeNull();
     state.armed = true;
-    expect(render().getAttribute("title")).toBe("Stop dictating");
+    render();
+    const note = host.querySelector(".prof-mic-wip-note");
+    expect(note?.textContent).toContain("often transcribes nothing");
+    expect(note?.getAttribute("aria-hidden")).toBe("true");
   });
 });

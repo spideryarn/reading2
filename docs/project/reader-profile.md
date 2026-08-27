@@ -468,6 +468,43 @@ The measurements, both reviews and the two bugs the tests found after the review
 - **Not multi-user.** One reader, one profile, which is what [auth.md](auth.md) says this app is —
   though the Postgres half is keyed by `owner_id` from the start.
 
+## It says it does not work
+
+Greg, 2026-08-27, after the encoder bug had been chased down, reproduced, and the library
+question settled — and the microphone still would not do the job:
+
+> I still couldn't get it to work properly, but don't have time to work on it. For now, add
+> a warning message and/or under-construction icon next to or whenever someone uses the
+> microphone button to warn users.
+
+So there is a small `Construction` mark and the word *unreliable* beside the button, and the
+same sentence again under the strip while a dictation is running. The words exist **once**
+in [`ProfileBox.tsx`](../../src/web/ProfileBox.tsx) and are used in three places, because
+three copies of a warning are three warnings that drift apart.
+
+Three things about how it is worded and placed, none of them incidental:
+
+- **It says what to do instead.** "If no words appear, type instead." A warning that only
+  reports a defect leaves the reader deciding whether to keep pressing the button.
+- **It says the typed text is safe.** The fear a broken dictation actually produces is not
+  *did it hear me* but *has it eaten what I already wrote* — so that sentence answers the
+  question the reader has rather than the one the feature has. [copy.md](copy.md).
+- **It is the button's `aria-describedby`, and it comes before the button in the DOM.** So
+  focusing the control reads the name and then the caveat, and somebody arriving by keyboard
+  meets the warning on the way to the button rather than after it. That description slot
+  used to hold a `title` that merely repeated the name — with an `aria-label` present an
+  unused `title` becomes the description anyway, so the slot was already spoken for and
+  saying the name twice was the worse use of it.
+
+The mark is **not** an error state and deliberately does not look like one: warm rather than
+red, small, and permanent. Dictation still works some of the time, and a control wearing a
+red alert is one people stop trying.
+
+What is actually wrong is written up in
+[microphone-library-options.md](../research/microphone-library-options.md) — an AAC encoder
+that refuses one channel at 48 kHz and 32 kbps while every probe available says it will
+accept it. The mark comes off when that stops being true, not when the docs improve.
+
 ## See also
 
 - [reader-profile.md (the plan)](../plans/reader-profile.md) · [glossary.md](glossary.md) ·

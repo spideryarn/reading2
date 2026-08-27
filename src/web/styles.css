@@ -4374,7 +4374,11 @@ td.text.has-hit[data-hues="8"] {
      beside a row in a vertical list, and a tall one would cover the rows above
      and below the one being recoloured. */
   grid-template-columns: repeat(4, 1.35rem);
-  gap: 0.25rem;
+  /* Wide enough that the two rings below never touch their neighbours. They are
+     `box-shadow`, so they take no space in the grid and will happily overlap
+     the swatch next door — and the strong ring reaches 4px out, the faint one
+     3px, so a pair of marked neighbours needs 7px between them. */
+  gap: 0.45rem;
 }
 .srch-picker-swatch {
   width: 1.35rem;
@@ -4396,7 +4400,17 @@ td.text.has-hit[data-hues="8"] {
 /* Two rings, because the panel is saying two different things. `.showing` is
    the hue the row is wearing right now — true of a row on automatic as much as
    of a pinned one — and `.current` is what the reader actually chose. When they
-   have chosen, the same swatch wears both and the strong ring simply wins.
+   have chosen, the same swatch wears both and the strong ring simply wins,
+   because they set the same property and this one comes second.
+
+   **They differ in weight as well as in strength, and that is deliberate.**
+   The first version separated them by opacity alone — 35% against 100% of the
+   same ink — and a browser pass called it: visible once you were looking for
+   it, easy to miss at a glance across eight coloured swatches. Two marks that
+   mean different things should not be one mark at two volumes; that is the
+   same "never carry meaning by one channel" rule § Several searches at once
+   applies to the wash and the stripes. So the chosen one is 2px and the drawn
+   one is 1px, and the faint one went to 55% besides.
 
    A ring outside the swatch rather than a tick inside it. A glyph on top of an
    arbitrary hue is a contrast problem with eight different answers — white
@@ -4407,12 +4421,12 @@ td.text.has-hit[data-hues="8"] {
 .srch-picker-swatch.showing {
   box-shadow:
     0 0 0 2px var(--surface-raised),
-    0 0 0 3px color-mix(in oklab, var(--ink) 35%, transparent);
+    0 0 0 3px color-mix(in oklab, var(--ink) 55%, transparent);
 }
 .srch-picker-swatch.current {
   box-shadow:
     0 0 0 2px var(--surface-raised),
-    0 0 0 3px var(--ink);
+    0 0 0 4px var(--ink);
 }
 .srch-picker-swatch:hover { border-color: color-mix(in oklab, var(--ink) 55%, transparent); }
 .srch-picker-swatch:focus-visible {
@@ -6945,6 +6959,42 @@ tr:hover .block-chat,
   stroke-linecap: round;
 }
 .diag-trail .diag-arrowhead { fill: rgb(var(--diag-chain) / 0.8); }
+
+/* **Dictation is not finished, and says so.** Warm rather than red, and small:
+   it is a caveat on a control that still works sometimes, not a failure that has
+   happened. Sits beside the microphone button so it is read before the press.
+   docs/research/microphone-library-options.md. */
+.prof-mic-wip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: auto;
+  color: var(--highlight-ink, var(--highlight));
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  line-height: 1;
+  opacity: 0.85;
+  cursor: help;
+}
+.prof-mic-wip-word {
+  text-transform: lowercase;
+  letter-spacing: 0.01em;
+}
+/* The same caveat again, under the strip, for the minute it is running in. */
+.prof-mic-wip-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0;
+  color: var(--highlight-ink, var(--highlight));
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.prof-mic-wip-note svg {
+  flex: none;
+  margin-top: 0.15em;
+}
 
 /* A microphone was chosen and could not be opened, so something else is in use.
    Warm rather than red: it is a fact worth knowing, not a failure — dictation is
