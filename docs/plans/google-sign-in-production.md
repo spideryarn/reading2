@@ -129,6 +129,23 @@ It needs `SUPABASE_ACCESS_TOKEN`. **The reliable way is a personal access token*
 <https://supabase.com/dashboard/account/tokens>, pasted into `.env.local` — it survives a CLI logout
 and there is nothing to get subtly wrong.
 
+Supabase's token page now asks for scopes rather than handing out a key to everything, and the two
+this script needs are **not a guess** — they are in the OpenAPI document beside the endpoint itself:
+
+| | |
+|---|---|
+| `GET /v1/projects/{ref}/config/auth` | `x-oauth-scope: auth:read` |
+| `PATCH /v1/projects/{ref}/config/auth` | `x-oauth-scope: auth:write` |
+
+So: **Resource access → Project**, that organisation, that one project; **Permissions → Auth →
+read and write**; nothing else, and *nothing at all* under Database, Secrets or Storage. A token
+scoped to one project's auth config cannot do anything else with itself, which is the whole reason
+to answer this question narrowly rather than reaching for **Create legacy token** — that link makes
+a key to the entire account, and it is on the same page, one click away, phrased as the easy option.
+
+A short expiry is right, and 7 days is the page's own default. Nothing here is a standing need: the
+token is for one `apply`, and a dead one in `.env.local` afterwards is the correct end state.
+
 The CLI on this machine is already logged in, and its token can be handed to one command without
 being written down anywhere. An agent cannot do this (the classifier blocks
 `security find-generic-password`, correctly), and **the `-a access-token` is the load-bearing part**:
