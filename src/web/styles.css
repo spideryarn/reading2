@@ -1083,7 +1083,13 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 
 .tooltip {
   position: relative; /* the arrow is measured against this box */
-  max-width: 22rem;
+  /* 22rem is the reading width this was designed at, and the `min()` is what
+     stops it becoming the *whole* of a narrow window. Floating UI's `shift`
+     keeps the panel on screen, but shifting a 352px box inside a 390px viewport
+     leaves it pinned to one edge with nowhere to go; capping the width instead
+     lets it stay near the thing it is about. The subtraction is the 10px
+     `shift` padding on each side plus a little air. Only bites below ~374px. */
+  max-width: min(22rem, calc(100vw - 1.75rem));
   padding: 0.6rem 0.75rem 0.55rem;
   border: 1px solid var(--rule-strong);
   border-radius: 5px;
@@ -5326,15 +5332,94 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.68rem;
 }
 
+/* -------------------------------------------- profile: dictation feedback --
+   The strip under the box while the microphone is on. It exists because the
+   old version rendered *nothing at all* until the first transcript came back —
+   a measured several seconds during which the layout was byte-for-byte what it
+   had been before the press, so the reader watching the box saw the feature not
+   happen. docs/plans/microphone-level-meter.md. */
+.prof-listening {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.prof-listening-what {
+  flex: none;
+  color: var(--ink-faint);
+}
+
 /* The unconfirmed tail of a dictation. Italic and faint because it is a guess
    the recogniser may still revise — and it is never saved. */
 .prof-interim {
-  margin: 0.3rem 0 0;
+  min-width: 0;
+  margin: 0;
   color: var(--ink-faint);
   font-family: var(--font-reading);
   font-size: 0.8rem;
   font-style: italic;
   line-height: 1.4;
+}
+
+/* ---------------------------------------------------- the level meter ------
+   Five bars driven by one custom property, `--level`, in 0..1.
+
+   `--level` is set on `.mic-level` itself and never higher up. A custom
+   property invalidates style for everything below the element carrying it, so
+   putting this on :root would hand the whole page a recalculation thirty times
+   a second. src/web/MicLevel.tsx writes it from an animation frame.
+
+   `scaleY`, never `height`: a height animated per frame is a layout per frame,
+   a transform is composited and free. GPT Sol's review, 2026-08-27, item 8. */
+.mic-level {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 0.85rem;
+  /* Declared so `var(--level)` resolves to something before the first frame
+     lands, and so the bars are at rest rather than absent for that frame. */
+  --level: 0;
+}
+.mic-level i {
+  width: 2px;
+  /* The full height a bar can reach. The scale below is what makes it shorter,
+     which is why this is a fixed number rather than a percentage of anything. */
+  height: 0.85rem;
+  border-radius: 1px;
+  background: var(--highlight);
+  /* Centre-symmetric, so the row reads as a waveform rather than as a bar
+     chart growing off a baseline. `--w` is the per-bar weight, set inline. */
+  transform-origin: center;
+  /* The 0.14 floor is what stops a silent microphone looking like a broken
+     one: at rest the bars are a row of faint dots, plainly present and plainly
+     doing nothing, which is a different thing from absent. */
+  transform: scaleY(calc(0.14 + 0.86 * var(--level) * var(--w, 1)));
+  opacity: calc(0.45 + 0.55 * var(--level));
+}
+
+/* The binary fallback, on browsers with no way to hand us the samples the
+   recogniser is using (Safari today — see src/web/useDictation.ts). The number
+   is the recogniser's own soundstart/soundend, so it is a real observation but
+   it is a 0 or a 1; the transition is what stops it snapping between the two,
+   and is deliberately NOT applied to the measured meter, where it would smear
+   a signal that is already smoothed. */
+.mic-level.detected i {
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The meter stays. It is *informative* motion — it is the content, and it is
+     the one thing telling the reader their microphone works — so turning it off
+     would take away the answer rather than the decoration. It is calmed
+     instead: MicLevel keeps writing the property, and the transition here means
+     what the reader sees is a level easing rather than a bar twitching. */
+  .mic-level i {
+    transition: transform 220ms linear, opacity 220ms linear;
+  }
 }
 
 .prof-mic {
@@ -5352,6 +5437,15 @@ td.text.has-hit[data-hues="8"] {
 }
 .prof-mic:hover:not(:disabled) { color: var(--highlight-ink); border-color: var(--highlight); }
 .prof-mic:disabled { opacity: 0.4; cursor: default; }
+/* Armed, but the microphone is not open yet — a measured 1.1 seconds in Chrome
+   between start() and audiostart. Outlined rather than filled, because the
+   filled state is a claim to be listening and for this second it would be a
+   false one: anything said into it is gone. The button is still a stop button
+   throughout, which is why it is lit at all. */
+.prof-mic.opening {
+  border-color: var(--highlight);
+  color: var(--highlight-ink, var(--highlight));
+}
 /* Listening. A colour change AND a different glyph (Mic → MicOff), because
    colour alone is not a state anyone should have to rely on — and because a
    microphone that is live is the one control in this app it is worth being
@@ -5362,7 +5456,10 @@ td.text.has-hit[data-hues="8"] {
   color: var(--page);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .prof-mic.on { animation: prof-mic-pulse 1.6s ease-in-out infinite; }
+  .prof-mic.opening { animation: prof-mic-pulse 1s ease-in-out infinite; }
+  /* No pulse on `.on` any more. The bars beside it now carry the "this is
+     live" signal, and they carry it with real information in it; two things
+     throbbing at different rates on one line is noise. */
 }
 @keyframes prof-mic-pulse {
   0%, 100% { opacity: 1; }
@@ -6386,24 +6483,45 @@ tr:hover .block-chat,
 .diag-opt-btn:hover { color: var(--ink); }
 .diag-opt-btn.on { border-color: var(--rule-strong); color: var(--highlight-ink); }
 
-/* The lane legend — one chip per topic, carrying the most distinctive word in
-   it. Ordered left to right exactly as the lanes are, so the strip reads as a
-   key to the picture rather than as a list. */
+/* The lane legend — one chip per topic, carrying its most distinctive word.
+ *
+ * **A grid of exactly `k` equal columns, not a wrapping row**, and that is the
+ * whole design rather than a styling preference. The first version was a
+ * `flex-wrap` list: with eight lanes it wrapped after five, so chip 6 sat under
+ * chip 0 and the legend's *order* was the only thing tying a word to a column.
+ * A reader had to count. Seen in a browser pass, 2026-08-27 — and it looked
+ * perfectly tidy, which is why counting the chips against the columns was worth
+ * doing rather than glancing at it.
+ *
+ * Now chip `i` sits over lane `i`, so the mapping is **position**, which is
+ * what a legend beside a picture is for. The column count comes from the
+ * component as `--lanes`, because only it knows how many lanes there are.
+ *
+ * The cost is honest and stated: at 288px and eight lanes a chip is 34px, so
+ * the word is clipped to three or four letters. The full three terms are in the
+ * hover, and the position is the part that cannot be got any other way. Fewer
+ * lanes — a short article — and the words fit outright. */
 .diag-lanes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem;
+  display: grid;
+  grid-template-columns: repeat(var(--lanes, 8), minmax(0, 1fr));
+  gap: 0.15rem;
   margin: 0;
-  padding: 0.25rem 0.7rem 0.35rem;
+  /* The same 13px inset the picture's own padding uses (PAD_X in scatter.ts),
+     so a chip's left edge lines up with the left edge of its lane rather than
+     with the panel. Moving one without the other silently shears the legend. */
+  padding: 0.25rem 13px 0.35rem;
   list-style: none;
 }
 .diag-lane {
-  padding: 0.05rem 0.3rem;
+  min-width: 0;
+  padding: 0.05rem 0.25rem;
   border-left: 2px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
   color: var(--ink-faint);
   font-family: var(--font-ui);
   font-size: 0.66rem;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: help;
 }
 

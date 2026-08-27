@@ -102,8 +102,20 @@ const PAD_X = 13;
 const PAD_Y = 14;
 /** Vertical room per dot on Drift before the picture starts to scroll. */
 const ROW = 6;
-/** Trail is a plane rather than a rail, so it is sized to the viewport. */
-const TRAIL_MIN_H = 380;
+/**
+ * The least height Trail will take, before it simply fills the scroller.
+ *
+ * **Low, and deliberately lower than it was.** Drift is a rail and scrolling it
+ * is reading the article; Trail is a *plane*, and a plane you have to scroll to
+ * see all of is a plane whose shape you never see — which is the only thing it
+ * has to offer. So it takes the room it is given and floors at something small
+ * enough that the picture almost always fits.
+ *
+ * 380 was the first number, and in a browser on 2026-08-27 the band's scroller
+ * came out at about 350px once the two control rows and the strip had taken
+ * their share — so the picture scrolled by thirty pixels, for nothing.
+ */
+const TRAIL_MIN_H = 260;
 /** One arrowhead every this many segments, so the chain has a direction and not 359 heads. */
 const ARROW_EVERY = 8;
 /** How many steps of fade the chain gets, oldest to newest. Matches the CSS. */

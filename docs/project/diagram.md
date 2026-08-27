@@ -611,6 +611,32 @@ paragraph-level version outright, which was not taken because Greg asked for a
 line between each successive pair of block-points and trying includes finding
 out.
 
+#### What a browser actually showed, 2026-08-27
+
+Looked at on `constitution` — 276 dots, 257 segments, 30 arrowheads, in a
+271 × 380 box:
+
+**The chain is texture and the colour is the finding.** Sol's plan-stage verdict
+was right about the segments: at that density the hairlines are a grey web with
+no readable direction, and the arrowheads are too small to pick out. What *does*
+work, and works immediately, is `dhue=progress`: the viridis ramp shows the end
+of the article clustered hard to one side and the middle spread across the
+other, which is exactly the "does it travel or circle?" question Trail exists to
+answer — and it answers it without the chain.
+
+So the honest reading is that **Trail's chain has not yet earned its place and
+Trail itself has**, which is a different conclusion from either "keep it" or
+"cut it", and it is Greg's call which way it goes. The local bright run around
+the reader is the half of the chain that is worth keeping either way.
+
+Two things the pass found and fixed. The lane legend was a wrapping row, so with
+eight lanes it wrapped after five and chip 6 sat under chip 0 — a legend whose
+*order* was the only thing tying a word to a column, which looked perfectly tidy
+and required counting. It is a grid of `k` columns now, so chip *i* sits over
+lane *i*. And Trail floored its height at 380px in a scroller that came out at
+about 350, so a plane you are meant to see whole scrolled by thirty pixels for
+nothing.
+
 ### The scale is robust, not min-to-max
 
 Measured on `constitution`: component 1 runs −0.649 to 0.331, and its middle

@@ -441,11 +441,32 @@ checked that three names differed rather than that they were the right three; th
 test checked determinism and ordering, which a rotated frame also satisfies; and the empty-lane test
 asserted that labels were integers. All five now assert the property they were named for.
 
+## What the browser showed
+
+Looked at on `constitution`, 2026-08-27, at the band's narrow width (288px):
+
+- **Both pictures render**, 276 dots, no console errors, the eight kind chips wrap to two rows with
+  nothing clipped, the roles come out `listbox`/`option`, and the strip reads as intended.
+- **Sol was right about Trail's chain.** 257 hairlines in a 271 × 380 box are a grey web with no
+  readable direction, and 30 arrowheads at that size are not findable. What carries the picture is
+  the **progress colour**: the viridis ramp puts the end of the article hard to one side and the
+  middle across the other, which answers "does this piece travel or circle?" on its own.
+- So the finding is neither "keep it" nor "cut it": **Trail earns its place and Trail's chain does
+  not yet.** The bright local run around the reader is the half worth keeping either way.
+- **Two bugs, both fixed.** The lane legend was a wrapping row, so with eight lanes chip 6 sat under
+  chip 0 and a reader had to count to tie a word to a column — a grid of `k` columns now. And Trail
+  floored its height at 380px in a scroller measuring about 350, so a plane you are meant to see
+  whole scrolled for nothing.
+
 ## Questions for Greg
 
-1. **Is Trail readable at 276 dots on a real article?** The escape hatch (sections rather than
-   paragraphs on Trail alone) is designed but not built, and GPT Sol's review says it is what should
-   have been built. Worth looking at `constitution` before deciding.
+1. **Trail's chain has not earned its place — what should happen to it?** Looked at in a browser
+   (above), 257 segments are texture and the progress colour is what actually shows the article's
+   route. Three ways out, and this is your call: drop the global chain and keep only the bright run
+   around the reader; build Trail from ~57 section centroids, which is what Sol recommended; or keep
+   it as it is because a web of connections is itself a true picture of a piece that circles. My
+   recommendation is the first — it costs nothing, keeps what works, and stops the picture claiming
+   a readable route it does not have.
 2. **Should Drift's lanes be labelled *in* the picture** — rather than in the legend strip above it?
    The legend is built and names every lane with its most distinctive word; the fuller three-word
    name is a hover away. A label down the lane itself would cost vertical room and truncate hard at
