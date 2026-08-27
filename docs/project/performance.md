@@ -268,10 +268,128 @@ Its first test asserts that polling *does* happen while visible, which looks red
 most important line in the file. A harness that has quietly broken — a mock that never resolves, a
 hook that threw on mount — also reports zero requests, and reads as a pass.
 
+## The 82% tab, 2026-08-27
+
+Greg sent two screenshots: Chrome's task manager with `Tab: Spideryarn · AI-assisted reading` at
+**81.9%** of a core, two `challenges.cloudflare.com` subframes under it at 13.4%, and Activity
+Monitor agreeing at 101.9% for the same renderer (PID 62201). Alongside it, `Network 0`.
+
+**None of the six fixes above is contradicted by this, and none of them is exonerated either** — the
+tab was never identified. What follows is what the evidence rules out, so the next person starts
+further along rather than repeating it.
+
+### The premise that was wrong
+
+The message said the web servers were not running. Four were: `lsof` found `vite` on 5273, 5275,
+5276 and 5277, all of them this repo. (`:3000` is an unrelated Electron app.) That matters because
+the most attractive hypothesis depended on it — a `useEffect` that sets state on a fetch failure has
+no natural throttle when the socket is refused in microseconds, so a render storm that looks mild
+with a live server pegs a core without one. It is a good hypothesis. It is not this.
+
+The lesson is the ordinary one: **check the premise before building on it.** A wrong premise handed
+to a reviewer comes back as forty-five minutes of confident reasoning about the wrong thing.
+
+### What was measured, and what it says
+
+| Page | Where | Cost |
+|---|---|---|
+| Signed-out landing page | clean Chrome, `measure-cpu.ts`, 30s after a 5s settle | **0.2% of one core** |
+| Reading view | Greg's own screenshot, PID 59814 | **0.0%** |
+| The hot tab | Greg's screenshot, PID 62201 | **81.9%** |
+
+The reading view row is the useful one, and it is Greg's own machine rather than ours: **a settled
+reading view costs nothing**, which is where most of the suspicion had been pointing.
+
+### The Cloudflare frames are not ours
+
+Two `challenges.cloudflare.com` subframes sat inside our tab. Nothing in this repo can put them
+there:
+
+- No component renders an `<iframe>` at all.
+- The sanitiser's embed allowlist is three origins — YouTube, youtube-nocookie, Vimeo
+  ([`sanitize-policy.ts`](../../src/sanitize-policy.ts)) — and every other `iframe` is deleted.
+- The Supabase SDK takes a caller-supplied captcha *token*; it contains no Turnstile widget and
+  injects nothing. Auth calls only run from button handlers in
+  [`SignInControls.tsx`](../../src/web/SignInControls.tsx).
+- A challenged `fetch` comes back as **data**. It cannot become an executing frame.
+
+And production serves nothing of the kind: `curl https://www.spideryarn.com/` returns 1,400 bytes
+with exactly one `<script>` tag and no mention of Turnstile.
+
+So the frames come from the browser, not the app — a content script is the obvious candidate. That
+does **not** on its own explain the tab's 81.9%, because that figure belongs to the parent frame;
+but a content script runs in the page's own renderer, so it is charged there. The two candidates
+that survive are *the signed-in shelf* and *an extension*, and telling them apart needs that tab.
+
+### What a cross-family review refuted
+
+GPT Sol was given the code and the screenshots and killed most of the list with citations, which is
+worth keeping so it is not re-derived:
+
+- **`useJobs` cannot spin.** Its effect deps are `[]`, a failed poll schedules 8 seconds, and
+  `drive()` keeps the `driving` guard and waits 8 seconds *inside* its loop. It cannot release and
+  re-enter tightly.
+- **Supabase refresh cannot spin.** The installed ticker is 30 seconds with exponential backoff and
+  a 60-second cooldown, and a refused localhost request throws before the `401` branch in
+  `lib/api.ts`, so it never reaches `refreshSession()`.
+- **The rAF loops are event-driven, not self-arming.** `App.tsx` schedules only from scroll;
+  `useColumnContext` from scroll, resize and a `ResizeObserver`, and it equality-checks before
+  calling `setLive`. Spine and DiagramPanel likewise.
+- **The SSE hooks do not restart on failure.** `readEvents` blocks on `reader.read()`. Their missing
+  unmount abort is a leak during active work, not a spin at rest.
+- **The microphone loops do re-arm every frame** — `useAudioLevel.ts` and `MicLevel.tsx` are the
+  only paths here that genuinely do — but they need a live track, and `MicLevel` mounts only while
+  dictation is armed.
+
+Checked locally and also dead: **no stale spinner.** The 36 job files hold 71 `skipped`, 62 `done`,
+21 `pending` and 15 `error` steps and **zero** `running` ones, and every job's own status is `done`
+or `error`. So `isBusy()` is false, the shelf polls at the slow 8 seconds, and no
+`animation: cmt-spin … infinite` is mounted.
+
+### The trap this round, again
+
+The probe run against a tab opened through the extension reported `requestAnimationFrame` never
+firing, and the tool called the renderer *frozen*. It was not: `document.visibilityState` was
+`hidden`, and **rAF does not run in a hidden document** — which is the same trap already listed
+below, arriving with a new disguise and a confident error message attached. A measurement harness
+that cannot see the page cannot tell you the page is broken.
+
 ## What we still do not know
 
 Said plainly, because the fixes above are all real and none of them has been shown to be *the* 5.5%:
 
+- **The 82% tab has never been identified**, and it is the only thing on this list a reader has
+  actually complained about. The extension can only reach tabs in its own group, so a subagent
+  cannot open somebody's existing tab; and a tab opened afresh through it comes up `hidden`, which
+  disables exactly the instruments worth running. Two things settle it, both a minute of Greg's
+  time:
+
+  1. **Paste this into that tab's console** and send back what it prints. No `rAF`-only reading, so
+     it survives the visibility trap:
+
+     ```js
+     (async () => {
+       const a = document.getAnimations().filter(x => x.playState === 'running');
+       const frames = await new Promise(r => { let n = 0; const t0 = performance.now();
+         const f = () => { n++; performance.now() - t0 < 2000 ? requestAnimationFrame(f) : r(n); };
+         requestAnimationFrame(f); });
+       const long = []; const po = new PerformanceObserver(l => {
+         for (const e of l.getEntries()) long.push(Math.round(e.duration)); });
+       po.observe({ entryTypes: ['longtask'] });
+       await new Promise(r => setTimeout(r, 3000)); po.disconnect();
+       console.log(JSON.stringify({ url: location.href, vis: document.visibilityState,
+         nodes: document.querySelectorAll('*').length, running: a.length,
+         names: a.map(x => x.animationName).slice(0, 10),
+         iframes: [...document.querySelectorAll('iframe')].map(f => f.src || '(srcdoc)').slice(0, 10),
+         framesIn2s: frames, longTasks: long.slice(0, 20) }, null, 2));
+     })()
+     ```
+
+     `framesIn2s` near 120 means the main thread is fine and the cost is elsewhere in the renderer;
+     a low number with fat `longTasks` means it is our JavaScript.
+
+  2. **Open the same URL in an Incognito window**, where extensions are off by default. If the CPU
+     goes with them, the answer is an extension and none of this code is implicated.
 - **The reading view's idle cost has not been split into script / layout / style.** That needs
   `measure-cpu.ts` against a signed-in session, and a fresh Chrome profile is not signed in — every
   route including `/api/health` answers 401. Until then the reading-view number comes from `ps` on a
