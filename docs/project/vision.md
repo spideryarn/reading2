@@ -144,3 +144,20 @@ these, each to be judged against the principles above:
   those ids are random rather than sequential
   ([block-ids.md](block-ids.md#why-random-and-not-sequential)).
 - **Recall** — a few durable questions generated from what the reader actually dwelt on.
+
+## Under this doc
+
+`vision.md` is one of the seven entry points listed in [AGENTS.md](../../AGENTS.md). Two things sit
+under it:
+
+- **[open-questions.md](open-questions.md)** — the calls nobody has made yet, each with a
+  recommendation so nobody is blocked. It should shrink: when a question gets decided, the answer
+  goes into the doc that owns it and the question is deleted.
+- **[original-version/](original-version/overview.md)** — the larger app this one is an offshoot of,
+  a folder with one doc per feature: what it already solved, what it got wrong, and
+  [what to rebuild first](original-version/borrow-list.md). A library to consult, not a backlog to
+  import.
+
+---
+
+Up: [AGENTS.md](../../AGENTS.md)

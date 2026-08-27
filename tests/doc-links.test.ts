@@ -178,6 +178,10 @@ describe("documentation links", () => {
       .filter((l) => !existsSync(l.file))
       // rename-or-move.md illustrates the syntax with a made-up path.
       .filter((l) => !l.from.endsWith("rename-or-move.md"))
+      // GPT Sol's review files cite evidence as `</abs/path/file.md:161>`. That
+      // is a citation, not a link — an absolute path is never a repo link, so
+      // there is nothing here for this test to be right about.
+      .filter((l) => !/^<?\//.test(l.target))
       .map((l) => `${l.from} → ${l.target}`);
     expect(broken).toEqual([]);
   });
@@ -188,5 +192,99 @@ describe("documentation links", () => {
       .filter((l) => !anchorsFor(l.file).has(l.anchor))
       .map((l) => `${l.from} → ${l.target}`);
     expect(broken).toEqual([]);
+  });
+});
+
+/**
+ * The second thing this file checks: that the docs tree has no orphans.
+ *
+ * `AGENTS.md` lists seven entry-point docs, and under each one ("↳ …") the docs
+ * it owns. That list is the index, so it is also the thing that rots — a new doc
+ * gets written, nothing points at it, and it is invisible to every agent that
+ * arrives afterwards. Reading it from the working tree rather than from
+ * `git ls-files` means an untracked new doc fails immediately, which is the
+ * moment it is cheapest to fix.
+ *
+ * Cross-links are fine and expected; a doc may be linked from anywhere. What
+ * this pins is that exactly one entry point *claims* it.
+ */
+
+const ENTRY_POINTS = [
+  "vision.md",
+  "architecture.md",
+  "reading-view-overview.md",
+  "design-css-overview.md",
+  "security-map.md",
+  "code-quality-overview.md",
+  "dev-and-deployment-overview.md",
+];
+
+/** owner filename → the docs its "↳" lines claim */
+function ownershipFromAgentsMd(): Map<string, string[]> {
+  const lines = readFileSync("AGENTS.md", "utf8").split("\n");
+  const owned = new Map<string, string[]>();
+  let current: string | null = null;
+  for (const line of lines) {
+    const owner = line.match(/^- \*\*\[([a-z0-9-]+\.md)\]/);
+    if (owner) {
+      current = owner[1];
+      owned.set(current, []);
+      continue;
+    }
+    if (!current) continue;
+    // A "↳" block runs until the next bullet or a blank line, and its
+    // continuation lines start with prose as often as with a backtick.
+    const inBlock = line.includes("↳") || /^\s+\S/.test(line);
+    if (!inBlock) {
+      current = null;
+      continue;
+    }
+    for (const [, name] of line.matchAll(/`([a-z0-9-]+\.md)`/g)) {
+      owned.get(current)!.push(name);
+    }
+  }
+  return owned;
+}
+
+describe("docs have exactly one owner", () => {
+  const owned = ownershipFromAgentsMd();
+  const claims = [...owned.values()].flat();
+  const onDisk = globSync("docs/project/*.md").map((f) => path.basename(f));
+
+  it("parses the ownership list at all", () => {
+    // Same guard as above: a regex that matched nothing would make every
+    // assertion below pass forever, and pass loudest when the file was empty.
+    expect(owned.size).toBe(ENTRY_POINTS.length);
+    expect([...owned.keys()].sort()).toEqual([...ENTRY_POINTS].sort());
+    expect(claims.length).toBeGreaterThan(30);
+  });
+
+  it("claims every doc that exists", () => {
+    const orphans = onDisk
+      .filter((f) => !ENTRY_POINTS.includes(f))
+      .filter((f) => !claims.includes(f));
+    expect(orphans).toEqual([]);
+  });
+
+  it("claims no doc twice", () => {
+    const twice = claims.filter((f, i) => claims.indexOf(f) !== i);
+    expect([...new Set(twice)]).toEqual([]);
+  });
+
+  it("claims nothing that does not exist", () => {
+    expect(claims.filter((f) => !onDisk.includes(f))).toEqual([]);
+  });
+
+  it("links from the owner to each doc it claims", () => {
+    const unlinked: string[] = [];
+    for (const [owner, children] of owned) {
+      const body = readFileSync(path.join("docs/project", owner), "utf8");
+      for (const child of children) {
+        // A deep link counts: `(other.md#section)` is still a link to it.
+        const linked = new RegExp(`\\(${child.replace(".", "\\.")}[)#]`).test(body);
+        if (!linked) unlinked.push(`${owner} → ${child}`);
+      }
+    }
+    expect(unlinked).toEqual([]);
   });
 });

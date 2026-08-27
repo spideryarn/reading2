@@ -11,8 +11,10 @@ From the brief (Greg, 2026-08-24), verbatim:
 > down to a paragraph level. And then we'll add a bunch of other readability — not readability,
 > like reading assistant functionality as well.
 
-So: a pipeline of small, independently runnable, independently cacheable stages, each writing JSON
-to disk, feeding a simple server and a React client. "It can be a simple one at first" is a design
+So: a pipeline of small, independently runnable stages, each writing JSON to disk, feeding a simple
+server and a React client. (*Independently cacheable* was the intent and is not yet the fact — two
+stages of seven cache on a content hash, the rest on a file existing. See
+[database.md](database.md#today-files-under-dataslug).) "It can be a simple one at first" is a design
 constraint, not an apology — keep it boring while the ideas are still moving.
 
 ## Pipeline
@@ -236,6 +238,10 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 
 - TypeScript, ESM (`"type": "module"`), strict mode — see [`tsconfig.json`](../../tsconfig.json).
 - Every stage is runnable on its own against a slug, so any one can be re-run without the others.
+- Anything expensive should be cached on a content hash. Two stages do it, and copy *their* choice of
+  hash input rather than only the idea — [database.md](database.md#today-files-under-dataslug).
+- What the model calls cost, and the three prompt caches that stop us paying for the article twice,
+  are in [prompt-caching.md](prompt-caching.md).
 - Test article: `output/noema-mythology-of-conscious-ai.html` (Anil Seth, ~54 min, long and largely
   *unstructured*). It's the deliberate hard case for anything that assumes headings exist.
 - **`output/` is generated and not in version control**, alongside `data/`. Both are rebuilt by
