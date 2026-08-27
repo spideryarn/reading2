@@ -21,6 +21,33 @@
 - Once you have finished, commit these changes as a single commit. In this repo, commit only your own
   files, by naming them explicitly — see the committing rules in [AGENTS.md](../../AGENTS.md).
 
+## A rename is never one edit
+
+Added here, not from upstream. The move itself is the easy half; everything that *names* the thing is
+the other half, and none of it fails loudly.
+
+Send a cheap subagent (Haiku, or `Explore`) to sweep the **whole repo** — code, docs, plans,
+postmortems, tests, fixtures, scripts, `package.json`. Give it both the old name and the new one, and
+ask it back for a list of every hit with a recommendation. Then decide each hit yourself; a sweep
+proposes, it does not rename.
+
+Look for the name, and for everything that should change *with* it:
+
+- file names
+- headings and titles
+- URL paths and slugs
+- variables and function names
+- types
+- CSS classes
+- env vars
+- log messages
+- the signpost table in [AGENTS.md](../../AGENTS.md)
+
+**Grep for fragments as well as for the whole name.** A `camelCase` rename and its `kebab-case` twin
+do not match the same pattern, and neither matches `SCREAMING_SNAKE`. Search for the distinctive stem
+on its own and read the noise, rather than searching for the exact string and getting a clean, short,
+wrong answer.
+
 ## Process Guidelines
 
 ### Before Starting

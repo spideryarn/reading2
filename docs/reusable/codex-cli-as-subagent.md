@@ -28,6 +28,35 @@ Use it rather than calling `codex exec` yourself — see [Why a wrapper](#why-a-
 Not worth it when the task needs the orchestrator's full conversation context, or when a
 same-family subagent would do — the handoff has real overhead.
 
+### The house workflow in this repo
+
+Specific to this project; the rest of the doc travels. **Every plan under `docs/plans/` goes to GPT
+Sol before it is built, and the code built from it goes back for a second review.**
+
+```bash
+npx tsx scripts/run-codex.ts --model gpt-5.6-sol --effort high --timeout-minutes 45 \
+  --prompt-file <review-prompt> --output <review-answer>
+```
+
+Read-only, in the background, and give it three quarters of an hour.
+
+**Weight the second review higher than the first.** A plan-stage review reads prose, so it can only
+catch what the prose says. It cannot find a `PATCH` handler that writes one field and then rejects
+the request — that bug does not exist until somebody writes it. Reviewing the plan and calling the
+job done is reviewing the half where the bugs are not.
+
+**Hand it the evidence, not only the prose** — the scoped diff, the results file, the script that
+produced a number. The most useful finding is often about the experiment rather than the conclusion,
+and a reviewer given only the conclusion cannot make it.
+
+**Check each finding yourself before acting on it.** Some of them are wrong. Fold what survives into
+the plan, and add its questions to the ones for Greg.
+
+**And check that a verdict actually arrived** — exit 0, *and* read the answer file, because a review
+that returned nothing looks exactly like a review that found nothing. This is
+[silent-success.md](silent-success.md) with a subprocess in it; the several ways it happens are under
+[Gotchas](#gotchas). `retrying with CODEX_API_KEY` on stdout is the fallback working, not a failure.
+
 ## Setup (once per machine)
 
 ```bash

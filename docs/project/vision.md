@@ -55,6 +55,52 @@ The first feature built on this is [granularity zoom](granularity-zoom.md).
 5. **No hidden reformulation.** We never silently rewrite the author's prose in the reading view.
    Generated text lives at generated altitudes; the rightmost level is verbatim, always.
 
+## Prefer boring
+
+The principles above are about reading. This one is about building, and it is the tiebreak whenever
+a tool or a layer is up for discussion.
+
+**Prefer boring**: filesystem over database, one server process, TypeScript + ESM throughout, `tsx`
+to run. *"It can be a simple one at first"* — no framework churn while the ideas are still moving.
+Every hour spent on infrastructure is an hour not spent on the reading experience, and a tool
+adopted early is a tool you are stuck with once four agents have written against it.
+
+**Two deliberate exceptions, both 2026-08-25, both Greg's call.** They are recorded here rather than
+quietly absorbed, because a principle that gets overridden without anybody noticing stops governing
+anything.
+
+### One — the database
+
+"Filesystem over database" is being reversed. Storage moves to Supabase Postgres,
+
+> in readiness for deploying this properly to the web
+>
+> — Greg, 2026-08-25
+
+The principle did not lose an argument; it ran out of runway. A single writable disk is the thing
+serverless hosting does not have, so the choice is a database or no deploy. Planned in
+[postgres-migration.md](../plans/postgres-migration.md); until it lands, the filesystem layout in
+[database.md](database.md) is still what is true. "One server process" goes with it. Everything else
+in the bullet — TypeScript, ESM, `tsx`, no framework churn — is untouched.
+
+### Two — shadcn
+
+Tailwind v4 and shadcn components went in at Greg's request:
+
+> Let's switch to using Shadcn.
+>
+> — Greg, 2026-08-25
+
+That is framework churn, and it was weighed against this principle rather than slipped past it:
+[shadcn-migration.md § Honest assessment](../plans/shadcn-migration.md#honest-assessment) states the
+cost in full and recommends only the cheap half of it. The principle was not forgotten; its owner
+overrode it.
+
+It still governs how far shadcn is allowed to spread.
+[web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components) says what is
+deliberately staying hand-written, and
+[design-css-overview.md](design-css-overview.md) is the map for anything visual.
+
 ## Anti-goals
 
 - A chatbot with the article stuffed in the context window.

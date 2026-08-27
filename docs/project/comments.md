@@ -267,10 +267,15 @@ it was fine" from "nobody has said".
 
 ## The answer arrives a few words at a time <a id="streaming"></a>
 
+**The rule this is an instance of: stream any model call a person is waiting on.** A spinner for
+fifteen seconds and the first sentence after two are the same call; only one of them lets the reader
+start reading. A batch call in the pipeline, which nobody is watching, does not need this.
+
 Greg, 2026-08-26: *"see if you can make the text stream in (if that won't be too complex)"*. It was
 not, because chat had already built every piece and none of them were chat-shaped. The three that
 moved into shared modules are worth knowing about, because each carries comments that record a real
-bug:
+bug — and because they are what makes a new streaming endpoint a generator and a route rather than a
+project:
 
 - [`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) — `sseChunks` (a chunk of bytes is not
   a line; `: OPENROUTER PROCESSING` is a keep-alive, not data; `data: [DONE]` is not JSON) and the
