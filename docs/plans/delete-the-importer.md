@@ -47,12 +47,31 @@ reading code near something else**, not out of the work item that was planned.
 | `c6ceed5` | The plan, brought up to date with what the built code taught. | |
 | `f40461c` | **C3 — the map, `readArtefact` and `stampForStep`**, plus a third Sol round that returned NO-SHIP on three of my answers and took the `toc` case out of C4 before it was written. | § What the third review changed. |
 | `cca945b` | **C4 and C5 — `has`, `interrupted`, `write`, and the two store views.** The seam now has a working Postgres adapter for everything but `raw`. | § The build order for C. |
+| `4fe11f7` | **The corpus backfilled** — the objects were already on disk, so this stores them rather than re-fetching. | § Where it stands. |
+| `056c46e` + `4038291` | **A live bug with nothing to do with this plan**, and the guard for its class. | [the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md). |
+| `85e76b0` | **The review of the built landing, acted on** — five real bugs, including one that would have refused every uploaded document. | § What the code review of C found. |
 | `5dc3b32` | **Not mine.** `src/library-scalars.ts`, committed because the commit before it had already imported it — see below. | |
 
-**Done:** C2, C3, C4, C5. **Withdrawn:** C1 — and the consequence I drew from withdrawing it was
-itself wrong, which is § lesson 7.
-**In progress:** C6, blocked on a migration — see below.
-**Not started:** C7, then B3, D, the demolition, E — in that order.
+**Done:** C2, C3, C4, C5, and C6's code, all reviewed as built. **Withdrawn:** C1 — and the consequence I drew from
+withdrawing it was itself wrong, which is § lesson 7.
+**Blocked:** C6's two columns, on a migration ledger three sessions are holding at once — see below.
+**Not started:** C7 (which needs C6 committed), then B3, D, the demolition, E.
+
+**The corpus is done, and it was a backfill rather than a re-ingest.** All seven manifests now carry
+`storedSha256` and `storedBytes`, and each object was verified against the bucket afterwards —
+read back, hashed, and compared with the file on disk — rather than trusted from the script's own
+report. Re-fetching was the plan's word for it and would have been worse: the bytes were never gone,
+and a re-fetch stamps today's `fetchedAt` onto an article fetched weeks ago, which the shelf sorts
+on. `scripts/backfill-raw-manifests.ts`.
+
+**And it found a live bug that had nothing to do with this plan.** Every HTML fetch had been throwing
+a 415 for seven hours: the local `sources` bucket still allowed only `application/pdf`, because
+declaring a bucket in `supabase/config.toml` does not change one that already exists, and the comment
+beside that declaration claimed — as a *measurement* — that the allowlist could not stop a
+service-role upload. The storage container's whole request log contains no such upload; the probe's
+bytes went to the filesystem blob store instead.
+[the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md) has both
+halves, and `bucketDrift` in `scripts/deploy-checks.ts` is the guard for the class.
 
 **I committed another session's work under my message, and this is the second time this repo has
 recorded it.** `git add src/store/pg-revisions.ts` stages that file *whole*, and a peer's rename of
@@ -170,6 +189,21 @@ unpublishable, and the symptom would have been a refusal naming the tree.
 **9. `git add <file>` is not `git add <my changes to file>`.** See § Where it stands. The rule was
 already written down; what was missing was doing it. A diffstat is not a diff.
 
+**10. The check that would have caught it was a comment.** Not this landing's bug, but found by it,
+and it belongs here because it is lesson 2 taken one step further. `supabase/config.toml` carried a
+*measurement* — that a bucket's mime allowlist does not stop a service-role upload — and it was false
+when it was written, because the probe's bytes had gone to the filesystem blob store instead. Nothing
+re-ran it, so it stayed true-looking for a day while the thing it described sat there refusing every
+HTML fetch. This repo's rule is *a check you have never seen fail is not evidence*; this is its
+mirror image, a check seen to pass once and then converted into prose.
+[the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md).
+
+**11. "Safe because of the transaction" is not the same as "fails before doing work".** Two of the
+code review's findings were this, and both of my originals were genuinely safe: a late refusal rolls
+everything back. They were still wrong, because between the work and the refusal any *other* error
+can be raised — and that error is what somebody reads, instead of the refusal that explains it. Take
+the lock before the work.
+
 ## What the second review changed
 
 [The third Sol round](delete-the-importer-review-2-sol.md) read this document *plus* the five commits
@@ -278,6 +312,40 @@ is dropped, `RawManifest.bytes` — the count of what the network sent — has *
 `raw_sources.bytes` is the *stored* count and answers a different question, and adding `storedBytes`
 to the manifest (which C6 already planned) does not preserve the other one. So C6 needs two columns,
 not one. § The build order for C.
+
+## What the code review of C found
+
+[The sixth Sol round](landing-c-code-review-sol.md) read C3 through C6 as built and returned
+**NO-SHIP** with five real bugs. This repo weights a review of built code above a plan review, and
+this round is the clearest case yet: **not one of these was reachable from the plan.** Each was
+verified against the code before being acted on, and each fix was watched red on its own.
+
+- **Every uploaded document would have been refused.** `src/pipeline.ts` calls `storeRawSource`,
+  discarded the digest it returns, and wrote a manifest naming no object — so C6's refusal would
+  have fired on every upload. The test called *"writes the same manifest a fetch writes"* was green
+  throughout, because it checked six fields and not the two that had just become load-bearing.
+- **`writeRawSource` certified an object it had never seen.** It set `verified_at` to `now()` on a
+  row whose meaning is *"when the bytes at this key were last shown to hash to it"* — on the strength
+  of a file. Sol found it by noticing that the tests invent hashes and never put an object behind
+  them. It now dates a new row from the manifest's `fetchedAt`, which is when `storeRawSource` did
+  the verifying, and leaves an existing row alone. And because that row is **shared**, a manifest
+  that disagrees with it about `bytes` or `content_type` is refused rather than ignored.
+- **`readRaw` ignored the two columns C6 had just added for it**, and the test asserted the `bytes: 0`
+  that resulted — a fixture that had stopped being an oracle and become a record of the bug.
+- **A stamp clash returned `null`, which every caller reads as "re-run".** `copyArtefacts` turns a
+  null stamp into `{}` and copies the artefact anyway, resolving the clash in the artefact's favour
+  with nothing saying so. It throws now.
+- **`has` validated its arguments after reading the database**, so whether a `(step, kind)` pair was
+  valid depended on whether the step had run.
+
+Two orderings moved, both from "safe because of the transaction" to "fails before doing work":
+`write` locks the step-run row before touching any artefact table, and the backfill script writes
+through a rename, refuses a manifest whose kind, filename and bytes disagree, and re-verifies an
+object it is about to call *"already done"*.
+
+**And one I found while writing the test for it:** importing that script ran it. A bare `void main()`
+meant importing one pure function started a run that reads `data/` and talks to the bucket — under
+vitest it began and the process exited first, so it left no trace at all.
 
 ---
 
@@ -707,27 +775,48 @@ which the interface predicted would "end up being literally the same value". `fi
 than the interface allows for, and says why: the filesystem tolerates finishing a step it never saw
 start because every CLI run is in that state, and nothing on this path can be.
 
-**C6. `raw`, and it now needs two columns rather than one.** `writeArtefacts` refuses `raw` outright
-today (`RawNotWritable`) rather than recording a `fetch` with no document behind it.
+**C6. `raw` — built, and its migration cannot be committed yet.** All five parts are done in the
+working tree and the columns exist in the local database.
 
-1. **`RawManifest` gains `storedBytes`** — done, in `src/fetch.ts`. `bytes` is the length of what the
+1. ✅ **`RawManifest` gains `storedBytes`** — `82aba18`. `bytes` is the length of what the
    network sent; `raw_sources.bytes` describes the object at the *stored* hash, and for any non-UTF-8
    page those differ for exactly the reason the two hashes do. `writeRaw` already computed the number
    and recorded only its hash.
-2. **A column for the network byte count.** Sol's NO-SHIP on this section: `RawManifest.bytes` is
+2. ✅ **`raw_byte_count`, for the network byte count.** Sol's NO-SHIP on this section: `RawManifest.bytes` is
    required, its only home today is `length(raw_bytes)`, and `raw_bytes` is dropped at the demolition.
    `storedBytes` does not preserve it — it answers the other question.
-3. **`raw_filename` on `article_revisions`**, classified `carry`. It is the **reader's own name** for
+3. ✅ **`raw_filename` on `article_revisions`**, classified `carry`. It is the **reader's own name** for
    an uploaded file, not `RawManifest.file`, which is derived from the kind. Both new columns must be
    classified or `REVISION_CARRY_POLICY`'s exhaustive check throws at module load, which is the
    schema forcing the decision.
-4. **The `raw_sources` row and the reference pair**, written for the first time by anything.
-5. **The refusal**: a manifest with no `storedSha256` is refused rather than written as a null
-   reference beside a done `fetch`.
+4. ✅ **The `raw_sources` row and the reference pair**, written for the first time by anything.
+   `verified_at` is refreshed on conflict, and the row's `bytes` and `content_type` are deliberately
+   **not** overwritten — the row is shared with every other revision pointing at that object.
+5. ✅ **Two refusals, not one.** A manifest with no `storedSha256` names no object. A manifest with a
+   stored hash and no `storedBytes` would put the *network* count on a shared row, and those are two
+   different numbers for any page that was not already UTF-8.
 
-**The migration is blocked, and not by this plan.** `src/db/schema.ts` has 127 uncommitted lines of
-another session's ai-spend work and an ungenerated migration beside them; `drizzle-kit generate`
-diffs the whole schema. § Where it stands.
+**And one thing the ownership question forced, which the plan had not seen.** `meta.json` and
+`raw.json` both carry `url`, `fetchedAt` and `rawSha256`, so `write` had two claimants for three
+columns. They belong to `fetch`: `src/extract.ts` sets `meta.fetchedAt` to **its own `new Date()`**,
+and the shelf sorts on that column, so letting `extract` write it would send every re-extracted
+article to the top of the library. `META_COLUMNS` is therefore shorter than `meta.json`, `readMeta`
+reports the three it does not write, and a test watches `extract` fail to overwrite them.
+
+**The migration is generated, applied locally, and cannot be committed.** `drizzle-kit generate`
+produced exactly two nullable `ADD COLUMN`s and nothing else — checked by running it into a scratch
+copy of `drizzle/` first, which is also how I established that the other sessions' schema work was
+already fully migrated and would *not* be swept in.
+
+What blocks the commit is the **ledger**, not the schema. `drizzle/meta/_journal.json` now holds
+`0020_comment_body` and `0021_ai_calls_ledger` from two other sessions, both untracked, and mine is
+`0022`. Migrations are strictly ordered, so committing `0022` means committing theirs. And committing
+`src/db/schema.ts` would make `HEAD` stop building, because the ai-spend consumers that match its new
+`ai_calls` shape are uncommitted too.
+
+**The tree is already incoherent this way**, which is worth recording rather than fixing quietly:
+`_journal.json` at `HEAD` names `0020_comment_body`, whose `.sql` file is untracked — so a fresh
+clone cannot run `db:migrate` today. This needs one person to land the three sets together.
 
 **And the refusal has a scheduling consequence.** All seven checked-in manifests predate
 `storedSha256`, so turning it on breaks every fixture that has not been re-fetched. The re-ingest
