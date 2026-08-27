@@ -279,9 +279,9 @@ OpenRouter, and what still separates them is the **wire** — they speak Anthrop
 and all seven send `thinking: { type: "adaptive" }`, which the chat/completions shape has no
 equivalent for at all ([ai-gateway.md § Why the stages were not translated](ai-gateway.md#why-the-stages-were-not-translated)).
 So moving one to the quick tier still means moving it to the other wire first, and that is still a
-rewrite of the call rather than a config change. Note that the error the guard throws is worded for
-the old reason — *"only reachable through OpenRouter"* — which is now true of everything and
-therefore says nothing.
+rewrite of the call rather than a config change. The error the guard throws was worded for the old
+reason — *"only reachable through OpenRouter"*, now true of everything and therefore saying
+nothing — and was rewritten the same day to name the wire instead.
 
 **And the one on that list that has no guard at all: the provider pin.** All three request-path
 calls send `provider: { order: ["anthropic"] }` ([`PROVIDER_ORDER`](../../src/openrouter-stream.ts)),

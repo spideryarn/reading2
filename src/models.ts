@@ -626,9 +626,21 @@ export function displayName(modelId: string): string {
 for (const task of PIPELINE_TASKS) {
   if (TASK_TIER[task] === "quick") {
     throw new Error(
-      `src/models.ts: task "${task}" is set to the quick tier, but it runs through the ` +
-        `Anthropic SDK and ${QUICK_MODEL_OPENROUTER} is only reachable through OpenRouter. ` +
-        `Move the stage onto OpenRouter first — the tier table cannot do it alone.`,
+      /* **The reason moved on 2026-08-27 and the wording had to move with it.**
+         It used to say the stage "runs through the Anthropic SDK and
+         ${QUICK_MODEL_OPENROUTER} is only reachable through OpenRouter" — a
+         *vendor* fact, and true until the pipeline moved onto OpenRouter too.
+         Left alone it would have gone on throwing at the right moment while
+         giving a reason that is now true of every model in the app and
+         therefore says nothing: the reader would go and check that OpenRouter
+         was reachable, find that it was, and be no closer. What still separates
+         them is the wire. */
+      `src/models.ts: task "${task}" is set to the quick tier, but it speaks Anthropic's ` +
+        `Messages shape and ${QUICK_MODEL_OPENROUTER} is only served on the chat/completions one. ` +
+        `Both go through OpenRouter; the protocols are what differ, and all seven pipeline ` +
+        `stages send thinking:{type:"adaptive"}, which chat/completions has no equivalent for. ` +
+        `Moving the stage means rewriting its call onto the other wire — the tier table ` +
+        `cannot do it alone. See docs/project/ai-gateway.md.`,
     );
   }
 }
