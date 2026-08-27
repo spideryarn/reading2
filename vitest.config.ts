@@ -15,6 +15,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    /* `.tsx` as well as `.ts`, since 2026-08-27. Until then this was `.ts`
+       only, which is why the repo had no component tests: a file that mounts a
+       React component wants JSX, and a `.tsx` test was simply never collected —
+       it did not fail, it was not found, which is the worst way for a test file
+       to be absent. */
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
   },
 });
