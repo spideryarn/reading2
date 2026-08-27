@@ -88,6 +88,44 @@ export function isLocalDatabaseUrl(url: string): boolean {
 }
 
 /**
+ * A connection string with the password removed, or nothing at all.
+ *
+ * **Parsed, not pattern-matched, and it took two goes.** The first version lived
+ * in scripts/db-migrate.ts as
+ * `url.replace(/:\/\/([^:@\/]*)(:[^@]*)?@/, "://$1@")`, which stops at the first
+ * literal `@` — and `pg` accepts one inside a password. Given
+ * `postgres://u:p@ss@host/db` it printed `postgres://u@ss@host/db`, putting half
+ * the password on the terminal of a line whose entire job is to be safe to read
+ * out. It also ignored `?password=` in the query string, which `pg` also
+ * accepts. Both found by GPT Sol's review, 2026-08-27, and both verified against
+ * `pg-connection-string` rather than argued about.
+ *
+ * WHATWG `URL` splits on the **last** `@` in the authority, which is the same
+ * rule `pg` follows and the same rule {@link isLocalDatabaseUrl} above relies
+ * on, so it gets `p@ss` right where a regex cannot.
+ *
+ * **Fails closed.** An unparsable URL returns `undefined` and the caller prints
+ * a placeholder rather than the string. A redactor that falls back to showing
+ * the original is not a redactor.
+ *
+ * Lives here, beside the other function that has to parse a connection string
+ * correctly, so that the migrator and the schema check cannot disagree about
+ * what is safe to print.
+ */
+export function withoutPassword(connection: string): string | undefined {
+  try {
+    const parsed = new URL(connection);
+    parsed.password = "";
+    /* `pg` reads the password from the query string too, so stripping only the
+       userinfo half leaves it in plain sight. */
+    parsed.searchParams.delete("password");
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Injection points, and they exist for one reason: the **unverified** branch is
  * the dangerous one, and it can only be reached when the committed certificate
  * is absent. A test cannot delete a committed file, so without these the one

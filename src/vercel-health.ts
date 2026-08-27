@@ -383,7 +383,13 @@ async function cachedStoreCheck(warnings: string[]): Promise<StoreCheck> {
 /* ------------------------------------------------------------------ */
 
 type SchemaCheck =
-  | { tables: number; missing: string[]; requiredExtra: string[] }
+  | {
+      tables: number;
+      missing: string[];
+      requiredExtra: string[];
+      defaultLost: string[];
+      nullabilityMismatch: string[];
+    }
   | { error: string };
 
 let schemaCached: { at: number; value: SchemaCheck; warnings: string[] } | null = null;
@@ -431,12 +437,22 @@ async function cachedSchemaCheck(warnings: string[]): Promise<SchemaCheck> {
         tables: report.declaredTables,
         missing: report.missingOrInaccessible,
         requiredExtra: report.requiredButUndeclared,
+        defaultLost: report.defaultLost,
+        nullabilityMismatch: report.nullabilityMismatch,
       };
       mine.push(...driftWarnings(report));
     } catch (err) {
-      /* Same bargain as the store check: the whole error to the log, a bounded
-         amount to an unauthenticated caller. */
+      /* Same bargain as the store check: the whole error object to the log, a
+         bounded message to an unauthenticated caller. */
       const message = (err as Error).message ?? "";
+      /* `console.error`, matching the store check above rather than src/log.ts.
+         docs/project/logging.md says a request path logs through src/log.ts, and
+         GPT Sol flagged this — but this file deliberately stands alone, and the
+         store check's `console.error` is pinned by a test in tests/health.test.ts
+         that asserts the full text reaches an operator. Moving one of the two
+         would leave the file speaking two conventions; moving both means
+         rewriting that test, which is a decision about this whole module rather
+         than about this block. Recorded in docs/plans/schema-drift-guard.md. */
       console.error("[health] schema check failed", { message });
       value = { error: message.slice(0, 200) };
     }

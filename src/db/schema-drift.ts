@@ -131,49 +131,70 @@ export function declaredTables(): DeclaredTable[] {
  * (src/vercel-health.ts) without each caller re-deciding how to bind it. Safe
  * because {@link SCHEMA} is a constant this repo owns — no caller supplies it,
  * and there is deliberately no parameter for one to supply.
+ *
+ * **The `access` CTE is not decoration.** The obvious version selects
+ * `has_schema_privilege(...)` alongside the columns, which means the privilege
+ * answer only exists on column rows — so a schema with no tables returns no
+ * rows, and "I could not ask" becomes indistinguishable from "the answer is
+ * no". The check would then report a perfectly accessible empty schema as one
+ * the role has lost `USAGE` on, sending whoever read it to the wrong problem.
+ * Anchoring on a one-row CTE and left-joining the columns keeps exactly one
+ * honest privilege answer whatever the schema contains. GPT Sol's second
+ * review, finding 5.
  */
 export const ACTUAL_SCHEMA_SQL = `
-  select
-    has_schema_privilege(current_user, '${SCHEMA}', 'USAGE') as schema_usable,
-    c.table_name,
-    c.column_name,
-    c.is_nullable,
-    c.column_default,
-    c.is_generated,
-    c.is_identity,
-    /* "Visible" is weaker than "readable": information_schema shows a column
-       the role holds ANY privilege on, so an INSERT-only grant lists a column
-       that every select will refuse. Asked explicitly rather than assumed.
-       GPT Sol's review, finding 3. */
-    has_column_privilege(
-      current_user,
-      format('%I.%I', c.table_schema, c.table_name),
+  with access as (
+    select has_schema_privilege(current_user, '${SCHEMA}', 'USAGE') as schema_usable
+  ),
+  cols as (
+    select
+      c.table_name,
       c.column_name,
-      'SELECT'
-    ) as selectable
-  from information_schema.columns c
-  join information_schema.tables t
-    on t.table_schema = c.table_schema
-   and t.table_name = c.table_name
-  where c.table_schema = '${SCHEMA}'
-    and t.table_type = 'BASE TABLE'
+      c.is_nullable,
+      c.column_default,
+      c.is_generated,
+      c.is_identity,
+      /* "Visible" is weaker than "readable": information_schema shows a column
+         the role holds ANY privilege on, so an INSERT-only grant lists a column
+         that every select will refuse. Asked explicitly rather than assumed.
+         GPT Sol's review, finding 3. */
+      has_column_privilege(
+        current_user,
+        format('%I.%I', c.table_schema, c.table_name),
+        c.column_name,
+        'SELECT'
+      ) as selectable
+    from information_schema.columns c
+    join information_schema.tables t
+      on t.table_schema = c.table_schema
+     and t.table_name = c.table_name
+    where c.table_schema = '${SCHEMA}'
+      and t.table_type = 'BASE TABLE'
+  )
+  select a.schema_usable, c.*
+  from access a
+  left join cols c on true
 `;
 
 /** Shape the rows of {@link ACTUAL_SCHEMA_SQL} into an {@link ActualSchema}. */
 export function readActualSchema(rows: Record<string, unknown>[]): ActualSchema {
   return {
-    /* No rows at all is not proof of usability — assume unusable and let the
-       caller's empty-result guard speak. */
+    /* Exactly one row always comes back thanks to the `access` CTE, so this is
+       the real privilege answer rather than a guess made from an empty result. */
     schemaUsable: rows[0]?.schema_usable === true,
-    columns: rows.map((r) => ({
-      table: String(r.table_name),
-      column: String(r.column_name),
-      nullable: r.is_nullable === "YES",
-      hasDefault: r.column_default !== null,
-      generated: r.is_generated === "ALWAYS",
-      identity: r.is_identity === "YES",
-      selectable: r.selectable === true,
-    })),
+    /* The left join emits one all-null column row for a schema with no tables.
+       That sentinel is the absence of columns, not a column named "null". */
+    columns: rows
+      .filter((r) => r.table_name !== null && r.table_name !== undefined)
+      .map((r) => ({
+        table: String(r.table_name),
+        column: String(r.column_name),
+        nullable: r.is_nullable === "YES",
+        hasDefault: r.column_default !== null,
+        generated: r.is_generated === "ALWAYS",
+        identity: r.is_identity === "YES",
+        selectable: r.selectable === true,
+      })),
   };
 }
 

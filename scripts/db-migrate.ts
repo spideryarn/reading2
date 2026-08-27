@@ -33,7 +33,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
-import { isLocalDatabaseUrl, sslDecisionFor } from "../src/db/ssl.js";
+import { isLocalDatabaseUrl, sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
 
 /**
@@ -69,38 +69,6 @@ if (!url) {
       "  See docs/project/supabase-local.md.",
   );
   process.exit(1);
-}
-
-/**
- * A connection string with the password removed, or nothing at all.
- *
- * **Parsed, not pattern-matched, and it took two goes.** The first version was
- * `url.replace(/:\/\/([^:@\/]*)(:[^@]*)?@/, "://$1@")`, which stops at the first
- * literal `@` — and `pg` accepts one inside a password. Given
- * `postgres://u:p@ss@host/db` it printed `postgres://u@ss@host/db`, putting half
- * the password on the terminal of a line whose entire job is to be safe to read
- * out. It also ignored `?password=` in the query string, which `pg` also
- * accepts. Both found by GPT Sol's review of this change, 2026-08-27, and both
- * verified against `pg-connection-string` rather than argued about.
- *
- * WHATWG `URL` splits on the **last** `@` in the authority, which is the same
- * rule `pg` follows, so it gets `p@ss` right where a regex cannot.
- *
- * **Fails closed.** An unparsable URL returns `undefined` and the caller prints
- * a placeholder rather than the string. A redactor that falls back to showing
- * the original is not a redactor.
- */
-function withoutPassword(connection: string): string | undefined {
-  try {
-    const parsed = new URL(connection);
-    parsed.password = "";
-    /* `pg` reads the password from the query string too, so stripping only the
-       userinfo half leaves it in plain sight. */
-    parsed.searchParams.delete("password");
-    return parsed.toString();
-  } catch {
-    return undefined;
-  }
 }
 
 /**
