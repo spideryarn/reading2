@@ -177,12 +177,21 @@ describe("the ingress is wired up", () => {
     return out;
   }
 
+  /**
+   * The setter is named here, and the name is a liability this test has already
+   * been bitten by: it was `setArticle` until 2026-08-27, when `ArticlePage`
+   * started storing the slug beside the payload and it became `setLoaded`. The
+   * scan then found nothing and reported it — which is the whole reason for the
+   * `toBeGreaterThan(0)` line, and the reason it is worth keeping. A rename is
+   * the cheap failure; a scan that quietly matches nothing while the XSS path
+   * reopens is the expensive one.
+   */
   it("every article that reaches state has been sanitised", () => {
-    const args = callArgs(APP, "setArticle");
+    const args = callArgs(APP, "setLoaded");
     expect(args.length).toBeGreaterThan(0); // the scan itself must not silently find nothing
     for (const arg of args) {
       const clearing = arg.trim() === "null";
-      expect(clearing || arg.includes("sanitizeArticle("), `setArticle(${arg})`).toBe(true);
+      expect(clearing || arg.includes("sanitizeArticle("), `setLoaded(${arg})`).toBe(true);
     }
   });
 

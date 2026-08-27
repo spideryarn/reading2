@@ -71,6 +71,7 @@ const DESIGN_JOB = {
 import { Toggle } from "@/components/ui/toggle";
 import { Link } from "./Link.js";
 import { PILL } from "./pill.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
 
 /** Every colour token, in the groups they are reasoned about in. */
@@ -262,6 +263,8 @@ function useMeasured(names: string[]): Record<string, { css: string; rgb: Rgb | 
 const ALL_COLOUR_TOKENS = SWATCHES.flatMap((s) => s.names);
 
 export function DesignPage() {
+  useDocumentTitle(pageTitle({ kind: "design" }));
+
   const measured = useMeasured(ALL_COLOUR_TOKENS);
   const page = measured["--page"]?.rgb ?? null;
 

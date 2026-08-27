@@ -37,6 +37,7 @@
 import { useEffect, useState } from "react";
 
 import { takeReturn } from "./auth-return.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { CALLBACK_HREF, LIBRARY_HREF, navigate } from "./router.js";
 import { supabase } from "./lib/supabase.js";
 
@@ -77,6 +78,8 @@ function describe(params: URLSearchParams): string | null {
 }
 
 export function AuthCallback() {
+  useDocumentTitle(pageTitle({ kind: "callback" }));
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

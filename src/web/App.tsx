@@ -12,6 +12,7 @@ import type { Article, Block, BlockId, GlossaryEntry } from "../types.js";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
+import { LandingPage } from "./LandingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { DesignPage } from "./DesignPage.js";
@@ -67,6 +68,8 @@ import {
   atParam,
   colsParam,
   deepParam,
+  diagramAxisParam,
+  diagramHueParam,
   diagramParam,
   modeParam,
   noteParam,
@@ -103,7 +106,9 @@ import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
 import { anchored, countByBlock, useChatAnchors } from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { useRenderCount } from "./perf.js";
 
 
 
@@ -132,8 +137,19 @@ export function App() {
   /* **A whole-app gate rather than a route**, because who you are is not view
      state and docs/project/url-state.md says view state is what lives in the
      URL. The address you were at is still in the address bar when you come
-     back — which is the point. */
-  if (!user) return <SignInPage />;
+     back — which is the point.
+
+     **What it shows is the landing page, wherever you were heading.** Greg's
+     call, 2026-08-27, asked as a question and answered as the simpler of two:
+     a deep link to an article gets the same front door as `/` rather than a
+     short prompt, so there is one signed-out page rather than two. The address
+     bar still holds the article, so signing in lands you on it.
+
+     `/login` is the exception, and the only one. It is a page somebody was
+     *sent* — a password-reset email has to land somewhere — so it keeps the
+     compact screen rather than being answered with the pitch. See
+     SignInPage.tsx. */
+  if (!user) return route.kind === "login" ? <SignInPage /> : <LandingPage />;
 
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
@@ -207,15 +223,36 @@ export function App() {
  * changes push a history entry and which quietly replace one.
  */
 function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
-  const [article, setArticle] = useState<Article | null>(null);
+  useRenderCount("ArticlePage");
+  /**
+   * The article **and the slug it is the article for**, together.
+   *
+   * The pair rather than the article alone, because `setLoaded(null)` happens
+   * in the effect below and an effect runs after the render that scheduled it.
+   * So the first render after the slug changes still held the *previous*
+   * article — and the children are keyed on the new slug, so a freshly mounted
+   * `Reader` or `Metadata` was handed the old article and drew it. Mostly
+   * invisible, because the fetch usually lands before anybody reads a
+   * paragraph; not invisible in the tab, where it produced titles like
+   * `<the article you just left> · Metadata`.
+   *
+   * GPT Sol found it reviewing this file's titles, 2026-08-27. The bug is older
+   * than the titles — they are just the first thing that showed it.
+   *
+   * Keeping the slug beside the payload makes the mismatch impossible to render
+   * rather than merely unlikely: `article` is `null` until what we have is what
+   * was asked for.
+   */
+  const [loaded, setLoaded] = useState<{ slug: string; article: Article } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const article = loaded?.slug === slug ? loaded.article : null;
 
   useEffect(() => {
     // The slug is in the path now, so it can change under us — via back/forward,
     // or a pasted link. Guard the response so a slow first fetch can't overwrite
     // a fast second one.
     let live = true;
-    setArticle(null);
+    setLoaded(null);
     setError(null);
     apiFetch(`/api/article/${encodeURIComponent(slug)}`)
       .then((r) => readJson<Article>(r))
@@ -224,7 +261,7 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
       // we are about to hand it to *Chrome's*. It must happen before anything
       // reads `block.html` — both renderedText and annotateHtml parse it with
       // innerHTML ahead of React. See src/web/sanitize.ts.
-      .then((a) => live && setArticle(sanitizeArticle(a)))
+      .then((a) => live && setLoaded({ slug, article: sanitizeArticle(a) }))
       .catch((e: Error) => live && setError(e.message));
     return () => {
       live = false;
@@ -264,6 +301,28 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
   }, [slug]);
 
   const slow = useSlow(!article && !error);
+
+  /**
+   * The tab, for the two states this component owns and no others.
+   *
+   * Once the article is here, each of the three views sets its own title —
+   * Reader has the mode, Metadata and Tweets have their own names — and this
+   * must then get out of the way. Hence the empty string, which
+   * `useDocumentTitle` treats as "not mine to set": React runs a child's
+   * effects *before* its parent's, so a title computed here would otherwise
+   * land on top of the more specific one the child had just written.
+   *
+   * **`Loading…` waits for `slow`, the same threshold the line below waits
+   * for.** A tab that flickers through "Loading…" on every fast navigation is
+   * the tab equivalent of a spinner that flashes and vanishes, and it is worse
+   * than that here: the title is announced to a screen reader, so a flicker
+   * nobody sees is an interruption somebody hears. Until then the previous
+   * title stands, which is exactly what a browser does during a real page
+   * load.
+   */
+  useDocumentTitle(
+    error ? pageTitle({ kind: "error" }) : !article && slow ? pageTitle({ kind: "loading" }) : "",
+  );
 
   if (error) return <pre className="error">{error}</pre>;
   // Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
@@ -377,6 +436,7 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
 }
 
 function Reader({ slug, article }: { slug: string; article: Article }) {
+  useRenderCount("Reader");
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -424,6 +484,11 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
    * So this is a single value the layout reads, not a flag each feature checks.
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
+
+  /* The tab: the article first, then the mode — and nothing for `toc`, which is
+     the mode most tabs are in and so the one that distinguishes nothing. See
+     src/web/page-title.ts. */
+  useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "article", mode }));
   /* Any mode that is not the table of contents takes the band. Written as
      "not toc" rather than as `chat || glossary` on purpose: the third mode cost
      this line nothing, which is the property the slot was built for, and the
@@ -1166,6 +1231,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
           be there in every mode too. */}
       <ProseHoverCard
         entries={terms}
+        slug={slug}
         sourceUrl={article.meta.url ?? null}
         blockText={blockText}
         onOpenTerm={openTermInGlossary}
@@ -1193,7 +1259,7 @@ function Reader({ slug, article }: { slug: string; article: Article }) {
       {mode === "summary" && (
         <SummaryBand slug={slug} article={article} onJump={jumpTo} />
       )}
-      {mode === "diagram" && <DiagramBand article={article} onJump={jumpTo} />}
+      {mode === "diagram" && <DiagramBand slug={slug} article={article} onJump={jumpTo} />}
       {mode === "ideas" && (
         <IdeasBand
           slug={slug}
@@ -1310,6 +1376,7 @@ function IdeasBand({
   openKey: string | null;
   onOpenKey(key: string | null): void;
 }) {
+  useRenderCount("IdeasBand");
   const ideas = useIdeas(slug);
   const [ideaId, setIdeaId] = useQueryState("idea", ideaParam);
 
@@ -1463,6 +1530,7 @@ function ChatBand({
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
 }) {
+  useRenderCount("ChatBand");
   const {
     threads,
     loaded,
@@ -1631,6 +1699,7 @@ function GlossaryBand({
   /** The list itself, up to `Reader`, which is where the prose's marks are drawn. */
   onEntries(entries: GlossaryEntry[]): void;
 }) {
+  useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug);
   const [termId, setTermId] = useQueryState("term", termParam);
   const [sort, setSort] = useQueryState("sort", sortParam);
@@ -1747,6 +1816,7 @@ function SearchBand({
   openHit: string | null;
   onOpenHit(next: string | null): void;
 }) {
+  useRenderCount("SearchBand");
   const { runs, loaded, ask, retry, remove, error } = useSearch(slug);
   const [match, setMatcher] = useQueryState("match", matchParam);
   const [find, setFind] = useQueryState("find", findParam);
@@ -1979,6 +2049,7 @@ function SummaryBand({
   article: Article;
   onJump(id: BlockId): void;
 }) {
+  useRenderCount("SummaryBand");
   const summaries = useSummaries(slug);
   const [rung, setRung] = useQueryState("len", rungParam);
   const [deep, setDeep] = useQueryState("deep", deepParam);
@@ -2050,13 +2121,24 @@ function SummaryBand({
  * all. See docs/project/diagram.md.
  */
 function DiagramBand({
+  slug,
   article,
   onJump,
 }: {
+  slug: string;
   article: Article;
   onJump(id: BlockId): void;
 }) {
+  useRenderCount("DiagramBand");
   const [kind, setKind] = useQueryState("diagram", diagramParam);
+  /* The two scatter controls, in the URL beside the picture they belong to —
+     `?dx=` and `?dhue=`. They live here rather than in the panel for the same
+     reason `?diagram=` does: every bit of view state is in the address
+     (docs/project/url-state.md), and unlike the collapse set these are stable
+     words rather than positional ids, so a pasted link cannot become quietly
+     wrong after a re-ingest. */
+  const [axis, setAxis] = useQueryState("dx", diagramAxisParam);
+  const [hue, setHue] = useQueryState("dhue", diagramHueParam);
 
   /* No summaries joined in: this panel shows titles, gists and sizes, all of
      which are on the tree. Passing `null` is what keeps a diagram from ever
@@ -2080,12 +2162,17 @@ function DiagramBand({
 
   return (
     <DiagramPanel
+      slug={slug}
       root={root}
       kind={kind}
       onKind={(next) => void setKind(next)}
       atRow={atRow}
       onJump={onJump}
       blocks={article.blocks}
+      axis={axis}
+      onAxis={(next) => void setAxis(next)}
+      hue={hue}
+      onHue={(next) => void setHue(next)}
     />
   );
 }

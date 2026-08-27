@@ -1,0 +1,276 @@
+/**
+ * What the browser tab says — src/web/page-title.ts. Pure string work, no DOM.
+ *
+ * The rules worth pinning are the ones a future edit would break without
+ * looking broken:
+ *
+ *  - **The app's name is last, everywhere except the bare shelf.** Put it first
+ *    and every tab in the window starts with the same eleven characters, which
+ *    is the exact failure this file was written to end. A test is the only
+ *    thing that notices, because either order looks fine on one page.
+ *  - **The strapline is on one page only.** Sprinkled everywhere it is
+ *    boilerplate, and boilerplate is what Google's own guidance says makes
+ *    titles indistinguishable.
+ *  - **The default mode leaves no trace.** Easy to "fix" by spelling out
+ *    `Contents`, which reads like an improvement and is not.
+ *  - **No stranded separators.** A title beginning `" · Spideryarn"` is what an
+ *    empty segment joined rather than dropped looks like.
+ *
+ * The hook is not tested here — it is three lines around `document.title` and a
+ * live region, and testing it would mean testing jsdom.
+ */
+import { readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { MODES } from "../src/web/params.js";
+import { APP_NAME, CLAMP, SEP, TAGLINE, clamp, host, pageTitle } from "../src/web/page-title.js";
+
+describe("the shelf", () => {
+  it("is the one page that leads with the app's name, and the one with the strapline", () => {
+    expect(pageTitle({ kind: "library" })).toBe(`${APP_NAME}${SEP}${TAGLINE}`);
+  });
+
+  it("drops the strapline the moment the reader narrows it", () => {
+    const t = pageTitle({ kind: "library", query: "seth" });
+    expect(t).not.toContain(TAGLINE);
+    expect(t).toBe(`“seth”${SEP}Shelf${SEP}${APP_NAME}`);
+  });
+
+  it("front-loads the search, then the filter, then the page", () => {
+    expect(pageTitle({ kind: "library", query: "seth", unread: true })).toBe(
+      `“seth”${SEP}Unread${SEP}Shelf${SEP}${APP_NAME}`,
+    );
+  });
+
+  it("says Unread on its own when that is all that is chosen", () => {
+    expect(pageTitle({ kind: "library", unread: true })).toBe(`Unread${SEP}Shelf${SEP}${APP_NAME}`);
+  });
+
+  it("treats a box with only spaces in it as an empty box", () => {
+    expect(pageTitle({ kind: "library", query: "   " })).toBe(`${APP_NAME}${SEP}${TAGLINE}`);
+  });
+});
+
+describe("an article", () => {
+  const title = "The Mythology of Conscious AI";
+
+  it("leads with the article, not the app", () => {
+    expect(pageTitle({ kind: "read", title, view: "article" })).toBe(`${title}${SEP}${APP_NAME}`);
+  });
+
+  it("says nothing about the default mode — that is the point of it", () => {
+    expect(pageTitle({ kind: "read", title, view: "article", mode: "toc" })).toBe(
+      `${title}${SEP}${APP_NAME}`,
+    );
+  });
+
+  /* Every mode, from `MODES` rather than a list retyped here — an eighth mode
+     arriving must fail this test rather than quietly get no name. */
+  it("names every other mode, by the word the Dock uses", () => {
+    const named: Record<string, string> = {
+      summary: "Summary",
+      glossary: "Glossary",
+      ideas: "Ideas",
+      search: "Search",
+      diagram: "Diagram",
+      chat: "Chat",
+    };
+    for (const mode of MODES) {
+      const t = pageTitle({ kind: "read", title, view: "article", mode });
+      if (mode === "toc") {
+        expect(t).toBe(`${title}${SEP}${APP_NAME}`);
+        continue;
+      }
+      const word = named[mode];
+      expect(word, `${mode} has no expected word — was a mode added?`).toBeDefined();
+      expect(t).toBe(`${title}${SEP}${word}${SEP}${APP_NAME}`);
+    }
+  });
+
+  it("names the other two views, and ignores any mode that came with them", () => {
+    expect(pageTitle({ kind: "read", title, view: "metadata", mode: "chat" })).toBe(
+      `${title}${SEP}Metadata${SEP}${APP_NAME}`,
+    );
+    expect(pageTitle({ kind: "read", title, view: "tweets" })).toBe(
+      `${title}${SEP}Tweets${SEP}${APP_NAME}`,
+    );
+  });
+
+  it("has something to say about an article with no title at all", () => {
+    expect(pageTitle({ kind: "read", title: "  ", view: "article" })).toBe(
+      `Untitled${SEP}${APP_NAME}`,
+    );
+  });
+
+  it("clamps a very long title so the app's name survives in a history list", () => {
+    const long =
+      "Attention Is All You Need But Also A Great Many Other Things Besides Which This Title Will Now List At Length";
+    const t = pageTitle({ kind: "read", title: long, view: "article" });
+    expect(t.endsWith(`${SEP}${APP_NAME}`)).toBe(true);
+    expect(t).toContain("…");
+    expect(t.length).toBeLessThan(long.length);
+  });
+});
+
+describe("the pages either side of an article", () => {
+  it("names the host being added, not the whole address", () => {
+    expect(pageTitle({ kind: "add", source: "https://www.nytimes.com/2026/an-essay" })).toBe(
+      `Adding nytimes.com${SEP}${APP_NAME}`,
+    );
+  });
+
+  it("passes a filename through, because an upload has no host", () => {
+    expect(pageTitle({ kind: "add", source: "the-paper.pdf" })).toBe(
+      `Adding the-paper.pdf${SEP}${APP_NAME}`,
+    );
+  });
+
+  it("still says what it is doing when it has nothing to name yet", () => {
+    expect(pageTitle({ kind: "add" })).toBe(`Adding an article${SEP}${APP_NAME}`);
+  });
+
+  it("gives every other route a name of its own", () => {
+    expect(pageTitle({ kind: "profile" })).toBe(`Your profile${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "design" })).toBe(`Design reference${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "login" })).toBe(`Sign in${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "callback" })).toBe(`Signing you in${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "loading" })).toBe(`Loading…${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "error" })).toBe(`Couldn’t open${SEP}${APP_NAME}`);
+  });
+});
+
+describe("every title, whatever the page", () => {
+  const every = [
+    { kind: "library" },
+    { kind: "library", query: "x", unread: true },
+    { kind: "read", title: "T", view: "article" },
+    { kind: "read", title: "T", view: "article", mode: "search" },
+    { kind: "read", title: "T", view: "metadata" },
+    { kind: "add" },
+    { kind: "add", source: "https://example.com" },
+    { kind: "profile" },
+    { kind: "design" },
+    { kind: "landing" },
+    { kind: "login" },
+    { kind: "callback" },
+    { kind: "loading" },
+    { kind: "error" },
+  ] as const;
+
+  it("never begins or ends with a stranded separator", () => {
+    for (const spec of every) {
+      const t = pageTitle(spec);
+      expect(t.startsWith(SEP.trim())).toBe(false);
+      expect(t.endsWith(SEP.trim())).toBe(false);
+      expect(t).not.toContain(`${SEP}${SEP}`);
+    }
+  });
+
+  /* For these fixtures, not as a universal law: an article genuinely titled
+     "Spideryarn" would contain it twice and be perfectly correct. What is being
+     pinned is that no *page* adds the app's name a second time of its own
+     accord. GPT Sol pointed out the first version of this claimed more than it
+     could deliver, 2026-08-27. */
+  it("adds the app's name once, for titles that do not contain it themselves", () => {
+    for (const spec of every) {
+      expect(pageTitle(spec).split(APP_NAME).length - 1, JSON.stringify(spec)).toBe(1);
+    }
+  });
+
+  it("puts the app's name last on every page except the bare shelf", () => {
+    for (const spec of every) {
+      const t = pageTitle(spec);
+      if (t === `${APP_NAME}${SEP}${TAGLINE}`) continue;
+      expect(t.endsWith(APP_NAME)).toBe(true);
+    }
+  });
+
+  /* Two pages, not one, and they are the same page seen from either side of
+     the gate: the bare shelf, and the landing page a signed-out reader gets
+     instead of it. Anything else picking up the strapline is a bug — see
+     page-title.ts § segments. */
+  it("carries the strapline on the two homepages and nowhere else", () => {
+    const withTagline = every.filter((s) => pageTitle(s).includes(TAGLINE));
+    expect(withTagline).toEqual([{ kind: "library" }, { kind: "landing" }]);
+  });
+});
+
+describe("clamp", () => {
+  it("leaves anything short enough alone", () => {
+    expect(clamp("short")).toBe("short");
+    expect(clamp("x".repeat(CLAMP))).toBe("x".repeat(CLAMP));
+  });
+
+  it("cuts at a word boundary and marks the cut", () => {
+    const t = clamp("one two three four five six seven eight nine ten", 20);
+    expect(t.endsWith("…")).toBe(true);
+    expect(t).toBe("one two three four…");
+  });
+
+  /* `slice` counts UTF-16 units, so a cut that lands inside an emoji leaves a
+     lone surrogate — rendered as `?`, which is the one character a deliberate
+     truncation must never produce. GPT Sol, 2026-08-27. */
+  it("never cuts an emoji in half", () => {
+    const t = clamp(`${"a".repeat(63)}\u{1F389}bbb`);
+    expect(t).toContain("\u{1F389}");
+    // A high surrogate not followed by a low one is a broken pair.
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(t)).toBe(false);
+  });
+
+  it("cuts mid-word rather than down to nothing when there is no space to use", () => {
+    // A single 40-character word: honouring the last space would leave "".
+    const t = clamp(`${"a".repeat(40)} tail`, 20);
+    expect(t).toBe(`${"a".repeat(20)}…`);
+  });
+});
+
+describe("host", () => {
+  it("takes the host off a URL and drops the www", () => {
+    expect(host("https://www.nytimes.com/a/b?c=d")).toBe("nytimes.com");
+    expect(host("http://example.org:8080/x")).toBe("example.org:8080");
+  });
+
+  it("hands back anything that is not a URL, which is how filenames pass through", () => {
+    expect(host("the-paper.pdf")).toBe("the-paper.pdf");
+    expect(host("")).toBe("");
+  });
+});
+
+/**
+ * **A page wired to a route but not to a title is the silent failure here** —
+ * it simply inherits whatever the last page set, and a stale title on a new
+ * page looks entirely plausible. Nothing in the type system catches it, because
+ * a `TitleSpec` variant nobody constructs is not an error.
+ *
+ * So: every variant of the union has to be constructed somewhere under
+ * `src/web/`. A new route that forgets its title fails here as soon as its
+ * variant is added, which is the first moment anything can know.
+ */
+describe("every kind of page is actually wired up", () => {
+  const WEB = path.resolve(import.meta.dirname, "..", "src", "web");
+
+  /** The `kind` of every variant, read out of the union rather than retyped. */
+  function kinds(): string[] {
+    const src = readFileSync(path.join(WEB, "page-title.ts"), "utf8");
+    const union = src.slice(src.indexOf("export type TitleSpec ="), src.indexOf("export function pageTitle"));
+    return [...union.matchAll(/\{\s*kind:\s*"([a-z-]+)"/g)].map((m) => m[1] as string);
+  }
+
+  function callers(): string {
+    return readdirSync(WEB, { recursive: true, encoding: "utf8" })
+      .filter((f) => (f.endsWith(".tsx") || f.endsWith(".ts")) && !f.endsWith("page-title.ts"))
+      .map((f) => readFileSync(path.join(WEB, f), "utf8"))
+      .join("\n");
+  }
+
+  it("finds a component constructing each one", () => {
+    const found = callers();
+    const missing = kinds().filter((k) => !found.includes(`kind: "${k}"`));
+    expect(missing).toEqual([]);
+  });
+
+  it("can tell — the union really was read, and it is not empty", () => {
+    expect(kinds().length).toBeGreaterThanOrEqual(9);
+    expect(kinds()).toContain("library");
+  });
+});

@@ -73,6 +73,7 @@ import { Button } from "@/components/ui/button";
 import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
 import { useJobs } from "./useJobs.js";
@@ -98,6 +99,11 @@ type Loaded =
 export function Tweets({ slug, article }: { slug: string; article: Article }) {
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const slow = useSlow(loaded.status === "loading");
+
+  /* The tab: the article first, then which of its pages this is — and `Tweets`
+     rather than `Thread`, because that is what the button in the Dock says.
+     See src/web/page-title.ts. */
+  useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "tweets" }));
 
   /**
    * Fetch the thread. Its own endpoint rather than a field on the article — see

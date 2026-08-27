@@ -42,6 +42,7 @@ import { ArrowLeft, BookOpen, Cpu, TriangleAlert, User, UserCheck } from "lucide
 import { MAX_PROFILE_CHARS, type LibraryEntry } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { Link } from "./Link.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
 import { ProfileBox } from "./ProfileBox.js";
@@ -61,6 +62,8 @@ const CARD = "tw:rounded-lg tw:border tw:border-border tw:bg-card";
 const RECENT = 8;
 
 export function ProfilePage() {
+  useDocumentTitle(pageTitle({ kind: "profile" }));
+
   const profile = useProfile();
   const [shelf, setShelf] = useState<LibraryEntry[] | null>(null);
   const [models, setModels] = useState<{ task: string; model: string; effort?: string }[] | null>(

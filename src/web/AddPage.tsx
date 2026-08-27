@@ -51,6 +51,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "./Link.js";
 import { JobCard } from "./AddArticle.js";
 import { normaliseUrl, slugFromUrl } from "../ingest.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF, navigate, readHref } from "./router.js";
 import type { Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
@@ -176,6 +177,17 @@ export function AddPage({ source: origin }: { source: AddSource }) {
     if (job?.status !== "done") return;
     navigate(readHref(job.slug), { replace: true });
   }, [job?.status, job?.slug]);
+
+  /* The tab, naming what is being added — the host for an address, the filename
+     for an upload. The filename only exists once the first poll has come back,
+     which is why this reads the same fallback the subtitle does rather than
+     going quiet. See src/web/page-title.ts. */
+  useDocumentTitle(
+    pageTitle({
+      kind: "add",
+      source: origin.kind === "upload" ? (job?.upload?.filename ?? null) : ok ? source : url,
+    }),
+  );
 
   return (
     <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:py-10 tw:font-sans">
