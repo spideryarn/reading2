@@ -231,9 +231,15 @@ Held back, with the reason:
 | `src/converse.ts` | held a peer's refactor pulling `openRouterStream` into `src/ai-call.ts`, **and that file was not yet in git** — committing this would have broken every build |
 | `src/web/ChatPanel.tsx` | a peer's new `loaded` / `onSendNew` props, whose only call site is in `App.tsx`, which is also mid-edit — committing one without the other fails the type-check |
 | `src/web/styles.css` | a peer's in-flight visual work; `.cited-link` is inert without ChatPanel anyway |
-| `src/web/ProseHoverCard.tsx`, `src/web/useHoverCard.ts` | a peer's touch/tap feature, mid-review |
-| `docs/project/tooltips.md` | a peer's paragraph in it links to `touch-glossary-card.md`, which is untracked — `doc-links.test.ts` would go red on `main` |
 | `tests/chat-web-links-prompt.test.ts` | it pins the prompt block, which lives in `converse.ts` |
+
+`ProseHoverCard.tsx`, `useHoverCard.ts` and `tooltips.md` were on that list too, and were **carried
+in twenty minutes later by the peer whose touch feature shared them** (`cce3f77`) — the selector
+narrowing, the `host` option and the observer all landed under a commit message about tapping a
+glossary term. That is the mechanism working rather than failing: the changes were finished and
+tested, and holding a file back means waiting for whoever else is in it, not blocking them. It is
+also the reason to leave a shared file in a state you would be happy to see committed by someone
+else, at any moment, without being asked.
 
 The one worth checking by hand is the **prompt**. Until `converse.ts` next goes in, a model writing
 links has not been told the provenance rule — *"link only an address that came back from a tool on
