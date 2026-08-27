@@ -448,6 +448,15 @@ kilobytes and genuinely benefits from being transactional) and use Storage for P
 row still says which is authoritative — and it is less work. It is worse in one specific way: two
 paths, and the seldom-used one rots.
 
+> **The follow-on arrived, 2026-08-27.** Greg asked whether Storage should hold the source files —
+> and, since Vercel forces it for large ones, whether it should hold everything. The single-authority
+> version below is what that question landed on, now with the measurements this appendix was written
+> without: [raw-bytes-in-storage.md](raw-bytes-in-storage.md). Two things there are worth reading back
+> into this section. The smaller alternative below became the *dearer* one, because the migration
+> changed which of them is extra work. And the transactional cost this appendix concedes turns out
+> not to be a cost at all for content-addressed bytes — a `ROLLBACK` leaving an object behind was
+> measured, and an orphan at a name that is its own checksum cannot be wrong, only absent.
+
 **Recommendation: the single-authority version, as a follow-on to v1, not part of it.** v1 should
 therefore be built so that it does not stand in the way — the blob store seam is what makes it a
 follow-on rather than a rewrite, which is why `pdf-ingestion.md` was right to insist on the seam

@@ -38,6 +38,13 @@ holding a key and a checksum, which is
 [the appendix of pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md#appendix-where-the-bytes-should-eventually-live),
 and the seam is what makes that a follow-on rather than a rewrite.
 
+**Since 2026-08-27 that follow-on is planned rather than merely intended** —
+[raw-bytes-in-storage.md](../plans/raw-bytes-in-storage.md), which answers the question it turns on
+(*should everything large go to Storage, for consistency?*) with a measured no. The line it draws is
+not size but **immutability**: content-addressed and immutable goes to Storage, revision-scoped and
+rewritable stays in Postgres. Raw source is 86% of every byte here and the only thing on the first
+side of that line.
+
 `data/_uploads/` is **queue state, not article state** — created, claimed and finished inside one
 ingest, and meaningless once the article exists. It was on the filesystem because `data/_jobs/` is,
 and it said it would move when that moved.
