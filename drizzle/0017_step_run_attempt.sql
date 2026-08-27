@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."revision_step_runs" ADD COLUMN "attempt_id" uuid;

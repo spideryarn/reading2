@@ -909,6 +909,24 @@ export const revisionStepRuns = spideryarn.table(
      */
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /**
+     * Which claim on the job wrote this row — the same token as
+     * `jobs.attempt_id` (src/store/jobs.ts, `mintAttempt`).
+     *
+     * **Nullable, and it has to be.** Two kinds of run legitimately have no
+     * attempt: every row that already exists, and every run started from a CLI
+     * rather than from a job, which is most of what a developer does. So a null
+     * here means "nobody claimed this", not "we lost the token" — and the fence
+     * that reads it must treat those as the same refusal, since a step run that
+     * cannot prove who wrote it cannot prove it was not somebody stale.
+     *
+     * `uuid`, not `text`, to match `jobs.attempt_id`. The two type as `string`
+     * on the TypeScript side either way, so a mismatch here would compile,
+     * read correctly, and fail with 22P02 on the first real advance —
+     * docs/reusable/silent-success.md, and it has already happened once on
+     * exactly this token.
+     */
+    attemptId: uuid("attempt_id"),
   },
   (t) => [
     primaryKey({ columns: [t.revisionId, t.stepName] }),
