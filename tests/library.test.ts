@@ -10,6 +10,7 @@ import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { describeArticle, listArticles, loadArticle } from "../src/api.js";
+import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { readingMinutes } from "../src/reading-time.js";
 import { createComment } from "../src/comments.js";
 import type { Block, Tree } from "../src/types.js";
@@ -106,6 +107,21 @@ describe("a half-built directory", () => {
 });
 
 describe("describeArticle", () => {
+  /**
+   * **It receives the five numbers now; it does not derive them.**
+   *
+   * It used to take `blocks` and `tree` and compute `words`, `blocks`, `parts`,
+   * `sections` and the blurb — which made it a second implementation of
+   * `deriveLibraryScalars`, and a review had already caught the two disagreeing
+   * about the `excerpt` rung. So the fallback chain's own cases moved to
+   * tests/store-revision-policy.test.ts, where that function lives, and what is
+   * left here is what this function still decides: the shape of the entry.
+   *
+   * The chain is exercised through the real function rather than by handing
+   * these tests literal scalars, so "describeArticle prints the blurb it was
+   * given" and "the blurb is the one the rules produce" are both covered and
+   * neither is assumed.
+   */
   const blocks: Block[] = [
     { id: "spya-aaaaaa", tag: "p", kind: "text", text: "a", words: 500, html: "", gistable: true },
     { id: "spya-bbbbbb", tag: "p", kind: "text", text: "b", words: 500, html: "", gistable: true },
@@ -124,19 +140,34 @@ describe("describeArticle", () => {
   const base = {
     slug: "s",
     meta: { slug: "s", title: "T" },
-    blocks,
-    tree,
+    scalars: deriveLibraryScalars({ blocks, tree }),
     comments: 0,
     addedAt: "2026-08-25T00:00:00.000Z",
   };
 
-  it("counts words across blocks and turns them into minutes", () => {
+  /** The same tree with one rung of the blurb's fallback removed. */
+  const withoutRootField = (field: "gist" | "summary"): Tree => {
+    const copy = JSON.parse(JSON.stringify(tree)) as Tree;
+    const root = copy.nodes.n1;
+    if (!root) throw new Error("fixture lost its root");
+    delete (root as unknown as Record<string, unknown>)[field];
+    return copy;
+  };
+
+  /** The root of a copy, for a test that needs to write to it. */
+  const rootOf = (t: Tree): Record<string, unknown> => {
+    const root = t.nodes.n1;
+    if (!root) throw new Error("fixture lost its root");
+    return root as unknown as Record<string, unknown>;
+  };
+
+  it("prints the word count it was given, and turns it into minutes", () => {
     const entry = describeArticle(base);
     expect(entry.words).toBe(1000);
     expect(entry.minutes).toBe(readingMinutes(1000));
   });
 
-  it("counts parts and sections by depth, not by position", () => {
+  it("prints parts and sections, which are counted by depth and not by position", () => {
     const entry = describeArticle(base);
     expect(entry.parts).toBe(1);
     expect(entry.sections).toBe(0);
@@ -146,18 +177,39 @@ describe("describeArticle", () => {
     expect(describeArticle(base).gist).toBe("The gist.");
   });
 
+  it("falls to the root summary when there is no gist", () => {
+    /* **The rung nothing tested.** GPT Sol's sixth finding on
+       docs/plans/library-read-latency.md: this chain had cases for its first
+       rung and for its absence, and none for either of the two in between, so a
+       change that dropped `root.summary` altogether would have gone green. */
+    const noGist = withoutRootField("gist");
+    rootOf(noGist).summary = "The root summary.";
+    expect(describeArticle({ ...base, scalars: deriveLibraryScalars({ blocks, tree: noGist }) }).gist).toBe(
+      "The root summary.",
+    );
+  });
+
+  it("falls to the excerpt when the tree says nothing about itself", () => {
+    const bare = withoutRootField("gist");
+    expect(
+      describeArticle({
+        ...base,
+        scalars: deriveLibraryScalars({ blocks, tree: bare, excerpt: "What the page says." }),
+      }).gist,
+    ).toBe("What the page says.");
+  });
+
   it("leaves the blurb absent rather than substituting something narrower", () => {
     // No gist, no summary, no excerpt. The tempting fallback is the first arc
     // sentence, which describes the END OF PART ONE and would read as a
     // description of the article — wrong, and wrong in a way that looks right.
-    const root = tree.nodes.n1;
-    if (!root) throw new Error("fixture lost its root");
-    const { gist: _dropped, ...withoutGist } = root;
-    const noGist = {
-      ...base,
-      tree: { ...tree, nodes: { ...tree.nodes, n1: withoutGist } },
-    };
-    expect(describeArticle(noGist).gist).toBeUndefined();
+    const bare = withoutRootField("gist");
+    const entry = describeArticle({ ...base, scalars: deriveLibraryScalars({ blocks, tree: bare }) });
+    expect(entry.gist).toBeUndefined();
+    /* Absent, not present-and-undefined: `exactOptionalPropertyTypes` is on and
+       the two serialise the same, so `toBeUndefined` alone cannot tell them
+       apart. */
+    expect("gist" in entry).toBe(false);
   });
 
   it("omits fields it has no value for, rather than carrying undefined", () => {

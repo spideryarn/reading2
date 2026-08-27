@@ -32,7 +32,12 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, blockIdentities, comments as commentsTable } from "../src/db/schema.js";
+import {
+  articleRevisions,
+  articles,
+  blockIdentities,
+  comments as commentsTable,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { fsArticleReader } from "../src/store/fs.js";
@@ -176,6 +181,123 @@ when("re-importing an article", () => {
     // Both halves matter. Asserting only that the stray is gone passes just as
     // well if the import wiped everything.
     expect(ids).toEqual([KEPT]);
+  }, 30_000);
+
+  it("updates the scalars in step with the tree it publishes", async () => {
+    /**
+     * **The invariant the shelf now depends on**, and it is not immutability.
+     *
+     * Since 2026-08-28 `listArticles` prints `word_count`, `block_count`,
+     * `part_count`, `section_count` and `root_gist` instead of recomputing them
+     * from every block row and the whole tree of every article. That is only
+     * safe because every writer sets those columns **in the same transaction**
+     * as the blocks and tree they describe.
+     *
+     * The importer is the writer that makes "immutable once published" false:
+     * when the text has not changed it reuses the current published revision
+     * and updates it in place. GPT Sol's second finding on
+     * docs/plans/library-read-latency.md — the plan claimed nothing ever
+     * touches a published revision, and the tool this migration runs on does.
+     *
+     * So: same ids, same text, different `words` and a different tree. The
+     * importer must take the update-in-place path (same revision id) and the
+     * five columns must describe what is now there. Red if `...scalars` is ever
+     * dropped from the update while `tree` stays in it — at which point the
+     * shelf would print last week's blurb and word count for ever, with nothing
+     * to say so.
+     */
+    const db = getDb();
+    const before = await db
+      .select({ id: articles.currentRevisionId })
+      .from(articles)
+      .where(eq(articles.slug, SLUG));
+
+    const write = (name: string, value: unknown) =>
+      writeFile(path.join(DIR, name), `${JSON.stringify(value, null, 2)}\n`, "utf8");
+
+    /* Same id and same text — that is what sends the importer down the
+       update-in-place branch — and a different word count. */
+    await write("blocks.json", {
+      blocks: [
+        {
+          id: BLOCK_ID,
+          tag: "p",
+          kind: "text",
+          text: "a paragraph",
+          words: 99,
+          html: `<p id="${BLOCK_ID}">a paragraph</p>`,
+          gistable: true,
+        },
+      ],
+    });
+    await write("tree.json", {
+      version: "toc/1",
+      generator: "fixture",
+      slug: SLUG,
+      rootId: "n0001",
+      nodes: {
+        n0001: {
+          id: "n0001",
+          depth: 0,
+          parent: null,
+          children: ["n0002"],
+          range: [BLOCK_ID, BLOCK_ID],
+          title: "A fixture",
+          gist: "A blurb the second import wrote.",
+        },
+        n0002: {
+          id: "n0002",
+          depth: 1,
+          parent: "n0001",
+          children: ["n0003"],
+          range: [BLOCK_ID, BLOCK_ID],
+          title: "Part one",
+        },
+        /* A depth-2 node, so `section_count` moves too. Without it this test
+           asserted four of the five while claiming all five — GPT Sol's third
+           finding on the built code, and the kind of gap that leaves one column
+           unwritten by a future importer with nothing to say so. */
+        n0003: {
+          id: "n0003",
+          depth: 2,
+          parent: "n0002",
+          children: [],
+          range: [BLOCK_ID, BLOCK_ID],
+          title: "Section one",
+        },
+      },
+    });
+    await importArticle(SLUG);
+
+    const after = await db
+      .select({
+        id: articles.currentRevisionId,
+        wordCount: articleRevisions.wordCount,
+        blockCount: articleRevisions.blockCount,
+        partCount: articleRevisions.partCount,
+        sectionCount: articleRevisions.sectionCount,
+        rootGist: articleRevisions.rootGist,
+      })
+      .from(articles)
+      .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+      .where(eq(articles.slug, SLUG));
+
+    /* The same revision, updated — not a new one. If this ever mints instead,
+       the test above it is no longer testing what it says. */
+    expect(after[0]?.id).toBe(before[0]?.id);
+    expect({
+      words: after[0]?.wordCount,
+      blocks: after[0]?.blockCount,
+      parts: after[0]?.partCount,
+      sections: after[0]?.sectionCount,
+      gist: after[0]?.rootGist,
+    }).toEqual({
+      words: 99,
+      blocks: 1,
+      parts: 1,
+      sections: 1,
+      gist: "A blurb the second import wrote.",
+    });
   }, 30_000);
 
   it("stays out of the library, in BOTH stores", async () => {

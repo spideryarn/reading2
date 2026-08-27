@@ -37,19 +37,24 @@ import { describe, expect, it } from "vitest";
 
 import { articleRevisions } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { REVISION_COLUMN_POLICY, deriveLibraryScalars } from "../src/store/pg-revisions.js";
+/* `deriveLibraryScalars` lives in src/library-scalars.ts since 2026-08-28 —
+   src/api.ts, the filesystem store, needs it too and must not import the
+   Postgres driver to get it. src/store/pg-revisions.ts re-exports it, and this
+   file imports it from its real address. */
+import { deriveLibraryScalars } from "../src/library-scalars.js";
+import { REVISION_CARRY_POLICY } from "../src/store/pg-revisions.js";
 
 loadEnvLocal();
 
 const declared = Object.keys(getTableColumns(articleRevisions));
-const classified = Object.keys(REVISION_COLUMN_POLICY);
+const classified = Object.keys(REVISION_CARRY_POLICY);
 
 describe("the carry-forward policy", () => {
   it("classifies every column the schema declares", () => {
     const unclassified = declared.filter((name) => !classified.includes(name));
     expect(
       unclassified,
-      "add each to REVISION_COLUMN_POLICY — a new column must not be carried or dropped by accident",
+      "add each to REVISION_CARRY_POLICY — a new column must not be carried or dropped by accident",
     ).toEqual([]);
   });
 
@@ -63,7 +68,7 @@ describe("the carry-forward policy", () => {
        `block_count` from `derive` to `carry` and adds a new derived column in
        the same breath — and moving `block_count` to `carry` is precisely the
        resurrect-dead-data bug the split exists to prevent. */
-    const of = (policy: string) => classified.filter((k) => REVISION_COLUMN_POLICY[k as never] === policy).sort();
+    const of = (policy: string) => classified.filter((k) => REVISION_CARRY_POLICY[k as never] === policy).sort();
     expect(of("mint")).toEqual(["articleId", "createdAt", "id", "status"]);
     expect(of("derive")).toEqual([
       "blockCount",
@@ -79,7 +84,7 @@ describe("the carry-forward policy", () => {
        missed. Dropping any of them makes a `{ steps: ["blocks"] }` job publish
        an article with no tree, which is an article nobody can read. */
     for (const column of ["tree", "labels", "arc", "glossary", "tweets", "summary"]) {
-      expect(REVISION_COLUMN_POLICY[column as never], column).toBe("carry");
+      expect(REVISION_CARRY_POLICY[column as never], column).toBe("carry");
     }
   });
 });

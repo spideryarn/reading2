@@ -157,6 +157,18 @@ when("the Postgres shelf and library search", () => {
         status: "published",
         title,
         fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
+        /* **The library's scalars, which a published revision always has.**
+           `publishRevision` and the importer both write them in the transaction
+           that publishes; a fixture without them was describing a row no writer
+           produces, and since 2026-08-28 the shelf reads them — so it was also
+           sending this suite down `listArticles`' recompute-and-warn fallback,
+           silently, on every run. `block_count` matters most: a published
+           revision with zero blocks is dropped from the shelf. */
+        wordCount: 12,
+        blockCount: 4,
+        partCount: 1,
+        sectionCount: 0,
+        rootGist: "A test article about nothing.",
         // A tree, because listArticles skips a revision without one.
         tree: {
           version: "1",

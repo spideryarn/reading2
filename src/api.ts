@@ -34,6 +34,7 @@ import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { contextPaths, STEP_ORDER, STEPS, stepIsDone, type StepContext } from "./pipeline.js";
 import { createFsArtifactStore } from "./store/artifacts-fs.js";
+import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "./library-scalars.js";
 import { readingMinutes } from "./reading-time.js";
 import { sanitizeStoredBlocks } from "./sanitize.js";
 import { isStale } from "./tweets.js";
@@ -722,24 +723,34 @@ async function weigh(files: string[]): Promise<{ ranAt: string | null; bytes: nu
 const FIXTURE_SLUG = "example";
 
 /**
- * One shelf-ready record, derived from artefacts already in memory.
+ * One shelf-ready record, assembled from things already in memory.
  *
- * Pure, so it can be tested without a filesystem, and so the derivation stays in
- * one place when the reads move to SQL.
+ * Pure, so it can be tested without a filesystem.
  *
- * The blurb is the tree root's `gist` — the whole piece in one sentence, which
- * is exactly what a card wants and is already generated. Note what is *not* a
- * fallback for it: the first arc entry. An arc sentence says where the argument
- * stands at the end of part one, so using it here would put a sentence about the
- * opening where the reader expects a sentence about the article, and it would
- * look right. `summary` then Readability's `excerpt` instead, both of which at
- * least mean the whole thing.
+ * The blurb, the word count and the three other numbers now arrive as
+ * `scalars`; `deriveLibraryScalars` in src/library-scalars.ts is where the rules
+ * for them live, including why the first arc entry is deliberately not a
+ * fallback for the blurb.
  */
 export function describeArticle(input: {
   slug: string;
   meta: Meta;
-  blocks: Block[];
-  tree: Tree;
+  /**
+   * The five, **received rather than derived** — since 2026-08-28.
+   *
+   * This function used to take `blocks` and `tree` and compute them, which made
+   * it the second implementation of `deriveLibraryScalars`; both files said so
+   * in a comment, and a review had already caught them disagreeing about the
+   * `excerpt` rung of the blurb. It is now one derivation reached from two
+   * moments: the filesystem store calls `deriveLibraryScalars` on the artefacts
+   * it has just read, and the Postgres store reads the columns the same
+   * function wrote at publish. docs/plans/library-read-latency.md § 2.
+   *
+   * That mattered for latency as well as for correctness: on the Postgres side,
+   * deriving here meant reading every block row and the whole tree of every
+   * article — and sanitising each one through jsdom — on every homepage load.
+   */
+  scalars: LibraryScalars;
   comments: number;
   addedAt: string;
   fixture?: boolean;
@@ -755,20 +766,8 @@ export function describeArticle(input: {
   /** Which optional stages have produced something. Absent means none of them. */
   has?: Partial<LibraryEntry["has"]>;
 }): LibraryEntry {
-  const { slug, meta, blocks, tree } = input;
+  const { slug, meta, scalars } = input;
   const shelf = input.shelf ?? { opens: 0 };
-  const words = blocks.reduce((n, b) => n + b.words, 0);
-
-  // One pass rather than two filters: the tree of a long article is thousands
-  // of nodes, and this runs once per article per homepage load.
-  let parts = 0;
-  let sections = 0;
-  for (const node of Object.values(tree.nodes)) {
-    if (node.depth === 1) parts++;
-    else if (node.depth === 2) sections++;
-  }
-
-  const gist = tree.nodes[tree.rootId]?.gist ?? tree.nodes[tree.rootId]?.summary ?? meta.excerpt;
 
   // Conditional spreads, not `byline: meta.byline` — exactOptionalPropertyTypes
   // is on, so an explicitly-undefined property is not the same as an absent one.
@@ -792,13 +791,13 @@ export function describeArticle(input: {
     ...(meta.siteName ? { siteName: meta.siteName } : {}),
     ...(meta.url ? { url: meta.url } : {}),
     addedAt: input.addedAt,
-    words,
-    minutes: readingMinutes(words),
-    blocks: blocks.length,
-    parts,
-    sections,
+    words: scalars.wordCount,
+    minutes: readingMinutes(scalars.wordCount),
+    blocks: scalars.blockCount,
+    parts: scalars.partCount,
+    sections: scalars.sectionCount,
     comments: input.comments,
-    ...(gist ? { gist } : {}),
+    ...(scalars.rootGist ? { gist: scalars.rootGist } : {}),
     ...(input.fixture ? { fixture: true as const } : {}),
   };
 }
@@ -866,10 +865,10 @@ async function describeDir(
 
   // Same fallback chain as loadArticle: the slug is the last resort, never the
   // first, because "noema-mythology-of-conscious-ai" is not a title.
-  const title =
-    meta?.title ??
-    blocksFile.blocks.find((b) => b.kind === "heading" && b.level === 1)?.text ??
-    slug;
+  /* Through `headingTitleOf`, not a scan written here. The Postgres store needs
+     the same rule and had its own copy; there were three, and one of them is
+     SQL. src/library-scalars.ts. */
+  const title = meta?.title ?? headingTitleOf(blocksFile.blocks) ?? slug;
 
   /* `fetchedAt` is the honest answer and stage 2 now records one
      (src/extract.ts). Before it did, the best available is when the blocks were
@@ -918,8 +917,16 @@ async function describeDir(
     entry: describeArticle({
       slug,
       meta: { ...(meta ?? { slug }), title, slug },
-      blocks: blocksFile.blocks,
-      tree,
+      /* Derived here, from the artefacts this walk has just read. The Postgres
+         store reads the columns the *same* function wrote at publish, so the
+         shelf cannot end up with two answers depending on which store served
+         it — the divergence a review found once already, over the `excerpt`
+         rung of the blurb. src/library-scalars.ts. */
+      scalars: deriveLibraryScalars({
+        blocks: blocksFile.blocks,
+        tree,
+        excerpt: meta?.excerpt,
+      }),
       comments: (await loadComments(slug)).length,
       addedAt,
       fixture,

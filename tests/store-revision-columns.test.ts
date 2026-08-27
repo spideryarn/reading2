@@ -23,7 +23,21 @@
  * 508 KB of it, to return a 10 KB glossary.
  *
  * So there is a projection per read now, and the guard is a **policy map**:
- * `REVISION_COLUMN_POLICY` names every column and says which reads may take it.
+ * `REVISION_READ_POLICY` names every column and says which reads may take it.
+ *
+ * ## And a second axis, since 2026-08-28
+ *
+ * The shelf asks four artefact columns one question — "is there one?" — and it
+ * answered it by pulling the whole JSONB document across the wire to compare it
+ * with null: 154 KB of tree, glossary, summary, arc and tweets across eight
+ * short articles, per homepage load, to produce twenty booleans. So a read may
+ * now take a column by its `"value"` or by its `"presence"`, and `is not null`
+ * is evaluated in Postgres.
+ *
+ * One axis could not express that, and the difference matters to this file
+ * specifically: without it, "the library may look at `glossary`" and "the
+ * library may read `glossary`" are the same sentence, and the projection check
+ * below would have to accept either query. docs/plans/library-read-latency.md.
  *
  * GPT Sol's review of docs/plans/glossary-read-latency.md is why it is a map
  * and not a union. A test of the form `selected ∪ omitted === all` looks like
@@ -52,16 +66,37 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { articleRevisions } from "../src/db/schema.js";
 import {
   currentRevisionQuery,
-  REVISION_COLUMN_POLICY_FOR_TEST as POLICY,
+  listArticlesQuery,
+  PRESENCE_OF_FOR_TEST as PRESENCE_OF,
+  REVISION_READ_POLICY_FOR_TEST as POLICY,
   REVISION_PROJECTIONS,
 } from "../src/store/pg.js";
 
-/** Which columns the policy grants one read, in sorted order. */
+type Uses = Record<string, "value" | "presence" | undefined>;
+
+/**
+ * The keys a read's projection must have, from the policy alone.
+ *
+ * A `"value"` grant is the column's own name; a `"presence"` grant is the
+ * `has…` alias `PRESENCE_OF` declares for it. Built from the two declarations
+ * rather than from a naming convention this file would otherwise have to guess
+ * — so renaming a flag without renaming its declaration fails here.
+ */
 function policyGrants(read: string): string[] {
-  return Object.entries(POLICY)
-    .filter(([, reads]) => (reads as string[]).includes(read))
-    .map(([name]) => name)
-    .sort();
+  const aliasOf = new Map<string, string>(
+    Object.entries(PRESENCE_OF).map(([alias, column]) => [column as string, alias]),
+  );
+  const keys: string[] = [];
+  for (const [column, uses] of Object.entries(POLICY as Record<string, Uses>)) {
+    const use = uses[read];
+    if (use === "value") keys.push(column);
+    else if (use === "presence") {
+      const alias = aliasOf.get(column);
+      if (!alias) throw new Error(`${column} is granted by presence to ${read} but has no has… alias`);
+      keys.push(alias);
+    }
+  }
+  return keys.sort();
 }
 
 describe("the revision column policy", () => {
@@ -78,7 +113,7 @@ describe("the revision column policy", () => {
        src/store/artifacts.ts and src/store/export.ts — never through a revision
        read. `labels` likewise. */
     for (const column of ["rawBytes", "extractedHtml", "stampedHtml", "labels"] as const) {
-      expect({ column, reads: POLICY[column] }).toEqual({ column, reads: [] });
+      expect({ column, reads: POLICY[column] }).toEqual({ column, reads: {} });
     }
   });
 
@@ -86,7 +121,23 @@ describe("the revision column policy", () => {
     /* `metaFrom` puts `rawSha256` in the Meta the client sees, and
        src/store/export.ts rebuilds meta.json from it. Dropping the bytes must
        not drop the fact that we know what they were. */
-    expect(POLICY.rawSha256).toContain("article");
+    expect(POLICY.rawSha256.article).toBe("value");
+  });
+});
+
+describe("the presence flags", () => {
+  it("are named for columns, and named nothing a column is called", () => {
+    const columns = new Set(Object.keys(getTableColumns(articleRevisions)));
+    for (const [alias, column] of Object.entries(PRESENCE_OF)) {
+      /* The column it is the presence of has to exist. */
+      expect({ alias, real: columns.has(column) }).toEqual({ alias, real: true });
+      /* And the alias must NOT be a column name. `RevisionRowFor` tests the
+         schema keys first, so an alias that collided with one would silently
+         take that column's type instead of `boolean` — a `has…` flag typed
+         `Tree | null`, and `if (row.hasTree)` true for every article that has
+         one and also for none that don't. GPT Sol's seventh finding. */
+      expect({ alias, shadows: columns.has(alias) }).toEqual({ alias, shadows: false });
+    }
   });
 });
 
@@ -108,6 +159,29 @@ describe("every projection obeys the policy", () => {
       expect(Object.keys(REVISION_PROJECTIONS[read]).sort()).toEqual(policyGrants(read));
     });
   }
+
+  it("lets the shelf ask whether an artefact exists without reading it", () => {
+    /* The second half of docs/plans/library-read-latency.md, as a fact about
+       the policy rather than as a diff: the library is granted all five of
+       these, and granted none of them by value. */
+    for (const column of ["tree", "arc", "tweets", "glossary", "summary"] as const) {
+      expect({ column, use: POLICY[column].library }).toEqual({ column, use: "presence" });
+    }
+    /* And the read that returns each artefact still takes it by value, so
+       "presence" cannot spread quietly into the reads that need the document. */
+    expect(POLICY.glossary.glossary).toBe("value");
+    expect(POLICY.summary.summaries).toBe("value");
+    expect(POLICY.tweets.tweets).toBe("value");
+    expect(POLICY.tree.article).toBe("value");
+  });
+
+  it("gives the shelf the cached scalars, which nothing read until 2026-08-28", () => {
+    /* They were written at publish and read by nobody, so the shelf recomputed
+       all five from every block row of every article on every load. */
+    for (const column of ["wordCount", "blockCount", "partCount", "sectionCount", "rootGist"] as const) {
+      expect({ column, use: POLICY[column].library }).toEqual({ column, use: "value" });
+    }
+  });
 
   it("does not let the glossary read take another artefact's document", () => {
     /* The point of the whole change, stated as a fact rather than as a diff:
@@ -180,12 +254,84 @@ describe("the query actually uses its projection", () => {
   });
 });
 
-describe("the two revision queries that are not reachable as builders", () => {
+describe("the shelf's own query", () => {
   /**
-   * `listArticles` and `publishRevision` name their projections inline — the
-   * first inside a long chain, the second inside a transaction that has already
-   * taken a lock. Extracting either to take its builder would be a bigger
-   * change than this one, so they are guarded by reading the source instead.
+   * **Built through the real query, not from the projection object.**
+   *
+   * `listArticlesQuery` exists as a seam for exactly this. Assembling SQL from
+   * `REVISION_PROJECTIONS.library` here would repeat the hole GPT Sol found in
+   * the last change: the projection can be perfect while the query says
+   * `.select()`. Its fourth finding on docs/plans/library-read-latency.md said
+   * so before this was built.
+   */
+  const shelfSql = (archived: boolean): string =>
+    listArticlesQuery(new QueryBuilder() as never, { archived }).toSQL().sql;
+
+  it("looks at the five artefact columns and reads none of them", () => {
+    const sql = shelfSql(false);
+    for (const column of ["tree", "arc", "tweets", "glossary", "summary"] as const) {
+      /* Present, and present ONLY as a null test. A bare `"tree"` in the select
+         list is the 37 KB document crossing the wire to answer a boolean. */
+      expect({ column, asked: sql.includes(`"${column}" is not null`) }).toEqual({
+        column,
+        asked: true,
+      });
+      const bare = new RegExp(`"${column}"(?! is not null)`, "g");
+      expect({ column, bare: bare.test(sql) }).toEqual({ column, bare: false });
+    }
+  });
+
+  it("takes the cached scalars instead of the blocks", () => {
+    const sql = shelfSql(false);
+    for (const column of ["word_count", "block_count", "part_count", "section_count", "root_gist"]) {
+      expect({ column, taken: sql.includes(`"${column}"`) }).toEqual({ column, taken: true });
+    }
+    /* **`revision_blocks` appears exactly once**, and only as the correlated
+       subquery that finds the title fallback's heading.
+
+       Counting, not merely "no `html` and no `fts`". GPT Sol's fourth finding
+       on the built code: a join, a lateral, or a second correlated aggregate
+       over the block table would stay at two statements, be invisible to the
+       statement-shape check in tests/store-shelf-reads.test.ts (which ignores
+       anything selecting `from articles`), touch neither of the two forbidden
+       columns, and leave every test green. */
+    /* Counting where it is *read from*, not where its name appears: a column
+       reference inside the subquery is qualified too, so the table's name
+       occurs six times in one perfectly good query. `from` and `join` are the
+       two ways a second read of it could arrive — including the inner `from` of
+       a lateral. */
+    const reads = sql.match(/\b(?:from|join)\s+"spideryarn"\."revision_blocks"/g) ?? [];
+    expect({ readsOfTheBlockTable: reads.length }).toEqual({ readsOfTheBlockTable: 1 });
+
+    /* And the shape of that one, since it is now the only thing standing
+       between the shelf and the blocks: guarded, ordered, and limited to a
+       row. Unordered it returns whichever `<h1>` the planner reaches first;
+       unguarded it filters every block of an article that has none. */
+    expect(sql).toMatch(/case\s+when .*"title" is null and .*"title_override" is null then \(/s);
+    expect(sql).toContain("limit 1");
+    expect(sql).toContain('"ordinal"');
+    expect(sql).not.toContain('"html"');
+    expect(sql).not.toContain('"fts"');
+  });
+
+  it("never sends the source document or the whole-article HTML", () => {
+    for (const archived of [false, true]) {
+      const sql = shelfSql(archived);
+      expect({ archived, raw: sql.includes('"raw_bytes"') }).toEqual({ archived, raw: false });
+      expect({ archived, x: sql.includes('"extracted_html"') }).toEqual({ archived, x: false });
+      expect({ archived, s: sql.includes('"stamped_html"') }).toEqual({ archived, s: false });
+      expect({ archived, l: sql.includes('"labels"') }).toEqual({ archived, l: false });
+      expect({ archived, i: sql.includes('"ideas"') }).toEqual({ archived, i: false });
+    }
+  });
+});
+
+describe("the revision query that is not reachable as a builder", () => {
+  /**
+   * `publishRevision` names its projection inline, inside a transaction that
+   * has already taken a lock, so it is guarded by reading the source instead.
+   * (`listArticles` was in this boat too until 2026-08-28; it now has the
+   * builder seam above, which is strictly better.)
    *
    * **A weak test, labelled as one.** It matches text; it cannot tell live code
    * from dead. What it catches is the one regression that matters here, which
@@ -206,12 +352,6 @@ describe("the two revision queries that are not reachable as builders", () => {
     const src = await readFile(path.join(root, file), "utf8");
     return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
   }
-
-  it("the library selects its projection, not the whole revision", async () => {
-    const src = await code("src/store/pg.ts");
-    expect(src).toContain("revision: REVISION_PROJECTIONS.library");
-    expect(src).not.toContain("revision: articleRevisions");
-  });
 
   it("publication selects its projection, not everything", async () => {
     const src = await code("src/store/pg-revisions.ts");

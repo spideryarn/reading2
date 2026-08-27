@@ -515,6 +515,59 @@ the card and the masthead cannot drift. They run on opposite sides of the wire, 
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
 
+### Where the numbers on it come from, and why nobody derives them twice
+
+Every number on the card — words, minutes, blocks, parts, sections — and the blurb are produced by
+one function, [`deriveLibraryScalars`](../../src/library-scalars.ts). Both stores use it, at
+different moments:
+
+| | when it runs | what the shelf then reads |
+|---|---|---|
+| **filesystem** | at read, over the artefacts the directory walk just loaded | its return value |
+| **Postgres** | at **publish**, inside the transaction that writes the blocks and the tree | the five columns it wrote |
+
+`describeArticle` in [`src/api.ts`](../../src/api.ts) *receives* those five and assembles the card.
+It used to derive them itself, which made it a second implementation — and the two had **already
+diverged once**, over the `excerpt` rung of the blurb's fallback, found in review rather than by a
+test.
+
+**On the Postgres side that was also the shelf's whole cost.** Deriving per request meant reading
+every block row of every article — `text`, `html` and the generated `fts` vector — and running each
+one through the jsdom sanitiser, on every homepage load, in order to add up some word counts. Six
+articles on a laptop against a local Supabase:
+
+```
+                          before      after
+  statements per call     13 (1+2N)   2
+  row JSON per call       641 KB      4 KB
+  wall clock (median)     558 ms      3 ms
+```
+
+The four ticks went the same way. `has.glossary` was `row.revision.glossary != null` on a JSONB
+document the query had dragged across the wire; it is now `is not null`, evaluated in Postgres, and
+the document stays on the server. So does the tree, which is 37 KB on one article and was read to
+count two kinds of node.
+
+The safety of reading columns instead of artefacts rests on one invariant, and it is **not** that a
+published revision is immutable — the importer updates one in place when the text has not changed.
+It is that every writer sets the five columns in the same transaction as the blocks and tree they
+describe. If a third writer ever touches `tree` or `revision_blocks` without recomputing them, the
+shelf starts printing last week's numbers with nothing to say so;
+[`tests/store-import-convergence.test.ts`](../../tests/store-import-convergence.test.ts) pins the
+importer's half of it. The whole thing is written up in
+[library-read-latency.md](../plans/library-read-latency.md).
+
+### The title fallback exists in four places, and that is on purpose
+
+When no column holds a title, the card and the masthead show the article's own first `<h1>`, and the
+slug is the last resort. [`headingTitleOf`](../../src/library-scalars.ts) is the rule, and three
+callers share it. The fourth is a correlated subquery inside `listArticlesQuery`
+([`src/store/pg.ts`](../../src/store/pg.ts)), because the shelf asks Postgres for **one row** rather
+than reading every block to find it. The SQL and the TypeScript are pinned against each other in
+[`tests/store-shelf-reads.test.ts`](../../tests/store-shelf-reads.test.ts), over the real corpus and
+over a fixture with two headings deliberately stored out of order — without which, dropping
+`order by ordinal` changes nothing and the test stays green.
+
 ## Adding an article: the box submits now
 
 Paste a URL, press Add, and the five stages tick over while you watch. The article appears on the
@@ -628,6 +681,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/Link.tsx`](../../src/web/Link.tsx) | an `<a>` that routes in-page and still behaves like an `<a>` |
 | [`src/ingest.ts`](../../src/ingest.ts) | `slugFromUrl`, `isSlug` — shared by the extractor, the add box and the server |
 | [`src/api.ts`](../../src/api.ts) | `listArticles()`, `describeArticle()` — **the Postgres seam** |
+| [`src/library-scalars.ts`](../../src/library-scalars.ts) | **the two derivations both stores share**: the card's five numbers and blurb, and the `<h1>` a missing title falls back to |
 | [`src/shelf.ts`](../../src/shelf.ts) | archived, renamed, opened — `data/<slug>/shelf.json` |
 | [`src/library-search.ts`](../../src/library-search.ts) | searching every article at once, filesystem half |
 | [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | the same two things, in SQL |
@@ -642,6 +696,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`tests/article-rename.test.tsx`](../../tests/article-rename.test.tsx) | the pencil on the article and on its metadata page, mounted — cancelled, cleared, unchanged, and a write that fails |
 | [`tests/library-hits.test.ts`](../../tests/library-hits.test.ts), [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) | the link's parameters; and the Postgres half, which had never had a query run against it |
 | [`tests/library-sorting.test.ts`](../../tests/library-sorting.test.ts) | the sorting rules, asserted against a **real TanStack table** rather than a stand-in |
+| [`tests/store-shelf-reads.test.ts`](../../tests/store-shelf-reads.test.ts) | **how many questions the shelf asks, and about what** — two, whatever it holds, and neither about a block |
 | [`tests/table-sort.test.ts`](../../tests/table-sort.test.ts), [`tests/relative-time.test.ts`](../../tests/relative-time.test.ts) | the URL round-trip and `sinkLast`; and where "days ago" stops helping |
 
 Styling is Tailwind utilities, not a block in [`styles.css`](../../src/web/styles.css). That is the

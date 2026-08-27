@@ -1,5 +1,5 @@
 /**
- * The five numbers and the one sentence a library card is made of.
+ * The derivations both stores share, and neither may spell twice.
  *
  * ## Why this is its own module
  *
@@ -28,6 +28,15 @@
  * there had better be only one.
  *
  * Pure, so it can be tested without a filesystem and without a database.
+ *
+ * ## Two of them, and the second one is not a scalar
+ *
+ * `headingTitleOf` is here too, despite the file's name, because it is the same
+ * kind of thing for the same reason: one rule, needed by both stores, and there
+ * were **three** copies of it when this module was written — src/api.ts,
+ * src/store/pg.ts, and a fourth spelling in SQL. It feeds the reading view's
+ * masthead as well as the card, which is why it is not called
+ * `deriveLibraryTitle`.
  */
 
 import type { Block, Tree } from "./types.js";
@@ -85,4 +94,27 @@ export function deriveLibraryScalars(input: {
        would look right. */
     rootGist: root?.gist ?? root?.summary ?? input.excerpt ?? null,
   };
+}
+
+/**
+ * The article's own first-level heading — **`meta.title`'s fallback**.
+ *
+ * When nothing stored a title, the article's own `<h1>` is what the card and the
+ * masthead show, and the slug is the last resort. Both stores need the rule and
+ * had their own copy of it: src/api.ts scanned `blocks.json`, `metaFrom` in
+ * src/store/pg.ts scanned the rows it had just read, and neither knew about the
+ * other.
+ *
+ * **The first by document order, not any of them.** The array is in document
+ * order by construction on the filesystem and by `order by ordinal` in
+ * Postgres, and an article with two `<h1>`s is not unusual.
+ *
+ * There is a fourth spelling, and it cannot be this function: the shelf asks
+ * Postgres for one row rather than reading every block, so the same rule exists
+ * as a correlated subquery in `listArticlesQuery`. It is pinned against this
+ * one by tests/store-shelf-reads.test.ts, over the real corpus and over a
+ * fixture with two headings deliberately stored out of order.
+ */
+export function headingTitleOf(blocks: readonly Block[]): string | null {
+  return blocks.find((b) => b.kind === "heading" && b.level === 1)?.text ?? null;
 }
