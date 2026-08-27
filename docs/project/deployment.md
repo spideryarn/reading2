@@ -573,6 +573,28 @@ Uploading a PDF (2026-08-27) puts bytes in Supabase Storage, in a bucket called 
 locally** — a remote project needs `supabase seed buckets --project-ref <ref>`, or the equivalent
 insert into `storage.buckets`.
 
+> **It exists on the remote as of 2026-08-27**, and it did not until then: `GET /storage/v1/bucket`
+> on the production project returned `[]`, an empty list, on the day this paragraph had been warning
+> about it for hours. Created with the REST API rather than the CLI, which needs no access token and
+> takes the settings straight from the block below:
+>
+> ```bash
+> curl -X POST "$SUPABASE_URL/storage/v1/bucket" \
+>   -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "Content-Type: application/json" \
+>   -d '{"id":"sources","name":"sources","public":false,"file_size_limit":52428800,
+>        "allowed_mime_types":["application/pdf","text/html"]}'
+> ```
+>
+> Found exactly the way the paragraph below predicts — by dropping a file at the live site and
+> watching the reader's own error message, `Storage sign failed (404): The related resource does not
+> exist`. Nothing before that point knew. **The check is one command and it is worth running after
+> any project change**, because an empty list is what a working configuration also looks like until
+> somebody uploads something:
+>
+> ```bash
+> curl -s "$SUPABASE_URL/storage/v1/bucket" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"
+> ```
+
 This is on the "fails quietly" list rather than beside it because of *how* it fails: nothing checks
 for the bucket at boot. `POST /api/uploads` mints a grant against a path in a bucket that is not
 there, the browser gets a signed URL that looks perfectly good, and the `PUT` is what discovers it.
@@ -610,7 +632,20 @@ from Postgres now — the last two since step 10 landed on 2026-08-26. What stil
 writes to a local filesystem, which a serverless host does not have:
 
 - **adding an article** ([`src/jobs.ts`](../../src/jobs.ts)) — and this one is
-  more than storage: the queue assumes one long-lived process
+  more than storage: the queue assumes one long-lived process.
+
+  **Confirmed on the live site, 2026-08-27**, and worth recording as the exact
+  string somebody will one day search for. Everything in front of the pipeline
+  now works: a dropped PDF mints a grant, `PUT`s to Storage, queues a job, and
+  the ingest page draws its five steps. Then step 1 says
+
+      ENOENT: no such file or directory, mkdir '/var/data'
+
+  because the stages still write `data/<slug>/` directly and Vercel has no
+  writable disk. Nothing is wrong with the upload half — it got all the way to
+  the wall. The wall is [transactional-stage-runner.md](../plans/transactional-stage-runner.md),
+  and [database.md § Writes do not](database.md) is the same fact from the
+  storage side
 - **`deleteGlossary`** — still refused by `notMigrated` in
   [`src/store/index.ts`](../../src/store/index.ts), which is the right failure.
   It nulls the glossary on a *published* revision, and whether a published
