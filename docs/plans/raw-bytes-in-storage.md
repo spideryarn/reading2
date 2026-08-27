@@ -623,12 +623,51 @@ and abandoned and rejected uploads are kept for ever. Staging objects were alrea
 deleted one *re-arms* any live grant over its key), so this is not new; it is now permanent by policy
 rather than by accident, and worth knowing before the bucket is ever measured.
 
+## What the review of the built code changed
+
+Four commits in, GPT Sol reviewed the code rather than the plan and returned **NO-SHIP** on two
+findings that could create or accept a dangling reference. All four acted on below were verified
+against the code first.
+
+**The repair I had just written could destroy a correct object.** `storeRawSource` removed a
+mismatched object and re-put ours. Two callers reading the same corruption race: the loser's `remove`
+deletes the **winner's correct object** after the winner returned success and its caller committed a
+reference. The fix for dangling references would have made one. It now **refuses**, naming the key,
+and touches nothing — repair needs serialisation or a version-conditioned replace and the blob seam
+has neither. The cost is stated rather than hidden: an article whose canonical name holds wrong bytes
+cannot be ingested until somebody clears them by hand.
+
+**Uploads were still doing it the old way.** `acquireUpload` called `putIfAbsent` directly, under a
+comment ending *"the bytes at that key are these bytes, by construction, because the key is their
+hash"* — the exact reasoning `storeRawSource` exists to refute. Pre-place wrong bytes at an uploaded
+PDF's canonical hash and the upload became `verified` over a corrupt object. It goes through the
+helper now, which is the shape a shared helper was supposed to guarantee and did not.
+
+**The boot check did not check the thing its own comment claimed.** `projectMismatch` never saw the
+service key, and `blobStore()` needs *both* the URL and the key, falling back to the filesystem when
+either is missing — so `SPIDERYARN_STORE=postgres` with `SUPABASE_URL` set and the key absent booted
+happily and wrote source documents to `data/_blobs/`. Both are now required, non-blank.
+
+**And it refused configurations that were fine**, which is worse than the hole it closed, because it
+refuses at boot. It read the project ref only from the pooler username's `postgres.<ref>`, and
+[database.md](../project/database.md) lists a **direct** host — `db.<ref>.supabase.co`, plain
+`postgres` username — used for local admin work. It reads either place now. The other half: *"both
+are loopback"* is not *"the same stack"*, since the previous app's container runs on this laptop too
+— which is the whole reason this project moved to a `5436x` port block — so the local case compares
+ports, pinned against `supabase/config.toml` by a test so that moving the block fails a test rather
+than somebody's boot.
+
 ## Not decided here
 
 - **The erasure deadline** — how long after its last reference an object may live. Needs a number and
   an owner, and it is a question for Greg rather than for this document.
 - **Whether `extractedHtml` / `stampedHtml` ever move.** Largest measured: 151 KB. The three-way line
   above says no, and says why more precisely than the first draft did.
+- **The publication gate is written here and not built.** `publishRevision` validates blocks, tree and
+  the ToC stamp and does not yet look at `fetch` runs or the source reference, so today the `CARRY`
+  decision above is the vacuous pass the second review warned about. It has to land **with** the
+  import work, not after it — the review was right that it was missing from the list, and this is the
+  list.
 - **When `raw_bytes` is dropped.** Writing stops first; the drop waits until every environment is
   backfilled and verified, because a drop is the one migration that cannot be walked back.
 - **Whether the checkpoint store** (landing B piece 3) uses Storage. It should not, by the same line:

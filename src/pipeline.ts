@@ -38,17 +38,10 @@ import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
 import { hashProfile } from "./profile.js";
-import {
-  type RejectReason,
-  canonicalKey,
-  looksLikePdf,
-  MAX_UPLOAD_BYTES,
-  rejectionFailure,
-  stagingKey,
-} from "./source.js";
+import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
 import { fsLocations } from "./store/artifacts-fs.js";
-import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
+import { blobStore, CONTENT_TYPE, storeRawSource } from "./store/blobs.js";
 import {
   type ArtifactKind,
   type ArtifactStore,
@@ -733,13 +726,18 @@ async function acquireUpload(ctx: StepContext, upload: JobUpload): Promise<strin
 
   /* Promoted to a name that is a statement about its contents, and create-only.
      `already-there` is the dedup hit — two readers with the same paper — and it
-     is a success, not a collision: the bytes at that key are these bytes, by
-     construction, because the key is their hash. */
-  const promotion = await store.putIfAbsent(
-    canonicalKey(sha256, "pdf"),
-    got,
-    CONTENT_TYPE.pdf,
-  );
+     is a success rather than a collision.
+
+     **Through `storeRawSource`, not `putIfAbsent` directly**, and the comment
+     here used to end "the bytes at that key are these bytes, by construction,
+     because the key is their hash". That is the reasoning `storeRawSource`
+     exists to refute: something can be at a canonical name without anybody
+     having deleted anything — a crashed write, a bad backfill, anybody with the
+     service key — and believing the hit would mark this upload `verified`
+     while the canonical object stays corrupt. Uploads were the one path still
+     doing it the old way after the helper landed, which is the shape a shared
+     helper is supposed to prevent. GPT Sol, 2026-08-27. */
+  const { outcome: promotion } = await storeRawSource(got, "pdf");
 
   await mkdir(ctx.dir, { recursive: true });
   await writeFile(path.join(ctx.dir, "raw.pdf"), got);

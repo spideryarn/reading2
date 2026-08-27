@@ -18,13 +18,22 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { projectMismatch } from "../src/store/blobs.js";
 
+/** The pooler form: the ref is in the username. */
 const REMOTE_DB = (ref: string) =>
   `postgresql://postgres.${ref}:pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres`;
+/** The direct form: plain `postgres`, and the ref is in the HOSTNAME. */
+const DIRECT_DB = (ref: string) => `postgresql://postgres:pw@db.${ref}.supabase.co:5432/postgres`;
 const REMOTE_API = (ref: string) => `https://${ref}.supabase.co`;
-const LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
-const LOCAL_API = "http://127.0.0.1:54321";
+/** This project's local stack, per `supabase/config.toml`. */
+const LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:54362/postgres";
+const LOCAL_API = "http://127.0.0.1:54361";
+/** The *other* app's local stack, on the default ports. Same laptop, same loopback. */
+const OTHER_LOCAL_DB = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 
 describe("pairing the database with the bucket", () => {
   it("is happy when both name the same project", () => {
@@ -74,5 +83,81 @@ describe("pairing the database with the bucket", () => {
     const sneaky = `postgresql://postgres.aaaaaaaaaaaaaaaaaaaa:postgres.bbbbbbbbbbbbbbbbbbbb@aws-0-eu-west-2.pooler.supabase.com:6543/postgres`;
     expect(projectMismatch(sneaky, REMOTE_API("aaaaaaaaaaaaaaaaaaaa"))).toBeNull();
     expect(projectMismatch(sneaky, REMOTE_API("bbbbbbbbbbbbbbbbbbbb"))).toBeTruthy();
+  });
+});
+
+describe("the connection strings people actually paste", () => {
+  /**
+   * **A boot-time refusal that refuses a valid configuration is worse than the
+   * hole it closes**, and the first version of this did exactly that.
+   *
+   * It read the project ref only out of the pooler username's
+   * `postgres.<ref>`. But `docs/project/database.md` lists three hosts, and the
+   * *direct* one — used for local admin work — is `db.<ref>.supabase.co` with
+   * a plain `postgres` username. That would have come out as project "unknown"
+   * and stopped the app booting against a perfectly good pair. GPT Sol,
+   * reviewing the built code, 2026-08-27.
+   */
+  it("reads the ref from the hostname when the username has none", () => {
+    expect(projectMismatch(DIRECT_DB("abcdefghijklmnopqrst"), REMOTE_API("abcdefghijklmnopqrst"))).toBeNull();
+  });
+
+  it("still catches a mismatch in the direct form", () => {
+    expect(projectMismatch(DIRECT_DB("aaaaaaaaaaaaaaaaaaaa"), REMOTE_API("bbbbbbbbbbbbbbbbbbbb"))).toBeTruthy();
+  });
+
+  it("does not mind which form each side uses", () => {
+    expect(projectMismatch(DIRECT_DB("abcdefghijklmnopqrst"), REMOTE_API("abcdefghijklmnopqrst"))).toBeNull();
+    expect(projectMismatch(REMOTE_DB("abcdefghijklmnopqrst"), REMOTE_API("abcdefghijklmnopqrst"))).toBeNull();
+  });
+});
+
+describe("two local stacks on one laptop", () => {
+  /**
+   * **"Both are loopback" is not "both are the same stack".** Greg runs the
+   * previous app's Supabase container beside this one — that is precisely why
+   * this project moved to a `5436x` port block
+   * (`docs/project/supabase-local.md`). So a `.env.local` naming the old app's
+   * database and this app's Storage is a real split brain on one machine, and
+   * comparing hostnames alone calls it fine.
+   *
+   * The ports are the only identity a local stack has, so they are the check.
+   */
+  it("accepts this project's own pair", () => {
+    expect(projectMismatch(LOCAL_DB, LOCAL_API)).toBeNull();
+  });
+
+  it("refuses the other app's database beside this app's Storage", () => {
+    const why = projectMismatch(OTHER_LOCAL_DB, LOCAL_API);
+    expect(why).toBeTruthy();
+    expect(why).toContain("54322");
+  });
+});
+
+describe("the local ports this check believes in", () => {
+  /**
+   * The two numbers live in `src/store/blobs.ts` as constants and in
+   * `supabase/config.toml` as configuration, and a boot refusal is what happens
+   * when they disagree. So they are pinned against each other here: moving the
+   * port block fails this test rather than refusing somebody's boot with a
+   * message about ports they have never heard of.
+   */
+  const config = readFileSync(
+    path.join(import.meta.dirname, "..", "supabase", "config.toml"),
+    "utf8",
+  );
+  const portUnder = (section: string): string => {
+    const from = config.indexOf(`[${section}]`);
+    expect(from, `no [${section}] in supabase/config.toml`).toBeGreaterThan(-1);
+    return /^port = (\d+)$/m.exec(config.slice(from))?.[1] ?? "";
+  };
+
+  it("matches supabase/config.toml", () => {
+    /* Driven through the function rather than by exporting the constants: what
+       matters is that the pair the code accepts is the pair the config
+       declares, not that two literals are equal. */
+    const db = `postgresql://postgres:postgres@127.0.0.1:${portUnder("db")}/postgres`;
+    const api = `http://127.0.0.1:${portUnder("api")}`;
+    expect(projectMismatch(db, api)).toBeNull();
   });
 });

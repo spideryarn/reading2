@@ -140,7 +140,7 @@ export function projectMismatch(
      separately and for a different reason. */
   if (!databaseUrl || !supabaseUrl) return null;
 
-  const db = hostAndRef(databaseUrl, (u) => u.username.split(".")[1]);
+  const db = hostAndRef(databaseUrl, databaseRef);
   const api = hostAndRef(supabaseUrl, (u) => u.hostname.split(".")[0]);
   /* Fail closed on anything that will not parse — the same rule
      `isLocalDatabaseUrl` follows, and for the same reason: "I cannot tell what
@@ -148,7 +148,28 @@ export function projectMismatch(
   if (!db) return `DATABASE_URL is not a URL, so it cannot be checked against SUPABASE_URL.`;
   if (!api) return `SUPABASE_URL is not a URL, so it cannot be checked against DATABASE_URL.`;
 
-  if (db.local && api.local) return null;
+  if (db.local && api.local) {
+    /* **"Both are loopback" is not "both are the same stack."** Greg runs the
+       previous app's Supabase container beside this one — which is exactly why
+       this project moved to a `5436x` port block
+       (docs/project/supabase-local.md) — so a `.env.local` naming the old app's
+       database and this app's Storage is a real split brain on one machine, and
+       comparing hostnames alone calls it fine. GPT Sol, 2026-08-27.
+
+       The port is the only identity a local stack has, so the port is the
+       check. tests/store-project-pair.test.ts pins these two numbers against
+       supabase/config.toml, so moving the block there fails a test here rather
+       than refusing somebody's boot. */
+    const wrong = [
+      db.port === LOCAL_DB_PORT ? null : `DATABASE_URL is on port ${db.port}, not ${LOCAL_DB_PORT}`,
+      api.port === LOCAL_API_PORT ? null : `SUPABASE_URL is on port ${api.port}, not ${LOCAL_API_PORT}`,
+    ].filter(Boolean);
+    if (!wrong.length) return null;
+    return (
+      `${wrong.join(", and ")}. Both are loopback, but they are not the same local ` +
+      `Supabase stack — see supabase/config.toml for this project's ports.`
+    );
+  }
   if (db.local !== api.local) {
     const [near, far] = db.local ? ["DATABASE_URL", "SUPABASE_URL"] : ["SUPABASE_URL", "DATABASE_URL"];
     return (
@@ -164,11 +185,39 @@ export function projectMismatch(
   );
 }
 
+/**
+ * This project's local ports, from `supabase/config.toml`.
+ *
+ * Not the Supabase defaults (54321/54322) on purpose: those belong to the
+ * previous app's container, which runs on the same laptop.
+ * tests/store-project-pair.test.ts asserts these still match the config file.
+ */
+const LOCAL_API_PORT = "54361";
+const LOCAL_DB_PORT = "54362";
+
+/**
+ * The project ref out of a database URL, from **either** place it can be.
+ *
+ * `docs/project/database.md` lists three hosts and they do not agree on where
+ * the ref lives. The pooler puts it in the username — `postgres.<ref>` — and the
+ * direct connection uses a plain `postgres` username and puts it in the
+ * hostname, `db.<ref>.supabase.co`. Reading only the username refused the
+ * direct form as project "unknown", which is a boot-time refusal of a
+ * configuration that was fine — worse than the hole this check closes. Found by
+ * GPT Sol reviewing the built code, 2026-08-27.
+ */
+function databaseRef(u: URL): string | undefined {
+  const fromUsername = u.username.split(".")[1];
+  if (fromUsername) return fromUsername;
+  const host = u.hostname.split(".");
+  return host[0] === "db" ? host[1] : undefined;
+}
+
 /** Parse once, and read the ref out of whichever part of the URL carries it. */
 function hostAndRef(
   raw: string,
   ref: (u: URL) => string | undefined,
-): { local: boolean; ref: string | undefined } | null {
+): { local: boolean; ref: string | undefined; port: string } | null {
   let url: URL;
   try {
     url = new URL(raw);
@@ -179,7 +228,7 @@ function hostAndRef(
   /* `new URL` for the same reason `isLocalDatabaseUrl` uses it rather than a
      regex: userinfo runs to the LAST `@`, so a pattern match can read a project
      ref out of a password. */
-  return { local, ref: local ? undefined : ref(url) || undefined };
+  return { local, ref: local ? undefined : ref(url) || undefined, port: url.port };
 }
 
 function configured(): { url: string; key: string } | null {
@@ -206,7 +255,7 @@ export function uploadGrants(): UploadGrants | null {
 }
 
 /** What `storeRawSource` had to do to get the right bytes to the right name. */
-export type StoreOutcome = "stored" | "already-there" | "repaired";
+export type StoreOutcome = "stored" | "already-there";
 
 export interface StoredRawSource {
   sha256: string;
@@ -242,17 +291,24 @@ export interface StoredRawSource {
  * deleted" removes the need for a state machine: it does, and it does not
  * remove this.
  *
- * ## Why a mismatch is repaired rather than refused
+ * ## Why a mismatch is refused rather than repaired
  *
- * Refusing would be safe and permanent in the wrong direction: the article
- * could never be ingested, by anybody, ever, with no way out that does not
- * involve somebody with a service key deleting an object by hand.
+ * The first version repaired: remove the wrong object, put ours. That is worse
+ * than doing nothing, and the review of it was right. Two callers who both read
+ * the same corruption race each other, and the loser's `remove` can delete the
+ * **winner's correct object** after the winner has already returned success and
+ * its caller has committed a reference. Crash there and the reference dangles —
+ * the exact failure this whole design exists to prevent, introduced by the code
+ * meant to prevent it. Repair needs serialisation or a version-conditioned
+ * replace, and the blob seam has neither.
  *
- * Repairing is a deliberate exception to the retention rule, and a narrow one.
- * An object that does not hash to its own name **is not a retained document**;
- * it is wreckage, and it is provably wreckage, because the name is a claim
- * about the contents that the contents themselves settle. Keeping it protects
- * nothing and poisons every future article made of those bytes.
+ * So a mismatch throws, naming the key. It is loud, it cannot destroy a correct
+ * object, and it leaves a human holding a service key to decide. The cost is
+ * real and worth stating: an article whose canonical name holds wrong bytes
+ * cannot be ingested until somebody clears them. That is rarer than it was —
+ * `blobs-fs.ts` no longer publishes a canonical name before the bytes behind it
+ * are complete — and a stuck article is a much smaller thing than a silently
+ * wrong one. GPT Sol, reviewing the built code, 2026-08-27.
  */
 export async function storeRawSource(
   bytes: Uint8Array,
@@ -274,18 +330,28 @@ export async function storeRawSource(
   }
 
   /* `maxBytes` above is the length of the document we hold, so an object
-     *larger* than ours throws rather than returning a prefix — and that throw is
-     correct: an over-long object at this name is corruption too, and reading 32
-     MiB to confirm it would be the wasteful way to find out. It surfaces as an
-     error rather than as a repair, which is the honest difference between "the
-     bytes are wrong" and "we could not even look".
-     `there` being null means it vanished between the two calls. Same repair. */
-  await store.remove(key);
-  const second = await store.putIfAbsent(key, bytes, CONTENT_TYPE[kind]);
-  if (second !== "stored") {
-    /* Somebody else repaired it in the gap, with the same bytes by
-       construction. Their write is ours. */
-    return { sha256, key, outcome: "repaired" };
+     *larger* than ours throws out of `get` rather than returning a prefix —
+     and that throw is correct, because an over-long object at this name is
+     corruption too. `there` being null means it vanished between the two calls,
+     which is the same answer: what is at this name is not what the name says. */
+  throw new CorruptObject(key);
+}
+
+/**
+ * What is at a content-addressed name is not what the name says.
+ *
+ * Its own class so a caller can tell it from a network failure — one means "try
+ * again", the other means "a human has to look". Carries the key, because that
+ * is the only thing anybody can act on, and no bytes, because they are somebody
+ * else's document.
+ */
+export class CorruptObject extends Error {
+  constructor(readonly key: string) {
+    super(
+      `The object at ${key} does not hash to its own name, so it is not the document ` +
+        "that name promises. Nothing here will overwrite it — removing it races any " +
+        "other writer — so it needs clearing by hand. See src/store/blobs.ts.",
+    );
+    this.name = "CorruptObject";
   }
-  return { sha256, key, outcome: "repaired" };
 }

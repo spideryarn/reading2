@@ -121,6 +121,42 @@ describe("acquiring an uploaded file", () => {
    * two-hour TTL races the browser it is cleaning up after. This is the
    * assertion that stops somebody adding the obvious `remove` later.
    */
+  /**
+   * **A dedup hit is not proof the canonical object is right**, and this path
+   * was the last one still assuming it was.
+   *
+   * The comment in `acquireUpload` used to end "the bytes at that key are these
+   * bytes, by construction, because the key is their hash". Something can be at
+   * a canonical name without anybody having deleted anything — a crashed write,
+   * a bad backfill, anybody holding the service key — and believing the hit
+   * marks this upload `verified` while the corrupt object stays put, to be
+   * served to the reader as their own paper.
+   *
+   * `storeRawSource` had already been written to stop exactly this, and uploads
+   * were still calling `putIfAbsent` directly, which is the failure a shared
+   * helper is supposed to make impossible. GPT Sol found it reviewing the built
+   * code, 2026-08-27.
+   */
+  it("refuses when something wrong is already sitting at the canonical name", async () => {
+    const bytes = aPdf("the real paper");
+    const key = canonicalKey(shaOf(bytes), "pdf");
+    rubbish.push(() => blobs.remove(key));
+
+    /* Squat on the name with something that is not this document. */
+    await blobs.remove(key);
+    await blobs.putIfAbsent(key, aPdf("not the real paper"), CONTENT_TYPE.pdf);
+
+    const { ctx, id } = await readyToVerify(bytes);
+    await expect(STEPS.fetch.run(ctx)).rejects.toThrow();
+
+    /* The two halves that matter. The upload must NOT have been recorded as
+       verified — that is the lie — and the squatter must still be there,
+       because removing it races whoever put it there. */
+    const record = await readUpload(id);
+    expect(record?.status).not.toBe("verified");
+    expect(await blobs.get(key)).not.toEqual(bytes);
+  });
+
   it("leaves the staging object alone rather than tidying it up", async () => {
     const bytes = aPdf("staging stays");
     const { id, ctx } = await readyToVerify(bytes);

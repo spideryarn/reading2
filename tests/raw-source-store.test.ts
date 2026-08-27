@@ -13,16 +13,18 @@
  * Found by GPT Sol, asked whether "objects are never deleted" removes the need
  * for a state machine. It removes the state machine; it does not remove this.
  *
- * The repair is a deliberate exception to "never delete", and a narrow one: an
- * object that does not hash to its own name is not a retained document, it is
- * corruption, and leaving it would poison every future article made of those
- * bytes. Retention protects documents, not wreckage.
+ * **It refuses rather than repairing**, which is a reversal of the first
+ * version and the review of it was right. Repairing means remove-then-put, and
+ * two callers who both read the same corruption race: the loser's `remove` can
+ * delete the *winner's correct object* after the winner returned success and
+ * its caller committed a reference. The fix for dangling references would have
+ * created one. Refusing cannot destroy anything and leaves a human to decide.
  */
 import { createHash } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
-import { blobStore, CONTENT_TYPE, storeRawSource } from "../src/store/blobs.js";
+import { blobStore, CONTENT_TYPE, CorruptObject, storeRawSource } from "../src/store/blobs.js";
 import { canonicalKey } from "../src/source.js";
 
 loadEnvLocal();
@@ -57,31 +59,48 @@ describe("storing a raw source", () => {
     expect(result.sha256).toBe(digest);
   });
 
-  it("repairs an object whose bytes do not hash to its own name", async () => {
+  it("refuses an object whose bytes do not hash to its own name", async () => {
     /* The crashed-write shape: something short and wrong sitting at a name that
        promises the full document. */
     await blobs.remove(key);
     await blobs.putIfAbsent(key, pdf("truncated"), CONTENT_TYPE.pdf);
-    expect(sha((await blobs.get(key)) as Uint8Array)).not.toBe(digest);
 
-    const result = await storeRawSource(good, "pdf");
-    expect(result.outcome).toBe("repaired");
+    await expect(storeRawSource(good, "pdf")).rejects.toThrow(CorruptObject);
+    /* Named, because the key is the only thing anybody can act on. */
+    await expect(storeRawSource(good, "pdf")).rejects.toThrow(key);
+  });
 
-    /* The point of the whole exercise: what is at that name now is the document
-       the name claims. Asserted by reading it back, not by trusting the return
-       value — the return value is the thing under test. */
-    const back = (await blobs.get(key)) as Uint8Array;
-    expect(sha(back)).toBe(digest);
-    expect(back.byteLength).toBe(good.byteLength);
+  it("leaves the wrong object exactly where it was", async () => {
+    /* The point of refusing. A repair would remove it, and removing races any
+       other writer — including one that has already succeeded and whose caller
+       has committed a reference to it. */
+    const wrong = pdf("wrong again");
+    await blobs.remove(key);
+    await blobs.putIfAbsent(key, wrong, CONTENT_TYPE.pdf);
+
+    await expect(storeRawSource(good, "pdf")).rejects.toThrow(CorruptObject);
+
+    const still = (await blobs.get(key)) as Uint8Array;
+    expect(sha(still)).toBe(sha(wrong));
   });
 
   it("never reports a mismatch as a plain dedup hit", async () => {
     /* The regression that matters. If `already-there` is ever returned for an
        object that does not verify, a caller writes `verified_at` over bytes it
-       has not read — which is the exact failure this file exists to stop. */
+       has not read — the exact failure this file exists to stop. */
     await blobs.remove(key);
-    await blobs.putIfAbsent(key, pdf("wrong again"), CONTENT_TYPE.pdf);
-    const result = await storeRawSource(good, "pdf");
-    expect(result.outcome).not.toBe("already-there");
+    await blobs.putIfAbsent(key, pdf("wrong once more"), CONTENT_TYPE.pdf);
+    await expect(storeRawSource(good, "pdf")).rejects.toThrow();
+  });
+
+  it("tells corruption apart from any other failure", async () => {
+    /* A caller has to be able to distinguish "try again" from "a human has to
+       look", and an Error with a message cannot be branched on safely. */
+    await blobs.remove(key);
+    await blobs.putIfAbsent(key, pdf("nope"), CONTENT_TYPE.pdf);
+    const err = await storeRawSource(good, "pdf").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CorruptObject);
+    expect((err as CorruptObject).key).toBe(key);
+    await blobs.remove(key);
   });
 });

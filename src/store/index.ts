@@ -128,6 +128,26 @@ if (STORE === "postgres") {
    * down at all. GPT Sol raised it, 2026-08-27, as the one way the dangling
    * reference arrives without anybody deleting anything.
    */
+  /**
+   * **Postgres without a blob store is not a configuration, it is a split
+   * brain**, and the comment below claimed a check that did not exist. Article
+   * rows would go to Postgres while their source documents went to
+   * `data/_blobs/` on whichever machine happened to run the fetch, where no
+   * other instance can reach them. `blobStore()` needs *both* the URL and the
+   * service key and falls back to the filesystem silently when either is
+   * missing, so the URL check alone let the commonest version straight through:
+   * a `.env.local` with `SUPABASE_URL` set and the key absent. GPT Sol found
+   * that the check I had written did not cover it, 2026-08-27.
+   */
+  if (!process.env.SUPABASE_URL?.trim() || !process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+    throw new Error(
+      'SPIDERYARN_STORE is "postgres" but there is no Supabase Storage configured — ' +
+        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must both be set. Article rows " +
+        "would land in Postgres and their source documents under data/_blobs/, where " +
+        "nothing else can find them. See src/store/index.ts.",
+    );
+  }
+
   const mismatch = projectMismatch(process.env.DATABASE_URL, process.env.SUPABASE_URL);
   if (mismatch) throw new Error(`${mismatch} See src/store/index.ts.`);
 
