@@ -10,7 +10,7 @@ our pipeline, that's a separate call.
 You can query Storage's *metadata* with plain SQL and join it to your own tables — it's a real
 Postgres table (`storage.objects`), not a black box. You **cannot** read a file's actual bytes
 with SQL, in a single query or otherwise; every practical path (`pg_net`, FDWs) is either
-async/polling, POST-only, or built for structured formats, not "give me this blob." A Storage
+asynchronous or built for structured formats, not "give me this blob." A Storage
 write and a Postgres write are two different systems with no shared transaction — deleting a
 `storage.objects` row via SQL orphans the real file instead of deleting it, and Storage is
 **not** covered by Supabase's automated backups or point-in-time recovery. Files up to ~6 MB
@@ -81,6 +81,17 @@ bytes. We looked for every documented escape hatch:
   "make an HTTP call and get the body back in this query" path. Responses are kept 6 hours in an
   **unlogged** table (lost on crash). Source:
   [pg_net docs](https://supabase.com/docs/guides/database/extensions/pg_net).
+
+  > **Correction, 2026-08-27.** The first version of this doc called `pg_net` "POST-only". It is
+  > not — it has `http_get` and `http_delete` as well as `http_post`, and Supabase also offers a
+  > *synchronous* `http` extension
+  > ([http extension](https://supabase.com/docs/guides/database/extensions/http)). Caught by GPT Sol
+  > reviewing [raw-bytes-in-storage.md](../plans/raw-bytes-in-storage.md). The conclusion does not
+  > move: neither extension is a sensible way to pull an 11–32 MiB binary payload into a transaction,
+  > and `pg_net` still fires after commit and lands its response in a table you poll. But the reason
+  > given was wrong, and a wrong reason is worth correcting even when it reaches the right place —
+  > the next person to check this would have found the claim false and had no way to tell how much
+  > else was.
 - **Foreign Data Wrappers** (Supabase's Rust-based `wrappers` framework): there's a generic
   **S3 wrapper**, but it's read-only, built for structured formats (CSV/JSON/Parquet columns
   mapped to a foreign table), not "give me this object's raw bytes," and it isn't specific to
