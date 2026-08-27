@@ -26,7 +26,42 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+/**
+ * **pdf.js is loaded on demand, and that is not a performance tweak.**
+ *
+ * A static import here reaches the serverless API, because src/pipeline.ts
+ * imports src/pdf-read.ts imports this file, and src/vercel.ts imports the
+ * pipeline. pdf.js then evaluates at module scope on *every* route, and its
+ * module body touches `DOMMatrix`, which Node does not have — it comes from
+ * `@napi-rs/canvas`, an optional platform-specific package that pdf.js
+ * `require`s inside a try/catch.
+ *
+ * Vercel's dependency tracer cannot see a require it never statically reads, so
+ * the canvas package is left out of the function bundle while pdf.js is put in.
+ * The result, measured in production 2026-08-27:
+ *
+ *     ReferenceError: DOMMatrix is not defined
+ *       at node_modules/pdfjs-dist/legacy/build/pdf.mjs:16713
+ *
+ * on every request, to every route, PDF or not — and never on a laptop, where
+ * `@napi-rs/canvas-darwin-arm64` is sitting in node_modules and supplies
+ * `DOMMatrix` happily. A green build, a green deploy, and a dead API.
+ * docs/postmortems/pdfjs-dommatrix-serverless.md.
+ *
+ * Deferring the import means a route that never opens a PDF never loads pdf.js,
+ * so the API comes up whether or not the canvas binary made it into the bundle.
+ * It costs one `await` on the first PDF this process handles.
+ */
+type Pdfjs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+let pdfjsPromise: Promise<Pdfjs> | undefined;
+
+/** pdf.js, imported the first time something actually needs it. */
+function loadPdfjs(): Promise<Pdfjs> {
+  /* The *promise* is cached rather than the module, so two concurrent callers
+     share one import rather than racing to start a second one. */
+  pdfjsPromise ??= import("pdfjs-dist/legacy/build/pdf.mjs");
+  return pdfjsPromise;
+}
 
 /** One text run as pdf.js found it: where it sits on the page, and what it says. */
 export interface TextItem {
@@ -248,6 +283,7 @@ export async function pass0(
      thing that can destroy the worker — `PDFDocumentProxy.cleanup()` releases
      page resources and leaves the worker running. The guard below needs to walk
      away from a document it has decided not to read. */
+  const pdfjs = await loadPdfjs();
   const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
   const doc = await loadingTask.promise;
 
