@@ -701,13 +701,14 @@ not feel like input: **strings a language model produced, rendered as markup.**
 
 Everything the model writes in this app is rendered as **text**, deliberately — chat answers, gists,
 arc sentences, tweet posts, glossary entries. No `dangerouslySetInnerHTML` anywhere near any of them,
-and the prompts say plain prose partly for that reason. There are **two** exceptions, and they are
+and the prompts say plain prose partly for that reason. There are **three** exceptions, and they are
 the ones to watch.
 
-This paragraph used to say "exactly one", and it was wrong for a day: chat quietly made it two when
-the web-search citations landed, and the sentence sat here reassuring anyone who read it. That is
-the failure mode a security doc has — it does not get compared against the code unless somebody
-thinks to.
+This paragraph has now been wrong twice, in the same way both times. It said "exactly one" until
+chat's web-search citations quietly made it two; it said "two" until a chat answer was allowed to
+carry a link in its own prose on 2026-08-27, and again the sentence sat here reassuring anyone who
+read it — a GPT Sol review found it, not a reader. That is the failure mode a security doc has: it
+does not get compared against the code unless somebody thinks to.
 
 **`Citation.url` becomes an `href`** — the web pages a chat answer cites, rendered as a source list
 under the answer ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)). Allowlisted by `isWebUrl` in
@@ -734,6 +735,25 @@ the same field with Zod's `.url()`, which checks that the string *parses* as a U
 `javascript:alert(1)` parses fine. A validator that looks like a security check and is not is worse
 than none, because it stops anyone looking again. Tested in
 [`tests/glossary.test.ts`](../../tests/glossary.test.ts).
+
+**A link the model writes into a chat answer becomes an `href`.** The newest of the three, and the
+only one where the model chooses both the address *and the words the reader sees over it*. Added
+2026-08-27 — [links.md § The links chat writes](links.md#the-links-chat-writes), and
+[chat-web-links.md](../plans/chat-web-links.md) for the reasoning. Four things hold it:
+
+- **`isWebUrl` again**, inside `webLinks` in [`src/urls.ts`](../../src/urls.ts) — the same allowlist
+  as the citation list, not a second one. A match that fails it stays as the characters the model
+  typed rather than becoming an attribute or being silently dropped.
+- **An address carrying credentials is refused outright.** `https://trusted.example@evil.example/`
+  passes any scheme check and goes somewhere other than it reads. There is no honest use for the
+  form in a chat answer.
+- **The real host is printed beside the label**, quietly, in the answer itself
+  ([`Cited.tsx`](../../src/web/Cited.tsx)). The hover card says more, but a card takes 320ms of rest
+  to open and a click does not wait for it, so the one fact a deceptive label cannot survive is on
+  the page rather than behind a gesture.
+- **It is off unless the caller asks for it.** `CitedText` is shared with the summary panel, whose
+  model reads the same untrusted article under a prompt that says nothing about links, so only chat
+  — which has the provenance rule — turns the sink on.
 
 **The rule to carry forward:** any model output that becomes an attribute — an `href`, a `src`, a
 `style`, an `id` — is untrusted input and needs an allowlist, not a parse. Model output that becomes

@@ -11,6 +11,7 @@
  * load-bearing should be checkable without a browser.
  */
 import { ID_PATTERN, ID_PREFIX } from "../ids.js";
+import { webLinks, withoutWebLinks } from "../urls.js";
 
 /**
  * Whatever can answer "is this one of the article's blocks?".
@@ -31,6 +32,136 @@ export type Segment = { kind: "text"; text: string } | { kind: "cite"; ids: stri
 export interface Emphasis {
   text: string;
   bold: boolean;
+}
+
+/** A run of prose, or an address the model wants the reader to be able to press. */
+export type LinkRun =
+  | { kind: "text"; text: string }
+  | { kind: "link"; text: string; url: string };
+
+/**
+ * Split a paragraph into prose and the links in it.
+ *
+ * **The matching itself is in src/urls.ts**, because the server needs the same
+ * answer: it counts block-id citations in the raw answer text, and an id inside
+ * a URL is neither a citation nor a hallucination. Two patterns would have
+ * disagreed the first time either was edited. `webLinks` also carries the three
+ * refusals — the scheme allowlist, an address with credentials in it, and a
+ * bare address we would have had to truncate — and each of them leaves the
+ * characters exactly where the model wrote them.
+ *
+ * **This runs before `splitCitations`, and the order is load-bearing.** That
+ * function matches a bare run of ids on the shape `spya-[a-z0-9]{6}`, and a URL
+ * is a string somebody else wrote: `https://example.com/notes/spya-k3m9qt`
+ * carries that shape inside it. Citations-first, the id becomes a chip and the
+ * address is torn in half — a link to `…/notes/` beside a chip pointing at a
+ * block this article almost certainly does not have. So links come out whole
+ * first, and only what is left is searched for citations.
+ *
+ * `partial` says the paragraph may be **half-written** — it is the last one of
+ * an answer that is still streaming. A bare URL touching the end of such a
+ * string is very likely half of an address, and a link to a truncated URL is
+ * one a reader can click in the second before the rest arrives. So it stays
+ * text until anything follows it. A Markdown link needs no such rule: its
+ * closing `)` is proof the address finished.
+ */
+export function splitLinks(para: string, partial = false): LinkRun[] {
+  const out: LinkRun[] = [];
+  let last = 0;
+  const push = (text: string) => {
+    if (text !== "") out.push({ kind: "text", text });
+  };
+
+  for (const link of webLinks(para)) {
+    if (partial && link.bare && link.toEnd) continue;
+    push(para.slice(last, link.index));
+    last = link.end;
+    out.push({ kind: "link", text: link.label, url: link.url });
+  }
+  push(para.slice(last));
+  return out;
+}
+
+/** A run of prose or a link, and whether the model asked for it to be bold. */
+export interface EmphasisedRun {
+  kind: "text" | "link";
+  /** Prose, or the model's words for a destination. Markers removed. */
+  text: string;
+  /** Present on a link run. */
+  url?: string;
+  bold: boolean;
+}
+
+/** `**`, counted rather than parsed — see `emphasise`. */
+const MARKER = /\*\*/g;
+
+/**
+ * Bold runs, paired **across** the links rather than inside each gap.
+ *
+ * `splitEmphasis` pairs `**` within one string, which was the whole of it until
+ * links started cutting a paragraph into pieces. After that, the commonest
+ * shape a model writes — `**[The paper](https://…)**` — arrives as three runs,
+ * each holding one unpartnered marker, and the reader gets literal asterisks
+ * around a link. Found by a GPT Sol review, 2026-08-27.
+ *
+ * So the markers are paired over the whole paragraph and a link inherits
+ * whatever is open when it is reached. An **odd** count means the model left
+ * one unclosed, and then nothing is emboldened and every marker stays literal —
+ * the rule `splitEmphasis` already followed, for the reason written there:
+ * guessing where the author meant to stop is how the rest of a paragraph ends
+ * up bold.
+ *
+ * A link's own label is emphasised separately by the caller, so `[**Foo**](…)`
+ * still works; its markers are not counted here, since they can never partner
+ * one outside the label.
+ *
+ * **The toggle is used only where it is needed**, and the two guards below are
+ * both about not losing characters:
+ *
+ *  - **There has to be a link.** A paragraph with none is handed to
+ *    `splitEmphasis` exactly as it always was, so nothing this feature did can
+ *    change how an ordinary answer — or a summary, which never has links at all
+ *    — reads. The two rules differ on `**a*b**` and on a pair spanning a single
+ *    newline, and there is no reason to change either where no link forced it.
+ *  - **No two markers may be adjacent.** `****` encloses nothing, and a toggle
+ *    would consume all four characters and emit none — silent text loss in the
+ *    one parser this feature rests on, which is the accident `splitCitations`
+ *    already has a paragraph about. `splitEmphasis` leaves it literal, so where
+ *    it appears we fall back and it stays literal here too.
+ */
+export function emphasise(runs: LinkRun[]): EmphasisedRun[] {
+  const texts = runs.filter((r) => r.kind === "text");
+  const markers = texts.reduce((n, r) => n + (r.text.match(MARKER)?.length ?? 0), 0);
+  const paired =
+    markers > 0 &&
+    markers % 2 === 0 &&
+    runs.some((r) => r.kind === "link") &&
+    // Empties at a run's edges are ordinary — `**` right before a link. An
+    // empty *between* two markers is `****`, and that is the case above.
+    texts.every((r) => r.text.split("**").slice(1, -1).every((piece) => piece !== ""));
+
+  const out: EmphasisedRun[] = [];
+  let bold = false;
+  for (const run of runs) {
+    if (run.kind === "link") {
+      out.push({ kind: "link", text: run.text, url: run.url, bold });
+      continue;
+    }
+    if (!paired) {
+      for (const piece of splitEmphasis(run.text)) {
+        out.push({ kind: "text", text: piece.text, bold: piece.bold });
+      }
+      continue;
+    }
+    for (const piece of run.text.split("**")) {
+      if (piece !== "") out.push({ kind: "text", text: piece, bold });
+      bold = !bold;
+    }
+    /* `split` yields one more piece than it saw markers, so the toggle above
+       ran once too often for this run. */
+    bold = !bold;
+  }
+  return out;
 }
 
 /**
@@ -128,7 +259,10 @@ export function splitCitations(para: string, known: Known): Segment[] {
  */
 export function unknownIds(text: string, known: Known): string[] {
   const bad = new Set<string>();
-  for (const raw of text.match(new RegExp(`${ID_PREFIX}[a-z0-9]{6}`, "g")) ?? []) {
+  // Links out first, exactly as `unknownCitedIds` does server-side and for the
+  // same reason: an id shape inside a URL is not a citation, because the
+  // renderer never turned it into one. `withoutWebLinks` is the shared matcher.
+  for (const raw of withoutWebLinks(text).match(new RegExp(`${ID_PREFIX}[a-z0-9]{6}`, "g")) ?? []) {
     if (ID_PATTERN.test(raw) && !known.has(raw)) bad.add(raw);
   }
   return [...bad];

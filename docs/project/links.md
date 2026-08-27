@@ -343,10 +343,42 @@ that never matches anything and looks exactly like a card that had nothing to ma
 object would be handed to React, which refuses by throwing, which takes the card down rather than
 one line of it.
 
+## The links chat writes
+
+Since 2026-08-27 a hyperlink can also arrive in a **chat answer**, and it gets this same card. Greg:
+
+> Allow chat responses to include hyperlinks to the web (e.g. in response to searching the web if it
+> found something useful). These should reuse our tooltips machinery for previewing hyperlinks that
+> we use in the main text.
+
+It matters more there than here. Everything above this section is about an address the *author*
+chose; a chat link is an address a *model* chose, after reading pages we do not control, with a label
+that is also the model's. `[the Anthropic paper](https://not-anthropic.example/)` is a plausible
+sentence with a hostile destination and the text gives nothing away.
+
+**The card is not enough on its own**, and saying so is the point rather than a caveat: it takes
+320ms of rest to open, a click does not wait for it, and on a touch screen a link navigates on the
+first tap by design. So the real host is also printed in the answer itself, beside the label, quiet
+and small — the card is the richer version of that check rather than the only version. A GPT Sol
+review, 2026-08-27, is why.
+
+What changed here to allow it was one selector. `useHoverCard` is already one delegated listener for
+the whole document, so the cost of a second customer is naming it — and naming them is itself the
+fix for a wart, because the old selector was a bare `a[href]` and therefore *every* anchor on the
+page. [chat-web-links.md](../plans/chat-web-links.md) has the parsing rules, the ordering constraint
+against `splitCitations`, and what happens to a URL that is still being streamed.
+
 ## See also
 
 - [tooltips.md](tooltips.md) — the hover machinery, why Floating UI, and why the card is a hook
   rather than one of the component libraries built for exactly this
+- [chat-web-links.md](../plans/chat-web-links.md) — the same card over a link a model wrote, and the
+  parsing that had to happen before the citation splitter could see the text
+- [chat-tools.md § The links the prompt does not carry](chat-tools.md#the-links-the-prompt-does-not-carry)
+  — the same hyperlinks, read by the model instead of by the reader. It parses `block.html` on the
+  server, so its count of "how many links are in this article" is a distinct-destination count and
+  differs from the raw one in the table above; it is also where a link the reader asks *about* gets
+  followed, which this card deliberately never does
 - [glossary.md](glossary.md) — the other half of the same card
 - [block-ids.md](block-ids.md) — why an in-article anchor points at an id we minted, and what stage 3
   had to do to the author's own ids to make that work

@@ -72,3 +72,166 @@ export function hostOf(url: string): string {
     return "";
   }
 }
+
+/**
+ * One parenthesised group in a URL, itself allowed to hold one nested pair.
+ *
+ * Not pedantry: `…/wiki/Mercury_(planet)` is an ordinary Wikipedia title, and a
+ * pattern that stops at the first `)` links to a 404 and leaves a stray bracket
+ * in the sentence. Two levels covers everything seen in the wild; three or more
+ * is refused rather than truncated — see `webLinks`.
+ *
+ * **The alternation is unambiguous on purpose.** `[^\s()]` and `\(` cannot
+ * match the same character, so there is no input on which the engine has two
+ * ways to consume the same text. That is what keeps this out of the
+ * catastrophic-backtracking family.
+ */
+const PARENS = String.raw`\((?:[^\s()]|\([^\s()]*\))*\)`;
+
+/** Inside `](…)` a URL may hold anything but whitespace and unpaired brackets. */
+const MD_CHARS = String.raw`[^\s()]`;
+
+/**
+ * `[what the page is](https://…)`.
+ *
+ * **The label excludes `[` as well as `]`**, and that is a performance fix
+ * rather than a nicety. With `[` allowed, an input of n opening brackets makes
+ * every one of them scan the rest of the string looking for a `]` — quadratic,
+ * and measured at 1.25s for 32k brackets on model output that re-parses on
+ * every streamed token. Found by a GPT Sol review, 2026-08-27.
+ */
+const MD_LINK = String.raw`\[([^\[\]\n]+)\]\(\s*(https?://${MD_CHARS}*(?:${PARENS}${MD_CHARS}*)*)\s*\)`;
+
+/**
+ * A bare `https://…`.
+ *
+ * The excluded characters are the ones that are nearly always punctuation
+ * *around* an address rather than in it. `*` is on the list because
+ * `**https://x.example/y**` otherwise linked to a path ending in two asterisks
+ * — a wrong destination, silently.
+ */
+const BARE_CHARS = String.raw`[^\s<>"'\`\[\]{}()*]`;
+const BARE_URL = `https?://${BARE_CHARS}*(?:${PARENS}${BARE_CHARS}*)*`;
+
+/** Case-insensitive: `HTTPS://example.com/x` is a valid address. */
+const LINKED = new RegExp(`${MD_LINK}|${BARE_URL}`, "gi");
+
+/** Sentence punctuation that followed a bare address rather than belonging to it. */
+const TRAILING = /[.,;:!?'"”’»]+$/;
+
+/**
+ * The same, for an address that already carries a query.
+ *
+ * `?` and `!` are dropped from the list there, because in
+ * `https://x.example/search?q=why?` the second `?` is query data and trimming it
+ * shortens the clickable range to a different page while the visible text looks
+ * unchanged. No `)` or `]` in either list: the patterns above cannot end in one
+ * unless it closed a pair they opened.
+ */
+const TRAILING_IN_QUERY = /[.,;:'"”’»]+$/;
+
+/** A link found in a run of model prose. */
+export interface WebLink {
+  /** Where the whole match starts. */
+  index: number;
+  /** Where it ends, after any trailing sentence punctuation was handed back. */
+  end: number;
+  /** The model wrote a bare address rather than `[label](url)`. */
+  bare: boolean;
+  /** The match ran to the end of the text, before any trimming. */
+  toEnd: boolean;
+  /** The model's words for the destination — the address itself, when bare. */
+  label: string;
+  url: string;
+}
+
+/**
+ * Every link in a run of model prose, in order.
+ *
+ * **One definition for both sides of the wire.** The client turns these into
+ * anchors (src/web/citations.ts § `splitLinks`) and the server subtracts them
+ * before counting block-id citations (src/converse.ts) — and the two must agree
+ * about where an address starts and stops, or an id inside a URL is a chip on
+ * one side and a hallucination in the log on the other. Two regexes would have
+ * drifted the first time either was touched. This file is where such a thing
+ * goes: it imports nothing, so both sides can reach it
+ * (tests/client-imports.test.ts says why that matters).
+ *
+ * Three things are refused rather than linked, and each is refused *whole* —
+ * the characters stay where the model wrote them:
+ *
+ *  - **Anything that is not `http(s)`**, via `isWebUrl` above.
+ *  - **An address carrying credentials.** `https://trusted.example@evil.example/`
+ *    reads as a link to `trusted.example` and goes to `evil.example`. The form
+ *    has no legitimate use in a chat answer, so it is not shown as a link at
+ *    all. Raised by a GPT Sol review, 2026-08-27.
+ *  - **A bare address we had to cut at an opening parenthesis.** That happens
+ *    only when the parentheses nest deeper than `PARENS` handles, and the cut
+ *    would produce a link to a *different, shorter* page — worse than no link.
+ */
+export function webLinks(text: string): WebLink[] {
+  const out: WebLink[] = [];
+  for (const match of text.matchAll(LINKED)) {
+    const label = match[1];
+    const marked = match[2];
+    const rawEnd = match.index + match[0].length;
+
+    let url = marked ?? match[0];
+    let end = rawEnd;
+    if (marked === undefined) {
+      if (text[rawEnd] === "(") continue;
+      /* Trim boldly, then look at what is left: an address that still has a
+         `?` in it has a real query, and its own trailing `?` is data rather
+         than the reader's question mark. Testing the untrimmed string instead
+         gets `…/x?` wrong, because the `?` it finds is the one being asked
+         about. */
+      const bold = url.replace(TRAILING, "");
+      const trimmed = bold.includes("?") ? url.replace(TRAILING_IN_QUERY, "") : bold;
+      end -= url.length - trimmed.length;
+      url = trimmed;
+    }
+    if (!isWebUrl(url) || hasCredentials(url)) continue;
+
+    out.push({
+      index: match.index,
+      end,
+      bare: marked === undefined,
+      toEnd: rawEnd === text.length,
+      label: label ?? url,
+      url,
+    });
+  }
+  return out;
+}
+
+/** `https://user:pass@host/` — a label built into the address itself. */
+function hasCredentials(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.username !== "" || parsed.password !== "";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * The same text with every link blanked out, character for character.
+ *
+ * For the server's citation counters, which look for block-id *shapes* in an
+ * answer: `https://example.com/notes/spya-k3m9qt` carries one, and counting it
+ * records either a citation the reader never sees or a hallucinated id that was
+ * never hallucinated — and both of those numbers are watched
+ * (src/converse.ts § `unknownCitedIds`). The renderer takes links out before it
+ * looks for citations; this is how the counters do the same thing, using the
+ * same matcher rather than a second one that can disagree.
+ *
+ * Spaces rather than deletion so that every other offset in the string is
+ * unchanged.
+ */
+export function withoutWebLinks(text: string): string {
+  let out = text;
+  for (const link of webLinks(text)) {
+    out = out.slice(0, link.index) + " ".repeat(link.end - link.index) + out.slice(link.end);
+  }
+  return out;
+}
