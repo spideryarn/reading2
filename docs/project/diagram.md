@@ -1,16 +1,27 @@
 # Diagram mode
 
-The article's structure as a picture, in the middle band — three of them, one
-toggle, and the reader's position marked on all three.
+The article as a picture, in the middle band — eight of them, one toggle, and
+the reader's position marked on every one.
 
-- **The geometry** — [`src/web/diagram.ts`](../../src/web/diagram.ts). Pure
-  functions, no DOM, tested in [`tests/diagram.test.ts`](../../tests/diagram.test.ts).
+- **The geometry** — [`src/web/diagram.ts`](../../src/web/diagram.ts) for the
+  three tree pictures, [`diagram-d3.ts`](../../src/web/diagram-d3.ts) for the
+  three graph ones, [`scatter.ts`](../../src/web/scatter.ts) for the two made of
+  paragraphs, and [`diagrams.ts`](../../src/web/diagrams.ts) is the router that
+  knows about all three. Pure functions, no DOM, tested in
+  [`tests/diagram.test.ts`](../../tests/diagram.test.ts),
+  [`diagram-graph.test.ts`](../../tests/diagram-graph.test.ts) and
+  [`scatter.test.ts`](../../tests/scatter.test.ts).
 - **The shell, the interaction and the paint** —
   [`src/web/DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx),
-  `§ diagram mode` at the end of [`src/web/styles.css`](../../src/web/styles.css).
-- **Why nothing was installed** — [diagram-mode.md](../plans/diagram-mode.md),
-  which has the whole library survey and the answers on Mermaid and on generated
-  images.
+  `§ diagram mode` and `§ drift and trail` in
+  [`src/web/styles.css`](../../src/web/styles.css).
+- **What the server computes for the last two** —
+  [`src/projection.ts`](../../src/projection.ts) over
+  [`src/article-vectors.ts`](../../src/article-vectors.ts).
+- **Why nothing was installed for the first three** —
+  [diagram-mode.md](../plans/diagram-mode.md), which has the whole library
+  survey and the answers on Mermaid and on generated images. What changed when
+  the data got richer is in [`diagram-d3.ts`](../../src/web/diagram-d3.ts).
 
 ## What it is for
 
@@ -26,7 +37,7 @@ It is a **mode**, in the sense [url-state.md](url-state.md) and
 and the prose, the article stays exactly where it was, and `?mode=diagram` says
 so. The fifth one, and it cost `MODES` one word.
 
-## The three pictures
+## The eight pictures
 
 ```
       strata                tree                  mindmap
@@ -141,7 +152,7 @@ Sides alternate by part index rather than by which side has room, because a
 picture that rearranges itself when you close a section is a picture you have to
 read again.
 
-## The graph the last three are drawn from
+## The graph the middle three are drawn from
 
 `arc`, `force` and `cluster` need more than the tree, and
 [`graph.ts`](../../src/web/graph.ts) builds it. **Five kinds of edge, and they
@@ -344,6 +355,38 @@ with a checkable answer should not be sent to something that can invent one.**
 Term overlap is arithmetic. It is also free and instant, which is what lets these
 pictures work on an article nobody has paid for.
 
+### What a browser pass reported, and what was actually true
+
+A Sonnet subagent checked the picture in Chrome on 2026-08-27 against a throwaway
+preview page. Most of it confirmed the design — the arrowheads are visible and
+all point down the page, the vermilion cross-reference reads as the brightest
+line despite being the thinnest, the dotted line reads as dotted at 288px, and
+nothing overlaps or clips at any of the three widths. Two findings were reported
+as bugs and **neither was one**, which is worth recording because both were
+reported with more confidence on the fourth telling than on the first.
+
+**"Vocabulary links never render."** True of that page, and a property of the
+fixture rather than of the code: `example/` is a 34-block extract with 10 drawn
+sections, and it has **zero** vocabulary edges — too little distinct vocabulary
+to clear `EDGE_FLOOR`. The real articles have 56, 11, 8 and 3. The agent's first
+message hedged this correctly ("worth confirming whether that's just a fixture
+gap") and its fourth called it a FAIL.
+
+**"Hovering a bubble does not update the footer card."** It does.
+[`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx)
+mounts the real panel and hovers a real bubble, and the card moves off the
+reading position onto the hovered node and shows the author's link text. The
+same session reported the whole component crashing and unmounting, HMR refusing
+to fast-refresh, and the preview growing toggle buttons mid-run — someone else
+was editing the file underneath it, and the preview page was deleted while it
+was still open.
+
+The lesson is not that the browser pass was wasted: it produced four real
+confirmations that no test could make, about colour and legibility on a
+near-black page. It is that **a browser is the wrong instrument for "is this
+wired up"**, and the right answer to that question was a mounted component test
+that takes 300ms and cannot be wrong about which build it was looking at.
+
 ## Interaction
 
 - **Hover or focus anything** → the footer card below the picture shows its
@@ -516,6 +559,12 @@ reduction algorithms"* — and they answer different questions.
 thirteen topics for a 360-block piece. Said plainly so nobody later reads 8 as a
 measurement.
 
+What comes back is **how many lanes there are**, which can be fewer than were
+asked for: repairing one empty cluster can empty another. A lane nobody is in
+would still get a legend chip, drawn beside seven that mean something and naming
+nothing — which reads as a bug in the naming rather than as a group that is not
+there.
+
 Lanes are ordered left to right by the **median row** of their members, so the
 leftmost is what the piece opens with. Median rather than first appearance: one
 stray early paragraph should not drag a whole lane to the front.
@@ -600,6 +649,15 @@ of principal components and k-means, cached too.
 Like Force, this is a fetch a reader can start without pressing anything that
 says what it will do, so the gate is narrow: exactly these two pictures, never
 the other six.
+
+**In the browser, laying out 276 dots costs 2.7ms** — measured on `constitution`,
+2026-08-27, both pictures, averaged over 200 runs. That matters because the
+layout memo keys on `atRow`, so it re-runs every time the reader's position
+changes: 2.7ms is well inside a frame and the position updates a few times a
+second at most. The Force picture's 300-tick simulation in the same memo is the
+one worth attacking if this ever becomes a problem, and it is not this feature's
+to fix. What is *not* measured here is React re-rendering 276 `<g>` elements on
+each of those, which is a browser question rather than an arithmetic one.
 
 ## What is deliberately not here
 
