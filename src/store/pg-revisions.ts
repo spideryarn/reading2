@@ -1070,8 +1070,15 @@ async function reasonsNotToPublish(
        `running`, `done` or `error`, and this branch did not exist until
        2026-08-27: the guard read the row, compared `input_hash` and stopped, so
        a `toc` that ran and *failed* published as long as the hash beside it
-       matched. A step records its hash when it starts, which is exactly why the
-       two agree in the case that matters.
+       matched — and `recordStepRun`, which is what the importer and every CLI
+       run use, does record a real hash at the moment it says `running`.
+
+       The fenced path does not: `beginStepRun` writes `NO_INPUT_HASH` on
+       purpose, because a step that has not run yet has not been made from
+       anything. So under the pipeline this branch is reached by a row that
+       could not have matched anyway — which makes it more necessary rather than
+       less, since without it the *next* branch would report "the tree was built
+       from different blocks" about a step that never got as far as a tree.
 
        `else if` rather than a second reason, because the hash cannot be trusted
        to mean anything here and "the tree was built from different blocks —

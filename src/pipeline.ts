@@ -1095,10 +1095,21 @@ export const STEPS: Record<StepName, PipelineStep> = {
      * that it is stale. Landing that is part of the transactional runner, not
      * of a stamp.
      *
-     * Consequence for the Postgres artefact store: with no stamp to compare, its
-     * `has` cannot answer "is the toc current" the way the other steps do, and
-     * must carry an explicit, documented `toc` case rather than pretending to
-     * parity. docs/plans/delete-the-importer.md § The build order for C.
+     * **The Postgres artefact store needs no special case for this**, and an
+     * earlier version of this comment said it did. `has` means readable outputs
+     * plus a `done` run row, uniformly, in both stores; with no stamp,
+     * `stepIsDone` returns true once `has` does, in both stores. Teaching
+     * storage a private freshness rule for `toc` would put the pipeline's logic
+     * in the storage layer *and* walk straight back into the hazard above, by a
+     * different door. GPT Sol, 2026-08-28;
+     * docs/plans/artifacts-pg-has-sol.md.
+     *
+     * **What the runner must still do is record the hash.** Having no expected
+     * stamp and recording no input are different things: `finishStepRun` has to
+     * be given `hashBlocks(blocks)` for this step, because
+     * `reasonsNotToPublish` compares `toc.input_hash` against the stored blocks
+     * and refuses the publication when they differ — so a `toc` left carrying
+     * `NO_INPUT_HASH` would make every article unpublishable.
      */
     async run(ctx) {
       const run = await generateToc({

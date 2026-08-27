@@ -123,6 +123,93 @@ export interface ArtifactMap {
 /** Some or all of one step's artefacts, handed to `write` in one call. */
 export type ArtifactParts = Partial<{ [K in ArtifactKind]: ArtifactMap[K] }>;
 
+/* ------------------------------------------------- what a usable one looks like -- */
+
+/**
+ * The one shallow shape check per kind, shared by **both** adapters.
+ *
+ * ## Why it lives here rather than in the file adapter that grew it
+ *
+ * These rules were written in src/store/artifacts-fs.ts, where they answer
+ * *"did this file survive being written?"*. The Postgres adapter has to answer
+ * the same question about a JSONB column, and the whole claim it makes is that
+ * the two stores agree about what a usable artefact is. Two copies of the rules
+ * cannot make that claim: they would agree on the day they were written and
+ * drift silently afterwards, which is the shape of bug this repo keeps writing
+ * postmortems about ([silent-success.md](docs/reusable/silent-success.md)).
+ *
+ * So there is one table, in the leaf module both adapters already import.
+ *
+ * ## Shallow, on purpose, and it is not the same check in both stores
+ *
+ * On the filesystem the real work is done before this runs: a truncated
+ * document fails at `JSON.parse`, and this catches the other cheap case —
+ * valid JSON of entirely the wrong shape. In Postgres a JSONB column cannot be
+ * half-written, so this is the *whole* check, and it is doing less. That is a
+ * difference in what the two stores can be corrupted by rather than a
+ * difference in the rule, and it is worth saying out loud: the filesystem
+ * needs a parse it can fail, and Postgres needs a transaction it can roll back.
+ *
+ * Running a 360-entry glossary through a full schema on every skip check of
+ * every step of every job would buy precision nobody asked for.
+ */
+export interface ShapeCheck {
+  /**
+   * The field that says what this is, or `null` for the kinds that are text
+   * rather than objects.
+   *
+   * The name is used in the failure message, which is why it is a string here
+   * and not folded into `ok`.
+   */
+  readonly field: string | null;
+  /** Is that field (or, for `field: null`, the value itself) usable? */
+  readonly ok: (value: unknown) => boolean;
+}
+
+const isArray = (v: unknown): boolean => Array.isArray(v);
+/* `!Array.isArray` is the load-bearing half. Without it `{"nodes":[]}` is a
+   perfectly good tree and `{"labels":[]}` a perfectly good labels file, which
+   is a shape neither writer has ever produced — so the check said yes to the
+   one thing it was there to say no to. Found by review, 2026-08-26. */
+const isObject = (v: unknown): boolean =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+const isString = (v: unknown): boolean => typeof v === "string" && v.length > 0;
+/** Non-empty text. All we can honestly ask of HTML. */
+const isText = (v: unknown): boolean => typeof v === "string" && v.trim().length > 0;
+
+export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
+  /** The **manifest**, whose `file` names the bytes beside it — see `ArtifactMap`. */
+  raw: { field: "file", ok: isString },
+  meta: { field: "slug", ok: isString },
+  extractedHtml: { field: null, ok: isText },
+  stampedHtml: { field: null, ok: isText },
+  blocks: { field: "blocks", ok: isArray },
+  tree: { field: "nodes", ok: isObject },
+  labels: { field: "labels", ok: isObject },
+  arc: { field: "entries", ok: isArray },
+  tweets: { field: "tweets", ok: isArray },
+  glossary: { field: "entries", ok: isArray },
+  ideas: { field: "ideas", ok: isArray },
+  summary: { field: "entries", ok: isArray },
+};
+
+/**
+ * Why this value is not a usable artefact of this kind, or `null` when it is.
+ *
+ * A reason rather than a boolean, because the two adapters do different things
+ * with it: the file one puts it in a thrown error that its own caller logs at
+ * `debug`, and the Postgres one logs it directly. Neither may put the *value*
+ * anywhere near a log line — it is article prose, which
+ * docs/project/logging.md forbids outright — so the reason names the field and
+ * never quotes what was in it.
+ */
+export function whyUnusable(kind: ArtifactKind, value: unknown): string | null {
+  const { field, ok } = SHAPE[kind];
+  if (field === null) return ok(value) ? null : "empty";
+  if (!isObject(value)) return "not an object";
+  return ok((value as Record<string, unknown>)[field]) ? null : `no usable "${field}"`;
+}
+
 /* ------------------------------------------------------ the two constants -- */
 /**
  * What `revision_step_runs.implementation_version` says for a row this seam
@@ -222,6 +309,67 @@ export interface StepStamp {
    * does, because it is compared with `===` like every other key.
    */
   profileHash?: string | null;
+}
+
+/**
+ * The artefact each step stamps, so `stampFor` knows what to read.
+ *
+ * Shared by both adapters. In Postgres the artefact is a JSONB column rather
+ * than a file, and the stamp fields are read out of it exactly the same way —
+ * see `stampOf` below and src/store/artifacts-pg.ts.
+ *
+ * Three steps are deliberately absent. `fetch`, `extract` and `blocks` record
+ * nothing about what they were made from, so their stamp is `null` and the only
+ * question that can be asked of them is presence — which is why the truncation
+ * hazard was invisible for them and why `has` had to start parsing.
+ *
+ * `toc` reads its stamp off **`labels.json`, not `tree.json`**, and that is
+ * worth stating because it looks backwards. The tree is the headline artefact,
+ * but it carries only `version` and `generator`; `labels.json` is the one that
+ * records `sourceHash` — the blocks it was written against — and
+ * `structureHash` besides. So it is the only output of stage 4 that can answer
+ * "is this still about the current article".
+ */
+export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
+  toc: "labels",
+  arc: "arc",
+  tweets: "tweets",
+  glossary: "glossary",
+  summary: "summary",
+  ideas: "ideas",
+};
+
+/**
+ * The stamp fields as they are spelled inside the artefact itself.
+ *
+ * Every stamped artefact in this project uses the same three names —
+ * `sourceHash`, `version`, `generator` — because they all grew out of
+ * src/tweets.ts. Reading them in one place is what lets `sameStamp` be one
+ * comparison instead of the three near-identical `…IsCurrent` functions.
+ */
+interface StampedArtefact {
+  sourceHash?: unknown;
+  version?: unknown;
+  generator?: unknown;
+  /** Only `ideas` compares this today — see `StepStamp.profileHash`. */
+  profileHash?: unknown;
+}
+
+export function stampOf(artefact: unknown): StepStamp {
+  const a = (artefact ?? {}) as StampedArtefact;
+  const stamp: StepStamp = {};
+  if (typeof a.sourceHash === "string") stamp.inputHash = a.sourceHash;
+  if (typeof a.version === "string") stamp.promptVersion = a.version;
+  if (typeof a.generator === "string") stamp.model = a.generator;
+  /* `null` is carried across as `null` rather than dropped: it means "written
+     deliberately without a profile", which is a real answer and has to compare
+     equal to an expected `null`. Dropping it would make an artefact written
+     without a profile look like one written before profiles existed, and the
+     step would then regenerate on every run for ever. */
+  if (typeof a.profileHash === "string" || a.profileHash === null) {
+    stamp.profileHash = a.profileHash;
+  }
+  return stamp;
 }
 
 /**

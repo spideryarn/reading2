@@ -37,6 +37,7 @@ import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { parseJsonFrom } from "../parse-json.js";
 import type { StepName } from "../types.js";
+import { STAMP_SOURCE, stampOf, whyUnusable } from "./artifacts.js";
 import type {
   ArtifactKind,
   ArtifactMap,
@@ -139,29 +140,6 @@ export const PATHS: {
   },
 };
 
-/**
- * The artefact each step stamps, so `stampFor` knows what to read.
- *
- * Three steps are deliberately absent. `fetch`, `extract` and `blocks` record
- * nothing about what they were made from, so their stamp is `null` and the only
- * question that can be asked of them is presence — which is why the truncation
- * hazard was invisible for them and why `has` had to start parsing.
- *
- * `toc` reads its stamp off **`labels.json`, not `tree.json`**, and that is
- * worth stating because it looks backwards. The tree is the headline artefact,
- * but it carries only `version` and `generator`; `labels.json` is the one that
- * records `sourceHash` — the blocks it was written against — and
- * `structureHash` besides. So it is the only output of stage 4 that can answer
- * "is this still about the current article".
- */
-const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
-  toc: "labels",
-  arc: "arc",
-  tweets: "tweets",
-  glossary: "glossary",
-  summary: "summary",
-  ideas: "ideas",
-};
 
 /**
  * How to turn bytes back into an artefact, per kind, with a ceiling.
@@ -190,7 +168,14 @@ interface Decoder {
 }
 
 /**
- * Valid JSON, and an object with the field that says what it is.
+ * Bytes to artefact, checked against the **shared** rules in artifacts.ts.
+ *
+ * The shape rules used to live here, and moving them was not tidying: the
+ * Postgres adapter has to apply the same ones to a JSONB column or its parity
+ * claim is a claim about two lists that happen to agree today. `whyUnusable`
+ * is now the single table — src/store/artifacts.ts § SHAPE.
+ *
+ * What stays here is the half that is genuinely about files: the parse.
  *
  * **`parseJsonFrom`, not `JSON.parse`**, and the difference is a privacy rule
  * rather than a nicety. V8 puts the first characters of the offending input
@@ -203,54 +188,44 @@ interface Decoder {
  * 2026-08-26; this was the one JSON boundary in the repo still doing it by
  * hand.
  */
-function json(field: string, isRight: (v: unknown) => boolean): Decoder["decode"] {
+function json(kind: ArtifactKind): Decoder["decode"] {
   return (text) => {
     // The `source` string is copied into the error as given, so it must carry
     // nothing about the content — see parseJsonFrom's header.
     const parsed: unknown = parseJsonFrom<unknown>(text, "an artefact");
-    if (typeof parsed !== "object" || parsed === null) {
-      throw new Error("not an object");
-    }
-    if (!isRight((parsed as Record<string, unknown>)[field])) {
-      throw new Error(`no usable "${field}"`);
-    }
+    const why = whyUnusable(kind, parsed);
+    if (why) throw new Error(why);
     return parsed;
   };
 }
 
-const isArray = (v: unknown): boolean => Array.isArray(v);
-/* `!Array.isArray` is the load-bearing half. Without it `{"nodes":[]}` is a
-   perfectly good tree and `{"labels":[]}` a perfectly good labels file, which
-   is a shape neither writer has ever produced — so the check said yes to the
-   one thing it was there to say no to. Found by review, 2026-08-26. */
-const isObject = (v: unknown): boolean =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
-const isString = (v: unknown): boolean => typeof v === "string" && v.length > 0;
-
-/** Non-empty text. All we can honestly ask of HTML. */
-const text: Decoder["decode"] = (t) => {
-  if (t.trim().length === 0) throw new Error("empty");
-  return t;
-};
+/** Text kinds never get parsed; the shared check is the whole of it. */
+function plain(kind: ArtifactKind): Decoder["decode"] {
+  return (body) => {
+    const why = whyUnusable(kind, body);
+    if (why) throw new Error(why);
+    return body;
+  };
+}
 
 const DECODERS: Record<ArtifactKind, Decoder> = {
   /* 32 MiB is src/fetch.ts's own ceiling on a page, so anything bigger did not
      come from us. */
-  raw: { maxBytes: 4 * MiB, decode: json("file", isString) },
-  extractedHtml: { maxBytes: 32 * MiB, decode: text },
-  stampedHtml: { maxBytes: 32 * MiB, decode: text },
-  meta: { maxBytes: 4 * MiB, decode: json("slug", isString) },
-  blocks: { maxBytes: 32 * MiB, decode: json("blocks", isArray) },
-  tree: { maxBytes: 32 * MiB, decode: json("nodes", isObject) },
-  labels: { maxBytes: 32 * MiB, decode: json("labels", isObject) },
-  arc: { maxBytes: 16 * MiB, decode: json("entries", isArray) },
-  tweets: { maxBytes: 16 * MiB, decode: json("tweets", isArray) },
-  glossary: { maxBytes: 32 * MiB, decode: json("entries", isArray) },
+  raw: { maxBytes: 4 * MiB, decode: json("raw") },
+  extractedHtml: { maxBytes: 32 * MiB, decode: plain("extractedHtml") },
+  stampedHtml: { maxBytes: 32 * MiB, decode: plain("stampedHtml") },
+  meta: { maxBytes: 4 * MiB, decode: json("meta") },
+  blocks: { maxBytes: 32 * MiB, decode: json("blocks") },
+  tree: { maxBytes: 32 * MiB, decode: json("tree") },
+  labels: { maxBytes: 32 * MiB, decode: json("labels") },
+  arc: { maxBytes: 16 * MiB, decode: json("arc") },
+  tweets: { maxBytes: 16 * MiB, decode: json("tweets") },
+  glossary: { maxBytes: 32 * MiB, decode: json("glossary") },
   /* Far smaller than a glossary in practice — three to ten ideas rather than a
      hundred terms — but the same ceiling, because the cap is a guard against a
      corrupt or hostile file rather than a size estimate. */
-  ideas: { maxBytes: 32 * MiB, decode: json("ideas", isArray) },
-  summary: { maxBytes: 32 * MiB, decode: json("entries", isArray) },
+  ideas: { maxBytes: 32 * MiB, decode: json("ideas") },
+  summary: { maxBytes: 32 * MiB, decode: json("summary") },
 };
 
 /** The path for one `(step, kind)`, or a clear error rather than `undefined`. */
@@ -367,38 +342,6 @@ function serialise(kind: ArtifactKind, value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-/**
- * The stamp fields as they are spelled on disk.
- *
- * Every stamped artefact in this project uses the same three names —
- * `sourceHash`, `version`, `generator` — because they all grew out of
- * src/tweets.ts. Reading them in one place is what lets `sameStamp` be one
- * comparison instead of the three near-identical `…IsCurrent` functions.
- */
-interface StampedOnDisk {
-  sourceHash?: unknown;
-  version?: unknown;
-  generator?: unknown;
-  /** Only `ideas` compares this today — see `StepStamp.profileHash`. */
-  profileHash?: unknown;
-}
-
-function stampOf(artefact: unknown): StepStamp {
-  const a = (artefact ?? {}) as StampedOnDisk;
-  const stamp: StepStamp = {};
-  if (typeof a.sourceHash === "string") stamp.inputHash = a.sourceHash;
-  if (typeof a.version === "string") stamp.promptVersion = a.version;
-  if (typeof a.generator === "string") stamp.model = a.generator;
-  /* `null` is carried across as `null` rather than dropped: it means "written
-     deliberately without a profile", which is a real answer and has to compare
-     equal to an expected `null`. Dropping it would make an artefact written
-     without a profile look like one written before profiles existed, and the
-     step would then regenerate on every run for ever. */
-  if (typeof a.profileHash === "string" || a.profileHash === null) {
-    stamp.profileHash = a.profileHash;
-  }
-  return stamp;
-}
 
 /**
  * Where the "this step started" markers live: `data/<slug>/steps/<step>.running`.
