@@ -409,9 +409,18 @@ The rules that keep it honest, all in [`mic-recording.ts`](../../src/web/mic-rec
 is offered unless the recorder started, never errored, finished, produced bytes, and ran at least
 two seconds; the recorder is drained *before* the track is released, or the tail of the file goes
 missing; it is dropped when the dictation produced text, on unmount, on the next press, and by hand;
-it is never uploaded anywhere. And the container is AAC-in-MP4 — because bare `audio/mp4` reports
-supported, records happily, and produces **Opus in MP4**, which macOS cannot play. A file the
-reader's machine will not open fails the whole point while passing every check.
+it is never uploaded anywhere.
+
+The container is AAC-in-MP4, so the file opens on a double-click — bare `audio/mp4` reports
+supported and gives you **Opus in MP4**, which macOS will not play, and a file the reader's machine
+cannot open fails the whole point while passing every check. But the sharper lesson came from the
+browser: **`isTypeSupported` is a claim about the codec, not about the options you pass with it.**
+AAC-in-MP4 is supported and works — until you add `audioBitsPerSecond: 32000`, at which point
+Chrome's encoder fires `EncodingError` 307ms in and hands over nothing. Three configurations out of
+three. So the app always chose AAC, always sent the hint, and **never once produced a file**, in
+total silence. Nothing you can ask beforehand would have caught it, so the recorder now has to prove
+itself: one that fails before producing a byte is replaced with the next container, one that fails
+after is a real failure and offers nothing.
 
 The measurements, both reviews and the two bugs the tests found after the reviews are in
 [microphone-device-and-recording.md](../plans/microphone-device-and-recording.md).

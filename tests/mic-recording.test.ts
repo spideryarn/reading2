@@ -24,6 +24,7 @@ import {
   pickMimeType,
   recordTrack,
   recordingFilename,
+  supportedAttempts,
 } from "../src/web/mic-recording.js";
 
 /* ------------------------------------------------------------- the fake -- */
@@ -32,14 +33,22 @@ class FakeRecorder {
   static instances: FakeRecorder[] = [];
   static failToConstruct = false;
   static failToStart = false;
+  /** What this browser claims. Empty by default, so most tests get the "ask for nothing" path. */
+  static supported = new Set<string>();
+  static isTypeSupported(t: string) {
+    return FakeRecorder.supported.has(t);
+  }
   state: "inactive" | "recording" = "inactive";
   mimeType: string;
+  /** Exactly what was passed in, so a test can assert which options went with which container. */
+  opts: { mimeType?: string; audioBitsPerSecond?: number };
   ondataavailable: ((e: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
   onerror: (() => void) | null = null;
 
-  constructor(_stream: unknown, opts?: { mimeType?: string }) {
+  constructor(_stream: unknown, opts?: { mimeType?: string; audioBitsPerSecond?: number }) {
     if (FakeRecorder.failToConstruct) throw new Error("nope");
+    this.opts = opts ?? {};
     this.mimeType = opts?.mimeType ?? "audio/webm";
     FakeRecorder.instances.push(this);
   }
@@ -74,6 +83,7 @@ beforeEach(() => {
   FakeRecorder.instances = [];
   FakeRecorder.failToConstruct = false;
   FakeRecorder.failToStart = false;
+  FakeRecorder.supported = new Set();
   vi.stubGlobal("MediaStream", class {});
   vi.stubGlobal("MediaRecorder", FakeRecorder);
   vi.useFakeTimers();
@@ -146,6 +156,91 @@ describe("m:ss", () => {
 });
 
 /* ------------------------------------------------------- the lifecycle --- */
+
+/**
+ * The bug this section exists for, found in Chrome 151 on 2026-08-27.
+ *
+ * `isTypeSupported("audio/mp4;codecs=mp4a.40.2")` returns **true**, and a
+ * recorder built on it produces a real AAC file — until you add
+ * `audioBitsPerSecond: 32000`, at which point it fires `EncodingError` 307ms
+ * in, hands over one zero-byte chunk and stops. Three configurations out of
+ * three. The app therefore always picked AAC, always sent the hint, always got
+ * nothing, and **never once offered a recording** — silently, because a failed
+ * recorder is deliberately quiet.
+ *
+ * `isTypeSupported` is a claim about the codec, not about the options you pass
+ * with it. So the recorder has to prove itself.
+ */
+describe("when the encoder refuses the combination it said it supported", () => {
+  const allSupported = () => {
+    FakeRecorder.supported = new Set([
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/webm;codecs=opus",
+      "audio/webm",
+    ]);
+  };
+
+  it("sends no bitrate hint with AAC, which is the pairing that fails", () => {
+    allSupported();
+    const [first] = supportedAttempts((t) => FakeRecorder.supported.has(t));
+    expect(first?.type).toBe("audio/mp4;codecs=mp4a.40.2");
+    expect(first?.audioBitsPerSecond).toBeUndefined();
+  });
+
+  it("still sends one with webm, where it is measured to be fine", () => {
+    const webm = supportedAttempts((t) => t.startsWith("audio/webm"))[0];
+    expect(webm?.type).toBe("audio/webm;codecs=opus");
+    expect(webm?.audioBitsPerSecond).toBe(32_000);
+  });
+
+  it("moves to the next container when the first produced nothing at all", async () => {
+    allSupported();
+    const tape = recordTrack(track);
+    expect(FakeRecorder.instances).toHaveLength(1);
+    expect(FakeRecorder.instances[0]?.mimeType).toBe("audio/mp4;codecs=mp4a.40.2");
+
+    // Fails before a single byte — exactly what Chrome's AAC encoder does.
+    vi.setSystemTime(new Date("2026-08-27T14:32:06"));
+    latest().fail();
+
+    expect(FakeRecorder.instances).toHaveLength(2);
+    expect(FakeRecorder.instances[1]?.mimeType).toBe("audio/webm;codecs=opus");
+
+    latest().emit(4096);
+    vi.setSystemTime(new Date("2026-08-27T14:32:16"));
+    const out = await tape?.stop();
+    expect(out?.blob.size).toBe(4096);
+    expect(out?.ext).toBe("webm");
+    /* The clock restarted with the recorder: ten seconds of the second
+       attempt, not eleven counting the first one's failure. A file described
+       as longer than it is, is the thing this whole round is about. */
+    expect(out?.ms).toBe(10_000);
+  });
+
+  /* A container that got as far as producing bytes and *then* failed is a real
+     failure, not a wrong guess about the codec. Retrying would throw away audio
+     we successfully captured in favour of starting again mid-sentence. */
+  it("does not retry once a container has proved it works", async () => {
+    allSupported();
+    const tape = recordTrack(track);
+    latest().emit(65_536);
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    latest().fail();
+    expect(FakeRecorder.instances).toHaveLength(1);
+    expect(await tape?.stop()).toBeNull();
+  });
+
+  it("gives up honestly when every container refuses", async () => {
+    allSupported();
+    const tape = recordTrack(track);
+    vi.setSystemTime(new Date("2026-08-27T14:32:20"));
+    latest().fail();
+    latest().fail();
+    latest().fail();
+    expect(FakeRecorder.instances).toHaveLength(3);
+    expect(await tape?.stop()).toBeNull();
+  });
+});
 
 describe("recording a track", () => {
   it("hands back what was recorded, with the type the recorder actually used", async () => {

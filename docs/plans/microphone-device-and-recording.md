@@ -356,22 +356,48 @@ next call every time. That is already known to freeze the meter bars
   are all right; it is frozen for a documented reason rather than a new bug. That it *ticks* is
   still unproven by anything but a test.
 
-**And one genuinely open question.** Several clean arm→stop cycles of 3s and 4.2s produced no
-`.prof-recording` and no error. A 3s arm is only ~1.9s of recording once the 1.1-second opening gap
-is subtracted, so that one is `MIN_MS` working as designed — but the 4.2s one should have offered a
-file. One earlier stop did produce *"The microphone was disconnected. Press it again to start
-over."*, which means the silent virtual device sometimes **ends its own track**. The suspicion, not
-yet tested: a recorder whose track ends underneath it may go inactive without firing `stop`, in
-which case `halt()` times out, `timedOut` is set, and `MicTape.stop` correctly returns null — so the
-guard that stops us handing over a half-finished file also suppresses the recording in one of the
-cases a reader would most want it. Worth a browser session with `MediaRecorder` instrumented before
-anything is changed; the fix is not obvious and guessing at it would make the evidence contract
-worse.
+**And then the recording never appeared** — several clean stops, no `.prof-recording`, no error.
+Instrumenting `MediaRecorder` gave the answer in five lines:
 
-The extension then disconnected mid-run, so the tab was left without its cleanup: **the mic may
-still be armed on that page, and the profile textarea has not been re-read since**. Its last
-confirmed value was correct, and nothing in the run had a mechanism to change it — the device
-transcribes nothing — but that is an argument, not a reading.
+```
+#0 +0ms   constructed type=audio/mp4;codecs=mp4a.40.2
+#0 +307ms EV start
+#0 +307ms EV error EncodingError
+#0 +307ms EV dataavailable size=0
+#0 +307ms EV stop
+```
+
+### `isTypeSupported` is a claim about the codec, not about your options
+
+`audio/mp4;codecs=mp4a.40.2` is supported, and a recorder built on it produces a real AAC file — the
+17 KB `ftypisom` measured at the top of this document. Add **`audioBitsPerSecond: 32000`** and the
+encoder refuses outright. Measured every way it could be:
+
+| container | bitrate hint | device | shared with the recogniser | result |
+|---|---|---|---|---|
+| AAC-in-MP4 | 32 kbps | built-in | no | `EncodingError`, **0 bytes** |
+| AAC-in-MP4 | 32 kbps | built-in | yes | `EncodingError`, **0 bytes** |
+| AAC-in-MP4 | 32 kbps | Teams (virtual) | no | `EncodingError`, **0 bytes** |
+| AAC-in-MP4 | *none* | built-in | no | fine — 17,026 bytes, valid `ftypisom` |
+| Opus-in-WebM | 32 kbps | built-in | yes | fine — 11,023 bytes |
+| Opus-in-WebM | 32 kbps | Teams (virtual) | yes | fine — 941 bytes |
+
+So the app always chose AAC, always sent the hint, always got nothing, and **never once offered a
+recording** — with no error shown anywhere, because a failed recorder is deliberately silent. The
+one line of code arguing hardest for AAC was the line breaking it, and the check that would have
+caught it (`isTypeSupported`) shares an assumption with the bug: it is answering about the *codec*,
+and the fault is in the *combination*. Textbook
+[silent-success](../reusable/silent-success.md).
+
+**The fix is not a better bitrate.** Nothing you can ask before starting will tell you the encoder
+accepts a combination, so `PREFERRED` became `ATTEMPTS` and **the recorder has to prove itself**: a
+recorder that errors before producing a single byte is replaced with the next container and its
+clock restarted, while one that errors *after* producing bytes is a real failure and still offers
+nothing. The bitrate hint now rides only on the containers measured to survive it. Three tests, each
+checked by breaking the source and watching them go red.
+
+The extension then disconnected mid-run, so the tab was left without its cleanup — though a later
+pass confirmed the profile textarea intact, the microphone idle and no stale device preference.
 
 ## What is still unverified
 
@@ -382,6 +408,11 @@ transcribes nothing — but that is an argument, not a reading.
   rather than after a silent device.
 - **The saved file opening.** The container work was measured — AAC-in-MP4, `ftypisom`, 17 KB for
   1.2s — but no `.m4a` produced by this code has yet been double-clicked on a Mac.
+- **The container fallback in a real browser.** It is covered by three tests and was written from a
+  measured failure, but the extension dropped before the fixed code could be watched recovering from
+  an `EncodingError` live. That is the first thing to check next time.
+- **Items 7, 9 and 10** of the browser pass — switching device mid-dictation, discarding a
+  recording, and how the quiet line lays out with a long device name beside a running timer.
 
 ## Questions for Greg
 

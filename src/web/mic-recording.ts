@@ -92,14 +92,46 @@ export interface MicTape {
   cancel(): void;
 }
 
-/**
- * In order of preference. See the header for why bare `audio/mp4` is absent —
- * it is not an oversight and putting it back breaks the feature silently.
- */
-const PREFERRED = ["audio/mp4;codecs=mp4a.40.2", "audio/webm;codecs=opus", "audio/webm"];
+/** One thing to try: a container, and the options to try it with. */
+export interface Attempt {
+  type: string;
+  /** Omitted where the encoder is known to refuse a hint. See below. */
+  audioBitsPerSecond?: number;
+}
 
-/** Speech, not music. 32 kbps of AAC is comfortably enough to hear what was said. */
-const BITRATE = 32_000;
+/**
+ * What to try, in order, **with the options each one is actually known to
+ * survive** — and that qualifier is the whole of a bug found on 2026-08-27.
+ *
+ * `isTypeSupported("audio/mp4;codecs=mp4a.40.2")` returns true, and a recorder
+ * built on it produces a real AAC file. Add `audioBitsPerSecond: 32000` and it
+ * fires **`EncodingError` 307ms in, hands over one zero-byte chunk and stops** —
+ * measured three times out of three, on the built-in microphone alone, on the
+ * built-in microphone shared with the recogniser, and on the virtual device.
+ * The same 32 kbps hint on Opus-in-WebM is fine. So on this machine the app
+ * always picked AAC, always sent the hint, always got nothing, and **never
+ * offered a recording at all** — with no error anywhere, because a failed
+ * recorder is deliberately silent.
+ *
+ * The lesson, which is why the list has this shape rather than a bitrate
+ * constant beside it: **`isTypeSupported` is a claim about the codec, not about
+ * your options.** Nothing you can ask before starting will tell you the encoder
+ * accepts the *combination*, so the recorder has to prove itself — see the
+ * fallback in `recordTrack`, which is what makes this list a list of attempts
+ * rather than a preference.
+ *
+ * Speech does not need 32 kbps of AAC; the caps bound the size either way, and
+ * AAC's own default measured ~14 KB/s, which fits five minutes inside
+ * {@link MAX_BYTES} with room to spare.
+ *
+ * Bare `audio/mp4` is absent for a different reason — see the header. It is not
+ * an oversight and putting it back breaks the feature silently.
+ */
+const ATTEMPTS: Attempt[] = [
+  { type: "audio/mp4;codecs=mp4a.40.2" },
+  { type: "audio/webm;codecs=opus", audioBitsPerSecond: 32_000 },
+  { type: "audio/webm", audioBitsPerSecond: 32_000 },
+];
 /** A chunk a second, so a stop mid-second still has the second before it. */
 const TIMESLICE_MS = 1000;
 /**
@@ -121,6 +153,18 @@ const MIN_MS = 2000;
 /** How long to wait for a recorder to finish before releasing the track anyway. */
 const FLUSH_TIMEOUT_MS = 3000;
 
+/**
+ * The attempts this browser says it can make, best first.
+ *
+ * Empty means it claims none of them, in which case `recordTrack` asks for
+ * nothing at all and reads back whatever the recorder chose for itself.
+ */
+export function supportedAttempts(
+  supported: (type: string) => boolean = isSupported,
+): Attempt[] {
+  return ATTEMPTS.filter((a) => supported(a.type));
+}
+
 /** The best container this browser will give us, or undefined to let it choose. */
 export function pickMimeType(
   /* `isTypeSupported` is checked for existence, not merely `MediaRecorder`.
@@ -128,13 +172,17 @@ export function pickMimeType(
      and calling a missing one throws where returning `undefined` would have
      been perfectly fine: the recorder picks its own container and we read back
      whatever it produced. Found by a fake that did not have it. */
-  supported: (type: string) => boolean = (type) =>
+  supported: (type: string) => boolean = isSupported,
+): string | undefined {
+  return supportedAttempts(supported)[0]?.type;
+}
+
+function isSupported(type: string): boolean {
+  return (
     typeof MediaRecorder !== "undefined" &&
     typeof MediaRecorder.isTypeSupported === "function" &&
-    MediaRecorder.isTypeSupported(type),
-): string | undefined {
-  for (const type of PREFERRED) if (supported(type)) return type;
-  return undefined;
+    MediaRecorder.isTypeSupported(type)
+  );
 }
 
 /**
@@ -196,76 +244,105 @@ export function formatDuration(ms: number): string {
  */
 export function recordTrack(track: MediaStreamTrack): MicTape | null {
   if (typeof MediaRecorder === "undefined") return null;
-  const wanted = pickMimeType();
-  let rec: MediaRecorder;
-  try {
-    rec = new MediaRecorder(
-      new MediaStream([track]),
-      wanted ? { mimeType: wanted, audioBitsPerSecond: BITRATE } : { audioBitsPerSecond: BITRATE },
-    );
-  } catch {
-    return null;
-  }
+  /* An empty list is a browser that claims none of our containers. Ask for
+     nothing and read back what it chose — which is the same fallback the
+     header describes, one level up. */
+  const attempts: Array<Attempt | undefined> = supportedAttempts();
+  if (attempts.length === 0) attempts.push(undefined);
 
   const chunks: Blob[] = [];
   let bytes = 0;
   let cancelled = false;
   let errored = false;
   let capped = false;
-  /** The recorder never finished handing over its data. Not a complete file. */
   let timedOut = false;
-  const startedAt = Date.now();
+  let startedAt = Date.now();
   let endedAt: number | null = null;
+  let at = 0;
+  let rec: MediaRecorder | null = null;
+  let settle: (() => void) | null = null;
+  const done = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
 
   const halted = () => {
     try {
-      if (rec.state !== "inactive") rec.stop();
+      if (rec && rec.state !== "inactive") rec.stop();
     } catch {
       /* Already inactive. */
     }
   };
 
-  rec.ondataavailable = (e) => {
-    if (cancelled || e.data.size === 0) return;
-    /* **Checked before the chunk is kept, not after.** The first version stored
-       it and then noticed, which bounds nothing: a delayed `dataavailable` can
-       be any size at all, so the "cap" was a promise about a number nobody had
-       looked at yet. GPT Sol's code review, 2026-08-27, item 4. Refusing the
-       chunk that would overflow costs the last second of a five-minute
-       recording, and the button says *Save the first 4:59* rather than
-       claiming the whole of it. */
-    if (bytes + e.data.size > MAX_BYTES) {
-      capped = true;
-      halted();
-      return;
-    }
-    chunks.push(e.data);
-    bytes += e.data.size;
+  const finished = () => {
+    endedAt = Date.now();
+    settle?.();
   };
-  /* One promise for "the recorder has finished handing us data", resolved by
-     whichever of the two events arrives. `onerror` resolves it too, because a
-     recorder that has failed is never going to fire `onstop` and a `stop()`
-     awaiting it would hold the microphone open for ever. */
-  const done = new Promise<void>((resolve) => {
-    rec.onstop = () => {
-      endedAt = Date.now();
-      resolve();
-    };
-    rec.onerror = () => {
-      /* **Errored means no file.** A recorder that failed part way through has
-         produced something we cannot describe honestly, and offering it as "the
-         recording" would be a claim about audio we do not have. */
-      errored = true;
-      endedAt = Date.now();
-      resolve();
-    };
-  });
 
-  try {
-    rec.start(TIMESLICE_MS);
-  } catch {
-    return null;
+  /**
+   * Build and start one attempt. False if it would not even construct or start,
+   * in which case the caller moves on to the next.
+   */
+  const begin = (): boolean => {
+    const opts = attempts[at];
+    let next: MediaRecorder;
+    try {
+      next = new MediaRecorder(new MediaStream([track]), opts ? { ...opts, mimeType: opts.type } : {});
+    } catch {
+      return false;
+    }
+    next.ondataavailable = (e) => {
+      if (cancelled || e.data.size === 0) return;
+      /* **Checked before the chunk is kept, not after.** The first version
+         stored it and then noticed, which bounds nothing: a delayed
+         `dataavailable` can be any size, so the "cap" was a promise about a
+         number nobody had looked at yet. GPT Sol's code review, item 4. */
+      if (bytes + e.data.size > MAX_BYTES) {
+        capped = true;
+        halted();
+        return;
+      }
+      chunks.push(e.data);
+      bytes += e.data.size;
+    };
+    next.onstop = () => {
+      if (rec === next) finished();
+    };
+    next.onerror = () => {
+      if (rec !== next) return;
+      /* **A recorder that failed before producing anything gets replaced, not
+         mourned.** `isTypeSupported` is a claim about the codec and not about
+         the options we pass with it, so the only way to find out whether this
+         browser will really encode this combination is to watch it try — and on
+         2026-08-27 the first choice failed on every machine we had, silently,
+         which meant the feature never once produced a file. Anything already
+         collected, though, means the container was fine and something else went
+         wrong later; that is a real failure and the evidence contract says we
+         offer nothing. */
+      if (bytes === 0 && at + 1 < attempts.length) {
+        at += 1;
+        // The clock restarts with the recorder, so `ms` describes the file we
+        // actually have rather than including the failed attempt.
+        startedAt = Date.now();
+        chunks.length = 0;
+        if (begin()) return;
+      }
+      errored = true;
+      finished();
+    };
+    try {
+      next.start(TIMESLICE_MS);
+    } catch {
+      return false;
+    }
+    rec = next;
+    return true;
+  };
+
+  while (at < attempts.length) {
+    if (begin()) break;
+    at += 1;
   }
+  if (!rec) return null;
 
   const cap = window.setTimeout(() => {
     capped = true;
@@ -283,20 +360,18 @@ export function recordTrack(track: MediaStreamTrack): MicTape | null {
        offering them would be handing the reader a partial file described as
        what we captured. So the wait reports its winner and a timed-out flush
        yields nothing. GPT Sol's code review, item 3. */
-    const finished = await Promise.race([
+    const ok = await Promise.race([
       done.then(() => true),
-      new Promise<boolean>((resolve) =>
-        window.setTimeout(() => resolve(false), FLUSH_TIMEOUT_MS),
-      ),
+      new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), FLUSH_TIMEOUT_MS)),
     ]);
-    if (!finished) timedOut = true;
+    if (!ok) timedOut = true;
   };
 
   return {
     async stop() {
       await halt();
       if (cancelled || errored || timedOut) return null;
-      const mimeType = rec.mimeType || wanted || "audio/webm";
+      const mimeType = rec?.mimeType || attempts[at]?.type || "audio/webm";
       const blob = new Blob(chunks, { type: mimeType });
       // Dropped either way: the Blob owns the data now, and holding the chunks
       // as well would double the memory for as long as the page is open.
