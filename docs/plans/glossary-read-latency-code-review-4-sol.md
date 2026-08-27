@@ -1,0 +1,11 @@
+Verdict: **NOT SAFE TO COMMIT.**
+
+1. **Must-fix — fetch and generation comments still contradict the code.** [useGlossary.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useGlossary.ts:66) says every mutation bumps the generation, although `patchEntry` deliberately does not. Its `refresh` documentation also names checked terms, although `look()` uses `patchEntry`. [App.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/App.tsx:753) says the band does not fetch again, while its mount revalidation does exactly that. The older component comment at [App.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/App.tsx:1966) still gives the avoided universal list fetch as the component boundary’s purpose; the poller and conditional revalidation are now the reason.
+
+2. **Should-fix — the sixth tautology is the stale-entry test.** [glossary-one-fetch.test.tsx](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/glossary-one-fetch.test.tsx:380) calls `patchEntry(id, lookup)` directly, so no stale name ever enters the test. Its assertion that the name does not revert cannot exercise the regression it claims to guard. Drive `useGlossary().look()` with a mocked lookup response containing the stale name instead. The file’s header also still names deleted `useGlossaryTerms`.
+
+3. **Nit — `glossary.md` is substantially right, but two statements need qualification.** “One GET” should be “one initial GET,” because opening the band revalidates. “`status` never goes back to `loading`” is true only for the same slug; a slug change deliberately resets it. [glossary.md](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/project/glossary.md:288)
+
+`look()`’s throw is correct. The server constructs the lookup, saves it, and returns `{ ...entry, lookup }`; a successful response without it violates the endpoint contract and should not silently look successful. [term-lookup.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/term-lookup.ts:188)
+
+I found no further runtime defect in the scoped implementation. The four targeted suites independently pass: 40 tests.

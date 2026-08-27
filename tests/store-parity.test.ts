@@ -192,10 +192,19 @@ when("the filesystem and Postgres stores agree", () => {
       expect(fromPg.blocks.map((b) => b.id)).toEqual(fromFiles.blocks.map((b) => b.id));
     });
 
+    /* **All four artefact reads, not three.** `loadIdeas` was missing until
+       2026-08-27, and it is the one that most needed to be here: alone of the
+       four its staleness compares the *tree* as well as the blocks
+       (src/ideas.ts § `inputFingerprint`), so it is the one a blocks-only
+       change can break while the other three stay green. GPT Sol found the gap
+       while reviewing docs/plans/glossary-read-latency.md — which narrows what
+       all four of them read — and it was right that the plan claimed a cover
+       this file did not provide. */
     for (const [name, read] of [
       ["tweets", (r: typeof fsArticleReader) => r.loadTweets(slug)],
       ["glossary", (r: typeof fsArticleReader) => r.loadGlossary(slug)],
       ["summaries", (r: typeof fsArticleReader) => r.loadSummaries(slug)],
+      ["ideas", (r: typeof fsArticleReader) => r.loadIdeas(slug)],
     ] as const) {
       it(`agrees about ${name}, present or absent`, async () => {
         const fromFiles = await read(fsArticleReader).catch((err: unknown) => err);

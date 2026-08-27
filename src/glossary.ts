@@ -48,7 +48,7 @@ import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { hashBlocks } from "./source-hash.js";
+import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -702,7 +702,7 @@ export function buildGlossary(
  * list is out of date, and `glossaryIsCurrent` below wraps it so the pipeline
  * will not skip a step whose artefact has gone stale.
  */
-export function isStale(glossary: Glossary, blocks: Block[]): boolean {
+export function isStale(glossary: Glossary, blocks: BlockFingerprint[]): boolean {
   return glossary.sourceHash !== hashBlocks(blocks);
 }
 

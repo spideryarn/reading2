@@ -77,7 +77,7 @@ import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
-import { hashBlocks } from "./source-hash.js";
+import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -773,7 +773,7 @@ export function countCitations(
  * and `summariesAreCurrent` below wraps it so the pipeline will not skip a step
  * whose artefact has gone stale.
  */
-export function isStale(summaries: Summaries, blocks: Block[]): boolean {
+export function isStale(summaries: Summaries, blocks: BlockFingerprint[]): boolean {
   return summaries.sourceHash !== hashBlocks(blocks);
 }
 

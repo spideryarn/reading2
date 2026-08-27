@@ -33,7 +33,20 @@ import type { Block, Tree } from "./types.js";
  * inventing a second canonical form — which is the one thing this module exists
  * to prevent. src/store/pg-searches.ts is the caller that needed it.
  */
-export function hashBlocks(blocks: readonly Pick<Block, "id" | "text">[]): string {
+/**
+ * **What a fingerprint of the article actually needs**, which is two fields.
+ *
+ * Named rather than spelled out at each caller, because the four staleness
+ * checks that use it are also the four reads that had been fetching every
+ * column of every block row to compute it — including the block HTML and a
+ * generated tsvector — and then throwing all of it away (`blockHashInputs` in
+ * src/store/pg.ts). A signature taking the whole `Block` is what let that
+ * happen quietly: the narrow row would not typecheck, so the obvious fix was to
+ * widen the query. docs/plans/glossary-read-latency.md.
+ */
+export type BlockFingerprint = Pick<Block, "id" | "text">;
+
+export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
   const canonical = blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }

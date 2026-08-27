@@ -29,7 +29,7 @@
  * § Rules. It would hide exactly the divergence the parity test is looking for.
  */
 
-import { and, asc, desc, eq, getTableColumns, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { describeArticle, titleFor } from "../api.js";
 import { getDb } from "../db/client.js";
@@ -52,7 +52,7 @@ import { CAPABLE_MODEL } from "../models.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
-import { hashBlocks } from "../source-hash.js";
+import { hashBlocks, type BlockFingerprint } from "../source-hash.js";
 import { isStale as summariesStale } from "../summarise.js";
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
@@ -197,53 +197,231 @@ export function onTheShelf() {
 }
 
 /**
- * Every column of `article_revisions` **except the source document's bytes**.
+ * **Which reads may take which column of `article_revisions`.**
  *
- * `select({ revision: articleRevisions })` takes the whole row, and one of those
- * columns is `raw_bytes` — the entire fetched document, up to 32 MiB at stage
- * 1's ceiling. `listArticles` runs that query **once per article**, for a page
- * that shows a title, some counts and a blurb. Measured against this laptop's
- * database with 8 articles: 23.89 MB across the wire, against 0.01 MB for the
- * columns actually read. Nothing downstream ever touched the bytes — `metaFrom`
- * reads `rawSha256`, and `LibraryEntry` has no field for them.
+ * Every column is named here, and the map is asserted exhaustive against
+ * `getTableColumns` in tests/store-revision-columns.test.ts. That exhaustiveness
+ * is the whole mechanism: adding a column to the schema fails the test until
+ * somebody says which reads want it, so a new column is never silently pulled
+ * into a query nor silently dropped out of one.
  *
- * **Derived from the table rather than listed here**, which is the whole point.
- * A hand-written column list is right on the day it is written and silently
- * wrong on the day somebody adds a column: the new one is dropped from every
- * read, and it surfaces as one `undefined` field somewhere far away that reads
- * like missing data rather than like a query.
- * tests/store-revision-columns.test.ts asserts the difference is exactly this
- * one column, so adding to the schema stays green and forgetting fails.
+ * ## Why this replaced "everything except `raw_bytes`"
  *
- * When docs/plans/raw-bytes-in-storage.md lands, `raw_bytes` stops existing and
- * this constant can go back to being the table itself.
+ * One shared projection served six reads. `raw_bytes` came out of it on
+ * 2026-08-27, after the library page was measured dragging the whole corpus
+ * across the wire — 8 articles, **23.89 MB** against 0.01 MB for the columns
+ * actually read, because `listArticles` runs its query once per article and
+ * `raw_bytes` is the entire fetched document, up to 32 MiB at stage 1's
+ * ceiling. Everything else was then frozen in place by the test written at the
+ * same time, which asserted the selection was *exactly* "all columns but that
+ * one".
+ *
+ * What that left behind: a glossary read pulling `extracted_html` and
+ * `stamped_html` — the whole article, twice — plus the tree, the labels, the
+ * ideas and the summaries, in order to return a 10 KB glossary. About 508 KB of
+ * it on a 360-block article, measured from the artefacts on disk that became
+ * those columns. GPT Sol's review of docs/plans/glossary-read-latency.md said a
+ * shared *narrow* set would still be the wrong shape, and it was right: the fix
+ * is a projection per use.
  */
-const { rawBytes: _rawBytesNotRead, ...revisionColumns } = getTableColumns(articleRevisions);
+type RevisionReader =
+  | "article"
+  | "library"
+  | "metadata"
+  | "publish"
+  | "tweets"
+  | "glossary"
+  | "summaries"
+  | "ideas";
 
-/** Exported for the test that guards the omission. Not a read seam. */
-export const REVISION_COLUMNS = revisionColumns;
+const REVISION_COLUMN_POLICY: Record<
+  keyof typeof articleRevisions.$inferSelect,
+  RevisionReader[]
+> = {
+  /* Identity. Every read has to know which revision it is looking at. */
+  id: ["article", "library", "metadata", "publish", "tweets", "glossary", "summaries", "ideas"],
+  articleId: ["publish"],
+  /* `publish` refuses a revision that is not still a draft. */
+  status: ["publish"],
+
+  /* `metaFrom` — the reading view's masthead and the library card. */
+  title: ["article", "library"],
+  byline: ["article", "library"],
+  siteName: ["article", "library"],
+  lang: ["article", "library"],
+  excerpt: ["article", "library", "publish"],
+  note: ["article", "library"],
+  finalUrl: ["article", "library"],
+  fetchedAt: ["article", "library"],
+  rawSha256: ["article", "library"],
+  source: ["article", "library"],
+  extractMethod: ["article", "library"],
+  pages: ["article", "library"],
+  unverified: ["article", "library"],
+  recall: ["article", "library"],
+  pagesChecked: ["article", "library"],
+
+  /* The tree: the article renders it, `ideas` compares it (src/ideas.ts §
+     `inputFingerprint` — that artefact is written from the skeleton as much as
+     from the paragraphs), the metadata page checks it, and `publish` refuses a
+     revision without one. */
+  tree: ["article", "library", "metadata", "publish", "ideas"],
+  arc: ["article", "library"],
+
+  /* Each artefact goes to the one read that returns it, to the metadata page —
+     which asks of every artefact "would we write this again today" — and to the
+     library, which is the exception and the one place still taking a whole
+     JSONB document to answer `!= null`. That is a follow-up named in
+     docs/plans/glossary-read-latency.md: `is not null` in SQL would keep the
+     bytes on the server, and it belongs with the rest of that page's read. */
+  tweets: ["library", "metadata", "tweets"],
+  glossary: ["library", "metadata", "glossary"],
+  summary: ["library", "metadata", "summaries"],
+  ideas: ["metadata", "ideas"],
+
+  /* **Read by nobody through here**, and the first three are why this map
+     exists. `raw_bytes` is up to 32 MiB of source document. The two HTML
+     columns are the whole article again, and they are pipeline artefacts
+     reached through src/store/artifacts.ts and src/store/export.ts, never
+     through a revision read — traced by grep, and independently by GPT Sol,
+     2026-08-27. `labels` likewise. */
+  rawBytes: [],
+  extractedHtml: [],
+  stampedHtml: [],
+  labels: [],
+  requestedUrl: [],
+  rawContentType: [],
+  rawEncoding: [],
+  rawSourceKind: [],
+  rawSourceSha256: [],
+  /* The library's cached scalars. `describeArticle` derives these from the
+     blocks `listArticles` already reads, and the stored columns are a cache of
+     that derivation rather than a rival to it, so no read selects them. */
+  wordCount: [],
+  blockCount: [],
+  partCount: [],
+  sectionCount: [],
+  rootGist: [],
+  createdAt: [],
+};
+
+/* The `metaFrom` scalars, which two reads want and neither should spell twice. */
+const META_COLUMNS = {
+  title: articleRevisions.title,
+  byline: articleRevisions.byline,
+  siteName: articleRevisions.siteName,
+  lang: articleRevisions.lang,
+  excerpt: articleRevisions.excerpt,
+  note: articleRevisions.note,
+  finalUrl: articleRevisions.finalUrl,
+  fetchedAt: articleRevisions.fetchedAt,
+  rawSha256: articleRevisions.rawSha256,
+  source: articleRevisions.source,
+  extractMethod: articleRevisions.extractMethod,
+  pages: articleRevisions.pages,
+  unverified: articleRevisions.unverified,
+  recall: articleRevisions.recall,
+  pagesChecked: articleRevisions.pagesChecked,
+} as const;
 
 /**
- * A revision row **as read** — the table's shape minus the source bytes.
+ * The projections themselves — **written out, not built from the policy**.
  *
- * `typeof articleRevisions.$inferSelect` is the shape of the *table*, and every
- * read here selects less than that. Using the table's type for a row that was
- * never fully fetched is how `raw_bytes` gets back into a query: the compiler
- * asks for a field nobody has, and the cheapest way to satisfy it is to fetch
- * it again.
+ * A projection derived from the map at runtime is opaque to Drizzle, which then
+ * types every row as `never` or as the whole table; either way the compiler
+ * stops being able to tell a selected column from an unselected one, which is
+ * most of what these are for. Written literally, reading a field a read did not
+ * ask for is a type error at the call site rather than an `undefined` that
+ * looks like missing data.
+ *
+ * The cost is that the map and these can drift, so
+ * tests/store-revision-columns.test.ts asserts each projection's keys equal the
+ * columns the policy assigns it. That is the assertion GPT Sol asked for: the
+ * map alone proves only that somebody classified every column, not that any
+ * query obeys the classification.
  */
-export type RevisionRead = { [K in keyof typeof revisionColumns]: (typeof articleRevisions.$inferSelect)[K] };
+export const REVISION_PROJECTIONS = {
+  article: { id: articleRevisions.id, ...META_COLUMNS, tree: articleRevisions.tree, arc: articleRevisions.arc },
+  library: {
+    id: articleRevisions.id,
+    ...META_COLUMNS,
+    tree: articleRevisions.tree,
+    arc: articleRevisions.arc,
+    tweets: articleRevisions.tweets,
+    glossary: articleRevisions.glossary,
+    summary: articleRevisions.summary,
+  },
+  metadata: {
+    id: articleRevisions.id,
+    tree: articleRevisions.tree,
+    tweets: articleRevisions.tweets,
+    glossary: articleRevisions.glossary,
+    summary: articleRevisions.summary,
+    ideas: articleRevisions.ideas,
+  },
+  publish: {
+    id: articleRevisions.id,
+    articleId: articleRevisions.articleId,
+    status: articleRevisions.status,
+    tree: articleRevisions.tree,
+    excerpt: articleRevisions.excerpt,
+  },
+  tweets: { id: articleRevisions.id, tweets: articleRevisions.tweets },
+  glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary },
+  summaries: { id: articleRevisions.id, summary: articleRevisions.summary },
+  ideas: { id: articleRevisions.id, ideas: articleRevisions.ideas, tree: articleRevisions.tree },
+} as const;
 
-/** One article's current published revision, or undefined. */
-async function currentRevision(slug: string) {
-  const db = getDb();
-  const rows = await db
-    .select({ article: articles, revision: revisionColumns })
+/** Exported for the test that guards the policy. Not a read seam. */
+export const REVISION_COLUMN_POLICY_FOR_TEST = REVISION_COLUMN_POLICY;
+
+/**
+ * A revision row **as the `article` read has it**.
+ *
+ * `metaFrom` is the one helper shared by two projections, and this is the
+ * narrower of the two — never `$inferSelect`, which is the shape of the
+ * *table*. Asking the compiler for a field nobody selected is how a column gets
+ * back into a query: the cheapest way to satisfy it is to fetch it again.
+ */
+type Selected = typeof articleRevisions.$inferSelect;
+
+/** The row one read gets back: exactly the columns its projection names. */
+type RevisionRowFor<K extends RevisionReader> = {
+  [C in keyof (typeof REVISION_PROJECTIONS)[K]]: C extends keyof Selected ? Selected[C] : never;
+};
+
+export type RevisionRead = RevisionRowFor<"article">;
+
+/**
+ * The query, taking its builder, so a test can read the SQL this will send.
+ *
+ * Same reason as `blockHashQuery` below, and GPT Sol's second finding on the
+ * built code: a test that compares projection *objects* to the policy proves
+ * nothing about whether any query uses them. Reverting this to
+ * `revision: articleRevisions` left every projection test green and still
+ * typechecked. The SQL is the only place the two facts meet.
+ */
+export function currentRevisionQuery<K extends RevisionReader>(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  read: K,
+) {
+  return db
+    .select({ article: articles, revision: REVISION_PROJECTIONS[read] })
     .from(articles)
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
     .where(ownedSlug(slug))
     .limit(1);
-  return rows[0];
+}
+
+/** One article's current published revision, or undefined. */
+async function currentRevision<K extends RevisionReader>(slug: string, read: K) {
+  const rows = await currentRevisionQuery(getDb(), slug, read);
+  /* The cast is the one place the projection's runtime shape and its type meet.
+     Drizzle infers the row correctly for a literal projection but not through
+     the generic `K`, and widening the return type to the whole table here would
+     undo the entire point of the projections. */
+  return rows[0] as { article: typeof articles.$inferSelect; revision: RevisionRowFor<K> } | undefined;
 }
 
 /**
@@ -255,13 +433,36 @@ async function currentRevision(slug: string) {
  * looks right in development and reorders the article in production. That is
  * why `ordinal` is written explicitly from the array index rather than inferred.
  */
-async function blocksFor(revisionId: string): Promise<Block[]> {
-  const db = getDb();
-  const rows = await db
-    .select()
+/**
+ * The rendering read's query, taking its builder for the same reason
+ * `blockHashQuery` does: so a test can read the SQL rather than a constant
+ * beside it. Reverting this to a bare `.select()` would silently put `fts` back
+ * and nothing would have failed — GPT Sol's fifth finding on the built code.
+ */
+export function blocksQuery(db: Pick<ReturnType<typeof getDb>, "select">, revisionId: string) {
+  return db
+    /* **Named, not `.select()`.** The bare form takes every column, and one of
+       them is `fts` — a generated tsvector whose own schema comment says it is
+       *"queried with `@@` and never selected"*. It was selected on every
+       article load, and it is roughly half the size of the text it indexes. */
+    .select({
+      blockId: revisionBlocks.blockId,
+      tag: revisionBlocks.tag,
+      kind: revisionBlocks.kind,
+      level: revisionBlocks.level,
+      text: revisionBlocks.text,
+      words: revisionBlocks.words,
+      html: revisionBlocks.html,
+      gistable: revisionBlocks.gistable,
+      note: revisionBlocks.note,
+    })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
     .orderBy(asc(revisionBlocks.ordinal));
+}
+
+async function blocksFor(revisionId: string): Promise<Block[]> {
+  const rows = await blocksQuery(getDb(), revisionId);
 
   const blocks = rows.map((row) => ({
     id: row.blockId,
@@ -297,6 +498,60 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
 }
 
 /**
+ * The blocks **as a fingerprint**, for the four reads that only want `stale`.
+ *
+ * `loadTweets`, `loadGlossary`, `loadSummaries` and `loadIdeas` each read every
+ * block row — `text`, `html` and, until 2026-08-27, the generated `fts` vector
+ * too — put them through the sanitiser, and then reduce the lot to a sixteen
+ * character hash and throw them away. On a 360-block article that is roughly
+ * 370 KB and an 80–180ms jsdom parse to compute one boolean.
+ *
+ * `hashBlocks` reads `id` and `text` and nothing else (src/source-hash.ts), so
+ * that is what this selects. **Aliased to `id`**, because the column is
+ * `block_id` and the two have to be spelled to agree — a mismatch here would
+ * hash `undefined` for every block, which is a perfectly stable hash that
+ * happens to be the same for every article.
+ *
+ * **No sanitiser, and the reason is a contract rather than a guess.**
+ * `sanitizeStoredBlocks` *"does not touch `text`"* — its docstring says so and
+ * its implementation only ever rewrites `html` (src/sanitize.ts). So the hash
+ * over these rows is byte-identical to the one the filesystem store computes
+ * over sanitised blocks, which is what keeps the two stores agreeing about
+ * `stale`. That agreement is what tests/store-parity.test.ts exists for.
+ *
+ * `order by ordinal` for the same reason `blocksFor` has it: block ids are
+ * random and carry no position, so without it the rows arrive in whatever order
+ * the planner likes — and `hashBlocks` joins them in the order it is given, so
+ * a reordering silently changes the hash and every artefact reports itself
+ * stale.
+ */
+async function blockHashInputs(revisionId: string): Promise<BlockFingerprint[]> {
+  return blockHashQuery(getDb(), revisionId);
+}
+
+/**
+ * The query itself, taking its builder, so that a test can read **the SQL this
+ * server will actually send** rather than a constant beside it.
+ *
+ * GPT Sol's eighth finding on the plan: a selected-column constant can be
+ * perfectly correct while the real query still says `.select()`, and a fixture
+ * array that is already in order proves nothing about `order by`. Both of those
+ * are only visible in the generated SQL, so the query has to be reachable
+ * without a database — `QueryBuilder` from `drizzle-orm/pg-core` is enough of
+ * one. tests/store-block-reads.test.ts.
+ */
+export function blockHashQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  revisionId: string,
+) {
+  return db
+    .select({ id: revisionBlocks.blockId, text: revisionBlocks.text })
+    .from(revisionBlocks)
+    .where(eq(revisionBlocks.revisionId, revisionId))
+    .orderBy(asc(revisionBlocks.ordinal));
+}
+
+/**
  * Rebuild `Meta` from the revision's columns.
  *
  * The fallback matters: `src/api.ts` invents a title from the article's own
@@ -307,12 +562,12 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
  */
 function metaFrom(
   slug: string,
-  /* **`RevisionRead`, not `$inferSelect`** — the row as it is actually
-     *selected*, which is every column except `raw_bytes`. Widening it back to
-     the table's full shape would compile and would quietly re-require the one
-     column no read fetches, so the next person to satisfy the typechecker would
-     do it by putting the bytes back in the query. The narrow type is the thing
-     stopping that. */
+  /* **`RevisionRead`, not `$inferSelect`** — the row as the `article` read
+     actually selects it, which is a good deal less than the table. Widening it
+     back to the table's full shape would compile, and would quietly re-require
+     columns no read fetches, so the next person to satisfy the typechecker
+     would do it by putting them back in the query. The narrow type is the thing
+     stopping that. `REVISION_COLUMN_POLICY` above says which read takes what. */
   revision: RevisionRead,
   blocks: Block[],
 ): Meta {
@@ -470,7 +725,7 @@ export const pgArticleReader: Pick<
 > = {
   async loadArticle(slug: string): Promise<Article> {
     requireSlug(slug);
-    const found = await currentRevision(slug);
+    const found = await currentRevision(slug, "article");
     if (!found) throw notFound(slug);
 
     const blocks = await blocksFor(found.revision.id);
@@ -494,7 +749,7 @@ export const pgArticleReader: Pick<
   async listArticles(opts: ListOptions = {}): Promise<LibraryEntry[]> {
     const db = getDb();
     const rows = await db
-      .select({ article: articles, revision: revisionColumns })
+      .select({ article: articles, revision: REVISION_PROJECTIONS.library })
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
       /* `is null` / `is not null`, never `= null`. The archived half is asked
@@ -626,7 +881,7 @@ export const pgArticleReader: Pick<
    */
   async articleMetadata(slug: string): Promise<ArticleMetadata> {
     requireSlug(slug);
-    const found = await currentRevision(slug);
+    const found = await currentRevision(slug, "metadata");
     if (!found) throw notFound(slug);
 
     const db = getDb();
@@ -738,7 +993,7 @@ export const pgArticleReader: Pick<
 
   async loadTweets(slug: string): Promise<ThreadFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug);
+    const found = await currentRevision(slug, "tweets");
     if (!found) throw notFound(slug);
 
     const thread = found.revision.tweets as TweetThread | null;
@@ -748,13 +1003,13 @@ export const pgArticleReader: Pick<
         { status: 404 },
       );
     }
-    const blocks = await blocksFor(found.revision.id);
+    const blocks = await blockHashInputs(found.revision.id);
     return { thread, stale: tweetsStale(thread, blocks) };
   },
 
   async loadGlossary(slug: string): Promise<GlossaryFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug);
+    const found = await currentRevision(slug, "glossary");
     if (!found) throw notFound(slug);
 
     const glossary = found.revision.glossary as Glossary | null;
@@ -764,17 +1019,25 @@ export const pgArticleReader: Pick<
         { status: 404 },
       );
     }
-    const blocks = await blocksFor(found.revision.id);
-
     /* Lookups are attached HERE, at the read seam, exactly as src/api.ts does
        it — not stored on the entry. Forgetting this would not fail; it would
        quietly drop every "checked on the web" answer from the panel while the
-       glossary itself looked perfectly correct. */
+       glossary itself looked perfectly correct.
+
+       **Together with the block read, not after it.** Both need only the ids
+       already in hand, so the second was waiting on the first for nothing — one
+       round trip to Supabase, on the request a reader is watching a spinner
+       for. The driver is `pg`'s `Pool`, default `max: 5` (src/db/client.ts §
+       poolMax), so the two queries usually take two connections and genuinely
+       overlap — *usually*, because `DATABASE_POOL_MAX=1` or a saturated pool
+       serialises them again, in which case this costs nothing and buys nothing.
+       GPT Sol was right that the first version of this comment claimed more
+       than it can. docs/plans/glossary-read-latency.md. */
     const db = getDb();
-    const stored = await db
-      .select()
-      .from(glossaryLookups)
-      .where(eq(glossaryLookups.articleId, found.article.id));
+    const [blocks, stored] = await Promise.all([
+      blockHashInputs(found.revision.id),
+      db.select().from(glossaryLookups).where(eq(glossaryLookups.articleId, found.article.id)),
+    ]);
     const byEntry = new Map(
       stored.map((row) => [
         row.entryId,
@@ -805,7 +1068,7 @@ export const pgArticleReader: Pick<
 
   async loadSummaries(slug: string): Promise<SummariesFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug);
+    const found = await currentRevision(slug, "summaries");
     if (!found) throw notFound(slug);
 
     const summaries = found.revision.summary as Summaries | null;
@@ -817,13 +1080,13 @@ export const pgArticleReader: Pick<
         { status: 404 },
       );
     }
-    const blocks = await blocksFor(found.revision.id);
+    const blocks = await blockHashInputs(found.revision.id);
     return { summaries, stale: summariesStale(summaries, blocks) };
   },
 
   async loadIdeas(slug: string): Promise<IdeasFound> {
     requireSlug(slug);
-    const found = await currentRevision(slug);
+    const found = await currentRevision(slug, "ideas");
     if (!found) throw notFound(slug);
 
     const ideas = found.revision.ideas as Ideas | null;
@@ -833,7 +1096,7 @@ export const pgArticleReader: Pick<
         { status: 404 },
       );
     }
-    const blocks = await blocksFor(found.revision.id);
+    const blocks = await blockHashInputs(found.revision.id);
     /* **The tree as well as the blocks**, which is what makes this one line
        longer than its three neighbours. `ideas` is written from the skeleton as
        much as from the paragraphs (src/ideas.ts § `inputFingerprint`), so a

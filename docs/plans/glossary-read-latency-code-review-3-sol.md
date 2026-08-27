@@ -1,0 +1,13 @@
+Verdict: **NOT SAFE TO COMMIT.**
+
+1. **Must-fix — canonical docs now contradict the implementation.** [glossary.md](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/project/glossary.md:288) still names deleted `useGlossaryTerms`, the second list, and `onEntries`. The [plan](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/plans/glossary-read-latency.md:133) also omits `refresh`, specifies `patchEntry(id, lookup)`, and falsely says every mutation bumps the generation. [pg.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/pg.ts:199) and its [metaFrom comment](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/pg.ts:584) still describe the removed “everything except raw bytes” projection.
+
+2. **Should-fix — SQL coverage has two holes.** The generated-SQL loop omits `tweets` and `summaries`; `library` and `publish` in that loop are hypothetical `currentRevisionQuery` calls, not their production queries. The glossary exclusions also omit the potentially large `tweets` JSONB column. All live projections are currently correct, but the claimed guard is incomplete. [store-revision-columns.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/store-revision-columns.test.ts:137)
+
+3. **Should-fix — `patchEntry` accepts an invalid state and silently succeeds.** `GlossaryEntry.lookup` is optional, so the public signature permits a lookup-less entry; [the guard](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useGlossary.ts:327) then does nothing while `look()` resolves successfully. The current server always returns a stored lookup, so there is no present happy-path loss. Prefer `patchEntry(id, lookup)` or an explicit pre-update throw.
+
+4. **Note — the fifth tautology is here:** `expect(hashBlocks(blocks)).toEqual(hashBlocks(blocks))`. It proves nothing. The following fingerprint assertion is nevertheless valid because it passes the same blocks with two different trees. [store-block-reads.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/store-block-reads.test.ts:146)
+
+The `refresh()` ordering holds in normal operation: the trailing request is installed before the first promise resolves. Only `clear()` or a slug change can replace/null it, and both supersede that refresh. Unmount leaves only an already-issued request to finish; it cannot launch the armed trailing request. Reset error routing is also correct.
+
+The six scoped suites passed: 113 tests. Source and web typechecks passed directly; the shared tests project currently has unrelated concurrent errors.

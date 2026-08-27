@@ -35,7 +35,7 @@ import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { hashBlocks } from "./source-hash.js";
+import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -103,7 +103,7 @@ export { hashBlocks };
  * below wraps it so the pipeline will not skip a step whose artefact has gone
  * stale.
  */
-export function isStale(thread: TweetThread, blocks: Block[]): boolean {
+export function isStale(thread: TweetThread, blocks: BlockFingerprint[]): boolean {
   return thread.sourceHash !== hashBlocks(blocks);
 }
 

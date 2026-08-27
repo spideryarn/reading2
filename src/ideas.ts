@@ -54,7 +54,7 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { hashBlocks, structureHash } from "./source-hash.js";
+import { hashBlocks, structureHash, type BlockFingerprint } from "./source-hash.js";
 import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -120,7 +120,7 @@ export function suggestedIdeas(words: number): number {
  * while every block is byte-identical and a blocks-only hash reports no change
  * at all.
  */
-export function inputFingerprint(blocks: readonly Block[], tree: Tree): string {
+export function inputFingerprint(blocks: readonly BlockFingerprint[], tree: Tree): string {
   return `${hashBlocks(blocks)}.${structureHash(tree)}`;
 }
 
@@ -489,7 +489,7 @@ export function buildIdeas(
 }
 
 /** Does this artefact still describe the article and tree on disk? */
-export function isStale(ideas: Ideas, blocks: readonly Block[], tree: Tree): boolean {
+export function isStale(ideas: Ideas, blocks: readonly BlockFingerprint[], tree: Tree): boolean {
   return ideas.sourceHash !== inputFingerprint(blocks, tree);
 }
 
