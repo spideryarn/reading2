@@ -44,7 +44,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import {
@@ -58,16 +58,27 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { PATHS } from "../src/store/artifacts-fs.js";
 import {
+  RawNotWritable,
   STORAGE,
   WrongArticle,
+  hasArtefacts,
   readArtefact,
   siteFor,
+  pgArtifactsIn,
+  readOnlyPgArtifacts,
   stampForStep,
+  stepInterrupted,
+  writeArtefacts,
 } from "../src/store/artifacts-pg.js";
 import type { JobDraftRef } from "../src/store/artifacts-pg.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/artifacts.js";
 import type { ArtifactKind } from "../src/store/artifacts.js";
 import { STEPS, STEP_ORDER } from "../src/pipeline.js";
+import { mintId } from "../src/ids.js";
+import { mintAttempt } from "../src/store/jobs.js";
+import { NotTheLiveAttempt, StepRunNotHeld, beginStepRun } from "../src/store/pg-revisions.js";
+import { jobs } from "../src/db/schema.js";
+import type { Block, JobStep, Meta } from "../src/types.js";
 import type { Arc, Ideas, Tree } from "../src/types.js";
 import type { LabelsFile } from "../src/labels.js";
 
@@ -726,3 +737,465 @@ async function cleanUpQuietly(): Promise<void> {
   await db.delete(articleRevisions).where(eq(articleRevisions.articleId, article.id));
   await db.delete(articles).where(eq(articles.id, article.id));
 }
+
+when("whether a step has actually produced anything", () => {
+  /* `has` is presence **and completion**, and never freshness — see the long
+     header on `hasArtefacts`. Every case below was watched red against the
+     mutation named in it. */
+  beforeAll(async () => {
+    await cleanUpQuietly();
+    await makeFixture();
+  }, 60_000);
+  afterAll(cleanUp);
+
+  const has = (step: "toc" | "arc" | "blocks", kinds: ArtifactKind[]) =>
+    hasArtefacts(ref, getDb(), SLUG, step, kinds);
+
+  const runRow = async (step: "toc" | "arc" | "blocks", status: "running" | "done" | "error") => {
+    const row = {
+      revisionId: ref.revisionId,
+      stepName: step,
+      inputHash: NO_INPUT_HASH,
+      implementationVersion: PIPELINE_RUN,
+      promptVersion: null,
+      model: null,
+      status,
+      finishedAt: status === "running" ? null : new Date(),
+    };
+    await getDb()
+      .insert(revisionStepRuns)
+      .values(row)
+      .onConflictDoUpdate({
+        target: [revisionStepRuns.revisionId, revisionStepRuns.stepName],
+        set: row,
+      });
+  };
+
+  it("refuses a slug that is not the one it is bound to", async () => {
+    await expect(hasArtefacts(ref, getDb(), "elsewhere", "toc", ["tree"])).rejects.toThrow(
+      WrongArticle,
+    );
+  });
+
+  it("says no to a step whose artefacts are all there but which never ran", async () => {
+    /* **The whole reason this function reads a row at all.** The fixture wrote
+       `tree` and `labels` straight into the columns and recorded no run — which
+       is exactly the shape `beginDraftIn` produces when it carries a previous
+       revision's columns forward. On the filesystem the artefacts being there
+       is very nearly proof that the step put them there; here it is not.
+
+       Watched red by deleting the run-row read. */
+    expect(await has("toc", ["tree", "labels"])).toBe(false);
+  });
+
+  it("says yes once the step is recorded done and everything reads back", async () => {
+    await runRow("toc", "done");
+    expect(await has("toc", ["tree", "labels", "blocks"])).toBe(true);
+  });
+
+  it("says no while the step is still running", async () => {
+    await runRow("toc", "running");
+    expect(await has("toc", ["tree", "labels"])).toBe(false);
+    expect(await stepInterrupted(ref, getDb(), SLUG, "toc")).toBe(true);
+  });
+
+  it("says no to a step that ended in error, artefacts or no artefacts", async () => {
+    /* The `status = 'done'` half **alone**: every artefact this step declares is
+       sitting in its column, and the only thing wrong is the row. Watched red by
+       relaxing the condition to "a row exists".
+
+       And it is not *interrupted*: it finished, badly. `stepIsDone` treats those
+       differently, so the two questions must not collapse into one. */
+    await runRow("toc", "error");
+    expect(await has("toc", ["tree", "labels"])).toBe(false);
+    expect(await stepInterrupted(ref, getDb(), SLUG, "toc")).toBe(false);
+  });
+
+  it("says no when one of the step's products is missing", async () => {
+    /* All of them, never any of them. `arc` is the whole of the arc step, and
+       `toc` declares three — a done row beside two of them is a step that
+       cannot be believed. */
+    await runRow("arc", "done");
+    expect(await has("arc", ["arc"])).toBe(true);
+    const db = getDb();
+    await db
+      .update(articleRevisions)
+      .set({ labels: null })
+      .where(eq(articleRevisions.id, ref.revisionId));
+    try {
+      await runRow("toc", "done");
+      expect(await has("toc", ["tree"])).toBe(true);
+      expect(await has("toc", ["tree", "labels"])).toBe(false);
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ labels: LABELS })
+        .where(eq(articleRevisions.id, ref.revisionId));
+    }
+  });
+
+  it("says no when nothing was asked for", async () => {
+    /* Not "yes, all of nothing". A step whose products list is empty has not
+       been shown to have run, and the file adapter answers the same way. */
+    await runRow("toc", "done");
+    expect(await has("toc", [])).toBe(false);
+  });
+
+  it("keeps saying yes about a tree built from blocks that have since moved", async () => {
+    /* **The assertion that says freshness stayed out of storage.** The `toc`
+       row records a hash that has nothing to do with the blocks now stored, and
+       `has` does not care: the tree is there and a run of `toc` finished.
+
+       An earlier version of the plan wanted the opposite — compare the row's
+       `input_hash` against the stored blocks — and it is wrong twice over. It
+       is a freshness rule in the one function that must not have one, and it
+       re-runs `toc`, which moves the tree's boundaries, which silently drops
+       every `arc` and `summary` entry whose block range no longer matches a
+       node. GPT Sol, 2026-08-28. */
+    await runRow("toc", "done");
+    const [row] = await getDb()
+      .select({ hash: revisionStepRuns.inputHash })
+      .from(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, ref.revisionId),
+          eq(revisionStepRuns.stepName, "toc"),
+        ),
+      );
+    expect(row?.hash, "the row must not happen to describe these blocks").toBe(NO_INPUT_HASH);
+    expect(await has("toc", ["tree", "labels", "blocks"])).toBe(true);
+  });
+});
+
+/* --------------------------------------------------------------- write -- */
+
+type Db = ReturnType<typeof getDb>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+class RollBack extends Error {}
+
+const JOB_STEPS: JobStep[] = [
+  { name: "toc", label: "Building the table of contents", status: "pending" },
+];
+
+/**
+ * A live claim on the fixture draft, and everything it touches rolled back.
+ *
+ * `jobs_only_one_running` is a partial unique index over the whole table: at
+ * most one `running` job exists at a time, anywhere. Every suite that wants one
+ * is therefore mutually exclusive with every other, and two of them already
+ * fail against each other under parallel vitest. So this takes the slot inside
+ * a transaction, does its work, and throws to roll the lot back — nothing
+ * reaches the slot and there is nothing to clean up.
+ *
+ * Copied in shape from tests/store-step-fence.test.ts, which explains it at
+ * length.
+ */
+async function withClaim(
+  body: (tx: Tx, claimed: JobDraftRef) => Promise<void>,
+): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    const id = mintId();
+    const attemptId = mintAttempt();
+    try {
+      await getDb().transaction(async (tx) => {
+        await tx.insert(jobs).values({
+          id,
+          ownerId: DEV_OWNER_ID,
+          slug: SLUG,
+          steps: JOB_STEPS,
+          status: "running",
+          attemptId,
+          leaseExpiresAt: new Date(Date.now() + 600_000),
+          workKey: `wk-${id}`,
+          draftRevisionId: ref.revisionId,
+        });
+        await body(tx, { ...ref, jobId: id, attemptId });
+        throw new RollBack();
+      });
+      return;
+    } catch (err) {
+      if (err instanceof RollBack) return;
+      const constraint = (err as { cause?: { constraint?: string } }).cause?.constraint;
+      if (constraint !== "jobs_only_one_running") throw err;
+      if (attempt >= 40) {
+        throw new Error(
+          "another job held the single running slot for 20s — re-run when the queue is idle.",
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+}
+
+const NEW_BLOCKS: Block[] = [
+  { id: B1, tag: "p", kind: "text", text: "rewritten first", words: 2, html: "<p>a</p>", gistable: true },
+  { id: B2, tag: "p", kind: "text", text: "rewritten second", words: 2, html: "<p>b</p>", gistable: true },
+];
+
+when("writing artefacts into a draft", () => {
+  beforeAll(async () => {
+    await cleanUpQuietly();
+    await makeFixture();
+  }, 60_000);
+  afterAll(cleanUp);
+
+  /** The protocol the runner follows: begin, then write. */
+  const begun = async (
+    tx: Tx,
+    claimed: JobDraftRef,
+    step: "toc" | "arc" | "blocks" | "fetch" | "extract",
+  ) => {
+    await beginStepRun(
+      { revisionId: claimed.revisionId, stepName: step, job: { id: claimed.jobId, attemptId: claimed.attemptId } },
+      tx,
+    );
+  };
+
+  it("puts a column artefact where the map says, and reads it back", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "arc");
+      const arc: Arc = { ...ARC, entries: [{ range: [B1, B2], text: "Something else entirely." }] };
+      await writeArtefacts(claimed, tx, SLUG, "arc", { arc }, { promptVersion: "arc/1", model: "claude-opus-5" });
+      expect(await readArtefact(claimed, tx, SLUG, "arc", "arc")).toEqual(arc);
+    });
+  });
+
+  it("takes meta apart into columns and puts it back together", async () => {
+    /* The round trip is the assertion: `metaColumns` and `readMeta` are
+       inverses, and a field one of them forgets is a field that silently stops
+       surviving an extraction. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      const meta: Meta = {
+        slug: SLUG,
+        title: "Rewritten",
+        byline: "Somebody",
+        lang: "fr",
+        url: "https://example.test/again",
+        fetchedAt: "2026-05-06T07:08:09.000Z",
+        source: "pdf",
+        method: "openai/gpt-5.6-luna/pdf-v1",
+        pages: 17,
+        unverified: false,
+        recall: 0.94,
+        pagesChecked: 12,
+      };
+      /* `extract` writes two things and this writes one, which the store allows
+         — `has` is what refuses the half-finished step, not `write`. */
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toEqual(meta);
+    });
+  });
+
+  it("clears a column for a field the new meta does not have", async () => {
+    /* The fixture has a `siteName` and an `excerpt`; this meta has neither. An
+       absent-key-means-leave-it write would leave last extraction's values
+       sitting beside this one's, and the result would read perfectly. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { slug: SLUG, title: "Bare" } }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toEqual({
+        slug: SLUG,
+        title: "Bare",
+      });
+    });
+  });
+
+  it("replaces the blocks wholesale, in the order it was given", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "blocks");
+      await writeArtefacts(claimed, tx, SLUG, "blocks", { blocks: { blocks: NEW_BLOCKS } }, {});
+      const back = await readArtefact(claimed, tx, SLUG, "blocks", "blocks");
+      expect(back?.blocks.map((b) => b.text)).toEqual(["rewritten first", "rewritten second"]);
+      /* The third fixture block is gone, not left behind beside the two new
+         ones — a paragraph nothing points at. */
+      expect(back?.blocks).toHaveLength(2);
+    });
+  });
+
+  it("deletes every block when it is handed none", async () => {
+    /* **The decision, and it is the opposite of what the importer does.**
+       `src/store/import.ts` puts its delete inside `if (blocks.length)`, so an
+       empty array leaves the inherited rows in place: the stage returns
+       nothing, the old article survives, and the run reports done. Watched red
+       by moving this delete back inside the same condition. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "blocks");
+      await writeArtefacts(claimed, tx, SLUG, "blocks", { blocks: { blocks: [] } }, {});
+      const rows = await tx
+        .select({ id: revisionBlocks.blockId })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.revisionId, claimed.revisionId));
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  it("refuses a stamp that contradicts the artefact it is writing", async () => {
+    /* The file adapter has nowhere to put a stamp, so it checks. This one has a
+       whole column, so a contradiction would **survive** — and `stampFor` would
+       then have to pick between the row and the artefact. Rejecting the write
+       is the only answer that keeps them meaning the same thing. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "arc");
+      await expect(
+        writeArtefacts(claimed, tx, SLUG, "arc", { arc: ARC }, { model: "some-other-model" }),
+      ).rejects.toThrow(/disagrees with the arc itself/);
+    });
+  });
+
+  it("refuses to write the raw manifest, rather than writing half of it", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "fetch");
+      const raw = await readArtefact(claimed, tx, SLUG, "fetch", "raw");
+      expect(raw).not.toBeNull();
+      await expect(
+        writeArtefacts(claimed, tx, SLUG, "fetch", { raw: raw ?? undefined }, {}),
+      ).rejects.toThrow(RawNotWritable);
+    });
+  });
+
+  it("refuses a write with no run of its own to record", async () => {
+    /* No `beginStep`. The artefacts would land with nothing saying a run
+       produced them, and `has` would then answer no for ever. */
+    await withClaim(async (tx, claimed) => {
+      await expect(
+        writeArtefacts(claimed, tx, SLUG, "arc", { arc: ARC }, {}),
+      ).rejects.toThrow(StepRunNotHeld);
+    });
+  });
+
+  it("refuses a write from an attempt the job has moved past", async () => {
+    /* The job fence, taken by `write` itself. `finishStepRun` takes it too, and
+       that is not a reason to leave it out here: "the write is safe because the
+       call after it checks" holds until somebody calls the write on its own. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "arc");
+      const stale = { ...claimed, attemptId: mintAttempt() };
+      /* **`NotTheLiveAttempt`, named.** A bare `rejects.toThrow()` passed with
+         the fence deleted, because `recordStamp` refuses a token it does not
+         recognise anyway — so the test would have been green about the wrong
+         refusal. Naming the error is what makes it about the job fence. */
+      await expect(writeArtefacts(stale, tx, SLUG, "arc", { arc: ARC }, {})).rejects.toThrow(
+        NotTheLiveAttempt,
+      );
+    });
+  });
+
+  it("leaves the blocks alone when the fence refuses", async () => {
+    /* The delete is unconditional, so a fence that refuses *after* it would be
+       the worst of both. It refuses first, and this is what says so. */
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "blocks");
+      const stale = { ...claimed, attemptId: mintAttempt() };
+      await expect(
+        writeArtefacts(stale, tx, SLUG, "blocks", { blocks: { blocks: [] } }, {}),
+      ).rejects.toThrow();
+      const rows = await tx
+        .select({ id: revisionBlocks.blockId })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.revisionId, claimed.revisionId));
+      expect(rows, "the delete must not have run").toHaveLength(3);
+    });
+  });
+
+  it("records the stamp on the running row, where stampFor will find it", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "toc");
+      /* `toc` has no `PipelineStep.stamp` and must still record an input hash,
+         because `reasonsNotToPublish` compares that column against the stored
+         blocks. Having no expected stamp and recording no input are different
+         things. */
+      await writeArtefacts(
+        claimed,
+        tx,
+        SLUG,
+        "toc",
+        { tree: TREE, labels: LABELS, blocks: { blocks: NEW_BLOCKS } },
+        { inputHash: "hash-of-the-blocks" },
+      );
+      const [row] = await tx
+        .select()
+        .from(revisionStepRuns)
+        .where(
+          and(
+            eq(revisionStepRuns.revisionId, claimed.revisionId),
+            eq(revisionStepRuns.stepName, "toc"),
+          ),
+        );
+      expect(row?.inputHash).toBe("hash-of-the-blocks");
+      expect(row?.status, "still running until finishStep says otherwise").toBe("running");
+    });
+  });
+});
+
+when("the store, assembled", () => {
+  beforeAll(async () => {
+    await cleanUpQuietly();
+    await makeFixture();
+  }, 60_000);
+  afterAll(cleanUp);
+
+  it("runs a step end to end through the interface alone", async () => {
+    /* begin → write → finish, the same three calls in the same order as the
+       runner, through `ArtifactStore` and nothing else. This is what
+       `copyArtefacts` drives (tests/helpers/artefacts.ts), and it is what C7's
+       replacement suites will use in place of `db:import`. */
+    await withClaim(async (tx, claimed) => {
+      const store = pgArtifactsIn(claimed, tx);
+      expect(await store.has(SLUG, "arc", ["arc"])).toBe(false);
+
+      const attempt = await store.beginStep(SLUG, "arc");
+      expect(await store.interrupted(SLUG, "arc")).toBe(true);
+
+      await store.write(SLUG, "arc", { arc: ARC }, { promptVersion: "arc/1" });
+      /* Written but not finished: the artefact is there and the step is not
+         done. That distinction is the whole reason `beginStep` exists. */
+      expect(await store.has(SLUG, "arc", ["arc"])).toBe(false);
+
+      await store.finishStep(SLUG, "arc", attempt);
+      expect(await store.interrupted(SLUG, "arc")).toBe(false);
+      expect(await store.has(SLUG, "arc", ["arc"])).toBe(true);
+      expect(await store.read(SLUG, "arc", "arc")).toEqual(ARC);
+    });
+  });
+
+  it("hands back the job's own attempt, not a token of its own", async () => {
+    /* `revision_step_runs.attempt_id` is the same value as `jobs.attempt_id` —
+       the interface predicted these would "end up being literally the same
+       value", and this is the assertion that keeps it true. */
+    await withClaim(async (tx, claimed) => {
+      const store = pgArtifactsIn(claimed, tx);
+      expect(await store.beginStep(SLUG, "arc")).toBe(claimed.attemptId);
+    });
+  });
+
+  it("refuses to finish a step with somebody else's token", async () => {
+    await withClaim(async (tx, claimed) => {
+      const store = pgArtifactsIn(claimed, tx);
+      await store.beginStep(SLUG, "arc");
+      await expect(store.finishStep(SLUG, "arc", mintAttempt())).rejects.toThrow(StepRunNotHeld);
+    });
+  });
+
+  it("refuses to finish a step that never began", async () => {
+    /* The filesystem tolerates this — a step can complete without that store
+       having seen it start, which is every CLI run. Nothing on this path can:
+       the runner always begins its step, so a finish with nothing to finish is
+       a protocol error and a quiet return would leave a step that never reports
+       itself done. */
+    await withClaim(async (tx, claimed) => {
+      const store = pgArtifactsIn(claimed, tx);
+      await expect(store.finishStep(SLUG, "arc", claimed.attemptId)).rejects.toThrow(
+        StepRunNotHeld,
+      );
+    });
+  });
+
+  it("answers the read-only questions without a transaction", async () => {
+    const store = readOnlyPgArtifacts(ref, getDb());
+    expect(await store.read(SLUG, "toc", "tree")).toEqual(TREE);
+    expect(await store.has(SLUG, "toc", ["tree"])).toBe(false);
+    expect(await store.interrupted(SLUG, "toc")).toBe(false);
+  });
+});

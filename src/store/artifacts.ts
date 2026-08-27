@@ -503,3 +503,59 @@ export interface ArtifactStore {
   /** Did a run of this step start and never finish? */
   interrupted(slug: string, step: StepName): Promise<boolean>;
 }
+
+/**
+ * The stamp a caller passes to `write` must be the stamp inside the artefact.
+ *
+ * On the filesystem there is nowhere else to put it — `sourceHash`, `version`
+ * and `generator` are fields of the artefact itself, and that is what
+ * `stampFor` reads back. So the `stamp` argument is not stored there; it is
+ * *checked*. An unused parameter would be worse than no parameter: it would
+ * read as though the store were recording something, and a caller could pass a
+ * stamp that contradicts the file it is writing without anything noticing until
+ * the step refused to stay done.
+ *
+ * **Postgres has somewhere else to put it — and still checks.** The stamp goes
+ * into `revision_step_runs`, so the two really can disagree there, which is
+ * worse rather than better: `stampFor` would then have to pick one. Rejecting
+ * the write is the only answer that keeps the row and the artefact meaning the
+ * same thing. GPT Sol, 2026-08-28.
+ *
+ * Only fields the artefact actually carries are compared. An arc has no
+ * `sourceHash`, so a caller declaring an `inputHash` for one is not
+ * contradicting anything on disk — there is simply nowhere for it to go, and
+ * that is the arc's limitation rather than the caller's mistake.
+ */
+export function assertStampAgrees(
+  slug: string,
+  step: StepName,
+  kind: ArtifactKind,
+  value: unknown,
+  stamp: StepStamp,
+): void {
+  if (STAMP_SOURCE[step] !== kind) return;
+  const onDisk = stampOf(value);
+  /* `profileHash` joined the list on 2026-08-27, with `ideas`. Leaving it out
+     was not a deliberate narrowing — it was the field arriving after this
+     function was written, which is exactly how a consistency check quietly
+     stops covering the thing it was extended for: a caller could pass
+     `profileHash: null` while writing an artefact stamped with a real hash, and
+     the store would accept the contradiction and then answer freshness
+     questions from whichever of the two it happened to read. GPT Sol.
+
+     `!== undefined` rather than a truthiness test, because `null` is a REAL
+     value here — "written deliberately without a profile" — and has to be able
+     to clash with a hash. */
+  const clashes = (["inputHash", "promptVersion", "model", "profileHash"] as const).filter(
+    (field) =>
+      stamp[field] !== undefined &&
+      onDisk[field] !== undefined &&
+      stamp[field] !== onDisk[field],
+  );
+  if (clashes.length > 0) {
+    throw new Error(
+      `${step} for "${slug}": the stamp passed to write disagrees with the ${kind} itself ` +
+        `(${clashes.map((f) => `${f}: ${String(stamp[f])} vs ${String(onDisk[f])}`).join(", ")})`,
+    );
+  }
+}

@@ -56,19 +56,37 @@
 import { and, asc, eq } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
-import { articleRevisions, revisionBlocks, revisionStepRuns } from "../db/schema.js";
+import {
+  articleRevisions,
+  blockIdentities,
+  revisionBlocks,
+  revisionStepRuns,
+} from "../db/schema.js";
 import { sniffKind } from "../fetch.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
 import { log } from "../log.js";
 import type { Block, Meta, StepName } from "../types.js";
 import {
+  StepRunNotHeld,
+  beginStepRun,
+  finishStepRun,
+  requireLiveJobOwnsDraft,
+} from "./pg-revisions.js";
+import {
   NO_INPUT_HASH,
   PIPELINE_RUN,
   STAMP_SOURCE,
+  assertStampAgrees,
   stampOf,
   whyUnusable,
 } from "./artifacts.js";
-import type { ArtifactKind, ArtifactMap, StepStamp } from "./artifacts.js";
+import type {
+  ArtifactKind,
+  ArtifactMap,
+  ArtifactParts,
+  ArtifactStore,
+  StepStamp,
+} from "./artifacts.js";
 
 const alog = log("store");
 
@@ -457,6 +475,112 @@ export async function readArtefact<K extends ArtifactKind>(
   return value as ArtifactMap[K];
 }
 
+/* ---------------------------------------------------------------- has -- */
+
+/** The `revision_step_runs` row for one step of the bound draft, if there is one. */
+async function runRowFor(
+  ref: JobDraftRef,
+  exec: Executor,
+  step: StepName,
+): Promise<typeof revisionStepRuns.$inferSelect | undefined> {
+  const [row] = await exec
+    .select()
+    .from(revisionStepRuns)
+    .where(
+      and(eq(revisionStepRuns.revisionId, ref.revisionId), eq(revisionStepRuns.stepName, step)),
+    )
+    .limit(1);
+  return row;
+}
+
+/**
+ * Does the store hold **all** of `kinds` for this step, in a state that can be
+ * read back — and did a run of this step actually finish?
+ *
+ * ## Presence and completion. Never freshness.
+ *
+ * Two conditions, and the second is the one the filesystem cannot ask:
+ *
+ * 1. Every requested kind reads back and passes the shared shape check.
+ * 2. `revision_step_runs` holds a row for this step with `status = 'done'`.
+ *
+ * **There is no comparison against an expected stamp**, and there must not be.
+ * `has` is handed no expected stamp, and what counts as current is
+ * step-specific — `ideas` hashes blocks *and* tree. Teaching this function that
+ * would put the pipeline's logic in the storage layer. Freshness stays in
+ * `stepIsDone` (src/pipeline.ts), which compares `stampFor` against what the
+ * step would produce now.
+ *
+ * ## Why the run row is needed here and not on the filesystem
+ *
+ * On disk, an artefact being there is very nearly proof that this step put it
+ * there. In Postgres it is not: `beginDraftIn` copies the previous published
+ * revision's columns and block rows into a new draft, so **a value can be
+ * present without this step having produced it**. The row is what tells the two
+ * apart — and `beginDraftIn` copies the step runs forward too, in the same
+ * transaction, so a coherent revision stays coherent.
+ *
+ * ## `toc` has no special case, and an earlier version of the plan said it did
+ *
+ * The rule was going to be: for `toc`, compare the row's `input_hash` against
+ * the stored blocks. It is wrong twice. It is a freshness rule, in the one
+ * function that must not have one. And it re-runs `toc` whenever stage 3 has
+ * run since — which moves the tree's boundaries, which silently drops every
+ * `arc` and `summary` entry whose block range no longer matches a node
+ * (src/web/tree.ts). That is the hazard the `toc` stamp was withdrawn to avoid,
+ * reached by a different door. GPT Sol, 2026-08-28;
+ * docs/plans/artifacts-pg-has-sol.md.
+ *
+ * The gap it was trying to close is real — neither store can tell a carried
+ * tree from a freshly built one — and it belongs to the runner, which knows at
+ * run time that a step is about to run and can invalidate what depends on it.
+ */
+export async function hasArtefacts(
+  ref: JobDraftRef,
+  exec: Executor,
+  slug: string,
+  step: StepName,
+  kinds: readonly ArtifactKind[],
+): Promise<boolean> {
+  requireBound(ref, slug);
+  /* Matching the file adapter: nothing requested is not "yes, all of nothing".
+     A step whose `produces` is empty has not been shown to have run. */
+  if (kinds.length === 0) return false;
+
+  /* The row first, because it is one small indexed read and the common case in
+     a re-run is that it says no — where reading the artefacts means pulling a
+     megabyte of blocks back to find out the same thing. */
+  const run = await runRowFor(ref, exec, step);
+  if (run?.status !== "done") return false;
+
+  for (const kind of kinds) {
+    if ((await readArtefact(ref, exec, slug, step, kind)) === null) return false;
+  }
+  return true;
+}
+
+/**
+ * Did a run of this step start and never finish?
+ *
+ * `status = 'running'`, which is what src/store/artifacts-fs.ts spends a marker
+ * file to express. The interface's own comment predicted this would be the same
+ * concept in both stores, and it is.
+ *
+ * A row that ended in `error` is **not** interrupted: it finished, badly. The
+ * distinction matters because `stepIsDone` refuses an interrupted step outright
+ * while an errored one falls through to the ordinary presence check — which is
+ * right, since a step that failed may have left nothing, and `has` will say so.
+ */
+export async function stepInterrupted(
+  ref: JobDraftRef,
+  exec: Executor,
+  slug: string,
+  step: StepName,
+): Promise<boolean> {
+  requireBound(ref, slug);
+  return (await runRowFor(ref, exec, step))?.status === "running";
+}
+
 /* ----------------------------------------------------------- stampFor -- */
 
 /**
@@ -502,13 +626,7 @@ export async function stampForStep(
 ): Promise<StepStamp | null> {
   requireBound(ref, slug);
 
-  const [run] = await exec
-    .select()
-    .from(revisionStepRuns)
-    .where(
-      and(eq(revisionStepRuns.revisionId, ref.revisionId), eq(revisionStepRuns.stepName, step)),
-    )
-    .limit(1);
+  const run = await runRowFor(ref, exec, step);
 
   /* The row's own reading of the three shared fields — used to *check* the
      artefact, never to stand in for it. */
@@ -547,4 +665,373 @@ export async function stampForStep(
     stamp.implementationVersion = run.implementationVersion;
   }
   return Object.keys(stamp).length === 0 ? null : stamp;
+}
+
+/* --------------------------------------------------------------- write -- */
+
+/**
+ * Which columns of `article_revisions` each assembled artefact owns.
+ *
+ * Written out rather than derived, because these are the columns `write` is
+ * allowed to set and nothing else may be inferred from a `Meta` — a stage that
+ * grows a field must be made to decide where it goes.
+ */
+const META_COLUMNS = [
+  "title",
+  "byline",
+  "siteName",
+  "lang",
+  "finalUrl",
+  "fetchedAt",
+  "excerpt",
+  "note",
+  "source",
+  "extractMethod",
+  "pages",
+  "unverified",
+  "recall",
+  "pagesChecked",
+  "rawSha256",
+] as const;
+
+/** `meta.json` taken apart into the columns it came from — the inverse of `readMeta`. */
+function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> {
+  /* **Every column named, and `?? null` on every one of them.** A field the
+     stage stopped producing has to *clear* its column, not leave last
+     extraction's value sitting beside this one's — which is what an
+     absent-key-means-leave-it write would do, and it would read perfectly. */
+  const columns: Partial<typeof articleRevisions.$inferInsert> = {
+    title: meta.title ?? null,
+    byline: meta.byline ?? null,
+    siteName: meta.siteName ?? null,
+    lang: meta.lang ?? null,
+    finalUrl: meta.url ?? null,
+    fetchedAt: meta.fetchedAt ? new Date(meta.fetchedAt) : null,
+    excerpt: meta.excerpt ?? null,
+    note: meta.note ?? null,
+    source: meta.source ?? null,
+    extractMethod: meta.method ?? null,
+    pages: meta.pages ?? null,
+    unverified: meta.unverified ?? null,
+    recall: meta.recall ?? null,
+    pagesChecked: meta.pagesChecked ?? null,
+    rawSha256: meta.rawSha256 ?? null,
+  };
+  /* The declared list and the object above must not drift; `META_COLUMNS` is
+     what `readMeta`'s inverse is checked against in the test. */
+  const written = Object.keys(columns);
+  const missing = META_COLUMNS.filter((c) => !written.includes(c));
+  if (missing.length) throw new Error(`meta write is missing ${missing.join(", ")}`);
+  return columns;
+}
+
+/**
+ * Replace this revision's blocks, wholesale.
+ *
+ * Three statements, and the order and the conditions are all load-bearing:
+ *
+ * 1. **Identities upsert, first and never deleted.** `revision_blocks` has a
+ *    foreign key onto `block_identities`, so a block whose identity was never
+ *    minted fails loudly — which is the intended behaviour, because it means
+ *    stage 3 re-minted instead of carrying ids forward
+ *    (docs/project/block-ids.md).
+ * 2. **Delete, unconditionally.** `src/store/import.ts` puts its delete *inside*
+ *    `if (blocks.length)`, so writing an empty set leaves the previous
+ *    revision's inherited rows in place — the stage returns nothing, the old
+ *    article survives, and the run reports done. That is a silent success of
+ *    the worst kind, and it is the one behaviour this function deliberately
+ *    does not copy.
+ * 3. **Insert only when there is something to insert**, because an empty
+ *    `INSERT … VALUES` is a syntax error rather than a no-op.
+ *
+ * `ordinal` is written from the array index. Block ids are random and carry no
+ * position, so if this is wrong there is nothing left to recover the order from.
+ */
+async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): Promise<void> {
+  if (blocks.length) {
+    await tx
+      .insert(blockIdentities)
+      .values(blocks.map((b) => ({ articleId: ref.articleId, blockId: b.id })))
+      .onConflictDoNothing();
+  }
+
+  await tx.delete(revisionBlocks).where(eq(revisionBlocks.revisionId, ref.revisionId));
+
+  if (blocks.length) {
+    await tx.insert(revisionBlocks).values(
+      blocks.map((b, index) => ({
+        articleId: ref.articleId,
+        revisionId: ref.revisionId,
+        blockId: b.id,
+        ordinal: index,
+        tag: b.tag,
+        kind: b.kind,
+        level: b.level ?? null,
+        text: b.text,
+        words: b.words,
+        html: b.html,
+        gistable: b.gistable,
+        note: b.note ?? null,
+      })),
+    );
+  }
+}
+
+/**
+ * Refused: `raw` cannot be written yet, and saying so beats writing half of it.
+ *
+ * The manifest names a document, and putting the document somewhere is the
+ * other half — the `raw_sources` row, the reference pair, and the byte count
+ * that `raw_sources.bytes` needs and `RawManifest.bytes` is not. That is C6 of
+ * docs/plans/delete-the-importer.md. Until it lands, a `write` that quietly
+ * skipped this part would leave a `fetch` step reporting done beside a revision
+ * that holds no document at all.
+ */
+export class RawNotWritable extends Error {
+  readonly status = 501;
+  constructor(slug: string) {
+    super(
+      `cannot write the raw manifest for "${slug}" yet: the source reference and the stored ` +
+        `byte count land in C6 of docs/plans/delete-the-importer.md. Refusing rather than ` +
+        `recording a fetch with no document behind it.`,
+    );
+    this.name = "RawNotWritable";
+  }
+}
+
+/**
+ * Write everything this step produced, and record what it was made from.
+ *
+ * ## One transaction, and the type is what enforces it
+ *
+ * `tx`, not `Db | Tx`. A `write` that could run outside a transaction would
+ * commit the artefacts and then discover, one call later, that the job fence
+ * refuses — leaving a revision full of a stale worker's output with nothing
+ * owning it. The reads may take either executor; this may not, and the
+ * typechecker is where that is said, because a comment saying it is a comment
+ * somebody can be in a hurry past.
+ *
+ * ## Three things happen, in this order
+ *
+ * 1. **The job fence.** `requireLiveJobOwnsDraft` — this job, this attempt,
+ *    still running, still pointed at this draft. Taken here even though the
+ *    `finishStepRun` that follows takes it too, because "the write is safe
+ *    because the call after it checks" holds only until somebody calls the
+ *    write on its own.
+ * 2. **The stamp is checked against the artefacts**, exactly as the file
+ *    adapter checks it — `assertStampAgrees`, shared. Here it matters more:
+ *    the file store has nowhere to put a stamp that contradicts the artefact,
+ *    and this one has a whole column, so a contradiction would survive and
+ *    `stampFor` would have to choose.
+ * 3. **The artefacts, then the stamp.** Every part goes to its site, and then
+ *    the running step-run row is located — fenced on the attempt and on
+ *    `status = 'running'`, so this cannot record against a step somebody else
+ *    is running or one that has already ended — and given whatever stamp
+ *    fields the caller declared.
+ *
+ * `finishStep` flips that row to `done` afterwards and leaves the stamp where
+ * this put it.
+ *
+ * ## The one stamp field the caller must supply that no `stamp()` produces
+ *
+ * `toc` has no `PipelineStep.stamp`, and it must still be written with an
+ * `inputHash` of `hashBlocks(blocks)` — because `reasonsNotToPublish` compares
+ * that column against the stored blocks and refuses the publication when they
+ * differ. Having no expected stamp and recording no input are different things.
+ * GPT Sol, 2026-08-28.
+ */
+export async function writeArtefacts(
+  ref: JobDraftRef,
+  tx: Tx,
+  slug: string,
+  step: StepName,
+  parts: ArtifactParts,
+  stamp: StepStamp,
+): Promise<void> {
+  requireBound(ref, slug);
+  await requireLiveJobOwnsDraft(tx, { id: ref.jobId, attemptId: ref.attemptId }, ref.revisionId);
+
+  const entries = Object.entries(parts) as [ArtifactKind, ArtifactMap[ArtifactKind]][];
+  /* Checked for **all** parts before **any** of them is written. A check
+     interleaved with the writes would leave the earlier artefacts in place and
+     roll back only because the caller's transaction happens to be one — which
+     is true today and is not a thing to depend on. */
+  for (const [kind, value] of entries) {
+    if (value === undefined) continue;
+    assertStampAgrees(slug, step, kind, value, stamp);
+  }
+
+  /* One `UPDATE` for all the column-shaped parts, rather than one each: they
+     are columns of the same row, and a step that writes two of them (`extract`)
+     should not be able to land one and not the other. */
+  let columns: Partial<typeof articleRevisions.$inferInsert> = {};
+  for (const [kind, value] of entries) {
+    if (value === undefined) continue;
+    const site = siteFor(step, kind);
+    if (site.at === "column") {
+      columns = { ...columns, [site.column]: value };
+    } else if (site.at === "blocks") {
+      await writeBlocks(ref, tx, (value as ArtifactMap["blocks"]).blocks);
+    } else if (site.of === "meta") {
+      columns = { ...columns, ...metaColumns(value as Meta) };
+    } else {
+      throw new RawNotWritable(slug);
+    }
+  }
+  if (Object.keys(columns).length) {
+    await tx
+      .update(articleRevisions)
+      .set(columns)
+      .where(eq(articleRevisions.id, ref.revisionId));
+  }
+
+  await recordStamp(ref, tx, step, stamp);
+}
+
+/**
+ * Put the stamp on the running step-run row, fenced.
+ *
+ * Only the fields the caller declared, because `undefined` in a `StepStamp`
+ * means *this step does not record that* and writing a null over a real value
+ * would be a different claim. `NO_INPUT_HASH` stays where `beginStepRun` put it
+ * for a step that declares no input.
+ *
+ * **The lock comes first and the update second, and they are not one
+ * statement.** Three of a step's four stamp fields are optional and three steps
+ * declare none of them at all, so `fetch`, `extract` and `blocks` arrive here
+ * with an empty stamp — and an `UPDATE` with nothing to set is an error rather
+ * than a no-op. Folding the fence into the update would therefore have made the
+ * fence *conditional on the step having a stamp*, which is exactly backwards:
+ * the steps with no stamp are the ones whose completion nothing else can check.
+ *
+ * `for update` holds the row for the rest of the caller's transaction, so
+ * nothing moves between the check and the write.
+ *
+ * A missing row is `StepRunNotHeld`, and zero rows is the fence working: held
+ * by another attempt, already ended, or never begun. A `write` with no
+ * preceding `beginStep` is the last of those, and it is a protocol error rather
+ * than something to tolerate — the artefacts would land with nothing recording
+ * that a run produced them.
+ */
+async function recordStamp(
+  ref: JobDraftRef,
+  tx: Tx,
+  step: StepName,
+  stamp: StepStamp,
+): Promise<void> {
+  const held = and(
+    eq(revisionStepRuns.revisionId, ref.revisionId),
+    eq(revisionStepRuns.stepName, step),
+    eq(revisionStepRuns.attemptId, ref.attemptId),
+    eq(revisionStepRuns.status, "running"),
+  );
+
+  const [row] = await tx
+    .select({ stepName: revisionStepRuns.stepName })
+    .from(revisionStepRuns)
+    .where(held)
+    .for("update")
+    .limit(1);
+  if (!row) throw new StepRunNotHeld(ref.revisionId, step);
+
+  const set = {
+    ...(stamp.inputHash === undefined ? {} : { inputHash: stamp.inputHash }),
+    ...(stamp.implementationVersion === undefined
+      ? {}
+      : { implementationVersion: stamp.implementationVersion }),
+    ...(stamp.promptVersion === undefined ? {} : { promptVersion: stamp.promptVersion }),
+    ...(stamp.model === undefined ? {} : { model: stamp.model }),
+  };
+  if (Object.keys(set).length === 0) return;
+
+  const result = await tx.update(revisionStepRuns).set(set).where(held);
+  if (result.rowCount !== 1) throw new StepRunNotHeld(ref.revisionId, step);
+}
+
+/* ------------------------------------------------------- the two views -- */
+
+/**
+ * What can be asked of the store outside the atomic write.
+ *
+ * The four questions that need no transaction: `stepIsDone` asks all of them
+ * (src/pipeline.ts), and so does the metadata page. `write`, `beginStep` and
+ * `finishStep` are deliberately absent — see below.
+ */
+export type ReadOnlyArtifactStore = Pick<
+  ArtifactStore,
+  "has" | "read" | "stampFor" | "interrupted"
+>;
+
+/**
+ * The read-only view, over any executor.
+ *
+ * `Db` is fine here: a read that sees a slightly older snapshot than the write
+ * that follows it is the ordinary state of a pipeline deciding what to skip,
+ * and the fenced write is what makes the decision safe rather than the read.
+ */
+export function readOnlyPgArtifacts(ref: JobDraftRef, exec: Executor): ReadOnlyArtifactStore {
+  return {
+    has: (slug, step, kinds) => hasArtefacts(ref, exec, slug, step, kinds),
+    read: (slug, step, kind) => readArtefact(ref, exec, slug, step, kind),
+    stampFor: (slug, step) => stampForStep(ref, exec, slug, step),
+    interrupted: (slug, step) => stepInterrupted(ref, exec, slug, step),
+  };
+}
+
+/**
+ * The whole store, bound to one transaction.
+ *
+ * **`tx`, and there is no overload taking a `Db`.** An artefact write that
+ * could commit on its own would commit before the job fence and the step
+ * transition it belongs with — and that is not a hypothetical ordering
+ * problem, it is the entire reason this landing exists. The type is where it is
+ * said, because a default executor makes forgetting the caller's transaction
+ * both compile and succeed.
+ *
+ * ## `beginStep` returns the attempt it already has
+ *
+ * On the filesystem the token is minted per marker file, because there is
+ * nothing else to identify the run. Here the run **is** the job's attempt:
+ * `revision_step_runs.attempt_id` is the same value as `jobs.attempt_id`, which
+ * is what `finishStepRun` fences on. So `beginStep` hands back `ref.attemptId`,
+ * and `finishStep` refuses anything else before it goes near the database — the
+ * interface's own comment predicted that "it should end up being literally the
+ * same value", and it has.
+ *
+ * ## `finishStep` is stricter here than the interface allows for
+ *
+ * The interface says clearing a marker that is not there, or belongs to
+ * somebody else, "is not an error". That is the *filesystem's* tolerance, and
+ * it exists because a step can complete without the store having seen it start
+ * — every artefact written before markers existed, and every stage run from its
+ * own CLI. Neither of those can happen on this path: a run through the
+ * transactional runner always begins its step. So a `finishStep` with nothing
+ * to finish is a protocol error and says so, rather than returning quietly and
+ * leaving a step that never reports itself done.
+ */
+export function pgArtifactsIn(ref: JobDraftRef, tx: Tx): ArtifactStore {
+  const job = { id: ref.jobId, attemptId: ref.attemptId };
+  return {
+    ...readOnlyPgArtifacts(ref, tx),
+    write: (slug, step, parts, stamp) => writeArtefacts(ref, tx, slug, step, parts, stamp),
+    async beginStep(slug, step) {
+      requireBound(ref, slug);
+      await beginStepRun({ revisionId: ref.revisionId, stepName: step, job }, tx);
+      return ref.attemptId;
+    },
+    async finishStep(slug, step, attempt) {
+      requireBound(ref, slug);
+      if (attempt !== ref.attemptId) {
+        /* Refused before the database, because the fenced UPDATE would refuse
+           it too and this way the message says which of the two things went
+           wrong. A store bound to attempt A being handed attempt B is a caller
+           bug, not a race. */
+        throw new StepRunNotHeld(ref.revisionId, step);
+      }
+      await finishStepRun(
+        { revisionId: ref.revisionId, stepName: step, job, status: "done" },
+        tx,
+      );
+    },
+  };
 }

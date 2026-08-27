@@ -30,7 +30,7 @@
  * glossary would become *"nobody has found the terms for this one yet"* under a
  * green tick.
  *
- * The copy is expressed as a **denylist** (`REVISION_COLUMN_POLICY`) rather than
+ * The copy is expressed as a **denylist** (`REVISION_CARRY_POLICY`) rather than
  * as a list of columns to carry, because an allowlist is something somebody has
  * to remember to extend, and this repo already knows how that ends —
  * tests/store-artefact-manifest.test.ts exists because five artefacts appeared
@@ -78,6 +78,7 @@ import { currentOwnerId } from "../owner.js";
 import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
+import { deriveLibraryScalars } from "../library-scalars.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
 
@@ -115,7 +116,7 @@ export type RevisionColumnPolicy = "mint" | "derive" | "carry";
  * old worker's ownership. So the map is exhaustive and an unclassified column is
  * an error rather than a carry.
  */
-export const REVISION_COLUMN_POLICY: Record<
+export const REVISION_CARRY_POLICY: Record<
   keyof typeof articleRevisions.$inferSelect,
   RevisionColumnPolicy
 > = {
@@ -222,13 +223,13 @@ export const REVISION_COLUMN_POLICY: Record<
 };
 
 const MINTED = new Set(
-  (Object.keys(REVISION_COLUMN_POLICY) as (keyof typeof REVISION_COLUMN_POLICY)[]).filter(
-    (k) => REVISION_COLUMN_POLICY[k] === "mint",
+  (Object.keys(REVISION_CARRY_POLICY) as (keyof typeof REVISION_CARRY_POLICY)[]).filter(
+    (k) => REVISION_CARRY_POLICY[k] === "mint",
   ),
 );
 const DERIVED = new Set(
-  (Object.keys(REVISION_COLUMN_POLICY) as (keyof typeof REVISION_COLUMN_POLICY)[]).filter(
-    (k) => REVISION_COLUMN_POLICY[k] === "derive",
+  (Object.keys(REVISION_CARRY_POLICY) as (keyof typeof REVISION_CARRY_POLICY)[]).filter(
+    (k) => REVISION_CARRY_POLICY[k] === "derive",
   ),
 );
 
@@ -244,11 +245,11 @@ const DERIVED = new Set(
  */
 function carriedColumns(): (keyof typeof articleRevisions.$inferSelect)[] {
   const declared = Object.keys(getTableColumns(articleRevisions)) as (keyof typeof articleRevisions.$inferSelect)[];
-  const unclassified = declared.filter((name) => !(name in REVISION_COLUMN_POLICY));
+  const unclassified = declared.filter((name) => !(name in REVISION_CARRY_POLICY));
   if (unclassified.length) {
     throw new Error(
       `article_revisions has ${unclassified.length} column(s) with no carry-forward policy: ` +
-        `${unclassified.join(", ")}. Add each to REVISION_COLUMN_POLICY in src/store/pg-revisions.ts ` +
+        `${unclassified.join(", ")}. Add each to REVISION_CARRY_POLICY in src/store/pg-revisions.ts ` +
         `— a new column must not be carried or dropped by accident.`,
     );
   }
@@ -258,48 +259,20 @@ function carriedColumns(): (keyof typeof articleRevisions.$inferSelect)[] {
 /* --------------------------------------------------- the derived scalars -- */
 
 /**
- * The five numbers the library prints, from the two artefacts they describe.
+ * **`deriveLibraryScalars` moved to src/library-scalars.ts on 2026-08-28**, and
+ * is re-exported here rather than merely relocated.
  *
- * **One function, called by both the pipeline and the importer**, because a
- * review found they had already diverged: `describeArticle` (src/api.ts) falls
- * back to `meta.excerpt` for the blurb and the importer did not, so an article
- * with no root gist had a blurb on the filesystem and none in Postgres. Two
- * implementations of one derivation is the divergence this whole migration
- * exists to make impossible.
+ * It moved because the shelf stopped recomputing these per request and started
+ * reading the columns this file writes — which meant `describeArticle` in
+ * src/api.ts, the **filesystem** store, needed the same function, and importing
+ * this module there would drag drizzle and the pool into the path that exists
+ * so the app runs without a database.
  *
- * `excerpt` is the third rung of that fallback and is passed in rather than
- * read, so this stays pure and testable without a database.
+ * It is re-exported because this is still part of this module's surface:
+ * `PublishResult.scalars` is typed from it, and src/store/import.ts is a store
+ * module reaching for its neighbour. See docs/plans/library-read-latency.md § 1.
  */
-export function deriveLibraryScalars(input: {
-  blocks: readonly Pick<Block, "words">[];
-  tree: Tree | null;
-  excerpt?: string | null | undefined;
-}): {
-  wordCount: number;
-  blockCount: number;
-  partCount: number;
-  sectionCount: number;
-  rootGist: string | null;
-} {
-  const { blocks, tree } = input;
-  let partCount = 0;
-  let sectionCount = 0;
-  if (tree) {
-    // One pass rather than two filters, matching `describeArticle`.
-    for (const node of Object.values(tree.nodes)) {
-      if (node.depth === 1) partCount++;
-      else if (node.depth === 2) sectionCount++;
-    }
-  }
-  const root = tree ? tree.nodes[tree.rootId] : undefined;
-  return {
-    wordCount: blocks.reduce((n, b) => n + b.words, 0),
-    blockCount: blocks.length,
-    partCount,
-    sectionCount,
-    rootGist: root?.gist ?? root?.summary ?? input.excerpt ?? null,
-  };
-}
+export { deriveLibraryScalars, type LibraryScalars } from "../library-scalars.js";
 
 /* ------------------------------------------------------------- the errors -- */
 
@@ -789,8 +762,14 @@ export async function openOrBeginJobDraft(opts: {
  *
  * It takes the **job** lock and never the article lock. See the note on
  * `beginStepRun` about the two orders that already exist in this file.
+ *
+ * Exported for `writeArtefacts` (src/store/artifacts-pg.ts), which fences on
+ * the same claim before it touches a column. That write is meant to share a
+ * transaction with `finishStepRun`, so in the ordinary case the fence is taken
+ * twice — deliberately, because "the write is safe because the call after it
+ * checks" is a guarantee that lasts until somebody calls the write on its own.
  */
-async function requireLiveJobOwnsDraft(
+export async function requireLiveJobOwnsDraft(
   tx: Tx,
   job: { id: string; attemptId: string },
   revisionId: string,
@@ -1156,7 +1135,7 @@ export async function publishRevision(opts: PublishRevisionOptions): Promise<{
        up to 32 MiB of source document, pulled across the wire so that four
        fields can be checked and the tree read. This used to share one selector
        with every other revision read; since 2026-08-27 each read names its own
-       columns, and `publish` wants four. See `REVISION_COLUMN_POLICY` in
+       columns, and `publish` wants four. See `REVISION_CARRY_POLICY` in
        src/store/pg.ts, and docs/plans/glossary-read-latency.md. */
     const found = await tx
       .select(REVISION_PROJECTIONS.publish)
