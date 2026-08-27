@@ -61,6 +61,19 @@
  * reader who opens search mode sees an unmarked article until they say
  * otherwise. Asking a *new* question is the one thing that ticks a box for you,
  * because a search you just paid for and cannot see is not a result.
+ *
+ * ## The row and the box are not the same control — 2026-08-27
+ *
+ * Greg: *"if I click on a row, select that and deselect all the others (since
+ * usually we care about just one at a time). If I want multiple-selection,
+ * I'll use a checkbox."*
+ *
+ * The set stayed; what changed is which gesture builds it. Several-at-once is
+ * the thing this panel *can* do, not the thing a reader usually wants, and the
+ * `<label>` wrapping the whole row made the rare case the only case — every
+ * press added or removed, so getting to "just this one" from four ticked was
+ * four presses. Now the row is a button that sets the set to itself, and the
+ * box beside it is the one that adds. See `Saved` for the two of them.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
@@ -107,6 +120,13 @@ interface Props {
   /** Its palette slot, for every saved run. `assignSlots` in hit-colours.ts. */
   slots: Map<string, number>;
   onToggle(id: string, on: boolean): void;
+  /**
+   * Show this one and nothing else — pressing the row rather than its box.
+   * Greg, 2026-08-27: *"if I click on a row, select that and deselect all the
+   * others (since usually we care about just one at a time). If I want
+   * multiple-selection, I'll use a checkbox."*
+   */
+  onSolo(id: string): void;
   /** Every box at once — the control at the top of the list. */
   onToggleAll(on: boolean): void;
   onAsk(criterion: string): void;
@@ -144,6 +164,7 @@ export function SearchPanel({
   active,
   slots,
   onToggle,
+  onSolo,
   onToggleAll,
   onAsk,
   onRetry,
@@ -221,6 +242,7 @@ export function SearchPanel({
           active={active}
           slots={slots}
           onToggle={onToggle}
+          onSolo={onSolo}
           onToggleAll={onToggleAll}
           onReuse={reuse}
           onRetry={onRetry}
@@ -514,18 +536,29 @@ const Box = forwardRef<
  * the whole article with no model call and no wait, because the answer is on
  * disk.
  *
- * ## Three targets on a row, and why that is not two too many
+ * ## Four targets on a row, and the two that look alike do different things
  *
- * The box and the label are one `<label>`, so clicking either toggles — which
- * is what a checkbox and its text have always done, and getting it wrong is the
- * kind of thing a reader blames on themselves. Then ↺, which puts the question
- * back in the box so it can be edited into the next one, and 🗑, which deletes.
+ * The box and the words used to be one `<label>`, so pressing either toggled.
+ * Since 2026-08-27 they are two controls, because Greg asked for the ordinary
+ * reading of a list —
  *
- * The row is deliberately **not** one big target with buttons inside it. That
- * arrangement is what library.md § What you can do to a card describes giving
- * up, for the reason that applies here too: a nested button inside a clickable
- * row is a hit area that does two things depending on a few pixels, and on a
- * touchscreen those pixels are not something anybody can aim at.
+ * > if I click on a row, select that and deselect all the others (since usually
+ * > we care about just one at a time). If I want multiple-selection, I'll use a
+ * > checkbox.
+ *
+ * — so **the box adds** (this search as well as whatever is already marked) and
+ * **the row replaces** (this search and nothing else). Then ↺, which puts the
+ * question back in the box so it can be edited into the next one, and 🗑, which
+ * deletes.
+ *
+ * That is one more hit area than there was, and it is the arrangement
+ * library.md § What you can do to a card describes giving up on — a nested
+ * button inside a clickable row is a target that does two things depending on a
+ * few pixels. What makes it survivable here and not there is that neither of
+ * these two is destructive and both are one press from undoing: a mis-hit marks
+ * the wrong searches for as long as it takes to press the right thing. The
+ * pixels still matter, so the box keeps its own padding rather than sharing the
+ * row's (styles.css § .srch-saved-tick).
  *
  * ## The dot is not the only thing saying which colour this is
  *
@@ -542,6 +575,7 @@ function Saved({
   active,
   slots,
   onToggle,
+  onSolo,
   onToggleAll,
   onReuse,
   onRetry,
@@ -552,6 +586,7 @@ function Saved({
   active: string[];
   slots: Map<string, number>;
   onToggle(id: string, on: boolean): void;
+  onSolo(id: string): void;
   onToggleAll(on: boolean): void;
   onReuse(criterion: string): void;
   onRetry(id: string): void;
@@ -613,50 +648,71 @@ function Saved({
                   : ({ "--cat-rgb": `var(--cat-${slot}-rgb)` } as React.CSSProperties)
               }
             >
+              {/* The box on its own, no longer wrapping the words beside it.
+                  The two targets now say two different things — the box adds
+                  this search to whatever is already marked, pressing the row
+                  marks this one and nothing else — and a `<label>` around both
+                  would have made the second impossible to express. Its name is
+                  therefore on an `aria-label` rather than in visible text: the
+                  criterion is right there, but it belongs to the button now. */}
               <label className="srch-saved-tick">
                 <input
                   type="checkbox"
                   checked={checked}
+                  aria-label={`Also mark: ${run.criterion}`}
+                  title="Mark this search as well as the ones already showing"
                   onChange={(e) => onToggle(run.id, e.target.checked)}
                 />
-                <span className="srch-saved-body">
-                  <span className="srch-saved-criterion">{run.criterion}</span>
-                  <span className="srch-saved-meta">
-                    {run.status === "pending" ? (
-                      <>
-                        <LoaderCircle size={11} className="srch-spin" /> searching…
-                      </>
-                    ) : run.status === "error" ? (
-                      <>
-                        <AlertTriangle size={11} /> failed
-                      </>
-                    ) : (
-                      <>
-                        {run.hits.length} passage{run.hits.length === 1 ? "" : "s"}
-                        {/* Said on the row, not only in a banner, because with
-                            several searches on there is no longer one run for a
-                            shared area to be about — the same reason the retry
-                            moved down here. The words are the tweet thread
-                            page's, deliberately: this is the same fact about
-                            the same article and it should not need a second
-                            vocabulary (docs/plans/tweet-thread-page.md). */}
-                        {run.stale && (
-                          <span
-                            className="srch-saved-stale"
-                            title={
-                              "This search describes an older version of the article. The text was " +
-                              "re-fetched or re-extracted afterwards, so its passages may have moved " +
-                              "— or gone. ↺ puts the question back in the box so you can ask it again."
-                            }
-                          >
-                            <AlertTriangle size={11} /> older version
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </span>
-                </span>
               </label>
+              {/* A button, so the keyboard reaches it and Enter does what the
+                  click does. Deliberately not a toggle: pressing the row that
+                  is already the only one on leaves it on, because "show me
+                  just this" is a place to arrive at rather than a switch, and
+                  a second press emptying the article would be the panel
+                  punishing a reader for pressing twice. Unticking is what the
+                  box is for. */}
+              <button
+                type="button"
+                className="srch-saved-body"
+                title={`${run.criterion}\n\nMark only this search`}
+                onClick={() => onSolo(run.id)}
+              >
+                <span className="srch-saved-criterion">{run.criterion}</span>
+                <span className="srch-saved-meta">
+                  {run.status === "pending" ? (
+                    <>
+                      <LoaderCircle size={11} className="srch-spin" /> searching…
+                    </>
+                  ) : run.status === "error" ? (
+                    <>
+                      <AlertTriangle size={11} /> failed
+                    </>
+                  ) : (
+                    <>
+                      {run.hits.length} passage{run.hits.length === 1 ? "" : "s"}
+                      {/* Said on the row, not only in a banner, because with
+                          several searches on there is no longer one run for a
+                          shared area to be about — the same reason the retry
+                          moved down here. The words are the tweet thread
+                          page's, deliberately: this is the same fact about
+                          the same article and it should not need a second
+                          vocabulary (docs/plans/tweet-thread-page.md). */}
+                      {run.stale && (
+                        <span
+                          className="srch-saved-stale"
+                          title={
+                            "This search describes an older version of the article. The text was " +
+                            "re-fetched or re-extracted afterwards, so its passages may have moved " +
+                            "— or gone. ↺ puts the question back in the box so you can ask it again."
+                          }
+                        >
+                          <AlertTriangle size={11} /> older version
+                        </span>
+                      )}
+                    </>
+                  )}
+                </span>
+              </button>
               {/* Retry lives on the row now rather than in the results area.
                   It had to move: the results area is shared by every switched-on
                   search, so it can no longer show one run's error with one run's

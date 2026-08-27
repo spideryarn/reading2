@@ -4259,21 +4259,38 @@ td.text.has-hit[data-hues="8"] {
 }
 .srch-saved-row.on { border-left-color: rgb(var(--cat-rgb, var(--hit-wash-rgb))); }
 .srch-saved-row:hover { background: var(--surface-raised); }
+/* The box no longer wraps the words — it adds a search to the marks, while
+   pressing the row replaces them (SearchPanel.tsx § Four targets on a row). So
+   it is a target of its own, and it keeps generous padding on both sides of a
+   0.85rem control: two adjacent hit areas that do different things is the one
+   arrangement where a few pixels either way is a wrong answer rather than a
+   near miss. */
 .srch-saved-tick {
-  flex: 1;
-  padding: 0.4rem 0.45rem;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.82rem;
+  flex: none;
+  padding: 0.4rem 0.35rem 0.4rem 0.45rem;
 }
-.srch-saved-row.on .srch-saved-tick { color: var(--ink-soft); }
-.srch-saved-tick:hover { color: var(--ink); }
+/* The row's own button: everything a `<button>` brings except the way one
+   looks. `text-align: left` because a button centres its text by default, and
+   the children are left on the flex default of `stretch` rather than
+   `flex-start` — the criterion ellipsizes, and a span sized to its own content
+   has nothing to ellipsize against. */
 .srch-saved-body {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  padding: 0.4rem 0.45rem 0.4rem 0.1rem;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
 }
+.srch-saved-row.on .srch-saved-body { color: var(--ink-soft); }
+.srch-saved-body:hover { color: var(--ink); }
 .srch-saved-criterion {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5404,11 +5421,20 @@ td.text.has-hit[data-hues="8"] {
 
 /* The binary fallback, on browsers with no way to hand us the samples the
    recogniser is using (Safari today — see src/web/useDictation.ts). The number
-   is the recogniser's own soundstart/soundend, so it is a real observation but
-   it is a 0 or a 1; the transition is what stops it snapping between the two,
-   and is deliberately NOT applied to the measured meter, where it would smear
-   a signal that is already smoothed. */
+   is the recogniser's own soundstart/soundend: a real observation of the real
+   audio, but a 0 or a 1.
+
+   **So the bars move as one, and the waveform shape is switched off** — `--w`
+   is forced to 1, overriding the per-bar weights. The centre-weighted shape
+   says "this is an amplitude"; drawing it from a yes/no signal would be a lie
+   told by the picture rather than by any sentence, and the reader has no way to
+   know which mode they are in. A row rising together reads as what it is: an
+   indicator. GPT Sol's code review, 2026-08-27, item 8.
+
+   The transition is what stops it snapping, and is deliberately NOT applied to
+   the measured meter, where it would smear a signal already smoothed. */
 .mic-level.detected i {
+  --w: 1;
   transition: transform 180ms ease-out, opacity 180ms ease-out;
 }
 

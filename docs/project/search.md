@@ -538,6 +538,40 @@ a sub-list per search — keeps provenance obvious but makes "the strongest matc
 the panel can no longer answer. So provenance moves into the row instead: the dot, the edge, the
 criterion in the hover card, and the criterion in the row's accessible name.
 
+### Pressing the row is not the same as pressing the box
+
+> if I click on a row, select that and deselect all the others (since usually we care about just one
+> at a time). If I want multiple-selection, I'll use a checkbox.
+>
+> — Greg, 2026-08-27
+
+The set stayed. What changed is which gesture builds it. Until now the box and the words beside it
+were one `<label>`, which is the right thing for a checkbox and its text and the wrong thing for a
+list: every press added or removed, so getting from four ticked searches to *just this one* was four
+presses, and the common case was paying for the rare one.
+
+Now there are two controls on the row, and the difference between them is the difference between
+**and** and **only**:
+
+| you press | what happens |
+|---|---|
+| the checkbox | this search is marked *as well as* whatever is already marked |
+| anywhere else on the row | this search is marked and every other is unmarked |
+
+The row is a `<button>`, so the keyboard reaches it and Enter does what the click does, and it is
+**not a toggle** — pressing the row that is already the only one on leaves it on. "Show me just
+this" is a place to arrive at rather than a switch, and a second press emptying the article would be
+the panel punishing a reader for pressing twice. Unticking is what the box is for.
+
+This is one more hit area on a row that already had three, which is the arrangement
+[library.md § What you can do to a card](library.md) describes giving up on — a nested button inside
+a clickable row does two different things a few pixels apart. What makes it survivable here is that
+neither of these two is destructive, and both are one press from being undone: a mis-hit marks the
+wrong searches until you press the right thing. The pixels still matter, so the box keeps padding of
+its own rather than sharing the row's. [`SearchPanel.tsx`](../../src/web/SearchPanel.tsx) § Four
+targets on a row, and `.srch-saved-tick` / `.srch-saved-body` in
+[`styles.css`](../../src/web/styles.css).
+
 ## The rail, and the shape of a search
 
 > And also show the Spine by default when "Search" mode is active, and add dots/thin vertical lines

@@ -1998,6 +1998,17 @@ function SearchBand({
            reader loses only a highlight. */
         onOpenHit(null);
       }}
+      /* Pressing the row rather than its box: the set becomes this one search.
+         Greg, 2026-08-27 — *"if I click on a row, select that and deselect all
+         the others (since usually we care about just one at a time). If I want
+         multiple-selection, I'll use a checkbox."* Not a toggle, so pressing
+         the row that is already alone leaves it alone; the box is what unticks.
+         The open row goes for the same reason it goes on a toggle — it may have
+         belonged to a search that is no longer drawing anything. */
+      onSolo={(id) => {
+        void setRunIds([id]);
+        onOpenHit(null);
+      }}
       onToggleAll={(on) => {
         void setRunIds(on ? runs.map((r) => r.id) : []);
         onOpenHit(null);
