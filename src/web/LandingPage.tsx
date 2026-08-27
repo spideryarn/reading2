@@ -17,12 +17,21 @@
  *
  * ## Where the words come from
  *
- * docs/project/vision.md and README.md, and mostly verbatim — this is the one
- * page in the app whose whole job is to say what the thing is, and the phrasing
- * in those two files is what was argued over. Greg's own sentence is quoted
- * rather than paraphrased, per CLAUDE.md. Anything claimed here has to stay
- * true of what is built: the list of features is what exists today, not a
- * roadmap.
+ * docs/project/vision.md and README.md, rewritten short. This is the one page
+ * in the app whose whole job is to say what the thing is, to somebody who will
+ * give it about ten seconds, so the register is different from the docs it is
+ * drawn from: short sentences, no hedging, one idea per line.
+ *
+ * **No quote from Greg here** — Greg, 2026-08-27, asked for it out and for the
+ * page punchier. CLAUDE.md's "quote Greg directly" rule is about *documents*
+ * capturing what he said; a stranger reading the front door has no idea who he
+ * is, and a founder quote about one's own product is the softest thing you can
+ * put on a page. The vision it carried is still here, in the app's voice, under
+ * "The bet". The original wording is in docs/project/vision.md and CLAUDE.md,
+ * which is where it belongs.
+ *
+ * Anything claimed here has to stay true of what is built: the list of features
+ * is what exists today, not a roadmap.
  *
  * ## The Alpha sign
  *
@@ -140,15 +149,14 @@ export function LandingPage() {
         </div>
 
         <p className="tw:mt-4 tw:font-prose tw:text-xl tw:text-foreground">
-          An experiment in AI-assisted reading that <em>augments</em> rather than replaces reading.
+          AI that helps you read harder things, not fewer of them.
         </p>
 
         {/* The strip. See the file header: the badge alone is decoration, and
             the thing a stranger has to be told is that they cannot get in. */}
         <p className="tw:mt-6 tw:rounded-md tw:border tw:border-highlight/40 tw:bg-highlight/10 tw:px-4 tw:py-3 tw:text-sm tw:text-foreground">
-          <strong>This is an alpha.</strong> It is a working experiment rather than a product —
-          rough edges, no support, and sign-in is limited to a short invite list while it is being
-          built.
+          <strong>This is an alpha.</strong> A working experiment, not a product. Rough edges, no
+          support, and sign-in is one short invite list while it is being built.
         </p>
       </header>
 
@@ -159,92 +167,89 @@ export function LandingPage() {
       <Shot
         src={zoomShot}
         alt="The reading view: three columns of increasingly detailed summary beside the article's own prose."
-        title="The article at several levels of detail at once."
+        title="One article, every level of detail at once."
         eager
       >
-        Left to right is how much detail; top to bottom is where you are in the piece. Move sideways
-        and the text expands or contracts without you losing your place. The rightmost column is
-        always the author’s own words.
+        Sideways is how much detail; down is where you are in the piece. Move left or right and the
+        text expands or contracts without you losing your place. The far right is always the
+        author’s own words.
       </Shot>
 
       <H2>The problem</H2>
       <p>
-        Nearly every AI reading tool makes the same move: compression. Paste an article, get bullet
-        points, done. That is genuinely useful for triage and genuinely corrosive for understanding.
-        You come away with a fluent impression of the piece and none of its texture — no argument you
-        could reconstruct, no sentence you could quote, no sense of where the author was strong and
-        where they were hand-waving. The summary replaced the reading instead of supporting it.
+        Every AI reading tool makes the same move: compress. Paste an article, get bullets, done.
+        Great for triage. Corrosive for understanding.
+      </p>
+      <p className="tw:mt-4">
+        You come away with a fluent impression and none of the texture. No argument you could
+        reconstruct. No sentence you could quote. No sense of where the author was strong and where
+        they were hand-waving. The summary didn’t support the reading — it replaced it.
       </p>
 
       <H2>The bet</H2>
-      <blockquote className="tw:my-6 tw:border-l-2 tw:border-highlight tw:pl-5 tw:font-prose tw:text-lg tw:text-foreground">
-        it augments human cognition, but it doesn’t replace it … instead of trying to make things too
-        easy, trying to replace the words with quick and easy summaries so much, but rather we help
-        the user get what they need from it, help them read efficiently, but deeply, help them
-        internalize and interrogate.
-        <footer className="tw:mt-2 tw:text-sm tw:text-muted-foreground">— Greg, 2026-08-24</footer>
-      </blockquote>
+      <p className="tw:my-6 tw:border-l-2 tw:border-highlight tw:pl-5 tw:font-prose tw:text-lg tw:text-foreground">
+        Make deep reading <em>cheaper</em>, not optional.
+      </p>
       <p>
-        Make deep reading <em>cheaper</em>, not optional. Scan the landscape quickly. Descend on
-        demand into the actual prose, at the point you care about. Stay oriented at whatever altitude
-        you are flying. Ask questions at the moment of confusion, in place. Come away with something
-        retained.
+        Skim the whole shape in seconds. Drop into the real prose exactly where it matters. Stay
+        oriented at whatever altitude you are flying. Ask your question at the moment of confusion,
+        without leaving the page. Finish holding something.
       </p>
 
       <H2>What else it does</H2>
       <p>
-        The same spine that carries the zoom — every block of the article addressed by a stable id —
-        makes the rest of these cheap:
+        One spine carries all of it — every block of the article has a stable id — so the rest come
+        cheap:
       </p>
       <ul className="tw:mt-4 tw:flex tw:flex-col tw:gap-4">
         <Feature name="A glossary written from this piece.">
-          Every term the article leans on is underlined wherever it appears. Point at one and the
-          card says two things: what the author means by it here, and what you need to bring to it
-          from outside.
+          Every term the article leans on, underlined wherever it appears. Point at one and the card
+          says two things: what the author means by it here, and what you need to bring to it from
+          outside.
         </Feature>
         <Feature name="Ask at the point of confusion.">
           Select a sentence and the model explains it — from the surrounding argument, and from the
-          web when it judges it needs to. The answer arrives a few words at a time rather than after
-          a spinner, and the article never leaves the screen.
+          web when it needs to. The answer starts arriving in a second or two, and the article never
+          leaves the screen.
         </Feature>
         <Feature name="The shape of the argument.">
-          Six diagrams in the band beside the prose. Three draw the article’s tree; three draw its
+          Six diagrams in the band beside the prose. Three draw the article’s tree. Three draw its
           sections as a graph, joined by the distinctive words they share — the one relationship a
           table of contents cannot hold.
         </Feature>
         <Feature name="Search, summaries, and a chat that cites.">
-          Find a passage by its exact words or by what it says, with the hits marked in the prose.
-          Summarise the whole piece or any part of it, at a length you choose. Ask a question and get
-          an answer whose every claim carries a link back into the article.
+          Find a passage by its exact words or by what it says, marked in the prose. Summarise the
+          whole piece, or any part of it, at a length you pick. Ask a question and every claim in
+          the answer links back into the article.
         </Feature>
       </ul>
 
       <H2>Three commitments</H2>
       <ul className="tw:mt-3 tw:flex tw:flex-col tw:gap-4">
-        <Feature name="The text is the destination, not the source material.">
-          Every generated line is a door into the prose, not a wall in front of it. We never silently
-          rewrite the author’s words: generated text lives at generated altitudes, and the rightmost
+        <Feature name="The text is the destination, not the raw material.">
+          Every generated line is a door into the prose, never a wall in front of it. We don’t
+          quietly rewrite the author: generated text stays at generated altitudes, and the rightmost
           level is verbatim, always.
         </Feature>
-        <Feature name="Nothing the model says is unanchored.">
-          Every block of the article has a stable id, and anything the model asserts is tied to one,
-          so the passage it came from is one press away.
+        <Feature name="Nothing the model says floats free.">
+          Every block has a stable id, and anything the model asserts is tied to one. The passage it
+          came from is one press away.
         </Feature>
-        <Feature name="It is a reading tool, not a writing or chat tool.">
-          The article never leaves the screen. When a design call is genuinely close, the tiebreak
-          is: which option leaves more of the thinking with the reader?
+        <Feature name="A reading tool, not a writing or chat tool.">
+          The article never leaves the screen. When a design call is close, the tiebreak is: which
+          option leaves more of the thinking with the reader?
         </Feature>
       </ul>
 
       <H2>And deliberately not</H2>
       <p>
-        “Read this in 2 minutes.” Engagement mechanics, streaks, or anything optimising for
-        time-in-app. Confident generated claims with no path back to the source.
+        “Read this in 2 minutes.” Streaks, nudges, anything optimising for time-in-app. Confident
+        generated claims with no path back to the source.
       </p>
 
       <section className="tw:mt-14 tw:rounded-lg tw:border tw:border-border tw:bg-card/50 tw:p-6">
         <p className="tw:mb-5 tw:text-sm">
-          On the invite list? Sign in and your shelf is where you left it.
+          On the invite list? Sign in — your shelf is where you left it.
         </p>
         <SignInControls />
       </section>
