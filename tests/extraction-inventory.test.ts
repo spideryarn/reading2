@@ -127,7 +127,50 @@ describe("the three instrument bugs", () => {
   });
 });
 
+describe("the fifth bug: multiplicity", () => {
+  /* Found by a GPT Sol review of the built code, 2026-08-27. `verdict` runs
+     per row and `indexOf` has no memory, so two source rows with the same text
+     both matched the same single occurrence and both came back kept — with
+     `keptChars` counting those characters twice and `dropped` at zero. */
+  const line = para(5);
+  const raw = `<!doctype html><html><body><article><p>${line}</p>` +
+    `<aside><p>${line}</p></aside></article></body></html>`;
+
+  it("does not report both copies as kept when the extraction holds one", () => {
+    const inv = compare(raw, `<p>${line}</p>`, URL);
+    expect(inv.rows).toHaveLength(2);
+    expect(inv.totals.kept).toBe(1);
+    expect(inv.totals.duplicate).toBe(1);
+  });
+
+  it("counts the characters once, not twice", () => {
+    const inv = compare(raw, `<p>${line}</p>`, URL);
+    expect(inv.totals.keptChars).toBe(inv.rows[0]!.chars);
+  });
+
+  it("keeps both when the extraction really does hold both", () => {
+    const inv = compare(raw, `<p>${line}</p><p>${line}</p>`, URL);
+    expect(inv.totals.kept).toBe(2);
+    expect(inv.totals.duplicate).toBe(0);
+  });
+});
+
 describe("what compare refuses to guess", () => {
+  it("cannot see a tail lost inside one large block", () => {
+    /* A documented limit rather than a bug, and it is here so nobody rediscovers
+       it as a surprise: `kept` means 90% of the shingles survived in order, so a
+       block can lose its last tenth and still be called kept. A block big enough
+       makes that tenth consequential, and no gap is reported. Source-id
+       provenance does not fix this either — it is a threshold, and the honest
+       repair is to report `survived` rather than only the verdict. */
+    const words = Array.from({ length: 400 }, (_, i) => `w${i}`).join(" ");
+    const cut = words.split(" ").slice(0, 370).join(" ");
+    const inv = compare(page([`<p>${words}</p>`]), `<p>${cut}</p>`, URL);
+    expect(inv.rows[0]?.verdict).toBe("kept");
+    expect(inv.rows[0]?.survived).toBeGreaterThan(0.9);
+    expect(inv.gaps).toHaveLength(0);
+  });
+
   it("will not judge a block too short to fingerprint", () => {
     const inv = compare(page(["<p>Read more</p>", "<p>2026</p>"]), "", URL);
     expect(inv.totals.short).toBe(inv.totals.blocks);

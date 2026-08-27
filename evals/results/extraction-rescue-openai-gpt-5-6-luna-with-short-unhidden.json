@@ -7,7 +7,7 @@
     "droppedBlocks": 59,
     "droppedChars": 9129,
     "restoreBlocks": 37,
-    "restoreChars": 10502,
+    "restoreChars": 9643,
     "furniture": 22,
     "invented": [],
     "unjudged": 0,
@@ -17,9 +17,9 @@
     "unhidden": true,
     "usage": {
       "input": 1772,
-      "output": 609
+      "output": 724
     },
-    "ms": 10823,
+    "ms": 24219,
     "article": [
       "n4",
       "n5",
@@ -82,61 +82,6 @@
       "n499",
       "n500",
       "n501"
-    ]
-  },
-  {
-    "dir": "data/noema-mythology-of-conscious-ai",
-    "model": "openai/gpt-5.6-luna",
-    "url": "https://www.noemamag.com/the-mythology-of-conscious-ai/",
-    "verdict": "extraction-lost-part-of-the-article",
-    "droppedBlocks": 29,
-    "droppedChars": 144,
-    "restoreBlocks": 2,
-    "restoreChars": 254,
-    "furniture": 27,
-    "invented": [],
-    "unjudged": 0,
-    "restoreEverythingBaseline": 29,
-    "daylight": 27,
-    "withShort": true,
-    "unhidden": true,
-    "usage": {
-      "input": 944,
-      "output": 388
-    },
-    "ms": 5165,
-    "article": [
-      "n8",
-      "n102"
-    ],
-    "furnitureIds": [
-      "n1",
-      "n2",
-      "n3",
-      "n4",
-      "n5",
-      "n6",
-      "n9",
-      "n10",
-      "n11",
-      "n77",
-      "n141",
-      "n142",
-      "n143",
-      "n144",
-      "n145",
-      "n146",
-      "n147",
-      "n148",
-      "n149",
-      "n150",
-      "n151",
-      "n152",
-      "n153",
-      "n154",
-      "n155",
-      "n156",
-      "n157"
     ]
   }
 ]

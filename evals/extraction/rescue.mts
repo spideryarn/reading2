@@ -202,7 +202,17 @@ async function main(): Promise<void> {
     const unjudged = candidates.filter(
       (r) => !answer.article.includes(r.id) && !answer.furniture.includes(r.id),
     );
-    const recovered = known.reduce((a, id) => a + (byId.get(id)?.chars ?? 0), 0);
+    /* **A `partial` row is credited at what is MISSING from it, not at its full
+       width.** It was credited in full, which counted text already in the
+       extraction as text the model restored — 769 characters of the
+       Constitution's 49,753, and 859 of its 10,502 after un-hiding. Small, and
+       exactly the kind of accounting that makes a headline number unfalsifiable.
+       Found by a GPT Sol review of the built code, 2026-08-27. */
+    const recovered = known.reduce((a, id) => {
+      const row = byId.get(id);
+      if (!row) return a;
+      return a + Math.round(row.chars * (row.verdict === "partial" ? 1 - row.survived : 1));
+    }, 0);
     /* How far from the policy that needs no model at all. */
     const restoreEverything = candidates.length;
     const daylight = restoreEverything - known.length;

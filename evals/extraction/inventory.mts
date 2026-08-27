@@ -152,14 +152,18 @@ function verdict(text: string, articleText: string): { verdict: Verdict; survive
   };
 }
 
-type Verdict = "kept" | "partial" | "dropped" | "short";
+type Verdict = "kept" | "partial" | "dropped" | "short" | "duplicate";
 
 interface Row {
   id: string;
   tag: string;
   depth: number;
   chars: number;
-  /** See `verdict` — `short` means the block is too small to judge, not that it is missing. */
+  /**
+   * See `verdict`. `short` means too small to judge, not missing; `duplicate`
+   * means this text appears more often in the source than in the extraction and
+   * text alone cannot say which copy survived.
+   */
   verdict: Verdict;
   /** Fraction of this block's shingles found in the extraction, 0–1. */
   survived: number;
@@ -294,6 +298,7 @@ export interface Comparison {
   totals: {
     blocks: number;
     kept: number;
+    duplicate: number;
     partial: number;
     dropped: number;
     short: number;
@@ -334,9 +339,11 @@ export function compare(rawHtml: string, articleHtml: string, url: string): Comp
   const rawText = visibleText(before);
 
   const rows: Row[] = [];
+  const candidateText = new Map<string, string>();
   let n = 0;
   for (const { el, text } of candidates(before)) {
     const v = verdict(text, articleText);
+    candidateText.set(`n${n + 1}`, text);
     rows.push({
       id: `n${++n}`,
       tag: el.tagName.toLowerCase(),
@@ -349,9 +356,59 @@ export function compare(rawHtml: string, articleHtml: string, url: string): Comp
     });
   }
 
+  /**
+   * **The fifth instrument bug: multiplicity.** Found by a GPT Sol review of the
+   * built code, 2026-08-27, and reproduced before being believed.
+   *
+   * `verdict` runs independently per row, and `indexOf` has no memory, so two
+   * source rows with the same text both match the *same* single occurrence in
+   * the extraction and both come back `kept`. The ordinary shape of that is a
+   * teaser or a related-articles card repeating a sentence of the article: the
+   * teaser was correctly dropped, and the inventory says both survived, with
+   * `keptChars` counting the characters twice and `dropped` at zero.
+   *
+   * Text cannot say WHICH copy survived, and pretending otherwise is how the
+   * previous four bugs happened. So the excess copies are marked `duplicate` —
+   * not kept, not dropped, and out of the character totals — and the honest
+   * repair is source-id provenance through Readability's `serializer` option,
+   * which knows the answer outright. That is build-order step 2 in
+   * docs/plans/readability-repair-pass.md; this is the guard until it lands.
+   */
+  const seen = new Map<string, number>();
+  /** Texts that really were in the extraction and whose copies are now used up. */
+  const exhausted = new Set<string>();
+  for (const r of rows) {
+    if (r.verdict !== "kept") continue;
+    const text = candidateText.get(r.id) ?? "";
+    /* `seen.has`, not `used === 0`. With 0 as the "not counted yet" sentinel,
+       a text with exactly one occurrence counts down to 0 after the first row
+       and the second row reads that as "not counted yet", recounts, and is
+       kept — which is the bug this pass exists to fix, reproduced inside the
+       fix. Caught by the test, which is the only reason it is not still here. */
+    if (!seen.has(text)) {
+      /* How many times does this text really occur in the extraction? */
+      let count = 0;
+      for (let i = articleText.indexOf(text); i >= 0; i = articleText.indexOf(text, i + 1)) count++;
+      seen.set(text, count);
+    }
+    const left = seen.get(text) ?? 0;
+    /* A row whose exact text occurs ZERO times was judged kept by shingles, not
+       by exact presence — the extraction reflowed it, or kept 90% of it and cut
+       the tail. Multiplicity has nothing to say about that, and demoting it here
+       called a merely-truncated block a duplicate. Only demote where the text
+       demonstrably exists and the copies have run out. */
+    if (left === 0 && !exhausted.has(text)) continue;
+    if (left <= 0) r.verdict = "duplicate";
+    else {
+      seen.set(text, left - 1);
+      if (left - 1 === 0) exhausted.add(text);
+    }
+  }
+
   const totals = {
     blocks: rows.length,
     kept: rows.filter((r) => r.verdict === "kept").length,
+    duplicate: rows.filter((r) => r.verdict === "duplicate").length,
     partial: rows.filter((r) => r.verdict === "partial").length,
     dropped: rows.filter((r) => r.verdict === "dropped").length,
     short: rows.filter((r) => r.verdict === "short").length,
@@ -464,7 +521,8 @@ function report(inv: Inventory, showRows: boolean): void {
   console.log(
     `  blocks ${t.blocks}: kept ${t.kept} (${t.keptChars.toLocaleString()} ch), ` +
     `partial ${t.partial}, dropped ${t.dropped} (${t.droppedChars.toLocaleString()} ch), ` +
-    `too short to judge ${t.short}`,
+    `too short to judge ${t.short}` +
+    (t.duplicate ? `, ${t.duplicate} duplicate (which copy survived is unknowable from text)` : ""),
   );
   if (t.coverage < COVERAGE_FLOOR) {
     console.log(
@@ -483,7 +541,10 @@ function report(inv: Inventory, showRows: boolean): void {
   console.log("");
   for (const r of inv.rows) {
     const mark =
-      r.verdict === "kept" ? "  " : r.verdict === "dropped" ? "--" : r.verdict === "partial" ? "~~" : "??";
+      r.verdict === "kept" ? "  "
+      : r.verdict === "dropped" ? "--"
+      : r.verdict === "partial" ? "~~"
+      : r.verdict === "duplicate" ? "==" : "??";
     console.log(
       `${mark} ${r.id.padEnd(6)} ${r.tag.padEnd(10)} d${String(r.depth).padStart(2)} ` +
       `${String(r.chars).padStart(5)}  ${r.path.slice(-40).padEnd(40)}  ${r.snippet}`,

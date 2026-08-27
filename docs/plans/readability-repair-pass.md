@@ -20,12 +20,17 @@ can be settled honestly.
 
 ## What is actually broken, measured
 
-`data/constitution` — Anthropic's own Claude's Constitution — loses **48,147 characters, 26% of the
+`data/constitution` — Anthropic's own Claude's Constitution — loses **48,147 characters, 25% of the
 article**, including whole named sections. Readability returns an article, nothing throws, and the
 piece reaches the reading view looking complete. Checked directly rather than inferred: the strings
 `three types of principals`, `hard constraints that remain`, `Operators: Companies and individuals`
 and `Claude typically cannot verify claims` are all absent from what stage 2 produces, and all
 present in `raw.html`.
+
+Two numbers, because they are not the same measure and this file conflated them once: **visible raw
+text minus extracted text is 50,439 characters (26.3%)**, while `droppedChars` — the sum over blocks
+the instrument is willing to judge — is **48,147 (25.1%)**, the difference being the partial and
+too-short blocks it excludes on purpose. After un-hiding they are 11,084 and 9,129.
 
 The other two cached HTML articles are clean — Noema loses one 144-character standfirst, PG loses
 nothing.
@@ -107,8 +112,8 @@ Reordered after the review. The original plan started at rung 3.
 | **0** | Pre-clean the DOM before Readability — un-hide collapsed regions | free, deterministic | **measured, works on the one case we have** |
 | **1** | Deterministic candidate variants: a semantic root, Readability's own options | free, deterministic | measured, **helps nothing** — see below |
 | **2** | A second extractor as a candidate (`dom-smoothie`, or trafilatura out of process) | free at runtime, a new dependency | not tried — needs Greg's call |
-| **3** | A model **detects** a bad extraction; no article text in its output | cheap | **measured** |
-| **4** | A model **repairs** by selecting source nodes | cheap, as it turns out | **measured** |
+| **3** | A model **detects** a bad extraction; no article text in its output | cheap | **part-measured** |
+| **4** | A model **repairs** by selecting source nodes | cheap, as it turns out | **part-measured** |
 
 Rung 1 was tested on all three cached pages and moved nothing: `charThreshold: 0`,
 `nbTopCandidates: 20`, `linkDensityModifier: 0.3`, re-rooting at `<main>`/`<article>`, and stripping
@@ -141,6 +146,22 @@ Luna costs about 4.3k input and 1.4k output tokens on the 657 KB page, and takes
 far cheaper than expected, and the reason is the inventory: the model never sees the article, only a
 few hundred rows of `id, tag, chars, snippet`.
 
+**What was actually measured, stated precisely, because the first version of this section
+overclaimed.** Two models classified the rows the instrument had already flagged, on two pages, once
+each. That is not the same as either rung:
+
+- **No repaired document was ever assembled or scored.** `rescue.mts` totals the ids the model chose
+  and writes them out. Nothing builds the HTML, so nothing has checked its order, its duplication or
+  its structure.
+- **There is no gold**, so a chosen id is called a "restore" without anything establishing it should
+  have been restored.
+- **Detection was not tested independently.** `compare()` chooses which rows the model ever sees,
+  and a page with no flagged rows skips the call entirely — so the model cannot detect a wrong
+  container, retained boilerplate, duplication, lost structure or a failed acquisition, because it
+  is never shown one.
+
+The honest description is *"Luna and Sonnet classified candidate omissions on two pages"*.
+
 **Three things in that table matter more than the totals.**
 
 **It discriminates.** The first control was worthless and looked fine: on a page Readability handles
@@ -156,9 +177,20 @@ headings that were never dropped, and its perfectly correct *"these are the arti
 a rescue. A control that includes the answer measures the control. It now filters on blocks the
 extraction genuinely lacks.
 
-**Luna is as good as Sonnet here.** 135 against 125, 2 against 1 — no gap worth paying for, which
-answers the "or perhaps just Luna" directly. With the caveat that agreement between two models given
-the same prompt and the same row format is weaker evidence than it looks.
+**Luna and Sonnet are indistinguishable, but not for the reason the totals suggest — and Luna is not
+stable against itself.** Sonnet's 125 selections are a **strict subset** of Luna's 135: they agree on
+every obvious paragraph and every piece of chrome, and disagree only on `n471`–`n480`, the ten
+acknowledgement paragraphs, plus one Noema pull-quote the instrument already says is 88.9% present.
+They differ only where the *policy* is genuinely arguable.
+
+Then a second Luna run on the same input restored **125**, not 135 — dropping exactly those ten
+acknowledgement paragraphs. So the whole Luna-versus-Sonnet difference sits inside Luna's own
+run-to-run variance, and "Luna is as good as Sonnet" is not a claim this evidence can carry. What it
+does support: **the easy part of the task is easy for both, and the disagreement is a policy question
+nobody has answered** — does Spideryarn want a publisher's summary and acknowledgements on the
+shelf? That is a decision, not a model capability.
+
+It also means one run per arm is not a measurement, which is why the plan asks for at least three.
 
 **And most of what it appeared to be worth was the free fix's work.** That was the obvious
 confound, so it was measured rather than left as a caveat: `--unhide` runs rung 0 first, so the
@@ -175,11 +207,16 @@ model is scored against the residual instead of against stock Readability.
 Rung 0 alone takes the Constitution's loss from 48,147 characters to 9,129 and its ratio from 73.7%
 to 94.2%.
 
-The remaining 10,502 characters are real, and worth arguing about rather than dismissing: they are
-the piece's own opening block — *"Claude's constitution is a detailed description of Anthropic's
-intentions for Claude"* — and the author bio, which is exactly the kind of thing two careful people
-would classify differently. That is the honest size of the question Greg asked, and it is a lot
-smaller than the first number made it look.
+The residual is **9,643 characters** once a partly-surviving block is credited at what is missing
+from it rather than at its full width — an accounting bug worth 859 characters here and 769 on the
+stock run, found by the second review. And it is not what this file first called it. Broken down, it
+is roughly 2,600 characters of front matter, 4,000 of the publisher's own *summary of the
+Constitution*, 3,000 of acknowledgements, and some accordion headings that mostly survive anyway.
+
+**That is front matter, a deliberately duplicative summary, and acknowledgements — not still-missing
+body prose.** The collapsed body is exactly what un-hiding recovered. So the question the residual
+poses is not "can a model find the missing article?" but "does this app want a publisher's summary
+and acknowledgements at all?", which is Greg's call and needs no model to answer.
 
 Measuring against stock would have reported the model as four times more useful than it is. Any arm
 added later gets the same treatment: **the denominator is whatever the cheaper rungs already
@@ -265,6 +302,18 @@ each watched failing against the version that had the bug. That is why `compare(
 and the after as two strings rather than reading a directory and calling Readability: an instrument
 nobody can test at a seam is an instrument nobody tests.
 
+**The fifth was found by the review of the built code**, reproduced before it was believed, and is
+now three more tests. `verdict` runs per row and `indexOf` has no memory, so two source blocks with
+the same text both match the *same* single occurrence in the output and both come back `kept` — the
+ordinary shape being a teaser that repeats a sentence of the article. `keptChars` counted those
+characters twice and `dropped` stayed at zero. Text cannot say which copy survived, so the excess
+copies are now `duplicate`: not kept, not dropped, out of the totals. The real repair is source-id
+provenance, which knows outright.
+
+Fixing it introduced the same bug again inside the fix — `0` used both as "not counted yet" and as
+"copies exhausted", so the second copy recounted and was kept. The test caught it, which is the
+entire argument for writing the test first.
+
 There is also a `coverage` number — what fraction of the page's text the walker can see at all —
 because failure 1 is the one that cannot be caught by any check computed *from the rows*.
 
@@ -298,8 +347,12 @@ denominator is the whole page, which contains navigation and footers no correct 
 keep, in a proportion that varies by template rather than by quality. A per-corpus calibration or
 nothing.
 
-One number here is worth recording because it shows how the same ratio can be computed two ways and
-differ by a factor of three. Raw `body.textContent` on the Constitution is 592,942 characters, of
+**A worked example of getting this wrong**, because it happened in review and was checked rather
+than accepted: a reviewer's table of extracted/raw ratios (0.239 / 0.873 / 0.535) was computed over
+unstripped `body.textContent`, and one row mixed a normalised numerator with an unnormalised
+denominator. Re-measured consistently the figures are 0.737 / 0.974 / 1.000. The reviewer withdrew
+the table on being shown the numbers. The warning it was making — that this ratio is an anomaly
+signal and not a quality score — survives its own arithmetic, which is the useful part. Raw `body.textContent` on the Constitution is 592,942 characters, of
 which **68% is `<script>`** — embedded application JSON. The harness strips `script`, `style`,
 `noscript`, `template` and `svg` before counting anything, so its denominator is 191,875. A ratio
 built on the unstripped number reads 0.239 and looks catastrophic; the same extraction against the
@@ -361,7 +414,7 @@ number comparable to a published one.
 
 ## Build order
 
-1. ~~The inventory harness~~ — **built**, tested, four bugs and all.
+1. ~~The inventory harness~~ — **built**, tested, five bugs and all.
 2. Add source-id provenance beside the text matcher, and report disagreements.
 3. Fixtures: a frozen corpus, WCXB's article subset first, plus our own hard cases.
 4. Rung 0 across the whole corpus. If un-hiding regresses nothing and fixes a real slice, it ships
