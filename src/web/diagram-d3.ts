@@ -85,6 +85,7 @@ import {
   type DiagramNode,
   type DiagramLink,
   type DiagramOptions,
+  type LinkKind,
   LABEL_PX,
   wrapText,
 } from "./diagram.js";
@@ -134,7 +135,13 @@ const TICKS = 300;
  */
 const MIN_ROW_FOR_FORCE = 32;
 
-interface Sim extends SimulationNodeDatum {
+/**
+ * A node inside the simulation. Exported for `arrowPath`, which is exported so
+ * its geometry can be tested against overlapping and coincident circles
+ * directly — the cases a whole-layout test can only reach by accident, and
+ * which a force simulation is under no obligation to produce.
+ */
+export interface Sim extends SimulationNodeDatum {
   n: GraphNode;
   r: number;
 }
@@ -147,7 +154,7 @@ interface Sim extends SimulationNodeDatum {
  * and after — and reaching for `as` at each callback is how you end up reading a
  * field that the rewrite moved.
  */
-interface SimLink extends SimulationLinkDatum<Sim> {
+export interface SimLink extends SimulationLinkDatum<Sim> {
   source: Sim;
   target: Sim;
   e: ArticleGraph["edges"][number];
@@ -234,12 +241,8 @@ export function layoutForce(graph: ArticleGraph, opts: DiagramOptions): DiagramL
         // A parent edge is structure and should hold tight; a vocabulary edge is
         // a hint and should only lean. Distance scales the other way from
         // strength on purpose — related sections sit closer AND pull harder.
-        .distance((l) => (l.e.kind === "parent" ? 26 : 54))
-        .strength((l) => {
-          if (l.e.kind === "parent") return 0.55;
-          if (l.e.kind === "sequence") return 0.08;
-          return 0.12 + l.e.weight * 0.5;
-        }),
+        .distance((l) => DISTANCE[l.e.kind])
+        .strength(strengthOf),
     )
     /* Charge and centring were both too timid in the first version: measured in
        a browser on a 323px picture, every bubble sat between x=141 and x=188 —
@@ -302,14 +305,161 @@ export function layoutForce(graph: ArticleGraph, opts: DiagramOptions): DiagramL
     };
   });
 
-  const drawnLinks: DiagramLink[] = links.map((l, i) => ({
-    id: `f${i}-${l.e.source}-${l.e.target}`,
-    d: `M ${l.source.x ?? 0} ${l.source.y ?? 0} L ${l.target.x ?? 0} ${l.target.y ?? 0}`,
-    part: l.e.kind === "vocabulary" ? -1 : (l.source.n.part ?? -1),
-    depth: l.e.kind === "parent" ? 1 : l.e.kind === "sequence" ? 0 : 2,
-  }));
+  /* **Paint order, which is not the order the edges were built in.**
+     The two sparse kinds go last. An anchor edge is the only line in this
+     picture that somebody *meant*, and there are usually fewer than five of
+     them in a whole article; a semantic edge is the only one that cost money.
+     Either of them drawn underneath the thick sequence chain is the same as not
+     drawn at all, and would look like the feature had failed rather than like
+     the paint order was wrong. */
+  const ORDER: Record<string, number> = { parent: 0, sequence: 1, vocabulary: 2, anchor: 3, semantic: 4 };
+  const drawnLinks: DiagramLink[] = links
+    .slice()
+    .sort((a, b) => (ORDER[a.e.kind] ?? 0) - (ORDER[b.e.kind] ?? 0))
+    .map((l, i) => ({
+      id: `f${i}-${l.e.source}-${l.e.target}`,
+      d: l.e.kind === "sequence" ? arrowPath(l.source, l.target) : straight(l.source, l.target),
+      part: l.e.kind === "vocabulary" || l.e.kind === "semantic" ? -1 : (l.source.n.part ?? -1),
+      /* Kept honest rather than kept as a kind: this really is the depth of the
+         node the line hangs off. The stylesheet now reads `kind`. */
+      depth: l.source.n.depth,
+      kind: l.e.kind,
+      ...(l.e.kind === "sequence" ? { arrow: true } : {}),
+    }));
 
   return { width: opts.width, height, nodes: out, links: drawnLinks, axis: null, nowY: null };
+}
+
+/**
+ * How far apart the link force would like each kind of pair to sit.
+ *
+ * Exhaustive over `LinkKind` — a `Record` rather than a chain of `if`s, so
+ * adding a sixth kind is a compile error here rather than a sixth kind silently
+ * inheriting whatever the last `return` happened to be. That is exactly how the
+ * first draft of this change went wrong; see `strengthOf`.
+ */
+const DISTANCE: Record<LinkKind, number> = {
+  parent: 26,
+  sequence: 54,
+  // Shorter than the two measured kinds: the author put these two sections next
+  // to each other in their head, so the picture may as well.
+  anchor: 44,
+  vocabulary: 54,
+  semantic: 54,
+};
+
+/**
+ * How hard each kind pulls — and the one number here that is a bug fix rather
+ * than a taste.
+ *
+ * **The two similarity measures are not on the same scale, and nothing says so
+ * anywhere else.** A tf-idf cosine between two sections of one article runs
+ * about 0.12 to 0.5, because the vectors are sparse and share few terms. An
+ * *embedding* cosine between any two passages of the same article runs about
+ * 0.6 to 0.9 — everything is somewhat like everything, and the corpus mean was
+ * measured at ~0.18 for the models that survived the eval and 0.39 for the one
+ * that did not (evals/results/embedding-retrieval-2026-08-26.md).
+ *
+ * So the obvious thing — let `semantic` fall through to the vocabulary formula,
+ * since both are "how alike are these" — is wrong, and wrong in the direction
+ * that ruins the experiment. `0.12 + 0.85 × 0.5` is 0.55: as strong as
+ * containment. Ten semantic edges at that strength would not *add* to the
+ * picture's shape, they would *become* it, and the answer to "what do
+ * embeddings do to the shape" would be an artefact of a fallthrough. That is
+ * what the first draft of this file did. GPT Sol caught it in review before it
+ * ran, 2026-08-27.
+ *
+ * `semantic` is therefore given its own rule, rescaled from the range it
+ * actually occupies, and deliberately kept at or below the vocabulary edges it
+ * is being compared against: this picture is meant to *show* the difference
+ * between the two measures, and it cannot do that if one of them is also
+ * setting the stage the other is judged on.
+ */
+export function strengthOf(l: SimLink): number {
+  switch (l.e.kind) {
+    case "parent":
+      return 0.55;
+    /* **A thick line is a rendering decision, not a physical one.** The
+       sequence chain is now drawn as the boldest thing in the picture (Greg,
+       2026-08-27), and the tempting next move is to make it pull as hard as it
+       looks. It must not: every node is pinned in y, so a strong sequence force
+       can only act sideways, and what it would do there is drag the whole
+       picture back into a column — undoing the one axis this layout is allowed
+       to solve for. */
+    case "sequence":
+      return 0.08;
+    /* A fact about the document rather than a guess, so it pulls harder than
+       either measured kind — but not as hard as containment, because an author
+       linking two sections does not make them one section.
+       **0.42 rather than 0.35, and a test moved it.** The comment above said
+       "harder than either measured kind" while the number did not: a vocabulary
+       edge at cosine 0.5 — which is about as high as tf-idf goes between two
+       sections of one article — comes out at 0.37 and quietly out-pulled this.
+       0.42 clears the whole of that range. */
+    case "anchor":
+      return 0.42;
+    case "vocabulary":
+      return 0.12 + l.e.weight * 0.5;
+    case "semantic":
+      /* 0.6 → 0, 0.9 → 0.30. Below 0.6 an embedding cosine is not saying
+         anything about one article's own passages, and the floor at 0 means
+         such an edge is drawn without being allowed to move anything. */
+      return Math.max(0, Math.min(0.3, (l.e.weight - 0.6) * 1.0));
+  }
+}
+
+/** Centre to centre. Every kind but `sequence` draws this. */
+function straight(a: Sim, b: Sim): string {
+  return `M ${a.x ?? 0} ${a.y ?? 0} L ${b.x ?? 0} ${b.y ?? 0}`;
+}
+
+/**
+ * Room left for the arrowhead beyond the target circle's edge, in px.
+ *
+ * The marker is 6px long and `orient="auto"`, so its tip lands here and its
+ * tail sits back along the line. 5 puts the tip just clear of the target's
+ * stroke rather than touching it, which reads as an arrow arriving rather than
+ * as one embedded in the bubble.
+ */
+const HEAD_GAP = 5;
+
+/**
+ * A sequence line, shortened at both ends so the arrowhead is visible.
+ *
+ * **This is the one piece of arithmetic in the change that can silently look
+ * fine.** `marker-end` puts the arrowhead at the path's last point, and a line
+ * drawn centre-to-centre ends *inside* the target bubble — where the arrowhead
+ * is painted underneath a filled circle and simply is not there. Nothing errors,
+ * the line still draws, and the feature reads as "the arrows did not work".
+ *
+ * So both ends are pulled back to the circles' edges: `r + 1` at the tail so the
+ * line starts just outside the source, `r + HEAD_GAP` at the head so the tip
+ * lands just outside the target.
+ *
+ * **When the two bubbles overlap** — which `forceCollide` allows at the density
+ * where rows get thin — the two trims together exceed the distance between the
+ * centres, and the naive version of this returns a line pointing *backwards*: a
+ * short arrow aimed up the article, which is exactly the falsehood the arrow was
+ * added to prevent. There is no honest short line to draw between two circles
+ * that are inside each other, so nothing is drawn at all (`M 0 0` with zero
+ * length paints nothing and takes no marker).
+ */
+export function arrowPath(a: Sim, b: Sim): string {
+  const ax = a.x ?? 0;
+  const ay = a.y ?? 0;
+  const bx = b.x ?? 0;
+  const by = b.y ?? 0;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dist = Math.hypot(dx, dy);
+  const trimA = a.r + 1;
+  const trimB = b.r + HEAD_GAP;
+  // Overlapping, or coincident. See the note above: a backwards arrow is worse
+  // than a missing one.
+  if (dist <= trimA + trimB) return "M 0 0";
+  const ux = dx / dist;
+  const uy = dy / dist;
+  return `M ${ax + ux * trimA} ${ay + uy * trimA} L ${bx - ux * trimB} ${by - uy * trimB}`;
 }
 
 /**
@@ -382,7 +532,10 @@ export function layoutArc(graph: ArticleGraph, opts: DiagramOptions): DiagramLay
   if (drawn.length > 1) {
     const first = y.get(drawn[0]?.id ?? ("" as NodeId)) ?? top;
     const last = y.get(drawn[drawn.length - 1]?.id ?? ("" as NodeId)) ?? top;
-    links.push({ id: "arc-spine", d: `M ${spine} ${first} V ${last}`, part: -1, depth: 0 });
+    /* `sequence`, honestly: the spine IS the reading order, drawn as one line
+       instead of as a chain of arrows because on Arc every node is already on
+       it. */
+    links.push({ id: "arc-spine", d: `M ${spine} ${first} V ${last}`, part: -1, depth: 0, kind: "sequence" });
   }
   for (const [i, e] of graph.edges.filter((e) => e.kind === "vocabulary").entries()) {
     const a = y.get(e.source);
@@ -398,8 +551,10 @@ export function layoutArc(graph: ArticleGraph, opts: DiagramOptions): DiagramLay
       d: `M ${spine} ${a} C ${spine + bulge} ${a} ${spine + bulge} ${b} ${spine} ${b}`,
       part: -1,
       // Weight, quantised into the three stroke widths the stylesheet has, so
-      // the eye can rank an arc without a legend.
+      // the eye can rank an arc without a legend. See `DiagramLink.depth` —
+      // this picture's use of that field is a band, not a depth.
       depth: e.weight > 0.45 ? 2 : e.weight > 0.25 ? 1 : 0,
+      kind: "vocabulary",
     });
   }
 
@@ -458,6 +613,7 @@ export function layoutCluster(graph: ArticleGraph, root: HierarchyInput, opts: D
           `M ${px} ${py} L ${cx} ${cy}`,
         part: g.part,
         depth: g.depth,
+        kind: "parent",
       });
     }
     /* **An internal node's label sits above its dot, a leaf's sits on it.**
