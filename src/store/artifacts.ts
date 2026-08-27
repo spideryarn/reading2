@@ -48,6 +48,7 @@ import type {
   TweetThread,
 } from "../types.js";
 import type { LabelsFile } from "../labels.js";
+import type { RawManifest } from "../fetch.js";
 
 /**
  * Every kind of thing the pipeline durably produces.
@@ -86,7 +87,26 @@ export type ArtifactKind =
  * would mean every reader and writer disagreeing with every file.
  */
 export interface ArtifactMap {
-  raw: string;
+  /**
+   * **The manifest, not the bytes** — and it said `string` until 2026-08-27,
+   * which was a lie nothing had caught because nothing calls `read` yet.
+   *
+   * `raw.json` holds a `RawManifest` (src/fetch.ts): the kind, the name of the
+   * file beside it that holds the payload, the two URLs, the content type, the
+   * byte count and the hash. The filesystem decoder has always checked exactly
+   * that — `json("file", isString)`, an object with a string `file` field — so
+   * the declaration and the adapter disagreed, and `read(slug, "fetch", "raw")`
+   * would have handed back an object cast to `string`, whose `.length` is
+   * `undefined`. No error anywhere: [silent success](docs/reusable/silent-success.md).
+   *
+   * **This is not the whole fix**, and the honest note matters more than the
+   * type. GPT Sol's review of docs/plans/transactional-stage-runner.md: a
+   * manifest names a *file*, and `article_revisions.raw_bytes` needs the bytes
+   * themselves, so a Postgres adapter cannot fill that column from this. What
+   * `fetch` eventually returns has to carry provenance **and** payload. That is
+   * that plan's landing B; this is the declaration ceasing to be false.
+   */
+  raw: RawManifest;
   meta: Meta;
   extractedHtml: string;
   blocks: { blocks: Block[] };

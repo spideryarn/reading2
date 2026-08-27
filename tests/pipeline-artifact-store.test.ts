@@ -42,7 +42,7 @@ import {
   pathFor,
 } from "../src/store/artifacts-fs.js";
 import { sameStamp } from "../src/store/artifacts.js";
-import type { ArtifactKind } from "../src/store/artifacts.js";
+import type { ArtifactKind, ArtifactMap } from "../src/store/artifacts.js";
 import type { StepContext } from "../src/pipeline.js";
 import type { Block, StepName, Tree } from "../src/types.js";
 
@@ -499,6 +499,72 @@ describe("the file store round-trips every kind", () => {
     // Valid JSON of the wrong shape entirely, which a bare parse would accept.
     await writeFile(pathFor(where, "glossary", "glossary"), `{"nope":1}`, "utf-8");
     expect(await store.read(scratch, "glossary", "glossary")).toBeNull();
+  });
+});
+
+describe("the raw artefact is a manifest, and the type has to say so", () => {
+  /**
+   * **The cast that was there until 2026-08-27, and why nothing caught it.**
+   *
+   * `ArtifactMap.raw` was declared `string`. The artefact is a `RawManifest`
+   * object — the filesystem decoder has always checked it with
+   * `json("file", isString)` — so `read(slug, "fetch", "raw")` handed back an
+   * object cast to `string`, whose `.length` is `undefined` and whose
+   * `.slice()` throws. Nothing had noticed because `read` has no production
+   * caller yet: the stages all open paths.
+   *
+   * This is a **compile-time** test as much as a runtime one. `manifest.file`
+   * does not typecheck against `string`, so the declaration cannot quietly go
+   * back to what it was without this file going red — which is the only kind of
+   * guard that works on a type nobody calls.
+   */
+  const at = fsLocations("raw-shape");
+
+  beforeAll(async () => {
+    await mkdir(at.dir, { recursive: true });
+    await writeJson(pathFor(at, "fetch", "raw"), {
+      kind: "html",
+      file: "raw.html",
+      requestedUrl: "https://example.test/a",
+      url: "https://example.test/a",
+      contentType: "text/html",
+      encoding: "UTF-8",
+      bytes: 29,
+      sha256: "0".repeat(64),
+      fetchedAt: "2026-08-26T00:00:00.000Z",
+    });
+  });
+
+  afterAll(async () => {
+    await rm(at.dir, { recursive: true, force: true });
+  });
+
+  it("comes back with its fields, not as a string", async () => {
+    const manifest = await createFsArtifactStore().read("raw-shape", "fetch", "raw");
+    expect(manifest).not.toBeNull();
+    // Each of these is a type error if `raw` goes back to `string`.
+    expect(manifest?.file).toBe("raw.html");
+    expect(manifest?.kind).toBe("html");
+    expect(manifest?.bytes).toBe(29);
+    expect(manifest?.url).toBe("https://example.test/a");
+  });
+
+  it("names a file rather than carrying the bytes, which is the unfinished half", () => {
+    /* Said in a test because it is the thing a reader of the type would assume
+       and be wrong about. `article_revisions.raw_bytes` needs the payload, and
+       a manifest has only its *name* — so a Postgres adapter cannot be written
+       against this. docs/plans/transactional-stage-runner.md § B. */
+    const manifest: ArtifactMap["raw"] = {
+      kind: "html",
+      file: "raw.html",
+      contentType: null,
+      encoding: null,
+      bytes: 29,
+      sha256: null,
+      fetchedAt: "2026-08-26T00:00:00.000Z",
+    };
+    expect(Object.keys(manifest)).not.toContain("payload");
+    expect(manifest.file).toBe("raw.html");
   });
 });
 
