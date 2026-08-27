@@ -28,6 +28,52 @@ assumes 5273 gets a refused connection or — worse — *somebody else's* dev se
 page that looks exactly right and is running different code. Read the port off the line Vite prints
 and pass it on to anything you dispatch.
 
+### A phone-width window does not exist, so use an iframe
+
+**Chrome on macOS will not make a window narrower than 605 CSS px.** `resize_window` returns
+"Successfully resized window ... to 390x844", `innerWidth` stays at 605, and nothing anywhere errors
+— the same lie the section below describes, with a hard floor underneath it. A session that trusts
+the call measures a 605px page believing it is a phone.
+
+What works is a **same-origin iframe** of the exact size, injected into a page the dev server is
+already serving. Inside an iframe, `innerWidth`, `100vw` and every width media query are the
+*iframe's*, so `fitView` and the stylesheet see a real 390 × 740; being same-origin, you can read
+computed boxes straight out of `contentWindow`. For a frame wider than the 605px window, a CSS
+`transform: scale()` on the iframe keeps its layout at full size and only shrinks the paint, so
+screenshots still work.
+
+```js
+const f = document.createElement("iframe");
+f.style.cssText = "width:390px;height:740px;border:0";
+f.src = "/read/<slug>";
+document.body.appendChild(f);
+// then: f.contentWindow.innerWidth === 390
+```
+
+Two things it cannot do, and both have cost real time:
+
+- **`@media (hover: none)` and `(any-pointer: coarse)` still match the desktop.** No touch-keyed rule
+  is being exercised. On 2026-08-27 the per-paragraph chat button was found to be unreachable on any
+  touch device by *reading the stylesheet*; every screenshot looked perfect.
+- **Anything driven by `requestAnimationFrame` is dead**, because the tab is not frontmost — see the
+  next section. This is the one that most looks like success.
+
+### A stale parsed stylesheet in a long-lived tab
+
+After a session's worth of HMR updates, a tab's `<style>` element can hold **byte-for-byte correct
+CSS text that Chrome has not re-parsed.** On 2026-08-27 the text said `top: var(--bar-bottom)`, the
+custom property demonstrably switched value on `:root`, and the element's computed `top` came from an
+older build — so every check agreed with itself and all of them were wrong. Half an hour went into
+blaming the build pipeline.
+
+Two habits that catch it:
+
+- **Check a CSS mechanism in a brand-new tab before concluding the CSS is wrong.** One navigation
+  settled it.
+- **Run a control.** Set a made-up property (`--zz-control`) the same way you set the real one and
+  read both back. If the control works and yours does not, it is your property; if neither works, it
+  is your method. That one call is what turned "the CSS is broken" into "the browser is stale".
+
 ### Work in your own tab
 
 Several agents drive this same browser. On 2026-08-26 a session's measurements were being
