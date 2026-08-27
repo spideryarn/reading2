@@ -398,65 +398,183 @@ OpenRouter-only, both carrying their own cost and neither priced here. That is b
 gap — but it does mean the price table's continuous test covers one row of three, which is worth
 knowing before trusting the drift check to catch everything.
 
-### The option that would delete the arithmetic entirely
+### The option that deletes the arithmetic entirely — and it works
 
-Worth stating plainly because it is the real answer to Greg's question, and the plan had not
-considered it: **if all twelve call sites went through OpenRouter, every call would carry a
-provider-reported `usage.cost` and there would be no price table and no cache arithmetic at all.**
+Greg asked this question twice, and the second time was because the answer written here the first
+time was wrong. Recording the correction rather than quietly swapping it, because the way it was
+wrong is the useful part.
 
-Two of the three things that would sink that idea are already measured here, and neither sinks it:
+**The proposal.** Route every model call through OpenRouter. One transport, one usage shape, and
+`usage.cost` on every response — so there is no price table and no cache arithmetic on our side at
+all.
 
-- **Anthropic prompt caching works through OpenRouter.** The probe above is the evidence — a
-  `cache_control: {type: "ephemeral"}` breakpoint produced `cache_write_tokens: 18212` cold and
-  `cached_tokens: 18212` warm, priced at the 1.25x and 0.1x rates. This is not a thing that has to
-  be given up.
-- **OpenRouter took no per-token margin on either probe.** 18 prompt tokens billed at exactly
-  $0.000036 — Anthropic's list price to the digit — and `cost` equal to `upstream_inference_cost`
-  on both the chat and the embeddings call.
+**The old verdict was "no", on three grounds. Two were false and one was backwards:**
 
-What it would cost is Anthropic-native surface this app actually uses: the SDK's typed errors
-(which [`src/anthropic-call.ts`](../../src/anthropic-call.ts) is built on), `stop_reason: "refusal"`
-and `stop_details`, `thinking: {type: "adaptive"}` and `effort`, and `finalMessage()`. Plus a second
-hop in front of every pipeline stage, and a single vendor in front of both halves of the app rather
-than one.
+| what this doc said | what a probe says |
+|---|---|
+| Going to OpenRouter forecloses Anthropic's half-price Batch tier | **False.** `anthropic/claude-sonnet-5:batch` is in the catalogue at exactly half — `prompt 0.000001`, `completion 0.000005` — reached through `/api/beta/batches`. Available on both routes. |
+| `thinking: {type:"adaptive"}` is "reachable, but mapped rather than native" | **Backwards on the OpenAI-shaped path, false on the right one.** On `chat/completions` adaptive is not reachable at all: `400 — reasoning.effort: Invalid option: expected one of "max"｜"xhigh"｜"high"｜"medium"｜"low"｜"minimal"｜"none"`. On the Skin (below) it is a first-class validated option. |
+| The SDK's typed errors and `stop_reason: "refusal"` are load-bearing losses | **Overstated.** [`src/anthropic-call.ts`](../../src/anthropic-call.ts) keys on `err.status`, not on the exception class, and the Skin returns an Anthropic-shaped error envelope. `native_finish_reason` carries Anthropic's own string verbatim even on the OpenAI-shaped path. |
 
-**Verdict: no — but not for the reason the research gave.**
+**And the thing that makes it work was not in this doc at all: OpenRouter has an Anthropic-native
+endpoint.** `POST https://openrouter.ai/api/v1/messages` — the "Anthropic Skin" — speaks the Messages
+protocol rather than OpenAI's. The whole previous verdict was an argument against the *OpenAI-shaped*
+path, carried forward by default because that is the path this app's other callers happen to use.
+Nobody had asked whether it was the only one.
 
-The research pass argued that prompt caching over OpenRouter depends on sticky routing via
-`session_id`, which this app does not send, so moving traffic there risks a silent cache-hit
-regression. That objection does not survive contact with the code.
-[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) has already been here:
+The Skin's `usage`, verbatim from a live call:
 
-> Ordered, **not** `allow_fallbacks: false`. A cache lives on the upstream that wrote it, so naming
-> Anthropic first is what keeps repeat calls landing where the article already is — and OpenRouter's
-> own sticky routing hashes the first user message, which varies here, so the heuristic would miss
-> exactly the case this is for.
+```json
+{"input_tokens":40,"output_tokens":600,
+ "output_tokens_details":{"thinking_tokens":0},
+ "cache_creation_input_tokens":0,"cache_read_input_tokens":0,
+ "cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},
+ "inference_geo":null,"service_tier":"standard","speed":"standard",
+ "cost":0.00608,"is_byok":false,
+ "cost_details":{"upstream_inference_cost":0.00608, …}}
+```
 
-`PROVIDER_ORDER` is the answer to that problem and is a *better* one than `session_id` for this
-workload, chosen deliberately and written down. My own probe agrees: a cold write and a warm read
-three seconds apart, no `session_id`, 18,212 tokens read from cache.
+**Both.** Anthropic's additive counters, the 5m/1h split, and the three fields
+[§ Where prices come from](#where-prices-come-from) argues make the arithmetic defensible —
+`service_tier`, `inference_geo`, `thinking_tokens` — with **`cost` beside them**. The premise of the
+"two incompatible usage shapes" section that opens this plan is that we must choose between a
+provider-reported cost and a token breakdown. On this endpoint we do not have to.
 
-The real reasons are the other two, and they are enough:
+Everything else survives too, checked rather than assumed:
 
-- **Feature loss, all of it load-bearing.** The SDK's typed errors are what
-  [`src/anthropic-call.ts`](../../src/anthropic-call.ts) is built on, and its whole point is that an
-  upstream error body carrying the article must not reach a reader; `stop_reason: "refusal"` and
-  `stop_details` likewise. `effort` and adaptive thinking reach OpenRouter only through its
-  parameter-mapping layer — reachable (`reasoning`, `reasoning_effort` are in its supported
-  parameters for this model) but mapped rather than native, and a mapping that silently drops a
-  parameter is this project's least favourite failure shape.
-- **It buys nothing that is still a problem.** The two-formula cache arithmetic was the thing worth
-  avoiding, and it is already written, tested against a real bill, and green. Rerouting seven stages
-  through a second vendor to delete a solved problem is paying a real cost for a settled one.
+- **The Anthropic SDK itself works against it.** `baseURL: "https://openrouter.ai/api"` plus
+  `authToken`. `client.messages.stream(…)` and `finalMessage()` unchanged; the seven stages' call
+  code does not move.
+- **Caching works, and `cost` reflects it.** Cold: 13,863 cache-creation tokens, `cost` 0.0347235.
+  Warm, same request: 13,863 cache-read tokens, `cost` 0.0028386. Both match
+  [`src/pricing.ts`](../../src/pricing.ts)'s list prices exactly — 1.25× write, 0.1× read.
+- **Adaptive thinking is a validated option.** `thinking: {"type":"banana"}` is refused, and the
+  refusal enumerates `"enabled" | "disabled" | "adaptive"`. Control-tested against Anthropic direct
+  with the same prompt: both routes returned `thinking_tokens: 0`, so it is the model declining to
+  think rather than the Skin neutering the field.
+- **Native `stop_reason`.** `end_turn` and `max_tokens` come back verbatim, and `stop_details` is on
+  the response shape.
 
-Recorded rather than dismissed, because it is the right question and the answer could change: if
-this app ever grows a third provider, the argument for one gateway that reports its own cost gets
-much stronger.
+#### The two traps, both of which look exactly like success
 
-One thing the option did surface that matters regardless — **OpenRouter's margin is a 5.5% fee on
-buying credits, not a per-token markup.** That is why the probes found `cost` equal to Anthropic's
-list price. It also means `usage.cost` is *credits consumed*, and the cash that left the bank is
-about 5.5% higher. Which is question 5 below, and no longer hypothetical.
+**One — `finalMessage()` silently drops `cost` on the streaming path.** All seven stages stream. The
+field is on the wire, in the `message_delta` event; the SDK's own merge keeps only the fields its
+types know:
+
+```
+finalMessage() usage.cost: (absent)
+captured from raw streamEvent -> cost: 0.018773
+```
+
+One `stream.on("streamEvent", …)` handler recovers it. But left unnoticed, every pipeline row lands
+with a `null` cost and nothing errors anywhere. Whatever gets built needs a test that goes red when
+`cost` stops arriving — see [silent-success.md](../reusable/silent-success.md).
+
+**Two — the default upstream is not Anthropic, and pinning is therefore mandatory rather than
+advisory.** Three otherwise-identical calls:
+
+| request | upstream that answered | `cost` |
+|---|---|---|
+| no `provider` key | Claude Platform on AWS | 0.000182 |
+| `{"order":["anthropic"]}` | **Anthropic** | 0.000082 |
+| `{"only":["anthropic"]}` | **Anthropic** | 0.000082 |
+
+A cache lives on the upstream that wrote it. Unpinned, a migrated stage would work perfectly and
+never hit a cache again. [`PROVIDER_ORDER`](../../src/openrouter-stream.ts) already exists for this
+and would have to travel with the stages.
+
+That table also carries something a cost model has to record: **the same model bills differently by
+upstream.** Two 16-token calls, 0.000182 against 0.000082. Far too small a sample to draw a rate
+from, big enough that `provider` belongs in a column rather than being averaged away.
+
+And one method note worth keeping, because it nearly went the other way: a made-up top-level key
+(`"spideryarn_nonsense": true`) is accepted with a 200 and no complaint. **OpenRouter accepting a
+request is never evidence that OpenRouter honoured a field.** The `provider` conclusion above is safe
+only because the upstream observably changed — not because the call succeeded. Same rule as
+[[committed-results-are-not-evidence]]: ask what would look different if it had not worked.
+
+#### What is actually left to weigh
+
+Not fidelity. The remaining arguments are operational, and they are real:
+
+- **One vendor in front of the whole app.** Today an OpenRouter outage costs the reader chat,
+  explain and search while the pipeline keeps ingesting; an Anthropic outage costs the pipeline while
+  chat fails over. Collapsing to one gateway makes every outage total. This is the strongest
+  remaining objection and it is an availability argument, not a cost one.
+- **`usage.cost` is credits, not cash.** OpenRouter's margin is a 5.5% fee on buying credits rather
+  than a per-token markup — which is why the probes found `cost` equal to Anthropic's list price to
+  the digit. The money that left the bank is about 5.5% higher. Question 5 below, and it applies to
+  the five call sites already on OpenRouter whatever we decide here.
+- **What the price table is still for.** It stops being the source of truth and becomes the check on
+  one: an independent number to diff against `cost`, which is what would catch a silently-changed
+  rate or a dropped field. That is a better job for it than being the only answer, and it is roughly
+  a third of the code — [`src/pricing.ts`](../../src/pricing.ts)'s effective-dating and its
+  `priceAnthropicCall` stay; the reconciliation against Anthropic's Admin Cost API, and question 0
+  with it, goes away entirely.
+
+#### What the second Sol review added
+
+Sol reached the same verdict independently — *"Greg's position wins. The previous 'no, feature loss'
+argument was weak and is now partly obsolete"* — and found the Skin by the same route. Three of its
+four decisive probes were already run above. Four things it contributed that the probes had not:
+
+**1. `require_parameters: true`, which is a trap we would have walked into.** `allow_fallbacks`
+defaults to *true* and `require_parameters` defaults to *false*. So a fallback upstream that does not
+support `cache_control` or adaptive thinking can be handed the request and serve it **without them**,
+successfully. Availability silently beating caching is the same failure shape as everything else on
+this page. The Skin accepts the field: `{"order":["anthropic"],"allow_fallbacks":true,
+"require_parameters":true}` returned `provider: Anthropic`, `cost: 0.000082`.
+
+**2. The refusal ambiguity is the one genuinely open item — and it is worse than "unprobed".**
+OpenRouter's own Messages reference is *internally contradictory*: its example shows
+`stop_details.type: "refusal"` alongside `stop_reason: "end_turn"`. If that is real rather than a
+documentation slip, then every `stop_reason === "refusal"` branch in the seven stages never fires,
+and each stage tries to parse refusal prose as JSON. Sol's table of what each one then does is worth
+reading — [summarise.ts](../../src/summarise.ts) is the worst, treating it as a repairable parse
+error, **buying a second call**, and then salvaging the batch as merely missing summaries.
+
+I could not settle this by probe: triggering a real refusal means composing a genuinely harmful
+request, which is not a thing to do to check a field name. **But the probe is not the right fix
+anyway.** Checking `stop_reason === "refusal" || stop_details?.type === "refusal"` costs one clause,
+covers both readings of a contradictory document, and is correct against Anthropic direct today. A
+probe would tell us what OpenRouter did once; the defensive check is right whatever it does. Pair it
+with a unit test that feeds both shapes through the handler — that tests our half, which is the half
+we own.
+
+**3. The reconciliation gets *better*, and question 0 disappears.** Every response carries an
+`x-generation-id` header, and `GET /api/v1/generation?id=…` returns OpenRouter's own settled figure:
+
+```json
+{"total_cost":0.000082,"provider_name":"Anthropic","is_byok":false,"latency":1097,
+ "upstream_inference_cost":0,"cache_discount":null,"tokens_prompt":2,"native_tokens_cached":0}
+```
+
+`total_cost` matched the inline `usage.cost` exactly. This is **per call**, where the Anthropic Admin
+Cost API reconciliation this plan proposed was per UTC-day-and-model — strictly better, and available
+on a key we already have. So [question 0](#questions-for-greg) — whether Greg can get an Anthropic
+Admin key, possibly needing the account converted to an organization — **stops being a blocker.**
+
+Two cautions on that endpoint, both visible in the response above. `upstream_inference_cost` is `0`
+here while the inline response had it populated — this is the async lookup, which is where the
+BYOK-only caveat genuinely applies. And `tokens_prompt: 2` against the response's own
+`input_tokens`: these are OpenRouter's normalised counts, not native ones. **Take the cost from this
+endpoint and the token counts from the response.**
+
+**4. One account is one rate-limit budget, and that is double-edged.** Label fan-out could starve a
+reader's chat turn. Sol's fix is two keys under one account — interactive and pipeline — which also
+gives two spend limits, and is the nearest off-the-shelf thing to the per-user cap Greg asked for
+(`GET /api/v1/key` already reports `limit`, `usage` and `limit_remaining`).
+
+Sol's ranked options put "OpenRouter as the normal path, retaining Anthropic-shaped Messages" first
+and "move everything direct to Anthropic" last — the latter because PDF reading uses Luna and
+embeddings use Voyage, so *"one direct SDK" would actually become several vendors, keys, bills, retry
+policies, and usage shapes.* Its full review is in
+[openrouter-gateway-review-sol.md](openrouter-gateway-review-sol.md).
+
+**Verdict: yes, on the Skin, subject to the availability question above being Greg's call rather
+than mine.** The plan below is written for two transports and would need rewriting for one; what
+does not change is the schema, the owner attribution, or the storage decisions, because those were
+never about where the number came from.
 
 ### A table in git, not a package — and the library that proves the point
 
@@ -960,17 +1078,22 @@ the first migration checks the table is empty rather than assuming it.
 
 ## Questions for Greg
 
-0. **Can you get an Admin API key — and do you want to?** It is what turns the Anthropic half of the
-   cost from an assertion into something reconciled against Anthropic's own daily figure. Without
-   it, those seven stages' cost is our arithmetic and nothing checks it.
+0. ~~**Can you get an Admin API key — and do you want to?**~~ **Withdrawn — this question died on
+   2026-08-27.** It existed because the Anthropic half of the cost was our own arithmetic with
+   nothing checking it, and the only check available was Anthropic's Admin Cost API, which needs a
+   credential this individual account may not be able to issue at all. OpenRouter's
+   `GET /api/v1/generation?id=…` gives a settled **per-call** figure on a key we already have, which
+   is both stronger and cheaper than the per-UTC-day-and-model reconciliation that question was for.
+   See [the Skin section above](#the-option-that-deletes-the-arithmetic-entirely--and-it-works).
 
-   Two things to know before saying yes. It is a *separate, more powerful* credential than the one
-   in `.env.local`, and it would only ever be read by `npm run cost`, never by the app. And it may
-   not be one click: Anthropic's docs say **"The Admin API is unavailable for individual accounts"**
-   and require setting up an organization first. This project runs on an individual account
-   ([setup-dev.md](../project/setup-dev.md)), so the real question may be *"are you willing to
-   convert the account to an organization"* rather than *"will you make a key"*. Worth five minutes
-   in the Console to find out which, before anything is built on it.
+   **Replaced by the real question: do we route everything through OpenRouter?** Everything below
+   still needs answering either way, but this one comes first because it changes what gets built.
+   The fidelity objections are gone — measured, not argued. What is left is a judgement only you can
+   make: **today an outage takes down half the app; afterwards it takes down all of it.** An
+   OpenRouter outage would stop ingest *and* chat *and* explain *and* search. Against that, one
+   vendor, one bill, provider-reported cost on every call, failover to a second upstream during an
+   Anthropic outage, and a large piece of this plan deleted.
+
 1. **A deleted user's spend history** — keep it or delete it? ~~Every other owned table cascades.~~
    **Wrong, and corrected by the review:** every owner FK in
    [`drizzle/0001_auth_fks_and_guards.sql`](../../drizzle/0001_auth_fks_and_guards.sql) is
