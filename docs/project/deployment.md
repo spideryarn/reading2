@@ -460,6 +460,12 @@ Two further things it changed, both about what a check can honestly claim:
   blank page. Absent is conclusive; present is not. A build-stamped sentinel is the real answer and
   is not built.
 
+The whole thing is written up in
+[health-check-green-while-uploads-dead.md](../postmortems/health-check-green-while-uploads-dead.md) —
+including the part that is not about this endpoint at all: four places in this codebase ask "am I in
+production with a development-only fallback?", three of them refuse, and the fourth is the one that
+writes the bytes. One of the three shipped in the *same commit* as the fourth.
+
 ### And one that was never about the environment
 
 The store check is cached so that an anonymous flood costs one query per window. It was written
