@@ -675,7 +675,27 @@ first done badly.
 ### Driving a rAF animation by hand
 
 A suspended tab runs no `requestAnimationFrame`, which means an rAF-driven animation cannot simply be
-watched — and "it did not move" is what both a broken animation and a sleeping tab look like. It can
+watched — and "it did not move" is what both a broken animation and a sleeping tab look like.
+
+**The 2026-08-27 version of that cost half an hour**, and is worth reading as a warning about how
+convincing the wrong diagnosis can get. The profile microphone's level meter
+([microphone-level-meter.md](../plans/microphone-level-meter.md)) read a flat zero from an automation
+tab, and every check on the way down came back clean: the `AnalyserNode` existed, the `AudioContext`
+was `running`, the `MediaStreamTrack` was `live`, unmuted and enabled, and the CSS resolved to the
+right resting transform. On that evidence a whole false theory got built — that Chrome's
+`SpeechRecognition.start(audioTrack)` takes the track exclusively and starves every other consumer —
+and it survived two experiments before a control killed it. The actual answer was
+`document.visibilityState === "hidden"`, so `getFloatTimeDomainData` was never called at all.
+
+**Check `document.hidden` before diagnosing anything that moves.** One line, and it comes first:
+
+```js
+requestAnimationFrame(() => (window.__fired = true));
+// …a moment later
+({ hidden: document.hidden, fired: !!window.__fired })
+```
+
+A screenshot brings the tab to the front, so taking one is both the check and the fix. It can
 still be **driven**: replace `window.requestAnimationFrame` / `cancelAnimationFrame` with a
 manually-pumped queue, trigger the thing that starts the animation, and step it with synthetic
 timestamps. Used on 2026-08-26 to check that a wheel over the summary panel kills its slide dead

@@ -274,6 +274,82 @@ it will look like something broke the first time it happens to a shelf with thir
 If that ever becomes intolerable the fix is not fuzzy hashing (there is no honest version of it); it
 is a "mark everything current" button, which is its own small design problem.
 
+## The microphone, and what it took to make it believable
+
+There is a microphone on both boxes. Why it is the browser's own Web Speech API rather than an
+OpenRouter call — free, no server, live text while you talk, and Safari can run it on-device — is
+argued out in [reader-profile.md § The microphone](../plans/reader-profile.md#the-microphone). This
+section is about the part that was wrong for a day, because the lesson generalises well past
+dictation.
+
+**Greg pressed it and reported that "nothing seemed to happen".** Nothing was broken. Measured in
+Chrome: the microphone does not open until **1.1 seconds** after the button is pressed, and no
+transcript comes back for several seconds after that — while the button turned orange *immediately*,
+a claim to be listening made a second before it could hear anything. The only other feedback, the
+interim text, was rendered conditionally on there being interim text, so until the first transcript
+the page was byte-for-byte what it had been before the press.
+
+So the whole of the first four seconds was: a 26-pixel icon in the corner changed colour, and nothing
+else in the world was different — while the reader watched the textarea, which is where the words are
+supposed to appear.
+
+Three things fixed it, and the third is the interesting one:
+
+1. **Three phases rather than two** — `idle | opening | listening`. The orange is only worn once
+   `audiostart` has fired, and `opening` says *"Opening the microphone…"* in words.
+2. **A strip that exists whenever the microphone is armed**, not only when it has something to say.
+3. **A live level meter** — Greg's ask, *"so that the user has a sense of whether it's working"*.
+
+### The meter is the only thing that can answer the question
+
+Bars moving with your voice mean the microphone works and the recogniser is merely thinking. Bars
+flat while you talk mean the audio device is wrong or muted. Nothing else on the page distinguishes
+those, and they are the two cases a reader most needs told apart.
+
+**That case is not hypothetical.** During the build every reading dropped to exactly zero, because
+macOS had silently switched the default input to *"Microsoft Teams Audio Device (Virtual)"*, which
+delivers digital silence — while `getUserMedia`, `readyState`, `muted` and `enabled` all reported
+perfect health. The feature caught its own motivating bug by accident.
+
+Two decisions inside it are worth carrying elsewhere:
+
+- **One capture, never two.** `SpeechRecognition` does not expose its `MediaStream`, so the obvious
+  design opens a second `getUserMedia` for the meter. That is unsafe: WebKit supports one microphone
+  source at a time, and a second capture can kill the first or switch the routing — the meter would
+  then be drawn from a *different microphone* than the one being transcribed. Recent Chromium
+  implements the spec's `recognition.start(audioTrack)`, so one track feeds both; Safari, which has
+  no such overload, opens no second stream and drives the bars from the recogniser's own
+  `soundstart`/`soundend` instead.
+- **Nothing is invented.** Both sources are real observations of real audio — one continuous, one
+  binary. A meter that moves when the microphone is dead answers the reader's question wrongly and
+  confidently, which is worse than no meter at all.
+
+### The threshold that says nothing rather than accusing
+
+After ten seconds with nothing above the activity threshold the strip says *"Listening — no sound
+detected yet"*. It said something much more useful for one draft — *"No sound reaching the
+microphone. Check your input device."* — and that was removed on review. Somebody presses the button,
+thinks, and then speaks; a headset with heavy noise gating delivers exact silence until the first
+syllable. Both produce the accusation, and a reader told their hardware is broken goes and changes
+settings that were fine. **Only `audio-capture`, a dead track or a refused `getUserMedia` earns that
+sentence**, because those are facts rather than inferences. Everything else gets an observation.
+
+### And the errors that used to vanish
+
+The handler named four codes: two it swallowed, two it apologised for. Everything else — including
+`network`, which is what a captive portal or a plane produces, and `audio-capture`, which is a
+disconnected headset — **disarmed and turned the button off with no message at all**. That is
+[silent-success](../reusable/silent-success.md) with the polarity reversed, and the check anybody
+would naturally run ("did the button light up?") gives the reassuring answer either way.
+[`dictation-errors.ts`](../../src/web/dictation-errors.ts) is now total: every code produces either a
+sentence or a deliberate silence, never an accident.
+
+The full diagnosis, the measurements, the two reviews and the traps are in
+[microphone-level-meter.md](../plans/microphone-level-meter.md) — including the one that costs the
+most time: **`requestAnimationFrame` does not run in a hidden tab**, so the meter reads a flat zero
+when driven from browser automation that is not frontmost, with every other part of the audio graph
+checking out perfectly.
+
 ## Where the pieces are
 
 | | |
@@ -286,6 +362,12 @@ is a "mark everything current" button, which is its own small design problem.
 | [`tests/profile.test.ts`](../../tests/profile.test.ts) | the pure rules, including the staleness table exhaustively |
 | [`tests/profile-prompts.test.ts`](../../tests/profile-prompts.test.ts) | the batch prompts — which `article-prompt.test.ts` never covered |
 | [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) | that the cached prefix is untouched by any profile |
+| [`src/web/ProfileBox.tsx`](../../src/web/ProfileBox.tsx) | the textarea, its microphone and the listening strip — shared by `/profile` and the metadata page |
+| [`src/web/useDictation.ts`](../../src/web/useDictation.ts) | the recogniser: three phases, the shared track, the Safari restart |
+| [`src/web/useAudioLevel.ts`](../../src/web/useAudioLevel.ts) | the analyser and the frame loop, and everything that must not be mistaken for silence |
+| [`src/web/audio-level.ts`](../../src/web/audio-level.ts) | pure: RMS, the decibel mapping, the measured floor, the smoothing |
+| [`src/web/dictation-errors.ts`](../../src/web/dictation-errors.ts) | pure: every error code to a sentence, totally |
+| [`src/web/MicLevel.tsx`](../../src/web/MicLevel.tsx) | the five bars, and the frame loop that never re-renders |
 
 ## What is still open
 
@@ -313,6 +395,9 @@ is a "mark everything current" button, which is its own small design problem.
 
 - [reader-profile.md (the plan)](../plans/reader-profile.md) · [glossary.md](glossary.md) ·
   [summaries.md](summaries.md) · [comments.md](comments.md) · [prompt-caching.md](prompt-caching.md)
+- [microphone-level-meter.md](../plans/microphone-level-meter.md) — the microphone's diagnosis and
+  rebuild, and the two GPT Sol reviews behind it
+- [browser-testing.md](browser-testing.md) — why a hidden tab makes the level meter read zero
 - [library.md](library.md) — the shelf record `purpose` joins
 - [silent-success.md](../reusable/silent-success.md) — a profile that silently stops reaching a
   prompt returns a perfectly good answer

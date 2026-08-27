@@ -24,8 +24,9 @@
  * **Dictated text goes in at the caret, not at the end.** A reader who clicks
  * into the middle of a sentence and starts talking means it there.
  */
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 import { Mic, MicOff, TriangleAlert } from "lucide-react";
+import { MicLevel } from "./MicLevel.js";
 import { useDictation } from "./useDictation.js";
 
 export function ProfileBox({
@@ -69,6 +70,20 @@ export function ProfileBox({
   live.current = value;
   const caret = useRef<number | null>(null);
 
+  /* Committing on **every** way of stopping, not only on the stop button.
+     Clicking the microphone takes the focus out of the box, so the blur has
+     already saved the *pre-dictation* text; if dictation then ends any other
+     way — a `network` error, a failed Safari restart — the confirmed words sat
+     in the box unsaved while the reader believed they had been taken. The old
+     code committed inside the stop handler alone, which covered exactly one of
+     those paths. GPT Sol's review, 2026-08-27, item 12. */
+  const commit = useRef(onCommit);
+  commit.current = onCommit;
+  const finished = useCallback(() => {
+    caret.current = null;
+    commit.current();
+  }, []);
+
   const dictation = useDictation((text) => {
     const el = box.current;
     const current = live.current;
@@ -88,7 +103,7 @@ export function ProfileBox({
       const pos = caret.current;
       if (pos !== null) el?.setSelectionRange(pos, pos);
     });
-  });
+  }, finished);
 
   const over = value.length > max;
 
@@ -101,23 +116,28 @@ export function ProfileBox({
         {dictation.supported && (
           <button
             type="button"
-            className={`prof-mic${dictation.listening ? " on" : ""}`}
+            /* Three phases, two of which are armed. `.on` — the orange — is
+               only worn once `audiostart` has fired and the microphone is
+               genuinely open; `.opening` is the second before that, and it
+               looks different on purpose. The old code went orange on the line
+               after `start()`, a measured 1.1 seconds before the microphone
+               could hear anything, which meant the button's one piece of
+               feedback was wrong exactly when the reader was watching it.
+               docs/plans/microphone-level-meter.md. */
+            className={`prof-mic${dictation.phase === "listening" ? " on" : ""}${
+              dictation.phase === "opening" ? " opening" : ""
+            }`}
             /* Two names, because the button does two things and a reader using
                a screen reader gets no colour to tell them which. */
-            aria-label={dictation.listening ? "Stop dictating" : "Dictate"}
-            aria-pressed={dictation.listening}
-            title={dictation.listening ? "Stop dictating" : "Dictate"}
+            aria-label={dictation.armed ? "Stop dictating" : "Dictate"}
+            aria-pressed={dictation.armed}
+            title={dictation.armed ? "Stop dictating" : "Dictate"}
             disabled={disabled}
             onClick={() => {
-              if (dictation.listening) {
-                /* Stopping is the moment the reader is finished, and the box
-                   never blurred — clicking the microphone took the focus, which
-                   already saved the *pre-dictation* text and then left
-                   everything dictated unsaved. So the stop commits.
-                   GPT Sol's review, 2026-08-26. */
-                caret.current = null;
+              if (dictation.armed) {
+                /* The commit now happens in `onEnd` rather than here, so that
+                   every way of stopping saves and not just this one. */
                 dictation.toggle();
-                onCommit();
                 return;
               }
               // Where the reader had the caret when they pressed it. Read now,
@@ -126,7 +146,7 @@ export function ProfileBox({
               dictation.toggle();
             }}
           >
-            {dictation.listening ? <MicOff size={14} /> : <Mic size={14} />}
+            {dictation.armed ? <MicOff size={14} /> : <Mic size={14} />}
           </button>
         )}
       </div>
@@ -152,10 +172,40 @@ export function ProfileBox({
         }}
       />
 
-      {/* The unconfirmed tail, shown greyed and never saved. Without it a reader
-          watching the box mid-sentence sees nothing happen for a second or two
-          and presses the button again. */}
-      {dictation.interim && <p className="prof-interim">{dictation.interim}…</p>}
+      {/* **The strip, and it is rendered whenever the microphone is armed** —
+          not only when there is interim text to put in it, which is what the
+          old code did. That conditional was most of the bug: for the several
+          seconds between pressing the button and the first transcript coming
+          back, the layout was byte-for-byte what it had been before the press,
+          so the reader looking at the box — which is where the words are
+          supposed to appear — saw nothing happen at all.
+
+          `role="status"` so the phase changes are announced rather than only
+          coloured; the bars themselves are `aria-hidden`, since they are a
+          picture of what this line already says in words. */}
+      {dictation.armed && (
+        <p className="prof-listening" role="status">
+          <MicLevel level={dictation.level} detected={dictation.meter === "detected"} />
+          <span className="prof-listening-what">
+            {dictation.phase === "opening"
+              ? "Opening the microphone…"
+              : /* Neutral, and deliberately never an accusation. It says what
+                   we have observed and stops. Telling somebody their input
+                   device is broken on the strength of ten quiet seconds sends
+                   them off to change settings that were fine — GPT Sol's
+                   review, 2026-08-27, item 6. */
+                dictation.quiet
+                ? "Listening — no sound detected yet"
+                : /* On the binary path the bars say *whether* there is sound
+                     rather than how much, so the words say so too rather than
+                     letting the picture imply a measurement nobody took. */
+                  dictation.meter === "detected"
+                  ? "Listening for sound"
+                  : "Listening"}
+          </span>
+          {dictation.interim && <span className="prof-interim">{dictation.interim}…</span>}
+        </p>
+      )}
 
       <div className="prof-box-foot">
         <p className="prof-box-hint">{hint}</p>
