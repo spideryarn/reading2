@@ -390,6 +390,85 @@ things it exists to catch. A health check that passes when the deployment is
 wrong is worse than none, because it is the thing you point at to argue nothing
 is wrong. [silent-success.md](../reusable/silent-success.md).
 
+### The env block was a report, not a check
+
+**And on 2026-08-27 it did it again anyway**, in the one place nobody had looked: the list of
+environment variables. `EXPECTED` was a flat list of names rendered to booleans, and *nothing ever
+compared one of those booleans against anything*. So production served this, for a day:
+
+```json
+{ "ok": true, "warnings": [], "env": { "SUPABASE_SERVICE_ROLE_KEY": false } }
+```
+
+Healthy on line one; the fault printed in full four lines later. Both halves are in the same
+response, and the endpoint had no opinion about the contradiction. A boolean nobody reads is not a
+check — it is a report that looks like one, which is worse, because the `env` block is exactly what
+you scroll to in order to reassure yourself.
+
+Each entry now carries a `breaks` string, and a missing one whose `breaks` is set produces a warning
+naming **what stops working** rather than merely which name is empty — the name is already visible
+in `env`, so repeating it there would add nothing. What nobody could see was where the bytes were
+going.
+
+Not every variable is required, deliberately. `breaks: null` means one of two things:
+
+- **Nothing needs it.** `LOG_LEVEL` has a default in [`src/log.ts`](../../src/log.ts).
+- **Something else already says it better.** A missing `DATABASE_URL` is reported by the `ssl` block
+  with its reason attached; a missing `PGSSLROOTCERT` surfaces as `TLS mode is …, not verified`,
+  which is the truer statement, since the certificate can also be present and unused. And a missing
+  `SPIDERYARN_STORE` never reaches this handler at all — [`src/store/index.ts`](../../src/store/index.ts)
+  throws at *import* when a filesystem store is live in production, and this module imports it. The
+  `STORE !== "postgres"` warning below is therefore a local-development signal, not a production one.
+
+The rule, then: **warn here only about what nothing else notices.** Warning twice about one fault
+teaches whoever reads the list to skim it, and then the next real line gets skimmed too — which is
+how a `false` sat in this response for a day.
+
+### Three ways the first version of that table still lied
+
+GPT Sol reviewed it the same day and found it giving both false-green and false-red answers. Each is
+worth knowing as a shape, because none of them is specific to this file:
+
+- **A required *need* is not a required *name*.** It demanded `SUPABASE_ANON_KEY`, but
+  [`src/auth.ts`](../../src/auth.ts) takes `SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_ANON_KEY` — the
+  fallback exists precisely so that rotating a key and deploying need not happen in the same minute.
+  A deployment whose sign-in worked would have been failed by its own health check. Entries can now
+  carry an `or`.
+- **Presence is not correctness.** `NODEJS_HELPERS` has to be the exact string `0` — the table above
+  says so, and the [request body](#the-request-body) section explains why. Set it to `1` and bodies
+  arrive empty while every line here reads green. The first version dismissed it as "a platform flag
+  no code in this repo reads", which is true and beside the point: the *platform* reads it. Entries
+  can now carry a `valid`, and it is checked only when `VERCEL` is set, since the flag means nothing
+  on a laptop.
+- **A wrong consequence is worse than none**, because it sends you to the wrong file. The first
+  version had `ANTHROPIC_API_KEY` gating "every model call the reader waits on". It does not — it is
+  the *pipeline*, in the Anthropic SDK spelling. `OPENROUTER_API_KEY` is the one every reader-facing
+  call goes through: explain, chat, search, PDF reading, embeddings.
+
+Two further things it changed, both about what a check can honestly claim:
+
+- `Boolean(process.env[name])` counted `" "` as configured — and so does `configured()` in
+  `src/store/blobs.ts`, so a stray space in a dashboard field would have taken this green while every
+  Supabase call failed on an invalid key. Values are trimmed now. It still cannot catch the literal
+  strings `"undefined"` or `"false"`, which are a real shape of this mistake and which nothing here
+  can tell from a secret.
+- **`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are the weakest lines on the page and
+  should be read as such.** [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at
+  module load without them — a blank reading view while every server-side line stays green — so they
+  are worth checking. But they are compiled into the client bundle at *build* time, and what this
+  endpoint sees is the current project setting. Add them and never redeploy, and it goes green over a
+  blank page. Absent is conclusive; present is not. A build-stamped sentinel is the real answer and
+  is not built.
+
+### And one that was never about the environment
+
+The store check is cached so that an anonymous flood costs one query per window. It was written
+*after* the `await`, so a hundred requests arriving **together** on a cold cache all missed, all ran
+the expensive query, and all set the cache. The test that vouched for it awaited three requests one
+after another — the single arrival pattern that cannot show the bug. The in-flight promise is shared
+now, and the test fires twenty-five at once against a query that does not resolve until they have
+all arrived.
+
 ## The five that fail quietly
 
 Each reported success while being wrong. The first four were found on 2026-08-26
@@ -498,6 +577,25 @@ environment, because minting a grant is server-only by construction — the anon
 `403 Unauthorized: new row violates row-level security policy`, which is the right answer. Without
 the key, `uploadGrants()` returns `null` and `POST /api/uploads` answers 503 saying uploading is not
 switched on, which is at least honest.
+
+**And on 2026-08-27 it was found never to have been set at all** — `vercel env ls production` did not
+list it, while the value sat in `.env.prod` the whole time. This paragraph had said to set it since
+the day uploads landed. Writing the requirement down is not the same as checking it, which is the
+entire lesson.
+
+The reason a day went by is the *quieter* half, which the paragraph above misses.
+`SUPABASE_SERVICE_ROLE_KEY` gates **two** functions in
+[`src/store/blobs.ts`](../../src/store/blobs.ts), through one `configured()`, and only one of them
+is honest about losing it:
+
+| Without the key | What happens | Does anyone find out? |
+|---|---|---|
+| `uploadGrants()` | returns `null`, `POST /api/uploads` → 503 | **Yes.** A reader gets an error and can report it |
+| `blobStore()` | falls back to `fsBlobs()` | **No.** Raw source bytes are written to a serverless filesystem that does not outlive the request. Nothing logs, nothing throws, the write returns success |
+
+The fallback itself is right and should stay — a laptop with no Supabase container is a real case,
+and the function comment says so. What was missing is any signal that it happened *in an environment
+where it is wrong*. That is now [`/api/health`'s](#apihealth-and-why-to-look-at-it-first) job, below.
 
 ## What does not work in production yet
 

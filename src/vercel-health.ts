@@ -52,19 +52,176 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { sslDecisionFor } from "./db/ssl.js";
 import { STORE, listArticles } from "./store/index.js";
 
-/** Set, or not. Values never appear — only whether the slot is filled. */
-const EXPECTED = [
-  "DATABASE_URL",
-  "SPIDERYARN_STORE",
-  "ANTHROPIC_API_KEY",
-  "OPENROUTER_API_KEY",
-  "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "PGSSLROOTCERT",
-  "NODEJS_HELPERS",
-  "LOG_LEVEL",
-] as const;
+/**
+ * What this deployment needs, and what stops working without each one.
+ *
+ * **`breaks` is the half that makes this a check rather than a report.** Until
+ * 2026-08-27 this was a flat list of names rendered to booleans, and nothing
+ * ever compared one against anything: production ran for a day with
+ * `SUPABASE_SERVICE_ROLE_KEY` unset while this endpoint answered
+ * `{"ok":true,"warnings":[]}` and printed `"SUPABASE_SERVICE_ROLE_KEY": false`
+ * in the same response. A boolean nobody reads is not a check, and this file's
+ * own header is about exactly that mistake.
+ *
+ * `breaks: null` means one of two things — nothing needs it (`LOG_LEVEL` has a
+ * default in src/log.ts), or **something else in this handler already says it
+ * better**: a missing `DATABASE_URL` is reported by the `ssl` block with its
+ * reason attached, and a missing `PGSSLROOTCERT` surfaces as `TLS mode is …,
+ * not verified`, which is truer, since the certificate can also be present and
+ * unused. Warning twice about one fault trains whoever reads the list to skim
+ * it, and then the next real line gets skimmed too.
+ *
+ * Three things GPT Sol's review of the first version of this table caught,
+ * each of which made it lie in one direction or the other:
+ *
+ *  - **`or` exists because a required *need* is not always a required *name*.**
+ *    src/auth.ts takes `SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_ANON_KEY` — either
+ *    works, and the fallback is deliberate so that rotating the key and
+ *    deploying need not happen in the same minute. Demanding the anon key by
+ *    name would 503 a deployment whose sign-in works perfectly.
+ *  - **`valid` exists because presence is not correctness.** `NODEJS_HELPERS`
+ *    has to be the exact string `0`; set to `1`, request bodies arrive empty
+ *    and every other line here still reads green. The first version of this
+ *    table called it "a platform flag no code in this repo reads", which is
+ *    true and beside the point — the platform reads it.
+ *  - **The consequences were wrong the first time**, and a wrong consequence is
+ *    worse than none, because it sends you to the wrong file. `ANTHROPIC_API_KEY`
+ *    is the *pipeline* (the Anthropic SDK spelling in src/models.ts);
+ *    `OPENROUTER_API_KEY` is what every reader-facing call goes through —
+ *    explain, chat, search, PDF reading, embeddings.
+ */
+interface Expected {
+  /** Always reported in `env`, warned about only when `breaks` is set. */
+  name: string;
+  /** A second name that satisfies the same need. Reported too; either suffices. */
+  or?: string;
+  /** What stops working without it, as a clause. `null` to report only. */
+  breaks: string | null;
+  /** Set when the value itself has to be right, not merely present. */
+  valid?: { ok(value: string): boolean; must: string };
+  /** `vercel` for platform settings that mean nothing on a laptop. */
+  where?: "vercel";
+}
+
+const EXPECTED: readonly Expected[] = [
+  { name: "DATABASE_URL", breaks: null },
+  /* Not because nothing needs it, but because the refusal is already louder
+     than a warning here could be: src/store/index.ts throws at *import* when a
+     filesystem store is live in production, and this module imports it — so a
+     wrong `SPIDERYARN_STORE` means `health()` never runs at all rather than
+     running and complaining. The `STORE !== "postgres"` warning further down
+     is therefore a local-development signal, not a production one. The first
+     version of this comment claimed that warning covered the production case;
+     it cannot. GPT Sol's review, 2026-08-27. */
+  { name: "SPIDERYARN_STORE", breaks: null },
+  {
+    name: "ANTHROPIC_API_KEY",
+    breaks: "the pipeline cannot run — no article can be ingested or re-extracted",
+  },
+  {
+    name: "OPENROUTER_API_KEY",
+    breaks: "explain, chat, search, PDF reading and embeddings all fail — every model call a reader waits on",
+  },
+  { name: "SUPABASE_URL", breaks: "sign-in, and the bucket raw source bytes are written to" },
+  {
+    name: "SUPABASE_PUBLISHABLE_KEY",
+    or: "SUPABASE_ANON_KEY",
+    breaks: "sign-in is refused for everybody — src/auth.ts fails closed",
+  },
+  {
+    name: "SUPABASE_SERVICE_ROLE_KEY",
+    /* Both halves, because the first is the one somebody reports and the second
+       is the one that loses data. src/store/blobs.ts `configured()` gates both:
+       `uploadGrants()` returns null and the upload is refused, and `blobStore()`
+       falls back to `fsBlobs()` — a serverless filesystem that does not outlive
+       the request. Only the first of those says anything at all. */
+    breaks:
+      "PDF upload is refused, and raw source bytes fall back to a disk this host does not keep",
+  },
+  {
+    /* Baked into the client bundle at build time, so reading it here proves
+       less than it looks like it does — see the note in `health` below. Absent
+       is still conclusive, and absent is the case that has actually happened. */
+    name: "VITE_SUPABASE_URL",
+    breaks: "the reading view throws at module load — a blank page, while every line here stays green",
+  },
+  {
+    name: "VITE_SUPABASE_PUBLISHABLE_KEY",
+    breaks: "the reading view throws at module load — a blank page, while every line here stays green",
+  },
+  { name: "PGSSLROOTCERT", breaks: null },
+  {
+    name: "NODEJS_HELPERS",
+    where: "vercel",
+    valid: { ok: (v) => v === "0", must: 'be exactly "0"' },
+    breaks: "request bodies arrive empty, and only POST /api/health notices",
+  },
+  { name: "LOG_LEVEL", breaks: null },
+];
+
+/**
+ * Which variables are set, and a warning for each one that is needed and is not.
+ *
+ * Its own function rather than a block inside `health` because `health` was
+ * already at the edge of the complexity budget and this pushed it over — but
+ * also because the two are asking different questions. `health` asks "is this
+ * deployment serving reads"; this asks "is it configured to do the things it
+ * claims". They fail independently and one is worth reading without the other.
+ *
+ * Appends to `warnings` rather than returning them, so that the ordering in
+ * the response follows the order the checks are written in.
+ */
+function checkEnv(warnings: string[]): Record<string, boolean> {
+  /* Reported for all of them; warned about only for the ones with a `breaks`.
+     Every missing one is named rather than stopping at the first, because these
+     get fixed in a dashboard one at a time and a second deployment to discover
+     the second missing variable is the avoidable half of the cost.
+
+     **The two `VITE_` names are the weakest lines here and are worth reading as
+     such.** They are compiled into the client bundle at build time, so what
+     this sees is the *current project setting*, not what the running bundle was
+     built with — add them and never redeploy, and this goes green over a blank
+     page. Absent is still conclusive and absent is the case that has actually
+     happened, so the check earns its place; it just cannot be leant on the way
+     the server-side ones can. A build-stamped sentinel is the real answer.
+     GPT Sol's review, 2026-08-27. */
+  const env: Record<string, boolean> = {};
+  for (const expected of EXPECTED) {
+    const names = expected.or ? [expected.name, expected.or] : [expected.name];
+    for (const name of names) env[name] = value(name) !== null;
+
+    if (!expected.breaks) continue;
+    if (expected.where === "vercel" && !process.env.VERCEL) continue;
+
+    const found = names.map(value).find((v) => v !== null);
+    if (found === undefined) {
+      warnings.push(`${names.join(" or ")} is not set — ${expected.breaks}`);
+    } else if (expected.valid && !expected.valid.ok(found)) {
+      /* The value is never echoed. That it is wrong, and what it has to be, is
+         the whole diagnosis; the value itself may be a secret. */
+      warnings.push(`${expected.name} must ${expected.valid.must} — ${expected.breaks}`);
+    }
+  }
+
+  return env;}
+
+/**
+ * A variable's value, or `null` if it is absent or blank.
+ *
+ * **Trimmed, because `" "` is not a credential.** `Boolean(process.env[name])`
+ * treats a single space as configured, and so does `configured()` in
+ * src/store/blobs.ts — so a stray space in a dashboard field would take this
+ * endpoint green while every Supabase call failed on an invalid key. It does
+ * not catch the literal strings `"undefined"` or `"false"`, which are a real
+ * shape of this mistake and which nothing here can distinguish from a secret;
+ * see the note on that in docs/project/deployment.md.
+ */
+function value(name: string): string | null {
+  const raw = process.env[name];
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed === "" ? null : trimmed;
+}
 
 /**
  * The four `pg` reads out of a connection string that make it ignore the `ssl`
@@ -93,6 +250,22 @@ type StoreCheck = { name: string; articles: number } | { name: string; error: st
 let cached: { at: number; value: StoreCheck; warnings: string[] } | null = null;
 
 /**
+ * The check that is currently running, so that concurrent callers wait on it
+ * rather than each starting their own.
+ *
+ * **The cache alone does not stop the flood it was written to stop.** It is
+ * written *after* `await listArticles()`, so a hundred requests arriving
+ * together on a cold cache all see `null`, all start the expensive query, and
+ * the cache is set a hundred times — the amplifier the cache exists to remove,
+ * fully intact. The test that vouched for it awaited three requests one after
+ * another, which is the one arrival pattern that cannot show the bug.
+ *
+ * Found by GPT Sol's review, 2026-08-27. Cleared in a `finally` so a rejection
+ * cannot wedge every later request onto one failed promise.
+ */
+let inFlight: Promise<StoreCheck> | null = null;
+
+/**
  * The store check, at most once every `CACHE_MS`.
  *
  * The warnings it produced are cached with it — recomputing them from a cached
@@ -106,7 +279,16 @@ async function cachedStoreCheck(warnings: string[]): Promise<StoreCheck> {
     return cached.value;
   }
 
+  /* Someone else is already asking. Wait for their answer and take their
+     warnings, rather than starting a second identical query. */
+  if (inFlight) {
+    const value = await inFlight;
+    warnings.push(...(cached?.warnings ?? []));
+    return value;
+  }
+
   const mine: string[] = [];
+  const run = async (): Promise<StoreCheck> => {
   let value: StoreCheck;
   try {
     const articles = await listArticles({ archived: false });
@@ -126,9 +308,18 @@ async function cachedStoreCheck(warnings: string[]): Promise<StoreCheck> {
     value = { name: STORE, error: message.slice(0, 200) };
   }
 
-  cached = { at: now, value, warnings: mine };
-  warnings.push(...mine);
+  cached = { at: Date.now(), value, warnings: mine };
   return value;
+  };
+
+  inFlight = run();
+  try {
+    const value = await inFlight;
+    warnings.push(...mine);
+    return value;
+  } finally {
+    inFlight = null;
+  }
 }
 
 const SSL_URL_KEYS = ["sslmode", "sslrootcert", "sslcert", "sslkey"];
@@ -253,8 +444,7 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
 
   const warnings: string[] = [];
 
-  const env: Record<string, boolean> = {};
-  for (const name of EXPECTED) env[name] = Boolean(process.env[name]);
+  const env = checkEnv(warnings);
 
   const url = process.env.DATABASE_URL;
 

@@ -31,7 +31,7 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /** What `listArticles` was asked, and how often. The whole point of the cache. */
 const listArticles = vi.fn(async () => [] as unknown[]);
@@ -225,4 +225,246 @@ describe("verbs and bodies", () => {
     expect(answer.status).toBe(200);
     expect(answer.body.bytes).toBeGreaterThan(0);
   });
+});
+
+/**
+ * **The check that was green about the thing it exists to catch.**
+ *
+ * 2026-08-27: production ran for a day with `SUPABASE_SERVICE_ROLE_KEY` never
+ * added to the Vercel project. `src/store/blobs.ts` reads it through
+ * `configured()`, and both callers degrade *quietly* when it is absent —
+ * `uploadGrants()` returns null, so a reader's PDF upload is refused, and
+ * `blobStore()` falls back to `fsBlobs()`, writing raw source bytes to a
+ * serverless filesystem that does not survive the request. Neither says
+ * anything. `/api/health` answered `{"ok":true,"warnings":[]}` throughout,
+ * while reporting `"SUPABASE_SERVICE_ROLE_KEY": false` two lines further down
+ * in the same response.
+ *
+ * That is the exact shape of docs/reusable/silent-success.md, and this file's
+ * own header already says a health check that passes when the deployment is
+ * wrong "is worse than no health check, because it is the thing you point at
+ * to argue nothing is wrong". `EXPECTED` was a *report*, and a boolean nobody
+ * compares against anything is not a check.
+ *
+ * So: the ones the deployment cannot work without produce a warning, which
+ * fails the endpoint. The ones that are merely nice to have stay quiet, or the
+ * warning list becomes noise and the next real one gets skimmed past.
+ */
+describe("the environment a deployment needs", () => {
+  /**
+   * Everything required, so a test can remove exactly one and blame it.
+   *
+   * **Every name is stubbed explicitly, including the ones a laptop happens to
+   * have.** vite.config.ts calls `loadEnvLocal()` and vitest inherits that, so
+   * `.env.local` is in `process.env` while these run — which meant the green
+   * control below passed on this machine without `VITE_SUPABASE_URL` ever being
+   * set by the fixture, and would have failed on a fresh checkout that has no
+   * `.env.local`. A fixture that reads the developer's environment is not a
+   * fixture. Left in the same order as `EXPECTED` so the two stay comparable.
+   */
+  function completeEnv(): void {
+    vi.stubEnv("DATABASE_URL", "postgres://u:p@db.example.com:5432/postgres");
+    vi.stubEnv("SPIDERYARN_STORE", "postgres");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("SUPABASE_URL", "https://project.supabase.co");
+    vi.stubEnv("SUPABASE_PUBLISHABLE_KEY", "");
+    vi.stubEnv("SUPABASE_ANON_KEY", "anon-test");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-test");
+    vi.stubEnv("VITE_SUPABASE_URL", "https://project.supabase.co");
+    vi.stubEnv("VITE_SUPABASE_PUBLISHABLE_KEY", "publishable-test");
+    vi.stubEnv("PGSSLROOTCERT", "certs/supabase-ca.crt");
+    vi.stubEnv("LOG_LEVEL", "info");
+    /* Only checked when `VERCEL` is set, and it is not here unless a test says
+       so — but stubbed anyway so that a machine with it in the environment
+       cannot change what these tests mean. */
+    vi.stubEnv("NODEJS_HELPERS", "0");
+    vi.stubEnv("VERCEL", "");
+  }
+
+  /** Only the warnings, since ssl and store have their own tests above. */
+  function warningsFrom(answer: Reply): string[] {
+    return (answer.body.warnings as string[]) ?? [];
+  }
+
+  /**
+   * **A non-empty shelf, so that the only warnings left are the env ones.**
+   *
+   * Without this the "shelf is empty" warning is in the list on every call,
+   * and the two assertions below that read `ok === false` pass whether or not
+   * the code under test does anything at all — which is how the first draft of
+   * this block ran green against the unfixed handler. docs/reusable/silent-success.md
+   * again, one level up: the *test* succeeding for a reason of its own.
+   */
+  beforeEach(() => {
+    listArticles.mockResolvedValue([{ slug: "one" }]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("says so when the key that silently disables uploads is missing", async () => {
+    completeEnv();
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+
+    const answer = await call("GET");
+
+    expect(warningsFrom(answer).join(" ")).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(answer.body.ok).toBe(false);
+  });
+
+  /* Not a duplicate of the one above: that asserts the *name* reaches the
+     operator, this asserts the *consequence* does. "SUPABASE_SERVICE_ROLE_KEY
+     is not set" is a fact you can already see in the env block; what nobody
+     can see is that the bytes are going somewhere that will not keep them. */
+  it("says what breaks, not merely which name is empty", async () => {
+    completeEnv();
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).toMatch(/upload|blob|bytes/i);
+  });
+
+  it("names every missing one, rather than stopping at the first", async () => {
+    completeEnv();
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).toContain("ANTHROPIC_API_KEY");
+    expect(said).toContain("OPENROUTER_API_KEY");
+  });
+
+  /* The other half. A warning list that fires on things nobody has to set is
+     a list that gets ignored, and then the real one is skimmed past too. */
+  it("stays quiet about one that is merely nice to have", async () => {
+    completeEnv();
+    vi.stubEnv("LOG_LEVEL", "");
+
+    const answer = await call("GET");
+
+    expect(warningsFrom(answer).join(" ")).not.toContain("LOG_LEVEL");
+    /* Stronger than "does not mention LOG_LEVEL": with a full environment and
+       a populated shelf there is nothing left to complain about, so the whole
+       list must be empty and the endpoint green. If this ever fails, something
+       new is warning and the assertion above would not have caught it. */
+    expect(warningsFrom(answer)).toEqual([]);
+    expect(answer.body.ok).toBe(true);
+  });
+
+
+  /* GPT Sol's review, 2026-08-27, finding 1: the first version of this table
+     demanded `SUPABASE_ANON_KEY` by name, which would have 503'd a deployment
+     whose sign-in works — src/auth.ts takes the publishable key first and only
+     falls back to the anon key. A required *need* is not a required *name*. */
+  it("takes either key sign-in accepts, rather than one by name", async () => {
+    completeEnv();
+    vi.stubEnv("SUPABASE_ANON_KEY", "");
+    vi.stubEnv("SUPABASE_PUBLISHABLE_KEY", "publishable-test");
+
+    const answer = await call("GET");
+
+    expect(warningsFrom(answer)).toEqual([]);
+    expect(answer.body.ok).toBe(true);
+  });
+
+  it("complains only when neither of the two is there", async () => {
+    completeEnv();
+    vi.stubEnv("SUPABASE_ANON_KEY", "");
+    vi.stubEnv("SUPABASE_PUBLISHABLE_KEY", "");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).toContain("SUPABASE_PUBLISHABLE_KEY or SUPABASE_ANON_KEY");
+  });
+
+  /* Finding 5. `Boolean(process.env[name])` called this configured, and so does
+     `configured()` in src/store/blobs.ts — so a stray space in a dashboard
+     field would take this endpoint green while every Supabase call failed. */
+  it("does not count a stray space as a credential", async () => {
+    completeEnv();
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "   ");
+
+    const answer = await call("GET");
+
+    expect(warningsFrom(answer).join(" ")).toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect((answer.body.env as Record<string, boolean>).SUPABASE_SERVICE_ROLE_KEY).toBe(false);
+  });
+
+  /* Finding 2. Presence is not correctness: set to "1" the variable is there
+     and request bodies still arrive empty, with every other line green. */
+  it("checks the value of the one variable whose value is the setting", async () => {
+    completeEnv();
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("NODEJS_HELPERS", "1");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).toContain("NODEJS_HELPERS");
+    expect(said).toMatch(/bodies/i);
+  });
+
+  it("says nothing about a platform flag on a machine that is not the platform", async () => {
+    completeEnv();
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("NODEJS_HELPERS", "");
+
+    expect(warningsFrom(await call("GET"))).toEqual([]);
+  });
+
+  /* Finding 3. The weakest check here, kept because absent is conclusive and
+     absent is what actually happens — a deploy whose client vars were never
+     set renders a blank page while every server-side line stays green. */
+  it("notices the client configuration that makes the reading view a blank page", async () => {
+    completeEnv();
+    vi.stubEnv("VITE_SUPABASE_URL", "");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).toContain("VITE_SUPABASE_URL");
+    expect(said).toMatch(/blank page/i);
+  });
+
+  /* The regression guard proper: this is the literal response production
+     served, and it must not be servable again. */
+  it("cannot report ok while a required variable is empty", async () => {
+    completeEnv();
+    vi.stubEnv("SUPABASE_ANON_KEY", "");
+
+    const answer = await call("GET");
+
+    expect(answer.body.ok).toBe(false);
+    expect(answer.status).toBe(503);
+    expect((answer.body.env as Record<string, boolean>).SUPABASE_ANON_KEY).toBe(false);
+  });
+
+});
+
+/**
+ * Finding 6 of the same review, and the one the existing cache test could not
+ * have found: it awaited three requests **one after another**, which is the one
+ * arrival pattern where a cache written after the await still works.
+ */
+describe("a flood that arrives all at once", () => {
+  it("runs the expensive query once, not once per concurrent caller", async () => {
+    /* A query that does not resolve until every caller has arrived. Without
+       this, `await` inside the loop would let each one finish before the next
+       began, and the test would pass against the broken code. */
+    let release: (v: unknown[]) => void = () => {};
+    listArticles.mockReturnValue(
+      new Promise<unknown[]>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    const flood = Array.from({ length: 25 }, () => call("GET"));
+    release([{ slug: "one" }]);
+    await Promise.all(flood);
+
+    expect(listArticles).toHaveBeenCalledTimes(1);
+  });
+
 });
