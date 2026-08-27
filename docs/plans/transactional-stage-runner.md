@@ -29,9 +29,11 @@ of this document, and it was right about the thing everything else hangs off:
 
 The first draft said "one transaction: artefacts + step-run + the job transition", and then said the
 release stays outside it. Those two sentences contradict each other and I did not notice.
-`pgJobStore.releaseStep` calls `getDb()` and opens its own transaction; `publishRevision` opens
-another; production runs through a **transaction pooler**, so separate calls cannot share so much as
-a session. So there were three transactions where the design needs one, and the failure is not
+`pgJobStore.releaseStep` takes its own `getDb()` and issues a single fenced `UPDATE` — not even a
+transaction of its own, which is *worse* rather than better: a lone statement is its own transaction
+and cannot be joined to anybody else's. `publishRevision` opens a real one. And production runs
+through a **transaction pooler**, so separate calls cannot share so much as a session. So there were
+three transactions where the design needs one, and the failure is not
 theoretical: A writes its artefacts and commits, `failExpired` invalidates A, the release throws —
 and A's artefacts are already there. Reverse the order and you get the opposite corruption.
 
@@ -53,7 +55,11 @@ today, stage by stage:
 
 - **No stage writes through the seam.** `ArtifactStore.write()` has **no production caller at all** —
   its only callers are in `tests/pipeline-artifact-store.test.ts`. All nine stages `writeFile`
-  directly, from inside nine different modules.
+  directly, and they do it from **eleven** modules rather than nine: the nine stage modules, plus
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) (`extract`'s PDF half) and
+  [`src/labels.ts`](../../src/labels.ts) (`toc`'s second pass) — and the upload branch writes from
+  `pipeline.ts` itself. Worth counting properly, because "one commit per stage" is the plan and two
+  of those stages have a second file in them.
 - **And no stage reads through it either.** `StepContext` carries `dir` and `htmlFile`, and that is
   how every stage finds its input: `toc` opens `output/<slug>.blocks.json`, `arc` and `tweets` and
   `glossary` and `summary` and `ideas` all take a `dir`. Under Postgres there is no `dir`, so
@@ -189,8 +195,8 @@ no production caller today, because the thing that would call it is landing D's 
 
 ### C. The Postgres artefact adapter, inside the coordinator
 
-Every one of the twelve `ArtifactKind`s has a home in `article_revisions` today, and only one of them
-is awkward:
+All twelve `ArtifactKind`s already have somewhere to go — **eleven of them as columns on
+`article_revisions`, and one as rows in a different table**, which is the whole difficulty:
 
 | kind | where |
 |---|---|
@@ -272,8 +278,10 @@ value:
 3. `blocks` — two artefacts, one of which is the HTML `extract` also writes. `extractedHtml` and
    `stampedHtml` are one path on the filesystem and two columns in Postgres, so `htmlCarriesItsIds`
    can go from a regex over a file to a comparison of two columns.
-4. `extract` — four write sites across two modules, one of which writes **another step's artefact**:
-   the PDF path's `keepTheOriginal` rewrites `raw.pdf` and `raw.json`. Plus the chunk cache.
+4. `extract` — **six** `writeFile` calls across two modules ([`src/extract.ts`](../../src/extract.ts)
+   twice, [`src/pdf-read.ts`](../../src/pdf-read.ts) four times), two of which write **another
+   step's artefact**: `keepTheOriginal` rewrites `raw.pdf` and `raw.json`. Plus the chunk cache,
+   which is checkpoint state rather than an artefact and must not join the atomic set.
 5. `fetch` — two write sites plus the upload branch (below).
 
 **The CLI wrapper travels with the stage, in the same commit.** The review's fourth finding and it is
@@ -316,10 +324,18 @@ whole migration has been for.
 
 ### E. The CLIs onto the shared runner
 
-`npm run toc`, `npm run arc` and the eight others take a **directory or a file path** off `argv` and
-call `generateToc({blocksPath, outDir})` directly. They touch no `STEPS`, no `StepContext`, no
-`ArtifactStore`, no `beginStep`. Putting them behind the runner means giving each one a **slug**
-rather than a path, which changes what you type as well as what runs.
+Eleven scripts in `package.json` (`fetch, extract, pdf, blocks, toc, labels, arc, tweets, glossary,
+ideas, summarise`), and none of them touches `STEPS`, `StepContext`, `ArtifactStore` or `beginStep`.
+Putting them behind the runner means giving each one a **slug**, which changes what you type as well
+as what runs — and it is **two different changes**, not one:
+
+- **Most take a directory or a file path** — `npm run arc -- data/example`,
+  `npm run toc -- output/x.blocks.json` — and call `generateArc({dir})` straight. Those swap a path
+  for a slug.
+- **`fetch` and `extract` take a URL** as `argv[2]`, with the directory an optional `argv[3]`
+  ([`src/fetch.ts`](../../src/fetch.ts), [`src/extract.ts`](../../src/extract.ts)). A slug is a
+  different *kind* of argument for those two, and `extract` would have to stop deriving its own
+  output path from the URL.
 
 Last because nothing waits on it, and not optional: a stage run from its own CLI leaves no attempt
 marker, so an interrupted CLI run is invisible to `stepIsDone`. `src/store/artifacts.ts` lists that
