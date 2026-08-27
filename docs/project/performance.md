@@ -1,4 +1,9 @@
-# What the page costs when nobody is touching it
+# What the page costs, and how to find out
+
+*Started as "what the page costs when nobody is touching it", which is still the first question it
+answers — but a reader complained about **scrolling** on 2026-08-27, so it now covers what an
+interaction costs too, and how to measure either without fooling yourself. If you are here to run
+something, [start here](#start-here-the-recipes).*
 
 Greg, 2026-08-27:
 
@@ -11,34 +16,123 @@ nobody asked for should cost nothing. A model call, a force simulation on the fr
 `Force`, an ingest walking its five steps — all fine. A tab left open on a table doing four hundred
 things an hour to change no pixel is not, and that is what this page is about.
 
-## The three instruments, and which one answers which question
+## Start here: the recipes
 
-Measuring this went wrong twice before it went right, and both times the tool was the reason. Pick
-deliberately:
+Every command below is real and was run today. Article slugs live in `data/`; `constitution` is a
+good one to test with because it is long (22,500 words, 360 rows, 92,703px tall) and long is where
+the costs show up.
+
+```bash
+# The reading view at rest. --local-sign-in gets you past the gate with no human.
+npx tsx scripts/measure-cpu.ts --local-sign-in \
+  --url "http://localhost:5273/read/constitution?perf=1" --settle 20 --seconds 30
+
+# The same page while somebody scrolls it. Real wheel events, through the compositor.
+npx tsx scripts/measure-cpu.ts --local-sign-in \
+  --url "http://localhost:5273/read/constitution?perf=1" --settle 20 --seconds 30 --scroll
+
+# A genuine background tab: the page is *told* it is hidden, so its listeners behave.
+npx tsx scripts/measure-cpu.ts --url http://localhost:5273/ --settle 20 --seconds 45 --hidden
+
+# A tab you cannot relaunch (someone else's browser, already signed in).
+npx tsx scripts/chrome-cpu.ts --seconds 60 --pid 51928
+```
+
+`?perf=1` switches on the in-page probe, which makes every run print a `renders:` line —
+`Spine=114 TableView=104 …`. **Read that line first.** See
+[render counts beat percentages](#render-counts-beat-percentages).
+
+### Comparing a change against `main`
+
+Do **not** edit source while a measurement is running, and do not measure a server another agent is
+also editing under: Vite hot-reloads the page, the metric counters reset, and the run reports
+*negative* CPU. Several hours went into learning that twice.
+
+Two worktrees, two servers, one difference:
+
+```bash
+S=/tmp/perf                       # anywhere outside the repo
+git worktree add --detach $S/before HEAD
+git worktree add --detach $S/after  HEAD
+for d in before after; do
+  ln -s "$PWD/node_modules" $S/$d/node_modules
+  ln -s "$PWD/.env.local"   $S/$d/.env.local
+  ln -s "$PWD/data"         $S/$d/data
+  rsync -a --delete src/ $S/$d/src/          # everyone's in-flight edits, so both are runnable
+  cp package.json index.html vite.config.ts $S/$d/
+done
+git show HEAD:src/web/Thing.tsx > $S/before/src/web/Thing.tsx   # roll back ONLY your files
+(cd $S/before && npx vite --port 5299 --strictPort &)
+(cd $S/after  && npx vite --port 5298 --strictPort &)
+```
+
+Then measure both, `diff -rq $S/before/src $S/after/src` to prove only your files differ, and
+**tear the servers and worktrees down afterwards** (`git worktree remove --force`). Two idle Vite
+servers are themselves a CPU complaint.
+
+Copying the whole working `src/` into both sides is deliberate: this tree usually holds several
+agents' uncommitted work, and a worktree at a bare `HEAD` often will not even boot — today it could
+not resolve `d3-hierarchy`, because a peer was midway through removing it.
+
+## Before you believe a number
+
+Every one of these produced a confident wrong answer here first. They are cheap to check and
+expensive to miss.
+
+1. **Did the page render?** Every `measure-cpu.ts` run prints `page: 360 rows, 360 prose blocks, …`
+   and warns when there are none. A blank page is genuinely cheap, so a run that never rendered
+   looks like a fast one. This is [silent-success](../reusable/silent-success.md) with a profiler on
+   it.
+2. **Is the number negative?** Then the window straddled a page reload and the counters reset.
+   Find the reload, don't re-run and hope.
+3. **Are two Chromes fighting?** They used to share a hardcoded debugging port, so the second run
+   attached to the first run's browser and measured *its* tab, silently. Fixed — Chrome picks the
+   port now — but the shape recurs: check you are talking to the browser you started.
+4. **Was the window really idle?** A page's first seconds are its load: nine fetches, a mount
+   cascade, four times the true render count. `--settle` is not decoration.
+5. **Is the tab actually visible?** Under extension automation it is reliably not, and
+   `requestAnimationFrame` does not run in a hidden document — so an rAF-based probe hangs and the
+   tooling calls the renderer *frozen*. It isn't. See
+   [the traps](#the-traps-all-of-which-produced-a-confident-wrong-number-first).
+6. **Is a clean main-thread profile proof of anything?** No. On the app shell, 2.3% of a core was
+   spent while only 0.9% was on the main thread; the rest was compositor and raster, where no
+   main-thread profiler can go.
+
+### Render counts beat percentages
+
+Two runs of *identical* code put the renderer at 30.1% and 37.2% — roughly 20% run-to-run noise on a
+laptop carrying several dev servers and a dozen agents. Over the same pair of runs the render counts
+repeated to within 1%.
+
+So: state the render counts as the result, quote CPU as directional, and never celebrate a 15%
+"improvement" that one re-run would erase. If you need a CPU number to hold still, take three runs
+and say so.
+
+## The three instruments, and which one answers which question
 
 | | Answers | Reach for it when |
 |---|---|---|
-| [`src/web/perf.ts`](../../src/web/perf.ts) — in the page, `?perf=1` | **why**: which timer, which component, how many fetches, visible vs hidden | you have a live page in front of you and want to know what it is doing |
-| [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — its own Chrome, over CDP | **how much**: real CPU for the whole renderer *and* for the main thread alone, plus the script / layout / style split, per frame | you want a number you can put in a commit message |
-| [`scripts/chrome-cpu.ts`](../../scripts/chrome-cpu.ts) — `ps` against the Chrome you are using | **how much**, whole process, nothing else | you must measure the browser you are already signed into |
-
-```
-npx tsx scripts/measure-cpu.ts --url http://localhost:5290/ --settle 20 --seconds 45
-npx tsx scripts/measure-cpu.ts --url … --hidden          # a real background tab
-npx tsx scripts/chrome-cpu.ts  --seconds 60 --pid 51928  # a tab you cannot relaunch
-```
+| [`src/web/perf.ts`](../../src/web/perf.ts) — in the page, `?perf=1` | **why**: which timer, which component, how many fetches, visible vs hidden | you have a live page and want to know what it is doing |
+| [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — its own Chrome, over CDP | **how much**: real CPU for the whole renderer *and* the main thread alone, the script / layout / style split, per frame, plus render counts | you want a number you can put in a commit message |
+| [`scripts/chrome-cpu.ts`](../../scripts/chrome-cpu.ts) — `ps` against a running Chrome | **how much**, whole process, nothing else | you must measure a browser you cannot relaunch |
 
 ### Use `measure-cpu.ts` unless you can't
 
 It launches its own Chrome with its own profile and one tab, so nothing else is running in the
-browser it measures — and it asks the DevTools Protocol rather than inferring from the process
-table, so it can say *script* or *layout* or *style* instead of one number. That distinction is
-usually the answer.
+browser it measures, and it asks the DevTools Protocol rather than inferring from the process table —
+so it can say *script* or *layout* or *style* instead of one number. That distinction is usually the
+answer.
 
-`chrome-cpu.ts` exists for the case `measure-cpu.ts` cannot cover, which today is **anything behind
-the sign-in gate**: a fresh Chrome profile is not signed in, and every route including `/api/health`
-answers `401`. So the reading view can be measured with the in-page probe and with `ps`, and not yet
-with the good tool. See [What we still do not know](#what-we-still-do-not-know).
+**It used to stop at the sign-in gate; it doesn't any more.** `--local-sign-in` mints a session
+against the local Supabase and hands it to the app's own SDK — see
+[The auth wall came down](#the-auth-wall-came-down) for why it is a `verifyOtp` and not a magic-link
+redirect, and [`scripts/seed-local-session.ts`](../../scripts/seed-local-session.ts) for the
+local-only guard on it. `chrome-cpu.ts` is now only for a browser you cannot start yourself.
+
+**What you cannot reach at all:** a tab the user already had open. The Chrome extension only exposes
+tabs in its own MCP group, for parent and subagent alike, so "look at the tab in their screenshot"
+is not a slow path, it is a dead end — hand them a console snippet instead. There is one in
+[What we still do not know](#what-we-still-do-not-know).
 
 ## The numbers, 2026-08-27
 
@@ -546,9 +640,62 @@ Said plainly, because the fixes above are all real and none of them has been sho
 
 ## Where the pieces are
 
-- [`src/web/perf.ts`](../../src/web/perf.ts) — the in-page probe, and `useRenderCount`
-- [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — the clean-browser harness
-- [`scripts/chrome-cpu.ts`](../../scripts/chrome-cpu.ts) — the `ps` sampler
-- [`tests/idle-work.test.ts`](../../tests/idle-work.test.ts) — the regression test
+**The instruments**
+
+- [`scripts/measure-cpu.ts`](../../scripts/measure-cpu.ts) — the clean-browser harness. Flags:
+  `--url --settle --seconds --scroll --hidden --local-sign-in --profile --sign-in --json`
+- [`scripts/seed-local-session.ts`](../../scripts/seed-local-session.ts) — signs a measuring browser
+  into the **local** Supabase, and refuses any other host
+- [`src/web/perf.ts`](../../src/web/perf.ts) — the in-page probe (`?perf=1`), and `useRenderCount`.
+  Off unless asked for; patches `setTimeout`, `setInterval`, `rAF` and `fetch` when on
+- [`scripts/chrome-cpu.ts`](../../scripts/chrome-cpu.ts) — the `ps` sampler, for a browser you
+  cannot relaunch
+
+**The tests that hold the fixes down**
+
+- [`tests/idle-work.test.ts`](../../tests/idle-work.test.ts) — nothing polls while the tab is hidden,
+  and a failed advance still recovers
+- [`tests/spine-scroll.test.ts`](../../tests/spine-scroll.test.ts) — scrolling moves the rail without
+  re-rendering it. Also the worked example of driving a React component in jsdom here: mock
+  `perf.js` to count renders, stub `ResizeObserver`, shim `requestAnimationFrame`, set
+  `IS_REACT_ACT_ENVIRONMENT`, and use **two** `act` calls — React flushes layout effects as the
+  first one exits, so awaiting inside it waits before the frame is even requested
+- [`tests/perf-probe.test.ts`](../../tests/perf-probe.test.ts) — the probe is genuinely inert when
+  switched off
+
+**The code this keeps coming back to**
+
+- [`src/web/Spine.tsx`](../../src/web/Spine.tsx) — the rail; writes its band's position to the DOM
+- [`src/web/TableView.tsx`](../../src/web/TableView.tsx) — the table, and `ColumnPanels`, which owns
+  the per-frame geometry so the table does not
+- [`src/web/useColumnContext.ts`](../../src/web/useColumnContext.ts) — the per-frame sampler itself
+- [`src/web/useJobs.ts`](../../src/web/useJobs.ts) — the poller, and `drive`
+- [`vite.config.ts`](../../vite.config.ts) — `server.watch.ignored`, without which the tests reload
+  the reader's page
+
+**Related docs**
+
 - [browser-testing.md](browser-testing.md) — every other way a browser measurement lies to you
 - [ingest-queue.md](ingest-queue.md) — why the browser drives a job, which is why `drive` may not pause
+- [supabase-local.md](supabase-local.md) — the local stack `--local-sign-in` depends on, and why its
+  keys are not secrets
+- [web-client.md](web-client.md) — the constraints the reading view is built under
+- [testing.md](testing.md) — what is worth testing here and what deliberately isn't
+- [silent-success.md](../reusable/silent-success.md) — the pattern behind most of the wrong numbers
+  on this page
+
+## If you are about to work on this
+
+Read [Still open, ranked, with citations](#still-open-ranked-with-citations) first — GPT Sol ranked
+what is left and, just as usefully, listed what it checked and found **not** worth doing, so you do
+not spend a morning on hover cards.
+
+Then three habits, all of which were learned the expensive way here:
+
+- **Measure before you fix, and measure the thing you think you are measuring.** Three of the
+  hypotheses on this page died on measurement rather than argument, and two "results" were pages
+  that had never rendered.
+- **Fix what nobody asked for before what somebody did.** A background poll costs a reader nothing
+  they wanted; a scroll they asked for. Both are here, in that order.
+- **Write the number down, with its noise.** A figure with no run-to-run range attached is a story,
+  and the next person cannot tell whether they have made things better.
