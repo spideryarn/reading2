@@ -183,6 +183,47 @@ happened. So the reader's title lives in shelf state and `describeArticle` prefe
 a renamed article is called the same thing on the card, in the masthead and in the search results.
 `tests/shelf.test.ts` re-runs the rewrite and asserts the override survives.
 
+### The pencil is on three pages now, and it is one control
+
+Greg, 2026-08-27:
+
+> I think we have a button to edit the title of an article in the Home page. Can we add a similar
+> button to the article page itself, and/or its Metadata.
+
+So there are three places to rename an article: the shelf (card and table row), the reading view's
+masthead, and the metadata page's own heading. **One implementation**, in
+[`src/web/TitleEditor.tsx`](../../src/web/TitleEditor.tsx) — the editor, the request, and the
+heading-with-a-pencil that wraps both.
+
+That file exists because a rename has three outcomes and only one of them is the one you try:
+`undefined` is *cancelled*, `null` is *clear it and go back to the extractor's title*, and a string
+is that title. Copies of an `<input>` and a `PATCH` would look identical while getting one of the
+other two wrong, and nobody would notice, because the happy path is the same in all three.
+
+Two things are worth knowing about the two new sites:
+
+- **The new title comes back from the server, not from the input.** Clearing the field sends
+  `title: null`, and what the reader should then see is whatever the extractor last found — a string
+  neither page has. So `useArticleRename` reports `entry.title` from the response, which is
+  `titleFor`'s answer to "what is this article called now" ([`src/api.ts`](../../src/api.ts)).
+- **The reading view cannot say whether the title on screen is the reader's own.** `GET
+  /api/article/:slug` deliberately does not carry the superseded title — the same refusal
+  `LibraryEntry` makes — so the editor's hint has a third state there: `undefined` for *we do not
+  know*, which reads "empty to restore the extracted title" rather than naming a title that might be
+  the reader's own.
+
+The new title is layered over the fetched payload in `ArticlePage`
+([`src/web/App.tsx`](../../src/web/App.tsx)) rather than written into it, which is the shape the
+server already uses — `titleFor` picks at the moment of answering rather than editing `meta.json`.
+It also keeps `setLoaded` under the rule that everything reaching it has been sanitised
+([`tests/sanitize-client.test.ts`](../../tests/sanitize-client.test.ts)); a rename introduces no HTML
+and would have had to be spelled as an exemption, and an exemption is how a guard stops meaning
+anything.
+
+The metadata page withholds the pencil on the fixture, for the same reason its Delete button is
+withheld there: an address with no article of its own has no shelf row, so the PATCH would 404, and
+pressing the button is how you would find out.
+
 ### Shelf state: a fourth kind of reader state
 
 Archived, renamed, and how often you have opened something are all *reader state about an article* —
@@ -547,6 +588,8 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/lib/table-sort.ts`](../../src/web/lib/table-sort.ts) | **reusable**: sorting state ⇄ URL, the collator, and `sinkLast` |
 | [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the two controls that are the shelf's own: Unread, and cards-or-table |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the card, the five buttons, rename-in-place, the details tooltip — shared by both views |
+| [`src/web/TitleEditor.tsx`](../../src/web/TitleEditor.tsx) | **renaming, wherever the reader is** — the editor, the `PATCH`, and the heading-with-a-pencil the masthead and the metadata page both use |
+| [`src/web/IconButton.tsx`](../../src/web/IconButton.tsx) | the 28px icon-only button every row of them agrees on |
 | [`src/web/relative-time.ts`](../../src/web/relative-time.ts), [`src/web/useNow.ts`](../../src/web/useNow.ts) | "3 days ago", and the clock that keeps it true |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx), [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the add box and the progress list — [ingest-queue.md](ingest-queue.md) |
 | [`src/web/AddPage.tsx`](../../src/web/AddPage.tsx) | where Add takes you: `/add/<a whole URL>` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
@@ -565,6 +608,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/extract.ts`](../../src/extract.ts) | stage 2, now writing `meta.json` |
 | [`tests/library.test.ts`](../../tests/library.test.ts), [`tests/router.test.ts`](../../tests/router.test.ts), [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | the shelf, the routes, the slugs |
 | [`tests/shelf.test.ts`](../../tests/shelf.test.ts), [`tests/library-search.test.ts`](../../tests/library-search.test.ts) | archive, rename, opens — and the search that must survive a re-extraction |
+| [`tests/article-rename.test.tsx`](../../tests/article-rename.test.tsx) | the pencil on the article and on its metadata page, mounted — cancelled, cleared, unchanged, and a write that fails |
 | [`tests/library-hits.test.ts`](../../tests/library-hits.test.ts), [`tests/store-shelf-pg.test.ts`](../../tests/store-shelf-pg.test.ts) | the link's parameters; and the Postgres half, which had never had a query run against it |
 | [`tests/library-sorting.test.ts`](../../tests/library-sorting.test.ts) | the sorting rules, asserted against a **real TanStack table** rather than a stand-in |
 | [`tests/table-sort.test.ts`](../../tests/table-sort.test.ts), [`tests/relative-time.test.ts`](../../tests/relative-time.test.ts) | the URL round-trip and `sinkLast`; and where "days ago" stops helping |

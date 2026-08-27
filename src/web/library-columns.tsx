@@ -36,8 +36,9 @@ import { localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
 import { timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
-import { Actions, Details, TitleEditor } from "./ShelfEntry.js";
+import { Actions, Details } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
+import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
 
 /** Parsed to a number, or `undefined` for absent and unparseable alike. */
@@ -262,7 +263,8 @@ function TitleCell({ entry, shelf }: { entry: LibraryEntry; shelf: Shelf }) {
   if (shelf.renaming === entry.slug) {
     return (
       <TitleEditor
-        entry={entry}
+        title={entry.title}
+        overridden={Boolean(entry.titleOverridden)}
         className="tw:text-sm"
         onDone={(title) => {
           if (title === undefined) shelf.cancelRename();

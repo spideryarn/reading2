@@ -34,6 +34,13 @@
  * Whether this masthead should link there is open — it shows the title and
  * byline, and a reader who wants more currently has to find the bottom bar.
  *
+ * Since 2026-08-27 the title here is **editable**: a pencil beside it opens the
+ * same in-place editor the shelf has, because the page you are reading is the
+ * place you notice the title is wrong. The editor, the request and the three
+ * outcomes a rename has are all in TitleEditor.tsx — this file only says where
+ * the heading is and what it looks like. docs/project/library.md § The pencil
+ * is on three pages now.
+ *
  * Note the masthead scrolls away by design (it is `position: sticky` only on
  * the horizontal axis, so it stays put when the table scrolls sideways). What
  * stays with you as you read is the spine and the arc column, not this.
@@ -45,13 +52,28 @@ import { Link } from "./Link.js";
 import { SourceLink } from "./SourceLink.js";
 import { LIBRARY_HREF } from "./router.js";
 import { articleStats } from "./stats.js";
+import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 
 interface Props {
   article: Article;
+  /**
+   * The article has been renamed — take this title.
+   *
+   * Owned by `ArticlePage` in App.tsx, which holds the payload this masthead is
+   * drawing, so one write updates the heading, the tab and every other view of
+   * the same article at once. A masthead that kept the new title to itself
+   * would disagree with the metadata page one click away.
+   */
+  onRenamed: (title: string) => void;
 }
 
-export function Masthead({ article }: Props) {
+export function Masthead({ article, onRenamed }: Props) {
   const { meta, tree } = article;
+  /* The same rename the shelf offers, from the page you are actually reading —
+     Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
+     rather than here, and why this site cannot say whether the title on screen
+     is the reader's own. */
+  const rename = useArticleRename(meta.slug, onRenamed);
   // The counts live in stats.ts now, because the drawer's About panel needs the
   // same arithmetic and two copies of it would drift.
   const stats = useMemo(() => articleStats(article), [article]);
@@ -92,15 +114,24 @@ export function Masthead({ article }: Props) {
           <ArrowLeft size={13} />
           Library
         </Link>
-        <h1>
-          {meta.url ? (
-            <a href={meta.url} target="_blank" rel="noreferrer noopener">
-              {meta.title}
-            </a>
-          ) : (
-            meta.title
-          )}
-        </h1>
+        {/* The title, and the pencil beside it — TitleEditor.tsx owns where the
+            pencil hides, what replaces the heading, and what a failed write
+            says, because the metadata page needs all three the same way. */}
+        <EditableTitle
+          rename={rename}
+          title={meta.title}
+          inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
+        >
+          <h1 className="tw:min-w-0 tw:flex-1">
+            {meta.url ? (
+              <a href={meta.url} target="_blank" rel="noreferrer noopener">
+                {meta.title}
+              </a>
+            ) : (
+              meta.title
+            )}
+          </h1>
+        </EditableTitle>
 
         <p className="facts">
           {facts.map((f, i) => (

@@ -94,6 +94,20 @@
  * placeholder here: `DeleteArticle`, below, which carries the reasoning,
  * including why it has no strip and no dialog and why its undo never expires.
  *
+ * ## The fifth pass, 2026-08-27: rename it from here
+ *
+ * Greg:
+ *
+ * > I think we have a button to edit the title of an article in the Home page.
+ * > Can we add a similar button to the article page itself, and/or its Metadata.
+ *
+ * A pencil beside the heading, opening the shelf's own editor in place — and
+ * the masthead got one at the same time (Masthead.tsx). One implementation
+ * across all three, in TitleEditor.tsx, because a rename has three outcomes
+ * that look identical when the happy path works. The one thing this page does
+ * that the masthead does not is **withhold the pencil on the fixture**, which
+ * is `showingFixture` again and exactly the refusal Delete makes below.
+ *
  * ## What it deliberately does not say
  *
  * **Whether anything is stale.** The first version of this page led with a red
@@ -163,6 +177,7 @@ import { Link } from "./Link.js";
 import { atParam } from "./params.js";
 import { LIBRARY_HREF, carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
+import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
@@ -245,10 +260,30 @@ const SOON: { key: string; label: string; icon: ComponentType<{ size?: number }>
 // so the docstring above and the effect below still read as they did.
 const LOADING_AFTER_MS = SLOW_AFTER_MS;
 
-export function Metadata({ slug, article }: { slug: string; article: Article }) {
+export function Metadata({
+  slug,
+  article,
+  onRenamed,
+}: {
+  slug: string;
+  article: Article;
+  /**
+   * The reader renamed the article from the heading below.
+   *
+   * Handed up to `ArticlePage` (App.tsx) rather than kept here, so the heading,
+   * the browser tab and the reading view one click away all change together —
+   * the same reason the masthead's pencil reports upwards too.
+   */
+  onRenamed: (title: string) => void;
+}) {
   const { meta, tree, arc } = article;
   const stats = useMemo(() => articleStats(article), [article]);
   const root = tree.nodes[tree.rootId];
+
+  /* The same rename the shelf offers, on the page that describes the article —
+     Greg, 2026-08-27. One hook, one editor, one request shape, shared with the
+     masthead and with the shelf: TitleEditor.tsx. */
+  const rename = useArticleRename(slug, onRenamed);
 
   /**
    * Which stages have run, and how many questions have been asked. Not in the
@@ -403,9 +438,23 @@ export function Metadata({ slug, article }: { slug: string; article: Article }) 
             no model call (docs/project/content-extraction.md) — which is the
             one place this page is ahead of the panel it was borrowed from:
             theirs never had a byline field at all. */}
-        <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
-          {meta.title}
-        </h1>
+        {/* The title, and the pencil beside it. Where the pencil hides, what
+            replaces the heading and what a failed write says are all
+            TitleEditor.tsx's — the masthead needs the same three.
+
+            **Not offered on the fixture**, for exactly the reason Delete is not
+            (see `showingFixture` above): there is no shelf row under this
+            address, so the PATCH behind it would 404. */}
+        <EditableTitle
+          rename={rename}
+          title={meta.title}
+          offer={!showingFixture}
+          inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
+        >
+          <h1 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+            {meta.title}
+          </h1>
+        </EditableTitle>
         {/* Only the facts this article actually has, filtered once and counted
             from the filtered list — same reasoning as the library card. A chain
             of `&&`s, or a separate test of the same fields, is how a line ends

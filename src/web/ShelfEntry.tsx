@@ -10,7 +10,7 @@
  *
  * See docs/project/library.md § What you can do to a card.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Check,
   Copy,
@@ -22,9 +22,11 @@ import {
   Trash2,
 } from "lucide-react";
 import type { LibraryEntry } from "../types.js";
+import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
 import { exactly } from "./relative-time.js";
 import { readHref } from "./router.js";
+import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
 import { apiFetch, failure } from "./lib/api.js";
@@ -80,7 +82,12 @@ export function ShelfCard({
       <div className="tw:flex tw:items-start tw:gap-3">
         {editing ? (
           <TitleEditor
-            entry={entry}
+            title={entry.title}
+            /* `Boolean`, because the flag is optional on the wire: it is set
+               only when there IS an override, so `undefined` here means "the
+               extractor's title" and not "we do not know". The reading view is
+               the one that genuinely does not know — TitleEditor.tsx. */
+            overridden={Boolean(entry.titleOverridden)}
             onDone={(title) => {
               // `undefined` means "escaped" — nothing to save, and saying so
               // here rather than in the editor keeps the cancel path from
@@ -240,81 +247,6 @@ export function Details({ entry }: { entry: LibraryEntry }) {
   );
 }
 
-/* ------------------------------------------------------------- rename ----- */
-
-/**
- * Rename in place.
- *
- * `onDone(undefined)` means cancelled, `onDone(null)` means "clear it and go
- * back to the extractor's title", and a string means that title. Three
- * outcomes, three values, rather than a boolean and a string that can disagree.
- */
-export function TitleEditor({
-  entry,
-  onDone,
-  className,
-}: {
-  entry: LibraryEntry;
-  onDone: (title: string | null | undefined) => void;
-  /** How the input is typeset — the card sets it in the prose face at card size. */
-  className?: string;
-}) {
-  const [value, setValue] = useState(entry.title);
-  const ref = useRef<HTMLInputElement>(null);
-
-  // Focus and select, so the common case — replacing the site's title wholesale
-  // — is one keystroke rather than a drag.
-  useEffect(() => ref.current?.select(), []);
-
-  return (
-    <form
-      // Above the stretched link, or every click in the input would follow it.
-      className="tw:relative tw:min-w-0 tw:flex-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const next = value.trim();
-        // Unchanged is a cancel, not a write. Otherwise pressing Enter on an
-        // untouched field would mark the extractor's own title as "renamed by
-        // you", which is a lie the tooltip would then repeat.
-        if (next === entry.title) return onDone(undefined);
-        onDone(next === "" ? null : next);
-      }}
-    >
-      <input
-        ref={ref}
-        value={value}
-        aria-label="Title"
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onDone(undefined);
-        }}
-        // Blur commits rather than cancels: clicking away from a field you have
-        // typed into and losing the typing is the more annoying of the two.
-        onBlur={(e) => e.currentTarget.form?.requestSubmit()}
-        className={`tw:w-full tw:rounded tw:border tw:border-highlight tw:bg-background tw:px-2 tw:py-1 tw:text-foreground tw:outline-none ${
-          className ?? "tw:font-prose tw:text-xl tw:leading-snug"
-        }`}
-      />
-      <span className="tw:mt-1 tw:block tw:text-xs tw:text-muted-foreground">
-        Enter to save · Escape to cancel ·{" "}
-        {/* Named only when it IS the extractor's title. Once the reader has
-            renamed the article, `entry.title` is their own — so naming it here
-            offered to "restore" the very title they were looking at, which is
-            not what clearing the field does. The card does not carry the
-            superseded title (`LibraryEntry` ships a `titleOverridden` flag
-            rather than both strings, so nothing puts a string on the wire that
-            nothing renders), and saying less is better than saying something
-            false. Found in a browser pass, 2026-08-26. */}
-        {entry.titleOverridden ? (
-          <>empty to restore the extracted title</>
-        ) : (
-          <>empty to restore “{entry.title}”</>
-        )}
-      </span>
-    </form>
-  );
-}
-
 /* ------------------------------------------------------------ actions ----- */
 
 /**
@@ -432,44 +364,5 @@ export function Actions({
         <Trash2 size={14} />
       </IconButton>
     </div>
-  );
-}
-
-export function IconButton({
-  label,
-  onClick,
-  children,
-  disabled,
-  destructive,
-}: {
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-  disabled?: boolean;
-  destructive?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      // Both, and they are not the same thing: `title` is the hover tooltip a
-      // sighted reader gets, `aria-label` is the name a screen reader reads.
-      // An icon-only button with neither is a button called "".
-      title={label}
-      aria-label={label}
-      /* A fixed 28px square rather than `p-1.5` round a 14px glyph. Same
-         reason as the shelf's view toggle (ShelfControls.tsx): a stated size
-         is what lets controls in a row agree without anybody re-doing the
-         arithmetic when an icon changes. `rounded-md` rather than `rounded`,
-         because 4px was the only 4px radius on the page. */
-      className={`tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:disabled:opacity-50 ${
-        destructive
-          ? "tw:hover:bg-destructive/10 tw:hover:text-destructive"
-          : "tw:hover:bg-highlight/10 tw:hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
