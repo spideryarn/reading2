@@ -96,6 +96,27 @@ succeed:
   profiler pointed at our page, which is exactly the shape of thing that stays unfound. It costs
   **0.5% of a core** sitting there unplayed, measured on a page containing nothing else. Real, and
   nowhere near the complaint. Hypothesis dead.
+  **And a second time, by a better-looking route.** A browser pass came back with what appeared to be
+  the answer: remove the `<iframe>` from a live reading view and foreground CPU fell **3.1% → 0.3%**
+  while our own component re-render rate fell **44/min → 0/min**. A tenfold difference, with a
+  plausible mechanism attached — the embed provoking `useColumnContext`'s `ResizeObserver` and
+  re-rendering the panels.
+
+  It is a confound, and the giveaway is in the report rather than the reasoning. The with-iframe
+  window contained a page reload; the without-iframe window did not. Its nine "idle" fetches were
+  `/api/article`, `/api/comments`, `/api/chat`, `/api/glossary` and `/api/library/…/open` — the mount
+  cascade, twice over because dev runs `StrictMode` — and its thirty-six renders were six cycles of
+  `ArticlePage` / `Reader` / `Spine` with three `ContextPanel`s each, which is what those five
+  responses landing looks like. So the comparison was *(a window containing a page load)* against
+  *(a settled page)*, and the iframe was not the variable. It is the same trap
+  [described below](#the-traps-all-of-which-produced-a-confident-wrong-number-first), found twice in
+  one day, which is why it gets a paragraph rather than a line.
+
+  The direct check settles it: on a page carrying that embed and nothing else, once settled, the
+  host frame did **zero layouts and zero style recalculations across 40 seconds** and cost 0.0% —
+  every one of the 0.5% is inside the iframe's own process. A settled embed does not reflow its
+  host, so it cannot be re-rendering our panels.
+
 - **CSS animations on invisible elements.** There are six `animation: … infinite` rules in
   [`styles.css`](../../src/web/styles.css) and they cost compositor time that leaves no JavaScript
   trace. But every one of them is on an element that is conditionally rendered — a spinner while a
@@ -198,9 +219,12 @@ never the thing that changed. Caught by the second GPT Sol review.
 long and contained nine `/api/…` fetches — the mount cascade. Its render count was about four times
 the true one. `measure-cpu.ts` takes `--settle` for this reason and it is not decoration.
 
-**`visibilityState` lies under extension automation.** Every reading taken through Claude-in-Chrome
-came back `hidden`, including the ones meant to be foreground — which
-[browser-testing.md](browser-testing.md) already warned about. `perf.ts`'s report therefore carries
+**`visibilityState` lies under extension automation** — and by now the evidence is not anecdotal.
+Across roughly ten attempts, two tabs and two renderer processes, a browser pass never once got a
+`"visible"` reading, including on a tab it was actively scrolling and screenshotting.
+[browser-testing.md](browser-testing.md) already warned about it; treat it as **"this harness cannot
+currently produce a genuinely-visible reading"** rather than as flakiness, and use
+`measure-cpu.ts --hidden` when the visible/hidden split is the thing you are measuring. `perf.ts`'s report therefore carries
 a `tab` field with `visibilityState`, `hasFocus` and the hidden bucket's frame count next to each
 other: three sources that agree are a measurement, one that disagrees is a warning not to believe
 the buckets. A genuinely hidden tab is served **no animation frames at all**, so that count is the
