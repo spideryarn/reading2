@@ -121,6 +121,14 @@ serves every article, the library, the metadata page and the reader's comments f
 instead of from disk; `files` remains the default. The work, and what is still missing, is in
 [postgres-storage-implementation.md](../plans/postgres-storage-implementation.md).
 
+**Writes do not.** Every pipeline stage still writes `data/<slug>/*.json` directly —
+`ArtifactStore.write()` has no production caller at all — so an article ingested with
+`SPIDERYARN_STORE=postgres` set produces files on disk and an empty draft revision that
+`publishRevision` then refuses. The job record moved on 2026-08-27
+([ingest-queue.md](ingest-queue.md)) and the artefacts did not, which is why an ingest still cannot
+run on a host without a writable disk. The plan for the other half, and an honest account of its
+size, is [transactional-stage-runner.md](../plans/transactional-stage-runner.md).
+
 ```bash
 npm run db:seed-owner   # the one auth.users row every owner_id points at
 npm run db:import       # data/<slug>/ → Postgres, idempotent
