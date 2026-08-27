@@ -475,6 +475,39 @@ roughly 900px**, and 700px is comfortably past the point where it stops meaning 
 
 *This section is derived from the stylesheet, not observed* — see the tooling caveat below.
 
+## A browser subagent stalls silently unless the parent does the handshake first
+
+**Measured 2026-08-27, at the cost of an hour.** Two Sonnet subagents were dispatched to check
+the upload flow. Both ran for twenty-five minutes and neither reached the app *at all* — not one
+request in the dev server's log — and neither said it was stuck.
+
+The cause is a rule in Claude-in-Chrome's own tool description: before any browser action, the
+agent must call `list_connected_browsers`, put **every** connected browser to the user as a
+question, and then `select_browser`. **A subagent has no user to ask.** So it either loops on that
+step or waits on an answer that will never arrive. Nothing errors and nothing times out, which
+means from the outside it is indistinguishable from an agent doing careful work.
+
+So the handshake belongs to whoever is talking to Greg:
+
+1. `list_connected_browsers` in the **parent** session.
+2. Ask him which one — usually a single question with one real option.
+3. `select_browser` with that `deviceId`.
+4. *Then* spawn the subagent, and tell it in its prompt: the handshake is done, do not call
+   `list_connected_browsers`, `select_browser`, `switch_browser` or `AskUserQuestion`, go straight
+   to `tabs_context_mcp`.
+
+And there is a one-line way to tell a stuck agent from a working one, which is worth more than the
+fix: **read the server log, not the agent.**
+
+```
+grep '"component":"http"' <dev-server log> | tail
+```
+
+No requests means it never arrived, whatever it is telling you. That is the same lesson as
+[§ Before anything, check the server is actually up](#before-anything-check-the-server-is-actually-up),
+one layer along — and it is the [silent-success](../reusable/silent-success.md) pattern with an
+agent in it.
+
 ## Driving it from an agent
 
 Claude-in-Chrome drives a real, visible Chrome. `resize_window` then `navigate`, and batch the
