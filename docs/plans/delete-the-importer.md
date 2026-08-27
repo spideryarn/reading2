@@ -27,24 +27,31 @@ useful kind of review.
 
 ---
 
-## Where it stands, 2026-08-27
+## Where it stands, 2026-08-28
 
-Seven commits, and none of them is the adapter yet. Three were live bugs found on the way, which is
-the pattern worth noticing: **every one of those came out of reading code near something else**, not
-out of the work item that was planned.
+Ten commits. **C2 is done and reviewed; C1 was built and withdrawn.** Four of the ten were live bugs
+found on the way, which is the pattern worth noticing: **every one came out of reading code near
+something else**, not out of the work item that was planned.
 
 | | what | why it is here |
 |---|---|---|
 | `e18ac5f` | **The ToC status hole.** `publishRevision` compared the `toc` run's `input_hash` and never read its `status`, so a table of contents that ran and *failed* published. A step records its hash when it **starts**, so the hash agreed precisely in the failing case. | A live bug, found by Sol reviewing this document. Fixed first and alone, because the source-reference gate is a second guard of the same shape and would have inherited it. |
-| `fd30c5d` | **A schema comment claiming a guard.** `src/db/schema.ts` said the raw-source rule was one *"which `publishRevision` enforces"*. It never has — and nothing writes those columns yet, so the claim was **vacuous**, not merely wrong. My comment, from last week. | The second such comment in one day. See § What this has taught us. |
-| `2a2cf7f` | The [postmortem](../postmortems/toc-status-never-checked.md) for the first one, which found the part I had not. | |
+| `fd30c5d` | **A schema comment claiming a guard.** `src/db/schema.ts` said the raw-source rule was one *"which `publishRevision` enforces"*. It never has — and nothing writes those columns yet, so the claim was **vacuous**, not merely wrong. My comment, from last week. | The second such comment in one day. § What this has taught us. |
+| `2a2cf7f` | The [postmortem](../postmortems/toc-status-never-checked.md) for the first, which found the part I had not. | |
 | `5d8ed19` | **The importer's replacement, and a latent bug it exposed.** `tests/helpers/artefacts.ts` copies an article between two `ArtifactStore`s; calling `ArtifactStore.write` for the first time failed, because `writeAtomic` never created its directory. | § The replacement, and § What this has taught us. |
-| `9e28f8c` | **The adapter's shape, settled** by a second Sol round that returned NO-SHIP on two of my three answers. § The adapter's shape, settled. | |
-| `59e8e3a` | **C1 — `toc` gets a real stamp.** Stage 4 could not tell that stage 3 had run again. | § The build order for C. |
-| (with this) | **The copy helper completes its steps**, rather than only writing them — a third Sol round's finding 2. | § What the second review changed. |
+| `9e28f8c` | **The adapter's shape, settled** by a second Sol round that returned NO-SHIP on two of my three answers. | § The adapter's shape, settled. |
+| `59e8e3a` | **C1 — `toc` gets a real stamp.** Built. | Withdrawn four commits later; § The build order for C. |
+| `1f624e6` | **The copy helper completes its steps**, rather than only writing them. | § What the second review changed, finding 2. |
+| `4da9bcf` | **C2 — `beginStepRun` and `finishStepRun`**, the first writer and first reader of `revision_step_runs.attempt_id`. The sentinels move to `artifacts.ts` to break an import cycle the linter refused. | § The build order for C. |
+| `414f3f9` | **C1 withdrawn, and three holes in C2's fence closed** — a stale claimant could finish a step for a job that had already failed; a token could reopen a run it had ended; the copy helper finished half-copied steps. | § What the review of the built code changed. |
 
-**Not started:** C2 through C7, then B3, D, the demolition, E — in that order. B2's remnant has grown
-and now lives inside C6.
+**Done:** C2. **Withdrawn:** C1, and its absence now shapes C4.
+**Not started:** C3 through C7, then B3, D, the demolition, E — in that order. B2's remnant has grown
+and lives inside C6.
+
+**One thing has moved earlier.** The re-ingest of the corpus was going to happen at the demolition.
+It has to happen **before C7** instead: all seven checked-in manifests predate `storedSha256`, so
+C6's refusal breaks every fixture that has not been re-fetched.
 
 **Nothing is at risk from the re-ingest.** All three eval PDFs are tracked in git and both upload
 fixtures are the same file as `evals/pdf/easy`. § What it does not delete has the table.
@@ -96,6 +103,21 @@ updated. The lesson is not "reading code is not evidence", which is too strong a
 review worthless. It is that `set: values` has two plausible readings, and a claim resting on the
 one you happen to prefer had already reached a committed document.
 
+**6. Checking half of a finding is worse than not checking it.** Sol said C1 would orphan `toc`'s
+consumers. I checked, found they key on **block-id ranges** rather than tree node ids, wrote
+*"a rebuilt tree over unchanged blocks orphans nothing"*, and narrowed the finding in the plan and in
+a commit message.
+
+Keying by range answers a different question from the one asked. It stops an entry attaching to the
+**wrong** node; it says nothing about an entry matching **no** node, which is what a rebuilt tree
+with different boundaries produces — and `src/web/tree.ts` states that outright in a comment I read
+while confirming the half I got right. The verification felt more thorough than accepting the
+finding, and it was less.
+
+The habit that would have caught it is the same one as lesson 1, pointed at my own conclusion: state
+what would have to be true for the finding to be *right*, and check that, rather than checking the
+first mechanism that comes to hand.
+
 ## What the second review changed
 
 [The third Sol round](delete-the-importer-review-2-sol.md) read this document *plus* the five commits
@@ -144,6 +166,31 @@ belongs on its own line rather than as a reason to hold C1.
 - **Importer rows are smoke data, not an oracle** for C3. The importer stores `extractedHtml: null`,
   stamps every inferred step with the same fingerprint where `ideas` uses blocks-plus-tree, and has
   no source reference. Agreeing with it would prove importer-plus-adapter behaviour, not correctness.
+
+## What the review of the built code changed
+
+[The fourth Sol round](c1-c2-code-review-sol.md) read C1 and C2 **as built** and returned NO-SHIP.
+This repo weights a review of built code above a plan review, and this round is why: the two row
+conditions in `finishStepRun` look complete on their own, and a plan could not have shown otherwise.
+
+- **C1 withdrawn.** § The build order for C has the reasoning and lesson 6 has the mistake.
+- **`finishStepRun` took the row's word for it.** `failExpired` clears a lapsed job's token without
+  touching its step runs, so a swept worker found its row still `running` under its own token and
+  would have committed `done` for a job that had already failed. Both callers now share one
+  `requireLiveJobOwnsDraft`.
+- **`beginStepRun` let a token reopen a run it had already ended** — `done/A` back to `running/A`,
+  `finished_at` cleared, the recorded hash replaced with `unstamped`. A *different* attempt reopening
+  is legitimate and stays allowed; only the same token is refused.
+- **`copyArtefacts` finished half-copied steps.** All of a step's products, or a loud refusal.
+- **A comment of mine claimed every caller takes the job and article locks in one order.** They do
+  not: `openOrBeginJobDraft` takes job-then-article, `publishRevision` and `failRevision` take
+  article-then-job. That inversion is real, predates this work, and is now written down at
+  `beginStepRun` rather than left as a fourth false claim in a comment.
+
+Two things it checked and passed, worth recording because they were deliberate choices: writing
+`NO_INPUT_HASH` on begin is honest (a crashed row stays non-`done`, and `articleMetadata` gates on
+that), and `rowCount !== 1` is correct because `(revision_id, step_name)` is the primary key, so
+concurrent finishes serialise.
 
 ---
 
@@ -423,12 +470,17 @@ row exists with `status = 'done'`. Freshness stays with `stampFor` + `sameStamp`
 where it already lives. There is one documented primitive-level difference from the filesystem, and a
 documented difference beats a false parity claim — this repo produced two of those yesterday.
 
-**And `toc` gets a real stamp**, rather than the adapter carrying a private special case for it.
-`toc` declares none today, so an adapter that compensated internally would be the *third*
-independently written status-and-hash test, beside `articleMetadata` and the publication guard — the
-exact class of [the postmortem](../postmortems/toc-status-never-checked.md). Its expected input
-hashes the **stage-3** blocks, which as a bonus lets the filesystem adapter notice stage 3 diverging
-from an old `data/<slug>/blocks.json`.
+**~~And `toc` gets a real stamp~~ — tried, and it cannot.** This round's recommendation was to give
+`toc` an ordinary stamp so the adapter would not need a private freshness rule for it. That was
+right about the adapter and wrong about what a stamp costs elsewhere: a `toc` that can report itself
+stale re-runs, a re-run may move the tree's boundaries, and `arc` and `summary` are joined to it by
+exact block-**range** pair and silently lose any entry matching no node. Built as `59e8e3a`,
+withdrawn in `414f3f9`; § The build order for C has the whole reasoning.
+
+So the third status-and-hash test the postmortem warns about **does** have to exist, in C4, and the
+mitigation is that it is written down as a deliberate exception rather than discovered later:
+for `toc`, `has` compares the stored run row's `input_hash` against the stored block rows. A
+documented difference beats a false parity claim.
 
 **Empty blocks means delete-all, authoritatively.** The importer's `if (blocks.length)` encloses both
 the delete and the insert, so an empty array leaves inherited rows in place. For the adapter that is
@@ -474,22 +526,34 @@ consequence for C4: with no stamp to compare, the adapter's `has` cannot answer 
 the way it does for other steps, and must carry an **explicit, documented** `toc` case rather than
 pretending to parity.
 
-**C2. `beginStep` and `finishStep` as fenced statements.** Two new functions in
-`src/store/pg-revisions.ts` beside `recordStepRun` rather than inside it — `recordStepRun` stays for
-the importer and for CLI runs, which have no attempt and never will. `beginStep` proves `jobs.id`,
-`jobs.attempt_id`, `status = 'running'` and `draft_revision_id` all match the bound reference before
-installing the attempt; `finishStep` is `UPDATE … WHERE revision_id = ? AND step_name = ? AND
-attempt_id = ? AND status = 'running'` requiring exactly one row.
+**C2. `beginStepRun` and `finishStepRun` as fenced statements — done, `4da9bcf` + `414f3f9`.** Two
+functions in `src/store/pg-revisions.ts` beside `recordStepRun` rather than inside it —
+`recordStepRun` stays for the importer and for CLI runs, which have no attempt and never will. They
+are the first writer and first reader `revision_step_runs.attempt_id` has ever had.
+
+**Four guards, not the two the plan named.** The two extra came from the review of the built code:
+
+| guard | refuses |
+|---|---|
+| `attempt_id = $token` on the row | somebody else's claim — and a null token too, which falls out of SQL rather than being special-cased |
+| `status = 'running'` on the row | a step that has already ended; finishing twice would overwrite the first ending's stamp |
+| `requireLiveJobOwnsDraft` | a claimant whose **job** has been swept. The row conditions cannot see this: `failExpired` clears the job's token without touching its step runs, so the row still looks perfectly held |
+| `setWhere` on the begin upsert | the same token reopening a run it has already ended. A *different* attempt reopening is legitimate — that is what a re-run is |
 
 *Red first, and the obvious version of this test does not work.* Sol caught it in the plan: a
-step-run *that has ended* already fails the `status = 'running'` half of the fence, so deleting the
-`attempt_id` condition changes nothing and the test stays green. That is lesson 1 catching this
-document's own mutation habit. Two independent cases instead:
+step-run *that has ended* already fails the `status = 'running'` half, so deleting the `attempt_id`
+condition changes nothing and the test stays green. That is lesson 1 catching this document's own
+mutation habit. All four guards were watched red **individually**: removing the attempt condition
+fails exactly two tests, the status condition one, the job fence two, the reopen guard one, and no
+removal touches another's.
 
-- `status = 'running'` holding token **A**; finishing with token **B** must refuse — the attempt half.
-- `status = 'done'` holding token **A**; finishing with token **A** must refuse — the status half.
-
-Each watched red with *its own* condition deleted, not with the other's.
+*Two other things that landed with it.* `NO_INPUT_HASH`/`PIPELINE_RUN` moved from `revisions.ts` to
+`artifacts.ts` — importing them the other way made a cycle the linter refused, and `artifacts.ts` is
+a leaf that already defines what a step stamp is. And the job cases run inside transactions that roll
+back: `jobs_only_one_running` is global, so every suite wanting a running job is mutually exclusive
+with every other, and `store-job-draft` and `store-jobs-parity` already fail against each other under
+parallel vitest. This suite waits its turn and leaves nothing behind rather than becoming a third
+contender.
 
 **C3. The kind ↔ storage map, and the read half.** `src/store/artifacts-pg.ts` with `read` and
 `stampFor` only, over a `JobDraftRef` and a mandatory `Db | Tx`.
@@ -503,9 +567,16 @@ legacy-compatibility cases, which is a different and smaller claim.
 `stampFor` merges the run row with the artefact's own fields, preserving `profileHash: null` as the
 real value it is.
 
-**C4. `has`.** Separately from C3 because its definition is the one Sol rewrote: every requested value
+**C4. `has`, and the `toc` case C1 was supposed to remove.** Separately from C3 because its
+definition is the one Sol rewrote: every requested value
 reconstructs and passes the same shallow shape checks the filesystem decoder applies, **and** a
 `revision_step_runs` row exists with `status = 'done'`. No comparison against today's expected stamp.
+
+**And it carries an explicit `toc` case, said out loud.** C1 would have removed the need for one;
+C1 is withdrawn, so `toc` still has no stamp and `has` cannot answer "is this tree current" the way
+it does for every other step. The rule is therefore: for `toc`, the stored run row's `input_hash`
+must match the stored block rows. That is a documented difference from the filesystem adapter, and a
+documented difference beats a false parity claim — this document has now produced three of those.
 
 *Red first, with the case corrected.* The first draft kept a test from an earlier definition and it
 contradicts this one: `beginDraftIn` carries block rows **and** a done `toc` run, so under
@@ -676,11 +747,13 @@ relearning ([silent-success.md](../reusable/silent-success.md)).
    the reason strings say so.
 5. ✅ **The ToC guard refuses an errored `toc` run** with a matching `input_hash` — done, `e18ac5f`.
    This one was a live bug, not a new rule.
-6. **The importer refuses an article carrying a reference**, from the commit D lands in.
-7. **The adapter refuses a manifest with no `storedSha256`** rather than writing a null reference.
-8. **Block identities outlive the revision that dropped them**, through the production path.
-9. **`db:export` refuses to run against Postgres without matching blob credentials.**
-10. **A retry does not buy a checkpoint twice**, on a different store instance.
+6. ✅ **Only the attempt that began a step may end it, and only while its job is live** — done,
+   `4da9bcf` + `414f3f9`, four guards each watched red on its own. § The build order for C.
+7. **The importer refuses an article carrying a reference**, from the commit D lands in.
+8. **The adapter refuses a manifest with no `storedSha256`** rather than writing a null reference.
+9. **Block identities outlive the revision that dropped them**, through the production path.
+10. **`db:export` refuses to run against Postgres without matching blob credentials.**
+11. **A retry does not buy a checkpoint twice**, on a different store instance.
 
 ## Open
 
