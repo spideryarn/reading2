@@ -8,8 +8,8 @@ A fair question to ask at that moment. The mic work had just cost three commits,
 GPT Sol reviews and two bugs that were nobody's fault and took a day to find. "Surely
 somebody has packaged this" is the right instinct.
 
-**The answer is no for three of the four areas — dictation, level metering and device
-selection — and "not yet established" for the fourth, recording.** The reason is more
+**The answer is no, in all four areas** — though the fourth, recording, only got there
+after a review overturned the reasoning and a spike overturned the review. The reason is more
 specific than "we already wrote it".
 
 This doc records the survey so nobody has to run it again: the candidate that came close and
@@ -78,9 +78,11 @@ reaching around the library to do the one thing that matters. And its types are 
 DefinitelyTyped (`@types/react-speech-recognition`) rather than absent; the table below
 should be read as *bundled* types, not *no* types. **Keep.**
 
-**Recording** — [`mic-recording.ts`](../../src/web/mic-recording.ts), 192 lines. **The one
-area where the answer is not "keep".** `extendable-media-recorder` is rejected on size, but
-`mediabunny` is not rejected at all — it needs a spike that has not been run. See below.
+**Recording** — [`mic-recording.ts`](../../src/web/mic-recording.ts), 192 lines. The area
+that took longest to settle. `extendable-media-recorder` is rejected on size;
+`mediabunny` was rejected, then un-rejected on review, then **rejected on measurement** — it
+fails at the identical configuration, because it drives the same encoder. See below.
+**Keep.**
 
 **Level metering** — [`audio-level.ts`](../../src/web/audio-level.ts), 31 lines of code.
 `hark` does roughly this and was last published **2018-08-25**. `@ricky0123/vad-web` is
@@ -182,86 +184,96 @@ cap ever changes shape — a much shorter clip, or a feature that needs guarante
 output more than it needs to be small — this becomes the right answer and should be
 picked up rather than re-litigated.
 
-## WebCodecs, and the check that really can see a bitrate
+## WebCodecs: what the spike actually found
 
-This section said the opposite until GPT Sol reviewed it, and the correction matters
-enough to keep the wrong version visible: **I claimed `AudioEncoder.isConfigSupported()`
-was "argument validation, not capability prediction", and that was wrong.**
+This section has been wrong twice, in opposite directions, and then settled by running it.
+Both wrong versions are kept, because the shape of the mistake is the useful part.
 
-The claim rested on reading the Web Platform Tests suite and finding only `invalidConfigs`
-— `bitrate: 6e9`, `bitrate: 1` — asserted to reject with `TypeError`. The same file also
-contains **`validButUnsupportedConfigs`**, asserted to come back with `supported === false`.
-I saw that array in my own grep output and did not follow it up. And the spec is explicit:
+**Draft one** said `AudioEncoder.isConfigSupported()` was "argument validation, not
+capability prediction" — that WebCodecs was no better than `MediaRecorder`. **GPT Sol
+overturned that**, correctly: the WPT suite has a `validButUnsupportedConfigs` array I had
+missed, and the spec is explicit —
 
 > If the User Agent can provide a codec to support **all entries of the config**, including
 > applicable default values for keys that are not included, return true.
 > — [WebCodecs § Check Configuration Support](https://www.w3.org/TR/webcodecs/#check-configuration-support)
 
-`bitrate` is an entry of `AudioEncoderConfig`. So the check is spec-required to cover it,
-where `MediaRecorder.isTypeSupported()` takes a MIME string and **cannot see a bitrate at
-all**. The two are not equivalent, and saying they were was the load-bearing error.
+`bitrate` is an entry of `AudioEncoderConfig`, so the check is *required* to cover it, where
+`isTypeSupported` takes a MIME string and cannot see a bitrate at all. **Draft two**
+therefore said WebCodecs would most likely have caught our bug in advance, and marked
+recording "not settled, spike required".
 
-**So WebCodecs would most likely have caught our bug in advance.** That is a real point in
-its favour and this document previously denied it.
+The spike ran on 2026-08-27. Chrome, synthetic mono track at 48 kHz:
 
-What survives the correction, and it is less than it was:
+```
+isConfigSupported ch=1 @32000  -> supported=true          <- the probe says yes
+MediaRecorder.isTypeSupported(AAC-in-MP4) -> true
+mediabunny canEncodeAudio aac@32k mono -> true
 
-- The answer is **best-effort and time-of-query** — the spec's own note says support "can
-  change dynamically if the hardware is altered". A `true` is not a promise about the next
-  five minutes.
-- Nothing in WPT pins a *plausible-but-unsupported* bitrate. Every case in
-  `validButUnsupportedConfigs` is an extreme — `sampleRate: 1`, 1024 channels, a bogus
-  codec string. AAC at 32 kbps is exactly the shape that is untested.
-- A successful configure still does not promise every subsequent frame encodes.
+CONTROL   MediaRecorder, AAC-in-MP4 + audioBitsPerSecond 32000
+          ERROR EncodingError@382ms -> data(0)@382ms
+          0 bytes  -> FAILED, the bug reproduces
 
-So a runtime failure path is still required. But "still required" is a much weaker claim
-than "the probe is no better", and the honest conclusion is:
+TEST      mediabunny, same codec/rate/channels/bitrate
+          encoder config: {codec:"mp4a.40.2", numberOfChannels:1,
+                           sampleRate:48000, bitrate:32000}
+          SOURCE ERROR EncodingError
+          TIMED OUT in start() after 5000ms
+          UNCAUGHT EncodingError
+          TIMED OUT in finalize() after 8000ms
+```
 
-> WebCodecs offers a materially stronger, configuration-sensitive probe. It reduces the
-> chance of this class of bug; it does not remove the need to verify at runtime.
+Three findings, none of them what either draft predicted.
 
-### And the platform argument was about the wrong browser
+**1. `isConfigSupported` is a false positive here.** It answered `supported: true` for the
+exact configuration that then threw `EncodingError`. So the spec requires the check to
+consider the bitrate and Chrome does not honour that — the *specification* is stronger than
+`isTypeSupported`, and the *implementation*, measured, is not. Sol was right about the text
+and the text is not what runs.
 
-The earlier draft rejected WebCodecs partly because `AudioEncoder` reached Safari only on
-2025-09-15, and this app frets about the iPad. **That is irrelevant to this code path.**
+**2. WebCodecs does not rescue us, because it is the same encoder.** `mediabunny` hit the
+identical wall at the identical configuration. There was never a second AAC encoder to move
+to; there is one, reached through two APIs.
 
-Recording is armed by `armTape` only when the session owns a shared track
-([`useDictation.ts`](../../src/web/useDictation.ts)), and the browsers without
-`recognition.start(audioTrack)` — Safari among them — return `track: null` and never reach
-`recordTrack` at all. Recording is Chromium-only today. On Chromium, `AudioEncoder` has
-shipped since **Chrome 94, 2021-09-21**: five years, not one.
+**3. It fails *worse* than what we have.** Our ladder sees zero bytes and moves to the next
+container in **382 ms**. Mediabunny's `start()` never resolved, `finalize()` never resolved,
+and an `EncodingError` escaped uncaught — a reader would have got a dictation that hung
+rather than one that quietly recorded in a different container. That is not a criticism of
+the library so much as of hanging one's error handling on somebody else's promise: our
+fallback is *supposed* to fire here, and theirs has nothing to fall back to.
 
-### What this does to the verdict
+So **draft one's conclusion was right for the wrong reason**, and the reason it gave has to
+be thrown away while the conclusion stands. The rule the code is built on —
 
-`mediabunny`'s `MediaStreamAudioTrackSource` **accepts a track you already own**, which is
-the one invariant that killed every other recording candidate. It offers `canEncodeAudio()`
-taking bitrate, sample rate and channel count; AAC encoding and MP4 muxing; a defined
-start/finalize/cancel lifecycle; explicit async error propagation; zero dependencies. It
-measures at **42.5 KB gzipped** for the audio path, and since recording is only reachable
-after the reader arms the microphone, it could be a lazy chunk rather than a page-load cost.
+> make the recorder prove itself, and fall back when it produces nothing
 
-It would not remove device selection, metering, the shared-track probe, the caps, the
-minimum duration, or the evidence rule. It would remove codec negotiation, muxing, and
-**the MediaRecorder event choreography** — which is precisely where Sol found a live bug in
-our code on this same pass (see below). That is the strongest argument for it: the ladder
-is not just code, it is code with a demonstrated capacity to be subtly wrong.
+— is not a workaround for an old API. It is what remains true when the new API's better
+probe turns out to be no more honest than the old one's.
 
-Against it: fourteen months old, which our first selection criterion weighs heavily;
-MPL-2.0, which is weak file-level copyleft and fine as a dependency but belongs on the
-record; and a 42.5 KB dependency for a recovery feature that fires rarely.
+### The variable was the channel count
 
-**Verdict for recording: not settled.** Not "rejected" — that was the earlier draft's
-answer and it did not survive review. What is needed is a bounded spike, and it is small:
+Two earlier runs of the same control on a **stereo** synthetic track produced 37,816 and
+38,223 bytes: no failure at all. Set the track to **mono** and it throws. That is why this
+morning's bug looked device-independent — all three microphones tested were mono, and a
+`getUserMedia` track normally is.
 
-1. Call `AudioEncoder.isConfigSupported({codec:"mp4a.40.2", sampleRate:48000, numberOfChannels:1, bitrate:32000})`
-   on the machine where `MediaRecorder` failed. **Does it correctly say no?** That single
-   result is most of the decision.
-2. Record ~10 seconds through mediabunny, finalize, and double-click the file in Finder.
-3. Check the five-minute memory profile and the marginal production-bundle delta as a lazy
-   chunk.
+It also means the failure is narrower than
+[`mic-recording.ts`](../../src/web/mic-recording.ts) originally described it. Not "AAC plus
+a bitrate hint" but, as measured, **AAC at 32 kbps with one channel at 48 kHz**. The
+`ATTEMPTS` ladder is unaffected — its first entry sends no bitrate hint at all, which is why
+the current code works — but the explanation attached to it is now sharper than the one
+written from the first day's evidence.
 
-If those pass, adopt it for the encode and keep everything else. Until they run, this
-document does not have grounds to reject it.
+### Verdict for recording
+
+**Keep it hand-rolled** — now on evidence rather than on the mistaken spec reading draft one
+used to get to the same place. `mediabunny` remains a well-built library and this is not an
+argument against it in general; it simply does not solve the problem it was being considered
+for, and hangs where our code recovers.
+
+What would reopen it: a *second* encoder implementation to fall back to (WebCodecs and
+`MediaRecorder` currently share one), or a need for containers `MediaRecorder` cannot
+produce. Neither is true today.
 
 ## What the field says we should be doing
 
@@ -336,9 +348,8 @@ Two useful facts that change nothing today but date this document:
 
 Not on a date, on a trigger, and the first one is a task rather than a wait:
 
-- **Run the mediabunny spike.** Three steps, listed above; the first is a single
-  `isConfigSupported` call on the machine where `MediaRecorder` failed. Until it runs,
-  "no library for recording" is an unfinished sentence rather than a decision.
+- **A second AAC encoder appears.** WebCodecs and `MediaRecorder` currently share one, which
+  is why the spike found no escape. Two would make a fallback across APIs meaningful.
 - **`extendable-media-recorder` becomes right if the recording constraint changes shape** —
   a cap short enough that WAV fits (roughly 80 seconds at 48 kHz, or 4 minutes resampled to
   16 kHz), or a hard requirement that the file open anywhere, valued above staying small.
@@ -357,15 +368,21 @@ lines would be deleted, and no security or supply-chain review of any candidate 
 counting dependencies. The bundle and audio numbers here are reproducible in principle —
 the commands are in the git history of this file's review — but were not scripted.
 
-The recording spike above is the piece whose absence actually changes an answer. The rest
-would sharpen the reasoning without moving it.
+The recording spike has now been run and is written up above; what remains missing would
+sharpen the reasoning without moving it. One caveat on the spike itself: it used a
+synthesised mono track rather than a real microphone, because a `getUserMedia` prompt needs
+a human. The failure it reproduces matches the original in signature (`EncodingError` at
+382 ms against 307 ms, zero bytes both times), but the confirming run on a real device has
+not been done.
 
 ## The review
 
 [microphone-library-options-review-sol.md](microphone-library-options-review-sol.md) —
 GPT Sol, 2026-08-27, which declined to approve the first draft and was right to. Three
-blockers, all three verified here and all three acted on: the WebCodecs reading was
-materially wrong, the iPadOS argument was about a browser this code path cannot reach, and
+blockers, all three verified here and all three acted on: the WebCodecs reading was wrong
+about the spec (though the spike later showed Chrome does not implement what the spec says,
+so the conclusion it supported was right anyway), the iPadOS argument was about a browser
+this code path cannot reach, and
 **the recorder fallback it was defending contained a live event-ordering bug** — a failed
 attempt's terminal chunk could land in its replacement's file, because the specification
 fires `error` before that chunk arrives and our handler had no generation guard. Fixed, with

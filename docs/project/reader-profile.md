@@ -477,11 +477,12 @@ The measurements, both reviews and the two bugs the tests found after the review
 - [microphone-device-and-recording.md](../plans/microphone-device-and-recording.md) — the device that
   emitted digital silence, the stop glyph, the timer, and the audio kept when nothing came back
 - [microphone-library-options.md](../research/microphone-library-options.md) — **should a library
-  have done all this?** No for dictation, metering and device choice; **still open for recording**,
-  where `mediabunny` needs a three-step spike rather than the rejection the first draft gave it.
-  The candidate that came close and the file-size number that killed it; why
-  `AudioEncoder.isConfigSupported` really can see a bitrate where `isTypeSupported` cannot, which
-  is the claim GPT Sol overturned; why the iPad is irrelevant to a code path Safari cannot reach;
+  have done all this?** No, in all four areas — though recording got there the long way, by being
+  rejected, un-rejected on review, and then **rejected on measurement**. The candidate that came
+  close and the file-size number that killed it; the spike that reproduced the encoder failure and
+  found that WebCodecs' better probe answers `supported: true` for the config that throws, that
+  `mediabunny` fails at the identical one because it is the same encoder, and that it *hangs*
+  where our ladder recovers in 382ms; why the iPad is irrelevant to a path Safari cannot reach;
   and the button that announced its state twice
 - [browser-testing.md](browser-testing.md) — why a hidden tab makes the level meter read zero
 - [library.md](library.md) — the shelf record `purpose` joins

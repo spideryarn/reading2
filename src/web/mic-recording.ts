@@ -126,6 +126,24 @@ export interface Attempt {
  *
  * Bare `audio/mp4` is absent for a different reason — see the header. It is not
  * an oversight and putting it back breaks the feature silently.
+ *
+ * ## Narrower than it first looked, and there is nowhere better to go
+ *
+ * A spike on 2026-08-27 (docs/research/microphone-library-options.md) pinned
+ * the failure to **one channel, 48 kHz, 32 kbps**: the identical control on a
+ * *stereo* track produced 38 KB quite happily. Every microphone tested that day
+ * was mono, and a `getUserMedia` track normally is, which is why it read as
+ * device-independent.
+ *
+ * The same spike closed the obvious escape route. WebCodecs'
+ * `AudioEncoder.isConfigSupported()` — which, unlike `isTypeSupported`, the
+ * spec *requires* to consider the bitrate — answers **`supported: true`** for
+ * the configuration that then throws. And `mediabunny`, driving that same
+ * encoder, fails at the identical config and then **hangs**: its `start()` and
+ * `finalize()` both time out and the error escapes uncaught, where the fallback
+ * below has already moved to the next container in 382ms. So there is no better
+ * probe to ask and no second encoder to fall back to — which is what makes
+ * proving it at runtime the design rather than a stopgap.
  */
 const ATTEMPTS: Attempt[] = [
   { type: "audio/mp4;codecs=mp4a.40.2" },
