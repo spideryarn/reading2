@@ -813,6 +813,73 @@ export async function recordStepRun(
 
 /* -------------------------------------------------------- publishRevision -- */
 
+/**
+ * Every reason this draft must not become the article, or an empty list.
+ *
+ * **Out of the transaction callback on purpose, and it is not only tidiness.**
+ * This is the list that grows: the raw-source reference is the next entry
+ * (docs/plans/delete-the-importer.md § The publication gate, as a truth table),
+ * and a guard that lives inline in a hundred-line callback is one that gets
+ * added to by whoever is passing rather than reviewed as a set. Everything here
+ * is a *reason string*; nothing here writes.
+ *
+ * It collects rather than returning early, because a draft with three things
+ * wrong should say three things. `PublishRefused` takes the list.
+ */
+async function reasonsNotToPublish(
+  tx: Tx,
+  revisionId: string,
+  blocks: Block[],
+  tree: Tree | null,
+): Promise<string[]> {
+  const reasons: string[] = [];
+
+  if (!blocks.length) reasons.push("it has no blocks");
+  if (!tree) reasons.push("it has no tree");
+  // Nothing below can say anything useful without both.
+  if (!blocks.length || !tree) return reasons;
+
+  const { problems } = checkTree(blocks, tree);
+  // Capped, because a tree whose root range is wrong reports once per block and
+  // the message would otherwise be a megabyte of prose in a log line.
+  for (const problem of problems.slice(0, 10)) reasons.push(problem);
+  if (problems.length > 10) reasons.push(`… and ${problems.length - 10} more tree problems`);
+
+  const runs = await tx
+    .select()
+    .from(revisionStepRuns)
+    .where(and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "toc")));
+  const toc = runs[0];
+  const blocksHash = hashBlocks(blocks);
+
+  if (!toc) {
+    reasons.push(
+      "there is no record of the toc step running, so nothing can say the tree describes these blocks",
+    );
+  } else if (toc.status !== "done") {
+    /* **Before the hash, and instead of it.** `revision_step_runs.status` is
+       `running`, `done` or `error`, and this branch did not exist until
+       2026-08-27: the guard read the row, compared `input_hash` and stopped, so
+       a `toc` that ran and *failed* published as long as the hash beside it
+       matched. A step records its hash when it starts, which is exactly why the
+       two agree in the case that matters.
+
+       `else if` rather than a second reason, because the hash cannot be trusted
+       to mean anything here and "the tree was built from different blocks —
+       re-run toc" would send somebody to re-run the thing that has just told us
+       it failed. */
+    reasons.push(
+      `the toc step ${toc.status === "running" ? "has not finished" : "ended in error"}, so its tree cannot be trusted to describe these blocks`,
+    );
+  } else if (toc.inputHash !== blocksHash) {
+    reasons.push(
+      `the tree was built from different blocks (toc ran against ${toc.inputHash}, these blocks are ${blocksHash}) — re-run toc`,
+    );
+  }
+
+  return reasons;
+}
+
 export interface PublishRevisionOptions {
   readonly slug: string;
   readonly revisionId: string;
@@ -885,38 +952,9 @@ export async function publishRevision(opts: PublishRevisionOptions): Promise<{
     if (draft.status !== "draft")
       throw new PublishRefused(slug, [`revision ${revisionId} is already ${draft.status}`]);
 
-    const reasons: string[] = [];
     const blocks = await storedBlocks(tx, revisionId);
     const tree = draft.tree as Tree | null;
-
-    if (!blocks.length) reasons.push("it has no blocks");
-    if (!tree) reasons.push("it has no tree");
-
-    if (blocks.length && tree) {
-      const { problems } = checkTree(blocks, tree);
-      // Capped, because a tree whose root range is wrong reports once per block
-      // and the message would otherwise be a megabyte of prose in a log line.
-      for (const problem of problems.slice(0, 10)) reasons.push(problem);
-      if (problems.length > 10) reasons.push(`… and ${problems.length - 10} more tree problems`);
-
-      const runs = await tx
-        .select()
-        .from(revisionStepRuns)
-        .where(
-          and(eq(revisionStepRuns.revisionId, revisionId), eq(revisionStepRuns.stepName, "toc")),
-        );
-      const toc = runs[0];
-      const blocksHash = hashBlocks(blocks);
-      if (!toc) {
-        reasons.push(
-          "there is no record of the toc step running, so nothing can say the tree describes these blocks",
-        );
-      } else if (toc.inputHash !== blocksHash) {
-        reasons.push(
-          `the tree was built from different blocks (toc ran against ${toc.inputHash}, these blocks are ${blocksHash}) — re-run toc`,
-        );
-      }
-    }
+    const reasons = await reasonsNotToPublish(tx, revisionId, blocks, tree);
 
     if (reasons.length) throw new PublishRefused(slug, reasons);
 
