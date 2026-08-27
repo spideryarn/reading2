@@ -572,6 +572,16 @@ its own rather than sharing the row's. [`SearchPanel.tsx`](../../src/web/SearchP
 targets on a row, and `.srch-saved-tick` / `.srch-saved-body` in
 [`styles.css`](../../src/web/styles.css).
 
+**The honest cost, measured** in the browser at the narrowest band (`MODE_MIN`, 288px): the box's
+target is **26 × 46px** and the row button's is **183 × 46px**, with a 3px gap between them, so the
+box is a smaller thing to aim at than it was — it used to be the whole row, because the whole row
+was its label. Tall enough for a pointer, and the four or five pixels to the right of the tick still
+belong to the label rather than to the button, which is the direction a near miss actually goes. On
+a touchscreen it is under the 44px square the guidelines ask for on one axis, and that is a real
+debt rather than a resolved question. The row button keeps the app's own orange focus ring
+(`--highlight`, the convention `.cmt-dialog button:focus-visible` explains) inset by 2px, because
+the list is a scroller and an outward ring on the first or last row is clipped by it.
+
 ## The rail, and the shape of a search
 
 > And also show the Spine by default when "Search" mode is active, and add dots/thin vertical lines

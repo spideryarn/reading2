@@ -4291,6 +4291,15 @@ td.text.has-hit[data-hues="8"] {
 }
 .srch-saved-row.on .srch-saved-body { color: var(--ink-soft); }
 .srch-saved-body:hover { color: var(--ink); }
+/* The app's own focus convention rather than the browser's blue ring, the same
+   call .cmt-dialog button:focus-visible explains further up. Inset, because the
+   list is a scroller and an outward ring on the first or last row is clipped by
+   it. The ↺ and 🗑 beside it keep the browser ring; they are secondary, and this
+   is the control the keyboard is here for. */
+.srch-saved-body:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
 .srch-saved-criterion {
   overflow: hidden;
   text-overflow: ellipsis;

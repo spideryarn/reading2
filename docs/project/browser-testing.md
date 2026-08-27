@@ -659,6 +659,30 @@ land, while `new MouseEvent('click', { bubbles: true })` reaches the identical R
 the real one, and reach for the synthetic when the real one will not land — noting which you used,
 since they prove different things.
 
+### A focus ring you cannot see, on an element that is genuinely focused
+
+The window an agent drives usually does **not** have focus — `document.hasFocus()` reads `false`
+while the tab is plainly the front one and everything else about it works. Two things follow, and
+both look like a broken stylesheet:
+
+- Chrome does not paint the focus ring, so a screenshot of a correctly focused control shows nothing.
+- `el.matches(':focus-visible')` reads `false`, and `getComputedStyle` therefore returns the
+  unfocused values — while `document.activeElement` is the right element the whole time.
+
+Worse, this **changes between calls**: the same check read `fv: true` and then `fv: false` a minute
+later in one session on 2026-08-27, because the window had gained and lost focus in between. So a
+single reading proves nothing either way. Check `document.hasFocus()` in the same evaluation as the
+focus assertion, and if it is `false`, verify the rule some other way — read the declaration out of
+the stylesheet, or apply the identical declaration inline and screenshot *that* to check the geometry
+(where the ring sits, whether the scroller clips it), which is a picture of the rule rather than a
+picture of the ring.
+
+Related, and it bit the same session: **`computer`'s Tab key does not move focus.** The keypress is
+synthetic, and focus traversal is a browser default action that an untrusted event does not get — the
+same split as § A synthetic wheel is not a wheel. Six Tabs left `document.activeElement` exactly where
+it started, which reads as a focus trap in the component rather than as a limit of the tool. Read tab
+*order* off the DOM instead: the elements in source order, which is what the browser would follow.
+
 ### An animation shorter than your round trip is invisible <a id="short-animation"></a>
 
 An agent driving Chrome cannot see a 200ms animation. Each screenshot or JS evaluation is a round
