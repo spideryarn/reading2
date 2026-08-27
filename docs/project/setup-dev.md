@@ -147,6 +147,16 @@ drifted a version behind.
 |---|---|---|
 | **capable** | Claude Sonnet 5 — `claude-sonnet-5`, or `anthropic/claude-sonnet-5` | the Anthropic SDK *and* OpenRouter, one spelling each |
 | **quick** | GPT-5.6 Luna — `openai/gpt-5.6-luna` | OpenRouter only |
+| **embeddings** | Voyage 4 — `voyageai/voyage-4` | OpenRouter only, and not a *tier* — see below |
+
+**The embedding model is not one of the two tiers**, and is listed above only so there is one place
+that names every model this app calls. A tier is a choice about how much reasoning a task needs;
+`voyageai/voyage-4` does no reasoning, and it was picked by measurement rather than by judgment —
+[the eval](../../evals/results/embedding-retrieval-2026-08-26.md) put four models over this
+project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.ts) rather than in
+`src/models.ts` for that reason. Only the Force diagram's dotted links use it today
+([diagram.md](diagram.md)); [semantic-search.md](../plans/semantic-search.md) is the other planned
+caller.
 
 **Every job is on the capable tier today.** The quick tier is about a tenth the price and nothing
 here has been measured on it, so it exists as a named option rather than as a change: moving a job
