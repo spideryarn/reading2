@@ -45,6 +45,10 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
   than user accounts, why Supabase Auth won, the four things to know before touching it (a 401 is
   not "the session is gone"; JWKS unreachable is a 503), **whose data is whose** now the shelf is no
   longer shared, and the one test that has to exist.
+- **[admin.md](admin.md)** — the one request that reads across owners, and how narrow the exception
+  is: one route, one path prefix, one address. Which of its three refusals is a gate and which two
+  are courtesies, why the check is on the prefix rather than the route, and what the page
+  deliberately does not show.
 - **[deployment.md § Who can reach it](deployment.md#who-can-reach-it)** — the app is readable by
   anybody with the address, deliberately, and it was an accident first: Vercel's protection setting
   reports itself as enabled while serving the world.

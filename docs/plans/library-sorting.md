@@ -349,7 +349,7 @@ says**, and the code around them looked right.
 ### `?by=title` sorted Z-to-A
 
 The per-column fallback — an absent `dir` means "each key goes whichever way it naturally goes" —
-never ran, because `libraryDirParam` had `.withDefault(["desc"])`, so the parameter was never absent.
+never ran, because the `dir` parser (`libraryDirParam`, renamed `sortDirParam` on 2026-08-27) had `.withDefault(["desc"])`, so the parameter was never absent.
 The one link the fallback existed for was the one link it did not reach. `dir` now has no default at
 all, and the shelf leaves it out of the URL itself when `isAllNatural` says it would add nothing.
 

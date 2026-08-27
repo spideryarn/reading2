@@ -8,6 +8,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  ADMIN_HREF,
+  ADMIN_USERS_HREF,
   addHref,
   addUploadHref,
   addUrlFrom,
@@ -74,6 +76,42 @@ describe("parseRoute", () => {
 
   it("survives a malformed escape rather than throwing out of the render", () => {
     expect(parseRoute("/read/%E0%A4%A")).toEqual({ kind: "library" });
+  });
+});
+
+/**
+ * `/admin` and `/admin/users` — see src/web/AdminPage.tsx.
+ *
+ * **Parsing an address says nothing about being allowed to use it.** These
+ * routes exist for everybody; App.tsx renders the shelf for anybody who is not
+ * the administrator, and the refusal that matters is the server's on
+ * `/api/admin`. So nothing here is a security test, and it must not be read as
+ * one — it is about the two spellings Greg wrote, and the ones that must not
+ * match. docs/project/admin.md.
+ */
+describe("the admin routes", () => {
+  it("takes both of the addresses, with or without the trailing slash", () => {
+    for (const path of ["/admin", "/admin/"]) {
+      expect(parseRoute(path), path).toEqual({ kind: "admin", page: "home" });
+    }
+    for (const path of ["/admin/users", "/admin/users/"]) {
+      expect(parseRoute(path), path).toEqual({ kind: "admin", page: "users" });
+    }
+  });
+
+  it("sends anything else under /admin to the shelf, like every other unknown address", () => {
+    /* The alternation in the regex is the validation. A third admin page is a
+       word added there, not a path that silently half-works. */
+    for (const path of ["/admin/nonsense", "/admin/users/extra", "/adminx", "/admin/USERS"]) {
+      expect(parseRoute(path), path).toEqual({ kind: "library" });
+    }
+  });
+
+  it("is spelled once, by the constants the links use", () => {
+    /* A link that does not parse lands the reader on the shelf while the
+       address bar says otherwise — which looks like nothing happened at all. */
+    expect(parseRoute(ADMIN_HREF)).toEqual({ kind: "admin", page: "home" });
+    expect(parseRoute(ADMIN_USERS_HREF)).toEqual({ kind: "admin", page: "users" });
   });
 });
 

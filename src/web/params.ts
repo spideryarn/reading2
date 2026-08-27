@@ -27,6 +27,7 @@ import { createParser, debounce } from "nuqs";
 import { isSpideryarnId } from "../ids.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
+import { ADMIN_DEFAULT_BY } from "./admin-columns.js";
 import { DEFAULT_BY } from "./library-columns.js";
 import { sameList } from "./lib/table-sort.js";
 import type { ShelfFilter, ShelfView } from "./ShelfControls.js";
@@ -228,7 +229,25 @@ export const panelParam = createParser<Panel>({
  * (docs/project/summaries.md). Diagram is the fifth
  * (docs/project/diagram.md), and it cost this list one word as well.
  */
-export const MODES = ["toc", "chat", "glossary", "search", "summary", "diagram", "ideas"] as const;
+export const MODES = [
+  "toc",
+  "chat",
+  "glossary",
+  "search",
+  "summary",
+  "diagram",
+  "ideas",
+  /* Review is the seventh, 2026-08-27, and the first mode whose content comes
+     from the reader rather than from the article: they say what they took from
+     it and the model helps them find where that comes apart. It cost this list
+     one word, like the five before it. docs/plans/review-mode.md.
+
+     There is deliberately no `?stance=` beside `?thread=` below. The stance
+     governs the next answer and changes nothing on screen, which is the rule
+     this file keeps — the closest existing thing is chat's profile checkbox,
+     which is component state for the same reason. */
+  "review",
+] as const;
 export type Mode = (typeof MODES)[number];
 
 export const modeParam = createParser<Mode>({
@@ -651,7 +670,9 @@ export const confParam = createParser<number>({
    there are. See docs/project/summaries.md and SummaryPanel.tsx.
 
    **What is NOT in the URL, and why.** The panel also lets you open and close
-   individual sections, and docs/project/original-version/structure-panel.md is
+   individual sections — including opening one part's sections *past* the depth
+   cut-off, which is what its `+N sections` badge does since 2026-08-27 — and
+   docs/project/original-version/structure-panel.md is
    emphatic that their version regretted keeping that only in memory. It stays
    in memory here anyway, and the reason is the rule that governs everything
    else in this app: a per-node open/closed set can only be written down as a
@@ -781,10 +802,16 @@ export const diagramHueParam = createParser<ScatterHue>({
  * it a node is a single paragraph, which the reader should be reading rather
  * than being told about.
  *
- * Note that this and a node's own open/closed state are **two different ways to
- * be hidden**, and they compose rather than sharing a variable — their version
- * got that right and it is the one design note worth copying verbatim from it:
- * "too deep to show" and "I closed this" are different states.
+ * Note that this and a node's own open/closed state are **different ways to be
+ * hidden**, and they compose rather than sharing a variable — their version got
+ * that right and it is the one design note worth copying verbatim from it:
+ * "too deep to show" and "I closed this" are different states. There are three
+ * of them here, because "I opened this one anyway" is a third; this parameter
+ * is the only one of the three that is stable enough to write down.
+ *
+ * So a reader who opens one part's sections past the cut-off does **not** move
+ * this value, and a link they share opens at the depth they chose with the
+ * pills. See SummaryPanel.tsx and `showsChildren` in tree.ts.
  *
  * An unparseable or out-of-range value falls back to the default rather than
  * throwing, the same rule as everything else in this file.
@@ -881,8 +908,15 @@ export const libraryByParam = createParser<string[]>({
  * here is *per column* rather than one value; so the shelf leaves the parameter
  * out itself when `isAllNatural` says it would add nothing. Found by a
  * cross-family review, 2026-08-26.
+ *
+ * **Named for the job rather than for the shelf**, and read by both pages that
+ * have a sortable table — the shelf and the admin users list. There is nothing
+ * page-specific in it: unlike `by`, whose default names a column, this one is
+ * the same three lines whatever the columns are, and two copies of it would be
+ * two places for the paragraph above to be forgotten. It was `libraryDirParam`
+ * until 2026-08-27.
  */
-export const libraryDirParam = createParser<("asc" | "desc")[]>({
+export const sortDirParam = createParser<("asc" | "desc")[]>({
   parse: (v) => {
     const parts = v.split(",");
     return parts.every((p) => p === "asc" || p === "desc")
@@ -892,6 +926,26 @@ export const libraryDirParam = createParser<("asc" | "desc")[]>({
   serialize: (v) => v.join(","),
   eq: sameList,
 }).withOptions({ history: "push" });
+
+/**
+ * What the admin users table is sorted by — `?by=signedUp`.
+ *
+ * Its own parser rather than `libraryByParam` because the *default* is the
+ * page-specific half: the shelf rests on what you last opened, and a list of
+ * accounts rests on who arrived most recently. Everything else about the two —
+ * the comma-separated shape, the `eq`, the `push` history — is identical, and
+ * the direction parser above is genuinely shared.
+ */
+export const adminByParam = createParser<string[]>({
+  parse: (v) => {
+    const ids = v.split(",").filter((s) => s !== "");
+    return ids.length ? ids : null;
+  },
+  serialize: (v) => v.join(","),
+  eq: sameList,
+})
+  .withDefault(ADMIN_DEFAULT_BY)
+  .withOptions({ history: "push" });
 
 /**
  * Cards or the dense table — `view=table`.

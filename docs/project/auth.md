@@ -300,6 +300,15 @@ Two more things came out of the same review and are fixed:
   `articleId`, and reinserted them under the importer's owner — every write
   reporting success. It now reads the owner first and refuses by name.
 
+### The one deliberate exception
+
+**`GET /api/admin/users` reads across owners on purpose**, and it is the only thing that does. It
+answers *"who are the readers"*, which cannot be asked with an owner filter on it. Everything above
+this line still holds: one route, in a gated namespace, open to one account id, returning **limited
+account metadata (the id, the email address, the sign-in providers), counts and dates** — never a
+title, a URL, a filename, or a sentence of anybody's reading. [admin.md](admin.md) is the whole of it, including which of its three refusals is a gate
+and which two are courtesies.
+
 ### What is still shared, and what is still open
 
 - **`articles.slug` is globally unique**, deliberately, because it is the URL contract. Two people

@@ -41,14 +41,15 @@ listed here; the names under each are files in `docs/project/`.
   `comments.md` (legacy: explain a selected sentence) · `chat-tools.md` (what chat may call) ·
   `links.md` (hover cards on the article's own hyperlinks) · `tooltips.md` · `keyboard.md` ·
   `touch.md` · `url-state.md` · `library.md` (the shelf) · `page-titles.md` ·
-  `reader-profile.md` · `copy.md` (reader-facing failure messages)
+  `reader-profile.md` · `dictation.md` (talking into a text box) ·
+  `copy.md` (reader-facing failure messages)
 - **[design-css-overview.md](docs/project/design-css-overview.md)** — the map for anything visual:
   the stylesheets and their order, which mechanism owns a given rule, the colour and type tokens.
   Its live counterpart is `/design`.
   <br>↳ `colour-scales.md` · `icons.md`
 - **[security-map.md](docs/project/security-map.md)** — start here for security: the untrusted
   parties (none of them is another reader) and where each defence physically lives.
-  <br>↳ `security.md` (the deep dive) · `auth.md`
+  <br>↳ `security.md` (the deep dive) · `auth.md` · `admin.md` (the one view across owners)
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·

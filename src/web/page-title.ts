@@ -48,7 +48,7 @@
  */
 import { useEffect } from "react";
 import type { Mode } from "./params.js";
-import type { ArticleView } from "./router.js";
+import type { AdminPage, ArticleView } from "./router.js";
 
 /** The product. `spideryarn2` is the working directory; this is the name. */
 export const APP_NAME = "Spideryarn";
@@ -93,7 +93,7 @@ export const SEP = " · ";
  */
 export const CLAMP = 64;
 
-/** Which of an article's seven middle-band modes, by the name the Dock uses. */
+/** Which of an article's eight middle-band modes, by the name the Dock uses. */
 const MODE_LABEL: Record<Mode, string> = {
   toc: "Contents",
   summary: "Summary",
@@ -102,6 +102,7 @@ const MODE_LABEL: Record<Mode, string> = {
   search: "Search",
   diagram: "Diagram",
   chat: "Chat",
+  review: "Review",
 };
 
 /**
@@ -129,6 +130,8 @@ export type TitleSpec =
   | { kind: "add"; source?: string | null }
   | { kind: "profile" }
   | { kind: "design" }
+  /** The administrator's pages. `page` is which one — see router.ts. */
+  | { kind: "admin"; page: AdminPage }
   /**
    * The page a signed-out reader sees, wherever they were heading —
    * LandingPage.tsx. It has no address of its own, which is why this variant
@@ -189,6 +192,12 @@ function segments(spec: TitleSpec): string[] {
 
     case "design":
       return ["Design reference", APP_NAME];
+
+    /* Most specific part first, like every other page: "Users · Admin ·
+       Spideryarn" rather than the other way round, so the tab is legible when
+       it is squeezed to four characters. */
+    case "admin":
+      return [spec.page === "users" ? "Users" : "", "Admin", APP_NAME];
 
     /* **The second page whose own name leads, and the second to carry the
        strapline** — see the `library` case above for the rule and the reason.

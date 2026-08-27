@@ -38,6 +38,7 @@
  * divergence this migration is meant to make impossible.
  */
 
+import type { AdminUser } from "../admin.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
 import type { NewComment } from "../comments.js";
 import type {
@@ -54,11 +55,13 @@ import type {
   LibraryEntry,
   LibraryHit,
   ListOptions,
+  ReviewStance,
   SearchRun,
   ShelfState,
   SummariesFound,
   IdeasFound,
   ThreadFound,
+  ThreadKind,
 } from "../types.js";
 
 /**
@@ -407,7 +410,27 @@ export interface ChatStore {
      * `withTurn` in src/chat.ts, which both stores call. An anchor for a thread
      * that already exists is refused by the route, not quietly dropped here.
      */
-    turn: { threadId: string; question: string; anchor?: ChatAnchor },
+    turn: {
+      threadId: string;
+      question: string;
+      anchor?: ChatAnchor;
+      /**
+       * Chat or review — like `anchor`, applied **only when this turn creates
+       * the thread**. `withTurn` throws `ChatConflict` on one that contradicts
+       * an existing thread rather than ignoring it, which is what makes the
+       * rule hold under Postgres too: the route's own check runs inside
+       * `inTurnOrder`, and that is per-process.
+       */
+      kind?: ThreadKind;
+      /**
+       * How much a review answer should say — written onto the **pending**
+       * reply, in the same write as the question.
+       *
+       * `retry` and `edit` below take no stance, deliberately: theirs comes
+       * from the answer they are replacing. See `ChatMessage.stance`.
+       */
+      stance?: ReviewStance;
+    },
     now?: () => string,
   ): Promise<Turn>;
 
@@ -609,4 +632,28 @@ export interface ReaderStore {
    * **Refused, not truncated**, past `MAX_PROFILE_CHARS` — see src/profile.ts.
    */
   writeProfile(text: string | null): Promise<string | null>;
+}
+
+/**
+ * Who has signed up, and how much each of them has made.
+ *
+ * **The one contract in this file that is not about the reader asking**, and
+ * the only one whose implementation runs a query with no owner filter on it.
+ * It is a contract rather than a bare function so that the filesystem store can
+ * refuse it in the same shape everything else is selected in — see
+ * src/store/index.ts, where `files` gets an adapter whose only method throws.
+ * There are no users on a filesystem: `data/` is one directory per slug and
+ * nothing in it records that a person exists.
+ *
+ * Read-only, and it should stay that way. Nothing here bans, deletes or spends;
+ * an admin *page* that can only look is a much smaller thing to get wrong than
+ * one that can act. docs/project/admin.md § Not now.
+ */
+export interface AdminStore {
+  /**
+   * Every account that could sign in, newest sign-up first is **not** promised
+   * — the page sorts, and a store that also sorted would be a second opinion
+   * about the default order.
+   */
+  listUsersAcrossOwners(): Promise<AdminUser[]>;
 }

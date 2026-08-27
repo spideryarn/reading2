@@ -58,6 +58,7 @@
 import { log } from "../log.js";
 import { makeLookUpTerm } from "../term-lookup.js";
 import type {
+  AdminStore,
   ArticleReader,
   ChatStore,
   CommentStore,
@@ -82,6 +83,7 @@ import {
   fsShelfStore,
 } from "./fs.js";
 import { notMigrated, STORE } from "./live.js";
+import { pgAdminStore } from "./pg-admin.js";
 import { pgArticleReader } from "./pg.js";
 import { pgChatStore } from "./pg-chat.js";
 import { pgCommentStore } from "./pg-comments.js";
@@ -297,3 +299,35 @@ export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch, 
  * failure `notMigrated` exists to prevent. docs/plans/reader-profile.md.
  */
 export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore, fsReaderStore);
+
+/**
+ * Who has signed up — the admin page's one endpoint.
+ *
+ * **Not `guarded(...)` like everything above it**, and the asymmetry is the
+ * point: the other stores have two real implementations and a flag choosing
+ * between them, while this one has a Postgres implementation and a filesystem
+ * *refusal*. There is no user list on a filesystem — `data/` is one directory
+ * per slug and nothing in it records that a person exists — so the `files`
+ * side cannot be written, only declined.
+ *
+ * Declined loudly, with its own sentence rather than `notMigrated`'s: that one
+ * says "no Postgres implementation yet", which is the opposite of what is true
+ * here and would send whoever reads it to the wrong plan. The alternative — an
+ * empty array — is the failure this whole directory keeps warning about: a page
+ * that says *you have no users* and looks exactly like a page that works.
+ * docs/reusable/silent-success.md.
+ */
+const adminOnFiles: AdminStore = {
+  listUsersAcrossOwners: () => {
+    throw Object.assign(
+      new Error(
+        "The admin users page needs Postgres — there are no user accounts on the " +
+          "filesystem store. Run with SPIDERYARN_STORE=postgres. See docs/project/admin.md.",
+      ),
+      { status: 501 },
+    );
+  },
+};
+
+export const adminStore: AdminStore =
+  STORE === "postgres" ? guardDbStore("admin", pgAdminStore) : adminOnFiles;

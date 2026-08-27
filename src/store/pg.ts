@@ -165,6 +165,38 @@ export function ownedByReader() {
 }
 
 /**
+ * **What counts as an article on somebody's shelf**, in SQL.
+ *
+ * Two rules, and neither is obvious from the outside:
+ *
+ * - **It has a published revision.** `beginRevision` creates the `articles` row
+ *   before there is anything in it (pg-revisions.ts), so a first ingest that
+ *   fails leaves a row with `current_revision_id` null — a slug with no
+ *   article behind it. `listArticles` never sees one, because its `innerJoin`
+ *   on that column drops it.
+ * - **Its slug does not start with `_`.** `data/_jobs/` is the ingest queue's
+ *   directory and the filesystem walk has always skipped the prefix; see
+ *   `listArticles` below for why this is `left(slug, 1)` rather than `not
+ *   like`, which is a trap.
+ *
+ * A predicate rather than a comment because there is now a **second** caller:
+ * src/store/pg-admin.ts counts articles per owner for the admin page, and a
+ * count that included failed ingests would say somebody has four articles while
+ * their shelf shows three. GPT Sol found exactly that, 2026-08-27 — the
+ * aggregate had been written from the column rather than from the rule.
+ *
+ * **It is the SQL-expressible half and not the whole rule.** `listArticles`
+ * additionally drops a row whose revision has no tree, or no blocks, per row in
+ * TypeScript. Those are not in here: the first is a column test that would be
+ * easy to add and the second is an `exists`, and neither has ever excluded a
+ * published article — `publishRevision` will not publish one. If that stops
+ * being true, this is where the third rule goes.
+ */
+export function onTheShelf() {
+  return and(isNotNull(articles.currentRevisionId), sql`left(${articles.slug}, 1) <> '_'`);
+}
+
+/**
  * Every column of `article_revisions` **except the source document's bytes**.
  *
  * `select({ revision: articleRevisions })` takes the whole row, and one of those
@@ -489,8 +521,11 @@ export const pgArticleReader: Pick<
              single-character wildcard: `not like '_%'` excludes every slug with
              at least one character, which is all of them. Written that way
              first, and the library came back empty. Escaping it works and reads
-             like a typo. */
-          sql`left(${articles.slug}, 1) <> '_'`,
+             like a typo. Both this and the `innerJoin` above are now stated
+             once, in `onTheShelf` — the admin page counts the same rows and
+             two spellings of "is this an article" is how the shelf and a count
+             of it come to disagree. */
+          onTheShelf(),
         ),
       )
       .orderBy(desc(ADDED_AT));

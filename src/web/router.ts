@@ -65,6 +65,9 @@ import { useMemo, useSyncExternalStore } from "react";
 /** Which of an article's three pages. `article` is the reading view itself. */
 export type ArticleView = "article" | "metadata" | "tweets";
 
+/** Which admin page. `home` is `/admin` itself — the index of the others. */
+export type AdminPage = "home" | "users";
+
 export type Route =
   | { kind: "library" }
   | { kind: "read"; slug: string; view: ArticleView }
@@ -114,6 +117,22 @@ export type Route =
    * SignInPage.tsx. Nothing in the app links to it.
    */
   | { kind: "login" }
+  /**
+   * The administrator's pages — `/admin` and `/admin/users`. See AdminPage.tsx
+   * and docs/project/admin.md.
+   *
+   * Two pages as one route with a `page`, exactly as an article's three views
+   * are one route with a `view`: they share a heading, a back-link and the
+   * question of who is allowed to see them, and three routes would mean three
+   * places to answer it.
+   *
+   * **Parsing this says nothing about being allowed to see it.** The route
+   * exists for everybody; App.tsx renders the shelf instead for anybody who is
+   * not the administrator, which is what this file already does with every
+   * other address it does not recognise. The refusal that matters is the
+   * server's, on `/api/admin/`.
+   */
+  | { kind: "admin"; page: AdminPage }
   /**
    * Where Google sends the reader back — `/auth/callback`. See AuthCallback.tsx.
    *
@@ -191,6 +210,13 @@ export function parseRoute(pathname: string): Route {
   // Beside `design` and above `/read/` for the same reason: it is not about an
   // article, so the article regex must never get a chance at it.
   if (/^\/profile\/?$/.test(pathname)) return { kind: "profile" };
+  /* Beside `design` and `profile`, and above `/read/` for the same reason: it
+     is not about an article. The alternation is the validation — `/admin/foo`
+     matches nothing here and falls through to the shelf, which is what every
+     unrecognised address does. Greg wrote both of these with a trailing slash,
+     so both spellings work at both lengths. */
+  const adminPath = /^\/admin(?:\/(users))?\/?$/.exec(pathname);
+  if (adminPath) return { kind: "admin", page: adminPath[1] === "users" ? "users" : "home" };
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
   // whole other URL, slashes and all. A bare /add — nothing to add — falls
   // through to the shelf, which is where the add box is.
@@ -263,6 +289,16 @@ export function carriedSearch(search: string): string {
 }
 
 export const LIBRARY_HREF = "/";
+/**
+ * The administrator's index, and the one page under it.
+ *
+ * Constants rather than strings at the call sites for the reason `CALLBACK_HREF`
+ * below is one: the regex in `parseRoute` and the `href` on a link are the two
+ * halves of the same fact, and a link that does not parse is a link that quietly
+ * lands on the shelf.
+ */
+export const ADMIN_HREF = "/admin";
+export const ADMIN_USERS_HREF = "/admin/users";
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /**

@@ -200,6 +200,37 @@ describe("every article lookup names an owner", () => {
     expect(body).toContain("articles.ownerId");
     expect(body).toContain("currentOwnerId()");
   });
+
+  /**
+   * **The other direction: a query that groups by owner is looking at everybody.**
+   *
+   * `group by owner_id` is the shape of a question asked *across* owners rather
+   * than within one, and there is exactly one place in this repo that is
+   * allowed to ask it — `pg-admin.ts`, behind the `/api/admin` gate
+   * (docs/project/admin.md). Anywhere else it would be a route quietly
+   * aggregating over other people's rows.
+   *
+   * Narrow on purpose. This is not "find every query missing a `where`", which
+   * no grep can do and which would overclaim; it is one syntactic shape with
+   * one legitimate home. GPT Sol asked for exactly that distinction, 2026-08-27.
+   */
+  it("and only the admin store groups by owner, because only it may", async () => {
+    const dir = fileURLToPath(new URL("../src/store/", import.meta.url));
+    const offenders: string[] = [];
+    for (const name of await readdir(dir)) {
+      if (!name.endsWith(".ts") || name === "pg-admin.ts") continue;
+      const source = await readFile(dir + name, "utf8");
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      if (/groupBy\([^)]*\.ownerId/.test(code)) offenders.push(name);
+    }
+    expect(offenders).toEqual([]);
+
+    /* And the exemption really does contain what it is exempted for — a rule
+       whose one allowed case has silently moved is a rule that now protects
+       nothing. */
+    const admin = await readFile(dir + "pg-admin.ts", "utf8");
+    expect(admin).toMatch(/groupBy\([^)]*\.ownerId/);
+  });
 });
 
 /* ------------------------------------------------- 3. the queries, for real -- */

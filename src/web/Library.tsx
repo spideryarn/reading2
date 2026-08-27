@@ -49,7 +49,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
-import { ChevronRight, Palette, Search, Undo2, User, X } from "lucide-react";
+import { ChevronRight, Palette, Search, Shield, Undo2, User, X } from "lucide-react";
+import { isAdmin } from "../admin.js";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
 import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
@@ -59,24 +60,30 @@ import { Link } from "./Link.js";
 import { fold, foldWithMap, libraryHitHref, queryTerms } from "./library-hits.js";
 import {
   libraryByParam,
-  libraryDirParam,
   libraryQueryParam,
   libraryShowParam,
   libraryViewParam,
+  sortDirParam,
 } from "./params.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
-import { DESIGN_HREF } from "./router.js";
+import { ADMIN_HREF, DESIGN_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
 import { useJobs } from "./useJobs.js";
 import { useLibrarySearch } from "./useLibrarySearch.js";
 import { useNow } from "./useNow.js";
+import { useSession } from "./useSession.js";
 import { useShelf } from "./useShelf.js";
 import { useSlow } from "./useSlow.js";
 import { useRenderCount } from "./perf.js";
 
 export function Library() {
   useRenderCount("Library");
+  /* Only to decide whether the Admin link is drawn. `useSession` is already
+     subscribed once at the top of the app (App.tsx), and a second subscription
+     is one listener rather than a second source of truth — the SDK is the
+     source, and both read it. */
+  const { user } = useSession();
   const shelf = useShelf();
   const { articles, error, reload } = shelf;
   const slow = useSlow(articles === null);
@@ -88,7 +95,7 @@ export function Library() {
      the server happened to send, so neither survived a reload. */
   const [rawQuery, setQuery] = useQueryState("q", libraryQueryParam);
   const [by, setBy] = useQueryState("by", libraryByParam);
-  const [rawDir, setDir] = useQueryState("dir", libraryDirParam);
+  const [rawDir, setDir] = useQueryState("dir", sortDirParam);
   const [view, setView] = useQueryState("view", libraryViewParam);
   const [show, setShow] = useQueryState("show", libraryShowParam);
 
@@ -98,11 +105,6 @@ export function Library() {
      app's own name; narrow the shelf and what you narrowed it to takes the
      front instead. See src/web/page-title.ts. */
   useDocumentTitle(pageTitle({ kind: "library", query, unread: show === "unread" }));
-  /* No `dir` in the URL means "each key goes whichever way it naturally goes",
-     which is a different answer per column — so this stays an empty list rather
-     than a default, and `sortingFromUrl` fills the gaps. See params.ts, where
-     giving it a default was briefly a bug. */
-  const dir = rawDir ?? [];
 
   /**
    * Make a `push` change to the view, taking any half-typed search with it.
@@ -133,10 +135,19 @@ export function Library() {
   const columns = useMemo(() => libraryColumns(shelf, now), [shelf, now]);
   const natural = useMemo(() => naturalDirections(columns), [columns]);
   /* `DEFAULT_BY` as the fallback: a URL naming nothing we recognise lands on
-     the ordinary shelf rather than on an unsorted list with no chip pressed. */
+     the ordinary shelf rather than on an unsorted list with no chip pressed.
+
+     **`rawDir` straight in, `null` and all.** No `dir` in the URL means "each
+     key goes whichever way it naturally goes", which is a different answer per
+     column, so `sortingFromUrl` fills the gaps rather than nuqs supplying a
+     default (params.ts § sortDirParam has the hour that rule cost). This line
+     used to read `rawDir ?? []` above the memo — a fresh array every render,
+     which made this memo re-run every render, which made TanStack recompute and
+     queue a page-index reset, which set state and rendered again, for ever:
+     docs/postmortems/shelf-render-loop.md. */
   const sorting = useMemo(
-    () => sortingFromUrl(by, dir, natural, DEFAULT_BY),
-    [by, dir, natural],
+    () => sortingFromUrl(by, rawDir, natural, DEFAULT_BY),
+    [by, rawDir, natural],
   );
 
   /* Matcher one: the shelf itself, filtered in the browser, then narrowed by
@@ -276,6 +287,20 @@ export function Library() {
               <User size={13} />
               Profile
             </Link>
+            {/* **Only the administrator sees this, and only the server enforces
+                it.** Drawing or not drawing a link is a courtesy — the page is
+                in the bundle either way, and typing the address gets a
+                non-administrator the shelf back (App.tsx). src/admin.ts. */}
+            {isAdmin(user?.id) && (
+              <Link
+                href={ADMIN_HREF}
+                className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                title="Who has signed up, and how much they have read"
+              >
+                <Shield size={13} />
+                Admin
+              </Link>
+            )}
             <Link
               href={DESIGN_HREF}
               className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
