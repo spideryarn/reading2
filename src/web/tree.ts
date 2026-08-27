@@ -119,11 +119,70 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
 export function columnLabel(depth: number, leafDepth: number, hasArc = false): string {
   if (depth === leafDepth) return "Paragraphs";
   switch (depth) {
-    case 0: return hasArc ? "The argument" : "Article";
+    case 0: return hasArc ? "Argument" : "Article";
     case 1: return "Parts";
     case 2: return "Sections";
     default: return `Level ${depth}`;
   }
+}
+
+/**
+ * The short label the controls bar's pill wears — the same column
+ * `columnLabel` names in full, in the two or four characters a pill has room
+ * for.
+ *
+ * Two of these were depth numbers until 2026-08-27, and a depth number says
+ * where a column sits in the tree rather than what is in it. Greg: rename `L0`
+ * to `Arg`, and the paragraph pill to anything short that explains itself. So
+ * the two ends of the ladder are named — the arc at the top, paragraphs at the
+ * bottom — and the middle rungs keep their numbers, because `Parts` and
+ * `Sections` are exactly what a depth of 1 and 2 mean here and the tooltip says
+ * so anyway.
+ *
+ * `Arg` is the arc's name even on an article that has no arc yet, where the
+ * column falls back to the root gist (§ the arc). The pill is a fixed piece of
+ * furniture and a reader who learned where `Arg` is should not find it renamed
+ * by a pipeline stage they never ran; `columnLabel` still tells the truth in
+ * the column's own header and in the tooltip.
+ */
+export function columnPill(depth: number, leafDepth: number): string {
+  if (depth === leafDepth) return "Para";
+  if (depth === 0) return "Arg";
+  return `L${depth}`;
+}
+
+/**
+ * The tooltip on that pill: the column's full name, and what one of its cells
+ * actually holds.
+ *
+ * A four-character pill can only ever be a reminder, so the sentence behind it
+ * has to do the teaching — and it is the only place the reader is told what
+ * separates one column from the next, which is not the depth number but the
+ * *stride*: a cell per part, a cell per section, a cell per paragraph.
+ *
+ * Built from `columnLabel` rather than repeating it, so a column renamed there
+ * is renamed here too. Note the label goes in lower-case mid-sentence, which is
+ * why `columnLabel` returns "Argument" and not "The argument" — the leading
+ * article made this read "the the argument column" from 2026-08-26 until the
+ * pills were named.
+ */
+export function columnHint(depth: number, leafDepth: number, hasArc = false): string {
+  return `Show or hide the ${columnLabel(depth, leafDepth, hasArc).toLowerCase()} column — ${
+    columnStride(depth, leafDepth, hasArc)
+  }`;
+}
+
+/** What one cell of a column covers — the half of `columnHint` that varies. */
+function columnStride(depth: number, leafDepth: number, hasArc: boolean): string {
+  if (depth === leafDepth) return "one line per paragraph, beside the full text";
+  if (depth === 0) {
+    return hasArc
+      ? "one sentence per part on where the argument stands"
+      : "the whole piece in one sentence";
+  }
+  if (depth === 1) return "one sentence per part";
+  if (depth === 2) return "one sentence per section";
+  return "one sentence per group at this depth";
 }
 
 /* -------------------------------------------------------------- the arc --

@@ -214,6 +214,38 @@ Consequences worth knowing:
   [Node shape](#node-shape): falling back to `navLabel` when `gist` is absent would silently turn
   navigation chrome into reading content.
 
+### What the bar calls each column
+
+The controls bar reads left to right in the order the things it names stand on screen — the rail,
+then the columns coarse to fine, then the prose, then whether any of it has been pinned by hand:
+
+```
+  Spine │ GRANULARITY  Arg  L1  L2  Para │ Text │ fit │ reading
+    ↑                  ↑                   ↑       ↑     ↑
+   the rail        the columns          the prose  |    which mode
+                                              nothing pinned
+```
+
+- **`Spine`** is the rail, and it is leftmost because the rail is — Greg, 2026-08-27: move it "to
+  the furthest-left (to mirror its column position)". It is also the one control that survives a
+  mode band ([the spine](#the-spine-a-birds-eye-rail)).
+- **`Arg`** is the L0 column: one sentence per part on where the argument stands
+  ([the arc](#the-arc)). Named for what it holds rather than for its depth, Greg 2026-08-27 — and it
+  keeps the name on an article with no `arc.json` yet, where the column falls back to the root gist.
+  A pill is furniture, and it should not rename itself because of a pipeline stage the reader never
+  ran; the column's own header and the pill's tooltip both still say `Article` there.
+- **`L1` and `L2`** keep their numbers, because *Parts* and *Sections* is exactly what those depths
+  mean here, and both the column header and the tooltip say so.
+- **`Para`** is the leaf column, one line per paragraph beside the prose
+  ([the paragraph outline](#both-at-once-the-paragraph-outline-beside-the-prose)), and it only
+  appears in reading mode. It was `L3` — a number that comes from the tree's depth, so it was the
+  one pill whose label was different on different articles.
+- **`Text`** is the article's own words, and `fit`/`auto` is the layout state, not a column.
+
+The short names are `columnPill` in [`tree.ts`](../../src/web/tree.ts), the full names the column
+headers use are `columnLabel` beside it, and the tooltips are `columnHint`, built *from*
+`columnLabel` so that a column renamed once is renamed in all three places.
+
 ### Two modes: reading and outline
 
 Greg, 2026-08-24:
@@ -346,10 +378,12 @@ Four decisions worth keeping:
   bird's-eye rail beside it would be a second copy of the same thing; the width goes back to the
   columns. Decided in [`layout.ts`](../../src/web/layout.ts) § `fitView`, not in the rail itself, so
   that one function answers every "how wide is anything" question.
-- **The reader can overrule all of that** — a `Spine` pill in the controls bar, beside `L0`/`L1`/
-  `Text`, added 2026-08-26 at Greg's request for "a button in the top bar to show/hide the Spine
-  (just as we can with L0, L1, etc)". It writes [`?spine=`](url-state.md), and like `?cols=` it has
-  **three** states rather than two: absent is *automatic*, which is everything above, and is not the
+- **The reader can overrule all of that** — a `Spine` pill, the **leftmost control in the bar**,
+  added 2026-08-26 at Greg's request for "a button in the top bar to show/hide the Spine (just as we
+  can with L0, L1, etc)". It sat between `Text` and `auto` until 2026-08-27, when Greg moved it to
+  the far left "to mirror its column position": the bar now runs left to right in the order the
+  things it names stand on screen, rail first and then the columns. It writes
+  [`?spine=`](url-state.md), and like `?cols=` it has **three** states rather than two: absent is *automatic*, which is everything above, and is not the
   same as on. That distinction is what lets a reader keep the rail in outline mode and lose it in
   reading mode, and it is what the `auto` control puts back — `auto` now clears `?spine=` as well as
   `?cols=`, and the word `fit` beside the pills means neither has been touched.
@@ -593,8 +627,9 @@ stays put while the text breathes around it.
 - ~~**Zoom out (←)** — each visible group of items collapses into its parent's gist.~~
   ~~**Zoom in (→)** — each visible gist is replaced by its children's gists.~~ **Superseded.** That
   was written for a view showing one level at a time; the tabular view shows every level at once, so
-  there is no single "current level" for a key to move. Choosing levels is the `L0 / L1 / L2` buttons
-  and `?cols=` ([url-state.md](url-state.md#the-parameters)). The keys went instead to **stepping
+  there is no single "current level" for a key to move. Choosing levels is the `Arg / L1 / L2`
+  buttons ([what the bar calls each column](#what-the-bar-calls-each-column)) and `?cols=`
+  ([url-state.md](url-state.md#the-parameters)). The keys went instead to **stepping
   through the article one item at a time, at whichever level the pointer is hovering** — and ended up
   on ↑ / ↓ rather than ← / →, because up-down is the axis that means "further through the piece" at
   every level of this view. ← / → then came back to granularity after all: they move that *aim*

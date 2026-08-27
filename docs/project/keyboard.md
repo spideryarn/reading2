@@ -269,12 +269,12 @@ buys focus management we do not need.
 [granularity-zoom.md § Interaction](granularity-zoom.md#interaction) originally gave ← / → to *zoom
 out* and *zoom in* — one level at a time, in a view that showed a single level at a time. The table
 view superseded that by showing every level at once, which left "zoom" without an axis to move
-along; choosing levels is the `L0 / L1 / L2` buttons and `?cols=`
+along; choosing levels is the `Arg / L1 / L2` buttons and `?cols=`
 ([url-state.md](url-state.md#the-parameters)). So ← / → were free.
 
 They have now come back round to something close to that original intent — ← / → *do* choose the
 level again — but on a view that shows every level at once, so the key moves your **aim** across the
-columns rather than replacing what is drawn in them. The zoom is still the `L0 / L1 / L2` buttons
+columns rather than replacing what is drawn in them. The zoom is still the `Arg / L1 / L2` buttons
 and `?cols=`. What the old sketch had right was the axis; what it could not have known was that the
 levels would stop being a thing you switch between and start being a thing you point at.
 

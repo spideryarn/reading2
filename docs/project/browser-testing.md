@@ -182,7 +182,7 @@ The view has two modes and the second is easy to forget:
 
 | URL | What you're looking at |
 |---|---|
-| `/` | reading mode: `Article L0 │ Parts L1 │ Sections L2 │ Text verbatim` |
+| `/` | reading mode: column headers `Article L0 │ Parts L1 │ Sections L2 │ Text verbatim` (the first reads `Argument L0` once `arc.json` exists), and a controls bar of `Spine · Arg · L1 · L2 · Para · Text` — [granularity-zoom.md § What the bar calls each column](granularity-zoom.md#what-the-bar-calls-each-column) |
 | `/?text=0` | **outline mode** — rows collapse to natural height and the same table becomes a whole-article ToC. A leaf column of navLabels appears *here and only here*, styled by `.nav-label`. Check accents separately; it is visually a different page |
 | `/?at=spya-k6fpme` | deep link, opens scrolled to that section — [block-ids.md](block-ids.md), [url-state.md](url-state.md) |
 | `/#spya-k6fpme` | the old spelling. Should *rewrite itself* to `?at=` before the page paints; if you ever see the hash survive in the address bar, the migration in `main.tsx` broke |
@@ -420,7 +420,7 @@ with a frame count before believing otherwise:
    `keynav.ts` is measuring mid-flight instead of stepping from its own last target.
 5. **Press Back.** As with scrolling, it must leave the page — arrow keys write `?at=` through the
    ordinary position listener and must never push a history entry.
-6. **Walk ← to the far left and → to the far right.** The label must reach *The argument* at one end
+6. **Walk ← to the far left and → to the far right.** The label must reach *Argument* at one end
    and *Paragraphs* (with the `Text` header lit) at the other, and stop rather than wrap. Exactly one
    header lights at a time. This is the check that catches a rung being folded into its neighbour,
    which is what the arc column was doing until 2026-08-26.
