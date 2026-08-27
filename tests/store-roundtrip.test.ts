@@ -31,7 +31,8 @@ import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
-import { exportArticle } from "../src/store/export.js";
+import { exportArticle, rawFileName } from "../src/store/export.js";
+import { sniffKind } from "../src/fetch.js";
 import { importArticle } from "../src/store/import.js";
 
 loadEnvLocal();
@@ -351,6 +352,30 @@ when("a round trip through Postgres", () => {
       expect((returned as { backfilled?: string }).backfilled).toEqual(
         expect.stringContaining("db:export"),
       );
+
+      /* **The fields, not just the name.** Asserting the filename and the stamp
+         leaves everything that matters untested: an export writing the wrong
+         content type, the wrong encoding, the wrong hash or the wrong URLs
+         passes both. GPT Sol, reviewing the fix, 2026-08-27.
+
+         Compared against the original manifest, because every one of these has
+         a column and therefore a round trip to survive. Where the original is
+         itself a backfilled manifest its values are null, the importer stores
+         null, and null coming back is the correct answer rather than a gap. */
+      if (original === undefined) return;
+      const both = returned as Record<string, unknown>;
+      for (const field of ["contentType", "encoding", "sha256", "requestedUrl", "url"]) {
+        expect(both[field] ?? null, `${slug}: ${field}`).toEqual(
+          (original as Record<string, unknown>)[field] ?? null,
+        );
+      }
+
+      /* `bytes` is not compared to the original — it is compared to the file,
+         which is the stronger statement and the one a reader acts on. A
+         manifest whose byte count disagrees with the document beside it is how
+         a truncated write gets accepted downstream. */
+      const beside2 = await readRawIfPresent(path.join(out, "data", slug));
+      expect(both.bytes).toBe(beside2?.bytes.byteLength);
     });
   });
 
@@ -375,5 +400,50 @@ when("a round trip through Postgres", () => {
     // nothing reads, and the next `npm run blocks` would re-mint every id.
     const beside = await readJsonIfPresent(path.join(out, "data", slugs[0] ?? "", "stamped.html"));
     expect(beside).toBeUndefined();
+  });
+});
+
+describe("naming the raw file on the way out", () => {
+  /**
+   * **Export must classify a document the same way stage 1 did.**
+   *
+   * The first fix for "every export was named `raw.html`" reached for
+   * `looksLikePdf` (src/source.ts), which requires `%PDF-` at byte **zero**.
+   * `sniffKind` (src/fetch.ts) deliberately does not: *"Real files sometimes
+   * carry a little junk in front, so a header further in is still believed."*
+   * So stage 1 accepts a PDF with a couple of stray bytes on the front, and the
+   * export would have written that same file out as `raw.html` — the identical
+   * bug, one layer along, and invisible because no fixture here has one.
+   *
+   * Two classifiers for one question is the shape to distrust. Found by GPT
+   * Sol, reviewing the fix rather than the plan, 2026-08-27.
+   */
+  const PDF = new TextEncoder().encode("%PDF-1.4\n1 0 obj\n");
+  const withJunk = new Uint8Array([0x0d, 0x0a, 0x0d, 0x0a, ...PDF]);
+
+  it("agrees with stage 1 about a PDF whose header is at byte zero", () => {
+    expect(sniffKind(null, PDF)).toBe("pdf");
+    expect(rawFileName(null, PDF)).toBe("raw.pdf");
+  });
+
+  it("agrees with stage 1 about a PDF with junk in front of the header", () => {
+    expect(sniffKind(null, withJunk)).toBe("pdf");
+    expect(rawFileName(null, withJunk)).toBe("raw.pdf");
+  });
+
+  it("does not call a page about PDFs a PDF", () => {
+    /* sniffKind's own rule: a `%PDF-1.7` in the middle of something the server
+       called HTML is text about PDFs, not a PDF. Export must inherit that too,
+       which is the other half of using one classifier rather than two. */
+    const page = new TextEncoder().encode("<!doctype html><p>the %PDF-1.7 header</p>");
+    expect(rawFileName("text/html", page)).toBe("raw.html");
+  });
+
+  it("falls back to HTML when nothing can be told", () => {
+    /* `sniffKind` returns null for bytes it cannot place. The file still has to
+       be called something, and `raw.html` is what every article predating
+       manifests already is. */
+    expect(sniffKind(null, new TextEncoder().encode("just words"))).toBeNull();
+    expect(rawFileName(null, new TextEncoder().encode("just words"))).toBe("raw.html");
   });
 });

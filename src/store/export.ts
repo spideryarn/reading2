@@ -44,8 +44,7 @@ import {
   searchRuns,
 } from "../db/schema.js";
 import { blocksArtefact } from "../blocks.js";
-import type { DocumentKind, RawManifest } from "../fetch.js";
-import { looksLikePdf } from "../source.js";
+import { type DocumentKind, type RawManifest, sniffKind } from "../fetch.js";
 import { ownedByReader, ownedSlug } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
@@ -115,6 +114,28 @@ function compact<T extends object>(value: T): Partial<T> {
 }
 
 /**
+ * What to call the raw document, decided **the way stage 1 decided it**.
+ *
+ * One classifier, not two. The first version of this reached for `looksLikePdf`
+ * (src/source.ts), which requires `%PDF-` at byte zero — while `sniffKind`
+ * deliberately accepts a header a little way in, because *"real files sometimes
+ * carry a little junk in front"*. So stage 1 would take such a file as a PDF and
+ * the export would write it out as `raw.html`: the exact bug this whole change
+ * exists to fix, one layer along, and invisible because no fixture here has one.
+ * GPT Sol found it reviewing the fix, 2026-08-27.
+ *
+ * Passing the stored content type in rather than `null` matters for the other
+ * direction: `sniffKind` uses it to refuse a `%PDF-1.7` sitting in the middle of
+ * a page the server called HTML, which is an article *about* PDFs.
+ *
+ * `null` — bytes it cannot place — falls back to HTML, which is what every
+ * article predating manifests already is.
+ */
+export function rawFileName(contentType: string | null, bytes: Uint8Array): string {
+  return sniffKind(contentType, bytes) === "pdf" ? "raw.pdf" : "raw.html";
+}
+
+/**
  * Write the raw document and its manifest, and say which files were written.
  *
  * Its own function because `exportArticle` was already long and this pushed it
@@ -152,8 +173,8 @@ async function writeRawDocument(
      served as `application/pdf` is still HTML." There is no `raw_kind`
      column; docs/plans/raw-bytes-in-storage.md adds one, and until it does
      the body is the honest authority. */
-  const kind: DocumentKind = looksLikePdf(revision.rawBytes) ? "pdf" : "html";
-  const file = kind === "pdf" ? "raw.pdf" : "raw.html";
+  const file = rawFileName(revision.rawContentType, revision.rawBytes);
+  const kind: DocumentKind = file === "raw.pdf" ? "pdf" : "html";
   await writeFile(path.join(dir, file), revision.rawBytes);
 
   /* raw.json — stage 1's manifest, rebuilt from the columns. It was not
