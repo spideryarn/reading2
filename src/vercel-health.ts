@@ -4,6 +4,12 @@
  * src/routes.ts, because it reports on the *deployment* rather than on the
  * application, and it has to work when the application does not.
  *
+ * That independence is about src/routes.ts and the gate in front of it, not
+ * about imports in general. The two errors this file catches are logged through
+ * [src/log.ts](log.ts) like everything else in a request path — src/vercel.ts
+ * imports the logger before it imports this module, so there is no case where
+ * the logger is missing and this handler is running.
+ *
  * ## Why this exists
  *
  * Everything it checks fails **quietly**, and none of it is visible from the
@@ -60,6 +66,7 @@ import {
   driftWarnings,
   readActualSchema,
 } from "./db/schema-drift.js";
+import { errorFields, log } from "./log.js";
 import { STORE, listArticles } from "./store/index.js";
 
 /**
@@ -140,11 +147,16 @@ const build = {
  *    and every other line here still reads green. The first version of this
  *    table called it "a platform flag no code in this repo reads", which is
  *    true and beside the point — the platform reads it.
- *  - **The consequences were wrong the first time**, and a wrong consequence is
- *    worse than none, because it sends you to the wrong file. `ANTHROPIC_API_KEY`
- *    is the *pipeline* (the Anthropic SDK spelling in src/models.ts);
- *    `OPENROUTER_API_KEY` is what every reader-facing call goes through —
- *    explain, chat, search, PDF reading, embeddings.
+ *  - **The consequences were wrong the first time, and then went wrong again**,
+ *    which is the point: a wrong consequence is worse than none, because it
+ *    sends you to the wrong file. This pair said `ANTHROPIC_API_KEY` was the
+ *    *pipeline* and `OPENROUTER_API_KEY` was everything reader-facing. True when
+ *    written; false from 2026-08-27, when the pipeline moved onto OpenRouter
+ *    (docs/project/ai-gateway.md). Left unfixed it would have warned about a key
+ *    nothing reads, and — worse — told somebody staring at a dead ingest queue
+ *    that the missing `OPENROUTER_API_KEY` only affected the reading view.
+ *    **A `breaks` clause is a claim about other code, so it goes stale silently
+ *    when that code moves.** Nothing here can notice; only a person can.
  */
 interface Expected {
   /** Always reported in `env`, warned about only when `breaks` is set. */
@@ -170,13 +182,18 @@ const EXPECTED: readonly Expected[] = [
      version of this comment claimed that warning covered the production case;
      it cannot. GPT Sol's review, 2026-08-27. */
   { name: "SPIDERYARN_STORE", breaks: null },
-  {
-    name: "ANTHROPIC_API_KEY",
-    breaks: "the pipeline cannot run — no article can be ingested or re-extracted",
-  },
+  /* **Reported, not warned about, since 2026-08-27** — and the pair below is
+     the worked example of why the `breaks` clause has to be maintained rather
+     than written once. Nothing in `src/` reads this key any more: the seven
+     pipeline stages moved onto OpenRouter's Anthropic-compatible endpoint
+     (docs/project/ai-gateway.md), so a deployment missing it loses nothing.
+     Left in the table because it is still worth *seeing* in the report while
+     `.env.example` carries it — `breaks: null` is exactly that distinction. */
+  { name: "ANTHROPIC_API_KEY", breaks: null },
   {
     name: "OPENROUTER_API_KEY",
-    breaks: "explain, chat, search, PDF reading and embeddings all fail — every model call a reader waits on",
+    breaks:
+      "every model call in the app fails — the whole pipeline, so nothing can be ingested or re-extracted, and explain, chat, search, PDF reading and embeddings for anyone already reading",
   },
   { name: "SUPABASE_URL", breaks: "sign-in, and the bucket raw source bytes are written to" },
   {
@@ -358,9 +375,15 @@ async function cachedStoreCheck(warnings: string[]): Promise<StoreCheck> {
        and at the same time it is the *only* diagnostic a broken deployment has,
        so removing it entirely would be trading a real tool for a small
        exposure. Truncated rather than hidden, with the full text one
-       `vercel logs` away. */
+       `vercel logs` away.
+
+       The error object goes in whole rather than a `message` string, so that
+       `safeError` in src/log.ts decides what of it is safe to write down —
+       stack and an allowlist of properties, and nothing a future error class
+       decides to carry. Pulling `.message` out here would put it in a place
+       redaction can never reach (logging.md, rule 3). */
     const message = (err as Error).message ?? "";
-    console.error("[health] store check failed", { message });
+    log("health").error(errorFields(err), "store check failed");
     value = { name: STORE, error: message.slice(0, 200) };
   }
 
@@ -445,15 +468,7 @@ async function cachedSchemaCheck(warnings: string[]): Promise<SchemaCheck> {
       /* Same bargain as the store check: the whole error object to the log, a
          bounded message to an unauthenticated caller. */
       const message = (err as Error).message ?? "";
-      /* `console.error`, matching the store check above rather than src/log.ts.
-         docs/project/logging.md says a request path logs through src/log.ts, and
-         GPT Sol flagged this — but this file deliberately stands alone, and the
-         store check's `console.error` is pinned by a test in tests/health.test.ts
-         that asserts the full text reaches an operator. Moving one of the two
-         would leave the file speaking two conventions; moving both means
-         rewriting that test, which is a decision about this whole module rather
-         than about this block. Recorded in docs/plans/schema-drift-guard.md. */
-      console.error("[health] schema check failed", { message });
+      log("health").error(errorFields(err), "schema check failed");
       value = { error: message.slice(0, 200) };
     }
     schemaCached = { at: Date.now(), value, warnings: mine };

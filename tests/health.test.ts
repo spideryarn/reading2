@@ -41,6 +41,35 @@ vi.mock("../src/store/index.js", () => ({
   STORE: "postgres",
 }));
 
+/**
+ * Every error line the handler wrote, so the other half of the trim — that the
+ * operator still gets the whole thing — stays assertable.
+ *
+ * **Mocked rather than read off stdout, and that is not laziness.** src/log.ts
+ * is `silent` under `NODE_ENV=test` on purpose, and its destination is a
+ * SonicBoom writing to fd 1 with `fs.writeSync` — so a spy on
+ * `process.stdout.write` sees nothing whatever the logger does, and would go
+ * green the day the handler stopped logging. tests/log.test.ts owns the rest of
+ * the chain: it runs a real subprocess and asserts that an `err` reaches stdout
+ * with its message and stack. What is left for here is that the handler hands
+ * the logger the error at all, and hands it the *error* rather than a string.
+ */
+const logged = vi.fn();
+
+vi.mock("../src/log.js", async (importActual) => {
+  const actual = await importActual<typeof import("../src/log.js")>();
+  const silent = {
+    debug() {},
+    info() {},
+    warn() {},
+    error: logged,
+    child() {
+      return silent;
+    },
+  };
+  return { ...actual, log: () => silent };
+});
+
 const { health } = await import("../src/vercel-health.js");
 
 /** A request the handler can consume, body and all. */
@@ -163,7 +192,7 @@ describe("what it says back", () => {
       "connect ECONNREFUSED 10.1.2.3:5432 — password authentication failed for user " +
       "postgres.abcdefghijklmnop ".repeat(20);
     listArticles.mockRejectedValue(new Error(secret));
-    const seen = vi.spyOn(console, "error").mockImplementation(() => {});
+    logged.mockClear();
 
     const answer = await call("GET");
 
@@ -178,14 +207,19 @@ describe("what it says back", () => {
     /* The operator still gets it — trimming the response is only safe if the
        full text is somewhere. If this ever stops being true the trim above
        becomes data loss rather than discretion. */
-    expect(seen).toHaveBeenCalled();
-    /* `JSON.stringify` rather than `join`, because it is logged as
-       ("[health] …", { message }) and an object joins to "[object Object]" —
-       which contains none of the words this asserts on and would have made the
-       test pass for the wrong reason the moment the shape changed. */
-    const logged = seen.mock.calls.map((args) => args.map((a) => JSON.stringify(a)).join(" ")).join(" ");
-    expect(logged).toContain("ECONNREFUSED");
-    seen.mockRestore();
+    expect(logged).toHaveBeenCalled();
+    /* Read off `err.message`, never `JSON.stringify(args)`. An `Error`'s message
+       is not an enumerable own property, so stringifying the call arguments
+       gives `[{"err":{}}]` — a string that contains none of the words below and
+       would fail here for a reason that has nothing to do with the handler.
+       The same trap in reverse is why errorFields exists at all
+       (tests/log.test.ts, "exists because JSON.stringify(new Error(...)) is {}"). */
+    const errors = logged.mock.calls.map(([fields]) => (fields as { err?: Error })?.err?.message ?? "");
+    expect(errors.join(" ")).toContain("ECONNREFUSED");
+    /* The whole error object, not a message plucked out of it: `safeError` in
+       src/log.ts can only apply its allowlist to something it is handed whole,
+       and a string assembled here would sail past redaction. */
+    expect(logged.mock.calls[0]?.[0]).toHaveProperty("err", expect.any(Error));
   });
 
   it("says which store is live, because that is the first question", async () => {
@@ -329,13 +363,39 @@ describe("the environment a deployment needs", () => {
 
   it("names every missing one, rather than stopping at the first", async () => {
     completeEnv();
-    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("SUPABASE_URL", "");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).toContain("OPENROUTER_API_KEY");
+    expect(said).toContain("SUPABASE_URL");
+  });
+
+  it("says the one key now stops ingest as well as reading", async () => {
+    /* The consequence clause is a claim about *other* code, so it goes stale in
+       silence when that code moves — and this one did, on 2026-08-27, when the
+       seven pipeline stages left api.anthropic.com. Until it was updated, the
+       report told somebody staring at a dead ingest queue that a missing
+       `OPENROUTER_API_KEY` only cost them the reading view. */
+    completeEnv();
     vi.stubEnv("OPENROUTER_API_KEY", "");
 
     const said = warningsFrom(await call("GET")).join(" ");
 
-    expect(said).toContain("ANTHROPIC_API_KEY");
-    expect(said).toContain("OPENROUTER_API_KEY");
+    expect(said).toMatch(/ingest|pipeline/i);
+  });
+
+  it("no longer warns about ANTHROPIC_API_KEY, which nothing reads", async () => {
+    /* Reported but not warned about: the pipeline stopped using it the day it
+       moved to OpenRouter. A warning list that fires on a key nobody has to set
+       is a list that gets skimmed, and then the real ones are skimmed too. */
+    completeEnv();
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+
+    const said = warningsFrom(await call("GET")).join(" ");
+
+    expect(said).not.toContain("ANTHROPIC_API_KEY");
   });
 
   /* The other half. A warning list that fires on things nobody has to set is
