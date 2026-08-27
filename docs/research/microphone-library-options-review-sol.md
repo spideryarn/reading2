@@ -48,7 +48,7 @@ followed by an actual short encode and MP4 finalization on the affected machine.
 
 ### 2. The iPadOS rejection criterion is irrelevant to this code path
 
-Recording is armed only when `useDictation` owns a shared track: [useDictation.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useDictation.ts:704). Browsers without `recognition.start(audioTrack)` return `track: null`, so no recording starts: [useDictation.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/useDictation.ts:775).
+Recording is armed only when `useDictation` owns a shared track: [useDictation.ts](../../src/web/useDictation.ts) (line 704). Browsers without `recognition.start(audioTrack)` return `track: null`, so no recording starts: [useDictation.ts](../../src/web/useDictation.ts) (line 775).
 
 The document itself says that overload is Chromium 135+ only. Therefore Safari/iPadOS does not reach `recordTrack` today. “AudioEncoder is only a year old on iPadOS” and “revisit when iPadOS has a few more years” are padding, not decision evidence.
 
@@ -56,7 +56,7 @@ The relevant platform is recent Chromium, where `AudioEncoder` has existed since
 
 ### 3. The supposedly fixed recorder fallback contradicts the MediaRecorder event order
 
-At [mic-recording.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/mic-recording.ts:310), `onerror` checks `bytes === 0` and immediately starts another recorder.
+At [mic-recording.ts](../../src/web/mic-recording.ts) (line 310), `onerror` checks `bytes === 0` and immediately starts another recorder.
 
 But the recording specification requires the failure sequence:
 
@@ -74,7 +74,7 @@ Consequences:
 - Late AAC bytes can therefore be appended to the new WebM attempt, producing a mixed, corrupt blob.
 - Those late bytes can also prevent the next retry because shared `bytes` is no longer zero.
 
-The fake’s `fail()` calls only `onerror`: [mic-recording.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/mic-recording.test.ts:69). It does not model the mandated terminal `dataavailable` and `stop`, so the tests certify the wrong event model.
+The fake’s `fail()` calls only `onerror`: [mic-recording.test.ts](../../tests/mic-recording.test.ts) (line 69). It does not model the mandated terminal `dataavailable` and `stop`, so the tests certify the wrong event model.
 
 There is a second smaller hole: if the next attempt fails synchronously to construct or start, the asynchronous fallback calls `begin()` once and gives up instead of continuing through later attempts.
 
