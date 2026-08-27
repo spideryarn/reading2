@@ -1,0 +1,464 @@
+[
+  {
+    "name": "pg-greatwork",
+    "file": "pg_greatwork.html",
+    "slot": "N/S/T",
+    "url": "https://www.paulgraham.com/greatwork.html",
+    "rawTextChars": 66518,
+    "stock": {
+      "droppedChars": 0,
+      "ratio": 1,
+      "biggestGap": 0,
+      "coverage": 1,
+      "title": "How to Do Great Work",
+      "structureLost": [
+        "table 0/3",
+        "img 1/4"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 0,
+      "ratio": 1,
+      "biggestGap": 0,
+      "coverage": 1,
+      "title": "How to Do Great Work",
+      "structureLost": [
+        "table 0/3",
+        "img 1/4"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "man-open",
+    "file": "man_open.html",
+    "slot": "S/B",
+    "url": "https://man7.org/linux/man-pages/man2/open.2.html",
+    "rawTextChars": 43029,
+    "stock": {
+      "droppedChars": 324,
+      "ratio": 0.9896116572544098,
+      "biggestGap": 191,
+      "coverage": 0.995747054312208,
+      "title": "open(2) - Linux manual page",
+      "structureLost": [
+        "table 0/3",
+        "img 0/1"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 324,
+      "ratio": 0.9896116572544098,
+      "biggestGap": 191,
+      "coverage": 0.995747054312208,
+      "title": "open(2) - Linux manual page",
+      "structureLost": [
+        "table 0/3",
+        "img 0/1"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "rfc9110",
+    "file": "rfc9110.html",
+    "slot": "T/S",
+    "url": "https://www.rfc-editor.org/rfc/rfc9110.html",
+    "rawTextChars": 446095,
+    "stock": {
+      "droppedChars": 20522,
+      "ratio": 0.9448346204283841,
+      "biggestGap": 4733,
+      "coverage": 0.9597574507672133,
+      "title": "RFC 9110: HTTP Semantics",
+      "structureLost": [
+        "pre 133/161",
+        "figcaption 2/3",
+        "h3 111/124"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 20522,
+      "ratio": 0.9448346204283841,
+      "biggestGap": 4733,
+      "coverage": 0.9597574507672133,
+      "title": "RFC 9110: HTTP Semantics",
+      "structureLost": [
+        "pre 133/161",
+        "figcaption 2/3",
+        "h3 111/124"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "whatwg-parsing",
+    "file": "whatwg.html",
+    "slot": "T/S",
+    "url": "https://html.spec.whatwg.org/multipage/parsing.html",
+    "rawTextChars": 265815,
+    "stock": {
+      "droppedChars": 2263,
+      "ratio": 0.9814043601753099,
+      "biggestGap": 1180,
+      "coverage": 0.9667099298384214,
+      "title": "HTML Standard",
+      "structureLost": []
+    },
+    "unhidden": {
+      "droppedChars": 2263,
+      "ratio": 0.9814043601753099,
+      "biggestGap": 1180,
+      "coverage": 0.9667099298384214,
+      "title": "HTML Standard",
+      "structureLost": []
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "wikipedia-transformer",
+    "file": "wiki_transformer.html",
+    "slot": "S/D/B",
+    "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)",
+    "rawTextChars": 111191,
+    "stock": {
+      "droppedChars": 7812,
+      "ratio": 0.7311113309530448,
+      "biggestGap": 1730,
+      "coverage": 0.9353095124605408,
+      "title": "Transformer (deep learning)",
+      "structureLost": [
+        "math 0/188",
+        "table 0/13",
+        "li 160/985",
+        "h2 1/11",
+        "h3 12/25"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 7812,
+      "ratio": 0.7311113309530448,
+      "biggestGap": 1730,
+      "coverage": 0.9353095124605408,
+      "title": "Transformer (deep learning)",
+      "structureLost": [
+        "math 0/188",
+        "table 0/13",
+        "li 160/985",
+        "h2 1/11",
+        "h3 12/25"
+      ]
+    },
+    "notable": true,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "ar5iv-attention",
+    "file": "ar5iv.html",
+    "slot": "S/T",
+    "url": "https://ar5iv.labs.arxiv.org/html/1706.03762",
+    "rawTextChars": 40279,
+    "stock": {
+      "droppedChars": 110,
+      "ratio": 0.96626033416917,
+      "biggestGap": 110,
+      "coverage": 0.9531517664291567,
+      "title": "Attention Is All You Need",
+      "structureLost": [
+        "math 116/142",
+        "table 7/9",
+        "img 3/5"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 110,
+      "ratio": 0.96626033416917,
+      "biggestGap": 110,
+      "coverage": 0.9531517664291567,
+      "title": "Attention Is All You Need",
+      "structureLost": [
+        "math 116/142",
+        "table 7/9",
+        "img 3/5"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "arxiv-abs",
+    "file": "arxiv_abs.html",
+    "slot": "W",
+    "url": "https://arxiv.org/abs/1706.03762",
+    "rawTextChars": 4802,
+    "stock": {
+      "droppedChars": 1139,
+      "ratio": 0.3744273219491878,
+      "biggestGap": 841,
+      "coverage": 0.8848396501457726,
+      "title": "Attention Is All You Need",
+      "structureLost": [
+        "li 0/10",
+        "h2 1/3",
+        "h3 0/5",
+        "img 0/6"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 949,
+      "ratio": 0.39441899208663056,
+      "biggestGap": 746,
+      "coverage": 0.8848396501457726,
+      "title": "Attention Is All You Need",
+      "structureLost": [
+        "li 0/10",
+        "h2 1/3",
+        "h3 0/5",
+        "img 0/6"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "aaronson",
+    "file": "aaronson.html",
+    "slot": "B/W",
+    "url": "https://scottaaronson.blog/?p=7784",
+    "rawTextChars": 343771,
+    "stock": {
+      "droppedChars": 279955,
+      "ratio": 0.09575560474850991,
+      "biggestGap": 79993,
+      "coverage": 0.9802455704524232,
+      "title": "The Problem of Human Specialness in the Age of AI",
+      "structureLost": [
+        "blockquote 2/19",
+        "li 10/285",
+        "h2 0/1",
+        "h3 0/2",
+        "img 5/6"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 279955,
+      "ratio": 0.09575560474850991,
+      "biggestGap": 79993,
+      "coverage": 0.9802455704524232,
+      "title": "The Problem of Human Specialness in the Age of AI",
+      "structureLost": [
+        "blockquote 2/19",
+        "li 10/285",
+        "h2 0/1",
+        "h3 0/2",
+        "img 5/6"
+      ]
+    },
+    "notable": true,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "acx",
+    "file": "acx.html",
+    "slot": "B",
+    "url": "https://www.astralcodexten.com/p/your-book-review-the-educated-mind",
+    "rawTextChars": 140708,
+    "stock": {
+      "droppedChars": 4111,
+      "ratio": 0.9499744151007761,
+      "biggestGap": 252,
+      "coverage": 0.9957287432128948,
+      "title": "Your Book Review: The Educated Mind",
+      "structureLost": [
+        "h2 0/6",
+        "h3 0/34",
+        "img 15/18"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 4111,
+      "ratio": 0.9499744151007761,
+      "biggestGap": 252,
+      "coverage": 0.9957287432128948,
+      "title": "Your Book Review: The Educated Mind",
+      "structureLost": [
+        "h2 0/6",
+        "h3 0/34",
+        "img 15/18"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "gwern-scaling",
+    "file": "gwern.html",
+    "slot": "D/S",
+    "url": "https://gwern.net/scaling-hypothesis",
+    "rawTextChars": 104865,
+    "stock": {
+      "droppedChars": 633,
+      "ratio": 0.9876793973203642,
+      "biggestGap": 542,
+      "coverage": 0.9931531016068278,
+      "title": "The Scaling Hypothesis",
+      "structureLost": [
+        "li 51/68"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 633,
+      "ratio": 0.9876793973203642,
+      "biggestGap": 542,
+      "coverage": 0.9931531016068278,
+      "title": "The Scaling Hypothesis",
+      "structureLost": [
+        "li 51/68"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "tufte-css",
+    "file": "tufte.html",
+    "slot": "D",
+    "url": "https://edwardtufte.github.io/tufte-css/",
+    "rawTextChars": 13836,
+    "stock": {
+      "droppedChars": 0,
+      "ratio": 0.9805579647296907,
+      "biggestGap": 0,
+      "coverage": 0.988869615495808,
+      "title": "Tufte CSS",
+      "structureLost": []
+    },
+    "unhidden": {
+      "droppedChars": 0,
+      "ratio": 0.9805579647296907,
+      "biggestGap": 0,
+      "coverage": 0.988869615495808,
+      "title": "Tufte CSS",
+      "structureLost": []
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "mdn-cache-control",
+    "file": "mdn_cache.html",
+    "slot": "B/D/S",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control",
+    "rawTextChars": 29408,
+    "stock": {
+      "droppedChars": 842,
+      "ratio": 0.6646490750816104,
+      "biggestGap": 448,
+      "coverage": 0.8430019042437432,
+      "title": "Cache-Control header - HTTP | MDN",
+      "structureLost": [
+        "table 2/3",
+        "code 185/520",
+        "li 10/509",
+        "h2 7/9"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 842,
+      "ratio": 0.6646490750816104,
+      "biggestGap": 448,
+      "coverage": 0.8430019042437432,
+      "title": "Cache-Control header - HTTP | MDN",
+      "structureLost": [
+        "table 2/3",
+        "code 185/520",
+        "li 10/509",
+        "h2 7/9"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "gutenberg-pride",
+    "file": "gutenberg.html",
+    "slot": "T/B",
+    "url": "https://www.gutenberg.org/cache/epub/1342/pg1342-images.html",
+    "rawTextChars": 735235,
+    "stock": {
+      "droppedChars": 18341,
+      "ratio": 0.9739960692839704,
+      "biggestGap": 17659,
+      "coverage": 0.9947649391011038,
+      "title": "Pride and Prejudice",
+      "structureLost": [
+        "blockquote 0/1",
+        "li 0/4"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 18341,
+      "ratio": 0.9739960692839704,
+      "biggestGap": 17659,
+      "coverage": 0.9947649391011038,
+      "title": "Pride and Prejudice",
+      "structureLost": [
+        "blockquote 0/1",
+        "li 0/4"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  },
+  {
+    "name": "cornell-17-107",
+    "file": "cornell.html",
+    "slot": "W/B",
+    "url": "https://www.law.cornell.edu/uscode/text/17/107",
+    "rawTextChars": 30850,
+    "stock": {
+      "droppedChars": 630,
+      "ratio": 0.9179254457050243,
+      "biggestGap": 246,
+      "coverage": 0.9815235008103728,
+      "title": "17 U.S. Code § 107 - Limitations on exclusive rights: Fair use",
+      "structureLost": [
+        "li 0/54",
+        "h2 0/1",
+        "img 0/2"
+      ]
+    },
+    "unhidden": {
+      "droppedChars": 630,
+      "ratio": 0.9179254457050243,
+      "biggestGap": 246,
+      "coverage": 0.9815235008103728,
+      "title": "17 U.S. Code § 107 - Limitations on exclusive rights: Fair use",
+      "structureLost": [
+        "li 0/54",
+        "h2 0/1",
+        "img 0/2"
+      ]
+    },
+    "notable": false,
+    "helped": false,
+    "regressed": false
+  }
+]

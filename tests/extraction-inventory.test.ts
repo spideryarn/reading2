@@ -127,6 +127,29 @@ describe("the three instrument bugs", () => {
   });
 });
 
+describe("structure, which characters cannot show", () => {
+  it("counts a formula the extractor discarded even when its paragraph survives", () => {
+    /* The Wikipedia case, in miniature: the prose comes through and every
+       equation is gone. Compare text and this paragraph looks mostly fine;
+       count elements and the article has lost its mathematics. */
+    const withMath = `<p>${para(1)} <math><mi>x</mi></math> ${para(2)}</p>`;
+    const withoutMath = `<p>${para(1)}  ${para(2)}</p>`;
+    const inv = compare(page([withMath]), withoutMath, URL);
+    /* The characters say the paragraph is basically fine — which it is. */
+    expect(inv.rows[0]?.verdict).not.toBe("dropped");
+    expect(inv.rows[0]?.survived).toBeGreaterThan(0.8);
+    /* The structure says the article has lost its mathematics. Only one of
+       these two numbers would tell a reader what happened to them. */
+    expect(inv.structure.math).toEqual({ present: 1, kept: 0 });
+  });
+
+  it("says nothing about a tag the page does not have", () => {
+    const inv = compare(page([`<p>${para(1)}</p>`]), `<p>${para(1)}</p>`, URL);
+    expect(inv.structure.math).toBeUndefined();
+    expect(inv.structure.table).toBeUndefined();
+  });
+});
+
 describe("the fifth bug: multiplicity", () => {
   /* Found by a GPT Sol review of the built code, 2026-08-27. `verdict` runs
      per row and `indexOf` has no memory, so two source rows with the same text

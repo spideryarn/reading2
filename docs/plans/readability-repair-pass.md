@@ -109,7 +109,7 @@ Reordered after the review. The original plan started at rung 3.
 
 | | Rung | Cost | Status |
 |---|---|---|---|
-| **0** | Pre-clean the DOM before Readability — un-hide collapsed regions | free, deterministic | **measured, works on the one case we have** |
+| **0** | Pre-clean the DOM before Readability — un-hide collapsed regions | free, deterministic | **measured: 0 regressions in 14 pages, and 0 further wins** |
 | **1** | Deterministic candidate variants: a semantic root, Readability's own options | free, deterministic | measured, **helps nothing** — see below |
 | **2** | A second extractor as a candidate (`dom-smoothie`, or trafilatura out of process) | free at runtime, a new dependency | not tried — needs Greg's call |
 | **3** | A model **detects** a bad extraction; no article text in its output | cheap | **part-measured** |
@@ -221,6 +221,67 @@ and acknowledgements at all?", which is Greg's call and needs no model to answer
 Measuring against stock would have reported the model as four times more useful than it is. Any arm
 added later gets the same treatment: **the denominator is whatever the cheaper rungs already
 achieved.**
+
+## The corpus, and the finding that outranks everything above
+
+Fourteen pages, chosen to fill the failure-mode slots rather than to sample the web, every one
+fetched over plain HTTP with no browser spoofing and returning 200 with its text in the initial
+bytes. [`evals/extraction/corpus.mts`](../../evals/extraction/corpus.mts) runs stock Readability
+against rung 0 over all of them. No model, no money.
+
+**Un-hiding regresses nothing.** 0 of 14. It also helps 0 of 14 — the accordion pattern does not
+recur here — so the fix is *safe on this evidence and narrow*, which is a different thing from
+proven.
+
+And then the number that reframes the whole exercise:
+
+> **12 of 14 pages lose 10% or more of some structural element.** Not prose — tables, formulas,
+> code, headings.
+
+| fixture | what it loses |
+|---|---|
+| **wikipedia-transformer** | **math 0/188**, table 0/13, h2 1/11 |
+| **acx** (a 24,000-word book review) | of 134 headings long enough to check, **19 survive in any form** — "The man", "The book", "Part 1: Why don't schools work?" are simply gone |
+| rfc9110 | pre 133/161 — 28 blocks of ABNF grammar — h3 111/124 |
+| mdn-cache-control | code 185/520, table 2/3 |
+| pg-greatwork, man-open | table 0/3 each |
+
+**Every equation in a deep-learning article is discarded, and the prose around them reads
+perfectly.** The character comparison barely notices: the Wikipedia paragraph holding a formula
+scores `partial` with most of its words intact, because the words *are* intact. Only counting
+elements shows that the article has lost its mathematics.
+
+**This matters more here than in most reading apps**, and the reason is structural rather than
+aesthetic. The table of contents and the granularity-zoom tree are the same structure, built from
+headings ([granularity-zoom.md](../project/granularity-zoom.md#the-tree)). An article whose headings
+were discarded at stage 2 has no tree to build at stages 4 and 5 — the feature this whole app exists
+for degrades, and nothing anywhere reports it.
+
+So the honest ranking of what stage 2 is doing wrong, on this evidence:
+
+1. **Lost structure (S)** — common, systematic, invisible, and it damages the feature the product is
+   for. Nobody was looking for this.
+2. **Truncation (T)** — real and severe when it happens (the Constitution), and rarer than expected.
+3. Everything else.
+
+### The threshold that failed in both directions
+
+Worth recording, because it was stated up front — 5% of the page, in a run of 1,500+ characters — and
+that discipline did not save it:
+
+- **Scott Aaronson's blog: 279,955 characters absent, correctly.** They are the comment thread. The
+  largest number the corpus produces is Readability doing its job, and the threshold called it
+  serious.
+- **RFC 9110: 20,522 characters of normative specification text genuinely absent**, verified string
+  by string — and only 4.6% of a 446,000-character page, so the threshold called it fine.
+
+No percentage separates those, because the difference between them is not a quantity. It is *what
+the missing text is*.
+
+**That is the strongest argument in this document for a model, and it is not an argument for
+repair.** Deterministic code can find what is absent; it cannot say whether absence was correct. A
+model can, cheaply, and Luna demonstrably did — leaving 27 pieces of furniture and restoring two
+real blocks on the Noema page. The rung worth building next is **detection**, and the corpus is why.
 
 ## Designs 3 and 4, and the one that is still ruled out
 
@@ -416,20 +477,28 @@ number comparable to a published one.
 
 1. ~~The inventory harness~~ — **built**, tested, five bugs and all.
 2. Add source-id provenance beside the text matcher, and report disagreements.
-3. Fixtures: a frozen corpus, WCXB's article subset first, plus our own hard cases.
-4. Rung 0 across the whole corpus. If un-hiding regresses nothing and fixes a real slice, it ships
-   on its own and the rest of this waits.
-5. Rung 2, if Greg wants a dependency weighed.
-6. **Rung 3/4 against the residual, not against stock.** Both have been measured against stock
+3. ~~Fixtures~~ — **14 fetched and measured**, one per failure slot, listed in
+   [`corpus.mts`](../../evals/extraction/corpus.mts). The HTML is **not committed**: 6 MB of other
+   people's pages, and whether that belongs in the repo is Greg's call. WCXB's article subset is
+   still the right thing to add for a comparable published number.
+4. ~~Rung 0 across the corpus~~ — **done: 0 regressions, 0 further wins.**
+5. **A structural check, which is now the most valuable thing on this list.** Counting kept-over-
+   present per tag is a dozen lines, costs nothing, needs no gold, and it is the only thing that
+   sees the failure the corpus says is most common. It belongs in stage 2 as a warning, not in an
+   eval.
+6. Rung 2, if Greg wants a dependency weighed.
+7. **Rung 3/4 against the residual, not against stock.** Both have been measured against stock
    Readability, which is the wrong denominator now that rung 0 exists. Re-run the model arm on
    pages already pre-cleaned: if the residual is a copyright line and a pull-quote, the answer to
    Greg's question is "a model helps, and the free fix already got there first".
 
 ## Decisions for Greg
 
-- **Ship rung 0 now, on this evidence, or wait for the corpus?** It is four lines and it recovers a
-  quarter of an article we already have. It is also the sort of change that could pull rubbish in on
-  a page we have not looked at.
+- **Ship rung 0 now?** The corpus answers the risk half: **0 regressions in 14 pages.** It recovers a
+  quarter of an article we hold and, on this set, wins nothing else. Cheap and safe, narrow benefit.
+- **The structural check is the one I would build first**, and it was not in the original question.
+  It is free, deterministic, needs no gold, and it catches the failure 12 of 14 pages exhibit —
+  including one that quietly guts the granularity-zoom tree.
 - **Is a second extractor allowed?** The published gap between Readability and trafilatura on
   article pages is larger than anything a repair pass has been shown to buy. It is a new dependency,
   so it is the sort of thing vision.md says to weigh rather than slip past.

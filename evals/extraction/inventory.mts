@@ -289,6 +289,23 @@ function visibleText(doc: Document): string {
   return norm(doc.body?.textContent ?? "");
 }
 
+/**
+ * Things a reader loses that a character comparison cannot see.
+ *
+ * Added after the corpus run, and it earned its place immediately: on the
+ * Wikipedia transformer article **0 of 188 `<math>` elements and 0 of 13 tables
+ * survive extraction**, while the surrounding prose comes through fine. Compare
+ * text and you see a paragraph that mostly survived; count elements and you see
+ * that every equation in a deep-learning article is gone.
+ *
+ * This is failure mode **S**, and it is the one bag-of-words scoring is blind to
+ * by construction — which is why it is counted separately rather than folded
+ * into the ratio. Kept over present, per tag.
+ */
+export const STRUCTURE = [
+  "math", "table", "pre", "figcaption", "code", "blockquote", "li", "h2", "h3", "img",
+] as const;
+
 export interface Comparison {
   rawTextChars: number;
   articleTextChars: number;
@@ -308,6 +325,8 @@ export interface Comparison {
   };
   /** The longest runs of consecutive dropped blocks — where a truncation shows up. */
   gaps: { startId: string; blocks: number; chars: number; snippet: string }[];
+  /** Per tag, how many of the page's own survived. See STRUCTURE. */
+  structure: Record<string, { present: number; kept: number }>;
 }
 
 export interface Inventory extends Comparison {
@@ -450,6 +469,13 @@ export function compare(rawHtml: string, articleHtml: string, url: string): Comp
   flush();
   gaps.sort((a, b) => b.chars - a.chars);
 
+  const structure: Comparison["structure"] = {};
+  for (const tag of STRUCTURE) {
+    const present = before.querySelectorAll(tag).length;
+    if (!present) continue;
+    structure[tag] = { present, kept: articleDoc.querySelectorAll(tag).length };
+  }
+
   return {
     rawTextChars: rawText.length,
     articleTextChars: articleText.length,
@@ -457,6 +483,7 @@ export function compare(rawHtml: string, articleHtml: string, url: string): Comp
     rows,
     totals,
     gaps: gaps.slice(0, 8),
+    structure,
   };
 }
 
@@ -482,6 +509,36 @@ export function unhide(doc: Document): void {
   for (const el of Array.from(doc.querySelectorAll("[hidden]"))) el.removeAttribute("hidden");
 }
 
+/**
+ * Readability over one HTML file, compared with the page it came from.
+ *
+ * Split out from `inventory` below so a corpus can be measured without first
+ * being copied into `data/<slug>/` — a fixture set is a pile of files with
+ * their URLs, and making it look like an ingested article before it can be
+ * measured is work that buys nothing.
+ */
+export async function inventoryFile(
+  htmlPath: string,
+  url: string,
+  opts: { unhide?: boolean } = {},
+): Promise<Inventory> {
+  const html = await readFile(htmlPath, "utf-8");
+  return { ...inventoryHtml(html, url, opts), dir: htmlPath, url, rawBytes: Buffer.byteLength(html) };
+}
+
+function inventoryHtml(html: string, url: string, opts: { unhide?: boolean }): Inventory {
+  /* Readability mutates the document it is handed, so this parse is its own and
+     `compare` gets a fresh one. Sharing them destroys the "before". */
+  const doc = new JSDOM(html, { url, virtualConsole: new VirtualConsole() }).window.document;
+  if (opts.unhide) unhide(doc);
+  const article = new Readability(doc).parse();
+  return {
+    dir: "", url, rawBytes: Buffer.byteLength(html),
+    title: article?.title ?? null,
+    ...compare(html, article?.content ?? "", url),
+  };
+}
+
 /** Readability over `<dir>/raw.html`, compared with the page it came from. */
 export async function inventory(dir: string, opts: { unhide?: boolean } = {}): Promise<Inventory> {
   const html = await readFile(path.join(dir, "raw.html"), "utf-8");
@@ -494,19 +551,7 @@ export async function inventory(dir: string, opts: { unhide?: boolean } = {}): P
     if (j.finalUrl || j.url) { url = (j.finalUrl ?? j.url) as string; break; }
   }
 
-  /* Readability mutates the document it is handed, so this parse is its own and
-     `compare` gets a fresh one. Sharing them destroys the "before". */
-  const doc = new JSDOM(html, { url, virtualConsole: new VirtualConsole() }).window.document;
-  if (opts.unhide) unhide(doc);
-  const article = new Readability(doc).parse();
-
-  return {
-    dir,
-    url,
-    rawBytes: Buffer.byteLength(html),
-    title: article?.title ?? null,
-    ...compare(html, article?.content ?? "", url),
-  };
+  return { ...inventoryHtml(html, url, opts), dir };
 }
 
 function report(inv: Inventory, showRows: boolean): void {
@@ -528,6 +573,12 @@ function report(inv: Inventory, showRows: boolean): void {
     console.log(
       `  !! the inventory can only see ${pct(t.coverage)} of this page's text — ` +
       "every number above it is measuring a fraction of the page. Fix `candidates` before believing it.",
+    );
+  }
+  const lost = Object.entries(inv.structure).filter(([, v]) => v.kept < v.present);
+  if (lost.length) {
+    console.log(
+      `  structure kept/present: ${lost.map(([t, v]) => `${t} ${v.kept}/${v.present}`).join(", ")}`,
     );
   }
   if (inv.gaps.length) {
