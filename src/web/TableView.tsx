@@ -15,7 +15,8 @@
  *    could be displayed (granularity-zoom.md#node-shape).
  */
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
-import type { Article, BlockId, Comment, NodeId } from "../types.js";
+import type { Article, BlockId, Comment, NodeId, TreeNode } from "../types.js";
+import { useRenderCount } from "./perf.js";
 import { columnLabel, type ArcCell, type Geometry } from "./tree.js";
 import type { Layout } from "./layout.js";
 import {
@@ -160,6 +161,7 @@ export function TableView({
   sections,
   layoutKey,
 }: Props) {
+  useRenderCount("TableView");
   const { blocks } = article;
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   /** The panel entry under the pointer, if any — see activeChain below. */
@@ -221,7 +223,6 @@ export function TableView({
     return m;
   }, [colKey, geometry, arcCells, blocks]);
   const depths = useMemo(() => [...levels.keys()], [levels]);
-  const live = useColumnContext({ sections, depths, enabled: panels, layoutKey });
   // The ancestor path of the hovered row — used to light up the chain across
   // every level at once, which is the whole point of seeing them side by side.
   // The panels carry it too, since they are the levels now (ContextList.tsx).
@@ -248,18 +249,6 @@ export function TableView({
     }
     return new Set(hoveredRow === null ? [] : geometry.chains[hoveredRow]);
   }, [hoveredNode, hoveredRow, geometry, article.tree.nodes]);
-  // The panels' lists, built once per change of position rather than once
-  // per render: a row hover re-renders the whole table, and a fresh `entries`
-  // array would send every panel back through its layout effect.
-  const panelLists = useMemo(() => {
-    if (!panels) return new Map<number, ReturnType<typeof levelList>>();
-    return new Map(
-      [...levels].map(([d, l]) => [
-        d,
-        levelList(l.items, currentIndex(l.starts, live.focusRow), article.tree.nodes),
-      ]),
-    );
-  }, [panels, levels, live.focusRow, article.tree.nodes]);
   /** The crumb on a landmark's tooltip: the part a section is in, or which part this is. */
   const crumbFor = (item: ContextItem): string | null => {
     const parent = item.node.parent === null ? undefined : article.tree.nodes[item.node.parent];
@@ -729,8 +718,85 @@ export function TableView({
     </table>
     {/* One panel per gist column, laid over it, following the focus line —
         see useColumnContext.ts. */}
-    {panels &&
-      [...panelLists].map(([d, entries]) => (
+    {panels && (
+      <ColumnPanels
+        sections={sections}
+        depths={depths}
+        layoutKey={layoutKey}
+        levels={levels}
+        nodes={article.tree.nodes}
+        pinLeft={pinLeft}
+        activeChain={activeChain}
+        crumbFor={crumbFor}
+        onJump={onJump}
+        onHoverNode={setHoveredNode}
+      />
+    )}
+    </>
+  );
+}
+
+/* ---------------------------------------------------- the gist panels ------
+
+   **This exists to keep a scroll out of the table's renderer.**
+
+   `useColumnContext` samples geometry on every animation frame of a scroll and
+   calls `setLive` whenever the answer changes — which, near the masthead where
+   the header is still sticking, is most frames. While that hook was called by
+   `TableView`, each of those was a re-render of `TableView`: the whole
+   block-by-column map, several hundred rows of it, to move three overlays a few
+   pixels. GPT Sol found this, and it is much the largest thing a scroll used to
+   cost here.
+
+   Owning the hook one level down changes nothing about what is drawn. The
+   panels re-render per frame exactly as before; the table no longer does.
+
+   The traffic that still goes upward is deliberate and rare: hovering a panel
+   entry calls `onHoverNode`, and the chain it lights crosses every column, so
+   that one *must* re-render the table. A hover is a gesture; a scroll is sixty
+   frames a second. */
+interface ColumnPanelsProps {
+  sections: Section[];
+  depths: number[];
+  layoutKey: string;
+  levels: Map<number, { items: ContextItem[]; starts: number[] }>;
+  nodes: Record<NodeId, TreeNode>;
+  pinLeft: number | undefined;
+  activeChain: Set<NodeId>;
+  crumbFor: (item: ContextItem) => string | null;
+  onJump: (blockId: BlockId) => void;
+  onHoverNode: (id: NodeId | null) => void;
+}
+
+function ColumnPanels({
+  sections,
+  depths,
+  layoutKey,
+  levels,
+  nodes,
+  pinLeft,
+  activeChain,
+  crumbFor,
+  onJump,
+  onHoverNode,
+}: ColumnPanelsProps) {
+  useRenderCount("ColumnPanels");
+  const live = useColumnContext({ sections, depths, enabled: true, layoutKey });
+  /* Built once per change of *position* rather than once per render: a fresh
+     `entries` array would send every panel back through its layout effect. */
+  const panelLists = useMemo(
+    () =>
+      new Map(
+        [...levels].map(([d, l]) => [
+          d,
+          levelList(l.items, currentIndex(l.starts, live.focusRow), nodes),
+        ]),
+      ),
+    [levels, live.focusRow, nodes],
+  );
+  return (
+    <>
+      {[...panelLists].map(([d, entries]) => (
         <ContextPanel
           key={d}
           depth={d}
@@ -744,7 +810,7 @@ export function TableView({
           activeChain={activeChain}
           crumbFor={crumbFor}
           onJump={onJump}
-          onHoverNode={setHoveredNode}
+          onHoverNode={onHoverNode}
         />
       ))}
     </>

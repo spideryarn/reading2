@@ -69,14 +69,48 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { localMagicLink } from "./seed-local-session.js";
 
 const CHROME =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const PORT = 9333;
+/**
+ * Chrome's debugging port, chosen by Chrome rather than by us.
+ *
+ * **It used to be the constant 9333, and that was a silent-success bug of the
+ * exact kind this file exists to catch.** Two measurements running at once —
+ * a before and an after, say — both spawned a Chrome, and the second one's
+ * `--remote-debugging-port=9333` quietly lost the race and exited that
+ * listener. The second script then connected to the port anyway, found the
+ * *first* browser's targets, and measured somebody else's tab. It never
+ * errored. It reported plausible numbers for a page it had never opened, and
+ * the tell was a blank-page reading for a URL that renders fine.
+ *
+ * `0` asks the OS for a free port; Chrome writes the one it got into
+ * `DevToolsActivePort` in the profile directory. Reading it back is the only
+ * way to know which browser we are talking to.
+ */
+let PORT = 0;
+
+/** First line of `DevToolsActivePort` is the port; the second is a WS path. */
+async function readDebugPort(profile: string, deadlineMs = 20_000): Promise<number> {
+  const file = join(profile, "DevToolsActivePort");
+  const until = Date.now() + deadlineMs;
+  while (Date.now() < until) {
+    try {
+      const first = readFileSync(file, "utf8").split("\n")[0]?.trim();
+      const n = Number(first);
+      if (Number.isInteger(n) && n > 0) return n;
+    } catch {
+      /* not written yet */
+    }
+    await sleep(150);
+  }
+  throw new Error(`Chrome never wrote ${file} — did it fail to start?`);
+}
 
 const flag = (name: string, fallback: string): string => {
   const i = process.argv.indexOf(`--${name}`);
@@ -237,6 +271,59 @@ function pick(list: { name: string; value: number }[]): Metrics {
   return out;
 }
 
+/**
+ * Scroll the page the way a reader does, for `ms`.
+ *
+ * **A real wheel event, not `window.scrollTo`.** The two take different paths:
+ * `scrollTo` is a script-driven scroll, while a wheel goes in at the top of the
+ * input pipeline, hits the compositor, and runs every passive listener the app
+ * has registered. Only the second one measures what a reader's finger costs.
+ *
+ * 60ms apart rather than every frame: a trackpad delivers wheel events at
+ * roughly that rate, and firing one per frame measures a scroll nobody
+ * performs. `deltaY` is a plausible notch rather than a fling, and the sign
+ * flips at the bottom so a long window keeps moving instead of measuring a page
+ * pinned against its end — which is a *stationary* page, and would quietly turn
+ * a scrolling measurement back into an idle one.
+ */
+interface PageState {
+  title: string;
+  nodes: number;
+  rows: number;
+  prose: number;
+  text: string;
+  scrollHeight: number;
+}
+
+/* A window is 600-1000px tall here; anything shorter than this cannot scroll,
+   whatever the wheel events say. Deliberately a round guess rather than a real
+   measurement — it only has to catch "the page is one screen". */
+const window$innerHeightGuess = 800;
+
+async function wheel(cdp: Cdp, ms: number): Promise<void> {
+  const STEP_MS = 60;
+  const until = Date.now() + ms;
+  let deltaY = 120;
+  let sinceFlip = 0;
+  while (Date.now() < until) {
+    await cdp.send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: 400,
+      y: 400,
+      deltaX: 0,
+      deltaY,
+      pointerType: "mouse",
+    });
+    sinceFlip += 1;
+    // ~15 seconds in one direction, then back, so we never park at an end.
+    if (sinceFlip > 250) {
+      deltaY = -deltaY;
+      sinceFlip = 0;
+    }
+    await sleep(STEP_MS);
+  }
+}
+
 async function main(): Promise<void> {
   const url = flag("url", "http://localhost:5273/");
   const seconds = Number(flag("seconds", "60"));
@@ -249,13 +336,21 @@ async function main(): Promise<void> {
   const kept = has("profile") ? flag("profile", "") : "";
   const profile = kept || mkdtempSync(join(tmpdir(), "spya-cpu-"));
 
+  /* Signed in without a human, against the local Supabase only. See
+     seed-local-session.ts for why this is a `verifyOtp` and not a magic-link
+     redirect: the app is on PKCE, and a browser that did not start the flow has
+     no code verifier to finish it with. Start on the origin so the module graph
+     is loaded and the app's own SDK instance is importable. */
+  const link = has("local-sign-in") ? await localMagicLink(url) : null;
+  const startUrl = link ? new URL(url).origin : url;
+
   let chrome: ChildProcess | null = null;
   let cdp: Cdp | null = null;
   try {
     chrome = spawn(
       CHROME,
       [
-        `--remote-debugging-port=${PORT}`,
+        "--remote-debugging-port=0",
         `--user-data-dir=${profile}`,
         // A fresh profile with none of the machine's extensions, sync, or
         // startup tabs — the whole point is a browser doing nothing else.
@@ -270,11 +365,12 @@ async function main(): Promise<void> {
         "--disable-backgrounding-occluded-windows",
         "--disable-renderer-backgrounding",
         "--disable-background-timer-throttling",
-        url,
+        startUrl,
       ],
       { stdio: "ignore" },
     );
 
+    PORT = await readDebugPort(profile);
     await waitForPort();
 
     if (has("sign-in")) {
@@ -291,6 +387,32 @@ async function main(): Promise<void> {
     if (!page?.webSocketDebuggerUrl) throw new Error("no page target — did Chrome open the URL?");
     cdp = await Cdp.open(page.webSocketDebuggerUrl);
     await cdp.send("Performance.enable");
+
+    if (link) {
+      /* Handed to the app's own client rather than to a second one built here,
+         so the session is stored under the key that client reads, in the format
+         that client's version writes. Vite serves the module by its source
+         path, which is what makes this possible in dev and impossible against a
+         built bundle. */
+      await sleep(3000);
+      const signIn = await cdp.send<{ result: { value: string } }>("Runtime.evaluate", {
+        expression: `(async () => {
+          try {
+            const m = await import('/src/web/lib/supabase.ts');
+            const r = await m.supabase.auth.verifyOtp({
+              type: 'magiclink', token_hash: ${JSON.stringify(link.hashedToken)} });
+            if (r.error) return 'error: ' + r.error.message;
+            return r.data.session ? 'ok:' + (r.data.user?.email ?? '?') : 'no session';
+          } catch (e) { return 'threw: ' + (e && e.message); }
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const said = signIn.result.value;
+      if (!said.startsWith("ok:")) throw new Error(`local sign-in failed — ${said}`);
+      console.log(`signed in locally (${said.slice(3)})`);
+      await cdp.send("Page.navigate", { url });
+    }
 
     if (has("hidden")) {
       // Genuinely hidden, told to the page rather than faked around it: this
@@ -321,11 +443,69 @@ async function main(): Promise<void> {
       return { total, byFrame };
     };
 
+    /* What is actually on screen, reported with every run.
+       
+       **A number from a page that never rendered looks exactly like a number
+       from a fast one** — and it looks *better*, because a blank page is
+       genuinely cheap. The first signed-in run here reported 345 DOM nodes for
+       an article and a beautifully low cost, which is the
+       docs/reusable/silent-success.md pattern with a profiler on it. So every
+       result now carries the evidence that the thing being measured is the
+       thing we meant. */
+    const page$ = await cdp.send<{ result: { value: PageState } }>("Runtime.evaluate", {
+      expression: `(() => {
+        const t = document.querySelector('table.zoom');
+        return {
+          title: document.title,
+          nodes: document.querySelectorAll('*').length,
+          rows: t ? t.querySelectorAll('tr[data-block]').length : 0,
+          prose: document.querySelectorAll('.prose').length,
+          text: (document.body.innerText || '').trim().slice(0, 80),
+          scrollHeight: document.documentElement.scrollHeight,
+        };
+      })()`,
+      returnByValue: true,
+    });
+    const state = page$.result.value;
+    console.log(
+      `page: ${state.rows} rows, ${state.prose} prose blocks, ${state.nodes} nodes, ` +
+        `${state.scrollHeight}px tall — "${state.text.replace(/\s+/g, " ").slice(0, 60)}"`,
+    );
+    if (state.rows === 0) {
+      console.log("  ⚠ no article rows on screen — this is NOT a reading-view measurement");
+    }
+    if (state.scrollHeight <= window$innerHeightGuess) {
+      console.log("  ⚠ page is not taller than a viewport — a scroll measurement would be idle");
+    }
+
+    /* Zeroed here so the counts below describe the measured window rather than
+       the window plus the page load that preceded it. */
+    await cdp.send("Runtime.evaluate", { expression: "window.__perf && window.__perf.reset()" });
+
     const first = await read();
     const before = first.total;
     const t0 = Date.now();
-    console.log(`measuring ${seconds}s${has("hidden") ? " (tab hidden)" : ""}…`);
-    await sleep(seconds * 1000);
+    const scrolling = has("scroll");
+    console.log(
+      `measuring ${seconds}s${has("hidden") ? " (tab hidden)" : ""}${scrolling ? " while scrolling" : ""}…`,
+    );
+    if (scrolling) await wheel(cdp, seconds * 1000);
+    else await sleep(seconds * 1000);
+    /* The in-page probe's render counts, when the URL asked for it (`?perf=1`).
+       CPU is the number that matters, but it is noisy and it does not say
+       *which component* spent it. A render count is exact, causal, and answers
+       "did this change stop that subtree re-rendering?" directly. See perf.ts. */
+    const renders = await cdp.send<{ result: { value: string } }>("Runtime.evaluate", {
+      expression: `(() => {
+        const p = window.__perf; if (!p) return '';
+        const r = p.report();
+        return (r.topRenders || []).slice(0, 6)
+          .map(x => x[0] + '=' + x[1]).join(' ');
+      })()`,
+      returnByValue: true,
+    });
+    if (renders.result.value) console.log(`renders: ${renders.result.value}`);
+
     const second = await read();
     const after = second.total;
     const elapsed = (Date.now() - t0) / 1000;
@@ -338,6 +518,7 @@ async function main(): Promise<void> {
     const asPercent = (v: number) => Math.round((v / elapsed) * 1000) / 10;
     const result = {
       url,
+      page: state,
       hidden: has("hidden"),
       elapsed,
       /** Real CPU, from Chromium's own CPU counters. `process` is the number to

@@ -83,6 +83,29 @@ export default defineConfig(() => {
     resolve: {
       alias: { "@": fileURLToPath(new URL("./src/web", import.meta.url)) },
     },
-    server: { port: 5273, open: true },
+    server: {
+      port: 5273,
+      open: true,
+      /* **Do not watch the article store.**
+       *
+       * `data/` is not source — it is the pipeline's output, and the tests
+       * write fixtures into it constantly. Vite's watcher does not know that,
+       * so every one of those writes was a full page reload: the log filled up
+       * with `page reload data/test-carry-forward/article.html` several times a
+       * minute, and a reader with an article open got their page thrown away
+       * and rebuilt underneath them. On a 22,000-word article that is 3,600
+       * nodes re-parsed and re-rendered, which is a CPU spike a reader can
+       * feel, arriving for no reason they can see.
+       *
+       * It also made this app unmeasurable. A reload resets the counters
+       * `Performance.getMetrics` reports, so a window containing one comes back
+       * with *negative* CPU — which is at least honest about being wrong. The
+       * runs that did not straddle a reload were measuring a page mid-load
+       * instead of a page being scrolled.
+       *
+       * `docs/` and `evals/` are here for the same reason: agents write to them
+       * while somebody is reading, and neither is imported by the client. */
+      watch: { ignored: ["**/data/**", "**/docs/**", "**/evals/**"] },
+    },
   };
 });

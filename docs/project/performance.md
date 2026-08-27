@@ -354,6 +354,134 @@ firing, and the tool called the renderer *frozen*. It was not: `document.visibil
 below, arriving with a new disguise and a confident error message attached. A measurement harness
 that cannot see the page cannot tell you the page is broken.
 
+## Scrolling, 2026-08-27
+
+Greg: *"it looks like CPU usage spikes briefly e.g. when I scroll in the main Contents & Text
+view."*
+
+That is work a reader asked for, so it is allowed to cost something. It was costing a re-render of
+the whole rail sixty times a second.
+
+### The auth wall came down
+
+Everything below depends on one thing: **the signed-in reading view can now be measured without a
+human.** [`scripts/seed-local-session.ts`](../../scripts/seed-local-session.ts) asks the *local*
+Supabase — already running in Docker, its keys deliberately not secret
+([supabase-local.md](supabase-local.md)) — for a magic link, and hands the `hashed_token` to the
+app's own SDK instance through `verifyOtp`. `measure-cpu.ts --local-sign-in` does it and then
+measures.
+
+**Not** by writing `localStorage` ourselves, which needs the SDK's private storage format, and
+**not** by following the link, because the app is on `flowType: "pkce"`: a browser that did not
+begin the flow has no code verifier, the exchange fails, and `useSession` is documented to notify
+nobody when it does. You get a landing page that looks like an article still loading. That is
+exactly what happened first, and it is why the harness now prints what is on screen.
+
+### Four ways this measured the wrong thing first
+
+Every one of them returned a plausible number.
+
+- **A page that never rendered.** The first signed-in run reported 345 DOM nodes and a lovely low
+  cost. A real article is 3,639 nodes and 92,703 pixels tall. A blank page is genuinely cheap, so
+  the number was *correct* and meaningless. Every run now ends with `page: 360 rows, 360 prose
+  blocks, … tall` and shouts if there are no rows.
+- **Two Chromes, one debugging port.** `measure-cpu.ts` hardcoded `--remote-debugging-port=9333`.
+  Run a before and an after together and the second Chrome loses the port, exits that listener, and
+  the second script connects to **the first browser** and measures its tab. No error. Now Chrome
+  picks the port (`--remote-debugging-port=0`) and we read it back from `DevToolsActivePort`.
+- **Vite reloading the page mid-measurement.** Its watcher covered `data/`, which the tests write
+  to constantly, so the log filled with `page reload data/test-carry-forward/article.html` and the
+  window straddled a reload. That resets the metric counters, so the run reports **negative** CPU —
+  the one failure here honest enough to be obvious. `server.watch.ignored` now excludes `data/`,
+  `docs/` and `evals/`. **This is a reader-facing fix too**: a reader with an article open was
+  having it thrown away and rebuilt while agents wrote fixtures.
+- **My own edit.** One window was ruined by saving `Spine.tsx` while it ran. A dev server is a
+  moving target and a shared tree is a moving target with several people pushing it.
+
+The last two are why before and after are now measured in **two git worktrees**, each with its own
+server, both holding the current working tree and differing only in the files under test.
+
+### What it costs, and what changed
+
+30 seconds of wheel events on a 22,500-word article (360 rows). `--scroll` dispatches real
+`Input.dispatchMouseEvent` wheels rather than `scrollTo`, because only the first goes through the
+compositor and the passive listeners.
+
+| | before | after |
+|---|---|---|
+| **Spine renders** | 886 | **114** |
+| **TableView renders** | 170 | **104** |
+| ContextPanel renders | 510 | 468 |
+| main-thread script | 14.4% | **10.1%** |
+| main thread, total | 33.6% | 28.7% |
+| whole renderer process | 41.5% | 37.2% |
+
+**Trust the render counts, not the percentages.** Two runs of identical code put the renderer at
+30.1% and 37.2% — about 20% run-to-run noise, on a laptop with several dev servers and a dozen
+agents on it. The render counts repeated to within 1% across runs, and they are the thing the
+change is actually about. Idle is unchanged at 0.5–0.6% of a core.
+
+### The rail stopped re-rendering
+
+[`Spine.tsx`](../../src/web/Spine.tsx) held the scroll position in React state — a rAF-debounced
+`setScrollY(window.scrollY)`. That is the ordinary way to write it, and it re-renders every band,
+tick and tooltip to move one div a few pixels.
+
+The two things a scroll drives are now split by how often they change. **The viewport band's
+position** changes every frame and is pure presentation, so it is written straight to the node
+(`el.style.top`), the same trick `MicLevel.tsx` uses for `--level`. **Which band is active** changes
+when the reader crosses a part — a handful of times per article — so it stays in state, with a local
+mirror of its id so the setter fires only on a real transition, the same trick as
+`useAudioLevel.ts`. React never clobbers the imperative `top`, because the element's `style` prop
+does not contain it.
+
+Pinned by [`tests/spine-scroll.test.ts`](../../tests/spine-scroll.test.ts), which was watched
+failing against the old code first: *expected 6 to be 2* for four scrolled frames.
+
+### The table stopped re-rendering — GPT Sol's finding, and the bigger one
+
+`useColumnContext` samples geometry every frame and calls `setLive` whenever the answer changes,
+which near the masthead is most frames. It was being called by **`TableView`**, so each of those was
+a re-render of the entire block-by-column map — several hundred rows — to move three overlays.
+
+The hook and the overlays now live in a `ColumnPanels` child. Nothing about what is drawn changes;
+the panels re-render per frame exactly as before, and the table does not. What still goes upward is
+deliberate: hovering a panel entry lights a chain that crosses every column, so that one *must*
+re-render the table. A hover is a gesture; a scroll is sixty frames a second.
+
+`TableView` did not fall to zero — 104 renders remain, and they track `Reader`'s 131. Those are
+`useReadingPosition` writing `?at=` as sections pass the reading line, which is a deliberate
+feature ([url-state.md](url-state.md)) and now the largest remaining cause.
+
+### Still open, ranked, with citations
+
+GPT Sol reviewed the plan and hunted for the spikes I had not looked at. What survived, in its
+order, none of it done:
+
+1. **Comment streaming re-renders the whole reader per token.** `useComments` is owned by `Reader`,
+   so every delta replaces the `comments` array `TableView` consumes, re-resolving every anchor and
+   rebuilding the prose HTML map. Chat does not have this problem because `useChat` deliberately
+   sits *below* `Reader`. The fix is to mirror that ownership. Care needed: the delete race
+   deliberately reads through to `done` ([comments.md](comments.md)).
+2. **Literal search rebuilds its index on every keypress** — parsing every block's HTML to text and
+   rebuilding the folded text and offset map, then committing twice per key. Precomputing per
+   `blocks` identity is behaviour-preserving; debouncing would not be.
+3. **The force simulation re-runs on revisits** (300 synchronous ticks, 39ms at 60 sections, 113ms
+   at 150) whenever the reader leaves Force and comes back, and when `box.h` changes even though its
+   effective height did not. A cache keyed on the graph inputs plus width and *normalised* height
+   fixes both.
+4. **Zero DOM reads per frame** is still available: rows are normal-flow, so a row's viewport
+   position is `documentTop − scrollY` and could be arithmetic against offsets cached per layout.
+   Sol's warning is worth heeding — the sticky column headers are **not** ordinary rows, their `top`
+   is deliberately dynamic near the masthead, and `useReadingPosition` has no observer at all, so a
+   naive cache would go stale on a late image or a font swap and point at the wrong section. Wrong
+   position is worse than slow position.
+
+Explicitly **not** worth doing, checked and dismissed: hover cards (delegated listeners, a 320ms
+gate, a `MutationObserver` scoped to one open block), shelf search (already debounced and aborted),
+chat streaming (already below `Reader`), keyboard and touch (one scan per key or completed swipe),
+the summary panel (runs on target change, not on scroll). No runaway observer loop exists.
+
 ## What we still do not know
 
 Said plainly, because the fixes above are all real and none of them has been shown to be *the* 5.5%:
@@ -390,22 +518,16 @@ Said plainly, because the fixes above are all real and none of them has been sho
 
   2. **Open the same URL in an Incognito window**, where extensions are off by default. If the CPU
      goes with them, the answer is an extension and none of this code is implicated.
-- **The reading view's idle cost has not been split into script / layout / style.** That needs
-  `measure-cpu.ts` against a signed-in session, and a fresh Chrome profile is not signed in — every
-  route including `/api/health` answers 401. Until then the reading-view number comes from `ps` on a
-  machine with 76 renderers, and deserves the suspicion that implies.
-
-  **The unblock is one human step, once, ever:**
+- ~~**The reading view's idle cost has not been split into script / layout / style.**~~
+  **Done, 2026-08-27.** It needed a signed-in session, and that needed "one human step, once, ever".
+  It does not any more — see *The auth wall came down* above. Idle is **0.5–0.6% of one core**,
+  script and style both at 0.0%, with zero layouts across 30 seconds. The reading view at rest is
+  not the problem and never was.
 
   ```bash
-  npx tsx scripts/measure-cpu.ts --profile ~/.spideryarn-measure --sign-in
-  # sign in in the window that opens, then Ctrl-C
-  npx tsx scripts/measure-cpu.ts --profile ~/.spideryarn-measure \
-    --url http://localhost:5273/read/<slug> --settle 25 --seconds 60
+  npx tsx scripts/measure-cpu.ts --local-sign-in \
+    --url "http://localhost:5273/read/<slug>?perf=1" --settle 20 --seconds 30 --scroll
   ```
-
-  The session lives in that profile and survives, so every later run is unattended. Keep the
-  directory outside the repo; it holds a real session.
 - **Nothing here has been measured on a production build.** `npm run dev` runs `StrictMode`, which
   renders every component twice on purpose, plus `@react-refresh` and unbundled modules.
   `configurePreviewServer` in [`vite.config.ts`](../../vite.config.ts) now puts the API in front of

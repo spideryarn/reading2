@@ -89,7 +89,15 @@
  * reader would have to learn. The number is in the band's hover card instead,
  * where there is room for the word "matches" beside it.
  */
-import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { OutlineEntry } from "./tree.js";
 import type { BlockMatch } from "./search-hits.js";
 import type { BlockId } from "../types.js";
@@ -225,8 +233,13 @@ const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
 export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
   useRenderCount("Spine");
   const [metrics, setMetrics] = useState<Metrics | null>(null);
-  const [scrollY, setScrollY] = useState(0);
   const [viewportH, setViewportH] = useState(() => window.innerHeight);
+  /* The you-are-here band. State, because it changes what is *drawn* — but set
+     only when the band actually changes, which is a handful of times per
+     article rather than once per frame. See the scroll effect below. */
+  const [here, setHere] = useState<Band | null>(null);
+  /** The moving viewport band, written to directly rather than re-rendered. */
+  const viewportBand = useRef<HTMLDivElement>(null);
 
   // ---- measurement -------------------------------------------------------
   // `layoutKey` is a re-run trigger, not a value this effect reads — that is
@@ -263,22 +276,71 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
   }, [outline, layoutKey]);
 
   // ---- scroll position ---------------------------------------------------
+  /**
+   * **Scrolling does not re-render this component.**
+   *
+   * It used to: a rAF-debounced `setScrollY(window.scrollY)`, which is the
+   * ordinary way to do this and costs a full re-render of the whole rail —
+   * every band, every tick, every tooltip — sixty times a second, to move one
+   * div a few pixels. On a 360-row article that was the largest single thing
+   * happening during a scroll.
+   *
+   * So the two things scroll actually drives are split by how often they
+   * change:
+   *
+   * - **The viewport band's position** changes every frame and is pure
+   *   presentation, so it is written straight to the node. Same trick as
+   *   `--level` in MicLevel.tsx.
+   * - **Which band is active** changes when you cross a part boundary — a
+   *   handful of times in an article. That still goes through state, because it
+   *   changes what is drawn, but the setter is called only on a real
+   *   transition. Same local-mirror trick as useAudioLevel.ts.
+   *
+   * React does not clobber the imperative `top`: the element's `style` prop
+   * never contains it, so the diff has nothing to say about it.
+   *
+   * Depends on `metrics` and `viewportH` rather than reading them from refs.
+   * Both change rarely (a resize, a font swap), so re-subscribing then is
+   * cheaper than the indirection — and it keeps the closure's values honest.
+   */
   useEffect(() => {
+    if (!metrics) return;
+    const { docTop, docHeight, l1 } = metrics;
     let raf = 0;
+    /* A local mirror of `here`'s identity. Comparing against the state value
+       would need it in the dependency list, which would re-subscribe the
+       listener every time the reader crossed a boundary. */
+    let hereId: string | null = null;
+
+    const apply = () => {
+      raf = 0;
+      const sy = window.scrollY;
+
+      const band = viewportBand.current;
+      if (band) band.style.top = `${((sy - docTop) / docHeight) * 100}%`;
+
+      const pos = sy + viewportH * READING_LINE - docTop;
+      const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
+      const last = l1[l1.length - 1] ?? null;
+      const next = l1.find(inBand) ?? (pos >= 0 ? last : (l1[0] ?? null));
+      const id = next?.entry.node.id ?? null;
+      if (id !== hereId) {
+        hereId = id;
+        setHere(next);
+      }
+    };
+
     const onScroll = () => {
       if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        setScrollY(window.scrollY);
-      });
+      raf = requestAnimationFrame(apply);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    apply();
     return () => {
       window.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [metrics, viewportH]);
 
   const docHeight = metrics?.docHeight ?? 1;
   const pct = useCallback(
@@ -286,16 +348,7 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
     [docHeight],
   );
 
-  /** The part the reading line currently falls in — the band drawn as active. */
-  const here = useMemo(() => {
-    if (!metrics) return null;
-    const pos = scrollY + viewportH * READING_LINE - metrics.docTop;
-    const inBand = (b: Band) => pos >= b.top && pos < b.top + b.height;
-    // Past the end of the last band (a short document, or the footer) we stay
-    // on the last part rather than showing nothing.
-    const last = metrics.l1[metrics.l1.length - 1] ?? null;
-    return metrics.l1.find(inBand) ?? (pos >= 0 ? last : metrics.l1[0] ?? null);
-  }, [metrics, scrollY, viewportH]);
+
 
   /**
    * The search marks, in the rail's own coordinate system.
@@ -469,8 +522,10 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
         {/* The viewport band: how much of the article is on screen right now,
             and where. This is the "where am I" the whole rail exists for. */}
         <div
+          ref={viewportBand}
           className="spine-viewport"
-          style={{ top: pct(scrollY - metrics.docTop), height: pct(viewportH) }}
+          /* `top` is deliberately absent — the scroll effect above owns it. */
+          style={{ height: pct(viewportH) }}
         />
       </div>
     </aside>
