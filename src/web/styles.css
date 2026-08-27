@@ -713,9 +713,16 @@ td.gist .title::before {
    Half a unit top and bottom, so the gap BETWEEN two paragraphs — which is two
    halves, one from each row — is exactly one unit. Padding rather than margin
    because these are table cells and margins on a <td> do nothing. */
+/* No rule between blocks here. Every other column is a list of separate
+   answers, so a hairline between rows helps; this column is one continuous
+   article, and a line across it every paragraph cuts the prose into strips.
+   The vertical rhythm above already does the separating. The border-right
+   stays — that one divides this column from its neighbour, not paragraph from
+   paragraph. */
 td.text {
   padding: calc(var(--rhythm) / 2) 1.4rem calc(var(--rhythm) / 2) 5.2rem;
   position: relative;
+  border-bottom: 0;
 }
 
 /* A HEADING BELONGS TO WHAT FOLLOWS IT, so the space above it must exceed the
