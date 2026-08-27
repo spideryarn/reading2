@@ -85,8 +85,21 @@ as the assumption this plan runs on:
 Said out loud because "I don't care about the data" and "every article stops accepting new work" are
 not obviously the same sentence, and Greg agreed to the first without being shown the second.
 
-**One check before that afternoon:** some of those directories hold uploaded PDFs whose bytes exist
-nowhere else. Re-ingesting those means having the original files to hand.
+**And the check that afternoon needs has been done — nothing is at risk.** Every raw source in the
+corpus is recoverable, which is a better answer than the question expected:
+
+| article | source | recoverable from |
+|---|---|---|
+| `fowler-phrenology` | `evals/pdf/much-harder/source.pdf` | **tracked in git** |
+| `ball-lightning` | `evals/pdf/harder/source.pdf` | **tracked in git** |
+| `coolabah-memory` | `evals/pdf/easy/source.pdf` | **tracked in git** |
+| `source`, `source-2` | uploads, both 144,779 bytes | the same file as `evals/pdf/easy` — tracked in git |
+| `revistes-ub-30977` | `revistes.ub.edu/…/30977` | the web |
+| `writes` | `paulgraham.com/writes.html` | the web |
+| `constitution`, `example`, `noema-mythology-of-conscious-ai` | no `raw.json` at all | nothing to lose |
+
+Greg offered the `much-harder` PDF as the one file he still had. All three are in the repository, so
+the re-ingest is three local paths and two URLs.
 
 ## What it costs
 
@@ -244,7 +257,7 @@ worth reading before starting, not after.
 | `implementation_version = "imported"` is the importer's | it scopes the importer's own withdrawal `DELETE`. Nothing the adapter writes may use that string, or `db:import` deletes pipeline records |
 | unstamped steps still need values | `input_hash` and `implementation_version` are NOT NULL and `fetch`/`extract`/`blocks` have no stamp. Use `NO_INPUT_HASH` and `PIPELINE_RUN`, never the draft's block hash — that claims a step ran against blocks it never saw |
 | `labels` is not a step | the `revision_step_runs_step` CHECK rejects it; it is a `toc` output |
-| `attempt_id` has no writer, and `recordStepRun` would clobber it | its upsert does `set: values`, which omits `attempt_id`. The adapter is the first writer, so that function has to be extended in the same commit |
+| `attempt_id` has no writer, and `recordStepRun` is the wrong primitive for one | ~~its upsert clobbers the column~~ — **wrong, and measured**: `set: values` omits `attempt_id`, so an update leaves it untouched. The real hazard is that a generic upsert keyed only on `(revision_id, step_name)` can overwrite a *newer* attempt once it is taught to write one. `beginStep`/`finishStep` want their own fenced statements |
 | an empty blocks array | the importer silently keeps the old rows. The adapter must decide, out loud, whether empty means delete-all or no-op |
 | null is a real value in a stamp | `StepStamp.profileHash` uses `null` to mean *written deliberately without a profile*, and `exactOptionalPropertyTypes` is on, so absent and null are different answers |
 
@@ -252,6 +265,67 @@ The transaction convention is already settled and should be copied rather than r
 `…In(tx, opts)` with the public function opening the transaction around it, exactly as
 `beginRevision`/`beginDraftIn` are split. Lock order is job row `for update` first, then article,
 and must not be deviated from.
+
+#### The adapter's shape, settled
+
+[A second input round](artifacts-pg-shape-sol.md) put three questions to Sol — how the store is
+addressed, how it joins the one transaction, and what `has` honestly means — and returned **NO-SHIP
+on two of my three answers**. What it settled:
+
+**It binds an already-resolved reference, not a resolver.** My proposal copied the *surface* of
+`createFsArtifactStore(locate)` and missed that its resolver is pure and deterministic, while
+`openOrBeginJobDraft` locks, may mint a revision, and fences a live job. That must run **once per
+advance**, not lazily behind a store method. And `{ articleId, revisionId }` is too little: the
+reference is
+
+```ts
+interface JobDraftRef { slug; articleId; revisionId; jobId; attemptId }
+```
+
+— `articleId` for the two composite block foreign keys, `jobId` and `attemptId` because
+`revision_step_runs.attempt_id` *is* the job attempt token and `beginStep`, the final write and the
+job transition all fence on it. `slug` stays in every method signature as a mandatory assertion
+against the bound reference: construct a store for draft A, call any method with slug B, and it must
+throw **before** reading or writing anything.
+
+**Transaction membership is a construction-time capability, never an argument.** One implementation
+bound to `ref` plus a `Db | Tx`, exposed as two capability views: a preflight one (reads,
+`interrupted`, `beginStep`) and a transaction-bound one (reads, `write`, `finishStep`). Critically,
+**the executor must not default to `getDb()`** — a default makes forgetting the caller's transaction
+compile *and* succeed. An optional `tx` on `write` is rejected outright: it is the exact silent split
+this landing exists to prevent. And the `…In(tx)` boundary belongs around the coordinator's *whole*
+atomic operation, because an artefact-only transaction can still commit before the job fence.
+
+My "two modes are read and write" framing was also wrong: the preflight side writes (`beginStep`) and
+the transaction side reads (its own uncommitted work, for `assertProduced`).
+
+**`has` answers presence and completion, never freshness.** The plan's earlier phrase — *"consult
+`revision_step_runs` and compare the stamp"* — was too broad: `has` is handed no expected stamp, and
+what counts as current is step-specific (`ideas` hashes blocks *and* tree). Teaching the adapter that
+would put pipeline logic in storage. So `has` means: every requested value reconstructs and passes
+the same shallow shape checks the filesystem decoder applies, **and** a matching `revision_step_runs`
+row exists with `status = 'done'`. Freshness stays with `stampFor` + `sameStamp` in `stepIsDone`,
+where it already lives. There is one documented primitive-level difference from the filesystem, and a
+documented difference beats a false parity claim — this repo produced two of those yesterday.
+
+**And `toc` gets a real stamp**, rather than the adapter carrying a private special case for it.
+`toc` declares none today, so an adapter that compensated internally would be the *third*
+independently written status-and-hash test, beside `articleMetadata` and the publication guard — the
+exact class of [the postmortem](../postmortems/toc-status-never-checked.md). Its expected input
+hashes the **stage-3** blocks, which as a bonus lets the filesystem adapter notice stage 3 diverging
+from an old `data/<slug>/blocks.json`.
+
+**Empty blocks means delete-all, authoritatively.** The importer's `if (blocks.length)` encloses both
+the delete and the insert, so an empty array leaves inherited rows in place. For the adapter that is
+a silent success of the worst kind: the stage returns `[]`, the old article survives, and the run
+reports done. Identities upsert (zero is fine), then delete *always*, then insert only when non-empty.
+Whether an article with no blocks may publish is a separate question that `reasonsNotToPublish`
+already answers.
+
+**`stampFor` must merge two sources.** `revision_step_runs` has no `profile_hash` column;
+`ideas.profileHash` lives only in the JSON artefact, and `null` there is a real recorded value
+meaning *written deliberately without a profile*. So the stamp is row fields plus artefact-embedded
+fields, and `NO_INPUT_HASH` must never be handed back as though it were a real recorded hash.
 
 ### The metadata page — **not the blocker I said it was**
 
